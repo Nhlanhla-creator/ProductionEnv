@@ -1,9134 +1,2990 @@
 "use client"
 
-
-
-import { useState, useEffect } from "react"
-
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
-
-import { getAuth } from "firebase/auth"
-
 import {
-
-  addDoc,
-
-  collection,
-
-  getDocs,
-
-  doc,
-
-  getDoc,
-
-  
-  query,
-
-  where,
-
-  updateDoc,
-
-  serverTimestamp,
-
-  setDoc,
-
-  arrayUnion
-
-} from "firebase/firestore"
-
-import { db } from "../../firebaseConfig"
-
-import {
-
   Eye,
-
-  Filter,
-
-  History,
-
+  EyeOff,
+  X,
+  HelpCircle,
+  BadgeCheck,
   Brain,
-
   AlertCircle,
-
-  
-  TrendingUp
-  
-  
+  Target,
+  Layers,
+  Share2,
+  StickyNote,
+  Flag,
+  Send,
+  ChevronDown,
+  SlidersHorizontal,
+  GripVertical,
+  RotateCcw,
+  Settings,
+  Trash2,
+  Plus,
+  LayoutGrid,
+  CheckCircle,
+  Search,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  ArrowRight,
+  Pin,
+  PinOff,
+  Bookmark,
+  MoreVertical,
+  Package,
 } from "lucide-react"
-
-import { useNavigate } from "react-router-dom"
-
-import { useLocation } from "react-router-dom";
-
-import emailjs from '@emailjs/browser'
-
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  addDoc,
+  getDoc,
+  serverTimestamp,
+  arrayUnion,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
+import { auth, db } from "../../firebaseConfig"
+import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
+import SupplierDetailsModal from "./SupplierDetailsModal"
+import {
+  calculateEnhancedMatchScore,
+  calculateOwnershipPercentages,
+  getEffectiveMatchScore,
+  getFirstCategory,
+  countCategories,
+  getSupplierAiEligibility,
+  runAiAnalysisForApplication,
+} from "./supplierMatching"
 
-import SupplierDetailsModal from './SupplierDetailsModal'
+/* ════════════════════════════════════════════════════════════════════════════
+   This file no longer imports ./matchTableKit.
 
-import { expandSearchTerms } from '../../utils/synonyms'
+   The kit rendered the header row, and its own <style> block set
+   `position: relative` on every <th>, which overrode the sticky positioning.
+   The header scrolled away while the pinned body cells stayed frozen —
+   supplier names sliding over the next column, and the ACTION label drifting
+   away from its buttons. The table now owns its head, toolbar, filters and
+   row actions, identical to the intern, advisor, funding, customer and
+   catalyst tables.
+   ════════════════════════════════════════════════════════════════════════ */
 
-import { getFunctions, httpsCallable } from "firebase/functions"
+/* ────────────────────────────────────────────────────────────────────────────
+   Scoring lives in supplierMatching.js. These are re-exported by name so that
+   existing call sites — useMatches.js, ProductApplication.js and anything else
+   importing scoring helpers from "./supplier-table" — keep working.
 
-// Use Firebase Cloud Function for AI analysis
-async function analyzeSupplierMatchesWithFallback(payload) {
-  // // Local development fallback (commented out — use Cloud Function in production)
-  // try {
-  //   const response = await fetch("http://localhost:8000/api/suppliers/analyze-matches", {
-  //     method: "POST",
-  //     headers: {
-  //       "Content-Type": "application/json",
-  //     },
-  //     body: JSON.stringify(payload),
-  //   });
-  //   if (!response.ok) {
-  //     throw new Error(`API returned ${response.status}: ${await response.text()}`);
-  //   }
-  //   const data = await response.json();
-  //   return data;
-  // } catch (error) {
-  //   console.error("Error calling local API, falling back to Cloud Function:", error);
-  // }
-  
-  // Use Firebase Cloud Function
-  const functions = getFunctions();
-  const analyzeSupplierMatches = httpsCallable(functions, "analyzeSupplierMatches");
-  const result = await analyzeSupplierMatches(payload);
-  return result.data;  // Cloud Function wraps response in .data
+   Written out one by one rather than as `export * from "./supplierMatching"`:
+   webpack could not statically resolve the star form through this file, so
+   every re-exported name came back as "not found" at build time.
+
+   New code should import from "./supplierMatching" directly.
+   ──────────────────────────────────────────────────────────────────────── */
+export {
+  AI_SUPPLIER_ANALYSIS_LIMIT,
+  ENHANCED_MATCHING_CRITERIA,
+  PREFERENCE_WEIGHTS,
+  getFirstCategory,
+  countCategories,
+  extractSupplierDescriptiveText,
+  calculateOwnershipPercentages,
+  calculateCategoryMatch,
+  calculateLocationMatch,
+  calculateDeliveryMatch,
+  parseBudgetValue,
+  calculateBudgetMatch,
+  calculateBBBEEEMatch,
+  calculateOwnershipMatch,
+  calculateRatingMatch,
+  calculateExperienceMatch,
+  calculateUrgencyMatch,
+  calculateEnhancedMatchScore,
+  calculatePreferenceScore,
+  calculateCombinedMatchScore,
+  getEffectiveMatchScore,
+  hasSupplierCategoryData,
+  getSupplierAiEligibility,
+  withSupplierAiEligibility,
+  selectSuppliersForAiAnalysis,
+  analyzeSupplierMatchesWithFallback,
+  runAiAnalysisForApplication,
+} from "./supplierMatching"
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Collections.
+
+   The old flow called addDoc on "supplierApplications" with a random id and
+   wrote supplierId = the SME and customerId = the supplier — the two were
+   swapped, which is why the supplier-side dashboard showed the buyer as the
+   vendor. There is now one document per side, keyed deterministically, so a
+   second Request Quote updates the same record instead of creating a duplicate.
+
+   SUPPLIER_SME_COLLECTION keeps the existing lowercase name so historic rows
+   stay readable; the field names below are a superset of the old shape.
+   ════════════════════════════════════════════════════════════════════════ */
+export const SME_SUPPLIER_COLLECTION = "SmeSupplierApplications"
+export const SUPPLIER_SME_COLLECTION = "supplierApplications"
+export const smeSupplierId = (smeId, supplierId) => `${smeId}_${supplierId}`
+export const supplierSmeId = (supplierId, smeId) => `${supplierId}_${smeId}`
+
+/* ─── Status vocabulary ─────────────────────────────────────────────────────
+   Spec section 3, with the two application steps worded for a quote flow:
+   "Application Started" → Quote Requested, "Applied" → Quote Received.
+   ──────────────────────────────────────────────────────────────────────── */
+export const SUPPLIER_STATUSES = [
+  "New Match",
+  "Viewed",
+  "Shortlisted",
+  "Contacted",
+  "Quote Requested",
+  "Quote Received",
+  "Under Review",
+  "Accepted",
+  "Declined",
+  "Closed",
+]
+
+/* The old table stored match *quality* in `status` ("Perfect Match", "Strong
+   Match"…) while workflow state lived in `currentStage`, so the Status column
+   never moved as the deal progressed. Status is now workflow only, and the old
+   values map onto it here. */
+const LEGACY_STATUS_ALIASES = {
+  "New Lead": "New Match",
+  "Perfect Match": "New Match",
+  "Strong Match": "New Match",
+  "Potential Match": "New Match",
+  "Low Match": "New Match",
+  "Potential Supplier": "New Match",
+  Shortlist: "Shortlisted",
+  Pending: "Contacted",
+  "Contact Initiated": "Contacted",
+  "Proposal Sent": "Quote Received",
+  "Proposal Submitted": "Quote Received",
+  "Proposal/Quote": "Quote Received",
+  Negotiation: "Under Review",
+  "Contract Sent": "Under Review",
+  "Contract Signed": "Accepted",
+  "Active Contract": "Accepted",
+  Completed: "Accepted",
+  "Completed Successfully": "Accepted",
+  Rejected: "Declined",
 }
-
-const AI_SUPPLIER_ANALYSIS_LIMIT = 100
-
-function hasSupplierCategoryData(productsServices = {}) {
-
-  return [
-
-    productsServices.productCategories,
-
-    productsServices.serviceCategories,
-
-    productsServices.categories,
-
-  ].some((categories) => Array.isArray(categories) && categories.length > 0)
-
-}
-
-function getSupplierAiEligibility(supplier, currentUserId = null) {
-
-  const completedSections = supplier?.completedSections || {}
-
-  const hasName = !!(
-
-    supplier?.entityOverview?.tradingName ||
-
-    supplier?.entityOverview?.registeredName
-
-  )
-
-  const hasCategories = hasSupplierCategoryData(supplier?.productsServices || {})
-
-  const reasons = []
-
-  if (currentUserId && supplier?.id === currentUserId) reasons.push("Current user's own profile")
-
-  if (completedSections.entityOverview !== true) reasons.push("Entity Overview incomplete")
-
-  if (completedSections.productsServices !== true) reasons.push("Products & Services incomplete")
-
-  if (!hasName) reasons.push("Supplier name missing")
-
-  if (!hasCategories) reasons.push("No product/service categories")
-
-  return {
-
-    eligible: reasons.length === 0,
-
-    reasons,
-
-    label: reasons.length > 0 ? reasons.join("; ") : "AI eligible",
-
-  }
-
-}
-
-function withSupplierAiEligibility(supplier, currentUserId = null) {
-
-  return {
-
-    ...supplier,
-
-    aiEligibility: getSupplierAiEligibility(supplier, currentUserId),
-
-  }
-
-}
-
-function getSupplierRankingScore(supplier) {
-
-  return supplier?.matchPercentage || supplier?.newMatchScore || 0
-
-}
-
-function selectSuppliersForAiAnalysis(suppliers, currentUserId = null) {
-
-  return suppliers
-
-    .map((supplier) => withSupplierAiEligibility(supplier, currentUserId))
-
-    .filter((supplier) => supplier.aiEligibility.eligible)
-
-    .sort((a, b) => getSupplierRankingScore(b) - getSupplierRankingScore(a))
-
-    .slice(0, AI_SUPPLIER_ANALYSIS_LIMIT)
-
-}
-
-
-
-// Status definitions with brown color scheme
+export const normalizeSupplierStatus = (s) => LEGACY_STATUS_ALIASES[s] || s || "New Match"
 
 const STATUS_TYPES = {
+  "New Match": { color: "#F5F0E1", textColor: "#7D5A50" },
+  Viewed: { color: "#EFEBE9", textColor: "#5D4037" },
+  Shortlisted: { color: "#FFF3E0", textColor: "#F57C00" },
+  Contacted: { color: "#E8EAF6", textColor: "#3949AB" },
+  "Quote Requested": { color: "#EDE7F6", textColor: "#5E35B1" },
+  "Quote Received": { color: "#F3E5F5", textColor: "#7B1FA2" },
+  "Under Review": { color: "#E3F2FD", textColor: "#1565C0" },
+  Accepted: { color: "#E8F5E8", textColor: "#388E3C" },
+  Declined: { color: "#FFEBEE", textColor: "#D32F2F" },
+  Closed: { color: "#EEEEEE", textColor: "#616161" },
+}
+const getStatusStyle = (status) => STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
 
-  Pending: {
-
-    color: "#F5EBE0",
-
-    textColor: "#5D2A0A",
-
-  },
-
-  Shortlisted: {
-
-    color: "#E8D5C4",
-
-    textColor: "#4E342E",
-
-  },
-
-  "Proposal/Quote": {
-
-    color: "#E8D5C4",
-
-    textColor: "#543c36ff",
-
-  },
-
-  Accepted: {
-
-    color: "#E8F5E8",
-
-    textColor: "#388E3C",
-
-  },
-
-  Rejected: {
-
-    color: "#FFEBEE",
-
-    textColor: "#D32F2F",
-
-  },
-
-  "New Lead": {
-
-    color: "#F5EBE0",
-
-    textColor: "#5D2A0A",
-
-  },
-
+/* One primary action that follows the workflow; everything else lives in the
+   three-dot quick actions popup, matching the other match tables. */
+const getRowActions = (status) => {
+  switch (status) {
+    case "New Match":
+    case "Viewed":
+    case "Shortlisted":
+      return { primary: "Request Quote", kind: "quote" }
+    case "Contacted":
+    case "Quote Requested":
+    case "Under Review":
+      return { primary: "View Status", kind: "view" }
+    case "Quote Received":
+      return { primary: "Review Quote", kind: "view" }
+    case "Accepted":
+      return { primary: "View Next Steps", kind: "view" }
+    case "Declined":
+    case "Closed":
+      return { primary: "View Outcome", kind: "view", terminal: true }
+    default:
+      return { primary: "View Supplier", kind: "view" }
+  }
 }
 
+/* ─── Reference data ────────────────────────────────────────────────────── */
+const BBBEE_LEVELS = [
+  "Level 1",
+  "Level 2",
+  "Level 3",
+  "Level 4",
+  "Level 5",
+  "Level 6",
+  "Level 7",
+  "Level 8",
+  "Non-Compliant",
+]
 
+const DELIVERY_MODES = ["On-site", "Remote", "Hybrid", "Delivery", "Collection"]
 
-const STAGE_COLORS = {
+const OWNERSHIP_TAGS = ["Black-owned", "Women-owned", "Youth-owned", "Disability-owned"]
 
-  "Potential Supplier": { backgroundColor: "#E3F2FD", color: "#1976D2" },
+/* ─── Shared helpers (previously imported from the kit) ──────────────────── */
 
-  "Contact Initiated": { backgroundColor: "#FFF3E0", color: "#F57C00" },
-
-  "Proposal Sent": { backgroundColor: "#F3E5F5", color: "#7B1FA2" },
-
-  "Under Review": { backgroundColor: "#E8F5E8", color: "#388E3C" },
-
-  Negotiation: { backgroundColor: "#FFF8E1", color: "#F9A825" },
-
-  Accepted: { backgroundColor: "#E8F5E8", color: "#2E7D32" },
-
-  Rejected: { backgroundColor: "#FFEBEE", color: "#D32F2F" },
-
+/* Lives here, not in supplierMatching.js — that module never exported it. The
+   old file pulled it from matchTableKit; this is the same implementation the
+   other match tables use. Exported so anything importing it from
+   "./supplier-table" keeps working. */
+export const formatLabel = (value) => {
+  if (!value) return ""
+  try {
+    return value
+      .toString()
+      .split(",")
+      .map((item) => item.trim())
+      .map((word) => {
+        if (word.toLowerCase() === "ict") return "ICT"
+        if (word.toLowerCase() === "southafrica" || word.toLowerCase() === "south_africa") return "South Africa"
+        return word
+          .split(/[_\s-]+/)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+          .join(" ")
+      })
+      .join(", ")
+  } catch (error) {
+    console.error("Error formatting label:", error)
+    return value || ""
+  }
 }
 
-
-
-// Enhanced matching criteria with better weights
-
-const ENHANCED_MATCHING_CRITERIA = {
-
-  CATEGORY_MATCH: {
-
-    weight: 0.40,
-
-    description: "Product/Service Category Alignment",
-
-  },
-
-  BBBEE_LEVEL: {
-
-    weight: 0.10,
-
-    description: "BBBEE Level Compliance",
-
-  },
-
-  LOCATION: {
-
-    weight: 0.10,
-
-    description: "Geographic Location Match",
-
-  },
-
-  DELIVERY_MODE: {
-
-    weight: 0.10,
-
-    description: "Delivery Mode Compatibility",
-
-  },
-
-  BUDGET_RANGE: {
-
-    weight: 0.10,
-
-    description: "Budget Fit",
-
-  },
-
-  OWNERSHIP_PREFS: {
-
-    weight: 0.05,
-
-    description: "Ownership Preferences Match",
-
-  },
-
-  URGENCY_LEAD_TIME: {
-
-    weight: 0.05,
-
-    description: "Urgency & Lead Time Match",
-
-  },
-
-  EXPERIENCE: {
-
-    weight: 0.05,
-
-    description: "Sector Experience Match",
-
-  },
-
-  RATING: {
-
-    weight: 0.05,
-
-    description: "Supplier Rating",
-
-  },
-
+const PopupPortal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
 }
 
-
-
-const TruncatedText = ({ text, maxLength = 20 }) => {
-
+const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
-
-
   if (!text || text === "-" || text === "Not specified" || text === "Various") {
-
-    return <span style={{ color: "#999" }}>{text || "-"}</span>
-
+    return <span style={{ color: "#a89482", fontSize: "0.75rem" }}>{text || "-"}</span>
   }
 
-
-
-  const shouldTruncate = text.length > maxLength
-
-  const displayText = isExpanded || !shouldTruncate ? text : `${text.slice(0, maxLength)}...`
-
-
-
-  const toggleExpanded = (e) => {
-
-    e.stopPropagation()
-
-    setIsExpanded(!isExpanded)
-
-  }
-
-
+  const value = text.toString()
+  const shouldTruncate = value.length > maxLength
+  const displayText = isExpanded || !shouldTruncate ? value : `${value.slice(0, maxLength)}...`
 
   return (
-
-    <div style={{ lineHeight: "1.4" }}>
-
+    <div style={{ lineHeight: "1.3", fontSize: "0.75rem" }}>
       <span style={{ wordBreak: "break-word" }}>{displayText}</span>
-
       {shouldTruncate && (
-
-        <div>
-
-          <button
-
-            style={{
-
-              background: "none",
-
-              border: "none",
-
-              color: "#a67c52",
-
-              cursor: "pointer",
-
-              fontSize: "0.75rem",
-
-              textDecoration: "underline",
-
-              padding: "0",
-
-              display: "block",
-
-            }}
-
-            onClick={toggleExpanded}
-
-          >
-
-            {isExpanded ? "Less" : "See more"}
-
-          </button>
-
-        </div>
-
-      )}
-
-    </div>
-
-  )
-
-}
-
-
-
-const getStatusStyle = (status) => {
-
-  return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
-
-}
-
-
-
-const getStageStyle = (stage) => {
-
-  return STAGE_COLORS[stage] || { backgroundColor: "#F5F5F5", color: "#666666" }
-
-}
-
-
-
-function getDeliveryModeMatches(appModes, supplyModes) {
-
-  const matches = []
-
-
-
-  // Check if either has Hybrid for full compatibility
-
-  const appHasHybrid = appModes.includes("Hybrid")
-
-  const supplyHasHybrid = supplyModes.includes("Hybrid")
-
-
-
-  if (appHasHybrid || supplyHasHybrid) {
-
-    matches.push({
-
-      applicationMode: appHasHybrid ? "Hybrid" : appModes[0],
-
-      supplierMode: supplyHasHybrid ? "Hybrid" : supplyModes[0],
-
-      matchType: "hybrid-full-compatibility",
-
-      score: 1,
-
-      note: "Hybrid delivery provides full compatibility with all modes"
-
-    })
-
-  } else {
-
-    // Standard exact matching
-
-    appModes.forEach((appMode) => {
-
-      supplyModes.forEach((supplyMode) => {
-
-        if (appMode === supplyMode) {
-
-          matches.push({
-
-            applicationMode: appMode,
-
-            supplierMode: supplyMode,
-
-            matchType: "exact",
-
-            score: 1,
-
-          })
-
-        }
-
-      })
-
-    })
-
-  }
-
-
-
-  return matches
-
-}
-
-
-
-export const getFirstCategory = (productsServices) => {
-
-  if (!productsServices) return "Not specified"
-
-
-
-  // Check productCategories first
-
-  if (Array.isArray(productsServices.productCategories) && productsServices.productCategories.length > 0) {
-
-    const firstProductCat = productsServices.productCategories[0]
-
-    return typeof firstProductCat === "string" ? firstProductCat : firstProductCat?.name || "Not specified"
-
-  }
-
-
-
-  // Check serviceCategories if productCategories is empty
-
-  if (Array.isArray(productsServices.serviceCategories) && productsServices.serviceCategories.length > 0) {
-
-    const firstServiceCat = productsServices.serviceCategories[0]
-
-    return typeof firstServiceCat === "string" ? firstServiceCat : firstServiceCat?.name || "Not specified"
-
-  }
-
-
-
-  return "Not specified"
-
-}
-
-
-
-function convertToDays(value, unit) {
-
-  const numericValue = parseInt(value) || 0
-
-  switch (unit) {
-
-    case 'hours':
-
-      return numericValue / 24
-
-    case 'days':
-
-      return numericValue
-
-    case 'weeks':
-
-      return numericValue * 7
-
-    case 'months':
-
-      return numericValue * 30 // Approximate
-
-    default:
-
-      return numericValue // Default to days
-
-  }
-
-}
-
-
-
-// Enhanced match calculation functions
-
-export function calculateCategoryMatch(application, supplier) {
-
-  const appCategories = (
-
-    application.productsServices?.categories ||
-
-    application.requestOverview?.categories ||
-
-    application.productsServices?.productCategories ||
-
-    []
-
-  ).map(c => (typeof c === 'string' ? c : c?.name || '').toLowerCase().trim())
-
-    .filter(Boolean);
-
-
-
-  const appKeywords = application.requestOverview?.keywords?.toLowerCase() || "";
-
-  const appPurpose = application.requestOverview?.purpose?.toLowerCase() || "";
-
-
-
-  const supplierText = extractSupplierDescriptiveText(supplier);
-
-
-
-  if (!supplierText) return { score: 0, matches: [] };
-
-  if (appCategories.length === 0 && !appKeywords && !appPurpose) return { score: 0, matches: [] };
-
-
-
-  const matchedCategories = [];
-
-  const unmatchedCategories = [];
-
-
-
-  // Binary match per category — matched or not
-
-  appCategories.forEach(appCat => {
-
-    const expandedTerms = expandSearchTerms([appCat]);
-
-    const hasMatch = expandedTerms.some(term => supplierText.includes(term));
-
-    if (hasMatch) {
-
-      matchedCategories.push(appCat);
-
-    } else {
-
-      unmatchedCategories.push(appCat);
-
-    }
-
-  });
-
-
-
-  // Category score: proportion of requested categories matched (0 to 1)
-
-  const categoryScore = appCategories.length > 0
-
-    ? matchedCategories.length / appCategories.length
-
-    : 0;
-
-
-
-  // Keyword/purpose secondary signal
-
-  let keywordScore = 0;
-
-  const matchedKeywords = [];
-
-  if (appKeywords || appPurpose) {
-
-    const combinedText = `${appKeywords} ${appPurpose}`;
-
-    const words = combinedText.split(/\s+/).filter(w => w.length > 3);
-
-    let keywordHits = 0;
-
-    words.forEach(word => {
-
-      const expanded = expandSearchTerms([word]);
-
-      const hasMatch = expanded.some(term => supplierText.includes(term));
-
-      if (hasMatch) {
-
-        keywordHits++;
-
-        matchedKeywords.push(word);
-
-      }
-
-    });
-
-    keywordScore = words.length > 0 ? keywordHits / words.length : 0;
-
-  }
-
-
-
-  const finalScore = appCategories.length > 0
-
-    ? (categoryScore * 0.7) + (keywordScore * 0.3)
-
-    : keywordScore;
-
-
-
-  return {
-
-    score: Math.min(finalScore, 1),
-
-    matches: matchedCategories,
-
-    unmatched: unmatchedCategories,
-
-    keywordMatches: matchedKeywords,
-
-  };
-
-}
-
-
-
-function calculateLocationMatch(application, supplier) {
-  const appLocation =
-    application.matchingPreferences?.location ||
-    application.requestOverview?.location ||
-    ""
-  // No preference → 100%
-  if (!appLocation) return 1
-  const supplierLocation = supplier.entityOverview?.location || ""
-  if (!supplierLocation) return 0
-  // Binary: exact country match only (no partial/proximity scoring for now)
-  return appLocation.toLowerCase().trim() === supplierLocation.toLowerCase().trim() ? 1 : 0
-}
-
-function calculateDeliveryMatch(application, supplier) {
-  const appModes =
-    application.matchingPreferences?.deliveryModes ||
-    application.requestOverview?.deliveryModes ||
-    []
-  // No preference → 100%
-  if (!appModes.length) return 1
-  const supplierModes = supplier.productsServices?.deliveryModes || []
-  if (!supplierModes.length) return 0
-  // Hybrid compatibility: if either side is Hybrid, all modes are covered
-  const appHasHybrid = appModes.includes("Hybrid")
-  const supplyHasHybrid = supplierModes.includes("Hybrid")
-  if (appHasHybrid || supplyHasHybrid) return 1
-  // Binary: any mode overlap = match
-  const hasOverlap = appModes.some((m) => supplierModes.includes(m))
-  return hasOverlap ? 1 : 0
-}
-
-/**
- * Parse a formatted currency string like "R 1,000,000" into a plain number.
- * Used by calculateBudgetMatch to handle the formatted values stored in Firestore.
- */
-function parseBudgetValue(formattedValue) {
-  if (!formattedValue) return 0
-  const numeric = String(formattedValue).replace(/[^\d.]/g, "")
-  return parseFloat(numeric) || 0
-}
-
-function calculateBudgetMatch(application, supplier) {
-  const minRaw =
-    application.matchingPreferences?.minBudget ||
-    application.requestOverview?.minBudget ||
-    ""
-  const maxRaw =
-    application.matchingPreferences?.maxBudget ||
-    application.requestOverview?.maxBudget ||
-    ""
-  // Both fields empty → no preference → 100%
-  if (!minRaw && !maxRaw) return 1
-  const appMin = parseBudgetValue(minRaw)
-  const appMax = parseBudgetValue(maxRaw) || Infinity
-  const revenue = parseBudgetValue(supplier.financialOverview?.annualRevenue || "")
-  // If supplier has no revenue data, treat as no match
-  if (revenue === 0) return 0
-  // Binary: within range = 100%, outside = 0%
-  return revenue >= appMin && revenue <= appMax ? 1 : 0
-}
-
-
-
-function calculateBBBEEEMatch(application, supplier) {
-  const pref = application.matchingPreferences?.bbeeLevel || ""
-  // No preference, "None", or "Any" → 100% (buyer doesn't care)
-  if (!pref || pref === "None" || pref === "Any") return 1
-  const appLevel = parseInt(pref.replace(/\D/g, "") || "0") || 0
-  if (appLevel === 0) return 1
-  const supplierLevel = parseInt(
-    (supplier.legalCompliance?.bbbeeLevel || "").replace(/\D/g, "") || "0"
-  ) || 0
-  if (supplierLevel === 0) return 0 // Supplier has no BBBEE data → no match
-  // Lower level number = better (Level 1 is best). Meets or exceeds = 100%.
-  return supplierLevel <= appLevel ? 1 : 0
-}
-
-
-
-function calculateOwnershipMatch(application, supplier) {
-  // Filter out placeholder values
-  const appOwnershipPrefs = (application.matchingPreferences?.ownershipPrefs || [])
-    .filter((p) => p && p !== "None")
-  // No meaningful preference → 100%
-  if (!appOwnershipPrefs.length) return 1
-  const ownershipDetails = calculateOwnershipPercentages(supplier.ownershipManagement || {})
-  // Binary: if any requested ownership type is satisfied → 100%, else 0%
-  const met = appOwnershipPrefs.some((pref) => {
-    const p = pref.toLowerCase().trim()
-    if ((p.includes("black-owned") || p.includes("black owned")) && ownershipDetails.blackOwnership >= 51) return true
-    if ((p.includes("women-owned") || p.includes("women owned")) && ownershipDetails.womenOwnership >= 30) return true
-    if ((p.includes("youth-owned") || p.includes("youth owned")) && ownershipDetails.youthOwnership >= 25) return true
-    if ((p.includes("disability") || p.includes("disabled")) && ownershipDetails.disabilityOwnership >= 5) return true
-    return false
-  })
-  return met ? 1 : 0
-}
-
-function calculateRatingMatch(supplier, ratingsData) {
-
-  const supplierId = supplier?.id
-
-  const supplierRatingData = ratingsData?.[supplierId] || { average: 0, count: 0 }
-
-  return supplierRatingData.average / 5
-
-}
-
-
-
-export function extractSupplierDescriptiveText(supplier) {
-
-  let text = "";
-
-
-
-  // Product descriptions
-
-  if (supplier.productsServices?.productCategories) {
-
-    supplier.productsServices.productCategories.forEach(category => {
-
-      text += ` ${category.name || ""} `;
-
-      if (category.products) {
-
-        category.products.forEach(product => {
-
-          text += ` ${product.name || ""} ${product.description || ""} `;
-
-        });
-
-      }
-
-    });
-
-  }
-
-
-
-  // Service descriptions
-
-  if (supplier.productsServices?.serviceCategories) {
-
-    supplier.productsServices.serviceCategories.forEach(category => {
-
-      text += ` ${category.name || ""} `;
-
-      if (category.services) {
-
-        category.services.forEach(service => {
-
-          text += ` ${service.name || ""} ${service.description || ""} `;
-
-        });
-
-      }
-
-    });
-
-  }
-
-
-
-  // Target market and other relevant fields
-
-  text += ` ${supplier.productsServices?.targetMarket || ""} `;
-
-
-
-  return text.toLowerCase().trim();
-
-}
-
-
-
-export function calculateEnhancedMatchScore(application, supplier, ratingsData = null) {
-
-  if (!application || !supplier) {
-
-    return { totalScore: 0, breakdown: {} }
-
-  }
-
-
-
-  let totalScore = 0
-
-  const breakdown = {}
-
-
-
-  // Category Match (40%)
-
-  const categoryMatch = calculateCategoryMatch(application, supplier)
-
-  const categoryContribution = categoryMatch.score * ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
-
-  totalScore += categoryContribution
-
-  breakdown.categoryMatch = {
-
-    score: Math.round(categoryMatch.score * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100,
-
-    contribution: Math.round(categoryContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.description,
-
-    matches: categoryMatch.matches
-
-  }
-
-
-
-  // BBBEE Match (10%)
-
-  const bbbeeScore = calculateBBBEEEMatch(application, supplier)
-
-  const bbbeeContribution = bbbeeScore * ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
-
-  totalScore += bbbeeContribution
-
-  breakdown.bbbeeMatch = {
-
-    score: Math.round(bbbeeScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100,
-
-    contribution: Math.round(bbbeeContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.description,
-
-  }
-
-
-
-  // Location Match (10%)
-
-  const locationScore = calculateLocationMatch(application, supplier)
-
-  const locationContribution = locationScore * ENHANCED_MATCHING_CRITERIA.LOCATION.weight * 100
-
-  totalScore += locationContribution
-
-  breakdown.locationMatch = {
-
-    score: Math.round(locationScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.LOCATION.weight * 100,
-
-    contribution: Math.round(locationContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.LOCATION.description,
-
-  }
-
-
-
-  // Delivery Match (10%)
-
-  const deliveryScore = calculateDeliveryMatch(application, supplier)
-
-  const deliveryContribution = deliveryScore * ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-
-  totalScore += deliveryContribution
-
-  breakdown.deliveryMatch = {
-
-    score: Math.round(deliveryScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.weight * 100,
-
-    contribution: Math.round(deliveryContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.description,
-
-  }
-
-
-
-  // Budget Match (10%)
-
-  const budgetScore = calculateBudgetMatch(application, supplier)
-
-  const budgetContribution = budgetScore * ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
-
-  totalScore += budgetContribution
-
-  breakdown.budgetMatch = {
-
-    score: Math.round(budgetScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.weight * 100,
-
-    contribution: Math.round(budgetContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.description,
-
-  }
-
-
-
-  // Ownership Preferences (5%)
-
-  const ownershipScore = calculateOwnershipMatch(application, supplier)
-
-  const ownershipContribution = ownershipScore * ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-
-  totalScore += ownershipContribution
-
-  breakdown.ownershipMatch = {
-
-    score: Math.round(ownershipScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100,
-
-    contribution: Math.round(ownershipContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
-
-  }
-
-
-
-  // Rating Match (5%)
-
-  const ratingScore = calculateRatingMatch(supplier, ratingsData)
-
-  const ratingContribution = ratingScore * ENHANCED_MATCHING_CRITERIA.RATING.weight * 100
-
-  totalScore += ratingContribution
-
-  breakdown.ratingMatch = {
-
-    score: Math.round(ratingScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.RATING.weight * 100,
-
-    contribution: Math.round(ratingContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.RATING.description,
-
-  }
-
-
-
-  // Experience Match (5%)
-
-  const experienceScore = 0.5
-
-  const experienceContribution = experienceScore * ENHANCED_MATCHING_CRITERIA.EXPERIENCE.weight * 100
-
-  totalScore += experienceContribution
-
-  breakdown.experienceMatch = {
-
-    score: Math.round(experienceScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.EXPERIENCE.weight * 100,
-
-    contribution: Math.round(experienceContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.EXPERIENCE.description,
-
-  }
-
-
-
-  // Urgency/Lead Time Match (5%)
-
-  const urgencyScore = 0.5
-
-  const urgencyContribution = urgencyScore * ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-
-  totalScore += urgencyContribution
-
-  breakdown.urgencyLeadTimeMatch = {
-
-    score: Math.round(urgencyScore * 100),
-
-    weight: ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100,
-
-    contribution: Math.round(urgencyContribution),
-
-    description: ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
-
-  }
-
-
-
-  return {
-
-    totalScore: Math.round(totalScore),
-
-    breakdown,
-
-  }
-
-}
-
-
-
-// ── Preference-only score (secondary) ──────────────────────────────────
-
-// SECONDARY matching score: evaluates applicant-specified preferences
-
-// against the supplier profile. Excludes category alignment (handled
-
-// by the AI primary score). Returns 0-100 with per-criterion breakdown.
-
-
-
-const PREFERENCE_WEIGHTS = {
-
-  BBBEE_LEVEL:       { weight: 0.15, label: "BBBEE Level Compliance" },
-
-  LOCATION:          { weight: 0.15, label: "Geographic Location Match" },
-
-  DELIVERY_MODE:     { weight: 0.15, label: "Delivery Mode Compatibility" },
-
-  BUDGET_RANGE:      { weight: 0.20, label: "Budget Fit" },
-
-  OWNERSHIP_PREFS:   { weight: 0.10, label: "Ownership Preferences Match" },
-
-  RATING:            { weight: 0.10, label: "Supplier Rating" },
-
-  EXPERIENCE:        { weight: 0.10, label: "Sector Experience" },
-
-  URGENCY_LEAD_TIME: { weight: 0.05, label: "Urgency & Lead Time" },
-
-}
-
-
-
-export function calculatePreferenceScore(application, supplier, ratingsData = null) {
-  if (!application || !supplier) return { totalScore: 0, breakdown: {} }
- 
-  let totalScore = 0
-  const breakdown = {}
- 
-  // BBBEE Match (15%)
-  const bbbeeScore = calculateBBBEEEMatch(application, supplier)
-  const bbbeeCont = bbbeeScore * PREFERENCE_WEIGHTS.BBBEE_LEVEL.weight * 100
-  totalScore += bbbeeCont
-  const bbbeePref = application.matchingPreferences?.bbeeLevel || ""
-  breakdown.bbbee = {
-    score: Math.round(bbbeeScore * 100),
-    weight: PREFERENCE_WEIGHTS.BBBEE_LEVEL.weight,
-    contribution: Math.round(bbbeeCont),
-    label: PREFERENCE_WEIGHTS.BBBEE_LEVEL.label,
-    appValue: bbbeePref && bbbeePref !== "None" && bbbeePref !== "Any" ? bbbeePref : "No preference",
-    supplierValue: supplier.legalCompliance?.bbbeeLevel || "N/A",
-  }
- 
-  // Location Match (15%)
-  const locationScore = calculateLocationMatch(application, supplier)
-  const locationCont = locationScore * PREFERENCE_WEIGHTS.LOCATION.weight * 100
-  totalScore += locationCont
-  const locationPref = application.matchingPreferences?.location || application.requestOverview?.location || ""
-  breakdown.location = {
-    score: Math.round(locationScore * 100),
-    weight: PREFERENCE_WEIGHTS.LOCATION.weight,
-    contribution: Math.round(locationCont),
-    label: PREFERENCE_WEIGHTS.LOCATION.label,
-    appValue: locationPref || "No preference",
-    supplierValue: supplier.entityOverview?.location || "Not specified",
-  }
- 
-  // Delivery Mode (15%)
-  const deliveryScore = calculateDeliveryMatch(application, supplier)
-  const deliveryCont = deliveryScore * PREFERENCE_WEIGHTS.DELIVERY_MODE.weight * 100
-  totalScore += deliveryCont
-  const deliveryPref = application.matchingPreferences?.deliveryModes || application.requestOverview?.deliveryModes || []
-  breakdown.delivery = {
-    score: Math.round(deliveryScore * 100),
-    weight: PREFERENCE_WEIGHTS.DELIVERY_MODE.weight,
-    contribution: Math.round(deliveryCont),
-    label: PREFERENCE_WEIGHTS.DELIVERY_MODE.label,
-    appValue: deliveryPref.length ? deliveryPref.join(", ") : "No preference",
-    supplierValue: (supplier.productsServices?.deliveryModes || []).join(", ") || "Not specified",
-  }
- 
-  // Budget Range (20%)
-  const budgetScore = calculateBudgetMatch(application, supplier)
-  const budgetCont = budgetScore * PREFERENCE_WEIGHTS.BUDGET_RANGE.weight * 100
-  totalScore += budgetCont
-  const minB = application.matchingPreferences?.minBudget || application.requestOverview?.minBudget || ""
-  const maxB = application.matchingPreferences?.maxBudget || application.requestOverview?.maxBudget || ""
-  breakdown.budget = {
-    score: Math.round(budgetScore * 100),
-    weight: PREFERENCE_WEIGHTS.BUDGET_RANGE.weight,
-    contribution: Math.round(budgetCont),
-    label: PREFERENCE_WEIGHTS.BUDGET_RANGE.label,
-    appValue: minB || maxB ? `${minB || "0"} – ${maxB || "∞"}` : "No preference",
-    supplierValue: supplier.financialOverview?.annualRevenue || "Not disclosed",
-  }
- 
-  // Ownership Prefs (10%)
-  const ownershipScore = calculateOwnershipMatch(application, supplier)
-  const ownershipCont = ownershipScore * PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.weight * 100
-  totalScore += ownershipCont
-  const ownershipPrefs = (application.matchingPreferences?.ownershipPrefs || []).filter(
-    (p) => p && p !== "None"
-  )
-  breakdown.ownership = {
-    score: Math.round(ownershipScore * 100),
-    weight: PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.weight,
-    contribution: Math.round(ownershipCont),
-    label: PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.label,
-    appValue: ownershipPrefs.length ? ownershipPrefs.join(", ") : "No preference",
-    supplierValue: "Evaluated from shareholder data",
-  }
- 
-  // Rating (10%) — objective metric, always scored
-  const ratingScore = calculateRatingMatch(supplier, ratingsData)
-  const ratingCont = ratingScore * PREFERENCE_WEIGHTS.RATING.weight * 100
-  totalScore += ratingCont
-  const ratingInfo = ratingsData?.[supplier.id] || { average: 0, count: 0 }
-  breakdown.rating = {
-    score: Math.round(ratingScore * 100),
-    weight: PREFERENCE_WEIGHTS.RATING.weight,
-    contribution: Math.round(ratingCont),
-    label: PREFERENCE_WEIGHTS.RATING.label,
-    appValue: "Platform rating",
-    supplierValue:
-      ratingInfo.count > 0
-        ? `${ratingInfo.average.toFixed(1)}/5 (${ratingInfo.count} reviews)`
-        : "No reviews yet",
-  }
- 
-  // Sector Experience (10%) — stub; no preference = 100%, preference set but
-  // not evaluatable yet = 50%
-  const sectorExp = application.matchingPreferences?.sectorExperience || ""
-  const experienceScore = sectorExp ? 0.5 : 1
-  const experienceCont = experienceScore * PREFERENCE_WEIGHTS.EXPERIENCE.weight * 100
-  totalScore += experienceCont
-  breakdown.experience = {
-    score: Math.round(experienceScore * 100),
-    weight: PREFERENCE_WEIGHTS.EXPERIENCE.weight,
-    contribution: Math.round(experienceCont),
-    label: PREFERENCE_WEIGHTS.EXPERIENCE.label,
-    appValue: sectorExp || "No preference",
-    supplierValue: sectorExp ? "Not fully evaluated yet" : "No requirement set",
-  }
- 
-  // Urgency / Lead Time (5%) — no structured field to match against; always 100%
-  const urgencyScore = 1
-  const urgencyCont = urgencyScore * PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.weight * 100
-  totalScore += urgencyCont
-  breakdown.urgency = {
-    score: Math.round(urgencyScore * 100),
-    weight: PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.weight,
-    contribution: Math.round(urgencyCont),
-    label: PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.label,
-    appValue: "Any",
-    supplierValue: "Not evaluated yet",
-  }
- 
-  return { totalScore: Math.round(totalScore), breakdown }
-}
-
-
-
-// ── Reusable AI analysis runner ────────────────────────────────────────
-
-// Calls the Cloud Function, saves results to Firestore, and returns
-
-// the processed matches map. Can be called from any component.
-
-
-
-export async function runAiAnalysisForApplication(application, suppliers, { onProgress } = {}) {
-  if (!application || !suppliers?.length) {
-    throw new Error("Application and suppliers are required")
-  }
-
-  const applicationId = application.id
-  if (!applicationId) throw new Error("Application must have an id")
-
-  const customerPurpose =
-    application.requestOverview?.purpose ||
-    application.purpose ||
-    "General business procurement needs"
-
-  // Extract explicit categories from the application for detailed breakdown
-  const productCategories =
-    application.requestOverview?.productCategories ||
-    application.productsServices?.productCategories ||
-    application.requestOverview?.categories ||
-    application.productsServices?.categories ||
-    []
-
-  const serviceCategories =
-    application.requestOverview?.serviceCategories ||
-    application.productsServices?.serviceCategories ||
-    []
-
-  const suppliersForAnalysis = suppliers.map((s) => ({
-    id: s.id,
-    entityOverview: s.entityOverview || {},
-    productsServices: s.productsServices || {},
-  }))
-
-  const eligibleSuppliersForAnalysis = selectSuppliersForAiAnalysis(suppliers)
-  const selectedSupplierIds = new Set(eligibleSuppliersForAnalysis.map((s) => s.id))
-  const selectedSuppliersForAnalysis = suppliersForAnalysis.filter((s) => selectedSupplierIds.has(s.id))
-
-  if (selectedSuppliersForAnalysis.length === 0) {
-    throw new Error("No AI-eligible suppliers found. Supplier profiles need completed Entity Overview, Products & Services, a name, and at least one category.")
-  }
-
-  if (onProgress) onProgress({ current: 0, total: selectedSuppliersForAnalysis.length })
-
-  const result = await analyzeSupplierMatchesWithFallback({
-    suppliers: selectedSuppliersForAnalysis,
-    customerPurpose,
-    applicationId,
-    productCategories,
-    serviceCategories,
-    analyzeAll: true,
-    maxSuppliers: selectedSuppliersForAnalysis.length,
-  })
-
-  // FIX: result.data doesn't exist - the matches are at the root level
-  const { matches, missingSupplierIds = [] } = result  // ✅ Direct destructuring
-
-  const processedMatches = {}
-  matches.forEach((match) => {
-    const normalizedScore = Math.round((match.score / 5) * 100)
-    processedMatches[match.supplierId] = {
-      score: normalizedScore,
-      reasoning: match.reasoning || "No reasoning provided",
-      capabilities: match.matchedCapabilities || [],
-      breakdown: match.breakdown || null,
-      analyzedAt: new Date().toISOString(),
-    }
-  })
-
-  // Mark missing suppliers with a 0 score so they don't stay pending
-  missingSupplierIds.forEach((id) => {
-    if (!processedMatches[id]) {
-      processedMatches[id] = {
-        score: 0,
-        reasoning: "AI analysis did not return a result for this supplier.",
-        capabilities: [],
-        breakdown: null,
-        analyzedAt: new Date().toISOString(),
-      }
-    }
-  })
-
-  if (onProgress) onProgress({ current: Object.keys(processedMatches).length, total: selectedSuppliersForAnalysis.length })
-
-  // Persist to Firestore
-  const matchDocRef = doc(db, "aiSecondaryMatches", applicationId)
-  await setDoc(matchDocRef, {
-    suppliers: processedMatches,
-    requestPurpose: customerPurpose,
-    analyzedAt: serverTimestamp(),
-    suppliersAnalyzed: Object.keys(processedMatches).length,
-    applicationId,
-  })
-
-  return processedMatches
-}
-
-
-
-// Helper function to calculate string similarity
-
-function calculateSimilarity(str1, str2) {
-
-  const longer = str1.length > str2.length ? str1 : str2
-
-  const shorter = str1.length > str2.length ? str2 : str1
-
-
-
-  if (longer.length === 0) return 1.0
-
-
-
-  return (longer.length - editDistance(longer, shorter)) / parseFloat(longer.length)
-
-}
-
-
-
-function editDistance(s1, s2) {
-
-  s1 = s1.toLowerCase()
-
-  s2 = s2.toLowerCase()
-
-
-
-  const costs = []
-
-  for (let i = 0; i <= s1.length; i++) {
-
-    let lastValue = i
-
-    for (let j = 0; j <= s2.length; j++) {
-
-      if (i === 0) {
-
-        costs[j] = j
-
-      } else if (j > 0) {
-
-        let newValue = costs[j - 1]
-
-        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
-
-          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1
-
-        }
-
-        costs[j - 1] = lastValue
-
-        lastValue = newValue
-
-      }
-
-    }
-
-    if (i > 0) costs[s2.length] = lastValue
-
-  }
-
-  return costs[s2.length]
-
-}
-
-
-
-// Helper function to calculate ownership percentages from shareholder data
-
-function calculateOwnershipPercentages(ownershipManagement) {
-
-  const result = {
-
-    blackOwnership: 0,
-
-    womenOwnership: 0,
-
-    youthOwnership: 0,
-
-    disabilityOwnership: 0,
-
-    totalShares: 0,
-
-  }
-
-
-
-  const shareholders = Array.isArray(ownershipManagement.shareholders) ? ownershipManagement.shareholders : []
-
-
-
-  shareholders.forEach((shareholder) => {
-
-    const shareholding = parseInt(shareholder.shareholding || "0") || 0
-
-    result.totalShares += shareholding
-
-
-
-    if (shareholder.race && shareholder.race.toLowerCase() === "black") {
-
-      result.blackOwnership += shareholding
-
-    }
-
-    if (shareholder.gender && shareholder.gender.toLowerCase() === "female") {
-
-      result.womenOwnership += shareholding
-
-    }
-
-    if (shareholder.isYouth === true) {
-
-      result.youthOwnership += shareholding
-
-    }
-
-    if (shareholder.isDisabled === true) {
-
-      result.disabilityOwnership += shareholding
-
-    }
-
-  })
-
-
-
-  if (result.totalShares > 0) {
-
-    result.blackOwnership = (result.blackOwnership / result.totalShares) * 100
-
-    result.womenOwnership = (result.womenOwnership / result.totalShares) * 100
-
-    result.youthOwnership = (result.youthOwnership / result.totalShares) * 100
-
-    result.disabilityOwnership = (result.disabilityOwnership / result.totalShares) * 100
-
-  }
-
-
-
-  return result
-
-}
-
-
-
-const mergeSupplierHistory = (newMatches, contactedHistory) => {
-
-  const supplierMap = new Map();
-
-
-
-  // Add contacted suppliers first (priority)
-
-  contactedHistory.forEach(supplier => {
-
-    if (supplier && supplier.id) {
-
-      supplierMap.set(supplier.id, {
-
-        ...supplier,
-
-        isPreviousContact: true,
-
-        previousServiceRequested: supplier.serviceRequired || supplier.originalRequest?.serviceRequested,
-
-        previousContactDate: supplier.lastContacted || supplier.contactDate,
-
-        contactHistory: [{
-
-          date: supplier.lastContacted || supplier.contactDate,
-
-          serviceRequested: supplier.serviceRequired || supplier.originalRequest?.serviceRequested,
-
-          matchScore: supplier.matchPercentage || supplier.matchScore
-
-        }]
-
-      });
-
-    }
-
-  });
-
-
-
-  // Add new matches (don't override previous contacts)
-
-  newMatches.forEach(supplier => {
-
-    if (supplier && supplier.id) {
-
-      if (supplierMap.has(supplier.id)) {
-
-        // Update existing supplier (previously contacted)
-
-        const existing = supplierMap.get(supplier.id);
-
-        existing.hasNewMatch = true;
-
-        existing.newMatchScore = supplier.matchPercentage;
-
-        existing.newServiceRequired = supplier.serviceRequired;
-
-      } else {
-
-        // New supplier
-
-        supplierMap.set(supplier.id, {
-
-          ...supplier,
-
-          isPreviousContact: false,
-
-          hasNewMatch: true
-
-        });
-
-      }
-
-    }
-
-  });
-
-
-
-  return Array.from(supplierMap.values());
-
-};
-
-
-
-const fetchContactedHistory = async (userId) => {
-
-  try {
-
-    if (!userId) return [];
-
-
-
-    const userDocRef = doc(db, "userApplications", userId);
-
-    const userDoc = await getDoc(userDocRef);
-
-
-
-    if (userDoc.exists()) {
-
-      const data = userDoc.data();
-
-      // Flatten all contacted suppliers from all applications
-
-      const allContactedSuppliers = [];
-
-
-
-      data.contactedApplications?.forEach(app => {
-
-        if (app.matches && app.contactedSuppliers) {
-
-          app.contactedSuppliers.forEach(supplierId => {
-
-            const supplierMatch = app.matches.find(m => m.id === supplierId);
-
-            if (supplierMatch) {
-
-              allContactedSuppliers.push({
-
-                ...supplierMatch,
-
-                contactDate: app.lastContacted,
-
-                originalApplication: {
-
-                  id: app.id,
-
-                  purpose: app.data?.requestOverview?.purpose
-
-                }
-
-              });
-
-            }
-
-          });
-
-        }
-
-      });
-
-
-
-      return allContactedSuppliers;
-
-    }
-
-    return [];
-
-  } catch (error) {
-
-    console.error("Error fetching contacted history:", error);
-
-    return [];
-
-  }
-
-};
-
-
-
-export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSupplierAccepted, onNewRequest }) {
-
-  const [showFilters, setShowFilters] = useState(false)
-
-  const [showModal, setShowModal] = useState(false)
-
-  const [modalContent, setModalContent] = useState({ type: "", supplier: null })
-
-  const [notification, setNotification] = useState(null)
-
-  const [mounted, setMounted] = useState(false)
-
-  const [loading, setLoading] = useState(true)
-
-  const [suppliers, setSuppliers] = useState([])
-
-  const [supplierRatings, setSupplierRatings] = useState({})
-
-  const [allSuppliers, setAllSuppliers] = useState([])
-
-  const [filteredSuppliers, setFilteredSuppliers] = useState([])
-
-  const [error, setError] = useState(null)
-
-  const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
-
-  const [matchBreakdownData, setMatchBreakdownData] = useState(null)
-
-  const [currentUser, setCurrentUser] = useState(null)
-
-  const [currentUserApplication, setCurrentUserApplication] = useState(null)
-
-  const [filters, setFilters] = useState({
-
-    location: "",
-
-    matchScore: 50,
-
-    minValue: "",
-
-    maxValue: "",
-
-    entityType: "",
-
-    sectors: [],
-
-    bbbeeLevel: "",
-
-    procurementCategories: [],
-
-    availability: "",
-
-    sortBy: "",
-
-  })
-
-  const [tableKey, setTableKey] = useState(0);
-
-
-
-  const [showLegend, setShowLegend] = useState(false);
-
-  const [combinedSuppliers, setCombinedSuppliers] = useState([]);
-
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-
-  const [hasPreviousContacts, setHasPreviousContacts] = useState(false);
-
-
-
-
-
-
-
-  const [contactedApplications, setContactedApplications] = useState([])
-
-  const [showContactedApplications, setShowContactedApplications] = useState(false)
-
-  const [applicationsWithContacts, setApplicationsWithContacts] = useState(new Set())
-
-
-
-  // NEW STATE FOR AI SECONDARY MATCHING
-
-  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false)
-
-  const [aiAnalysisProgress, setAiAnalysisProgress] = useState({ current: 0, total: 0 })
-
-  const [secondaryMatchData, setSecondaryMatchData] = useState({})
-
-  const [showSecondaryBreakdown, setShowSecondaryBreakdown] = useState(false)
-
-  const [secondaryBreakdownData, setSecondaryBreakdownData] = useState(null)
-
-  const [aiAnalysisError, setAiAnalysisError] = useState("")
-
-  const [showIneligibleSuppliers, setShowIneligibleSuppliers] = useState(false)
-
-
-
-  const navigate = useNavigate()
-
-  const location = useLocation()
-
-
-
-
-
-  // NEW: Load cached secondary matches
-
-  // Replace the current useEffect for loading cached secondary matches with this:
-
-
-
-  // Load cached secondary matches
-
-  useEffect(() => {
-
-    // Replace the current loadCachedSecondaryMatches function with this:
-
-
-
-    const loadCachedSecondaryMatches = async () => {
-
-      if (!currentUserApplication?.id) {
-
-        console.log("No application ID available yet");
-
-        return;
-
-      }
-
-
-
-      try {
-
-        console.log("Loading cached matches for application:", currentUserApplication.id);
-
-
-
-        const matchDocRef = doc(db, "aiSecondaryMatches", currentUserApplication.id);
-
-        const matchDoc = await getDoc(matchDocRef);
-
-
-
-        if (matchDoc.exists()) {
-
-          const data = matchDoc.data();
-
-          const suppliersData = data.suppliers || {};
-
-
-
-          console.log("✅ Found cached AI matches:", {
-
-            suppliersCount: Object.keys(suppliersData).length,
-
-            analyzedAt: data.analyzedAt,
-
-            supplierIds: Object.keys(suppliersData)
-
-          });
-
-
-
-          // Store the raw data
-
-          setSecondaryMatchData(suppliersData);
-
-
-
-          // Create update function for suppliers
-
-          const updateSupplierWithCache = (supplier) => {
-
-            const cachedData = suppliersData[supplier.id];
-
-            if (cachedData) {
-
-              return {
-
-                ...supplier,
-
-                secondaryMatchScore: cachedData.score || 0,
-
-                secondaryMatchReasoning: cachedData.reasoning || "",
-
-                secondaryMatchCapabilities: cachedData.capabilities || [],
-
-                _hasAiAnalysis: true
-
-              };
-
-            }
-
-            return supplier;
-
-          };
-
-
-
-          // Update the base suppliers array
-
-          const updatedAllSuppliers = allSuppliers.map(updateSupplierWithCache);
-
-
-
-          setAllSuppliers(updatedAllSuppliers); // Update the base array
-
-
-
-          console.log("📈 Updated suppliers with AI data:", {
-
-            total: updatedAllSuppliers.length,
-
-            withAiData: updatedAllSuppliers.filter(s => s._hasAiAnalysis).length
-
-          });
-
-
-
-          // CRITICAL: Re-apply filters after updating with AI data
-
-          applyFiltersWithUpdatedSuppliers(updatedAllSuppliers);
-
-
-
-          setNotification({
-
-            type: "success",
-
-            message: `Loaded cached secondary match analysis for ${Object.keys(suppliersData).length} suppliers`
-
-          });
-
-          setTimeout(() => setNotification(null), 3000);
-
-        } else {
-
-          console.log("⚠️ No cached AI matches found for application:", currentUserApplication.id);
-
-          setSecondaryMatchData({});
-
-        }
-
-      } catch (error) {
-
-        console.error("❌ Error loading cached secondary matches:", error);
-
-        setNotification({
-
-          type: "error",
-
-          message: "Failed to load cached AI analysis"
-
-        });
-
-        setTimeout(() => setNotification(null), 3000);
-
-      }
-
-    };
-
-    // Add a small delay to ensure application is fully loaded
-
-    const loadData = async () => {
-
-      if (currentUserApplication?.id && allSuppliers.length > 0) {
-
-        await loadCachedSecondaryMatches();
-
-      }
-
-    };
-
-
-
-    const timer = setTimeout(loadData, 500);
-
-    return () => clearTimeout(timer);
-
-  }, [currentUserApplication?.id, allSuppliers.length]); // Only depend on the ID string, not the whole object
-
-
-
-
-
-  const applyFiltersWithUpdatedSuppliers = (suppliersArray) => {
-
-    const getEffectiveScore = (supplier) => {
-
-      if (supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined) {
-
-        return calculateCombinedMatchScore(supplier.matchPercentage || 0, supplier.secondaryMatchScore);
-
-      }
-
-      return supplier.matchPercentage || 0;
-
-    };
-
-
-
-    const filtered = suppliersArray.filter((supplier) => {
-
-      const aiEligibility = supplier.aiEligibility || getSupplierAiEligibility(supplier, currentUser?.uid);
-
-      if (!showIneligibleSuppliers && !aiEligibility.eligible) return false
-
-      if (filters.location && !supplier.entityOverview?.location?.includes(filters.location)) return false
-
-      const effectiveScore = getEffectiveScore(supplier);
-
-      if (effectiveScore < filters.matchScore) return false
-
-      if (filters.bbbeeLevel && supplier.legalCompliance?.bbbeeLevel !== filters.bbbeeLevel) return false
-
-      if (
-
-        filters.sectors.length > 0 &&
-
-        !filters.sectors.some((sector) => supplier.entityOverview?.economicSectors?.includes(sector))
-
-      )
-
-        return false
-
-      return true
-
-    })
-
-
-
-    // Sort by combined/AI score when available, fallback to primary match
-
-    const sorted = filtered.sort((a, b) => {
-
-      const scoreA = getEffectiveScore(a);
-
-      const scoreB = getEffectiveScore(b);
-
-      return scoreB - scoreA;
-
-    });
-
-
-
-    setFilteredSuppliers(sorted);
-
-    if (onSuppliersUpdate) {
-
-      onSuppliersUpdate(suppliersArray, sorted)
-
-    }
-
-  }
-
-  useEffect(() => {
-
-    if (allSuppliers.length > 0) {
-
-      applyFiltersWithUpdatedSuppliers(allSuppliers)
-
-    }
-
-  }, [showIneligibleSuppliers])
-
-
-
-  // // Helper function to create the analysis prompt
-
-  function createSupplierAnalysisPrompt(suppliers, customerPurpose) {
-
-    const truncatedPurpose = customerPurpose.length > 800
-
-      ? customerPurpose.substring(0, 800) + "..."
-
-      : customerPurpose;
-
-
-
-    const supplierData = suppliers.map(supplier => {
-
-      const name = supplier.entityOverview?.tradingName ||
-
-        supplier.entityOverview?.registeredName ||
-
-        'Unknown Supplier';
-
-
-
-      const productCategories = supplier.productsServices?.productCategories || [];
-
-      const serviceCategories = supplier.productsServices?.serviceCategories || [];
-
-      const targetMarket = supplier.productsServices?.targetMarket || 'Not specified';
-
-      const sector = supplier.entityOverview?.economicSectors?.[0] || 'Not specified';
-
-      const location = supplier.entityOverview?.location || 'Not specified';
-
-
-
-      // Extract product names and descriptions
-
-      const productsDesc = productCategories.map(cat => {
-
-        if (typeof cat === 'string') return cat;
-
-        const name = cat.name || cat.category || '';
-
-        const products = cat.products?.map(p => `${p.name || ''} ${p.description || ''}`).join('; ') || '';
-
-        return `${name} ${products}`;
-
-      }).join(', ').substring(0, 200);
-
-
-
-      // Extract service names and descriptions
-
-      const servicesDesc = serviceCategories.map(cat => {
-
-        if (typeof cat === 'string') return cat;
-
-        const name = cat.name || cat.category || '';
-
-        const services = cat.services?.map(s => `${s.name || ''} ${s.description || ''}`).join('; ') || '';
-
-        return `${name} ${services}`;
-
-      }).join(', ').substring(0, 200);
-
-
-
-      return `SUPPLIER_ID: ${supplier.id}
-
-NAME: ${name}
-
-SECTOR: ${sector}
-
-LOCATION: ${location}
-
-PRODUCTS: ${productsDesc || 'None listed'}
-
-SERVICES: ${servicesDesc || 'None listed'}
-
-TARGET_MARKET: ${targetMarket.substring(0, 150)}
-
----END_SUPPLIER---`;
-
-    }).join('\n');
-
-
-
-    return `You are a business matching expert. Analyze how well each supplier matches the customer request below.
-
-
-
-CUSTOMER REQUEST:
-
-"${truncatedPurpose}"
-
-
-
-SUPPLIERS TO ANALYZE (${suppliers.length} total):
-
-${supplierData}
-
-
-
-CRITICAL RULES:
-
-1. You MUST return a match for EVERY supplier listed above — all ${suppliers.length} of them
-
-2. Use the exact SUPPLIER_ID values as the supplierId in your response
-
-3. Do NOT skip any supplier even if their profile is incomplete
-
-4. For suppliers with no product/service info, give score 0 with reasoning explaining why
-
-
-
-SCORING GUIDE (0-5):
-
-5 = Excellent — direct capability match, supplier clearly offers what customer needs
-
-4 = Strong — high relevance, minor gaps
-
-3 = Good — general alignment, some capability gaps
-
-2 = Partial — limited relevance, indirect connection
-
-1 = Minimal — very weak connection
-
-0 = None — no meaningful alignment or profile is too incomplete to assess
-
-
-
-RETURN THIS EXACT JSON FORMAT (no markdown, no extra text):
-
-{
-
-  "matches": [
-
-    {
-
-      "supplierId": "exact-supplier-id-here",
-
-      "score": 3.5,
-
-      "reasoning": "2-3 sentences explaining WHY this score was given, what matched and what didn't",
-
-      "matchedCapabilities": ["specific capability 1", "specific capability 2"]
-
-    }
-
-  ]
-
-}
-
-
-
-Remember: The matches array must contain exactly ${suppliers.length} entries, one per supplier.`;
-
-  }
-
-  // In your runSecondaryAiAnalysis function, add this check at the beginning:
-
-  const runSecondaryAiAnalysis = async () => {
-
-    if (!currentUserApplication || filteredSuppliers.length === 0) {
-
-      setAiAnalysisError("No suppliers or application data available");
-
-      return;
-
-    }
-
-    const applicationId = currentUserApplication.id ||
-
-      `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    const annotatedSuppliers = allSuppliers.map((supplier) =>
-
-      withSupplierAiEligibility(supplier, currentUser?.uid)
-
-    );
-
-    const suppliersToAnalyze = selectSuppliersForAiAnalysis(annotatedSuppliers, currentUser?.uid);
-
-    const ineligibleCount = annotatedSuppliers.filter((supplier) => !supplier.aiEligibility.eligible).length;
-
-    if (suppliersToAnalyze.length === 0) {
-
-      const message = "No AI-eligible suppliers found. Supplier profiles need completed Entity Overview, Products & Services, a name, and at least one category.";
-
-      setAiAnalysisError(message);
-
-      setNotification({ type: "warning", message });
-
-      setTimeout(() => setNotification(null), 4000);
-
-      return;
-
-    }
-
-
-
-    setIsAiAnalyzing(true);
-
-    setAiAnalysisProgress({ current: 0, total: suppliersToAnalyze.length });
-
-    setAiAnalysisError("");
-
-    try {
-
-      // Prepare ALL supplier data for AI analysis
-
-      const suppliersForAnalysis = suppliersToAnalyze.map(supplier => ({
-
-        id: supplier.id,
-
-        entityOverview: supplier.entityOverview || {},
-
-        productsServices: supplier.productsServices || {}
-
-      }));
-
-      const customerPurpose = currentUserApplication.requestOverview?.purpose ||
-
-        currentUserApplication.purpose ||
-
-        "General business procurement needs";
-
-      setAiAnalysisProgress({ current: 0, total: suppliersToAnalyze.length });
-
-      const result = await analyzeSupplierMatchesWithFallback({
-
-        suppliers: suppliersForAnalysis,
-
-        customerPurpose: customerPurpose,
-
-        applicationId: applicationId,
-
-        analyzeAll: true,        // tell the function to not limit results
-
-        maxSuppliers: suppliersForAnalysis.length  // explicit count
-
-      });
-
-      console.log("AI analysis result:", result);
-
-
-      const { matches } = result.data;
-
-
-
-      // Process and normalize scores for ALL suppliers
-
-      const processedMatches = {};
-
-      matches.forEach(match => {
-
-        const normalizedScore = Math.round((match.score / 5) * 100);
-
-        processedMatches[match.supplierId] = {
-
-          score: normalizedScore,
-
-          reasoning: match.reasoning || "No reasoning provided",
-
-          capabilities: match.matchedCapabilities || [],
-
-          analyzedAt: new Date().toISOString()
-
-        };
-
-      });
-
-
-
-      // Log which suppliers got analysis vs which didn't
-
-      const analyzedIds = Object.keys(processedMatches);
-
-      const allSupplierIds = suppliersToAnalyze.map(s => s.id);
-
-      const missingAnalyses = allSupplierIds.filter(id => !analyzedIds.includes(id));
-
-
-
-      console.log("Analysis coverage:", {
-
-        analyzed: analyzedIds.length,
-
-        total: allSupplierIds.length,
-
-        missing: missingAnalyses.length,
-
-        missingIds: missingAnalyses
-
-      });
-
-
-
-      // Save to Firestore only if we have a real application ID (not temp)
-
-      if (!applicationId.startsWith('temp-')) {
-
-        await saveSecondaryMatchesToFirestore(applicationId, processedMatches);
-
-      }
-
-
-
-      // Update local state
-
-      setSecondaryMatchData(processedMatches);
-
-
-
-      // Update ALL suppliers with new scores
-
-      const updateSupplierWithAnalysis = (supplier) => {
-
-        const analysis = processedMatches[supplier.id];
-
-        if (analysis) {
-
-          return withSupplierAiEligibility({
-
-            ...supplier,
-
-            secondaryMatchScore: analysis.score,
-
-            secondaryMatchReasoning: analysis.reasoning,
-
-            secondaryMatchCapabilities: analysis.capabilities
-
-          }, currentUser?.uid);
-
-        }
-
-        return withSupplierAiEligibility(supplier, currentUser?.uid);
-
-      };
-
-
-
-      setSuppliers(prev => prev.map(updateSupplierWithAnalysis));
-
-      setAllSuppliers(prev => prev.map(updateSupplierWithAnalysis));
-
-      setFilteredSuppliers(prev => prev.map(updateSupplierWithAnalysis));
-
-
-
-      setAiAnalysisProgress({ current: analyzedIds.length, total: suppliersToAnalyze.length });
-
-
-
-      const missedCount = suppliersToAnalyze.length - analyzedIds.length;
-
-      const cappedCount = Math.max(
-
-        0,
-
-        annotatedSuppliers.length - ineligibleCount - suppliersToAnalyze.length
-
-      );
-
-      const analysisMessage = missedCount === 0
-
-        ? `AI analysis complete - ${analyzedIds.length} eligible suppliers analyzed${ineligibleCount ? `, ${ineligibleCount} ineligible skipped` : ""}${cappedCount ? `, ${cappedCount} held for next batch` : ""}`
-
-        : `AI analysis complete - ${analyzedIds.length} analyzed, ${missedCount} missing from AI response, ${ineligibleCount} ineligible skipped`;
-
-      setNotification({
-
-        type: missedCount === 0 ? "success" : "info",
-
-        message: analysisMessage
-
-      });
-
-      setTimeout(() => setNotification(null), 4000);
-
-
-
-    } catch (error) {
-
-      console.error("AI Analysis error details:", error);
-
-
-
-      let errorMessage = "AI analysis failed. Please try again.";
-
-
-
-      if (error.message.includes('Missing')) {
-
-        errorMessage = "Data validation error: " + error.message;
-
-      } else if (error.message.includes('INTERNAL')) {
-
-        errorMessage = "Server error: The AI service is temporarily unavailable";
-
-      } else if (error.message.includes('timeout')) {
-
-        errorMessage = "Analysis timed out. Try with fewer suppliers or try again later.";
-
-      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
-
-        errorMessage = "Rate limit reached. Please wait a few minutes and try again.";
-
-      } else if (error.message.includes('OpenAI')) {
-
-        errorMessage = "AI service error: " + error.message;
-
-      }
-
-
-
-      setAiAnalysisError(errorMessage);
-
-      setNotification({
-
-        type: "error",
-
-        message: errorMessage
-
-      });
-
-    } finally {
-
-      setIsAiAnalyzing(false);
-
-      setAiAnalysisProgress({ current: 0, total: 0 });
-
-    }
-
-  };
-
-
-
-  // NEW: Save matches to Firestore
-
-  const saveSecondaryMatchesToFirestore = async (applicationId, matches) => {
-
-    try {
-
-      const matchDocRef = doc(db, "aiSecondaryMatches", applicationId)
-
-      await setDoc(matchDocRef, {
-
-        suppliers: matches,
-
-        requestPurpose: currentUserApplication.requestOverview?.purpose,
-
-        analyzedAt: serverTimestamp(),
-
-        suppliersAnalyzed: Object.keys(matches).length,
-
-        applicationId: applicationId
-
-      })
-
-    } catch (error) {
-
-      console.error("Error saving secondary matches:", error)
-
-      throw error
-
-    }
-
-  }
-
-
-
-  // NEW: Prepare supplier data for AI (helper function)
-
-  const prepareSupplierDataForAi = (supplier) => {
-
-    return {
-
-      id: supplier.id,
-
-      name: supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName,
-
-      products: supplier.productsServices?.productCategories || [],
-
-      services: supplier.productsServices?.serviceCategories || [],
-
-      targetMarket: supplier.productsServices?.targetMarket || ""
-
-    }
-
-  }
-
-
-
-  // NEW: Handle secondary match breakdown
-
-  const handleShowSecondaryBreakdown = (supplier) => {
-
-    setSecondaryBreakdownData({
-
-      supplier,
-
-      primaryScore: supplier.matchPercentage || supplier.newMatchScore || 0,
-
-      secondaryScore: supplier.secondaryMatchScore ?? null,
-
-      reasoning: supplier.secondaryMatchReasoning || null,
-
-      capabilities: supplier.secondaryMatchCapabilities || []
-
-    });
-
-    setShowSecondaryBreakdown(true);
-
-  };
-
-
-
-
-
-  // NEW: Get secondary match color
-
-  const getSecondaryMatchColor = (score) => {
-
-    if (!score) return "#999"
-
-    if (score >= 75) return "#48BB78"
-
-    if (score >= 50) return "#F6AD55"
-
-    return "#F56565"
-
-  }
-
-
-
-  function calculateCombinedMatchScore(primaryScore, aiScore) {
-
-    if (aiScore === null || aiScore === undefined) {
-
-      return null; // No AI analysis yet
-
-    }
-
-
-
-    // Combine scores: 60% primary match, 40% AI semantic match
-
-    const combinedScore = (aiScore * 0.6) + (primaryScore * 0.4);
-
-    return Math.round(combinedScore);
-
-  }
-
-
-
-  useEffect(() => {
-
-    const loadContactedApplications = async () => {
-
-      try {
-
-        const user = getAuth().currentUser
-
-        if (!user) return
-
-
-
-        const userDocRef = doc(db, "userApplications", user.uid)
-
-        const userDoc = await getDoc(userDocRef)
-
-
-
-        if (userDoc.exists()) {
-
-          const data = userDoc.data()
-
-          const contactedApps = data.contactedApplications || []
-
-          setContactedApplications(contactedApps)
-
-
-
-          // Populate applicationsWithContacts set
-
-          const contactedIds = new Set(contactedApps.map(app => app.id))
-
-          setApplicationsWithContacts(contactedIds)
-
-        }
-
-      } catch (error) {
-
-        console.error("Error loading contacted applications:", error)
-
-      }
-
-    }
-
-
-
-    if (currentUser) {
-
-      loadContactedApplications()
-
-    }
-
-  }, [currentUser])
-
-
-
-  const saveContactedAppToFirestore = async (contactedApp) => {
-
-    try {
-
-      const user = getAuth().currentUser
-
-      if (!user) return
-
-
-
-      const userDocRef = doc(db, "userApplications", user.uid)
-
-      const userDoc = await getDoc(userDocRef)
-
-
-
-      if (userDoc.exists()) {
-
-        // Update existing document
-
-        await updateDoc(userDocRef, {
-
-          contactedApplications: arrayUnion(contactedApp),
-
-          updatedAt: serverTimestamp()
-
-        })
-
-      } else {
-
-        // Create new document
-
-        await setDoc(userDocRef, {
-
-          userId: user.uid,
-
-          contactedApplications: [contactedApp],
-
-          createdAt: serverTimestamp()
-
-        })
-
-      }
-
-    } catch (error) {
-
-      console.error("Error saving contacted application:", error)
-
-    }
-
-  }
-
-
-
-  const updateContactedApplication = async (applicationId, newSupplierId) => {
-
-    try {
-
-      // Update in local state
-
-      setContactedApplications(prev =>
-
-        prev.map(app => {
-
-          if (app.id === applicationId) {
-
-            const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId]
-
-            return {
-
-              ...app,
-
-              contactedSuppliers: updatedSuppliers,
-
-              contactedCount: updatedSuppliers.length,
-
-              lastContacted: new Date().toISOString()
-
-            }
-
-          }
-
-          return app
-
-        })
-
-      )
-
-
-
-      // Update in Firestore
-
-      const user = getAuth().currentUser
-
-      if (!user) return
-
-
-
-      const userDocRef = doc(db, "userApplications", user.uid)
-
-      const userDoc = await getDoc(userDocRef)
-
-
-
-      if (userDoc.exists()) {
-
-        const data = userDoc.data()
-
-        const updatedContactedApps = data.contactedApplications.map(app => {
-
-          if (app.id === applicationId) {
-
-            const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId]
-
-            return {
-
-              ...app,
-
-              contactedSuppliers: updatedSuppliers,
-
-              contactedCount: updatedSuppliers.length,
-
-              lastContacted: new Date().toISOString()
-
-            }
-
-          }
-
-          return app
-
-        })
-
-
-
-        await updateDoc(userDocRef, {
-
-          contactedApplications: updatedContactedApps
-
-        })
-
-      }
-
-    } catch (error) {
-
-      console.error("Error updating contacted application:", error)
-
-    }
-
-  }
-
-
-
-  const handleNewRequest = () => {
-
-    console.log("New request triggered from SupplierTable");
-
-
-
-    // Clear current matches and data
-
-    setAllSuppliers([]);
-
-    setFilteredSuppliers([]);
-
-    setSuppliers([]);
-
-    setCombinedSuppliers([]);
-
-    setCurrentUserApplication(null);
-
-    setSecondaryMatchData({});
-
-
-
-    setNotification({
-
-      type: "info",
-
-      message: "Starting new request. Switch to Application tab to update criteria."
-
-    });
-
-
-
-    // Call the parent's onNewRequest callback to switch tabs
-
-    if (onNewRequest) {  // Now using the prop parameter
-
-      onNewRequest();
-
-    } else {
-
-      // Fallback: Show instruction
-
-      setNotification({
-
-        type: "warning",
-
-        message: "Please switch to the 'Product & Service Application' tab to start a new request."
-
-      });
-
-    }
-
-
-
-    setTimeout(() => setNotification(null), 3000);
-
-  };
-
-
-
-  // Add a useEffect to handle navigation state
-
-  useEffect(() => {
-
-    if (location.state?.newApplicationSubmitted) {
-
-      setNotification({
-
-        type: "success",
-
-        message: "New application submitted! Loading matches..."
-
-      });
-
-
-
-      // Trigger refresh of matches
-
-      if (currentUser) {
-
-        loadUserApplicationAndMatches();
-
-      }
-
-    }
-
-  }, [location.state]);
-
-
-
-  useEffect(() => {
-
-    const loadDataWithHistory = async () => {
-
-      if (!currentUser || !currentUserApplication) return;
-
-
-
-      setIsLoadingHistory(true);
-
-      try {
-
-        // 1. Calculate new matches (existing logic)
-
-        const profilesSnapshot = await getDocs(collection(db, "universalProfiles"));
-
-        const profilesData = profilesSnapshot.docs.map((doc) => {
-
-          const data = doc.data();
-
-          return {
-
-            id: doc.id,
-
-            ...data,
-
-            productsServices: data.productsServices || {},
-
-            financialOverview: data.financialOverview || {},
-
-            legalCompliance: data.legalCompliance || {},
-
-            entityOverview: data.entityOverview || {},
-
-            currentStage: "Potential Supplier",
-
-            status: "New Lead",
-
-          };
-
-        });
-
-
-
-        const ratingsData = await fetchSupplierRatings();
-
-
-
-        const suppliersWithMatches = profilesData.map((supplier) => {
-
-          const matchScore = calculateEnhancedMatchScore(currentUserApplication, supplier, ratingsData);
-
-          const firstCategory = getFirstCategory(supplier.productsServices);
-
-          const supplierRatingData = ratingsData[supplier.id] || {
-
-            average: 0,
-
-            count: 0,
-
-            latestComment: "No ratings yet"
-
-          };
-
-          const actualRating = supplierRatingData.average;
-
-
-
-          return withSupplierAiEligibility({
-
-            ...supplier,
-
-            matchPercentage: matchScore.totalScore,
-
-            matchDetails: matchScore.breakdown,
-
-            status: getStatusBasedOnScore(matchScore.totalScore),
-
-            rating: actualRating,
-
-            avgResponseTime: "1-2 days",
-
-            lastActivity: new Date().toLocaleDateString(),
-
-            urgency: supplier.applicationOverview?.urgency || "1 month",
-
-            dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
-
-            serviceCategory: firstCategory,
-
-            currentStage: "Potential Supplier",
-
-            nextStage: "Initial Contact",
-
-            bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
-
-            applicationId: null,
-
-            ratingCount: supplierRatingData.count,
-
-            serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
-
-          }, currentUser?.uid);
-
-        });
-
-
-
-        const relevantSuppliers = suppliersWithMatches
-
-          .filter(supplier => supplier.matchPercentage > 0 && supplier.id !== currentUser?.uid)
-
-          .sort((a, b) => b.matchPercentage - a.matchPercentage);
-
-
-
-        // 2. Fetch contacted history
-
-        const contactedHistory = await fetchContactedHistory(currentUser.uid);
-
-
-
-        // 3. Merge with new matches
-
-        const mergedSuppliers = mergeSupplierHistory(relevantSuppliers, contactedHistory);
-
-
-
-        // 4. Update states
-
-        setAllSuppliers(mergedSuppliers);
-
-        setCombinedSuppliers(mergedSuppliers);
-
-        setFilteredSuppliers(mergedSuppliers);
-
-
-
-        // 5. Check if we have previous contacts
-
-        const hasPrevious = mergedSuppliers.some(s => s.isPreviousContact);
-
-        setHasPreviousContacts(hasPrevious);
-
-        setShowLegend(hasPrevious);
-
-
-
-        // Notify parent component
-
-        if (onSuppliersUpdate) {
-
-          onSuppliersUpdate(mergedSuppliers, mergedSuppliers);
-
-        }
-
-
-
-      } catch (error) {
-
-        console.error("Error loading data with history:", error);
-
-        setError("Failed to load supplier matches with history.");
-
-      } finally {
-
-        setIsLoadingHistory(false);
-
-      }
-
-    };
-
-
-
-    loadDataWithHistory();
-
-  }, [currentUserApplication, currentUser]);
-
-
-
-  // Update the table rendering to show combined suppliers
-
-  const renderSupplierRows = () => {
-
-    return filteredSuppliers.map((supplier) => {
-
-      const statusStyle = getStatusStyle(supplier.status);
-
-      const stageStyle = getStageStyle(supplier.currentStage);
-
-
-
-      const isPreviousContact = supplier.isPreviousContact;
-
-      const hasNewMatch = supplier.hasNewMatch;
-
-      const aiEligibility = supplier.aiEligibility || getSupplierAiEligibility(supplier, currentUser?.uid);
-
-
-
-      return (
-
-        <tr
-
-          key={supplier.id}
-
-          style={{
-
-            ...tableRowStyle,
-
-            backgroundColor: isPreviousContact ? '#FFF8E1' : 'white',
-
-            borderLeft: isPreviousContact ? '4px solid #F57C00' : 'none',
-
-            opacity: isPreviousContact && !hasNewMatch ? 0.8 : 1
-
-          }}
-
-        >
-
-          <td style={tableCellStyle}>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-
-              <div>
-
-                <span onClick={() => handleViewDetails(supplier)} style={supplierNameStyle}>
-
-                  <TruncatedText
-
-                    text={supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}
-
-                    maxLength={15}
-
-                  />
-
-                </span>
-
-                {isPreviousContact && (
-
-                  <div style={{ fontSize: "0.6rem", color: "#F57C00", marginTop: "2px" }}>
-
-                    ✓ Previously Contacted
-
-                  </div>
-
-                )}
-
-              </div>
-
-            </div>
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            <TruncatedText
-
-              text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
-
-              maxLength={12}
-
-            />
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            <TruncatedText
-
-              text={supplier.financialOverview?.annualRevenue || "Not specified"}
-
-              maxLength={12}
-
-            />
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            <TruncatedText
-
-              text={
-
-                supplier.productsServices?.productCategories?.[0]?.name ||
-
-                supplier.productsServices?.serviceCategories?.[0]?.name ||
-
-                "Not specified"
-
-              }
-
-              maxLength={10}
-
-            />
-
-          </td>
-
-
-
-          {/* Updated Service Required Column */}
-
-          <td style={tableCellStyle}>
-
-            {isPreviousContact ? (
-
-              <div>
-
-                <div style={{ fontSize: '0.7rem', color: '#F57C00', fontWeight: 'bold' }}>
-
-                  Previous: {supplier.previousServiceRequested || "Not specified"}
-
-                </div>
-
-                {hasNewMatch && (
-
-                  <div style={{ fontSize: '0.7rem', color: '#388E3C', marginTop: '4px' }}>
-
-                    New Match: {supplier.serviceRequired || supplier.newServiceRequired || "Not specified"}
-
-                  </div>
-
-                )}
-
-                {supplier.previousContactDate && (
-
-                  <div style={{ fontSize: '0.6rem', color: '#666', marginTop: '2px' }}>
-
-                    Contacted: {new Date(supplier.previousContactDate).toLocaleDateString()}
-
-                  </div>
-
-                )}
-
-              </div>
-
-            ) : (
-
-              <TruncatedText
-
-                text={supplier.serviceRequired || "Not specified"}
-
-                maxLength={15}
-
-              />
-
-            )}
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            {!aiEligibility.eligible ? (
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-
-                <span style={{ color: "#B45309", fontSize: "0.72rem", fontWeight: "700" }}>
-
-                  Not AI eligible
-
-                </span>
-
-                <span style={{ color: "#8D6E63", fontSize: "0.68rem", lineHeight: "1.25" }}>
-
-                  {aiEligibility.label}
-
-                </span>
-
-              </div>
-
-            ) : supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
-
-              <div style={matchContainerStyle}>
-
-                <div style={progressBarStyle}>
-
-                  <div
-
-                    style={{
-
-                      ...progressFillStyle,
-
-                      width: `${calculateCombinedMatchScore(
-
-                        supplier.matchPercentage || supplier.newMatchScore || 0,
-
-                        supplier.secondaryMatchScore
-
-                      )}%`,
-
-                      backgroundColor: getSecondaryMatchColor(
-
-                        calculateCombinedMatchScore(
-
-                          supplier.matchPercentage || supplier.newMatchScore || 0,
-
-                          supplier.secondaryMatchScore
-
-                        )
-
-                      ),
-
-                    }}
-
-                  />
-
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-
-                  <span style={{ ...matchScoreStyle, color: getSecondaryMatchColor(calculateCombinedMatchScore(supplier.matchPercentage || supplier.newMatchScore || 0, supplier.secondaryMatchScore)), fontWeight: "bold" }}>
-
-                    {calculateCombinedMatchScore(supplier.matchPercentage || supplier.newMatchScore || 0, supplier.secondaryMatchScore)}%
-
-                  </span>
-
-                  <Eye
-
-                    size={14}
-
-                    style={{ cursor: "pointer", color: "#a67c52" }}
-
-                    onClick={() => handleShowSecondaryBreakdown(supplier)}
-
-                    title="View AI match breakdown"
-
-                  />
-
-                </div>
-
-              </div>
-
-            ) : (
-
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-
-                <span style={{ color: "#999", fontSize: "0.75rem", fontStyle: "italic" }}>Pending</span>
-
-                <Eye
-
-                  size={14}
-
-                  style={{ cursor: "pointer", color: "#a67c52" }}
-
-                  onClick={() => handleShowSecondaryBreakdown(supplier)}
-
-                  title="Click to see details / run AI analysis"
-
-                />
-
-              </div>
-
-            )}
-
-          </td>
-
-
-
-          <td style={tableCellStyle}>
-
-            <div style={matchContainerStyle}>
-
-              <div style={progressBarStyle}>
-
-                <div
-
-                  style={{
-
-                    ...progressFillStyle,
-
-                    width: `${supplier.matchPercentage || supplier.newMatchScore || 0}%`,
-
-                    background:
-
-                      (supplier.matchPercentage || supplier.newMatchScore || 0) > 75
-
-                        ? "#48BB78"
-
-                        : (supplier.matchPercentage || supplier.newMatchScore || 0) > 50
-
-                          ? "#F6AD55"
-
-                          : "#F56565",
-
-                  }}
-
-                />
-
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-
-                <span
-
-                  style={{
-
-                    ...matchScoreStyle,
-
-                    color:
-
-                      (supplier.matchPercentage || supplier.newMatchScore || 0) > 75
-
-                        ? "#48BB78"
-
-                        : (supplier.matchPercentage || supplier.newMatchScore || 0) > 50
-
-                          ? "#D69E2E"
-
-                          : "#E53E3E",
-
-                  }}
-
-                >
-
-                  {supplier.matchPercentage || supplier.newMatchScore || 0}%
-
-                </span>
-
-                <Eye
-
-                  size={14}
-
-                  style={{
-
-                    cursor: "pointer",
-
-                    color: "#a67c52",
-
-                  }}
-
-                  onClick={() => handleShowMatchBreakdown(supplier)}
-
-                  title="View match breakdown"
-
-                />
-
-              </div>
-
-            </div>
-
-          </td>
-
-
-
-
-
-          {/* Action Column - Updated for previous contacts */}
-
-          <td style={tableCellStyle}>
-
-            {isPreviousContact ? (
-
-              <span style={{
-
-                padding: '0.25rem 0.5rem',
-
-                backgroundColor: '#E0E0E0',
-
-                color: '#666',
-
-                fontSize: '0.65rem',
-
-                borderRadius: '3px',
-
-                display: 'inline-block',
-
-                cursor: 'default'
-
-              }}>
-
-                Previously Contacted
-
-              </span>
-
-            ) : (
-
-              <button
-
-                onClick={() => handleConnectClick(supplier)}
-
-                style={{
-
-                  ...statusBadgeStyle,
-
-                  backgroundColor: "#5D2A0A",
-
-                  color: "white",
-
-                  padding: "0.25rem 0.5rem",
-
-                  cursor: "pointer",
-
-                  border: "none",
-
-                  borderRadius: "3px",
-
-                  fontWeight: "500",
-
-                  fontSize: "0.65rem",
-
-                }}
-
-              >
-
-                Contact
-
-              </button>
-
-            )}
-
-          </td>
-
-
-
-          <td style={{ ...tableCellStyle, borderRight: "none" }}>
-
-            <div
-
-              style={{
-
-                ...statusBadgeStyle,
-
-                backgroundColor: stageStyle.backgroundColor,
-
-                color: stageStyle.color,
-
-                fontSize: "0.65rem",
-
-                padding: "0.15rem 0.3rem",
-
-                textAlign: "center",
-
-                lineHeight: "1.2",
-
-                minHeight: "2.5rem",
-
-                display: "flex",
-
-                flexDirection: "column",
-
-                justifyContent: "center",
-
-              }}
-
-            >
-
-              {supplier.currentStage.split(" ").map((word, index) => (
-
-                <div key={index} style={{ fontSize: "0.6rem" }}>
-
-                  {word}
-
-                </div>
-
-              ))}
-
-            </div>
-
-          </td>
-
-        </tr>
-
-      );
-
-    });
-
-  };
-
-
-
-  // Add Legend/Info Panel component
-
-  const renderLegend = () => {
-
-    if (!hasPreviousContacts) return null;
-
-
-
-    return (
-
-      <div style={{
-
-        background: '#FFF3E0',
-
-        padding: '0.75rem',
-
-        borderRadius: '6px',
-
-        border: '1px solid #FFE0B2',
-
-        marginBottom: '1rem',
-
-        fontSize: '0.75rem',
-
-        display: 'flex',
-
-        justifyContent: 'space-between',
-
-        alignItems: 'center'
-
-      }}>
-
-        <div>
-
-          <strong>Match Types:</strong>
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-
-              <div style={{
-
-                width: '20px',
-
-                height: '12px',
-
-                background: '#FFF8E1',
-
-                border: '2px solid #F57C00',
-
-                borderRadius: '2px'
-
-              }}></div>
-
-              <span>Previously Contacted Suppliers</span>
-
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-
-              <div style={{
-
-                width: '20px',
-
-                height: '12px',
-
-                background: 'white',
-
-                border: '1px solid #E8D5C4',
-
-                borderRadius: '2px'
-
-              }}></div>
-
-              <span>New Matches</span>
-
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-
-              <div style={{
-
-                width: '20px',
-
-                height: '12px',
-
-                background: '#FFF8E1',
-
-                border: '2px dashed #F57C00',
-
-                borderRadius: '2px'
-
-              }}></div>
-
-              <span>Previously Contacted with New Match</span>
-
-            </div>
-
-          </div>
-
-        </div>
-
         <button
-
-          onClick={() => setShowLegend(!showLegend)}
-
           style={{
-
-            background: 'none',
-
-            border: 'none',
-
-            color: '#F57C00',
-
-            cursor: 'pointer',
-
-            fontSize: '0.7rem',
-
-            padding: '0.25rem 0.5rem'
-
+            background: "none",
+            border: "none",
+            color: "#a67c52",
+            cursor: "pointer",
+            fontSize: "0.7rem",
+            marginLeft: "4px",
+            textDecoration: "underline",
+            padding: "0",
           }}
-
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsExpanded(!isExpanded)
+          }}
         >
-
-          {showLegend ? 'Hide Legend' : 'Show Legend'}
-
+          {isExpanded ? "Less" : "More"}
         </button>
-
-      </div>
-
-    );
-
-  };
-
-
-
-  // Update the New Request button logic in the render
-
-  const renderNewRequestButton = () => {
-
-    const hasMatches = filteredSuppliers.length > 0;
-
-    const buttonStyle = hasMatches ? filterButtonStyle : {
-
-      ...newRequestButtonStyle,
-
-      background: "#5D2A0A",
-
-      color: "white",
-
-      fontWeight: "600",
-
-      fontSize: "1rem",
-
-      padding: "0.75rem 1.5rem",
-
-      margin: "0 auto",
-
-      display: "block"
-
-    };
-
-
-
-    return (
-
-      <button onClick={handleNewRequest} style={newRequestButtonStyle}>
-
-        {hasMatches ? "New Request" : "Start New Request"}
-
-      </button>
-
-    );
-
-  };
-
-
-
-  const loadUserApplicationAndMatches = async () => {
-
-    try {
-
-      if (!currentUser) return;
-
-
-
-      // Reload the user's application
-
-      const applicationDoc = await getDoc(doc(db, "productApplications", currentUser.uid));
-
-      if (applicationDoc.exists()) {
-
-        const applicationData = applicationDoc.data();
-
-        setCurrentUserApplication({
-
-          id: applicationDoc.id,
-
-          ...applicationData
-
-        })
-
-
-
-        // TEMP DEBUG - remove after fixing
-
-        console.log("=== APPLICATION DATA STRUCTURE ===", {
-
-          hasMatchingPrefs: !!applicationData.matchingPreferences,
-
-          hasRequestOverview: !!applicationData.requestOverview,
-
-          hasProductsServices: !!applicationData.productsServices,
-
-          categories: applicationData.requestOverview?.categories || applicationData.productsServices?.categories,
-
-          keywords: applicationData.requestOverview?.keywords,
-
-          purpose: applicationData.requestOverview?.purpose,
-
-          location: applicationData.matchingPreferences?.location,
-
-          deliveryModes: applicationData.matchingPreferences?.deliveryModes,
-
-        })
-
-
-
-
-
-        // This will trigger the useEffect that loads data with history
-
-      } else {
-
-        setError("Please complete a product application first");
-
-      }
-
-    } catch (error) {
-
-      console.error("Error reloading application:", error);
-
-    }
-
-  };
-
-
-
-  const getImprovementSuggestion = (criteriaKey, score) => {
-
-    const suggestions = {
-
-      categoryMatch: "Consider expanding your service categories or highlighting relevant subcategories that align with customer needs.",
-
-      bbbeeMatch: "Improve your BBBEE certification level to better match customer transformation requirements.",
-
-      locationMatch: "Consider expanding your service delivery areas or highlighting remote service capabilities.",
-
-      deliveryMatch: "Add more delivery mode options (on-site, remote, hybrid) to match customer preferences.",
-
-      budgetMatch: "Adjust your pricing structure or highlight different service tiers to better fit customer budgets.",
-
-      ownershipMatch: "Highlight your transformation credentials and ownership demographics more prominently.",
-
-      urgencyMatch: "Improve your response times and project delivery capabilities to meet urgent requirements.",
-
-      experienceMatch: "Better showcase your relevant sector experience and case studies in your profile.",
-
-      ratingMatch: "Focus on improving customer satisfaction and collecting more positive reviews.",
-
-    }
-
-
-
-    return suggestions[criteriaKey] || "Review your profile to ensure all relevant information is complete and accurate."
-
-  }
-
-
-
-  const fetchSupplierRatings = async () => {
-
-    try {
-
-      const ratingsSnapshot = await getDocs(collection(db, "supplierReviews"))
-
-      const ratingsData = {}
-
-
-
-      ratingsSnapshot.forEach((doc) => {
-
-        const ratingData = doc.data()
-
-        const supplierId = ratingData.supplierId
-
-
-
-        if (supplierId) {
-
-          if (!ratingsData[supplierId]) {
-
-            ratingsData[supplierId] = []
-
-          }
-
-          ratingsData[supplierId].push({
-
-            rating: ratingData.rating || 0,
-
-            comment: ratingData.comment || "",
-
-            date: ratingData.date || "",
-
-            customerName: ratingData.customerName || "",
-
-            feedbackTheme: ratingData.feedbackTheme || ""
-
-          })
-
-        }
-
-      })
-
-
-
-      const averageRatings = {}
-
-      Object.keys(ratingsData).forEach(supplierId => {
-
-        const ratings = ratingsData[supplierId]
-
-        if (ratings.length > 0) {
-
-          const total = ratings.reduce((sum, item) => sum + (item.rating || 0), 0)
-
-          averageRatings[supplierId] = {
-
-            average: total / ratings.length,
-
-            count: ratings.length,
-
-            latestComment: ratings[ratings.length - 1]?.comment || "No comments"
-
-          }
-
-        } else {
-
-          averageRatings[supplierId] = {
-
-            average: 0,
-
-            count: 0,
-
-            latestComment: "No ratings yet"
-
-          }
-
-        }
-
-      })
-
-
-
-      setSupplierRatings(averageRatings)
-
-      return averageRatings
-
-    } catch (error) {
-
-      console.error("Error fetching supplier ratings:", error)
-
-      return {}
-
-    }
-
-  }
-
-
-
-  const getSupplierRating = (supplierId) => {
-
-    return supplierRatings[supplierId] || {
-
-      average: 0,
-
-      count: 0,
-
-      latestComment: "No ratings yet"
-
-    }
-
-  }
-
-
-
-  const handleShowMatchBreakdown = (supplier) => {
-
-    setMatchBreakdownData(supplier)
-
-    setShowMatchBreakdown(true)
-
-  }
-
-
-
-  useEffect(() => {
-
-    setMounted(true)
-
-    const auth = getAuth()
-
-
-
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-
-      if (user) {
-
-        setCurrentUser(user)
-
-      } else {
-
-        setCurrentUser(null)
-
-        setCurrentUserApplication(null)
-
-      }
-
+      )}
+    </div>
+  )
+}
+
+const toDateSafe = (value) => {
+  if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value?.toDate === "function") return value.toDate()
+  if (value?.seconds != null) return new Date(value.seconds * 1000)
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+const formatDateValue = (value) => {
+  const d = toDateSafe(value)
+  if (!d) return null
+  return d.toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })
+}
+
+export const toISODateOnly = (value) => {
+  const d = toDateSafe(value)
+  if (!d) return ""
+  return d.toISOString().slice(0, 10)
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Section B column configuration.
+
+   Supplier is the pinned first column and Action the last, so neither appears
+   here. The five above the divider plus Status are the spec default view;
+   everything below is a spec "hidden by default" column.
+
+   Widths raised in line with the other match tables — each header carries a
+   grip, sort and filter control (~60px of chrome), so the old 116–150px
+   columns left too little room and the browser broke labels mid-word
+   ("MAT CH..", "STA TUS").
+   ════════════════════════════════════════════════════════════════════════ */
+const COLUMN_DEFS = {
+  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
+  productService: { label: "Product / Service Offered", width: 204, filterType: "productService", visible: true, priority: 2, sortable: true },
+  location: { label: "Location / Service Area", width: 178, filterType: "location", visible: true, priority: 3, sortable: true },
+  capacity: { label: "Capacity / Lead Time", width: 170, filterType: "capacity", visible: true, priority: 3, sortable: true },
+  status: { label: "Status", width: 148, filterType: "status", visible: true, priority: 1, sortable: true },
+
+  businessSize: { label: "Business Size", width: 148, filterType: "businessSize", visible: false, priority: 4, sortable: true },
+  yearsOperating: { label: "Years Operating", width: 146, filterType: "yearsOperating", visible: false, priority: 4, sortable: true },
+  bbbeeLevel: { label: "B-BBEE Level", width: 142, filterType: "bbbeeLevel", visible: false, priority: 4, sortable: true },
+  ownershipProfile: { label: "Ownership Profile", width: 182, filterType: "ownershipProfile", visible: false, priority: 4, sortable: false },
+  certifications: { label: "Certifications", width: 170, filterType: "certifications", visible: false, priority: 4, sortable: false },
+  pricingRange: { label: "Pricing Range", width: 152, filterType: "pricingRange", visible: false, priority: 4, sortable: true },
+  minimumOrder: { label: "Minimum Order", width: 152, filterType: "minimumOrder", visible: false, priority: 4, sortable: true },
+  deliveryCapability: { label: "Delivery Capability", width: 166, filterType: "deliveryCapability", visible: false, priority: 4, sortable: false },
+  complianceStatus: { label: "Compliance Status", width: 164, filterType: "complianceStatus", visible: false, priority: 4, sortable: true },
+  sector: { label: "Sector", width: 158, filterType: "sector", visible: false, priority: 4, sortable: true },
+  primaryMatch: { label: "Structured Match %", align: "center", width: 156, filterType: "primaryMatch", visible: false, priority: 4, sortable: true },
+  aiMatch: { label: "AI Match %", align: "center", width: 140, filterType: "aiMatch", visible: false, priority: 4, sortable: true },
+  documents: { label: "Documents", align: "center", width: 132, filterType: null, visible: false, priority: 4, sortable: true },
+  dateMatched: { label: "Date Matched", width: 148, filterType: "dateMatched", visible: false, priority: 4, sortable: true },
+  notes: { label: "Notes", width: 198, filterType: "notes", visible: false, priority: 4, sortable: false },
+}
+
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
+const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
+  DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].visible !== false]),
+)
+const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width]))
+const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
+const DEFAULT_DENSITY = "comfortable"
+
+const SUPPLIER_WIDTH = 226
+const ACTION_WIDTH = 214
+const MIN_COLUMN_WIDTH = 84
+
+const EMPTY_FILTERS = {
+  name: "",
+  matchRange: [0, 100],
+  productService: "",
+  location: [],
+  capacity: "",
+  status: [],
+  businessSize: [],
+  yearsOperating: "",
+  bbbeeLevel: [],
+  ownershipProfile: [],
+  certifications: "",
+  pricingRange: "",
+  minimumOrder: "",
+  deliveryCapability: [],
+  complianceStatus: [],
+  sector: [],
+  primaryRange: [0, 100],
+  aiRange: [0, 100],
+  matchedFrom: "",
+  matchedTo: "",
+  notes: "",
+}
+
+/* ─── Saved views + filter persistence ──────────────────────────────────── */
+const BUILTIN_VIEW_ID = "__default__"
+// v2: the stored widths from the kit version are the narrow ones that caused
+// the mid-word header breaks, so old saved views fall back to the new defaults.
+const VIEWS_STORAGE_KEY = "supplier-matches-views-v2"
+const FILTERS_STORAGE_KEY = "supplier-matches-filters-v1"
+
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
+  const known = new Set(DEFAULT_COLUMN_ORDER)
+  const deduped = order.filter((key) => known.has(key))
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key))
+  return [...deduped, ...missing]
+}
+
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  pinned: { ...DEFAULT_PINNED },
+  density: DEFAULT_DENSITY,
+})
+
+const createBuiltinDefaultView = () => ({
+  id: BUILTIN_VIEW_ID,
+  name: "Default",
+  description: "",
+  builtin: true,
+  ...createDefaultViewLayout(),
+})
+
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
+  density: view?.density || DEFAULT_DENSITY,
+})
+
+const loadViewsState = () => {
+  const freshDefault = () => ({
+    activeViewId: BUILTIN_VIEW_ID,
+    views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() },
+  })
+  if (typeof window === "undefined") return freshDefault()
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null")
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {}
+    const views = {}
+    Object.entries(rawViews).forEach(([id, v]) => {
+      views[id] = sanitizeView(v, id)
     })
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView()
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID
+    return { activeViewId, views }
+  } catch {
+    return freshDefault()
+  }
+}
 
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // Storage can fail (private browsing, quota) — the table still works this session.
+  }
+}
 
-
-    return () => {
-
-      unsubscribeAuth()
-
-      setMounted(false)
-
+const loadFilterState = () => {
+  if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
+    return {
+      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
+      sort: saved?.sort?.key ? saved.sort : null,
     }
+  } catch {
+    return { filters: { ...EMPTY_FILTERS }, sort: null }
+  }
+}
 
+const persistFilterState = (filters, sort) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({ filters, sort }))
+  } catch {
+    // Non-fatal.
+  }
+}
+
+const generateViewId = () => {
+  try {
+    return `view_${crypto.randomUUID()}`
+  } catch {
+    return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  }
+}
+
+const CATEGORY_LABEL = {
+  categoryMatch: "Category Alignment",
+  bbbeeMatch: "B-BBEE Level",
+  locationMatch: "Location",
+  deliveryMatch: "Delivery Mode",
+  budgetMatch: "Budget Fit",
+  ownershipMatch: "Ownership Profile",
+  ratingMatch: "Supplier Rating",
+  experienceMatch: "Sector Experience",
+  urgencyLeadTimeMatch: "Urgency & Lead Time",
+}
+
+/* ─── Row mapping ───────────────────────────────────────────────────────── */
+
+const asList = (v) => (Array.isArray(v) ? v : v ? [v] : [])
+
+const mapSupplier = (data, id) => {
+  const entity = data.entityOverview || {}
+  const ps = data.productsServices || {}
+  const legal = data.legalCompliance || {}
+  const finance = data.financialOverview || {}
+  const documents = data.documents || {}
+
+  const own = calculateOwnershipPercentages(data.ownershipManagement || {})
+  const ownershipTags = []
+  if (own.blackOwnership >= 51) ownershipTags.push(`${Math.round(own.blackOwnership)}% Black-owned`)
+  if (own.womenOwnership >= 30) ownershipTags.push(`${Math.round(own.womenOwnership)}% Women-owned`)
+  if (own.youthOwnership >= 25) ownershipTags.push(`${Math.round(own.youthOwnership)}% Youth-owned`)
+  if (own.disabilityOwnership >= 5) ownershipTags.push(`${Math.round(own.disabilityOwnership)}% Disability-owned`)
+
+  const serviceArea = asList(ps.serviceAreas || ps.deliveryAreas || entity.serviceArea).join(", ")
+  const locationLine = [entity.location, serviceArea].filter(Boolean).join(" · ") || "-"
+
+  const capacity = ps.capacity || ps.productionCapacity || ""
+  const leadTime = ps.leadTime || ps.deliveryLeadTime || ""
+  const capacityLine = [capacity, leadTime && `${leadTime} lead time`].filter(Boolean).join(" · ")
+
+  const documentCount = Object.values(documents).reduce(
+    (sum, value) => sum + (Array.isArray(value) ? value.length : value ? 1 : 0),
+    0,
+  )
+
+  const taxCompliant = !!(legal.taxNumber || legal.taxClearance)
+  const cipcRegistered = !!(legal.registrationNumber || entity.registrationNumber)
+  const complianceStatus = taxCompliant && cipcRegistered
+    ? "Fully compliant"
+    : taxCompliant || cipcRegistered
+      ? "Partially compliant"
+      : "Not verified"
+
+  const yearEstablished = Number.parseInt(entity.yearEstablished || entity.yearFounded || "", 10)
+  const yearsOperating =
+    entity.yearsOperating ||
+    (Number.isFinite(yearEstablished) ? `${new Date().getFullYear() - yearEstablished}` : "-")
+
+  return {
+    id,
+    name: entity.tradingName || entity.registeredName || "Unnamed Supplier",
+    verified: legal.verified === true || data.verified === true || entity.verified === true,
+    sector: formatLabel(asList(entity.economicSectors)[0] || "-"),
+    productService: formatLabel(getFirstCategory(ps)),
+    categoryCount: countCategories(ps),
+    location: locationLine,
+    locationOnly: entity.location || "-",
+    capacity: capacityLine || "Not specified",
+    bigScore: data.bigScore ?? data.scores?.bigScore ?? null,
+    pisScore: data.pisScore ?? data.scores?.pisScore ?? null,
+    businessSize: formatLabel(entity.businessSize || entity.companySize || "-"),
+    yearsOperating,
+    bbbeeLevel: legal.bbbeeLevel || "-",
+    ownershipProfile: ownershipTags.join(", ") || "Not specified",
+    ownershipTags,
+    certifications: formatLabel(asList(legal.certifications || legal.accreditations)) || "-",
+    pricingRange: ps.pricingRange || finance.pricingRange || "-",
+    minimumOrder: ps.minimumOrderQuantity || ps.moq || "-",
+    deliveryCapability: formatLabel(asList(ps.deliveryModes)) || "-",
+    complianceStatus,
+    documentCount,
+    email: data.contactDetails?.email || data.userEmail || null,
+    rating: 0,
+    ratingCount: 0,
+    primaryMatchPercentage: 0,
+    aiMatchPercentage: null,
+    aiReasoning: null,
+    aiCapabilities: [],
+    matchPercentage: 0,
+    matchBreakdown: null,
+  }
+}
+
+const hasTooManyMissingFields = (s) => {
+  const fields = [s.name, s.productService, s.location, s.capacity, s.sector, s.bbbeeLevel]
+  const missing = fields.filter(
+    (f) =>
+      !f ||
+      ["-", "Not specified", "Various", "Unknown", "N/A"].includes(f.toString().trim()) ||
+      f.toString().toLowerCase().includes("not specified"),
+  ).length
+  return missing > 4
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Component
+   ════════════════════════════════════════════════════════════════════════ */
+export function SupplierTable({
+  filters,
+  stageFilter,
+  onSupplierContacted,
+  onSuppliersUpdate,
+  onCountChange,
+  onNewRequest,
+}) {
+  const [suppliers, setSuppliers] = useState([])
+  const [records, setRecords] = useState({})
+  const [application, setApplication] = useState(null)
+  const [ratings, setRatings] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [notification, setNotification] = useState(null)
+  const [mounted, setMounted] = useState(false)
+  const [busyId, setBusyId] = useState(null)
+
+  const [effectiveUserId, setEffectiveUserId] = useState(null)
+  const [authResolved, setAuthResolved] = useState(false)
+  const [isCompanyMember, setIsCompanyMember] = useState(false)
+  const [userRole, setUserRole] = useState(null)
+
+  const [detailsSupplier, setDetailsSupplier] = useState(null)
+  const [noteTarget, setNoteTarget] = useState(null)
+  const [noteText, setNoteText] = useState("")
+  const [savedMatches, setSavedMatches] = useState({})
+  const [hoveredRow, setHoveredRow] = useState(null)
+
+  /* Popups — anchored popovers portaled to <body>, same pattern as the other
+     match tables. { type, row, position:{x,y}, rect } */
+  const [activePopup, setActivePopup] = useState(null)
+
+  const [aiRunning, setAiRunning] = useState(false)
+  const [aiProgress, setAiProgress] = useState({ current: 0, total: 0 })
+  const [aiError, setAiError] = useState("")
+  const [showIneligible, setShowIneligible] = useState(false)
+
+  // Filters + sort, restored from the last visit
+  const initialFilterState = useMemo(() => loadFilterState(), [])
+  const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
+  const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+
+  // Views
+  const [viewsState, setViewsState] = useState(() => loadViewsState())
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths)
+  const [pinned, setPinned] = useState(() => initialActiveView.pinned)
+  const [density, setDensity] = useState(() => initialActiveView.density)
+
+  const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
+  const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
+  const [showNewViewForm, setShowNewViewForm] = useState(false)
+  const [newViewName, setNewViewName] = useState("")
+  const [newViewDescription, setNewViewDescription] = useState("")
+  const [editingViewMeta, setEditingViewMeta] = useState(null)
+  const [columnSearch, setColumnSearch] = useState("")
+
+  // Drag-to-reorder / resize
+  const [draggedColumn, setDraggedColumn] = useState(null)
+  const [dragOverColumn, setDragOverColumn] = useState(null)
+  const [dragHintRect, setDragHintRect] = useState(null)
+  const resizingRef = useRef(null)
+
+  // Viewport, for responsive column collapse
+  const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
   }, [])
 
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
 
-
-  // Check if user has a product application
+  const toast = useCallback((type, message, ms = 3000) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), ms)
+  }, [])
 
   useEffect(() => {
+    setMounted(true)
+    return () => setMounted(false)
+  }, [])
 
-    const checkApplicationExists = async () => {
-
-      if (!currentUser) return
-
-
-
-      try {
-
-        const applicationDoc = await getDoc(doc(db, "productApplications", currentUser.uid))
-
-        if (!applicationDoc.exists()) {
-
-          setSuppliers([])
-
-          setFilteredSuppliers([])
-
-          setError("Please complete a product application first to see matching suppliers")
-
-          setLoading(false)
-
-          return
-
-        }
-
-
-
-        const applicationData = applicationDoc.data()
-
-        console.log("Loaded application data:", {
-
-          id: applicationDoc.id,
-
-          hasRequestOverview: !!applicationData.requestOverview,
-
-          hasPurpose: !!applicationData.requestOverview?.purpose
-
-        })
-
-
-
-        setCurrentUserApplication({
-
-          id: applicationDoc.id, // Make sure we have the ID
-
-          ...applicationData
-
-        })
-
-      } catch (error) {
-
-        console.error("Error checking application:", error)
-
-        setError("Failed to verify product application")
-
+  /* ─── Auth + company membership ─────────────────────────────────────── */
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setEffectiveUserId(null)
+        setAuthResolved(true)
         setLoading(false)
-
+        return
       }
-
-    }
-
-
-
-    checkApplicationExists()
-
-  }, [currentUser])
-
-
-
-  // Fetch data only when application exists
-
-  useEffect(() => {
-
-    const fetchData = async () => {
-
-      if (!currentUserApplication) return
-
-
-
       try {
-
-        setLoading(true)
-
-        setError(null)
-
-
-
-        // Fetch universal profiles (suppliers)
-
-        const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
-
-        const profilesData = profilesSnapshot.docs.map((doc) => {
-
-          const data = doc.data()
-
-          return {
-
-            id: doc.id,
-
-            ...data,
-
-            productsServices: data.productsServices || {},
-
-            financialOverview: data.financialOverview || {},
-
-            legalCompliance: data.legalCompliance || {},
-
-            entityOverview: data.entityOverview || {},
-
-            currentStage: "Potential Supplier",
-
-            status: "New Lead",
-
+        const userSnap = await getDoc(doc(db, "users", user.uid))
+        if (userSnap.exists()) {
+          const { companyId, userRole: role } = userSnap.data()
+          if (companyId) {
+            const companySnap = await getDoc(doc(db, "companies", companyId))
+            if (companySnap.exists()) {
+              const ownerId = companySnap.data().createdBy
+              setUserRole(role || "viewer")
+              setIsCompanyMember(ownerId !== user.uid)
+              setEffectiveUserId(ownerId || user.uid)
+              setAuthResolved(true)
+              return
+            }
           }
-
-        })
-
-
-
-        const ratingsData = await fetchSupplierRatings()
-
-
-
-        // Calculate matches using enhanced matching
-
-        const suppliersWithMatches = profilesData.map((supplier) => {
-
-          const matchScore = calculateEnhancedMatchScore(currentUserApplication, supplier, ratingsData)
-
-
-
-          // Get first category name or default
-
-          const firstCategory = getFirstCategory(supplier.productsServices)
-
-
-
-          // Get the actual rating
-
-          const supplierRatingData = ratingsData[supplier.id] || {
-
-            average: 0,
-
-            count: 0,
-
-            latestComment: "No ratings yet"
-
-          }
-
-          const actualRating = supplierRatingData.average
-
-
-
-          return {
-
-            ...supplier,
-
-            matchPercentage: matchScore.totalScore,
-
-            matchDetails: matchScore.breakdown,
-
-            status: getStatusBasedOnScore(matchScore.totalScore),
-
-            rating: actualRating,
-
-            avgResponseTime: "1-2 days",
-
-            lastActivity: new Date().toLocaleDateString(),
-
-            urgency: supplier.applicationOverview?.urgency || "1 month", // ← CHANGED LINE
-
-            dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
-
-            serviceCategory: firstCategory,
-
-            currentStage: "Potential Supplier",
-
-            nextStage: "Initial Contact",
-
-            bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
-
-            applicationId: null,
-
-            ratingCount: supplierRatingData.count,
-
-            serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
-
-          }
-
-        })
-
-
-
-        // Filter out suppliers with 0% match and sort by match percentage
-
-        const relevantSuppliers = suppliersWithMatches
-
-          .filter(supplier => supplier.matchPercentage > 0 && supplier.id !== currentUser?.uid)
-
-          .sort((a, b) => b.matchPercentage - a.matchPercentage)
-
-
-
-        setSuppliers(relevantSuppliers)
-
-        setAllSuppliers(relevantSuppliers)
-
-        setFilteredSuppliers(relevantSuppliers)
-
-
-
-        // Notify parent component of the update
-
-        if (onSuppliersUpdate) {
-
-          onSuppliersUpdate(relevantSuppliers, relevantSuppliers)
-
         }
-
-
-
+        setIsCompanyMember(false)
+        setEffectiveUserId(user.uid)
+        setUserRole("owner")
       } catch (err) {
-
-        console.error("Error fetching data:", err)
-
-        setError("Failed to load supplier matches. Please try again later.")
-
+        console.error("Error resolving company membership:", err)
+        setEffectiveUserId(user.uid)
+        setUserRole("owner")
       } finally {
-
-        setLoading(false)
-
+        setAuthResolved(true)
       }
+    })
+    return () => unsubscribe()
+  }, [])
 
-    }
-
-
-
-    fetchData()
-
-  }, [currentUserApplication])
-
-
-
-  // Determine status based on match score
-
-  const getStatusBasedOnScore = (score) => {
-
-    if (score >= 90) return "Perfect Match"
-
-    if (score >= 75) return "Strong Match"
-
-    if (score >= 50) return "Potential Match"
-
-    if (score >= 25) return "Low Match"
-
-    return "New Lead"
-
-  }
-
-
-
-  // Filter suppliers based on active filters
-
-  const applyFilters = () => {
-
-    applyFiltersWithUpdatedSuppliers(allSuppliers);
-
-  }
-
-
-
-  const getEffectiveScore = (supplier) => {
-
-    if (supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined) {
-
-      return calculateCombinedMatchScore(supplier.matchPercentage || 0, supplier.secondaryMatchScore);
-
-    }
-
-    return supplier.matchPercentage || 0;
-
-  };
-
-
-
-
-
+  /* ─── Live SME-side records. One scoped listener; the old file ran an
+     unscoped getDocs over supplierApplications and filtered in JS. ────── */
   useEffect(() => {
-
-    applyFilters()
-
-  }, [filters, allSuppliers])
-
-
-
-  const getMatchScoreClass = (percentage) => {
-
-    if (percentage >= 90) return { color: "#388E3C", fontWeight: "bold" }
-
-    if (percentage >= 80) return { color: "#F57C00", fontWeight: "bold" }
-
-    return { color: "#D32F2F", fontWeight: "bold" }
-
-  }
-
-
-
-  const sendEmailNotification = async (supplier, applicationPayload) => {
-
-    try {
-
-      console.log("🔄 Using Feedback service configuration for supplier notification...");
-
-
-
-      const emailjsConfig = {
-
-        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
-
-        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-
-        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-
-      };
-
-
-
-      console.log("📧 Using Feedback config:", emailjsConfig);
-
-
-
-      if (!window.emailjs) {
-
-        emailjs.init(emailjsConfig.publicKey);
-
-        window.emailjs = emailjs;
-
-      }
-
-
-
-      // Get supplier email from supplierApplications collection
-
-      let supplierEmail = null;
-
-      console.log("📋 Fetching supplier email for:", supplier.id);
-
-
-
-      try {
-
-        // Query supplierApplications collection to find the supplier's application
-
-        const supplierApplicationsQuery = query(
-
-          collection(db, "supplierApplications"),
-
-          where("supplierId", "==", supplier.id)
-
-        );
-
-        const supplierApplicationsSnapshot = await getDocs(supplierApplicationsQuery);
-
-
-
-        if (!supplierApplicationsSnapshot.empty) {
-
-          const supplierApplication = supplierApplicationsSnapshot.docs[0].data();
-
-          console.log("📄 supplierApplications data:", supplierApplication);
-
-
-
-          // Get email from customerProfileData
-
-          supplierEmail = supplierApplication.customerProfileData?.email;
-
-
-
-          if (supplierEmail) {
-
-            console.log("✅ Found supplier email:", supplierEmail);
-
-          } else {
-
-            console.log("❌ No email found in customerProfileData");
-
+    if (!effectiveUserId) return undefined
+    const unsubscribe = onSnapshot(
+      query(collection(db, SME_SUPPLIER_COLLECTION), where("smeId", "==", effectiveUserId)),
+      (snapshot) => {
+        const next = {}
+        snapshot.forEach((d) => {
+          const data = d.data()
+          if (!data.supplierId) return
+          next[data.supplierId] = {
+            status: data.status ? normalizeSupplierStatus(data.status) : null,
+            hidden: data.hidden === true,
+            notes: data.notes || [],
+            dateMatched: data.createdAt || null,
           }
-
-        } else {
-
-          console.log("❌ No supplier applications found for:", supplier.id);
-
-        }
-
-      } catch (fetchError) {
-
-        console.error("❌ Error fetching supplier email:", fetchError);
-
-      }
-
-
-
-      if (!supplierEmail) {
-
-        console.warn("⚠️ No supplier email found, using fallback");
-
-        supplierEmail = "support@bigmarketplace.africa";
-
-      }
-
-
-
-      console.log("📧 Final recipient email:", supplierEmail);
-
-
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-      if (!emailRegex.test(supplierEmail)) {
-
-        throw new Error(`Invalid email format: "${supplierEmail}"`);
-
-      }
-
-
-
-      const currentUser = getAuth().currentUser;
-
-      const customerName = currentUser?.displayName || "Customer";
-
-      const supplierName = supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName || "Supplier";
-
-
-
-      const emailMessage = `Dear ${supplierName},\n\n
-
-We are pleased to inform you that a customer has expressed interest in your services through the BIG Marketplace Africa.\n\n
-
-Application Details:
-
-- Customer: ${customerName}
-
-- Service Required: ${applicationPayload.originalRequest?.serviceRequested || "Not specified"}
-
-- Location: ${applicationPayload.originalRequest?.location || "Not specified"}
-
-- Budget Range: ${applicationPayload.originalRequest?.budgetRange?.min || "0"} - ${applicationPayload.originalRequest?.budgetRange?.max || "0"}
-
-- Match Score: ${applicationPayload.matchPercentage}%\n\n
-
-Please log into your BIG Marketplace Africa account to view the complete application details and respond to this opportunity.\n\n
-
-Best regards,\n
-
-BIG Marketplace Africa Team`;
-
-
-
-      const templateParams = {
-
-        to_email: supplierEmail,
-
-        subject: `New Customer Interest - ${applicationPayload.originalRequest?.serviceRequested || "Service Request"}`,
-
-        from_name: "BIG Marketplace Africa",
-
-        date: new Date().toLocaleDateString(),
-
-        message: emailMessage,
-
-        portal_url: `https://www.bigmarketplace.africa/supplier/applications`,
-
-        has_attachments: "false",
-
-        attachments_count: "0"
-
-      };
-
-
-
-      console.log("📨 Sending supplier notification with Feedback service...", templateParams);
-
-
-
-      const response = await window.emailjs.send(
-
-        emailjsConfig.serviceId,
-
-        emailjsConfig.templateId,
-
-        templateParams,
-
-        emailjsConfig.publicKey
-
-      );
-
-
-
-      console.log("✅ Supplier notification email sent successfully!", response);
-
-
-
-    } catch (emailError) {
-
-      console.error("❌ Supplier notification email failed:", emailError);
-
-      // Don't throw error here - we don't want to block the application process if email fails
-
-    }
-
-  }
-
-
-
-  const handleConnectClick = async (supplier) => {
-
-    if (supplier.id === currentUser?.uid) {
-
-      setNotification({
-
-        type: "error",
-
-        message: "You cannot contact yourself"
-
-      })
-
-      setTimeout(() => setNotification(null), 3000)
-
-      return
-
-    }
-
-
-
-    try {
-
-      const auth = getAuth()
-
-      const currentUser = auth.currentUser
-
-      if (!currentUser) throw new Error("Please log in to contact suppliers")
-
-
-
-      // ✅ TRACK CONTACTED APPLICATIONS
-
-      const isFirstContact = !applicationsWithContacts.has(currentUserApplication?.id)
-
-
-
-      if (currentUserApplication && isFirstContact) {
-
-        // First contact for this application - create new entry
-
-        setApplicationsWithContacts(prev => new Set([...prev, currentUserApplication.id]))
-
-
-
-        const contactedApp = {
-
-          id: currentUserApplication.id || `app_${Date.now()}`,
-
-          createdAt: new Date().toISOString(),
-
-          data: currentUserApplication,
-
-          matches: filteredSuppliers,
-
-          matchCount: filteredSuppliers.length,
-
-          contactedSuppliers: [supplier.id],
-
-          contactedCount: 1,
-
-          lastContacted: new Date().toISOString()
-
-        }
-
-
-
-        setContactedApplications(prev => [contactedApp, ...prev])
-
-        await saveContactedAppToFirestore(contactedApp)
-
-
-
-        setNotification({
-
-          type: "info",
-
-          message: "Application saved to your contacted requests"
-
         })
+        setRecords(next)
+      },
+      (err) => console.error("Supplier status listener failed:", err),
+    )
+    return () => unsubscribe()
+  }, [effectiveUserId])
 
-      } else if (currentUserApplication) {
+  /* ─── Application + profiles + ratings + cached AI, in one pass ──────────
+     The old file had three overlapping effects that each refetched every
+     universalProfile, plus a cached-AI effect keyed on allSuppliers.length
+     that also set allSuppliers. That is what made the route hang. ─────── */
+  const loadEverything = useCallback(async () => {
+    if (!effectiveUserId) return
 
-        // Update existing contacted application
-
-        await updateContactedApplication(currentUserApplication.id, supplier.id)
-
+    setLoading(true)
+    setError(null)
+    try {
+      const appSnap = await getDoc(doc(db, "productApplications", effectiveUserId))
+      if (!appSnap.exists()) {
+        setSuppliers([])
+        setApplication(null)
+        setError("Complete a product or service request first and your supplier matches will appear here.")
+        return
       }
+      const applicationData = { id: appSnap.id, ...appSnap.data() }
+      setApplication(applicationData)
 
-
-
-      // ... REST OF YOUR EXISTING handleConnectClick CODE
-
-      const supplierRef = doc(db, "universalProfiles", supplier.id)
-
-      await updateDoc(supplierRef, {
-
-        currentStage: "Contact Initiated",
-
-        updatedAt: serverTimestamp(),
-
-      })
-
-
-
-      // Update local state optimistically
-
-      setAllSuppliers((prev) =>
-
-        prev.map((s) => (s.id === supplier.id ? { ...s, currentStage: "Contact Initiated" } : s)),
-
-      )
-
-      setFilteredSuppliers((prev) =>
-
-        prev.map((s) => (s.id === supplier.id ? { ...s, currentStage: "Contact Initiated" } : s)),
-
-      )
-
-
-
-      // Notify parent component about the contact
-
-      if (onSupplierContacted) {
-
-        onSupplierContacted(supplier.id)
-
-      }
-
-
-
-      // Get both profiles (current user and target supplier)
-
-      const [supplierProfile, customerProfile] = await Promise.all([
-
-        getDoc(doc(db, "universalProfiles", currentUser.uid)),
-
-        getDoc(doc(db, "universalProfiles", supplier.id)),
-
+      const [profilesSnap, reviewsSnap, aiSnap] = await Promise.all([
+        getDocs(collection(db, "universalProfiles")),
+        getDocs(collection(db, "supplierReviews")),
+        getDoc(doc(db, "aiSecondaryMatches", applicationData.id)),
       ])
 
-
-
-      if (!supplierProfile.exists()) throw new Error("Your supplier profile not found")
-
-      if (!customerProfile.exists()) throw new Error("Supplier profile not found")
-
-
-
-      const customerData = customerProfile.data()
-
-      const supplierData = supplierProfile.data()
-
-
-
-      // Helper function to safely get nested values
-
-      const getSafeValue = (obj, path, defaultValue = null) => {
-
-        return path.split(".").reduce((acc, key) => acc?.[key] ?? defaultValue, obj)
-
-      }
-
-
-
-      const formatMatchBreakdown = (matchDetails) => {
-
-        if (!matchDetails) return null
-
-
-
-        return Object.entries(matchDetails).reduce((acc, [key, details]) => {
-
-          acc[key] = {
-
-            score: details.score,
-
-            description: details.description,
-
-            weight: ENHANCED_MATCHING_CRITERIA[key]?.weight * 100 || 0,
-
-          }
-
-          return acc
-
-        }, {})
-
-      }
-
-
-
-      // Prepare the complete application payload
-
-      const applicationPayload = {
-
-        applicationSource: "supplier-directory",
-
-        status: "Pending",
-
-        matchPercentage: supplier.matchPercentage || 0,
-
-        matchBreakdown: {
-
-          totalScore: supplier.matchPercentage || 0,
-
-          breakdown: formatMatchBreakdown(supplier.matchDetails),
-
-          calculatedAt: serverTimestamp(),
-
-          criteriaWeights: Object.entries(ENHANCED_MATCHING_CRITERIA).reduce((acc, [key, criteria]) => {
-
-            acc[key] = {
-
-              weight: criteria.weight * 100,
-
-              description: criteria.description,
-
-            }
-
-            return acc
-
-          }, {}),
-
-        },
-
-
-
-        createdAt: serverTimestamp(),
-
-        updatedAt: serverTimestamp(),
-
-        supplierId: currentUser.uid,
-
-        supplierName:
-
-          getSafeValue(supplierData, "entityOverview.tradingName") ||
-
-          getSafeValue(supplierData, "entityOverview.registeredName") ||
-
-          "Unknown Supplier",
-
-        supplierLocation: getSafeValue(supplierData, "entityOverview.location") || "Not specified",
-
-        supplierType: getSafeValue(supplierData, "entityOverview.entityType") || "Not specified",
-
-        supplierSector: getSafeValue(supplierData, "entityOverview.economicSectors[0]") || "Not specified",
-
-        customerId: supplier.id,
-
-        customerName:
-
-          getSafeValue(customerData, "entityOverview.tradingName") ||
-
-          getSafeValue(customerData, "entityOverview.registeredName") ||
-
-          "Unknown Customer",
-
-        customerLocation: getSafeValue(customerData, "entityOverview.location") || "Not specified",
-
-        customerType: getSafeValue(customerData, "entityOverview.entityType") || "Not specified",
-
-        customerSector: getSafeValue(customerData, "entityOverview.economicSectors[0]") || "Not specified",
-
-        originalRequest: {
-
-          id: currentUserApplication?.id || "unknown-id",
-
-          businessName: getSafeValue(currentUserApplication, "contactSubmission.businessName") || "Unknown Business",
-
-          serviceRequested:
-
-            getSafeValue(currentUserApplication, "productsServices.categories[0]") ||
-
-            getSafeValue(currentUserApplication, "productsServices.serviceCategories[0]") ||
-
-            "Not specified",
-
-          budgetRange: {
-
-            min: getSafeValue(currentUserApplication, "requestOverview.minBudget") || "0",
-
-            max: getSafeValue(currentUserApplication, "requestOverview.maxBudget") || "0",
-
-          },
-
-          location: getSafeValue(currentUserApplication, "requestOverview.location") || "Not specified",
-
-          urgency: getSafeValue(currentUserApplication, "applicationOverview.urgency") || "Not specified",
-
-          deliveryTurnaround: getSafeValue(currentUserApplication, "requestOverview.endDate")
-
-            ? `By ${currentUserApplication.requestOverview.endDate}`
-
-            : "Not specified",
-
-          purpose: currentUserApplication?.requestOverview?.purpose || "Not specified",
-
-        },
-
-        currentStage: "Contact Initiated",
-
-        nextStage: "Proposal Sent",
-
-        lastActivity: new Date().toISOString(),
-
-        supplierOffer: {
-
-          productCategories: Array.isArray(supplierData.productsServices?.productCategories)
-
-            ? supplierData.productsServices.productCategories
-
-            : [],
-
-          serviceCategory: getFirstCategory(supplierData.productsServices),
-
-          bbbeeLevel: supplierData.legalCompliance?.bbbeeLevel || "Not specified",
-
-          deliveryModes: Array.isArray(supplierData.productsServices?.deliveryModes)
-
-            ? supplierData.productsServices.deliveryModes
-
-            : ["Not specified"],
-
-          pisScore: supplierData.pisScore || 0,
-
-          bigScore: supplierData.bigScore || 0,
-
-          products: Array.isArray(supplierData.productsServices?.products)
-
-            ? supplierData.productsServices.products
-
-            : [],
-
-        },
-
-        customerProfileData: {
-
-          contactName: getSafeValue(customerData, "contactDetails.contactName") || "Not specified",
-
-          email: getSafeValue(customerData, "contactDetails.email") || "Not specified",
-
-          phone: getSafeValue(customerData, "contactDetails.mobile") || "Not specified",
-
-          annualRevenue: getSafeValue(customerData, "financialOverview.annualRevenue") || "Not specified",
-
-          fundingStage: getSafeValue(customerData, "applicationOverview.fundingStage") || "Not specified",
-
-          bbbeeLevel: getSafeValue(customerData, "legalCompliance.bbbeeLevel") || "Not specified",
-
-          taxStatus: getSafeValue(customerData, "legalCompliance.taxNumber") ? "Compliant" : "Not specified",
-
-          companyProfile: getSafeValue(customerData, "documents.companyProfile[0]") || null,
-
-          financialStatements: getSafeValue(customerData, "documents.financialStatements[0]") || null,
-
-        },
-
-      }
-
-
-
-      // Save the application
-
-      await addDoc(collection(db, "supplierApplications"), applicationPayload)
-
-
-
-      await updateDoc(supplierRef, {
-
-        currentStage: "Contact Initiated",
-
-        updatedAt: serverTimestamp(),
-
+      /* Ratings are keyed by supplierId. The reviews modal used to write only
+         supplierName, so nothing it saved ever reached this aggregate — it now
+         writes both and this reads the id. */
+      const buckets = {}
+      reviewsSnap.forEach((d) => {
+        const review = d.data()
+        const key = review.supplierId
+        if (!key) return
+        if (!buckets[key]) buckets[key] = []
+        buckets[key].push(Number(review.rating) || 0)
       })
-
-
-
-      // Send email notification to supplier
-
-      await sendEmailNotification(supplier, applicationPayload)
-
-
-
-      setNotification({
-
-        type: "success",
-
-        message: `Contact initiated with ${supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}`,
-
-      })
-
-
-
-      if (applicationPayload.status === "Accepted") {
-
-        if (onSupplierAccepted) {
-
-          onSupplierAccepted(supplier.id)
-
+      const ratingsData = {}
+      Object.entries(buckets).forEach(([key, list]) => {
+        ratingsData[key] = {
+          average: list.reduce((sum, r) => sum + r, 0) / list.length,
+          count: list.length,
         }
-
-      }
-
-    } catch (error) {
-
-      // Revert optimistic update on error
-
-      setAllSuppliers((prev) =>
-
-        prev.map((s) => (s.id === supplier.id ? { ...s, currentStage: "Potential Supplier" } : s)),
-
-      )
-
-      setFilteredSuppliers((prev) =>
-
-        prev.map((s) => (s.id === supplier.id ? { ...s, currentStage: "Potential Supplier" } : s)),
-
-      )
-
-
-
-      console.error("Application error:", error)
-
-      setNotification({
-
-        type: "error",
-
-        message: error.message.includes("FirebaseError")
-
-          ? "Failed to send application due to data validation"
-
-          : error.message,
-
       })
+      setRatings(ratingsData)
 
+      const cachedAi = aiSnap.exists() ? aiSnap.data().suppliers || {} : {}
+
+      const mapped = profilesSnap.docs
+        .filter((d) => d.id !== effectiveUserId)
+        .map((docSnap) => {
+          const data = { id: docSnap.id, ...docSnap.data() }
+          const row = mapSupplier(data, docSnap.id)
+          const result = calculateEnhancedMatchScore(applicationData, data, ratingsData)
+          const ai = cachedAi[docSnap.id]
+          const ratingInfo = ratingsData[docSnap.id] || { average: 0, count: 0 }
+
+          const enriched = {
+            ...row,
+            raw: data,
+            rating: ratingInfo.average,
+            ratingCount: ratingInfo.count,
+            primaryMatchPercentage: result.totalScore,
+            matchBreakdown: result.breakdown,
+            aiMatchPercentage: ai ? ai.score : null,
+            aiReasoning: ai ? ai.reasoning : null,
+            aiCapabilities: ai ? ai.capabilities || [] : [],
+            aiEligibility: getSupplierAiEligibility(data, effectiveUserId),
+          }
+          return { ...enriched, matchPercentage: getEffectiveMatchScore(enriched) }
+        })
+        .filter((s) => s.primaryMatchPercentage > 0)
+
+      mapped.sort((a, b) => b.matchPercentage - a.matchPercentage)
+      setSuppliers(mapped)
+    } catch (err) {
+      console.error("Error loading supplier matches:", err)
+      setError("Could not load supplier matches. Refresh to try again.")
     } finally {
+      setLoading(false)
+    }
+  }, [effectiveUserId])
 
-      setTimeout(() => setNotification(null), 3000)
+  useEffect(() => {
+    if (!authResolved) return
+    if (!effectiveUserId) {
+      setLoading(false)
+      return
+    }
+    loadEverything()
+  }, [authResolved, effectiveUserId, loadEverything])
 
+  const statusOf = useCallback((supplier) => normalizeSupplierStatus(records[supplier.id]?.status), [records])
+
+  /* ─── View + filter persistence ─────────────────────────────────────── */
+  useEffect(() => {
+    setViewsState((prev) => {
+      const current = prev.views[prev.activeViewId]
+      if (!current) return prev
+      const updated = { ...current, columnVisibility, columnOrder, columnWidths, pinned, density }
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, columnWidths, pinned, density])
+
+  useEffect(() => {
+    persistFilterState(localFilters, sortConfig)
+  }, [localFilters, sortConfig])
+
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId]
+    if (!target) return
+    setViewsState((prev) => {
+      const next = { ...prev, activeViewId: viewId }
+      persistViewsState(next)
+      return next
+    })
+    setColumnVisibility(target.columnVisibility)
+    setColumnOrder(target.columnOrder)
+    setColumnWidths(target.columnWidths)
+    setPinned(target.pinned)
+    setDensity(target.density)
+  }
+
+  const createNewView = () => {
+    const trimmedName = newViewName.trim()
+    if (!trimmedName) return
+    const id = generateViewId()
+    const newView = {
+      id,
+      name: trimmedName,
+      description: newViewDescription.trim(),
+      builtin: false,
+      columnVisibility: { ...columnVisibility },
+      columnOrder: [...columnOrder],
+      columnWidths: { ...columnWidths },
+      pinned: { ...pinned },
+      density,
+    }
+    setViewsState((prev) => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
+      persistViewsState(next)
+      return next
+    })
+    setNewViewName("")
+    setNewViewDescription("")
+    setShowNewViewForm(false)
+    toast("success", `View "${trimmedName}" created`)
+  }
+
+  const startEditingViewMeta = (view) =>
+    setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin })
+
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return
+    const trimmedName = editingViewMeta.name.trim()
+    if (!trimmedName && !editingViewMeta.builtin) return
+    setViewsState((prev) => {
+      const existing = prev.views[editingViewMeta.id]
+      if (!existing) return prev
+      const updated = {
+        ...existing,
+        name: existing.builtin ? existing.name : trimmedName,
+        description: editingViewMeta.description.trim(),
+      }
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    setEditingViewMeta(null)
+  }
+
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return
+    const wasActive = viewsState.activeViewId === viewId
+    setViewsState((prev) => {
+      const { [viewId]: _removed, ...restViews } = prev.views
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId
+      const next = { activeViewId: nextActiveId, views: restViews }
+      persistViewsState(next)
+      return next
+    })
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID]
+      setColumnVisibility(def.columnVisibility)
+      setColumnOrder(def.columnOrder)
+      setColumnWidths(def.columnWidths)
+      setPinned(def.pinned)
+      setDensity(def.density)
+    }
+    toast("success", "View deleted")
+  }
+
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout()
+    setColumnVisibility(layout.columnVisibility)
+    setColumnOrder(layout.columnOrder)
+    setColumnWidths(layout.columnWidths)
+    setPinned(layout.pinned)
+    setDensity(layout.density)
+    toast("success", `"${activeView.name}" reset to factory defaults`)
+  }
+
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  const cyclePin = (key) =>
+    setPinned((prev) => ({
+      ...prev,
+      [key]: prev[key] === "left" ? "right" : prev[key] === "right" ? null : "left",
+    }))
+
+  /* ─── Drag to reorder ───────────────────────────────────────────────── */
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key)
+    setDragHintRect(null)
+    try {
+      e.dataTransfer.effectAllowed = "move"
+      e.dataTransfer.setData("text/plain", key)
+    } catch {}
+  }
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (key !== dragOverColumn) setDragOverColumn(key)
+  }
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault()
+    if (!draggedColumn || draggedColumn === key) {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+    setColumnOrder((prev) => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(draggedColumn)
+      const toIdx = next.indexOf(key)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, draggedColumn)
+      return next
+    })
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+  const handleColumnDragEnd = () => {
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+
+  /* ─── Resize ────────────────────────────────────────────────────────── */
+  const startResize = (e, key) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    resizingRef.current = key
+
+    const onMove = (ev) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
+      setColumnWidths((prev) => ({ ...prev, [key]: next }))
+    }
+    const onUp = () => {
+      resizingRef.current = null
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
     }
 
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
   }
 
+  /* ─── Header filter + sort ──────────────────────────────────────────── */
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
+  }
+  const closeHeaderFilter = () => setHeaderFilterOpen(null)
 
+  const toggleSort = (key, event) => {
+    event.stopPropagation()
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" }
+      if (prev.dir === "asc") return { key, dir: "desc" }
+      return null
+    })
+  }
 
-  const loadContactedRequest = (contactedApp) => {
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${
+        active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"
+      }`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  )
 
-    setCurrentUserApplication(contactedApp.data)
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${
+          isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"
+        }`}
+        title={isActive ? (sortConfig.dir === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive ? sortConfig.dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} /> : <ArrowUpDown size={11} />}
+      </button>
+    )
+  }
 
-    setSuppliers(contactedApp.matches)
+  /* ─── Popups ────────────────────────────────────────────────────────── */
+  const openPopup = (type, row, rect) => {
+    let popupWidth
+    let popupHeight
+    switch (type) {
+      case "match":
+        popupWidth = 420
+        popupHeight = 560
+        break
+      case "quickActions":
+        popupWidth = 216
+        popupHeight = 300
+        break
+      default:
+        popupWidth = 320
+        popupHeight = 320
+    }
 
-    setFilteredSuppliers(contactedApp.matches)
+    let x = rect.left + rect.width / 2 - popupWidth / 2
+    let y = rect.bottom + 8
 
-    setShowContactedApplications(false)
+    if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20
+    if (x < 20) x = 20
+    if (y + popupHeight > window.innerHeight - 20) y = rect.top - popupHeight - 8
+    if (y < 20) y = 20
 
+    setActivePopup({ type, row, position: { x, y }, rect })
+  }
 
+  const openPopupFromEvent = (type, row, event) => {
+    event.stopPropagation()
+    openPopup(type, row, event.currentTarget.getBoundingClientRect())
+  }
 
-    setNotification({
+  const closePopup = () => setActivePopup(null)
 
-      type: "success",
+  /* ─── Writing status ────────────────────────────────────────────────── */
+  const canAct = !isCompanyMember || ["owner", "admin"].includes(userRole)
 
-      message: "Loaded previous contacted request"
+  const writeRecord = useCallback(
+    async (supplier, patch) => {
+      if (!effectiveUserId) return
+      await setDoc(
+        doc(db, SME_SUPPLIER_COLLECTION, smeSupplierId(effectiveUserId, supplier.id)),
+        {
+          smeId: effectiveUserId,
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+          viewType: "sme",
+          matchPercentage: supplier.matchPercentage || 0,
+          updatedAt: serverTimestamp(),
+          ...patch,
+        },
+        { merge: true },
+      )
+    },
+    [effectiveUserId],
+  )
 
+  const handleSetStatus = async (supplier, nextStatus, { quiet = false } = {}) => {
+    if (!canAct) {
+      toast("warning", "Only company owners and admins can update supplier matches.", 4000)
+      return
+    }
+    try {
+      await writeRecord(supplier, { status: nextStatus, createdAt: records[supplier.id]?.dateMatched || serverTimestamp() })
+      if (!quiet) toast("success", `${supplier.name} moved to ${nextStatus}.`)
+    } catch (err) {
+      console.error("Failed to update supplier status:", err)
+      toast("error", "Could not update the status. Try again.", 4000)
+    }
+  }
+
+  /* Opening a profile is what "Viewed" means, so record it. Without this the
+     funnel could never show anything between New Match and Contacted. */
+  const openDetails = (supplier) => {
+    setActivePopup(null)
+    setDetailsSupplier(supplier)
+    if (statusOf(supplier) === "New Match" && !records[supplier.id]?.status && canAct) {
+      handleSetStatus(supplier, "Viewed", { quiet: true })
+    }
+  }
+
+  /* ─── Request a quote ───────────────────────────────────────────────── */
+  const sendSupplierEmail = async (supplier, payload) => {
+    try {
+      const config = {
+        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
+      }
+      if (!window.emailjs) {
+        emailjs.init(config.publicKey)
+        window.emailjs = emailjs
+      }
+
+      const recipient = supplier.email
+      if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+        console.warn("No usable email on the supplier profile, skipping the email notification.")
+        return
+      }
+
+      await window.emailjs.send(
+        config.serviceId,
+        config.templateId,
+        {
+          to_email: recipient,
+          subject: `Quote request from ${payload.smeName}`,
+          from_name: "BIG Marketplace Africa",
+          date: new Date().toLocaleDateString("en-ZA"),
+          message:
+            `Dear ${supplier.name},\n\n${payload.smeName} has requested a quote through BIG Marketplace Africa.\n\n` +
+            `- Requirement: ${payload.request.serviceRequested}\n` +
+            `- Location: ${payload.request.location}\n` +
+            `- Budget: ${payload.request.budgetRange.min} to ${payload.request.budgetRange.max}\n` +
+            `- Needed by: ${payload.request.deliveryTurnaround}\n` +
+            `- Match score: ${payload.matchPercentage}%\n\n` +
+            `Log in to respond with your quote.\n\nBIG Marketplace Africa`,
+          portal_url: "https://www.bigmarketplace.africa/supplier/applications",
+          has_attachments: "false",
+          attachments_count: "0",
+        },
+        config.publicKey,
+      )
+    } catch (err) {
+      // Email failing must never report the quote request itself as failed.
+      console.error("Quote saved but the email notification failed:", err)
+    }
+  }
+
+  const handleRequestQuote = async (supplier) => {
+    setActivePopup(null)
+    const user = auth.currentUser
+    if (!user) {
+      toast("error", "Log in to request a quote.")
+      return
+    }
+    if (!canAct) {
+      toast("warning", "Only company owners and admins can request quotes.", 4000)
+      return
+    }
+    if (supplier.id === effectiveUserId) {
+      toast("error", "That is your own profile.")
+      return
+    }
+
+    setBusyId(supplier.id)
+    try {
+      const smeSnap = await getDoc(doc(db, "universalProfiles", effectiveUserId))
+      const smeData = smeSnap.exists() ? smeSnap.data() : {}
+      const smeName = smeData.entityOverview?.registeredName || smeData.entityOverview?.tradingName || "A Small Business"
+
+      const request = {
+        id: application?.id || "unknown",
+        serviceRequested:
+          getFirstCategory(application?.productsServices) ||
+          application?.requestOverview?.purpose ||
+          "Not specified",
+        purpose: application?.requestOverview?.purpose || "Not specified",
+        location: application?.requestOverview?.location || application?.matchingPreferences?.location || "Not specified",
+        budgetRange: {
+          min: application?.requestOverview?.minBudget || application?.matchingPreferences?.minBudget || "0",
+          max: application?.requestOverview?.maxBudget || application?.matchingPreferences?.maxBudget || "0",
+        },
+        urgency: application?.applicationOverview?.urgency || "Not specified",
+        deliveryTurnaround: application?.requestOverview?.endDate
+          ? `By ${application.requestOverview.endDate}`
+          : "Not specified",
+      }
+
+      const shared = {
+        smeId: effectiveUserId,
+        smeName,
+        smeLocation: smeData.entityOverview?.location || "",
+        smeSector: asList(smeData.entityOverview?.economicSectors).join(", "),
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        supplierLocation: supplier.locationOnly,
+        supplierSector: supplier.sector,
+        // Kept so anything still reading the old shape keeps working. The old
+        // writer had these two the wrong way round.
+        customerId: effectiveUserId,
+        customerName: smeName,
+        submittedBy: user.uid,
+        submittedByRole: userRole,
+        applicationId: application?.id || null,
+        originalRequest: request,
+        matchPercentage: supplier.matchPercentage || 0,
+        primaryMatchPercentage: supplier.primaryMatchPercentage || 0,
+        aiMatchPercentage: supplier.aiMatchPercentage ?? null,
+        matchBreakdown: supplier.matchBreakdown || null,
+        status: "Quote Requested",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        // Both ends of the gap, so responsiveness can be measured later.
+        smeActedAt: serverTimestamp(),
+        firstRespondedAt: null,
+      }
+
+      await Promise.all([
+        setDoc(doc(db, SME_SUPPLIER_COLLECTION, smeSupplierId(effectiveUserId, supplier.id)), {
+          ...shared,
+          viewType: "sme",
+        }, { merge: true }),
+        setDoc(doc(db, SUPPLIER_SME_COLLECTION, supplierSmeId(supplier.id, effectiveUserId)), {
+          ...shared,
+          viewType: "supplier",
+        }, { merge: true }),
+      ])
+
+      const applicationId = smeSupplierId(effectiveUserId, supplier.id)
+
+      try {
+        await Promise.all([
+          addDoc(collection(db, "messages"), {
+            to: supplier.id,
+            toName: supplier.name,
+            from: user.uid,
+            fromName: smeName,
+            subject: `Quote request from ${smeName}`,
+            content:
+              `Dear ${supplier.name},\n\n${smeName} has requested a quote.\n\n` +
+              `Requirement: ${request.serviceRequested}\nLocation: ${request.location}\n` +
+              `Budget: ${request.budgetRange.min} to ${request.budgetRange.max}\nNeeded by: ${request.deliveryTurnaround}\n\n` +
+              `Log in to BIG Marketplace Africa to respond.\n\nBIG Marketplace Africa`,
+            date: new Date().toISOString(),
+            read: false,
+            type: "inbox",
+            applicationId,
+            linkTo: `/supplier/quotes/${applicationId}`,
+          }),
+          addDoc(collection(db, "messages"), {
+            to: user.uid,
+            toName: smeName,
+            from: "system",
+            fromName: "BIG Marketplace",
+            subject: `Quote requested from ${supplier.name}`,
+            content:
+              `Dear ${smeName},\n\nYour quote request to ${supplier.name} has been sent.\n\n` +
+              `Supplier: ${supplier.name}\nOffering: ${supplier.productService}\nLocation: ${supplier.locationOnly}\n\n` +
+              `You will be notified when they respond.\n\nBIG Marketplace Africa`,
+            date: new Date().toISOString(),
+            read: false,
+            type: "inbox",
+            applicationId,
+            linkTo: `/sme/quotes/${applicationId}`,
+          }),
+        ])
+      } catch (messageError) {
+        console.error("Quote saved but the in-app messages failed:", messageError)
+      }
+
+      await sendSupplierEmail(supplier, { smeName, request, matchPercentage: supplier.matchPercentage || 0 })
+
+      window.dispatchEvent(
+        new CustomEvent("newNotification", {
+          detail: {
+            message: `Quote requested from ${supplier.name}`,
+            type: "success",
+            timestamp: new Date().toISOString(),
+          },
+          bubbles: true,
+        }),
+      )
+
+      toast("success", `Quote requested from ${supplier.name}.`)
+      if (onSupplierContacted) onSupplierContacted(supplier.id)
+    } catch (err) {
+      console.error("Error requesting a quote:", err)
+      toast("error", "Could not send the quote request. Try again.", 4000)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  /* ─── AI analysis ───────────────────────────────────────────────────── */
+  const runAiAnalysis = async () => {
+    if (!application || suppliers.length === 0) {
+      setAiError("There is nothing to analyse yet.")
+      return
+    }
+    setAiRunning(true)
+    setAiError("")
+    setAiProgress({ current: 0, total: 0 })
+    try {
+      const { processed, analyzedCount, ineligibleCount } = await runAiAnalysisForApplication(
+        application,
+        suppliers.map((s) => s.raw || s),
+        { onProgress: setAiProgress, currentUserId: effectiveUserId },
+      )
+
+      setSuppliers((prev) =>
+        prev.map((s) => {
+          const ai = processed[s.id]
+          if (!ai) return s
+          const next = {
+            ...s,
+            aiMatchPercentage: ai.score,
+            aiReasoning: ai.reasoning,
+            aiCapabilities: ai.capabilities || [],
+          }
+          return { ...next, matchPercentage: getEffectiveMatchScore(next) }
+        }),
+      )
+
+      toast(
+        "success",
+        `AI analysis complete — ${analyzedCount} supplier${analyzedCount === 1 ? "" : "s"} scored${
+          ineligibleCount ? `, ${ineligibleCount} skipped as ineligible` : ""
+        }.`,
+        4000,
+      )
+    } catch (err) {
+      console.error("AI analysis failed:", err)
+      const message = err?.message?.includes("AI-eligible")
+        ? err.message
+        : "AI analysis failed. Wait a moment and try again."
+      setAiError(message)
+      toast("error", message, 4000)
+    } finally {
+      setAiRunning(false)
+      setAiProgress({ current: 0, total: 0 })
+    }
+  }
+
+  /* ─── Notes ─────────────────────────────────────────────────────────── */
+  const saveNote = async () => {
+    if (!noteTarget || !noteText.trim()) return
+    try {
+      await writeRecord(noteTarget, { notes: arrayUnion(noteText.trim()) })
+      toast("success", "Note saved.")
+    } catch (err) {
+      console.error("Failed to save the note:", err)
+      toast("error", "Could not save the note.", 4000)
+    } finally {
+      setNoteTarget(null)
+      setNoteText("")
+    }
+  }
+
+  /* ─── Derived filter options ────────────────────────────────────────── */
+  const uniqueOf = useCallback(
+    (accessor) => [...new Set(suppliers.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
+    [suppliers],
+  )
+  const locationOptions = useMemo(() => uniqueOf((s) => s.locationOnly), [uniqueOf])
+  const sectorOptions = useMemo(() => uniqueOf((s) => s.sector), [uniqueOf])
+  const businessSizeOptions = useMemo(() => uniqueOf((s) => s.businessSize), [uniqueOf])
+  const complianceOptions = useMemo(() => uniqueOf((s) => s.complianceStatus), [uniqueOf])
+
+  /* ─── Filtering + sorting ───────────────────────────────────────────── */
+  const filteredSuppliers = useMemo(() => {
+    const f = localFilters
+    const matchesAny = (selected, value) =>
+      selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
+    const includesText = (needle, value) =>
+      !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
+
+    const rows = suppliers.filter((s) => {
+      if (records[s.id]?.hidden) return false
+      if (hasTooManyMissingFields(s)) return false
+      if (!showIneligible && !s.aiEligibility?.eligible) return false
+
+      const status = statusOf(s)
+      if (stageFilter && status !== stageFilter) return false
+      if (filters?.search && !s.name.toLowerCase().includes(filters.search.toLowerCase())) return false
+
+      if (!includesText(f.name, s.name)) return false
+      if (s.matchPercentage < f.matchRange[0] || s.matchPercentage > f.matchRange[1]) return false
+
+      if (s.primaryMatchPercentage < f.primaryRange[0] || s.primaryMatchPercentage > f.primaryRange[1]) return false
+      if (s.aiMatchPercentage !== null && (s.aiMatchPercentage < f.aiRange[0] || s.aiMatchPercentage > f.aiRange[1]))
+        return false
+
+      if (!includesText(f.productService, `${s.productService} ${s.sector}`)) return false
+      if (!matchesAny(f.location, s.location)) return false
+      if (!includesText(f.capacity, s.capacity)) return false
+      if (f.status.length > 0 && !f.status.includes(status)) return false
+      if (!matchesAny(f.businessSize, s.businessSize)) return false
+      if (!includesText(f.yearsOperating, s.yearsOperating)) return false
+      if (!matchesAny(f.bbbeeLevel, s.bbbeeLevel)) return false
+      if (!matchesAny(f.ownershipProfile, s.ownershipProfile)) return false
+      if (!includesText(f.certifications, s.certifications)) return false
+      if (!includesText(f.pricingRange, s.pricingRange)) return false
+      if (!includesText(f.minimumOrder, s.minimumOrder)) return false
+      if (!matchesAny(f.deliveryCapability, s.deliveryCapability)) return false
+      if (!matchesAny(f.complianceStatus, s.complianceStatus)) return false
+      if (!matchesAny(f.sector, s.sector)) return false
+      if (!includesText(f.notes, (records[s.id]?.notes || []).join(" "))) return false
+
+      const iso = toISODateOnly(records[s.id]?.dateMatched)
+      if (f.matchedFrom && (!iso || iso < f.matchedFrom)) return false
+      if (f.matchedTo && (!iso || iso > f.matchedTo)) return false
+
+      return true
     })
 
-    setTimeout(() => setNotification(null), 3000)
+    if (sortConfig?.key) {
+      const accessors = {
+        name: (r) => r.name,
+        match: (r) => r.matchPercentage || 0,
+        productService: (r) => r.productService,
+        location: (r) => r.location,
+        capacity: (r) => r.capacity,
+        status: (r) => statusOf(r),
+        businessSize: (r) => r.businessSize,
+        yearsOperating: (r) => Number.parseFloat(r.yearsOperating) || 0,
+        bbbeeLevel: (r) => r.bbbeeLevel,
+        pricingRange: (r) => r.pricingRange,
+        minimumOrder: (r) => r.minimumOrder,
+        complianceStatus: (r) => r.complianceStatus,
+        sector: (r) => r.sector,
+        primaryMatch: (r) => r.primaryMatchPercentage || 0,
+        aiMatch: (r) => (r.aiMatchPercentage === null ? -1 : r.aiMatchPercentage),
+        documents: (r) => r.documentCount || 0,
+        dateMatched: (r) => toDateSafe(records[r.id]?.dateMatched)?.getTime() ?? 0,
+      }
+      const accessor = accessors[sortConfig.key]
+      if (accessor) {
+        rows.sort((a, b) => {
+          const av = accessor(a)
+          const bv = accessor(b)
+          if (typeof av === "number" && typeof bv === "number") {
+            return sortConfig.dir === "asc" ? av - bv : bv - av
+          }
+          const cmp = (av || "").toString().localeCompare((bv || "").toString())
+          return sortConfig.dir === "asc" ? cmp : -cmp
+        })
+      }
+    }
 
-  }
+    return rows
+  }, [suppliers, records, localFilters, sortConfig, statusOf, stageFilter, filters, showIneligible])
 
+  /* Parent callbacks go through a ref so an inline arrow in the parent can't
+     retrigger this effect on every render. */
+  const notifyRef = useRef({ onCountChange, onSuppliersUpdate })
+  useEffect(() => {
+    notifyRef.current = { onCountChange, onSuppliersUpdate }
+  })
+  useEffect(() => {
+    notifyRef.current.onCountChange?.(filteredSuppliers.length)
+    notifyRef.current.onSuppliersUpdate?.(suppliers, filteredSuppliers)
+  }, [suppliers, filteredSuppliers])
 
-
-  const handleViewDetails = (supplier) => {
-
-    setModalContent({
-
-      type: "supplier-details",
-
-      supplier
-
-    })
-
-    setShowModal(true)
-
-  }
-
-
-
-  const handleViewDocuments = (supplier) => {
-
-    setModalContent({ type: "documents", supplier })
-
-    setShowModal(true)
-
-  }
-
-
-
-  const handleMessage = (supplier) => {
-
-    setModalContent({ type: "message", supplier })
-
-    setShowModal(true)
-
-  }
-
-
-
-  const handleCall = (supplier) => {
-
-    setModalContent({ type: "call", supplier })
-
-    setShowModal(true)
-
-  }
-
-
-
-  const handleExport = () => {
-
-    setNotification({ type: "info", message: "Exporting supplier data..." })
-
-    setTimeout(() => setNotification(null), 3000)
-
-  }
-
-
+  /* ─── Filter chrome ─────────────────────────────────────────────────── */
+  const f = localFilters
+  const activeFilterCount =
+    (f.name.trim() ? 1 : 0) +
+    (f.matchRange[0] > 0 || f.matchRange[1] < 100 ? 1 : 0) +
+    (f.productService.trim() ? 1 : 0) +
+    f.location.length +
+    (f.capacity.trim() ? 1 : 0) +
+    f.status.length +
+    f.businessSize.length +
+    (f.yearsOperating.trim() ? 1 : 0) +
+    f.bbbeeLevel.length +
+    f.ownershipProfile.length +
+    (f.certifications.trim() ? 1 : 0) +
+    (f.pricingRange.trim() ? 1 : 0) +
+    (f.minimumOrder.trim() ? 1 : 0) +
+    f.deliveryCapability.length +
+    f.complianceStatus.length +
+    f.sector.length +
+    (f.primaryRange[0] > 0 || f.primaryRange[1] < 100 ? 1 : 0) +
+    (f.aiRange[0] > 0 || f.aiRange[1] < 100 ? 1 : 0) +
+    (f.matchedFrom || f.matchedTo ? 1 : 0) +
+    (f.notes.trim() ? 1 : 0)
 
   const clearAllFilters = () => {
-
-    setFilters({
-
-      location: "",
-
-      matchScore: 50,
-
-      minValue: "",
-
-      maxValue: "",
-
-      entityType: "",
-
-      sectors: [],
-
-      bbbeeLevel: "",
-
-      procurementCategories: [],
-
-      availability: "",
-
-      sortBy: "",
-
-    })
-
+    setLocalFilters({ ...EMPTY_FILTERS })
+    setSortConfig(null)
   }
 
+  const getFilterActive = (type) => {
+    switch (type) {
+      case "match":
+        return f.matchRange[0] > 0 || f.matchRange[1] < 100
+      case "primaryMatch":
+        return f.primaryRange[0] > 0 || f.primaryRange[1] < 100
+      case "aiMatch":
+        return f.aiRange[0] > 0 || f.aiRange[1] < 100
+      case "dateMatched":
+        return !!f.matchedFrom || !!f.matchedTo
+      default: {
+        const v = f[type]
+        if (Array.isArray(v)) return v.length > 0
+        return typeof v === "string" ? !!v.trim() : false
+      }
+    }
+  }
 
+  const toggleChip = (field, value) =>
+    setLocalFilters((p) => ({
+      ...p,
+      [field]: p[field].includes(value) ? p[field].filter((x) => x !== value) : [...p[field], value],
+    }))
 
-  if (loading) return <div>Loading suppliers...</div>
+  /* ─── Layout: responsive collapse, pinning, offsets ─────────────────── */
+  const maxPriority = viewportWidth < 640 ? 1 : viewportWidth < 1024 ? 3 : 99
 
-
-
-  if (error) return (
-
-    <div style={{ textAlign: 'center', padding: '3rem' }}>
-
-      <div style={{ color: '#D32F2F', marginBottom: '1rem', fontSize: '1.1rem' }}>{error}</div>
-
-      {error.includes("complete a product application") && (
-
-        <button
-
-          onClick={() => navigate('/applications/product')}
-
-          style={{
-
-            padding: '0.75rem 1.5rem',
-
-            background: '#5D2A0A',
-
-            color: 'white',
-
-            border: 'none',
-
-            borderRadius: '6px',
-
-            fontSize: '1rem',
-
-            fontWeight: '500',
-
-            cursor: 'pointer',
-
-          }}
-
-        >
-
-          Create Product Application
-
-        </button>
-
-      )}
-
-    </div>
-
+  const visibleColumnKeys = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key].priority <= maxPriority),
+    [columnOrder, columnVisibility, maxPriority],
   )
 
-
-
-  if (filteredSuppliers.length === 0 && !loading) return (
-
-    <div style={{ textAlign: 'center', padding: '3rem' }}>
-
-      <p style={{ fontSize: '1.1rem', color: '#5D2A0A', marginBottom: '1rem' }}>
-
-        No matching suppliers found based on your product application criteria.
-
-      </p>
-
-      <p style={{ color: '#7d5a50', marginBottom: '2rem' }}>
-
-        Try updating your product application or check back later for new suppliers.
-
-      </p>
-
-      <button
-
-        onClick={() => navigate('/applications/product')}
-
-        style={{
-
-          padding: '0.75rem 1.5rem',
-
-          background: '#5D2A0A',
-
-          color: 'white',
-
-          border: 'none',
-
-          borderRadius: '6px',
-
-          fontSize: '1rem',
-
-          fontWeight: '500',
-
-          cursor: 'pointer',
-
-        }}
-
-      >
-
-        Edit Product Application
-
-      </button>
-
-    </div>
-
+  const collapsedByViewport = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key].priority > maxPriority).length,
+    [columnOrder, columnVisibility, maxPriority],
   )
 
+  const orderedColumns = useMemo(() => {
+    const left = visibleColumnKeys.filter((k) => pinned[k] === "left")
+    const right = visibleColumnKeys.filter((k) => pinned[k] === "right")
+    const middle = visibleColumnKeys.filter((k) => !pinned[k])
+    return [...left, ...middle, ...right]
+  }, [visibleColumnKeys, pinned])
 
+  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+
+  const stickyOffsets = useMemo(() => {
+    const offsets = {}
+    // Left-pinned columns stack to the right of the frozen Supplier column.
+    let leftAcc = SUPPLIER_WIDTH
+    orderedColumns.forEach((key) => {
+      if (pinned[key] === "left") {
+        offsets[key] = { side: "left", value: leftAcc }
+        leftAcc += widthOf(key)
+      }
+    })
+    // Action is not pinned, so right-pinned columns stick to the table edge.
+    let rightAcc = 0
+    ;[...orderedColumns].reverse().forEach((key) => {
+      if (pinned[key] === "right") {
+        offsets[key] = { side: "right", value: rightAcc }
+        rightAcc += widthOf(key)
+      }
+    })
+    return offsets
+  }, [orderedColumns, pinned, widthOf])
+
+  const totalWidth = SUPPLIER_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+
+  const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
+  const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
+
+  const tableCellStyle = {
+    padding: cellPadding,
+    borderBottom: "1px solid #e6d7c3",
+    borderRight: "1px solid #e6d7c3",
+    fontSize: "0.8rem",
+    verticalAlign: "top",
+    color: "#4a352f",
+    lineHeight: "1.3",
+    overflow: "hidden",
+  }
+
+  const searchedColumns = DEFAULT_COLUMN_ORDER.filter((key) =>
+    COLUMN_DEFS[key].label.toLowerCase().includes(columnSearch.toLowerCase()),
+  )
+
+  /* ─── Cells ─────────────────────────────────────────────────────────── */
+  const scoreColor = (n) => (n > 75 ? "#48BB78" : n > 50 ? "#D69E2E" : "#E53E3E")
+  const barColor = (n) => (n > 75 ? "#48BB78" : n > 50 ? "#F6AD55" : "#F56565")
+
+  const renderCell = (key, s, rowBg) => {
+    const offset = stickyOffsets[key]
+    const stickyStyle = offset
+      ? {
+          position: "sticky",
+          [offset.side]: `${offset.value}px`,
+          zIndex: 9,
+          backgroundColor: rowBg,
+          boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+        }
+      : {}
+    const style = { ...tableCellStyle, ...stickyStyle }
+    const status = statusOf(s)
+    const record = records[s.id]
+
+    switch (key) {
+      case "match":
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            <div className="flex flex-col items-center gap-1 w-full">
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-semibold" style={{ color: scoreColor(s.matchPercentage) }}>
+                  {s.matchPercentage}%
+                </span>
+                {/* Spec: "Why this match?" sits beside Match %, not in Action */}
+                <button
+                  onClick={(e) => openPopupFromEvent("match", s, e)}
+                  title="Why this match?"
+                  aria-label={`Why this match for ${s.name}?`}
+                  className="text-[#a67c52] hover:text-[#4a352f]"
+                >
+                  <HelpCircle size={13} />
+                </button>
+              </div>
+              <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, s.matchPercentage))}%`,
+                    backgroundColor: barColor(s.matchPercentage),
+                  }}
+                />
+              </div>
+              {s.aiMatchPercentage === null && <span className="text-[9px] text-[#a89482]">structured only</span>}
+            </div>
+          </td>
+        )
+
+      case "productService":
+        return (
+          <td key={key} style={style}>
+            <div className="leading-snug">
+              <TruncatedText text={s.productService} maxLength={26} />
+              {s.categoryCount > 1 && (
+                <div className="text-[10px] text-[#a89482] mt-0.5">
+                  +{s.categoryCount - 1} more categor{s.categoryCount - 1 === 1 ? "y" : "ies"}
+                </div>
+              )}
+            </div>
+          </td>
+        )
+
+      case "capacity":
+        return (
+          <td key={key} style={style}>
+            <span className="text-xs">{s.capacity}</span>
+          </td>
+        )
+
+      case "status": {
+        const st = getStatusStyle(status)
+        return (
+          <td key={key} style={style}>
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+              style={{ backgroundColor: st.color, color: st.textColor }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: st.textColor }} />
+              {status}
+            </span>
+          </td>
+        )
+      }
+
+      case "ownershipProfile":
+        return (
+          <td key={key} style={style}>
+            {s.ownershipTags.length === 0 ? (
+              <span className="text-[#a89482] text-xs">Not specified</span>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {s.ownershipTags.map((tag) => (
+                  <span key={tag} className="px-1.5 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </td>
+        )
+
+      case "deliveryCapability":
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={s.deliveryCapability} maxLength={24} />
+          </td>
+        )
+
+      case "primaryMatch":
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            {s.primaryMatchPercentage}%
+          </td>
+        )
+
+      case "aiMatch":
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            {s.aiMatchPercentage === null ? (
+              <span className="text-[#a89482] text-xs">Not run</span>
+            ) : (
+              <span style={{ color: scoreColor(s.aiMatchPercentage), fontWeight: 600 }}>{s.aiMatchPercentage}%</span>
+            )}
+          </td>
+        )
+
+      case "documents":
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            {s.documentCount || <span className="text-[#a89482]">-</span>}
+          </td>
+        )
+
+      case "dateMatched":
+        return (
+          <td key={key} style={style}>
+            {formatDateValue(record?.dateMatched) || <span className="text-[#a89482] text-xs">-</span>}
+          </td>
+        )
+
+      case "notes": {
+        const notes = record?.notes || []
+        return (
+          <td key={key} style={style}>
+            {notes.length === 0 ? (
+              <span className="text-[#a89482] text-xs">-</span>
+            ) : (
+              <TruncatedText text={notes[notes.length - 1]} maxLength={30} />
+            )}
+          </td>
+        )
+      }
+
+      default:
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={s[key]} maxLength={26} />
+          </td>
+        )
+    }
+  }
+
+  /* ─── Render ────────────────────────────────────────────────────────── */
+  if (loading) {
+    return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading supplier matches...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="p-10 text-center">
+        <p className="text-sm font-semibold text-[#4a352f] m-0">{error}</p>
+        {onNewRequest && (
+          <button
+            onClick={onNewRequest}
+            className="mt-4 px-4 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold"
+          >
+            Start a request
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
-
-    <>
-
-      <div
-
-        style={{
-
-          position: "relative",
-
-          filter: showModal || showFilters ? "blur(2px)" : "none",
-
-          transition: "filter 0.2s ease",
-
-          pointerEvents: isAiAnalyzing ? "none" : "auto",
-
-        }}
-
-      >
-
-        {/* Notification area */}
-
-        {notification && (
-
-          <div
-
-            style={{
-
-              position: "fixed",
-
-              top: "1rem",
-
-              right: "1rem",
-
-              padding: "1rem",
-
-              borderRadius: "6px",
-
-              color: "white",
-
-              fontWeight: "500",
-
-              zIndex: 1001,
-
-              background:
-
-                notification.type === "success" ? "#48BB78" : notification.type === "error" ? "#F56565" : "#4299E1",
-
-            }}
-
-          >
-
-            {notification.message}
-
-          </div>
-
-        )}
-
-
-
-        {/* Loading state */}
-
-        {isLoadingHistory && (
-
-          <div style={{
-
-            textAlign: 'center',
-
-            padding: '2rem',
-
-            color: '#5D2A0A'
-
-          }}>
-
-            Loading matches with history...
-
-          </div>
-
-        )}
-
-
-
-        {/* No matches but has previous contacts */}
-
-        {!isLoadingHistory && filteredSuppliers.length === 0 && hasPreviousContacts && (
-
-          <div style={{ textAlign: 'center', padding: '3rem' }}>
-
-            <p style={{ fontSize: '1.1rem', color: '#5D2A0A', marginBottom: '1rem' }}>
-
-              No new matches found for your current request.
-
-            </p>
-
-            <p style={{ color: '#7d5a50', marginBottom: '2rem' }}>
-
-              However, you have previously contacted suppliers below.
-
-            </p>
-
-            {renderNewRequestButton()}
-
-          </div>
-
-        )}
-
-
-
-        {/* No matches at all */}
-
-        {!isLoadingHistory && filteredSuppliers.length === 0 && !hasPreviousContacts && (
-
-          <div style={{ textAlign: 'center', padding: '3rem' }}>
-
-            <p style={{ fontSize: '1.1rem', color: '#5D2A0A', marginBottom: '1rem' }}>
-
-              No matching suppliers found based on your product application criteria.
-
-            </p>
-
-            <p style={{ color: '#7d5a50', marginBottom: '2rem' }}>
-
-              Try creating a new request or check back later for new suppliers.
-
-            </p>
-
-            {renderNewRequestButton()}
-
-          </div>
-
-        )}
-
-
-
-        {/* AI Analysis Full Screen Loader - rendered via portal so it's always on top */}
-
-        {mounted && isAiAnalyzing && createPortal(
-
-          <div style={{
-
-            position: "fixed",
-
-            top: 0, left: 0, right: 0, bottom: 0,
-
-            backgroundColor: "rgba(0,0,0,0.75)",
-
-            display: "flex",
-
-            alignItems: "center",
-
-            justifyContent: "center",
-
-            zIndex: 99999,
-
-          }}>
-
-            <div style={{
-
-              background: "white",
-
-              padding: "2.5rem",
-
-              borderRadius: "16px",
-
-              textAlign: "center",
-
-              color: "#5D2A0A",
-
-              minWidth: "380px",
-
-              maxWidth: "480px",
-
-              boxShadow: "0 25px 50px rgba(0,0,0,0.3)",
-
-            }}>
-
-              {/* Animated brain icon */}
-
-              <div style={{
-
-                width: "80px", height: "80px",
-
-                borderRadius: "50%",
-
-                background: "linear-gradient(135deg, #5D2A0A, #a67c52)",
-
-                display: "flex", alignItems: "center", justifyContent: "center",
-
-                margin: "0 auto 1.5rem auto",
-
-                animation: "pulse 1.5s ease-in-out infinite",
-
-              }}>
-
-                <Brain size={40} color="white" />
-
-              </div>
-
-
-
-              <style>{`
-
-                @keyframes pulse {
-
-                  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(93,42,10,0.4); }
-
-                  70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(93,42,10,0); }
-
-                  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(93,42,10,0); }
-
-                }
-
-                @keyframes shimmer {
-
-                  0% { background-position: -400px 0; }
-
-                  100% { background-position: 400px 0; }
-
-                }
-
-                @keyframes dotBounce {
-
-                  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
-
-                  40% { transform: scale(1); opacity: 1; }
-
-                }
-
-              `}</style>
-
-
-
-              <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: "700" }}>
-
-                AI Semantic Analysis Running
-
-              </h3>
-
-              <p style={{ margin: "0 0 1.5rem 0", color: "#8D6E63", fontSize: "0.875rem" }}>
-
-                Analyzing supplier capabilities against your request...
-
-              </p>
-
-
-
-              {/* Progress bar */}
-
-              <div style={{
-
-                width: "100%", height: "10px",
-
-                backgroundColor: "#E8D5C4",
-
-                borderRadius: "5px",
-
-                margin: "0 0 0.75rem 0",
-
-                overflow: "hidden",
-
-              }}>
-
-                <div style={{
-
-                  height: "100%",
-
-                  background: "linear-gradient(90deg, #5D2A0A 0%, #a67c52 50%, #5D2A0A 100%)",
-
-                  backgroundSize: "400px 100%",
-
-                  borderRadius: "5px",
-
-                  animation: "shimmer 1.5s infinite linear",
-
-                  width: aiAnalysisProgress.total > 0
-
-                    ? `${Math.max(5, (aiAnalysisProgress.current / aiAnalysisProgress.total) * 100)}%`
-
-                    : "100%",
-
-                  transition: "width 0.5s ease",
-
-                }} />
-
-              </div>
-
-
-
-              {/* Supplier count */}
-
-              <p style={{ margin: "0 0 1.5rem 0", color: "#5D2A0A", fontSize: "0.875rem", fontWeight: "600" }}>
-
-                {aiAnalysisProgress.total > 0
-
-                  ? `Analyzing ${aiAnalysisProgress.total} supplier profiles...`
-
-                  : "Preparing analysis..."}
-
-              </p>
-
-
-
-              {/* Animated dots */}
-
-              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "1.5rem" }}>
-
-                {[0, 1, 2].map(i => (
-
-                  <div key={i} style={{
-
-                    width: "10px", height: "10px",
-
-                    borderRadius: "50%",
-
-                    background: "#5D2A0A",
-
-                    animation: `dotBounce 1.4s ease-in-out ${i * 0.16}s infinite`,
-
-                  }} />
-
-                ))}
-
-              </div>
-
-
-
-              {/* What's happening */}
-
-              <div style={{
-
-                background: "#FFF8F5",
-
-                border: "1px solid #E8D5C4",
-
-                borderRadius: "8px",
-
-                padding: "1rem",
-
-                textAlign: "left",
-
-              }}>
-
-                <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.75rem", fontWeight: "600", color: "#5D2A0A" }}>
-
-                  What's happening right now:
-
-                </p>
-
-                <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#7D5A50" }}>
-
-                  <li style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>Reading each supplier's full product & service profile</li>
-
-                  <li style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>Comparing against your specific request semantically</li>
-
-                  <li style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>Scoring capability alignment & generating explanations</li>
-
-                  <li style={{ fontSize: "0.75rem" }}>Caching results so future loads are instant</li>
-
-                </ul>
-
-              </div>
-
-
-
-              <p style={{ margin: "1.25rem 0 0 0", fontSize: "0.7rem", color: "#A67C52" }}>
-
-                ⏱ This may take 30–60 seconds for large supplier lists
-
-              </p>
-
-            </div>
-
-          </div>,
-
-          document.body
-
-        )}
-
-
-
-        <div style={{ marginBottom: "2rem" }}>
-
-          {/* Current Request Section */}
-
-          <div style={{
-
-            background: "#FEFCFA",
-
-            padding: "1rem",
-
-            borderRadius: "8px",
-
-            border: "1px solid #E8D5C4",
-
-            marginBottom: "1rem"
-
-          }}>
-
-            {/* Table Header */}
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-
-              <h3 style={{ color: "#5D2A0A", margin: 0 }}>
-
-                {hasPreviousContacts ? "Combined Matches" : "Current Request"}
-
-              </h3>
-
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-
-                {renderNewRequestButton()}
-
-                {/* Other buttons remain the same */}
-
-                <button
-
-                  onClick={runSecondaryAiAnalysis}
-
-                  disabled={isAiAnalyzing || filteredSuppliers.length === 0 || !currentUserApplication}
-
-                  style={{
-
-                    ...filterButtonStyle,
-
-                    background: isAiAnalyzing ? "#E8D5C4" : "#5D2A0A",
-
-                    color: isAiAnalyzing ? "#5D2A0A" : "white",
-
-                    opacity: (filteredSuppliers.length === 0 || !currentUserApplication) ? 0.5 : 1,
-
-                    cursor: (isAiAnalyzing || filteredSuppliers.length === 0 || !currentUserApplication) ? "not-allowed" : "pointer"
-
-                  }}
-
-                >
-
-                  <Brain size={16} />
-
-                  {isAiAnalyzing ? "Analyzing..." : "AI Analysis"}
-
-                </button>
-
-                <button onClick={() => setShowFilters(true)} style={filterButtonStyle}>
-
-                  <Filter size={16} />
-
-                  Filter
-
-                </button>
-                
-                {contactedApplications.length > 0 && (
-
-                  <button
-
-                    onClick={() => setShowContactedApplications(!showContactedApplications)}
-
-                    style={{
-
-                      background: "#5D2A0A",
-
-                      color: "white",
-
-                      border: "1px solid #5D2A0A",
-
-                      padding: "0.5rem 1rem",
-
-                      borderRadius: "6px",
-
-                      cursor: "pointer",
-
-                      fontSize: "0.875rem",
-
-                      display: "flex",
-
-                      alignItems: "center",
-
-                      gap: "0.5rem"
-
-                    }}
-
-                  >
-
-                    <History size={16} />
-
-                    {showContactedApplications ? "Hide" : "Show"} Contacted ({contactedApplications.length})
-
-                  </button>
-
-                )}
-
-              </div>
-
-            </div>
-
-
-
-            {/* Legend */}
-
-            {showLegend && renderLegend()}
-
-
-
-            {/* Error Display */}
-
-            {aiAnalysisError && (
-
-              <div
-
-                style={{
-
-                  background: "#FEF2F2",
-
-                  border: "1px solid #FECACA",
-
-                  color: "#DC2626",
-
-                  padding: "0.75rem",
-
-                  borderRadius: "6px",
-
-                  marginBottom: "1rem",
-
-                  display: "flex",
-
-                  alignItems: "center",
-
-                  gap: "0.5rem",
-
-                  fontSize: "0.875rem"
-
-                }}
-
-              >
-
-                <AlertCircle size={16} />
-
-                {aiAnalysisError}
-
-              </div>
-
-            )}
-
-
-
-            {/* Table Structure - UPDATED WITH NEW COLUMN */}
-
-            <div style={tableContainerStyle}>
-
-              <table style={tableStyle}>
-
-                <colgroup>
-
-                  <col style={{ width: "8%" }} />
-
-                  <col style={{ width: "8%" }} />
-
-                  <col style={{ width: "8%" }} />
-
-                  <col style={{ width: "5%" }} />
-
-                  <col style={{ width: "5%" }} />
-
-                  <col style={{ width: "8%" }} />
-
-                  <col style={{ width: "10%" }} /> {/* Increased width for service required */}
-
-                  <col style={{ width: "7%" }} />
-
-                  <col style={{ width: "8%" }} />
-
-                  <col style={{ width: "8%" }} />
-
-                  <col style={{ width: "8%" }} />
-
-                  <col style={{ width: "5%" }} />
-
-                  <col style={{ width: "8%" }} />
-
-                </colgroup>
-
-                <thead>
-
-                  <tr>
-
-                    <th style={tableHeaderStyle}>Supplier Name</th>
-
-                    <th style={tableHeaderStyle}>Location</th>
-
-                    <th style={tableHeaderStyle}>Sector Focus</th>
-
-                    <th style={tableHeaderStyle}>BBBEE Level</th>
-
-                    <th style={tableHeaderStyle}>Revenue</th>
-
-                    <th style={tableHeaderStyle}>Category</th>
-
-                    <th style={tableHeaderStyle}>Service Required</th>
-
-                    <th style={tableHeaderStyle}>Urgency</th>
-
-                    <th style={tableHeaderStyle}>Match %</th>
-
-                    <th style={tableHeaderStyle}>Secondary Match %</th>
-
-                    <th style={tableHeaderStyle}>Action</th>
-
-                    <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Stage</th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {renderSupplierRows()} {/* Use the new render function */}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-
-
-            {/* Table Footer */}
-
-            <div
-
-              style={{
-
-                display: "flex",
-
-                justifyContent: "space-between",
-
-                alignItems: "center",
-
-                marginTop: "1rem",
-
-                padding: "1rem",
-
-                background: "#FEFCFA",
-
-                borderRadius: "8px",
-
-                border: "1px solid #E8D5C4",
-
-              }}
-
-            >
-
-              <div style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>
-
-                Showing {filteredSuppliers.length} of {suppliers.length} suppliers
-
-                {Object.keys(secondaryMatchData).length > 0 && (
-
-                  <span style={{ marginLeft: "1rem", color: "#8D6E63" }}>
-
-                    • AI Analysis: {Object.keys(secondaryMatchData).length} suppliers
-
-                  </span>
-
-                )}
-
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-
-                <button
-
-                  style={{
-
-                    padding: "0.5rem 1rem",
-
-                    background: "#F5EBE0",
-
-                    color: "#5D2A0A",
-
-                    border: "1px solid #E8D5C4",
-
-                    borderRadius: "4px",
-
-                    cursor: "pointer",
-
-                    fontSize: "0.875rem",
-
-                  }}
-
-                >
-
-                  Previous
-
-                </button>
-
-                <span style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>Page 1 of 1</span>
-
-                <button
-
-                  style={{
-
-                    padding: "0.5rem 1rem",
-
-                    background: "#F5EBE0",
-
-                    color: "#5D2A0A",
-
-                    border: "1px solid #E8D5C4",
-
-                    borderRadius: "4px",
-
-                    cursor: "pointer",
-
-                    fontSize: "0.875rem",
-
-                  }}
-
-                >
-
-                  Next
-
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
-
-
-          {/* NEW: Secondary Match Breakdown Modal */}
-
-          {mounted &&
-
-            showSecondaryBreakdown &&
-
-            createPortal(
-
-              <div
-
-                style={{
-
-                  position: "fixed",
-
-                  top: 0,
-
-                  left: 0,
-
-                  right: 0,
-
-                  bottom: 0,
-
-                  backgroundColor: "rgba(0,0,0,0.5)",
-
-                  display: "flex",
-
-                  alignItems: "center",
-
-                  justifyContent: "center",
-
-                  zIndex: 1000,
-
-                }}
-
-              >
-
-                <div
-
-                  style={{
-
-                    background: "white",
-
-                    borderRadius: "12px",
-
-                    maxWidth: "800px",
-
-                    width: "95%",
-
-                    maxHeight: "90vh",
-
-                    overflowY: "auto",
-
-                    boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-
-                  }}
-
-                >
-
-                  <div style={modalHeaderStyle}>
-
-                    <h3 style={modalTitleStyle}>
-
-                      AI Semantic Match -{" "}
-
-                      {secondaryBreakdownData?.supplier?.entityOverview?.tradingName ||
-
-                        secondaryBreakdownData?.supplier?.entityOverview?.registeredName}
-
-                    </h3>
-
-                    <button onClick={() => setShowSecondaryBreakdown(false)} style={modalCloseButtonStyle}>
-
-                      ✖
-
-                    </button>
-
-                  </div>
-
-
-
-                  <div style={modalBodyStyle}>
-
-                    {secondaryBreakdownData?.secondaryScore === null || secondaryBreakdownData?.secondaryScore === undefined ? (
-
-                      <div>
-
-                        <div style={{ textAlign: "center", padding: "2rem", background: "#FFF8E1", borderRadius: "8px", border: "1px solid #FFE0B2", marginBottom: "1.5rem" }}>
-
-                          <Brain size={48} color="#F57C00" style={{ marginBottom: "1rem" }} />
-
-                          <h3 style={{ color: "#5D2A0A", marginBottom: "0.5rem" }}>AI Analysis Pending</h3>
-
-                          <p style={{ color: "#7D5A50", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
-
-                            Click <strong>"AI Analysis"</strong> to run semantic analysis on all {allSuppliers.length} suppliers.
-
-                          </p>
-
-                          <button onClick={() => { setShowSecondaryBreakdown(false); runSecondaryAiAnalysis(); }}
-
-                            style={{ padding: "0.75rem 1.5rem", background: "#5D2A0A", color: "white", border: "none", borderRadius: "6px", fontSize: "0.875rem", fontWeight: "600", cursor: "pointer" }}>
-
-                            Run AI Analysis Now
-
-                          </button>
-
-                        </div>
-
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: "8px", padding: "1.5rem" }}>
-
-                          <h4 style={{ color: "#5D2A0A", marginBottom: "1rem", fontSize: "0.875rem" }}>
-
-                            Current Primary Match Score: <span style={{ fontSize: "1.5rem", fontWeight: "bold", color: secondaryBreakdownData?.primaryScore >= 75 ? "#48BB78" : secondaryBreakdownData?.primaryScore >= 50 ? "#F6AD55" : "#F56565" }}>{secondaryBreakdownData?.primaryScore}%</span>
-
-                          </h4>
-
-                          <p style={{ fontSize: "0.75rem", color: "#8D6E63", margin: 0 }}>Based on structured data matching (category, location, BBBEE, budget, delivery mode). AI analysis adds semantic understanding of actual service alignment.</p>
-
-                        </div>
-
-                      </div>
-
-                    ) : (
-
-                      <div>
-
-                        {/* TOP SCORE SUMMARY */}
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "2rem", paddingBottom: "1rem", borderBottom: "2px solid #E8D5C4" }}>
-
-                          <div style={{ textAlign: "center", background: "#F8F5F0", borderRadius: "8px", padding: "1rem" }}>
-
-                            <div style={{ fontSize: "2rem", fontWeight: "bold", color: getMatchScoreClass(secondaryBreakdownData?.primaryScore).color, marginBottom: "0.25rem" }}>
-
-                              {secondaryBreakdownData?.primaryScore}%
-
-                            </div>
-
-                            <p style={{ fontSize: "0.8rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 0.25rem 0" }}>Primary Match</p>
-
-                            <p style={{ fontSize: "0.7rem", color: "#8D6E63", margin: 0 }}>Structured Data Scoring</p>
-
-                          </div>
-
-                          <div style={{ textAlign: "center", background: "#F8F5F0", borderRadius: "8px", padding: "1rem" }}>
-
-                            <div style={{ fontSize: "2rem", fontWeight: "bold", color: getSecondaryMatchColor(secondaryBreakdownData?.secondaryScore), marginBottom: "0.25rem" }}>
-
-                              {secondaryBreakdownData?.secondaryScore}%
-
-                            </div>
-
-                            <p style={{ fontSize: "0.8rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 0.25rem 0" }}>AI Semantic Match</p>
-
-                            <p style={{ fontSize: "0.7rem", color: "#8D6E63", margin: 0 }}>Context & Meaning Analysis</p>
-
-                          </div>
-
-                          <div style={{ textAlign: "center", background: "#5D2A0A", borderRadius: "8px", padding: "1rem" }}>
-
-                            <div style={{ fontSize: "2.5rem", fontWeight: "bold", color: "white", marginBottom: "0.25rem" }}>
-
-                              {calculateCombinedMatchScore(secondaryBreakdownData?.primaryScore, secondaryBreakdownData?.secondaryScore)}%
-
-                            </div>
-
-                            <p style={{ fontSize: "0.8rem", fontWeight: "600", color: "#E8D5C4", margin: "0 0 0.25rem 0" }}>Combined Match</p>
-
-                            <p style={{ fontSize: "0.7rem", color: "#E8D5C4", margin: 0 }}>60% AI + 40% Primary</p>
-
-                          </div>
-
-                        </div>
-
-
-
-                        {/* PRIMARY MATCH DETAILED BREAKDOWN */}
-
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
-
-                          <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 1.25rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-
-                            📊 Primary Match Breakdown — What We Analyzed
-
-                          </h4>
-
-                          <p style={{ fontSize: "0.75rem", color: "#8D6E63", margin: "0 0 1rem 0" }}>
-
-                            These are the structured data criteria we compare between your application and this supplier's profile:
-
-                          </p>
-
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-
-                            {secondaryBreakdownData?.supplier?.matchDetails && Object.entries(secondaryBreakdownData.supplier.matchDetails).map(([key, details]) => {
-
-                              const criteriaInfo = ENHANCED_MATCHING_CRITERIA[key];
-
-                              const weight = criteriaInfo ? criteriaInfo.weight * 100 : 0;
-
-                              const score = Math.round(details.score);
-
-                              const scoreColor = score >= 75 ? "#388E3C" : score >= 50 ? "#F57C00" : "#D32F2F";
-
-                              const getStatusIcon = (s) => s >= 75 ? "✅" : s >= 50 ? "⚠️" : "❌";
-
-                              const getStatusLabel = (s) => s >= 75 ? "Good match" : s >= 50 ? "Partial match" : "Poor match";
-
-
-
-                              const getCriteriaExplanation = (k, s, supplier, application) => {
-
-                                const sup = secondaryBreakdownData?.supplier;
-
-                                switch (k) {
-
-                                  case 'categoryMatch':
-
-                                    return s >= 75
-
-                                      ? `The supplier's product/service categories align well with your requested categories.${details.matches?.length > 0 ? ` Matched: ${details.matches.slice(0, 3).join(", ")}` : ""}`
-
-                                      : s >= 40
-
-                                        ? `Partial category overlap found.${details.matches?.length > 0 ? ` Some matches: ${details.matches.slice(0, 2).join(", ")}` : " Limited category alignment detected."}`
-
-                                        : `No strong category match. The supplier's listed categories don't align with what you requested.`;
-
-                                  case 'bbbeeMatch':
-
-                                    const bbbeeLevel = sup?.legalCompliance?.bbbeeLevel || "N/A";
-
-                                    return s >= 75
-
-                                      ? `Supplier BBBEE level (${bbbeeLevel}) meets or exceeds your requirement.`
-
-                                      : s >= 50
-
-                                        ? `Supplier BBBEE level (${bbbeeLevel}) is close to your preferred level but not exact.`
-
-                                        : `Supplier BBBEE level (${bbbeeLevel}) does not meet your transformation requirement.`;
-
-                                  case 'locationMatch':
-
-                                    const loc = sup?.entityOverview?.location || "Not specified";
-
-                                    return s >= 75
-
-                                      ? `Supplier is located in ${loc}, which matches your geographic preference.`
-
-                                      : s >= 40
-
-                                        ? `Supplier location (${loc}) is nearby or in the same region as your preference.`
-
-                                        : `Supplier is in ${loc}, which doesn't match your preferred location.`;
-
-                                  case 'deliveryMatch':
-
-                                    const modes = sup?.productsServices?.deliveryModes?.join(", ") || "Not specified";
-
-                                    return s >= 75
-
-                                      ? `Supplier delivery modes (${modes}) match your required delivery preferences.`
-
-                                      : s >= 40
-
-                                        ? `Supplier offers some compatible delivery modes (${modes}) but not all you require.`
-
-                                        : `Supplier delivery modes (${modes}) don't match your requirements.`;
-
-                                  case 'budgetMatch':
-
-                                    const revenue = sup?.financialOverview?.annualRevenue || "Not specified";
-
-                                    return s >= 75
-
-                                      ? `Supplier's revenue (${revenue}) indicates capacity within your budget range.`
-
-                                      : s >= 40
-
-                                        ? `Supplier's revenue (${revenue}) is somewhat aligned with your budget, but may be outside your ideal range.`
-
-                                        : `Supplier's revenue (${revenue}) suggests a capacity mismatch with your budget range.`;
-
-                                  case 'ownershipMatch':
-
-                                    return s >= 75
-
-                                      ? `Supplier's ownership profile meets your transformation/ownership preferences.`
-
-                                      : s >= 40
-
-                                        ? `Supplier partially meets your ownership preferences.`
-
-                                        : `Supplier ownership profile doesn't strongly match your preferences.`;
-
-                                  case 'ratingMatch':
-
-                                    const rating = sup?.rating || 0;
-
-                                    const ratingCount = sup?.ratingCount || 0;
-
-                                    return ratingCount === 0
-
-                                      ? `No ratings yet — this supplier has not been reviewed on the platform.`
-
-                                      : `Supplier has an average rating of ${rating.toFixed(1)}/5 based on ${ratingCount} review(s).`;
-
-                                  case 'experienceMatch':
-
-                                    return `Sector experience match is estimated at 50% (detailed experience data not yet fully captured in profile).`;
-
-                                  case 'urgencyLeadTimeMatch':
-
-                                    const urgency = sup?.applicationOverview?.urgency || sup?.urgency || "Not specified";
-
-                                    return `Supplier's typical lead time (${urgency}) compared to your urgency requirement.`;
-
-                                  default:
-
-                                    return details.description || "No additional detail available.";
-
-                                }
-
-                              };
-
-
-
-                              return (
-
-                                <div key={key} style={{ background: "#F8F5F0", borderRadius: "6px", padding: "0.75rem 1rem", borderLeft: `4px solid ${scoreColor}` }}>
-
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-
-                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-
-                                      <span style={{ fontSize: "0.85rem" }}>{getStatusIcon(score)}</span>
-
-                                      <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "#5D2A0A" }}>{details.description}</span>
-
-                                    </div>
-
-                                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-
-                                      <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>Weight: {weight}%</span>
-
-                                      <span style={{ fontSize: "0.85rem", fontWeight: "bold", color: scoreColor }}>{score}%</span>
-
-                                    </div>
-
-                                  </div>
-
-                                  <div style={{ background: "#E8D5C4", borderRadius: "3px", height: "5px", marginBottom: "0.5rem" }}>
-
-                                    <div style={{ height: "100%", background: scoreColor, width: `${score}%`, borderRadius: "3px", transition: "width 0.3s ease" }} />
-
-                                  </div>
-
-                                  <p style={{ fontSize: "0.75rem", color: "#5D2A0A", margin: "0 0 0.25rem 0", lineHeight: "1.4" }}>
-
-                                    {getCriteriaExplanation(key, score)}
-
-                                  </p>
-
-                                  <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
-
-                                    {getStatusLabel(score)} · Contributes {Math.round((score * weight) / 100)}% to total primary score
-
-                                  </span>
-
-                                  {/* Show matched categories chips */}
-
-                                  {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
-
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.5rem" }}>
-
-                                      {details.matches.map((m, i) => (
-
-                                        <span key={i} style={{ background: "#E8F5E8", color: "#388E3C", padding: "0.2rem 0.5rem", borderRadius: "10px", fontSize: "0.65rem", border: "1px solid #C8E6C9" }}>{m}</span>
-
-                                      ))}
-
-                                    </div>
-
-                                  )}
-
-                                </div>
-
-                              );
-
-                            })}
-
-                          </div>
-
-                        </div>
-
-
-
-                        {/* AI SEMANTIC ANALYSIS */}
-
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
-
-                          <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 1rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-
-                            <Brain size={18} />
-
-                            AI Semantic Analysis — Why this score?
-
-                          </h4>
-
-                          <div style={{ background: "#F8F5F0", borderRadius: "6px", padding: "1rem", marginBottom: "1rem", borderLeft: "4px solid #5D2A0A" }}>
-
-                            <p style={{ fontSize: "0.875rem", lineHeight: "1.7", color: "#5D2A0A", margin: 0, whiteSpace: "pre-wrap" }}>
-
-                              {secondaryBreakdownData?.reasoning || "No reasoning provided."}
-
-                            </p>
-
-                          </div>
-
-                          <p style={{ fontSize: "0.7rem", color: "#8D6E63", margin: 0 }}>
-
-                            The AI reads the supplier's actual product/service descriptions and compares them semantically to your request — going beyond category tags to understand real-world capability alignment.
-
-                          </p>
-
-                        </div>
-
-
-
-                        {/* MATCHED CAPABILITIES */}
-
-                        {secondaryBreakdownData?.capabilities && secondaryBreakdownData.capabilities.length > 0 && (
-
-                          <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
-
-                            <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#166534", margin: "0 0 0.75rem 0" }}>✅ Matched Capabilities</h4>
-
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-
-                              {secondaryBreakdownData.capabilities.map((cap, i) => (
-
-                                <span key={i} style={{ background: "#DCFCE7", color: "#166534", padding: "0.4rem 0.75rem", borderRadius: "16px", fontSize: "0.75rem", fontWeight: "500", border: "1px solid #BBF7D0" }}>{cap}</span>
-
-                              ))}
-
-                            </div>
-
-                          </div>
-
-                        )}
-
-
-
-                        {/* GAPS / WHY NOT HIGHER */}
-
-                        {secondaryBreakdownData?.secondaryScore < 75 && (
-
-                          <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
-
-                            <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#9A3412", margin: "0 0 0.75rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-
-                              <TrendingUp size={18} />
-
-                              Why isn't the AI score higher?
-
-                            </h4>
-
-                            <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#7C2D12" }}>
-
-                              {secondaryBreakdownData?.secondaryScore < 40 && (
-
-                                <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>The supplier's listed products/services have <strong>limited or no overlap</strong> with your requested service category.</li>
-
-                              )}
-
-                              {secondaryBreakdownData?.secondaryScore >= 40 && secondaryBreakdownData?.secondaryScore < 75 && (
-
-                                <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>The supplier has <strong>some relevant capabilities</strong> but may serve a different target market or industry vertical.</li>
-
-                              )}
-
-                              <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>The supplier's profile descriptions may be <strong>incomplete or use different terminology</strong> — view their full profile before deciding.</li>
-
-                              <li style={{ fontSize: "0.875rem" }}>AI scoring is based solely on <strong>publicly listed profile information</strong> — the supplier may have unlisted capabilities.</li>
-
-                            </ul>
-
-                          </div>
-
-                        )}
-
-
-
-                        {/* IMPROVEMENT TIPS */}
-
-                        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "1.5rem" }}>
-
-                          <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#1E40AF", margin: "0 0 0.75rem 0" }}>💡 How to improve this match</h4>
-
-                          <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#1E3A8A" }}>
-
-                            <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>Add more detail to your service request description so AI can better match intent</li>
-
-                            <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>View the supplier's full profile — their actual offerings may align more than the score suggests</li>
-
-                            <li style={{ fontSize: "0.875rem" }}>Re-run AI Analysis after updating your application criteria</li>
-
-                          </ul>
-
-                        </div>
-
-                      </div>
-
-                    )}
-
-
-
-                    <div style={{ display: "flex", justifyContent: "center", paddingTop: "1.5rem", borderTop: "1px solid #E8D5C4", marginTop: "1.5rem" }}>
-
-                      <button style={{ padding: "0.75rem 2rem", background: "#5D2A0A", color: "white", border: "none", borderRadius: "6px", fontSize: "0.875rem", fontWeight: "500", cursor: "pointer" }}
-
-                        onClick={() => setShowSecondaryBreakdown(false)}>
-
-                        Close Analysis
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>,
-
-              document.body,
-
-            )}
-
-
-
-          {/* Contacted Requests Section */}
-
-          {showContactedApplications && contactedApplications.length > 0 && (
-
-            <div style={{
-
-              background: "#F9F5F0",
-
-              padding: "1.5rem",
-
-              borderRadius: "8px",
-
-              border: "2px solid #D7CCC8",
-
-              marginTop: "2rem"
-
-            }}>
-
-              <h3 style={{
-
-                color: "#5D2A0A",
-
-                marginBottom: "1.5rem",
-
-                display: "flex",
-
-                alignItems: "center",
-
-                gap: "0.5rem"
-
-              }}>
-
-                <History size={20} />
-
-                Contacted Requests ({contactedApplications.length})
-
-              </h3>
-
-
-
-              {contactedApplications.map((contactedApp, index) => (
-
-                <div key={contactedApp.id} style={{
-
-                  background: "white",
-
-                  padding: "1.5rem",
-
-                  borderRadius: "8px",
-
-                  border: "2px solid #E8D5C4",
-
-                  marginBottom: "1rem",
-
-                  transition: "all 0.2s",
-
-                  boxShadow: "0 2px 8px rgba(93, 42, 10, 0.1)"
-
-                }}
-
-                  onMouseEnter={(e) => {
-
-                    e.currentTarget.style.transform = "translateY(-2px)";
-
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(93, 42, 10, 0.15)";
-
-                  }}
-
-                  onMouseLeave={(e) => {
-
-                    e.currentTarget.style.transform = "translateY(0)";
-
-                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(93, 42, 10, 0.1)";
-
-                  }}
-
-                >
-
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
-
-                    <div style={{ flex: 1 }}>
-
-                      <h4 style={{ color: "#5D2A0A", margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>
-
-                        {contactedApp.data?.requestOverview?.purpose?.substring(0, 60) || "Product/Service Request"}...
-
-                      </h4>
-
-
-
-                      <div style={{ display: "flex", gap: "2rem", fontSize: "0.875rem", color: "#7D5A50", flexWrap: "wrap" }}>
-
-                        <div>
-
-                          <strong>Created:</strong> {new Date(contactedApp.createdAt).toLocaleDateString()}
-
-                        </div>
-
-                        <div>
-
-                          <strong>Total Matches:</strong> {contactedApp.matchCount} suppliers
-
-                        </div>
-
-                        <div>
-
-                          <strong>Contacted:</strong> {contactedApp.contactedCount || 0} supplier(s)
-
-                        </div>
-
-                        <div>
-
-                          <strong>Last Contact:</strong> {new Date(contactedApp.lastContacted).toLocaleDateString()}
-
-                        </div>
-
-                        <div>
-
-                          <strong>Status:</strong>
-
-                          <span style={{
-
-                            color: contactedApp.contactedCount > 0 ? "#388E3C" : "#D32F2F",
-
-                            fontWeight: "600",
-
-                            marginLeft: "0.25rem"
-
-                          }}>
-
-                            {contactedApp.contactedCount > 0 ? "Active" : "No contacts"}
-
-                          </span>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-
-
-                    <button
-
-                      onClick={() => loadContactedRequest(contactedApp)}
-
-                      style={{
-
-                        background: "transparent",
-
-                        color: "#5D2A0A",
-
-                        border: "2px solid #5D2A0A",
-
-                        padding: "0.5rem 1rem",
-
-                        borderRadius: "6px",
-
-                        cursor: "pointer",
-
-                        fontSize: "0.875rem",
-
-                        fontWeight: "600",
-
-                        transition: "all 0.2s",
-
-                        whiteSpace: "nowrap"
-
-                      }}
-
-                      onMouseEnter={(e) => {
-
-                        e.target.style.background = "#5D2A0A";
-
-                        e.target.style.color = "white";
-
-                      }}
-
-                      onMouseLeave={(e) => {
-
-                        e.target.style.background = "transparent";
-
-                        e.target.style.color = "#5D2A0A";
-
-                      }}
-
-                    >
-
-                      Resume This Request
-
-                    </button>
-
-                  </div>
-
-
-
-                  {/* Show contacted suppliers if any */}
-
-                  {contactedApp.contactedSuppliers && contactedApp.contactedSuppliers.length > 0 && (
-
-                    <div style={{
-
-                      background: "#E8F5E8",
-
-                      padding: "0.75rem",
-
-                      borderRadius: "6px",
-
-                      border: "1px solid #C8E6C9",
-
-                      fontSize: "0.8rem",
-
-                      color: "#2E7D32"
-
-                    }}>
-
-                      <strong>Contacted Suppliers:</strong> {contactedApp.contactedCount} suppliers
-
-                      <div style={{ marginTop: "0.25rem", fontSize: "0.75rem" }}>
-
-                        (Supplier IDs: {contactedApp.contactedSuppliers.slice(0, 3).join(", ")}
-
-                        {contactedApp.contactedSuppliers.length > 3 ? `... +${contactedApp.contactedSuppliers.length - 3} more` : ""})
-
-                      </div>
-
-                    </div>
-
-                  )}
-
-                </div>
-
-              ))}
-
-            </div>
-
-          )}
-
+    <div style={{ width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
+      {isCompanyMember && (
+        <div
+          className="rounded-xl mb-6 p-4 shadow-md"
+          style={{
+            backgroundColor: userRole === "viewer" ? "#fef3c7" : "#e0f2fe",
+            border: `2px solid ${userRole === "viewer" ? "#f59e0b" : "#0369a1"}`,
+          }}
+        >
+          <h3 className="m-0 font-bold text-base" style={{ color: userRole === "viewer" ? "#f59e0b" : "#0369a1" }}>
+            Company supplier matches — role: {userRole?.toUpperCase()}
+          </h3>
+          <p className="m-0 mt-1 text-sm text-[#4a5568]">
+            {canAct
+              ? "You can request quotes and move suppliers through the pipeline."
+              : "You have read-only access to these supplier matches."}
+          </p>
         </div>
+      )}
 
+      {/* Inline banner, same as the other match tables */}
+      {notification && (
+        <div
+          className={`px-4 py-3 rounded-xl text-sm font-medium border mb-3 ${
+            notification.type === "success"
+              ? "bg-green-50 text-green-800 border-green-200"
+              : notification.type === "warning"
+                ? "bg-amber-50 text-amber-800 border-amber-200"
+                : notification.type === "info"
+                  ? "bg-[#faf7f2] text-[#4a352f] border-[#e6d7c3]"
+                  : "bg-red-50 text-red-800 border-red-200"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span>{notification.message}</span>
+            <button onClick={() => setNotification(null)} className="ml-2 text-current opacity-50 hover:opacity-100">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
+      {aiError && (
+        <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-[#fff3e0] border border-[#e65100]/30 text-xs text-[#e65100] flex items-center gap-2">
+          <AlertCircle size={14} className="flex-shrink-0" />
+          {aiError}
+        </div>
+      )}
 
-        {/* Match Breakdown Modal */}
+      {/* Toolbar */}
+      <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-bold text-[#4a352f] m-0">Supplier Matches</h2>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+              <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+              Viewing: {activeView.name}
+              {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
+            </span>
+            {activeFilterCount > 0 && (
+              <>
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+                </span>
+                <button
+                  onClick={clearAllFilters}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-white border border-[#e6d7c3] transition-colors"
+                >
+                  Clear all filters
+                </button>
+              </>
+            )}
+            {collapsedByViewport > 0 && (
+              <span className="px-3 py-1.5 rounded-xl text-xs font-medium text-[#a89482] border border-[#e6d7c3]">
+                {collapsedByViewport} column{collapsedByViewport > 1 ? "s" : ""} hidden on this screen size
+              </span>
+            )}
+          </div>
 
-        {mounted &&
-
-          showMatchBreakdown &&
-
-          createPortal(
-
-            <div
-
-              style={{
-
-                position: "fixed",
-
-                top: 0,
-
-                left: 0,
-
-                right: 0,
-
-                bottom: 0,
-
-                backgroundColor: "rgba(0,0,0,0.5)",
-
-                display: "flex",
-
-                alignItems: "center",
-
-                justifyContent: "center",
-
-                zIndex: 1000,
-
-              }}
-
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={runAiAnalysis}
+              disabled={aiRunning || !application || suppliers.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold bg-[#4a352f] text-[#faf7f2] disabled:opacity-40"
             >
+              <Brain size={13} />
+              {aiRunning ? "Analysing..." : "Run AI analysis"}
+            </button>
 
-              <div
+            <label className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-medium text-[#7d5a50] bg-white border border-[#c8b6a6] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showIneligible}
+                onChange={() => setShowIneligible((p) => !p)}
+                className="rounded border-[#c8b6a6]"
+              />
+              Show incomplete profiles
+            </label>
 
-                style={{
-
-                  background: "white",
-
-                  borderRadius: "12px",
-
-                  maxWidth: "800px",
-
-                  width: "95%",
-
-                  maxHeight: "90vh",
-
-                  overflowY: "auto",
-
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-
-                }}
-
+            {onNewRequest && (
+              <button
+                onClick={onNewRequest}
+                className="px-3 py-2.5 rounded-xl text-xs font-semibold text-[#4a352f] bg-white border border-[#c8b6a6] hover:bg-[#f5f0e1]"
               >
-
-                <div style={modalHeaderStyle}>
-
-                  <h3 style={modalTitleStyle}>
-
-                    Match Breakdown -{" "}
-
-                    {matchBreakdownData?.entityOverview?.tradingName ||
-
-                      matchBreakdownData?.entityOverview?.registeredName}
-
-                  </h3>
-
-                  <button onClick={() => setShowMatchBreakdown(false)} style={modalCloseButtonStyle}>
-
-                    ✖
-
-                  </button>
-
-                </div>
-
-                <div style={modalBodyStyle}>
-
-                  {/* Overall Score Header */}
-
-                  <div style={{ textAlign: "center", marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "2px solid #E8D5C4" }}>
-
-                    <div style={{
-
-                      fontSize: "3.5rem", fontWeight: "bold", lineHeight: 1,
-
-                      color: matchBreakdownData?.matchPercentage >= 75 ? "#388E3C"
-
-                        : matchBreakdownData?.matchPercentage >= 50 ? "#F57C00" : "#D32F2F",
-
-                      marginBottom: "0.5rem"
-
-                    }}>
-
-                      {matchBreakdownData?.matchPercentage}%
-
-                    </div>
-
-                    <p style={{ fontSize: "1rem", color: "#8D6E63", margin: "0 0 0.5rem 0" }}>Overall Primary Match Score</p>
-
-                    <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: 0 }}>
-
-                      Based on structured data: categories, location, BBBEE, budget, delivery mode & more
-
-                    </p>
-
-                  </div>
-
-
-
-                  {/* Score Legend */}
-
-                  <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
-
-                    {[
-
-                      { color: "#388E3C", label: "Strong match (75–100%)" },
-
-                      { color: "#F57C00", label: "Partial match (50–74%)" },
-
-                      { color: "#D32F2F", label: "Weak match (0–49%)" },
-
-                    ].map((item, i) => (
-
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#5D2A0A" }}>
-
-                        <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: item.color }} />
-
-                        {item.label}
-
-                      </div>
-
-                    ))}
-
-                  </div>
-
-
-
-                  {/* Criteria Breakdown */}
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "2rem" }}>
-
-                    {matchBreakdownData?.matchDetails && Object.entries(matchBreakdownData.matchDetails).map(([key, details]) => {
-
-                      const score = details.score ?? 0;
-
-                      const weight = details.weight ?? 0;
-
-                      const contribution = details.contribution ?? 0;
-
-                      const scoreColor = score >= 75 ? "#388E3C" : score >= 50 ? "#F57C00" : "#D32F2F";
-
-                      const statusIcon = score >= 75 ? "✅" : score >= 50 ? "⚠️" : "❌";
-
-
-
-                      // Human-readable explanation per criterion
-
-                      const getExplanation = (k, s, data) => {
-
-                        const sup = matchBreakdownData;
-
-                        switch (k) {
-
-                          case 'categoryMatch': {
-
-                            const matched = data.matches || [];
-
-                            const unmatched = data.unmatched || [];
-
-                            if (matched.length === 0 && unmatched.length === 0) {
-
-                              return "No categories were specified in your request to compare against.";
-
-                            }
-
-                            if (matched.length === 0) {
-
-                              return `None of your requested categories (${unmatched.join(", ")}) were found in this supplier's profile.`;
-
-                            }
-
-                            if (unmatched.length === 0) {
-
-                              return `All requested categories matched: ${matched.join(", ")}.`;
-
-                            }
-
-                            return `Matched ${matched.length} of ${matched.length + unmatched.length} categories. ✓ ${matched.join(", ")} | ✗ ${unmatched.join(", ")}`;
-
-                          }
-
-                          case 'bbbeeMatch': {
-
-                            const level = sup?.legalCompliance?.bbbeeLevel || "N/A";
-
-                            if (s === 50) return `No BBBEE preference was set in your request — neutral score applied. Supplier is Level ${level}.`;
-
-                            if (s >= 75) return `Supplier BBBEE Level ${level} meets your requirement.`;
-
-                            if (s >= 50) return `Supplier BBBEE Level ${level} is one level off your requirement.`;
-
-                            return `Supplier BBBEE Level ${level} does not meet your requirement.`;
-
-                          }
-
-                          case 'locationMatch': {
-
-                            const loc = sup?.entityOverview?.location || "Not specified";
-
-                            if (s === 50) return `No location preference was set — neutral score applied. Supplier is based in ${loc}.`;
-
-                            if (s >= 75) return `Supplier location (${loc}) matches your preference.`;
-
-                            if (s >= 40) return `Supplier (${loc}) is in the same general region as your preference.`;
-
-                            return `Supplier location (${loc}) does not match your preferred location.`;
-
-                          }
-
-                          case 'deliveryMatch': {
-
-                            const modes = sup?.productsServices?.deliveryModes?.join(", ") || "Not specified";
-
-                            if (s === 50) return `No delivery mode preference set — neutral score applied. Supplier offers: ${modes}.`;
-
-                            if (s >= 75) return `Supplier delivery modes (${modes}) fully match your requirements.`;
-
-                            if (s >= 40) return `Supplier (${modes}) partially matches your required delivery modes.`;
-
-                            return `Supplier delivery modes (${modes}) do not match your requirements.`;
-
-                          }
-
-                          case 'budgetMatch': {
-
-                            const revenue = sup?.financialOverview?.annualRevenue || "Not specified";
-
-                            if (s === 50) return `No budget range set — neutral score applied. Supplier revenue: ${revenue}.`;
-
-                            if (s >= 75) return `Supplier revenue (${revenue}) is within your specified budget range.`;
-
-                            if (s >= 40) return `Supplier revenue (${revenue}) is slightly outside your budget range.`;
-
-                            return `Supplier revenue (${revenue}) is significantly outside your budget range.`;
-
-                          }
-
-                          case 'ownershipMatch': {
-
-                            if (s === 50) return "No ownership preferences were set — neutral score applied.";
-
-                            if (s >= 75) return "Supplier's ownership profile meets your transformation preferences.";
-
-                            return "Supplier partially meets your ownership preferences.";
-
-                          }
-
-                          case 'ratingMatch': {
-
-                            const rating = sup?.rating || 0;
-
-                            const count = sup?.ratingCount || 0;
-
-                            if (count === 0) return "This supplier has not been rated yet on the platform.";
-
-                            return `Supplier has ${rating.toFixed(1)}/5 stars based on ${count} review(s).`;
-
-                          }
-
-                          case 'experienceMatch':
-
-                            return "Sector experience is estimated — detailed experience data not yet fully captured in this supplier's profile.";
-
-                          case 'urgencyLeadTimeMatch': {
-
-                            const urgency = sup?.urgency || sup?.applicationOverview?.urgency || "Not specified";
-
-                            return `Supplier's typical lead time is ${urgency}. This is compared to your urgency requirement.`;
-
-                          }
-
-                          default:
-
-                            return "No additional detail available.";
-
-                        }
-
-                      };
-
-
-
-                      return (
-
-                        <div key={key} style={{
-
-                          background: "#FEFCFA",
-
-                          border: `1px solid ${scoreColor}30`,
-
-                          borderLeft: `5px solid ${scoreColor}`,
-
-                          borderRadius: "8px",
-
-                          padding: "1rem",
-
-                        }}>
-
-                          {/* Row 1: Label + Score */}
-
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-
-                              <span>{statusIcon}</span>
-
-                              <span style={{ fontWeight: "600", fontSize: "0.875rem", color: "#5D2A0A" }}>
-
-                                {details.description}
-
-                              </span>
-
-                            </div>
-
-                            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-
-                              <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
-
-                                Weight: <strong>{weight}%</strong>
-
-                              </span>
-
-                              <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
-
-                                Contributes: <strong>+{contribution}%</strong>
-
-                              </span>
-
-                              <span style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor }}>
-
-                                {score}%
-
-                              </span>
-
-                            </div>
-
-                          </div>
-
-
-
-                          {/* Progress bar */}
-
-                          <div style={{ background: "#E8D5C4", borderRadius: "4px", height: "7px", marginBottom: "0.6rem" }}>
-
-                            <div style={{
-
-                              height: "100%", borderRadius: "4px",
-
-                              background: scoreColor,
-
-                              width: `${score}%`,
-
-                              transition: "width 0.4s ease"
-
-                            }} />
-
-                          </div>
-
-
-
-                          {/* Explanation */}
-
-                          <p style={{ fontSize: "0.8rem", color: "#5D2A0A", margin: "0 0 0.35rem 0", lineHeight: "1.5" }}>
-
-                            {getExplanation(key, score, details)}
-
-                          </p>
-
-
-
-                          {/* Category chips for category match */}
-
-                          {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
-
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginTop: "0.4rem" }}>
-
-                              {details.matches.map((m, i) => (
-
-                                <span key={i} style={{
-
-                                  background: "#E8F5E8", color: "#388E3C",
-
-                                  padding: "0.2rem 0.5rem", borderRadius: "10px",
-
-                                  fontSize: "0.7rem", border: "1px solid #C8E6C9"
-
-                                }}>✓ {m}</span>
-
-                              ))}
-
-                              {(details.unmatched || []).map((m, i) => (
-
-                                <span key={`u-${i}`} style={{
-
-                                  background: "#FFEBEE", color: "#D32F2F",
-
-                                  padding: "0.2rem 0.5rem", borderRadius: "10px",
-
-                                  fontSize: "0.7rem", border: "1px solid #FFCDD2"
-
-                                }}>✗ {m}</span>
-
-                              ))}
-
-                            </div>
-
-                          )}
-
-                        </div>
-
-                      );
-
-                    })}
-
-                  </div>
-
-
-
-                  {/* Score formula note */}
-
-                  <div style={{
-
-                    background: "#F8F5F0", border: "1px solid #E8D5C4",
-
-                    borderRadius: "8px", padding: "1rem", marginBottom: "1.5rem",
-
-                    fontSize: "0.75rem", color: "#5D2A0A", lineHeight: "1.6"
-
-                  }}>
-
-                    <strong>📊 How this score is calculated:</strong><br />
-
-                    Each criterion has a weight (shown above). The score for each criterion (0–100%) is multiplied by its weight and summed to produce the overall match %. For example, Category Alignment (weight 40%) scoring 75% contributes 30% to the total.
-
-                  </div>
-
-
-
-                  {/* Improvement section - only show criteria scoring below 75% */}
-
-                  {matchBreakdownData?.matchDetails && Object.entries(matchBreakdownData.matchDetails).some(([, d]) => (d.score ?? 0) < 75) && (
-
-                    <div style={{
-
-                      background: "#FFF3E0", border: "1px solid #FFE0B2",
-
-                      borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem"
-
-                    }}>
-
-                      <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 1rem 0" }}>
-
-                        🔧 How to Improve This Match Score
-
-                      </h4>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-
-                        {Object.entries(matchBreakdownData.matchDetails)
-
-                          .filter(([, d]) => (d.score ?? 0) < 75)
-
-                          .sort(([, a], [, b]) => (b.weight ?? 0) - (a.weight ?? 0)) // highest weight first
-
-                          .map(([key, details]) => {
-
-                            const suggestions = {
-
-                              categoryMatch: "Expand your service/product categories in your profile to include more relevant terms that align with customer needs.",
-
-                              bbbeeMatch: "Improve your BBBEE certification level — even moving one level has a significant impact on matching.",
-
-                              locationMatch: "Add remote or national delivery capability to your profile if you can serve clients outside your base location.",
-
-                              deliveryMatch: "Add more delivery modes (on-site, remote, hybrid) to broaden your compatibility with customer preferences.",
-
-                              budgetMatch: "Ensure your annual revenue and pricing tiers are accurately reflected in your financial profile.",
-
-                              ownershipMatch: "Ensure your ownership demographics (Black-owned, Women-owned, Youth-owned) are fully captured in your profile.",
-
-                              ratingMatch: "Encourage satisfied clients to leave reviews on the platform to improve your rating score.",
-
-                              experienceMatch: "Add detailed sector experience, case studies, and client names to your profile.",
-
-                              urgencyLeadTimeMatch: "Update your profile to reflect your actual delivery lead times and availability.",
-
-                            };
-
-                            return (
-
-                              <div key={key} style={{
-
-                                background: "white", border: "1px solid #E8D5C4",
-
-                                borderRadius: "6px", padding: "0.75rem",
-
-                                display: "flex", gap: "0.75rem", alignItems: "flex-start"
-
-                              }}>
-
-                                <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#F57C00", whiteSpace: "nowrap" }}>
-
-                                  {details.weight}% weight
-
-                                </span>
-
-                                <div>
-
-                                  <div style={{ fontSize: "0.8rem", fontWeight: "600", color: "#D32F2F", marginBottom: "0.2rem" }}>
-
-                                    {details.description} — currently {details.score}%
-
+                New request
+              </button>
+            )}
+
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  if (showCustomizeMenu) {
+                    setShowCustomizeMenu(false)
+                    setCustomizeMenuRect(null)
+                  } else {
+                    setCustomizeMenuRect(e.currentTarget.getBoundingClientRect())
+                    setShowCustomizeMenu(true)
+                    setShowNewViewForm(false)
+                    setEditingViewMeta(null)
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+              >
+                <SlidersHorizontal size={16} /> Customize Table{" "}
+                <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? "rotate-180" : ""}`} />
+              </button>
+
+              {showCustomizeMenu &&
+                customizeMenuRect &&
+                (() => {
+                  const panelWidth = 340
+                  const margin = 12
+                  let left = customizeMenuRect.right - panelWidth
+                  left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
+                  const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
+                  const spaceAbove = customizeMenuRect.top - margin - 8
+                  const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
+                  const maxHeight = Math.max(200, Math.min(640, openUpward ? spaceAbove : spaceBelow))
+                  const top = openUpward ? undefined : customizeMenuRect.bottom + 8
+                  const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
+                  const allViews = Object.values(viewsState.views).sort((a, b) =>
+                    a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name),
+                  )
+
+                  return (
+                    <PopupPortal>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => {
+                          setShowCustomizeMenu(false)
+                          setCustomizeMenuRect(null)
+                          setShowNewViewForm(false)
+                          setEditingViewMeta(null)
+                        }}
+                      />
+                      <div
+                        className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
+                        style={{ left, width: panelWidth, top, bottom, maxHeight }}
+                      >
+                        <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                        <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
+                        <div className="space-y-1 mb-3">
+                          {allViews.map((view) => {
+                            const isActive = view.id === viewsState.activeViewId
+                            const isEditing = editingViewMeta?.id === view.id
+                            if (isEditing) {
+                              return (
+                                <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                  {!view.builtin ? (
+                                    <input
+                                      autoFocus
+                                      value={editingViewMeta.name}
+                                      onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))}
+                                      placeholder="View name"
+                                      className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                                    />
+                                  ) : (
+                                    <p className="text-sm font-semibold text-[#4a352f]">
+                                      Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span>
+                                    </p>
+                                  )}
+                                  <textarea
+                                    value={editingViewMeta.description}
+                                    onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))}
+                                    placeholder="Description (optional) — what is this view for?"
+                                    rows={2}
+                                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <button onClick={() => setEditingViewMeta(null)} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">
+                                      Cancel
+                                    </button>
+                                    <button onClick={saveViewMeta} className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold">
+                                      Save
+                                    </button>
                                   </div>
-
-                                  <div style={{ fontSize: "0.78rem", color: "#5D2A0A", lineHeight: "1.4" }}>
-
-                                    {suggestions[key] || "Review your profile to ensure all relevant information is complete and accurate."}
-
-                                  </div>
-
                                 </div>
-
+                              )
+                            }
+                            return (
+                              <div
+                                key={view.id}
+                                className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"}`}
+                              >
+                                <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                    <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>{view.name}</span>
+                                    {view.builtin && (
+                                      <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Built-in</span>
+                                    )}
+                                  </div>
+                                  {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                                </button>
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                  <button onClick={() => startEditingViewMeta(view)} title="Rename / edit description" className="text-[#a89482] hover:text-[#7d5a50] p-1">
+                                    <Settings size={13} />
+                                  </button>
+                                  {!view.builtin && (
+                                    <button onClick={() => removeView(view.id)} title="Delete view" className="text-[#a89482] hover:text-red-500 p-1">
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-
-                            );
-
+                            )
                           })}
-
-                      </div>
-
-                    </div>
-
-                  )}
-
-
-
-                  <div style={{ display: "flex", justifyContent: "center", paddingTop: "1.5rem", borderTop: "1px solid #E8D5C4" }}>
-
-                    <button
-
-                      style={{ padding: "0.75rem 2rem", background: "#5D2A0A", color: "white", border: "none", borderRadius: "6px", fontSize: "0.875rem", fontWeight: "500", cursor: "pointer" }}
-
-                      onClick={() => setShowMatchBreakdown(false)}
-
-                    >
-
-                      Close Breakdown
-
-                    </button>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>,
-
-            document.body,
-
-          )}
-
-
-
-        {/* Filter Modal */}
-
-        {mounted &&
-
-          showFilters &&
-
-          createPortal(
-
-            <div
-
-              style={{
-
-                position: "fixed",
-
-                top: 0,
-
-                left: 0,
-
-                right: 0,
-
-                bottom: 0,
-
-                backgroundColor: "rgba(0,0,0,0.5)",
-
-                display: "flex",
-
-                alignItems: "center",
-
-                justifyContent: "center",
-
-                zIndex: 1000,
-
-              }}
-
-            >
-
-              <div
-
-                style={{
-
-                  background: "white",
-
-                  borderRadius: "12px",
-
-                  maxWidth: "1000px",
-
-                  width: "95%",
-
-                  maxHeight: "90vh",
-
-                  overflowY: "auto",
-
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-
-                }}
-
-              >
-
-                <div style={modalHeaderStyle}>
-
-                  <h3 style={modalTitleStyle}>Filter Suppliers</h3>
-
-                  <button onClick={() => setShowFilters(false)} style={modalCloseButtonStyle}>
-
-                    ✖
-
-                  </button>
-
-                </div>
-
-                <div style={modalBodyStyle}>
-
-                  <div
-
-                    style={{
-
-                      textAlign: "center",
-
-                      marginBottom: "2rem",
-
-                      paddingBottom: "1rem",
-
-                      borderBottom: "2px solid #E8D5C4",
-
-                    }}
-
-                  >
-
-                    <h1
-
-                      style={{
-
-                        fontSize: "1.5rem",
-
-                        fontWeight: "bold",
-
-                        color: "#5D2A0A",
-
-                        margin: "0 0 0.5rem 0",
-
-                      }}
-
-                    >
-
-                      Filter Suppliers
-
-                    </h1>
-
-                    <p
-
-                      style={{
-
-                        fontSize: "1rem",
-
-                        color: "#8D6E63",
-
-                        margin: "0",
-
-                      }}
-
-                    >
-
-                      Find the perfect suppliers for your business needs
-
-                    </p>
-
-                  </div>
-
-
-
-                  <div
-
-                    style={{
-
-                      display: "grid",
-
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-
-                      gap: "1.5rem",
-
-                      marginBottom: "2rem",
-
-                    }}
-
-                  >
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>📍 Location</h3>
-
-                      <select
-
-                        style={filterSelectStyle}
-
-                        value={filters.location}
-
-                        onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-
-                      >
-
-                        <option value="">Select Location</option>
-
-                        {["South Africa", "Johannesburg", "Cape Town", "Durban", "Pretoria", "Bloemfontein"].map(
-
-                          (loc) => (
-
-                            <option key={loc} value={loc}>
-
-                              {loc}
-
-                            </option>
-
-                          ),
-
-                        )}
-
-                      </select>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>🎯 Match Score Minimum</h3>
-
-                      <div
-
-                        style={{
-
-                          display: "flex",
-
-                          flexDirection: "column",
-
-                          gap: "0.5rem",
-
-                        }}
-
-                      >
-
-                        <input
-
-                          type="range"
-
-                          min="0"
-
-                          max="100"
-
-                          value={filters.matchScore}
-
-                          onChange={(e) => setFilters({ ...filters, matchScore: Number.parseInt(e.target.value) })}
-
-                          style={{
-
-                            width: "100%",
-
-                            height: "6px",
-
-                            background: "#E8D5C4",
-
-                            borderRadius: "3px",
-
-                            outline: "none",
-
-                            appearance: "none",
-
-                          }}
-
-                        />
-
-                        <div
-
-                          style={{
-
-                            textAlign: "center",
-
-                            fontWeight: "600",
-
-                            color: "#5D2A0A",
-
-                            fontSize: "0.875rem",
-
-                          }}
-
-                        >
-
-                          {filters.matchScore}%
-
                         </div>
 
-                      </div>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>💰 Contract Value Range</h3>
-
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
-
-                        <input
-
-                          type="text"
-
-                          placeholder="Min Amount"
-
-                          style={filterInputStyle}
-
-                          value={filters.minValue}
-
-                          onChange={(e) => setFilters({ ...filters, minValue: e.target.value })}
-
-                        />
-
-                        <input
-
-                          type="text"
-
-                          placeholder="Max Amount"
-
-                          style={filterInputStyle}
-
-                          value={filters.maxValue}
-
-                          onChange={(e) => setFilters({ ...filters, maxValue: e.target.value })}
-
-                        />
-
-                      </div>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>🏢 Entity Type</h3>
-
-                      <select
-
-                        style={filterSelectStyle}
-
-                        value={filters.entityType}
-
-                        onChange={(e) => setFilters({ ...filters, entityType: e.target.value })}
-
-                      >
-
-                        <option value="">Select Entity Type</option>
-
-                        {["Pty Ltd", "CC", "NGO", "Co-op", "Sole Proprietor", "Partnership"].map((type) => (
-
-                          <option key={type} value={type}>
-
-                            {type}
-
-                          </option>
-
-                        ))}
-
-                      </select>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>🏭 Industry/Sector</h3>
-
-                      <div
-
-                        style={{
-
-                          display: "flex",
-
-                          flexDirection: "column",
-
-                          gap: "0.5rem",
-
-                          maxHeight: "200px",
-
-                          overflowY: "auto",
-
-                        }}
-
-                      >
-
-                        {[
-
-                          "Agriculture",
-
-                          "Mining",
-
-                          "Manufacturing",
-
-                          "Energy",
-
-                          "Construction",
-
-                          "Retail",
-
-                          "Transport",
-
-                          "Finance",
-
-                          "Real Estate",
-
-                          "ICT",
-
-                          "Tourism",
-
-                          "Education",
-
-                          "Health",
-
-                          "Arts",
-
-                          "Other Services",
-
-                        ].map((sector) => (
-
-                          <div
-
-                            key={sector}
-
-                            style={{
-
-                              display: "flex",
-
-                              alignItems: "center",
-
-                              gap: "0.5rem",
-
-                            }}
-
-                          >
-
+                        {showNewViewForm ? (
+                          <div className="space-y-2 mb-1">
                             <input
-
-                              type="checkbox"
-
-                              id={`sector-${sector}`}
-
-                              checked={filters.sectors.includes(sector)}
-
-                              onChange={() => {
-
-                                const newSectors = filters.sectors.includes(sector)
-
-                                  ? filters.sectors.filter((s) => s !== sector)
-
-                                  : [...filters.sectors, sector]
-
-                                setFilters({ ...filters, sectors: newSectors })
-
-                              }}
-
-                              style={{
-
-                                width: "16px",
-
-                                height: "16px",
-
-                                accentColor: "#5D2A0A",
-
-                              }}
-
+                              autoFocus
+                              value={newViewName}
+                              onChange={(e) => setNewViewName(e.target.value)}
+                              placeholder="New view name..."
+                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
                             />
-
-                            <label
-
-                              htmlFor={`sector-${sector}`}
-
-                              style={{
-
-                                fontSize: "0.875rem",
-
-                                color: "#5D2A0A",
-
-                                cursor: "pointer",
-
-                              }}
-
-                            >
-
-                              {sector}
-
-                            </label>
-
-                          </div>
-
-                        ))}
-
-                      </div>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>⭐ BBBEE Level</h3>
-
-                      <select
-
-                        style={filterSelectStyle}
-
-                        value={filters.bbbeeLevel}
-
-                        onChange={(e) => setFilters({ ...filters, bbbeeLevel: e.target.value })}
-
-                      >
-
-                        <option value="">Select BBBEE Level</option>
-
-                        {[
-
-                          "Level 1",
-
-                          "Level 2",
-
-                          "Level 3",
-
-                          "Level 4",
-
-                          "Level 5",
-
-                          "Level 6",
-
-                          "Level 7",
-
-                          "Level 8",
-
-                          "Non-Compliant",
-
-                        ].map((level) => (
-
-                          <option key={level} value={level}>
-
-                            {level}
-
-                          </option>
-
-                        ))}
-
-                      </select>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>📦 Procurement Category</h3>
-
-                      <div
-
-                        style={{
-
-                          display: "flex",
-
-                          flexDirection: "column",
-
-                          gap: "0.5rem",
-
-                        }}
-
-                      >
-
-                        {["Services", "Goods", "Construction", "Professional Services", "IT Solutions"].map(
-
-                          (category) => (
-
-                            <div
-
-                              key={category}
-
-                              style={{
-
-                                display: "flex",
-
-                                alignItems: "center",
-
-                                gap: "0.5rem",
-
-                              }}
-
-                            >
-
-                              <input
-
-                                type="checkbox"
-
-                                id={`proc-${category}`}
-
-                                checked={filters.procurementCategories.includes(category)}
-
-                                onChange={() => {
-
-                                  const newCategories = filters.procurementCategories.includes(category)
-
-                                    ? filters.procurementCategories.filter((c) => c !== category)
-
-                                    : [...filters.procurementCategories, category]
-
-                                  setFilters({ ...filters, procurementCategories: newCategories })
-
+                            <textarea
+                              value={newViewDescription}
+                              onChange={(e) => setNewViewDescription(e.target.value)}
+                              placeholder="Description (optional) — what is this view for?"
+                              rows={2}
+                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setShowNewViewForm(false)
+                                  setNewViewName("")
+                                  setNewViewDescription("")
                                 }}
-
-                                style={{
-
-                                  width: "16px",
-
-                                  height: "16px",
-
-                                  accentColor: "#5D2A0A",
-
-                                }}
-
-                              />
-
-                              <label
-
-                                htmlFor={`proc-${category}`}
-
-                                style={{
-
-                                  fontSize: "0.875rem",
-
-                                  color: "#5D2A0A",
-
-                                  cursor: "pointer",
-
-                                }}
-
+                                className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
                               >
-
-                                {category}
-
-                              </label>
-
+                                Cancel
+                              </button>
+                              <button
+                                onClick={createNewView}
+                                disabled={!newViewName.trim()}
+                                className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40"
+                              >
+                                Create view
+                              </button>
                             </div>
-
-                          ),
-
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setShowNewViewForm(true)}
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]"
+                          >
+                            <Plus size={13} /> New view from current layout
+                          </button>
                         )}
 
+                        <div className="border-t border-[#e6d7c3] my-4" />
+                        <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Columns</h4>
+
+                        <div className="relative mb-3">
+                          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
+                          <input
+                            value={columnSearch}
+                            onChange={(e) => setColumnSearch(e.target.value)}
+                            placeholder="Search columns..."
+                            className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                          />
+                        </div>
+
+                        <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                          <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                        </p>
+
+                        <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                          <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f] flex-1">Supplier</span>
+                          <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                        </div>
+                        <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                          <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f] flex-1">Action</span>
+                          <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Always last</span>
+                        </div>
+                        <div className="border-t border-[#e6d7c3] my-2" />
+
+                        {searchedColumns.length === 0 && <p className="text-xs text-[#a89482] px-2 py-1.5">No columns match that search.</p>}
+                        {searchedColumns.map((key) => (
+                          <div key={key} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2]">
+                            <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={columnVisibility[key] || false}
+                                onChange={() => toggleColumn(key)}
+                                className="rounded border-[#c8b6a6] text-[#7d5a50]"
+                              />
+                              <span className="text-sm text-[#4a352f] truncate">{COLUMN_DEFS[key].label}</span>
+                            </label>
+                            <button
+                              onClick={() => cyclePin(key)}
+                              title={
+                                pinned[key] === "left"
+                                  ? "Pinned left — click to pin right"
+                                  : pinned[key] === "right"
+                                    ? "Pinned right — click to unpin"
+                                    : "Pin left"
+                              }
+                              className={`p-1 rounded flex-shrink-0 ${pinned[key] ? "text-[#7d5a50]" : "text-[#c8b6a6] hover:text-[#7d5a50]"}`}
+                            >
+                              {pinned[key] ? <Pin size={13} /> : <PinOff size={13} />}
+                            </button>
+                            <span className="text-[10px] text-[#a89482] w-7 text-right flex-shrink-0">
+                              {pinned[key] === "left" ? "L" : pinned[key] === "right" ? "R" : ""}
+                            </span>
+                          </div>
+                        ))}
+
+                        <div className="border-t border-[#e6d7c3] my-4" />
+                        <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                        <div className="flex gap-1.5">
+                          {[
+                            { key: "comfortable", label: "Comfortable" },
+                            { key: "compact", label: "Compact" },
+                          ].map((d) => (
+                            <button
+                              key={d.key}
+                              onClick={() => setDensity(d.key)}
+                              className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                              }`}
+                            >
+                              {d.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="border-t border-[#e6d7c3] my-4" />
+                        <button
+                          onClick={resetActiveViewToDefault}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
+                        >
+                          <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                        </button>
                       </div>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>⏰ Availability</h3>
-
-                      <select
-
-                        style={filterSelectStyle}
-
-                        value={filters.availability}
-
-                        onChange={(e) => setFilters({ ...filters, availability: e.target.value })}
-
-                      >
-
-                        <option value="">Select Availability</option>
-
-                        {["Immediate", "Within 1 week", "Within 1 month", "Within 3 months", "Custom"].map((option) => (
-
-                          <option key={option} value={option}>
-
-                            {option}
-
-                          </option>
-
-                        ))}
-
-                      </select>
-
-                    </div>
-
-
-
-                    <div style={filterCardStyle}>
-
-                      <h3 style={filterTitleStyle}>🔄 Sort By</h3>
-
-                      <select
-
-                        style={filterSelectStyle}
-
-                        value={filters.sortBy}
-
-                        onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
-
-                      >
-
-                        <option value="">Select Sort Option</option>
-
-                        {[
-
-                          "Match Score (High to Low)",
-
-                          "Match Score (Low to High)",
-
-                          "Rating (High to Low)",
-
-                          "Rating (Low to High)",
-
-                          "Date Added (Newest First)",
-
-                          "Date Added (Oldest First)",
-
-                        ].map((option) => (
-
-                          <option key={option} value={option}>
-
-                            {option}
-
-                          </option>
-
-                        ))}
-
-                      </select>
-
-                    </div>
-
-                  </div>
-
-
-
-                  <div
-
-                    style={{
-
-                      display: "flex",
-
-                      justifyContent: "space-between",
-
-                      gap: "1rem",
-
-                      paddingTop: "1.5rem",
-
-                      borderTop: "1px solid #E8D5C4",
-
-                    }}
-
-                  >
-
-                    <button
-
-                      style={{
-
-                        flex: "1",
-
-                        padding: "0.75rem 1.5rem",
-
-                        background: "#F5EBE0",
-
-                        color: "#5D2A0A",
-
-                        border: "1px solid #E8D5C4",
-
-                        borderRadius: "6px",
-
-                        fontSize: "0.875rem",
-
-                        fontWeight: "500",
-
-                        cursor: "pointer",
-
-                        transition: "all 0.2s",
-
-                      }}
-
-                      onClick={clearAllFilters}
-
-                    >
-
-                      Clear All Filters
-
-                    </button>
-
-                    <button
-
-                      style={{
-
-                        flex: "1",
-
-                        padding: "0.75rem 1.5rem",
-
-                        background: "#5D2A0A",
-
-                        color: "white",
-
-                        border: "none",
-
-                        borderRadius: "6px",
-
-                        fontSize: "0.875rem",
-
-                        fontWeight: "500",
-
-                        cursor: "pointer",
-
-                        transition: "all 0.2s",
-
-                      }}
-
-                      onClick={() => setShowFilters(false)}
-
-                    >
-
-                      Apply Filters
-
-                    </button>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>,
-
-            document.body,
-
-          )}
-
-
-
-        {/* Supplier Details Modal */}
-
-        {mounted && showModal && modalContent.type === "supplier-details" && (
-
-          <SupplierDetailsModal
-
-            supplier={modalContent.supplier}
-
-            isOpen={showModal}
-
-            onClose={() => setShowModal(false)}
-
-          />
-
-        )}
-
-
-
-        {/* Keep your existing modals for other types */}
-
-        {mounted && showModal && modalContent.type === "documents" && (
-
-          createPortal(
-
-            <div
-
-              style={{
-
-                position: "fixed",
-
-                top: 0,
-
-                left: 0,
-
-                right: 0,
-
-                bottom: 0,
-
-                backgroundColor: "rgba(0,0,0,0.5)",
-
-                display: "flex",
-
-                alignItems: "center",
-
-                justifyContent: "center",
-
-                zIndex: 1000,
-
-              }}
-
-            >
-
-              <div
-
-                style={{
-
-                  background: "white",
-
-                  borderRadius: "12px",
-
-                  maxWidth: "600px",
-
-                  width: "90%",
-
-                  maxHeight: "80vh",
-
-                  overflowY: "auto",
-
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-
-                }}
-
-              >
-
-                <div style={modalHeaderStyle}>
-
-                  <h3 style={modalTitleStyle}>Supplier Documents</h3>
-
-                  <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
-
-                    ✖
-
-                  </button>
-
-                </div>
-
-                <div style={modalBodyStyle}>
-
-                  <div>
-
-                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-
-                      Documents for{" "}
-
-                      <strong>
-
-                        {modalContent.supplier?.entityOverview?.tradingName ||
-
-                          modalContent.supplier?.entityOverview?.registeredName}
-
-                      </strong>
-
-                      :
-
-                    </p>
-
-                    <ul
-
-                      style={{
-
-                        listStyle: "none",
-
-                        padding: "0",
-
-                        margin: "0 0 1.5rem 0",
-
-                        display: "flex",
-
-                        flexDirection: "column",
-
-                        gap: "0.5rem",
-
-                      }}
-
-                    >
-
-                      <li
-
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-
-                      >
-
-                        📄 Company Profile.pdf
-
-                      </li>
-
-                      <li
-
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-
-                      >
-
-                        📄 BBBEE Certificate.pdf
-
-                      </li>
-
-                      <li
-
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-
-                      >
-
-                        📄 Tax Compliance.pdf
-
-                      </li>
-
-                      <li
-
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-
-                      >
-
-                        📄 References.pdf
-
-                      </li>
-
-                      <li
-
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-
-                      >
-
-                        📄 Service Portfolio.pdf
-
-                      </li>
-
-                      <li
-
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-
-                      >
-
-                        📄 Case Studies.pdf
-
-                      </li>
-
-                    </ul>
-
-                    <div style={modalActionsStyle}>
-
-                      <button style={primaryButtonStyle}>Download All</button>
-
-                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-
-                        Close
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>,
-
-            document.body
-
-          )
-
-        )}
-
-
-
-        {mounted && showModal && modalContent.type === "message" && (
-
-          createPortal(
-
-            <div
-
-              style={{
-
-                position: "fixed",
-
-                top: 0,
-
-                left: 0,
-
-                right: 0,
-
-                bottom: 0,
-
-                backgroundColor: "rgba(0,0,0,0.5)",
-
-                display: "flex",
-
-                alignItems: "center",
-
-                justifyContent: "center",
-
-                zIndex: 1000,
-
-              }}
-
-            >
-
-              <div
-
-                style={{
-
-                  background: "white",
-
-                  borderRadius: "12px",
-
-                  maxWidth: "600px",
-
-                  width: "90%",
-
-                  maxHeight: "80vh",
-
-                  overflowY: "auto",
-
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-
-                }}
-
-              >
-
-                <div style={modalHeaderStyle}>
-
-                  <h3 style={modalTitleStyle}>Send Message</h3>
-
-                  <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
-
-                    ✖
-
-                  </button>
-
-                </div>
-
-                <div style={modalBodyStyle}>
-
-                  <div>
-
-                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-
-                      Send a message to{" "}
-
-                      <strong>
-
-                        {modalContent.supplier?.entityOverview?.tradingName ||
-
-                          modalContent.supplier?.entityOverview?.registeredName}
-
-                      </strong>
-
-                      :
-
-                    </p>
-
-                    <textarea
-
-                      style={{
-
-                        width: "100%",
-
-                        minHeight: "120px",
-
-                        padding: "0.75rem",
-
-                        border: "1px solid #E8D5C4",
-
-                        borderRadius: "6px",
-
-                        fontSize: "0.875rem",
-
-                        fontFamily: "inherit",
-
-                        resize: "vertical",
-
-                        background: "#FEFCFA",
-
-                        marginBottom: "1.5rem",
-
-                      }}
-
-                      placeholder="Type your message here..."
-
-                      rows={4}
-
-                    />
-
-                    <div style={modalActionsStyle}>
-
-                      <button style={primaryButtonStyle}>Send Message</button>
-
-                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-
-                        Cancel
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>,
-
-            document.body
-
-          )
-
-        )}
-
-
-
-        {mounted && showModal && modalContent.type === "call" && (
-
-          createPortal(
-
-            <div
-
-              style={{
-
-                position: "fixed",
-
-                top: 0,
-
-                left: 0,
-
-                right: 0,
-
-                bottom: 0,
-
-                backgroundColor: "rgba(0,0,0,0.5)",
-
-                display: "flex",
-
-                alignItems: "center",
-
-                justifyContent: "center",
-
-                zIndex: 1000,
-
-              }}
-
-            >
-
-              <div
-
-                style={{
-
-                  background: "white",
-
-                  borderRadius: "12px",
-
-                  maxWidth: "600px",
-
-                  width: "90%",
-
-                  maxHeight: "80vh",
-
-                  overflowY: "auto",
-
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-
-                }}
-
-              >
-
-                <div style={modalHeaderStyle}>
-
-                  <h3 style={modalTitleStyle}>Call Supplier</h3>
-
-                  <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
-
-                    ✖
-
-                  </button>
-
-                </div>
-
-                <div style={modalBodyStyle}>
-
-                  <div>
-
-                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-
-                      Call{" "}
-
-                      <strong>
-
-                        {modalContent.supplier?.entityOverview?.tradingName ||
-
-                          modalContent.supplier?.entityOverview?.registeredName}
-
-                      </strong>
-
-                      :
-
-                    </p>
-
-                    <div
-
-                      style={{
-
-                        padding: "1rem",
-
-                        background: "#F5EBE0",
-
-                        borderRadius: "8px",
-
-                        marginBottom: "1.5rem",
-
-                        border: "1px solid #E8D5C4",
-
-                      }}
-
-                    >
-
-                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Primary Contact: John Smith</p>
-
-                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Phone: +27 12 345 6789</p>
-
-                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>
-
-                        Email: contact@
-
-                        {(modalContent.supplier?.entityOverview?.tradingName || "supplier")
-
-                          .toLowerCase()
-
-                          .replace(/\s/g, "")}
-
-                        .com
-
-                      </p>
-
-                    </div>
-
-                    <div style={modalActionsStyle}>
-
-                      <button style={primaryButtonStyle}>Dial Now</button>
-
-                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-
-                        Cancel
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>,
-
-            document.body
-
-          )
-
-        )}
-
+                    </PopupPortal>
+                  )
+                })()}
+            </div>
+          </div>
+        </div>
       </div>
 
-    </>
+      {/* Table */}
+      <div className="bg-white rounded-b-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+        <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
+          <style>{`
+            /* No 'position: relative' here — that is what the shared kit had,
+               and it silently overrode the sticky positioning on every <th>,
+               so the header scrolled away while the pinned body cells stayed.
+               Sticky is itself a positioned ancestor, so the absolutely
+               placed grip and resize handle still anchor correctly. */
+            .st-th { color: #faf7f2 !important; vertical-align: top !important; }
+            .st-th-draggable { cursor: grab; }
+            .st-th-draggable:active { cursor: grabbing; }
+            .st-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+            /* overflow-wrap: normal stops the browser splitting inside a word,
+               which is what turned "Match %" into "MAT CH.." and "Status" into
+               "STA TUS" in narrow columns. */
+            .st-th-label {
+              flex: 1 1 auto; min-width: 0;
+              display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+              overflow: hidden; white-space: normal;
+              overflow-wrap: normal; word-break: normal; hyphens: none;
+              line-height: 1.2; letter-spacing: 0.02em;
+            }
+            .st-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+            /* The drag grip leaves the flex flow and only appears on hover,
+               buying every header ~14px more room for its label. */
+            .st-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+            .st-th:hover .st-th-grip { opacity: .45; }
+            .st-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .st-resize:hover { background: rgba(255,255,255,0.25); }
+          `}</style>
 
+          <table
+            style={{
+              /* separate (not collapse) — collapsed borders are dropped by
+                 sticky cells, which made the pinned column lose its edge and
+                 mispaint over its neighbour while scrolling. */
+              borderCollapse: "separate",
+              borderSpacing: 0,
+              background: "white",
+              fontSize: "0.8rem",
+              backgroundColor: "#faf7f2",
+              tableLayout: "fixed",
+              width: totalWidth,
+              minWidth: "100%",
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  className="st-th font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30 text-left"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    width: SUPPLIER_WIDTH,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                    boxShadow: "2px 0 0 #e6d7c3",
+                  }}
+                >
+                  <div className="st-th-row">
+                    <span className="st-th-label" title="Supplier">
+                      Supplier
+                    </span>
+                    <span className="st-th-tools">
+                      <SortTrigger columnKey="name" />
+                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                    </span>
+                  </div>
+                </th>
+
+                {orderedColumns.map((key) => {
+                  const col = COLUMN_DEFS[key]
+                  const isDragging = draggedColumn === key
+                  const isDragOver = dragOverColumn === key && draggedColumn !== key
+                  const offset = stickyOffsets[key]
+
+                  return (
+                    <th
+                      key={key}
+                      draggable
+                      onDragStart={(e) => handleColumnDragStart(e, key)}
+                      onDragOver={(e) => handleColumnDragOver(e, key)}
+                      onDrop={(e) => handleColumnDrop(e, key)}
+                      onDragEnd={handleColumnDragEnd}
+                      onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                      onMouseLeave={() => setDragHintRect(null)}
+                      className={`st-th st-th-draggable font-semibold uppercase tracking-wider text-xs sticky top-0 select-none transition-opacity ${
+                        col.align === "center" ? "text-center" : "text-left"
+                      } ${isDragging ? "opacity-40" : ""}`}
+                      style={{
+                        width: widthOf(key),
+                        padding: headerPadding,
+                        backgroundColor: isDragOver ? "#5a423b" : "#4a352f",
+                        zIndex: offset ? 25 : 20,
+                        borderBottom: "1px solid #e6d7c3",
+                        borderRight: "1px solid #e6d7c3",
+                        ...(offset
+                          ? {
+                              [offset.side]: `${offset.value}px`,
+                              boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+                            }
+                          : {}),
+                      }}
+                    >
+                      <GripVertical size={11} className="st-th-grip" />
+                      <div className={`st-th-row ${col.align === "center" ? "justify-center" : ""}`}>
+                        <span className="st-th-label" title={col.label}>
+                          {col.label}
+                        </span>
+                        <span className="st-th-tools">
+                          {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
+                          {col.sortable && <SortTrigger columnKey={key} />}
+                          {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                        </span>
+                      </div>
+                      <div className="st-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                    </th>
+                  )
+                })}
+
+                {/* Action scrolls horizontally with the table — only top-0, so
+                    it still holds position on vertical scroll. */}
+                <th
+                  className="st-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    width: ACTION_WIDTH,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                  }}
+                >
+                  Action
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filteredSuppliers.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={orderedColumns.length + 2}
+                    style={{ ...tableCellStyle, textAlign: "center", padding: "3rem 1rem", borderRight: "none" }}
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-16 h-16 rounded-full bg-[#f5f0e1] flex items-center justify-center">
+                        <Package size={26} className="text-[#7d5a50] opacity-50" />
+                      </div>
+                      <p className="text-sm font-semibold text-[#4a352f] m-0">
+                        {suppliers.length === 0 ? "No supplier matches yet" : "No suppliers match these filters"}
+                      </p>
+                      <p className="text-xs text-[#a89482] m-0">
+                        {suppliers.length === 0
+                          ? "Update your request with more categories or a wider location and the matches will follow."
+                          : "Clear a filter to widen the results."}
+                      </p>
+                      {activeFilterCount > 0 && suppliers.length > 0 && (
+                        <button onClick={clearAllFilters} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white">
+                          Clear all filters
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredSuppliers.map((s) => {
+                  const status = statusOf(s)
+                  const actions = getRowActions(status)
+                  const isSaved = !!savedMatches[s.id]
+                  const rowBg = hoveredRow === s.id ? "#fdf8f4" : "#ffffff"
+                  const busy = busyId === s.id
+
+                  return (
+                    <tr
+                      key={s.id}
+                      onMouseEnter={() => setHoveredRow(s.id)}
+                      onMouseLeave={() => setHoveredRow(null)}
+                      style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
+                    >
+                      {/* Supplier — pinned left. Name only; sector has its own
+                          column. The two icons are status marks on the name,
+                          not a description line. */}
+                      <td
+                        className="sticky left-0 z-10"
+                        style={{
+                          ...tableCellStyle,
+                          width: SUPPLIER_WIDTH,
+                          backgroundColor: rowBg,
+                          borderRight: "none",
+                          boxShadow: "2px 0 0 #e6d7c3",
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-[#4a352f] break-words text-sm">{s.name}</span>
+                          {/* Spec section B: a small Verified indicator on the name */}
+                          {s.verified && (
+                            <BadgeCheck size={13} className="text-[#388E3C] flex-shrink-0" aria-label="Verified supplier" />
+                          )}
+                          {!s.aiEligibility?.eligible && (
+                            <AlertCircle
+                              size={12}
+                              className="text-[#B45309] flex-shrink-0"
+                              aria-label="Profile incomplete"
+                              title="Profile incomplete — not eligible for AI analysis"
+                            />
+                          )}
+                          <button
+                            onClick={() => openDetails(s)}
+                            className="text-[#a89482] hover:text-[#7d5a50] flex-shrink-0"
+                            aria-label={`View profile for ${s.name}`}
+                            title="View profile"
+                          >
+                            <Eye size={13} />
+                          </button>
+                        </div>
+                      </td>
+
+                      {orderedColumns.map((key) => renderCell(key, s, rowBg))}
+
+                      {/* Action — scrolls with the table */}
+                      <td
+                        style={{
+                          ...tableCellStyle,
+                          width: ACTION_WIDTH,
+                          borderRight: "none",
+                          backgroundColor: rowBg,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => (actions.kind === "quote" ? handleRequestQuote(s) : openDetails(s))}
+                            disabled={busy}
+                            title={actions.primary}
+                            className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 disabled:opacity-60 ${
+                              actions.terminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
+                            }`}
+                            style={{ width: "132px", height: "34px", backgroundColor: actions.terminal ? undefined : "#7d5a50" }}
+                          >
+                            {!actions.terminal && !busy && <ArrowRight size={13} className="flex-shrink-0" />}
+                            <span className="truncate">{busy ? "Sending..." : actions.primary}</span>
+                          </button>
+
+                          <button
+                            onClick={() => setSavedMatches((p) => ({ ...p, [s.id]: !p[s.id] }))}
+                            title={isSaved ? "Remove from saved" : "Save match"}
+                            aria-label={isSaved ? "Remove from saved" : "Save match"}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                            style={{ color: isSaved ? "#a67c52" : "#c8b6a6" }}
+                          >
+                            <Bookmark size={14} fill={isSaved ? "#a67c52" : "none"} />
+                          </button>
+
+                          <button
+                            onClick={(e) => openPopupFromEvent("quickActions", s, e)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                            style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
+                            title="More actions"
+                            aria-label="More actions"
+                          >
+                            <MoreVertical size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Drag-to-reorder hint */}
+      {dragHintRect && !draggedColumn && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
+            style={{
+              top: dragHintRect.bottom + 8,
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 210),
+              width: "200px",
+            }}
+          >
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* Column header filter popover */}
+      {headerFilterOpen && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div
+            className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
+            style={{
+              top: headerFilterOpen.rect.bottom + 8,
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312),
+              width: "300px",
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
+            {["match", "primaryMatch", "aiMatch"].includes(headerFilterOpen.type) &&
+              (() => {
+                const config = {
+                  match: { field: "matchRange", label: "Match %" },
+                  primaryMatch: { field: "primaryRange", label: "Structured Match %" },
+                  aiMatch: { field: "aiRange", label: "AI Match %" },
+                }[headerFilterOpen.type]
+                const range = localFilters[config.field]
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-semibold text-[#4a352f]">
+                        {config.label}: {range[0]} - {range[1]}
+                      </label>
+                      {(range[0] > 0 || range[1] < 100) && (
+                        <button
+                          onClick={() => setLocalFilters((p) => ({ ...p, [config.field]: [0, 100] }))}
+                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={range[0]}
+                        onChange={(e) =>
+                          setLocalFilters((p) => ({
+                            ...p,
+                            [config.field]: [
+                              Math.min(Number.parseInt(e.target.value) || 0, p[config.field][1]),
+                              p[config.field][1],
+                            ],
+                          }))
+                        }
+                        className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
+                      />
+                      <span className="text-[#7d5a50]">to</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={range[1]}
+                        onChange={(e) =>
+                          setLocalFilters((p) => ({
+                            ...p,
+                            [config.field]: [
+                              p[config.field][0],
+                              Math.max(Number.parseInt(e.target.value) || 0, p[config.field][0]),
+                            ],
+                          }))
+                        }
+                        className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={range[0]}
+                      onChange={(e) =>
+                        setLocalFilters((p) => ({
+                          ...p,
+                          [config.field]: [Number.parseInt(e.target.value), p[config.field][1]],
+                        }))
+                      }
+                      className="w-full accent-[#7d5a50]"
+                    />
+                  </>
+                )
+              })()}
+
+            {headerFilterOpen.type === "dateMatched" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Date matched</label>
+                  {(localFilters.matchedFrom || localFilters.matchedTo) && (
+                    <button
+                      onClick={() => setLocalFilters((p) => ({ ...p, matchedFrom: "", matchedTo: "" }))}
+                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={localFilters.matchedFrom}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, matchedFrom: e.target.value }))}
+                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                  />
+                  <span className="text-[#7d5a50] text-xs">to</span>
+                  <input
+                    type="date"
+                    value={localFilters.matchedTo}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, matchedTo: e.target.value }))}
+                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                  />
+                </div>
+              </>
+            )}
+
+            {[
+              { type: "name", label: "Supplier name", placeholder: "Search name..." },
+              { type: "productService", label: "Product / Service Offered", placeholder: "e.g. logistics" },
+              { type: "capacity", label: "Capacity / Lead Time", placeholder: "e.g. 2 weeks" },
+              { type: "yearsOperating", label: "Years Operating", placeholder: "e.g. 5" },
+              { type: "certifications", label: "Certifications", placeholder: "e.g. ISO" },
+              { type: "pricingRange", label: "Pricing Range", placeholder: "Search pricing..." },
+              { type: "minimumOrder", label: "Minimum Order", placeholder: "Search minimum..." },
+              { type: "notes", label: "Notes", placeholder: "Search your notes..." },
+            ].map(
+              ({ type, label, placeholder }) =>
+                headerFilterOpen.type === type && (
+                  <div key={type}>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                      {localFilters[type] && (
+                        <button
+                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: "" }))}
+                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={localFilters[type]}
+                      onChange={(e) => setLocalFilters((p) => ({ ...p, [type]: e.target.value }))}
+                      placeholder={placeholder}
+                      className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                    />
+                  </div>
+                ),
+            )}
+
+            {[
+              { type: "location", label: "Location / Service Area", options: locationOptions },
+              { type: "status", label: "Status", options: SUPPLIER_STATUSES },
+              { type: "sector", label: "Sector", options: sectorOptions },
+              { type: "businessSize", label: "Business Size", options: businessSizeOptions },
+              { type: "bbbeeLevel", label: "B-BBEE Level", options: BBBEE_LEVELS },
+              { type: "ownershipProfile", label: "Ownership Profile", options: OWNERSHIP_TAGS },
+              { type: "deliveryCapability", label: "Delivery Capability", options: DELIVERY_MODES },
+              { type: "complianceStatus", label: "Compliance Status", options: complianceOptions },
+            ].map(
+              ({ type, label, options }) =>
+                headerFilterOpen.type === type && (
+                  <div key={type}>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                      {localFilters[type].length > 0 && (
+                        <button
+                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
+                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
+                      {options.map((value) => (
+                        <button
+                          key={value}
+                          onClick={() => toggleChip(type, value)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                            localFilters[type].includes(value)
+                              ? "bg-[#7d5a50] text-white"
+                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ),
+            )}
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Quick Actions popup ───────────────────────────────────────── */}
+      {activePopup?.type === "quickActions" && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "216px" }}
+          >
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
+              <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
+              <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]">
+                <X size={14} />
+              </button>
+            </div>
+            <button
+              onClick={() => openDetails(activePopup.row)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Eye size={12} /> View Supplier
+            </button>
+            <button
+              onClick={() => openPopup("match", activePopup.row, activePopup.rect)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Target size={12} /> Why This Match?
+            </button>
+            <button
+              onClick={() => handleRequestQuote(activePopup.row)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Send size={12} /> Connect
+            </button>
+            <button
+              onClick={() => {
+                const target = activePopup.row
+                closePopup()
+                setNoteTarget(target)
+                setNoteText("")
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <StickyNote size={12} /> Add Note
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                toast("info", '"Compare" is not wired up yet.', 2500)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Layers size={12} /> Compare
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                toast("info", '"Share" is not wired up yet.', 2500)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Share2 size={12} /> Share
+            </button>
+            <button
+              onClick={() => {
+                const target = activePopup.row
+                closePopup()
+                writeRecord(target, { hidden: true })
+                  .then(() => toast("info", `${target.name} hidden from your matches.`, 2500))
+                  .catch(() => toast("error", "Could not hide that match.", 3000))
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <EyeOff size={12} /> Hide Match
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                toast("info", '"Report" is not wired up yet.', 2500)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#D32F2F] hover:bg-[#faf7f2] text-left"
+            >
+              <Flag size={12} /> Report
+            </button>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Why this match? — anchored popover ─────────────────────────── */}
+      {activePopup?.type === "match" && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{
+              top: activePopup.position.y,
+              left: activePopup.position.x,
+              width: "420px",
+              maxHeight: "560px",
+              overflowY: "auto",
+            }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Why this match?</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[240px]">{activePopup.row.name}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xl font-bold">{activePopup.row.matchPercentage}%</div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-2">
+              {/* How the headline number is made up */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-[#e6d7c3] bg-[#faf7f2] p-3 text-center">
+                  <div className="text-lg font-bold" style={{ color: scoreColor(activePopup.row.primaryMatchPercentage) }}>
+                    {activePopup.row.primaryMatchPercentage}%
+                  </div>
+                  <p className="text-[11px] font-semibold text-[#4a352f] m-0 mt-0.5">Structured</p>
+                  <p className="text-[10px] text-[#a89482] m-0">Profile fields vs your request</p>
+                </div>
+                <div className="rounded-lg border border-[#e6d7c3] bg-[#faf7f2] p-3 text-center">
+                  <div
+                    className="text-lg font-bold"
+                    style={{
+                      color:
+                        activePopup.row.aiMatchPercentage === null
+                          ? "#a89482"
+                          : scoreColor(activePopup.row.aiMatchPercentage),
+                    }}
+                  >
+                    {activePopup.row.aiMatchPercentage === null ? "—" : `${activePopup.row.aiMatchPercentage}%`}
+                  </div>
+                  <p className="text-[11px] font-semibold text-[#4a352f] m-0 mt-0.5">AI semantic</p>
+                  <p className="text-[10px] text-[#a89482] m-0">
+                    {activePopup.row.aiMatchPercentage === null ? "Not run yet" : "Reads the descriptions"}
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-[#a89482] text-center m-0 pb-1">
+                {activePopup.row.aiMatchPercentage === null
+                  ? "Match % is structured only until AI analysis runs."
+                  : "Match % is 60% AI + 40% structured."}
+              </p>
+
+              {activePopup.row.matchBreakdown &&
+                Object.entries(activePopup.row.matchBreakdown).map(([key, c]) => {
+                  const color = c.score >= 75 ? "#22c55e" : c.score >= 50 ? "#f59e0b" : "#ef4444"
+                  return (
+                    <div key={key} className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
+                      <div className="flex items-center justify-between mb-1.5 gap-2">
+                        <span className="font-semibold text-[#4a352f]">{CATEGORY_LABEL[key] || formatLabel(key)}</span>
+                        <span className="font-bold flex-shrink-0" style={{ color }}>
+                          {c.score}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full" style={{ width: `${c.score}%`, backgroundColor: color }} />
+                      </div>
+                      <p className="text-[10px] text-[#a89482] m-0">
+                        Weight {c.weight}% · contributes {c.contribution} points
+                      </p>
+                      {key === "categoryMatch" && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {(c.matches || []).map((m) => (
+                            <span key={m} className="px-2 py-0.5 rounded-full bg-[#E8F5E8] text-[#388E3C] text-[10px] border border-[#C8E6C9]">
+                              {m}
+                            </span>
+                          ))}
+                          {(c.unmatched || []).map((m) => (
+                            <span key={`u-${m}`} className="px-2 py-0.5 rounded-full bg-[#FFEBEE] text-[#D32F2F] text-[10px] border border-[#FFCDD2]">
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+              <div className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2]">
+                <h4 className="text-xs font-semibold text-[#4a352f] m-0 mb-2 flex items-center gap-1.5">
+                  <Brain size={13} /> AI reading of this profile
+                </h4>
+                {activePopup.row.aiMatchPercentage === null ? (
+                  <>
+                    <p className="text-[11px] text-[#7d5a50] m-0 mb-2.5 leading-relaxed">
+                      The AI score compares the supplier's written product and service descriptions against your request,
+                      rather than the category tags alone. It has not run for this request yet.
+                    </p>
+                    <button
+                      onClick={() => {
+                        closePopup()
+                        runAiAnalysis()
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#7d5a50] text-white text-xs font-semibold"
+                    >
+                      Run AI analysis
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-[#4a352f] leading-relaxed m-0 whitespace-pre-wrap">
+                      {activePopup.row.aiReasoning}
+                    </p>
+                    {activePopup.row.aiCapabilities.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {activePopup.row.aiCapabilities.map((cap, i) => (
+                          <span key={i} className="px-2.5 py-1 rounded-full bg-[#DCFCE7] text-[#166534] text-[10px] border border-[#BBF7D0]">
+                            {cap}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* Add note */}
+      {mounted &&
+        noteTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4"
+            onClick={() => setNoteTarget(null)}
+          >
+            <div className="bg-white rounded-2xl max-w-[420px] w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-base font-semibold text-[#4a352f] m-0 mb-3">Add a note on {noteTarget.name}</h3>
+              <textarea
+                autoFocus
+                rows={4}
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="What should your team know about this supplier?"
+                className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm resize-none"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setNoteTarget(null)} className="px-3 py-1.5 text-xs font-semibold text-[#7d5a50]">
+                  Cancel
+                </button>
+                <button
+                  onClick={saveNote}
+                  disabled={!noteText.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-[#7d5a50] text-white text-xs font-semibold disabled:opacity-40"
+                >
+                  Save note
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* AI analysis overlay */}
+      {mounted &&
+        aiRunning &&
+        createPortal(
+          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/70 p-4">
+            <div className="bg-white rounded-2xl p-8 max-w-[420px] w-full text-center shadow-2xl">
+              <div className="w-16 h-16 rounded-full mx-auto mb-5 flex items-center justify-center bg-gradient-to-br from-[#7d5a50] to-[#4a352f]">
+                <Brain size={30} className="text-[#faf7f2]" />
+              </div>
+              <h3 className="text-base font-bold text-[#4a352f] m-0">Reading supplier profiles</h3>
+              <p className="text-xs text-[#7d5a50] mt-1 mb-5">
+                Comparing each profile against your request and writing an explanation for every score.
+              </p>
+              <div className="w-full h-2 rounded-full bg-[#e6d7c3] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[#7d5a50] transition-all duration-500"
+                  style={{
+                    width: aiProgress.total > 0 ? `${Math.max(6, (aiProgress.current / aiProgress.total) * 100)}%` : "20%",
+                  }}
+                />
+              </div>
+              <p className="text-xs font-semibold text-[#4a352f] mt-3 mb-0">
+                {aiProgress.total > 0 ? `${aiProgress.total} profiles in this batch` : "Preparing the batch"}
+              </p>
+              <p className="text-[10px] text-[#a89482] mt-2 mb-0">This takes 30 to 60 seconds on a large list.</p>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {mounted && detailsSupplier && (
+        <SupplierDetailsModal supplier={detailsSupplier.raw || detailsSupplier} isOpen onClose={() => setDetailsSupplier(null)} />
+      )}
+    </div>
   )
-
 }
 
-
-
-// Styles
-
-const newRequestButtonStyle = {
-
-  background: "#5D2A0A",
-
-  color: "white",
-
-  border: "1px solid #5D2A0A",
-
-  padding: "0.5rem 1rem",
-
-  borderRadius: "6px",
-
-  cursor: "pointer",
-
-  display: "flex",
-
-  alignItems: "center",
-
-  gap: "0.5rem",
-
-  fontSize: "0.875rem",
-
-  fontWeight: "500",
-
-  transition: "all 0.2s",
-
-};
-
-
-
-const filterButtonStyle = {
-
-  background: "#F5EBE0",
-
-  color: "#5D2A0A",
-
-  border: "1px solid #E8D5C4",
-
-  padding: "0.5rem 1rem",
-
-  borderRadius: "6px",
-
-  cursor: "pointer",
-
-  display: "flex",
-
-  alignItems: "center",
-
-  gap: "0.5rem",
-
-  fontSize: "0.875rem",
-
-  transition: "all 0.2s",
-
-}
-
-
-
-const noResultsStyle = {
-
-  display: "flex",
-
-  justifyContent: "center",
-
-  alignItems: "center",
-
-  padding: "2rem",
-
-  color: "#a67c52",
-
-  textAlign: "center",
-
-  marginTop: "1rem",
-
-}
-
-
-
-const clearFiltersButtonStyle = {
-
-  padding: "0.5rem 1rem",
-
-  background: "#F5EBE0",
-
-  color: "#5D2A0A",
-
-  border: "1px solid #E8D5C4",
-
-  borderRadius: "6px",
-
-  cursor: "pointer",
-
-  marginTop: "0.5rem",
-
-}
-
-
-
-const tableContainerStyle = {
-
-  overflowX: "auto",
-
-  borderRadius: "8px",
-
-  border: "1px solid #E8D5C4",
-
-  boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-
-}
-
-
-
-const tableStyle = {
-
-  width: "100%",
-
-  borderCollapse: "collapse",
-
-  background: "white",
-
-  fontSize: "0.875rem",
-
-  backgroundColor: "#FEFCFA",
-
-  tableLayout: "fixed",
-
-  minWidth: "1300px", // Increased to accommodate new column
-
-}
-
-
-
-
-
-const tableRowStyle = {
-
-  borderBottom: "1px solid #E8D5C4",
-
-}
-
-
-
-const supplierNameStyle = {
-
-  color: "#a67c52",
-
-  textDecoration: "underline",
-
-  cursor: "pointer",
-
-  fontWeight: "500",
-
-  fontSize: "0.75rem",
-
-  lineHeight: "1.2",
-
-}
-
-
-
-const statusBadgeStyle = {
-
-  borderRadius: "3px",
-
-  fontWeight: "500",
-
-  display: "inline-block",
-
-}
-
-
-
-// Style constants
-
-const tableHeaderStyle = {
-
-  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-
-  color: "#FEFCFA",
-
-  padding: "0.75rem 0.4rem",
-
-  textAlign: "left",
-
-  fontWeight: "600",
-
-  fontSize: "0.7rem",
-
-  letterSpacing: "0.5px",
-
-  textTransform: "uppercase",
-
-  position: "sticky",
-
-  top: "0",
-
-  zIndex: "10",
-
-  borderBottom: "2px solid #1a0c02",
-
-  borderRight: "1px solid #1a0c02",
-
-  lineHeight: "1.2",
-
-}
-
-
-
-const tableCellStyle = {
-
-  padding: "0.6rem 0.4rem",
-
-  borderBottom: "1px solid #E8D5C4",
-
-  borderRight: "1px solid #E8D5C4",
-
-  fontSize: "0.75rem",
-
-  verticalAlign: "top",
-
-  color: "#5d2a0a",
-
-  lineHeight: "1.3",
-
-  overflow: "hidden",
-
-}
-
-
-
-const matchScoreStyle = {
-
-  fontSize: "0.75rem",
-
-  fontWeight: "500",
-
-}
-
-
-
-const matchContainerStyle = {
-
-  display: "flex",
-
-  flexDirection: "column",
-
-  alignItems: "flex-start",
-
-  width: "100%",
-
-}
-
-
-
-const progressBarStyle = {
-
-  width: "60%", // Reduced progress bar width from 80% to 60% to make it shorter
-
-  height: "6px",
-
-  backgroundColor: "#E2E8F0",
-
-  borderRadius: "3px",
-
-  overflow: "hidden",
-
-}
-
-
-
-const progressFillStyle = {
-
-  height: "100%",
-
-  borderRadius: "3px",
-
-  transition: "width 0.3s ease",
-
-}
-
-
-
-const modalHeaderStyle = {
-
-  display: "flex",
-
-  justifyContent: "space-between",
-
-  alignItems: "center",
-
-  padding: "1.5rem",
-
-  borderBottom: "1px solid #E8D5C4",
-
-  background: "#FEFCFA",
-
-}
-
-
-
-const modalTitleStyle = {
-
-  margin: "0",
-
-  fontSize: "1.25rem",
-
-  fontWeight: "600",
-
-  color: "#5D2A0A",
-
-}
-
-
-
-const modalCloseButtonStyle = {
-
-  background: "none",
-
-  border: "none",
-
-  fontSize: "1.25rem",
-
-  cursor: "pointer",
-
-  color: "#5D2A0A",
-
-  padding: "0.25rem",
-
-}
-
-
-
-const modalBodyStyle = {
-
-  padding: "1.5rem",
-
-}
-
-
-
-const detailCardStyle = {
-
-  padding: "1rem",
-
-  background: "#F5EBE0",
-
-  borderRadius: "8px",
-
-  border: "1px solid #E8D5C4",
-
-}
-
-
-
-const detailTextStyle = {
-
-  margin: "0.5rem 0",
-
-  fontSize: "0.875rem",
-
-  color: "#5D2A0A",
-
-}
-
-
-
-const modalActionsStyle = {
-
-  display: "flex",
-
-  gap: "0.75rem",
-
-  justifyContent: "flex-end",
-
-}
-
-
-
-const primaryButtonStyle = {
-
-  padding: "0.75rem 1.5rem",
-
-  background: "#5D2A0A",
-
-  color: "white",
-
-  border: "none",
-
-  borderRadius: "6px",
-
-  fontSize: "0.875rem",
-
-  fontWeight: "500",
-
-  cursor: "pointer",
-
-}
-
-
-
-const cancelButtonStyle = {
-
-  padding: "0.75rem 1.5rem",
-
-  background: "#F5EBE0",
-
-  color: "#5D2A0A",
-
-  border: "1px solid #E8D5C4",
-
-  borderRadius: "6px",
-
-  fontSize: "0.875rem",
-
-  fontWeight: "500",
-
-  cursor: "pointer",
-
-}
-
-
-
-const filterCardStyle = {
-
-  padding: "1.5rem",
-
-  background: "#FEFCFA",
-
-  borderRadius: "8px",
-
-  border: "1px solid #E8D5C4",
-
-}
-
-
-
-const filterTitleStyle = {
-
-  margin: "0 0 1rem 0",
-
-  fontSize: "1rem",
-
-  fontWeight: "600",
-
-  color: "#5D2A0A",
-
-}
-
-
-
-const filterSelectStyle = {
-
-  width: "100%",
-
-  padding: "0.75rem",
-
-  border: "1px solid #E8D5C4",
-
-  borderRadius: "6px",
-
-  fontSize: "0.875rem",
-
-  background: "white",
-
-  color: "#5D2A0A",
-
-}
-
-
-
-const filterInputStyle = {
-
-  flex: "1",
-
-  padding: "0.75rem",
-
-  border: "1px solid #E8D5C4",
-
-  borderRadius: "6px",
-
-  fontSize: "0.875rem",
-
-  background: "white",
-
-  color: "#5D2A0A",
-
-}
+export default SupplierTable

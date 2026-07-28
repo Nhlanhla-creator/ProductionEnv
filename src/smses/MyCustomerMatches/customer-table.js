@@ -1,6 +1,43 @@
 "use client"
-import { useState, useEffect } from "react"
+
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
+import {
+  X,
+  Eye,
+  EyeOff,
+  HelpCircle,
+  FileText,
+  Send,
+  Calendar,
+  Check,
+  Download,
+  FileIcon,
+  Target,
+  Flag,
+  StickyNote,
+  Share2,
+  Layers,
+  ChevronDown,
+  SlidersHorizontal,
+  GripVertical,
+  RotateCcw,
+  Settings,
+  Trash2,
+  Plus,
+  LayoutGrid,
+  CheckCircle,
+  Search,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  ArrowRight,
+  Pin,
+  PinOff,
+  Bookmark,
+  MoreVertical,
+  Briefcase,
+} from "lucide-react"
 import {
   collection,
   query,
@@ -8,393 +45,639 @@ import {
   doc,
   updateDoc,
   getDocs,
+  getDoc,
   onSnapshot,
   addDoc,
   serverTimestamp,
-  getDoc,
 } from "firebase/firestore"
+import { onAuthStateChanged, getAuth } from "firebase/auth"
 import { db } from "../../firebaseConfig"
-import { getAuth } from "firebase/auth"
 import { DayPicker } from "react-day-picker"
+// Was "react-day-picker/dist/style.module.css" — that path doesn't exist in
+// the package and fails to resolve at build time.
+import "react-day-picker/dist/style.css"
 import CustomerDetailsModal from "./CustomerDetailsModal"
-import "react-day-picker/dist/style.module.css"
-import { FileText, MessageCircle, Filter, Download, Send, FileIcon, Calendar, Check, Eye } from "lucide-react"
 
-// Status definitions with brown color scheme
+/* ════════════════════════════════════════════════════════════════════════════
+   This file no longer imports ./matchTableKit.
+
+   The kit rendered the header row, and its own <style> block set
+   `position: relative` on every <th>, which overrode the sticky positioning.
+   The header scrolled away while the pinned body cells stayed frozen —
+   customer names sliding over the next column, and the ACTION label drifting
+   away from its buttons. The table now owns its head, toolbar, filters and
+   row actions, identical to the intern, advisor and funding tables.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   NAMING NOTE — worth resolving before this ships.
+
+   Rows come from `supplierApplications` filtered by `customerId`, but each row
+   stores the counterparty under `supplierName` / `supplierId` / `supplierLocation`
+   while `getCustomerEconomicSectors` reads `customerId`, and `handleViewDetails`
+   looks up `supplierId` and feeds it to CustomerDetailsModal as the customer.
+   One record is describing both sides with the wrong labels.
+
+   This file treats the counterparty as the customer (which is what the UI
+   claims) and reads it from the `supplier*` fields, because that's where the
+   data actually is. Renaming the fields is a migration, not a UI change.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Status vocabulary (spec section 3) ────────────────────────────────── */
+export const CUSTOMER_STATUSES = [
+  "New Match",
+  "Viewed",
+  "Shortlisted",
+  "Contacted",
+  "Application Started",
+  "Applied",
+  "Under Review",
+  "Accepted",
+  "Declined",
+  "Closed",
+]
+
+const LEGACY_STATUS_ALIASES = {
+  Pending: "New Match",
+  Reviewed: "Under Review",
+  "Proposal/Quote": "Applied",
+  "Proposal Sent": "Applied",
+  "In Progress": "Accepted",
+  Completed: "Closed",
+  Rejected: "Declined",
+}
+export const normalizeCustomerStatus = (s) => LEGACY_STATUS_ALIASES[s] || s || "New Match"
+
 const STATUS_TYPES = {
-  Pending: {
-    color: "#F5EBE0",
-    textColor: "#5D2A0A",
-  },
-  Shortlisted: {
-    color: "#E8D5C4",
-    textColor: "#4E342E",
-  },
-  "Proposal/Quote": {
-    color: "#E8D5C4",
-    textColor: "#543c36ff",
-  },
-  Accepted: {
-    color: "#E8F5E8",
-    textColor: "#388E3C",
-  },
-  Rejected: {
-    color: "#FFEBEE",
-    textColor: "#D32F2F",
-  },
+  "New Match": { color: "#F5F0E1", textColor: "#7D5A50" },
+  Viewed: { color: "#EFEBE9", textColor: "#5D4037" },
+  Shortlisted: { color: "#FFF3E0", textColor: "#F57C00" },
+  Contacted: { color: "#E8EAF6", textColor: "#3949AB" },
+  "Application Started": { color: "#E1F5FE", textColor: "#0277BD" },
+  Applied: { color: "#E3F2FD", textColor: "#1565C0" },
+  "Under Review": { color: "#F3E5F5", textColor: "#7B1FA2" },
+  Accepted: { color: "#E8F5E8", textColor: "#388E3C" },
+  Declined: { color: "#FFEBEE", textColor: "#D32F2F" },
+  Closed: { color: "#EEEEEE", textColor: "#616161" },
+}
+const getStatusStyle = (s) => STATUS_TYPES[s] || { color: "#F5F5F5", textColor: "#666666" }
+
+/* One primary action per row; everything else lives in the three-dot quick
+   actions popup, matching the other match tables. */
+const getRowActions = (status) => {
+  switch (status) {
+    case "New Match":
+    case "Viewed":
+      return { primary: "Shortlist", kind: "shortlist" }
+    case "Shortlisted":
+      return { primary: "Send Proposal", kind: "proposal" }
+    case "Application Started":
+      return { primary: "Continue Application", kind: "proposal" }
+    case "Contacted":
+    case "Applied":
+      return { primary: "View Application", kind: "view" }
+    case "Under Review":
+      return { primary: "View Status", kind: "view" }
+    case "Accepted":
+      return { primary: "View Next Steps", kind: "view" }
+    case "Declined":
+    case "Closed":
+      return { primary: "View Outcome", kind: "view" }
+    default:
+      return { primary: "View Opportunity", kind: "view" }
+  }
 }
 
-const STAGE_FLOW = {
-  "Application Submitted": {
-    nextStage: "Shortlist",
-    status: "Pending",
-  },
-  Shortlist: {
-    nextStage: "Proposal Sent",
-    status: "Shortlisted",
-  },
-  "Proposal Sent": {
-    nextStage: "Accept/Decline",
-    status: "Proposal/Quote",
-  },
-  Accepted: {
-    nextStage: "Deal Closed",
-    status: "Accepted",
-  },
-  Rejected: {
-    nextStage: "Deal Closed",
-    status: "Rejected",
-  },
+const OPPORTUNITY_TYPES = ["RFQ", "RFP", "Tender", "Purchase Order", "Framework Agreement", "Direct Award", "Other"]
+
+/* ─── Shared helpers (previously imported from the kit) ──────────────────── */
+const PopupPortal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
 }
 
-// Text truncation component
-const TruncatedText = ({ text, maxLength = 40 }) => {
+const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#666" }}>{text || "-"}</span>
+    return <span style={{ color: "#a89482", fontSize: "0.75rem" }}>{text || "-"}</span>
   }
 
-  const shouldTruncate = text.length > maxLength
-  const displayText = isExpanded || !shouldTruncate ? text : `${text.slice(0, maxLength)}...`
-
-  const toggleExpanded = (e) => {
-    e.stopPropagation()
-    setIsExpanded(!isExpanded)
-  }
+  const value = text.toString()
+  const shouldTruncate = value.length > maxLength
+  const displayText = isExpanded || !shouldTruncate ? value : `${value.slice(0, maxLength)}...`
 
   return (
-    <div style={{ lineHeight: "1.4" }}>
-      <span style={{ wordBreak: "break-word", color: "#333" }}>{displayText}</span>
+    <div style={{ lineHeight: "1.3", fontSize: "0.75rem" }}>
+      <span style={{ wordBreak: "break-word" }}>{displayText}</span>
       {shouldTruncate && (
-        <div style={{ marginTop: "4px" }}>
-          <button
-            style={{
-              background: "none",
-              border: "none",
-              color: "#a67c52",
-              cursor: "pointer",
-              fontSize: "0.75rem",
-              textDecoration: "underline",
-              padding: "0",
-            }}
-            onClick={toggleExpanded}
-          >
-            {isExpanded ? "See less" : "See more"}
-          </button>
-        </div>
+        <button
+          style={{
+            background: "none",
+            border: "none",
+            color: "#a67c52",
+            cursor: "pointer",
+            fontSize: "0.7rem",
+            marginLeft: "4px",
+            textDecoration: "underline",
+            padding: "0",
+          }}
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsExpanded(!isExpanded)
+          }}
+        >
+          {isExpanded ? "Less" : "More"}
+        </button>
       )}
     </div>
   )
 }
 
-const getStatusStyle = (status) => {
-  return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
+const toDateSafe = (value) => {
+  if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value?.toDate === "function") return value.toDate()
+  if (value?.seconds != null) return new Date(value.seconds * 1000)
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
+export const formatDateValue = (value) => {
+  const d = toDateSafe(value)
+  if (!d) return null
+  return d.toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })
+}
+
+export const toISODateOnly = (value) => {
+  const d = toDateSafe(value)
+  if (!d) return ""
+  return d.toISOString().slice(0, 10)
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Section A column configuration.
+
+   Customer is the pinned first column and Action the last, so neither appears
+   here. The six above the divider are the spec default view; everything below
+   is a spec "hidden by default" column.
+
+   Widths raised in line with the other match tables — each header carries a
+   grip, sort and filter control (~60px of chrome), so the old 120–150px
+   columns left too little room and the browser broke labels mid-word
+   ("MAT CH..", "STA TUS").
+   ════════════════════════════════════════════════════════════════════════ */
+const COLUMN_DEFS = {
+  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
+  productService: { label: "Product or Service Required", width: 210, filterType: "productService", visible: true, priority: 2, sortable: true },
+  opportunityType: { label: "Opportunity Type", width: 158, filterType: "opportunityType", visible: true, priority: 3, sortable: true },
+  estimatedValue: { label: "Estimated Value / Range", width: 178, filterType: "estimatedValue", visible: true, priority: 2, sortable: true },
+  closingDate: { label: "Closing Date", width: 148, filterType: "closingDate", visible: true, priority: 2, sortable: true },
+  status: { label: "Status", width: 144, filterType: "status", visible: true, priority: 1, sortable: true },
+
+  customerSector: { label: "Customer Sector", width: 166, filterType: "customerSector", visible: false, priority: 4, sortable: true },
+  deliveryLocation: { label: "Delivery Location", width: 160, filterType: "deliveryLocation", visible: false, priority: 4, sortable: true },
+  contractDuration: { label: "Contract Duration", width: 160, filterType: "contractDuration", visible: false, priority: 4, sortable: true },
+  paymentTerms: { label: "Payment Terms", width: 154, filterType: "paymentTerms", visible: false, priority: 4, sortable: true },
+  minimumRequirements: { label: "Minimum Requirements", width: 190, filterType: "minimumRequirements", visible: false, priority: 4, sortable: false },
+  bbbeeRequirement: { label: "B-BBEE Requirement", width: 168, filterType: "bbbeeRequirement", visible: false, priority: 4, sortable: true },
+  complianceRequirements: { label: "Compliance Requirements", width: 196, filterType: "complianceRequirements", visible: false, priority: 4, sortable: false },
+  contactPerson: { label: "Contact Person", width: 156, filterType: "contactPerson", visible: false, priority: 4, sortable: true },
+  deliveryTurnaround: { label: "Delivery Turnaround", width: 166, filterType: "deliveryTurnaround", visible: false, priority: 4, sortable: true },
+  customerType: { label: "Customer Type", width: 150, filterType: "customerType", visible: false, priority: 4, sortable: true },
+  documents: { label: "Documents", align: "center", width: 132, filterType: "documents", visible: false, priority: 4, sortable: true },
+  dateMatched: { label: "Date Matched", width: 148, filterType: null, visible: false, priority: 4, sortable: true },
+  lastActivity: { label: "Last Activity", width: 148, filterType: null, visible: false, priority: 4, sortable: true },
+  nextStage: { label: "Next Stage", width: 142, filterType: "nextStage", visible: false, priority: 4, sortable: false },
+}
+
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
+const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
+  DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].visible !== false]),
+)
+const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width]))
+const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
+const DEFAULT_DENSITY = "comfortable"
+
+const CUSTOMER_WIDTH = 230
+const ACTION_WIDTH = 208
+const MIN_COLUMN_WIDTH = 84
+
+const EMPTY_FILTERS = {
+  name: "",
+  matchRange: [0, 100],
+  productService: "",
+  opportunityType: [],
+  estimatedValue: "",
+  closingFrom: "",
+  closingTo: "",
+  status: [],
+  customerSector: [],
+  deliveryLocation: "",
+  contractDuration: "",
+  paymentTerms: "",
+  minimumRequirements: "",
+  bbbeeRequirement: [],
+  complianceRequirements: "",
+  contactPerson: "",
+  deliveryTurnaround: "",
+  customerType: [],
+  documents: [],
+  nextStage: [],
+}
+
+/* ─── Saved views + filter persistence ──────────────────────────────────── */
+const BUILTIN_VIEW_ID = "__default__"
+// v2: the stored widths from the kit version are the narrow ones that caused
+// the mid-word header breaks, so old saved views fall back to the new defaults.
+const VIEWS_STORAGE_KEY = "customer-matches-views-v2"
+const FILTERS_STORAGE_KEY = "customer-matches-filters-v1"
+
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
+  const known = new Set(DEFAULT_COLUMN_ORDER)
+  const deduped = order.filter((key) => known.has(key))
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key))
+  return [...deduped, ...missing]
+}
+
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  pinned: { ...DEFAULT_PINNED },
+  density: DEFAULT_DENSITY,
+})
+
+const createBuiltinDefaultView = () => ({
+  id: BUILTIN_VIEW_ID,
+  name: "Default",
+  description: "",
+  builtin: true,
+  ...createDefaultViewLayout(),
+})
+
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
+  density: view?.density || DEFAULT_DENSITY,
+})
+
+const loadViewsState = () => {
+  const freshDefault = () => ({
+    activeViewId: BUILTIN_VIEW_ID,
+    views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() },
+  })
+  if (typeof window === "undefined") return freshDefault()
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null")
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {}
+    const views = {}
+    Object.entries(rawViews).forEach(([id, v]) => {
+      views[id] = sanitizeView(v, id)
+    })
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView()
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID
+    return { activeViewId, views }
+  } catch {
+    return freshDefault()
+  }
+}
+
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // Storage can fail (private browsing, quota) — the table still works this session.
+  }
+}
+
+const loadFilterState = () => {
+  if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
+    return {
+      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
+      sort: saved?.sort?.key ? saved.sort : null,
+    }
+  } catch {
+    return { filters: { ...EMPTY_FILTERS }, sort: null }
+  }
+}
+
+const persistFilterState = (filters, sort) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({ filters, sort }))
+  } catch {
+    // Non-fatal.
+  }
+}
+
+const generateViewId = () => {
+  try {
+    return `view_${crypto.randomUUID()}`
+  } catch {
+    return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  }
+}
+
+const DOCUMENT_BUCKETS = ["Has documents", "No documents"]
+const BBBEE_LEVELS = ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7", "Level 8", "Non-compliant"]
+
+const NEXT_STAGE_BY_STATUS = {
+  "New Match": "Viewed",
+  Viewed: "Shortlisted",
+  Shortlisted: "Contacted",
+  Contacted: "Application Started",
+  "Application Started": "Applied",
+  Applied: "Under Review",
+  "Under Review": "Accepted",
+  Accepted: "Closed",
+  Declined: "—",
+  Closed: "—",
+}
+
+/* ─── Matching criteria (unchanged weights) ─────────────────────────────── */
 const MATCHING_CRITERIA = {
-  CATEGORY_MATCH: {
-    weight: 0.40,
-    description: "Product/Service Category Alignment",
-  },
-  BBBEE_LEVEL: {
-    weight: 0.10,
-    description: "BBBEE Level Compliance",
-  },
-  LOCATION: {
-    weight: 0.10,
-    description: "Geographic Location Match",
-  },
-  DELIVERY_MODE: {
-    weight: 0.10,
-    description: "Delivery Mode Compatibility",
-  },
-  BUDGET_RANGE: {
-    weight: 0.10,
-    description: "Budget Fit",
-  },
-  OWNERSHIP_PREFS: {
-    weight: 0.05,
-    description: "Ownership Preferences Match",
-  },
-  URGENCY_LEAD_TIME: {
-    weight: 0.05,
-    description: "Urgency & Lead Time Match",
-  },
-  EXPERIENCE: {
-    weight: 0.05,
-    description: "Sector Experience Match",
-  },
-  RATING: {
-    weight: 0.05,
-    description: "Supplier Rating",
-  },
+  CATEGORY_MATCH: { weight: 0.4, description: "Product/Service Category Alignment" },
+  BBBEE_LEVEL: { weight: 0.1, description: "B-BBEE Level Compliance" },
+  LOCATION: { weight: 0.1, description: "Geographic Location Match" },
+  DELIVERY_MODE: { weight: 0.1, description: "Delivery Mode Compatibility" },
+  BUDGET_RANGE: { weight: 0.1, description: "Budget Fit" },
+  OWNERSHIP_PREFS: { weight: 0.05, description: "Ownership Preferences Match" },
+  URGENCY_LEAD_TIME: { weight: 0.05, description: "Urgency & Lead Time Match" },
+  EXPERIENCE: { weight: 0.05, description: "Sector Experience Match" },
+  RATING: { weight: 0.05, description: "Supplier Rating" },
 }
 
-function getDeliveryModeMatches(appModes, supplyModes) {
-  const matches = []
-
-  // Check if either has Hybrid for full compatibility
-  const appHasHybrid = appModes.includes("Hybrid")
-  const supplyHasHybrid = supplyModes.includes("Hybrid")
-
-  if (appHasHybrid || supplyHasHybrid) {
-    matches.push({
-      applicationMode: appHasHybrid ? "Hybrid" : appModes[0],
-      supplierMode: supplyHasHybrid ? "Hybrid" : supplyModes[0],
-      matchType: "hybrid-full-compatibility",
-      score: 1,
-      note: "Hybrid delivery provides full compatibility with all modes"
-    })
-  } else {
-    // Standard exact matching
-    appModes.forEach((appMode) => {
-      supplyModes.forEach((supplyMode) => {
-        if (appMode === supplyMode) {
-          matches.push({
-            applicationMode: appMode,
-            supplierMode: supplyMode,
-            matchType: "exact",
-            score: 1,
-          })
-        }
-      })
-    })
-  }
-
-  return matches
-}
-
-// Helper function to calculate ownership percentages from shareholder data
-function calculateOwnershipPercentages(ownershipManagement) {
-  const result = {
-    blackOwnership: 0,
-    womenOwnership: 0,
-    youthOwnership: 0,
-    disabilityOwnership: 0,
-    totalShares: 0,
-  }
-
+const calculateOwnershipPercentages = (ownershipManagement = {}) => {
+  const result = { blackOwnership: 0, womenOwnership: 0, youthOwnership: 0, disabilityOwnership: 0, totalShares: 0 }
   const shareholders = Array.isArray(ownershipManagement.shareholders) ? ownershipManagement.shareholders : []
 
-  // Calculate totals from shareholders
-  shareholders.forEach((shareholder) => {
-    const shareholding = Number.parseInt(shareholder.shareholding || "0") || 0
-    result.totalShares += shareholding
-
-    // Black ownership
-    if (shareholder.race && shareholder.race.toLowerCase() === "black") {
-      result.blackOwnership += shareholding
-    }
-
-    // Women ownership
-    if (shareholder.gender && shareholder.gender.toLowerCase() === "female") {
-      result.womenOwnership += shareholding
-    }
-
-    // Youth ownership (assuming isYouth flag)
-    if (shareholder.isYouth === true) {
-      result.youthOwnership += shareholding
-    }
-
-    // Disability ownership
-    if (shareholder.isDisabled === true) {
-      result.disabilityOwnership += shareholding
-    }
+  shareholders.forEach((s) => {
+    const shares = Number.parseInt(s.shareholding || "0", 10) || 0
+    result.totalShares += shares
+    if (s.race?.toLowerCase() === "black") result.blackOwnership += shares
+    if (s.gender?.toLowerCase() === "female") result.womenOwnership += shares
+    if (s.isYouth === true) result.youthOwnership += shares
+    if (s.isDisabled === true) result.disabilityOwnership += shares
   })
 
-  // Also check directors for management representation (weighted less than ownership)
   const directors = Array.isArray(ownershipManagement.directors) ? ownershipManagement.directors : []
 
-  let blackDirectors = 0
-  let womenDirectors = 0
-  let youthDirectors = 0
-  let disabledDirectors = 0
-  const totalDirectors = directors.length
-
-  directors.forEach((director) => {
-    if (director.race && director.race.toLowerCase() === "black") {
-      blackDirectors++
-    }
-    if (director.gender && director.gender.toLowerCase() === "female") {
-      womenDirectors++
-    }
-    if (director.isYouth === true) {
-      youthDirectors++
-    }
-    if (director.isDisabled === true) {
-      disabledDirectors++
-    }
-  })
-
-  // If no shareholders data but we have directors, use directors as proxy (with lower weight)
-  if (result.totalShares === 0 && totalDirectors > 0) {
-    result.blackOwnership = (blackDirectors / totalDirectors) * 100 * 0.7 // 70% weight for directors as proxy
-    result.womenOwnership = (womenDirectors / totalDirectors) * 100 * 0.7
-    result.youthOwnership = (youthDirectors / totalDirectors) * 100 * 0.7
-    result.disabilityOwnership = (disabledDirectors / totalDirectors) * 100 * 0.7
+  if (result.totalShares === 0 && directors.length > 0) {
+    const pct = (fn) => (directors.filter(fn).length / directors.length) * 100 * 0.7
+    result.blackOwnership = pct((d) => d.race?.toLowerCase() === "black")
+    result.womenOwnership = pct((d) => d.gender?.toLowerCase() === "female")
+    result.youthOwnership = pct((d) => d.isYouth === true)
+    result.disabilityOwnership = pct((d) => d.isDisabled === true)
   } else if (result.totalShares > 0) {
-    // Convert to percentages
-    result.blackOwnership = (result.blackOwnership / result.totalShares) * 100
-    result.womenOwnership = (result.womenOwnership / result.totalShares) * 100
-    result.youthOwnership = (result.youthOwnership / result.totalShares) * 100
-    result.disabilityOwnership = (result.disabilityOwnership / result.totalShares) * 100
+    ;["blackOwnership", "womenOwnership", "youthOwnership", "disabilityOwnership"].forEach((k) => {
+      result[k] = (result[k] / result.totalShares) * 100
+    })
   }
 
   return result
 }
 
-// Additional helper function to get detailed ownership breakdown
-function getOwnershipBreakdown(ownershipManagement) {
-  const breakdown = {
-    shareholders: [],
-    directors: [],
-    summary: {},
-  }
+export const calculateMatchScore = (application, supplier, ratingsData = {}) => {
+  if (!application || !supplier) return { totalScore: 0, breakdown: {} }
 
-  // Shareholder breakdown
-  if (Array.isArray(ownershipManagement.shareholders)) {
-    breakdown.shareholders = ownershipManagement.shareholders.map((shareholder) => ({
-      name: shareholder.name || "Unknown",
-      shareholding: Number.parseInt(shareholder.shareholding || "0") || 0,
-      race: shareholder.race || "Not specified",
-      gender: shareholder.gender || "Not specified",
-      isYouth: shareholder.isYouth || false,
-      isDisabled: shareholder.isDisabled || false,
-    }))
-  }
+  let totalScore = 0
+  const breakdown = {}
 
-  // Director breakdown
-  if (Array.isArray(ownershipManagement.directors)) {
-    breakdown.directors = ownershipManagement.directors.map((director) => ({
-      name: director.name || "Unknown",
-      position: director.position || director.customPosition || "Not specified",
-      race: director.race || "Not specified",
-      gender: director.gender || "Not specified",
-      isYouth: director.isYouth || false,
-      isDisabled: director.isDisabled || false,
-      execType: director.execType || "Not specified",
-    }))
-  }
-
-  // Calculate summary
-  const percentages = calculateOwnershipPercentages(ownershipManagement)
-  breakdown.summary = percentages
-
-  return breakdown
-}
-// Helper function to calculate string similarity (simple version)
-function calculateSimilarity(str1, str2) {
-  const longer = str1.length > str2.length ? str1 : str2
-  const shorter = str1.length > str2.length ? str2 : str1
-
-  if (longer.length === 0) return 1.0
-
-  return (longer.length - editDistance(longer, shorter)) / Number.parseFloat(longer.length)
-}
-
-// Helper function for edit distance (Levenshtein distance)
-function editDistance(s1, s2) {
-  s1 = s1.toLowerCase()
-  s2 = s2.toLowerCase()
-
-  const costs = []
-  for (let i = 0; i <= s1.length; i++) {
-    let lastValue = i
-    for (let j = 0; j <= s2.length; j++) {
-      if (i === 0) {
-        costs[j] = j
-      } else if (j > 0) {
-        let newValue = costs[j - 1]
-        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
-          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1
-        }
-        costs[j - 1] = lastValue
-        lastValue = newValue
-      }
-    }
-    if (i > 0) costs[s2.length] = lastValue
-  }
-  return costs[s2.length]
-}
-
-// Helper function to get detailed category matches
-function getCategoryMatches(appCategories, supplierCategories) {
-  const matches = []
-
-  appCategories.forEach((appCat) => {
-    supplierCategories.forEach((supplierCat) => {
-      if (
-        supplierCat.includes(appCat) ||
-        appCat.includes(supplierCat) ||
-        calculateSimilarity(appCat, supplierCat) > 0.7
-      ) {
-        matches.push({
-          applicationCategory: appCat,
-          supplierCategory: supplierCat,
-          similarity: calculateSimilarity(appCat, supplierCat),
-        })
-      }
+  const extractSupplierText = (sup) => {
+    let text = ""
+    sup.productsServices?.productCategories?.forEach((cat) => {
+      text += ` ${cat.name || ""} `
+      cat.products?.forEach((p) => {
+        text += ` ${p.name || ""} ${p.description || ""} `
+      })
     })
+    sup.productsServices?.serviceCategories?.forEach((cat) => {
+      text += ` ${cat.name || ""} `
+      cat.services?.forEach((s) => {
+        text += ` ${s.name || ""} ${s.description || ""} `
+      })
+    })
+    text += ` ${sup.productsServices?.targetMarket || ""} `
+    return text.toLowerCase().trim()
+  }
+
+  // 1. Category (40%)
+  const appCategories = (
+    application.productsServices?.categories ||
+    application.requestOverview?.categories ||
+    application.productsServices?.productCategories ||
+    []
+  )
+    .map((c) => (typeof c === "string" ? c : c?.name || "").toLowerCase().trim())
+    .filter(Boolean)
+
+  const appKeywords = application.requestOverview?.keywords?.toLowerCase() || ""
+  const appPurpose = application.requestOverview?.purpose?.toLowerCase() || ""
+  const supplierText = extractSupplierText(supplier)
+
+  const matched = appCategories.filter((c) => supplierText.includes(c))
+  const unmatched = appCategories.filter((c) => !supplierText.includes(c))
+  const catScore = appCategories.length > 0 ? matched.length / appCategories.length : 0
+
+  let kwScore = 0
+  if (appKeywords || appPurpose) {
+    const words = `${appKeywords} ${appPurpose}`.split(/\s+/).filter((w) => w.length > 3)
+    kwScore = words.length > 0 ? words.filter((w) => supplierText.includes(w)).length / words.length : 0
+  }
+
+  const categoryScore = appCategories.length > 0 ? catScore * 0.7 + kwScore * 0.3 : kwScore
+  const categoryContribution = Math.min(categoryScore, 1) * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
+  totalScore += categoryContribution
+  breakdown.categoryMatch = {
+    score: Math.round(Math.min(categoryScore, 1) * 100),
+    weight: MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100,
+    contribution: Math.round(categoryContribution),
+    description: MATCHING_CRITERIA.CATEGORY_MATCH.description,
+    matches: matched,
+    unmatched,
+  }
+
+  // 2. B-BBEE (10%)
+  const appBBBEE =
+    Number.parseInt(
+      (application.matchingPreferences?.bbeeLevel || application.requestOverview?.bbeeLevel || "0").replace(/\D/g, ""),
+      10,
+    ) || 0
+  const supplierBBBEE = Number.parseInt(supplier.legalCompliance?.bbbeeLevel || "0", 10) || 0
+  let bbbeeScore = 0.5
+  if (appBBBEE > 0) bbbeeScore = supplierBBBEE <= appBBBEE ? 1 : supplierBBBEE === appBBBEE + 1 ? 0.5 : 0
+  const bbbeeContribution = bbbeeScore * MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
+  totalScore += bbbeeContribution
+  breakdown.bbbeeMatch = {
+    score: Math.round(bbbeeScore * 100),
+    weight: MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100,
+    contribution: Math.round(bbbeeContribution),
+    description: MATCHING_CRITERIA.BBBEE_LEVEL.description,
+  }
+
+  // 3. Location (10%)
+  const appLoc = (application.matchingPreferences?.location || application.requestOverview?.location || "").toLowerCase().trim()
+  const supLoc = (supplier.entityOverview?.location || "").toLowerCase().trim()
+  let locationScore = 0.5
+  if (appLoc) {
+    if (!supLoc) locationScore = 0
+    else if (appLoc === supLoc) locationScore = 1
+    else if (supLoc.includes(appLoc) || appLoc.includes(supLoc)) locationScore = 0.7
+    else locationScore = 0
+  }
+  const locationContribution = locationScore * MATCHING_CRITERIA.LOCATION.weight * 100
+  totalScore += locationContribution
+  breakdown.locationMatch = {
+    score: Math.round(locationScore * 100),
+    weight: MATCHING_CRITERIA.LOCATION.weight * 100,
+    contribution: Math.round(locationContribution),
+    description: MATCHING_CRITERIA.LOCATION.description,
+  }
+
+  // 4. Delivery mode (10%)
+  const appModes = application.matchingPreferences?.deliveryModes || application.requestOverview?.deliveryModes || []
+  const supModes = supplier.productsServices?.deliveryModes || []
+  let deliveryScore = 0.5
+  if (appModes.length > 0) {
+    if (supModes.length === 0) deliveryScore = 0
+    else if (appModes.includes("Hybrid") || supModes.includes("Hybrid")) deliveryScore = 1
+    else deliveryScore = appModes.filter((m) => supModes.includes(m)).length / appModes.length
+  }
+  const deliveryContribution = deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+  totalScore += deliveryContribution
+  breakdown.deliveryMatch = {
+    score: Math.round(deliveryScore * 100),
+    weight: MATCHING_CRITERIA.DELIVERY_MODE.weight * 100,
+    contribution: Math.round(deliveryContribution),
+    description: MATCHING_CRITERIA.DELIVERY_MODE.description,
+  }
+
+  // 5. Budget (10%)
+  const appBudgetMin =
+    Number.parseInt((application.matchingPreferences?.minBudget || application.requestOverview?.minBudget || "0").replace(/\D/g, ""), 10) || 0
+  const appBudgetMax =
+    Number.parseInt((application.matchingPreferences?.maxBudget || application.requestOverview?.maxBudget || "0").replace(/\D/g, ""), 10) || 1000000
+  const revenue = Number.parseInt((supplier.financialOverview?.annualRevenue || "0").toString().replace(/\D/g, ""), 10) || 0
+  let budgetScore = 0.5
+  if (revenue > 0) {
+    if (revenue >= appBudgetMin && revenue <= appBudgetMax) budgetScore = 1
+    else if (revenue >= appBudgetMin * 0.5 && revenue <= appBudgetMax * 1.5) budgetScore = 0.7
+    else budgetScore = 0.3
+  }
+  const budgetContribution = budgetScore * MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
+  totalScore += budgetContribution
+  breakdown.budgetMatch = {
+    score: Math.round(budgetScore * 100),
+    weight: MATCHING_CRITERIA.BUDGET_RANGE.weight * 100,
+    contribution: Math.round(budgetContribution),
+    description: MATCHING_CRITERIA.BUDGET_RANGE.description,
+  }
+
+  // 6. Ownership (5%)
+  const prefs = application.matchingPreferences?.ownershipPrefs || []
+  let ownershipScore = 0.5
+  if (prefs.length > 0) {
+    const o = calculateOwnershipPercentages(supplier.ownershipManagement || {})
+    ownershipScore = 0
+    prefs.forEach((pref) => {
+      const p = pref.toLowerCase().trim()
+      if (p.includes("black") && o.blackOwnership >= 51) ownershipScore += 0.4
+      else if (p.includes("women") && o.womenOwnership >= 30) ownershipScore += 0.3
+      else if (p.includes("youth") && o.youthOwnership >= 25) ownershipScore += 0.2
+      else if ((p.includes("disability") || p.includes("disabled")) && o.disabilityOwnership >= 5) ownershipScore += 0.1
+    })
+    ownershipScore = Math.min(ownershipScore, 1)
+  }
+  const ownershipContribution = ownershipScore * MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
+  totalScore += ownershipContribution
+  breakdown.ownershipMatch = {
+    score: Math.round(ownershipScore * 100),
+    weight: MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100,
+    contribution: Math.round(ownershipContribution),
+    description: MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
+  }
+
+  // 7 & 8 are placeholders until lead-time and sector-experience data is captured.
+  ;[
+    ["urgencyLeadTimeMatch", MATCHING_CRITERIA.URGENCY_LEAD_TIME],
+    ["experienceMatch", MATCHING_CRITERIA.EXPERIENCE],
+  ].forEach(([key, criteria]) => {
+    const contribution = 0.5 * criteria.weight * 100
+    totalScore += contribution
+    breakdown[key] = {
+      score: 50,
+      weight: criteria.weight * 100,
+      contribution: Math.round(contribution),
+      description: `${criteria.description} (estimated — source data not captured yet)`,
+      estimated: true,
+    }
   })
 
-  return matches
+  // 9. Rating (5%)
+  const ratingData = ratingsData[supplier?.id] || { average: 0, count: 0 }
+  const ratingScore = (ratingData.average || 0) / 5
+  const ratingContribution = ratingScore * MATCHING_CRITERIA.RATING.weight * 100
+  totalScore += ratingContribution
+  breakdown.ratingMatch = {
+    score: Math.round(ratingScore * 100),
+    weight: MATCHING_CRITERIA.RATING.weight * 100,
+    contribution: Math.round(ratingContribution),
+    description: MATCHING_CRITERIA.RATING.description,
+    actualRating: ratingData.average || 0,
+    ratingCount: ratingData.count || 0,
+  }
+
+  return { totalScore: Math.round(totalScore), breakdown }
 }
 
-function convertToDays(value, unit) {
-  const numericValue = parseInt(value) || 0
-  switch (unit) {
-    case 'hours':
-      return numericValue / 24
-    case 'days':
-      return numericValue
-    case 'weeks':
-      return numericValue * 7
-    case 'months':
-      return numericValue * 30 // Approximate
-    default:
-      return numericValue // Default to days
-  }
+const IMPROVEMENT_SUGGESTIONS = {
+  categoryMatch: "Expand your service categories or highlight subcategories that align with what this customer needs.",
+  bbbeeMatch: "Improve your B-BBEE certification level to meet this customer's transformation requirements.",
+  locationMatch: "Expand your service delivery areas, or highlight remote delivery capability.",
+  deliveryMatch: "Add delivery modes (on-site, remote, hybrid) to match customer preferences.",
+  budgetMatch: "Adjust pricing tiers so your offering fits this budget band.",
+  ownershipMatch: "Make your ownership demographics and transformation credentials more prominent.",
+  urgencyLeadTimeMatch: "Shorten quoted lead times or state your capacity for urgent work.",
+  experienceMatch: "Add sector case studies and references to your profile.",
+  ratingMatch: "Collect more customer reviews to lift your rating.",
 }
-export function CustomerTable() {
-  const [showFilters, setShowFilters] = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [showDocumentModal, setShowDocumentModal] = useState(false)
-  const [showMessageModal, setShowMessageModal] = useState(false)
-  const [selectedApplication, setSelectedApplication] = useState(null)
-  const [messageText, setMessageText] = useState("")
-  const [showCalendarModal, setShowCalendarModal] = useState(false)
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Component
+   ════════════════════════════════════════════════════════════════════════ */
+export function CustomerTable({ stageFilter, onCountChange }) {
   const [applications, setApplications] = useState([])
+  const [universalProfiles, setUniversalProfiles] = useState([])
+  const [supplierRatings, setSupplierRatings] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [mounted, setMounted] = useState(false)
+  const [notification, setNotification] = useState(null)
+  const [currentCustomerId, setCurrentCustomerId] = useState(null)
+  const [authResolved, setAuthResolved] = useState(false)
+
+  const [selectedApplication, setSelectedApplication] = useState(null)
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [showProposalModal, setShowProposalModal] = useState(false)
+  const [showDocumentModal, setShowDocumentModal] = useState(false)
+  const [showShortlistModal, setShowShortlistModal] = useState(false)
+  const [showCalendarModal, setShowCalendarModal] = useState(false)
+
   const [proposalFile, setProposalFile] = useState(null)
   const [proposalMessage, setProposalMessage] = useState("")
-  const [notification, setNotification] = useState(null)
-  const [mounted, setMounted] = useState(false)
-  const [currentCustomerId, setCurrentCustomerId] = useState(null)
-  const [temporaryStatus, setTemporaryStatus] = useState(null)
-  const [showShortlistModal, setShowShortlistModal] = useState(false)
   const [meetingPurpose, setMeetingPurpose] = useState("")
   const [meetingLocation, setMeetingLocation] = useState("")
   const [availabilities, setAvailabilities] = useState([])
@@ -403,427 +686,118 @@ export function CustomerTable() {
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [formErrors, setFormErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [filters, setFilters] = useState({
-    status: "",
-    minMatchScore: 0,
-    supplierLocation: "",
-    sortBy: "newest",
-  })
-  const [supplierRatings, setSupplierRatings] = useState({})
-  const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
-  const [matchBreakdownData, setMatchBreakdownData] = useState(null)
-  const [universalProfiles, setUniversalProfiles] = useState([])
-  const [productProfiles, setProductProfiles] = useState([])
-  const [currentUserApplication, setCurrentUserApplication] = useState(null)
-  const [showCustomerModal, setShowCustomerModal] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState(null)
 
+  const [savedMatches, setSavedMatches] = useState({})
+  const [hiddenMatches, setHiddenMatches] = useState({})
+  const [hoveredRow, setHoveredRow] = useState(null)
 
-  function calculateMatchScore(application, supplier, ratingsData = null) {
-    if (!application || !supplier) {
-      return { totalScore: 0, breakdown: {} };
-    }
+  /* Popups — anchored popovers portaled to <body>, same pattern as the other
+     match tables. { type, row, position:{x,y}, rect } */
+  const [activePopup, setActivePopup] = useState(null)
 
-    let totalScore = 0;
-    const breakdown = {};
+  // Filters + sort, restored from the last visit
+  const initialFilterState = useMemo(() => loadFilterState(), [])
+  const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
+  const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
 
-    // ── helpers ──────────────────────────────────────────────────────
-    const expandSearchTerms = (terms) => terms.map(t => t.toLowerCase().trim());
+  // Views
+  const [viewsState, setViewsState] = useState(() => loadViewsState())
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths)
+  const [pinned, setPinned] = useState(() => initialActiveView.pinned)
+  const [density, setDensity] = useState(() => initialActiveView.density)
 
-    const extractSupplierText = (sup) => {
-      let text = "";
-      sup.productsServices?.productCategories?.forEach(cat => {
-        text += ` ${cat.name || ""} `;
-        cat.products?.forEach(p => { text += ` ${p.name || ""} ${p.description || ""} `; });
-      });
-      sup.productsServices?.serviceCategories?.forEach(cat => {
-        text += ` ${cat.name || ""} `;
-        cat.services?.forEach(s => { text += ` ${s.name || ""} ${s.description || ""} `; });
-      });
-      text += ` ${sup.productsServices?.targetMarket || ""} `;
-      return text.toLowerCase().trim();
-    };
+  const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
+  const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
+  const [showNewViewForm, setShowNewViewForm] = useState(false)
+  const [newViewName, setNewViewName] = useState("")
+  const [newViewDescription, setNewViewDescription] = useState("")
+  const [editingViewMeta, setEditingViewMeta] = useState(null)
+  const [columnSearch, setColumnSearch] = useState("")
 
-    // ── 1. CATEGORY MATCH (40%) ───────────────────────────────────────
-    const appCategories = (
-      application.productsServices?.categories ||
-      application.requestOverview?.categories ||
-      application.productsServices?.productCategories ||
-      []
-    ).map(c => (typeof c === "string" ? c : c?.name || "").toLowerCase().trim()).filter(Boolean);
+  // Drag-to-reorder / resize
+  const [draggedColumn, setDraggedColumn] = useState(null)
+  const [dragOverColumn, setDragOverColumn] = useState(null)
+  const [dragHintRect, setDragHintRect] = useState(null)
+  const resizingRef = useRef(null)
 
-    const appKeywords = application.requestOverview?.keywords?.toLowerCase() || "";
-    const appPurpose = application.requestOverview?.purpose?.toLowerCase() || "";
-    const supplierText = extractSupplierText(supplier);
+  // Viewport, for responsive column collapse
+  const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
 
-    let categoryScore = 0;
-    const matchedCategories = [];
-    const unmatchedCategories = [];
-
-    if (appCategories.length > 0 || appKeywords || appPurpose) {
-      appCategories.forEach(appCat => {
-        const hasMatch = supplierText.includes(appCat);
-        if (hasMatch) { matchedCategories.push(appCat); }
-        else { unmatchedCategories.push(appCat); }
-      });
-
-      const catScore = appCategories.length > 0 ? matchedCategories.length / appCategories.length : 0;
-
-      let kwScore = 0;
-      if (appKeywords || appPurpose) {
-        const words = `${appKeywords} ${appPurpose}`.split(/\s+/).filter(w => w.length > 3);
-        const hits = words.filter(w => supplierText.includes(w)).length;
-        kwScore = words.length > 0 ? hits / words.length : 0;
-      }
-
-      categoryScore = appCategories.length > 0 ? (catScore * 0.7) + (kwScore * 0.3) : kwScore;
-    }
-
-    const categoryContribution = Math.min(categoryScore, 1) * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100;
-    totalScore += categoryContribution;
-    breakdown.categoryMatch = {
-      score: Math.round(Math.min(categoryScore, 1) * 100),
-      weight: MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100,
-      contribution: Math.round(categoryContribution),
-      description: MATCHING_CRITERIA.CATEGORY_MATCH.description,
-      matches: matchedCategories,
-      unmatched: unmatchedCategories,
-    };
-
-    // ── 2. BBBEE MATCH (10%) ─────────────────────────────────────────
-    const bbbeePref = application.matchingPreferences?.bbeeLevel || application.requestOverview?.bbeeLevel || "0";
-    const appBBBEE = parseInt((bbbeePref || "0").replace(/\D/g, "")) || 0;
-    const supplierBBBEE = parseInt(supplier.legalCompliance?.bbbeeLevel || "0") || 0;
-
-    let bbbeeScore = 0.5;
-    if (appBBBEE > 0) {
-      if (supplierBBBEE <= appBBBEE) bbbeeScore = 1;
-      else if (supplierBBBEE === appBBBEE + 1) bbbeeScore = 0.5;
-      else bbbeeScore = 0;
-    }
-
-    const bbbeeContribution = bbbeeScore * MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100;
-    totalScore += bbbeeContribution;
-    breakdown.bbbeeMatch = {
-      score: Math.round(bbbeeScore * 100),
-      weight: MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100,
-      contribution: Math.round(bbbeeContribution),
-      description: MATCHING_CRITERIA.BBBEE_LEVEL.description,
-    };
-
-    // ── 3. LOCATION MATCH (10%) ──────────────────────────────────────
-    const appLoc = (application.matchingPreferences?.location || application.requestOverview?.location || "").toLowerCase().trim();
-    const supLoc = (supplier.entityOverview?.location || "").toLowerCase().trim();
-
-    let locationScore = 0.5;
-    if (appLoc) {
-      if (!supLoc) locationScore = 0;
-      else if (appLoc === supLoc) locationScore = 1;
-      else if (supLoc.includes(appLoc) || appLoc.includes(supLoc)) locationScore = 0.7;
-      else locationScore = 0;
-    }
-
-    const locationContribution = locationScore * MATCHING_CRITERIA.LOCATION.weight * 100;
-    totalScore += locationContribution;
-    breakdown.locationMatch = {
-      score: Math.round(locationScore * 100),
-      weight: MATCHING_CRITERIA.LOCATION.weight * 100,
-      contribution: Math.round(locationContribution),
-      description: MATCHING_CRITERIA.LOCATION.description,
-    };
-
-    // ── 4. DELIVERY MODE MATCH (10%) ─────────────────────────────────
-    const appModes = (application.matchingPreferences?.deliveryModes || application.requestOverview?.deliveryModes || []);
-    const supModes = supplier.productsServices?.deliveryModes || [];
-
-    let deliveryScore = 0.5;
-    if (appModes.length > 0) {
-      if (supModes.length === 0) {
-        deliveryScore = 0;
-      } else if (appModes.includes("Hybrid") || supModes.includes("Hybrid")) {
-        deliveryScore = 1;
-      } else {
-        const matched = appModes.filter(m => supModes.includes(m));
-        deliveryScore = matched.length / appModes.length;
-      }
-    }
-
-    const deliveryContribution = deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100;
-    totalScore += deliveryContribution;
-    breakdown.deliveryMatch = {
-      score: Math.round(deliveryScore * 100),
-      weight: MATCHING_CRITERIA.DELIVERY_MODE.weight * 100,
-      contribution: Math.round(deliveryContribution),
-      description: MATCHING_CRITERIA.DELIVERY_MODE.description,
-    };
-
-    // ── 5. BUDGET MATCH (10%) ────────────────────────────────────────
-    const minBudgetRaw = application.matchingPreferences?.minBudget || application.requestOverview?.minBudget || "0";
-    const maxBudgetRaw = application.matchingPreferences?.maxBudget || application.requestOverview?.maxBudget || "0";
-    const appBudgetMin = parseInt((minBudgetRaw || "0").replace(/\D/g, "")) || 0;
-    const appBudgetMax = parseInt((maxBudgetRaw || "0").replace(/\D/g, "")) || 1000000;
-    const revenue = parseInt((supplier.financialOverview?.annualRevenue || "0").replace(/\D/g, "")) || 0;
-
-    let budgetScore = 0.5;
-    if (revenue > 0) {
-      if (revenue >= appBudgetMin && revenue <= appBudgetMax) budgetScore = 1;
-      else if (revenue >= appBudgetMin * 0.5 && revenue <= appBudgetMax * 1.5) budgetScore = 0.7;
-      else budgetScore = 0.3;
-    }
-
-    const budgetContribution = budgetScore * MATCHING_CRITERIA.BUDGET_RANGE.weight * 100;
-    totalScore += budgetContribution;
-    breakdown.budgetMatch = {
-      score: Math.round(budgetScore * 100),
-      weight: MATCHING_CRITERIA.BUDGET_RANGE.weight * 100,
-      contribution: Math.round(budgetContribution),
-      description: MATCHING_CRITERIA.BUDGET_RANGE.description,
-    };
-
-    // ── 6. OWNERSHIP MATCH (5%) ──────────────────────────────────────
-    const appOwnershipPrefs = (application.matchingPreferences?.ownershipPrefs || []);
-    let ownershipScore = 0.5;
-
-    if (appOwnershipPrefs.length > 0) {
-      const shareholderData = calculateOwnershipPercentages(supplier.ownershipManagement || {});
-      ownershipScore = 0;
-
-      appOwnershipPrefs.forEach(pref => {
-        const p = pref.toLowerCase().trim();
-        if ((p.includes("black-owned") || p.includes("black owned")) && shareholderData.blackOwnership >= 51) ownershipScore += 0.4;
-        else if ((p.includes("women-owned") || p.includes("women owned")) && shareholderData.womenOwnership >= 30) ownershipScore += 0.3;
-        else if ((p.includes("youth-owned") || p.includes("youth owned")) && shareholderData.youthOwnership >= 25) ownershipScore += 0.2;
-        else if ((p.includes("disability") || p.includes("disabled")) && shareholderData.disabilityOwnership >= 5) ownershipScore += 0.1;
-      });
-      ownershipScore = Math.min(ownershipScore, 1);
-    }
-
-    const ownershipContribution = ownershipScore * MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100;
-    totalScore += ownershipContribution;
-    breakdown.ownershipMatch = {
-      score: Math.round(ownershipScore * 100),
-      weight: MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100,
-      contribution: Math.round(ownershipContribution),
-      description: MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
-    };
-
-    // ── 7. URGENCY / LEAD TIME (5%) ──────────────────────────────────
-    const urgencyScore = 0.5; // estimated until lead time data is fully captured
-    const urgencyContribution = urgencyScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100;
-    totalScore += urgencyContribution;
-    breakdown.urgencyLeadTimeMatch = {
-      score: Math.round(urgencyScore * 100),
-      weight: MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100,
-      contribution: Math.round(urgencyContribution),
-      description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
-    };
-
-    // ── 8. EXPERIENCE MATCH (5%) ─────────────────────────────────────
-    const experienceScore = 0.5; // estimated
-    const experienceContribution = experienceScore * MATCHING_CRITERIA.EXPERIENCE.weight * 100;
-    totalScore += experienceContribution;
-    breakdown.experienceMatch = {
-      score: Math.round(experienceScore * 100),
-      weight: MATCHING_CRITERIA.EXPERIENCE.weight * 100,
-      contribution: Math.round(experienceContribution),
-      description: MATCHING_CRITERIA.EXPERIENCE.description,
-    };
-
-    // ── 9. RATING MATCH (5%) ─────────────────────────────────────────
-    const supplierId = supplier?.id;
-    const effectiveRatings = ratingsData || {};
-    const ratingData = effectiveRatings[supplierId] || { average: 0, count: 0 };
-    const ratingScore = (ratingData.average || 0) / 5;
-    const ratingContribution = ratingScore * MATCHING_CRITERIA.RATING.weight * 100;
-    totalScore += ratingContribution;
-    breakdown.ratingMatch = {
-      score: Math.round(ratingScore * 100),
-      weight: MATCHING_CRITERIA.RATING.weight * 100,
-      contribution: Math.round(ratingContribution),
-      description: MATCHING_CRITERIA.RATING.description,
-      actualRating: ratingData.average || 0,
-      ratingCount: ratingData.count || 0,
-    };
-
-    return {
-      totalScore: Math.round(totalScore),
-      breakdown,
-    };
-  }
-
-  const fetchSupplierRatings = async () => {
-    try {
-      const ratingsSnapshot = await getDocs(collection(db, "supplierReviews"))
-      const ratingsData = {}
-
-      ratingsSnapshot.forEach((doc) => {
-        const ratingData = doc.data()
-        const supplierId = ratingData.supplierId
-
-        if (supplierId) {
-          if (!ratingsData[supplierId]) {
-            ratingsData[supplierId] = []
-          }
-          ratingsData[supplierId].push({
-            rating: ratingData.rating || 0,
-            comment: ratingData.comment || "",
-            date: ratingData.date || "",
-            customerName: ratingData.customerName || "",
-            feedbackTheme: ratingData.feedbackTheme || ""
-          })
-        }
-      })
-
-      // Calculate average ratings for each supplier
-      const averageRatings = {}
-      Object.keys(ratingsData).forEach(supplierId => {
-        const ratings = ratingsData[supplierId]
-        if (ratings.length > 0) {
-          const total = ratings.reduce((sum, item) => sum + (item.rating || 0), 0)
-          averageRatings[supplierId] = {
-            average: total / ratings.length,
-            count: ratings.length,
-            latestComment: ratings[ratings.length - 1]?.comment || "No comments"
-          }
-        } else {
-          // Initialize with zero if no ratings
-          averageRatings[supplierId] = {
-            average: 0,
-            count: 0,
-            latestComment: "No ratings yet"
-          }
-        }
-      })
-
-      // console.log("Fetched supplier ratings:", averageRatings)
-      setSupplierRatings(averageRatings)
-      return averageRatings // Return the data so it can be used immediately
-
-    } catch (error) {
-      console.error("Error fetching supplier ratings:", error)
-      return {}
-    }
-  }
-
-  const formatMatchBreakdown = (matchDetails) => {
-    if (!matchDetails) return null;
-    return Object.entries(matchDetails).reduce((acc, [key, details]) => {
-      acc[key] = {
-        score: details.score ?? 0,
-        weight: details.weight ?? 0,
-        contribution: details.contribution ?? 0,
-        description: details.description,
-        matches: details.matches || [],
-        unmatched: details.unmatched || [],
-      };
-      return acc;
-    }, {});
-  };
-
-  const handleShowMatchBreakdown = (application) => {
-    // Add validation checks
-    if (!application) {
-      console.error("Application is undefined")
-      setNotification({
-        type: "error",
-        message: "Application data not available",
-      })
-      return
-    }
-
-    if (!application.productsServices) {
-      console.warn("Application missing productsServices:", application)
-      // Handle missing data gracefully
-    }
-
-    if (!application.matchDetails) {
-      const supplierProfile = universalProfiles.find((profile) => profile.id === application.customerId)
-
-      if (!supplierProfile) {
-        setNotification({
-          type: "error",
-          message: "Supplier profile not found",
-        })
-        return
-      }
-
-      // Add validation for productProfiles
-      if (!productProfiles) {
-        setNotification({
-          type: "error",
-          message: "Product profiles not loaded yet",
-        })
-        return
-      }
-
-      const matchScore = calculateMatchScore(productProfiles, supplierProfile, supplierRatings);
-
-      // Update the application in state with the new match data
-      setApplications((prev) =>
-        prev.map((app) =>
-          app.id === application.id
-            ? { ...app, matchPercentage: matchScore.totalScore, matchDetails: matchScore.breakdown }
-            : app,
-        ),
-      )
-
-      setMatchBreakdownData({
-        ...application,
-        matchPercentage: matchScore.totalScore,
-        matchBreakdown: {
-          totalScore: matchScore.totalScore,
-          breakdown: formatMatchBreakdown(matchScore.breakdown),
-          calculatedAt: new Date(),
-          criteriaWeights: Object.entries(MATCHING_CRITERIA).reduce((acc, [key, criteria]) => {
-            acc[key] = {
-              weight: criteria.weight * 100,
-              description: criteria.description,
-            }
-            return acc
-          }, {}),
-        },
-      })
-    } else {
-      // Use the pre-calculated data
-      setMatchBreakdownData({
-        ...application,
-        matchBreakdown: {
-          totalScore: application.matchPercentage,
-          breakdown: formatMatchBreakdown(application.matchDetails),
-          calculatedAt: new Date(),
-          criteriaWeights: Object.entries(MATCHING_CRITERIA).reduce((acc, [key, criteria]) => {
-            acc[key] = {
-              weight: criteria.weight * 100,
-              description: criteria.description,
-            }
-            return acc
-          }, {}),
-        },
-      })
-    }
-
-    setShowMatchBreakdown(true)
-  }
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
 
   useEffect(() => {
     setMounted(true)
-    const auth = getAuth()
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setCurrentCustomerId(user.uid)
-      } else {
-        setCurrentCustomerId(null)
-        setApplications([])
-      }
-    })
-    return () => {
-      unsubscribeAuth()
-      setMounted(false)
-    }
+    return () => setMounted(false)
   }, [])
 
-  // Set up real-time listener for applications
   useEffect(() => {
+    const auth = getAuth()
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentCustomerId(user ? user.uid : null)
+      setAuthResolved(true)
+      if (!user) setLoading(false)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  /* ─── Reference data. Fetched once per customer rather than inside the
+     applications listener, where a full scan of universalProfiles and
+     supplierReviews was re-running on every single snapshot change. ───── */
+  useEffect(() => {
+    if (!currentCustomerId) return
+
+    let cancelled = false
+    const loadReferenceData = async () => {
+      try {
+        const [profilesSnap, reviewsSnap] = await Promise.all([
+          getDocs(collection(db, "universalProfiles")),
+          getDocs(collection(db, "supplierReviews")),
+        ])
+
+        if (cancelled) return
+
+        setUniversalProfiles(profilesSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
+
+        const grouped = {}
+        reviewsSnap.forEach((d) => {
+          const data = d.data()
+          const key = data.supplierId
+          if (!key) return
+          if (!grouped[key]) grouped[key] = []
+          grouped[key].push(data.rating || 0)
+        })
+
+        const averages = {}
+        Object.entries(grouped).forEach(([id, ratings]) => {
+          averages[id] = {
+            average: ratings.reduce((s, r) => s + r, 0) / ratings.length,
+            count: ratings.length,
+          }
+        })
+        setSupplierRatings(averages)
+      } catch (err) {
+        console.error("Error loading reference data:", err)
+      }
+    }
+
+    loadReferenceData()
+    return () => {
+      cancelled = true
+    }
+  }, [currentCustomerId])
+
+  /* ─── Applications ──────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!authResolved) return
     if (!currentCustomerId) {
       setApplications([])
       setLoading(false)
@@ -831,1776 +805,2021 @@ export function CustomerTable() {
     }
 
     setLoading(true)
-
-    const fetchCurrentUserApplication = async () => {
-      try {
-        const auth = getAuth()
-        const user = auth.currentUser
-        if (!user) return
-
-        const applicationDoc = await getDoc(doc(db, "productApplications", user.uid))
-        if (applicationDoc.exists()) {
-          setCurrentUserApplication(applicationDoc.data())
-        }
-      } catch (error) {
-        console.error("Error fetching current user application:", error)
-      }
-    }
-
-    const fetchUniversalProfiles = async () => {
-      try {
-        const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
-        const profilesData = profilesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        setUniversalProfiles(profilesData)
-        // console.log("Fetched universal profiles:", profilesData.length); // Debug log
-        return profilesData
-      } catch (error) {
-        console.error("Error fetching universal profiles:", error)
-        return []
-      }
-    }
-
-    const q = query(collection(db, "supplierApplications"), where("customerId", "==", currentCustomerId))
-
     const unsubscribe = onSnapshot(
-      q,
-      async (querySnapshot) => {
-        const profiles = await fetchUniversalProfiles()
-        const ratingsData = await fetchSupplierRatings()
+      query(collection(db, "supplierApplications"), where("customerId", "==", currentCustomerId)),
+      (snapshot) => {
+        const rows = snapshot.docs.map((docSnapshot) => {
+          const data = docSnapshot.data()
+          const req = data.originalRequest || {}
+          const budget = req.budgetRange || {}
+          const min = Number.parseInt((budget.min || "0").toString().replace(/\D/g, ""), 10) || 0
+          const max = Number.parseInt((budget.max || "0").toString().replace(/\D/g, ""), 10) || 0
 
-        const apps = await Promise.all(
-          querySnapshot.docs.map(async (docSnapshot) => {
-            const data = docSnapshot.data()
+          return {
+            id: docSnapshot.id,
+            ...data,
+            customerName: data.supplierName || "Unnamed customer",
+            counterpartyId: data.supplierId,
+            opportunityTitle: req.title || req.purpose || null,
+            productService: req.purpose || req.serviceRequested || "Not specified",
+            opportunityType: req.opportunityType || data.opportunityType || "Not specified",
+            estimatedValueMin: min,
+            estimatedValueMax: max,
+            estimatedValue:
+              min > 0 || max > 0 ? `R${min.toLocaleString()} - R${max.toLocaleString()}` : "Not specified",
+            closingDate: req.closingDate || req.deadline || data.closingDate || null,
+            deliveryLocation: req.location || data.supplierLocation || "Not specified",
+            contractDuration: req.contractDuration || "Not specified",
+            paymentTerms: req.paymentTerms || "Not specified",
+            minimumRequirements: req.minimumRequirements || "Not specified",
+            bbbeeRequirement: req.bbeeLevel ? `Level ${req.bbeeLevel}` : "Not specified",
+            complianceRequirements: req.complianceRequirements || "Not specified",
+            contactPerson: data.contactPerson || req.contactPerson || "Not specified",
+            deliveryTurnaround: req.deliveryTurnaround || "Not specified",
+            customerType: data.customerType || "Not specified",
+            documentCount: Array.isArray(data.applicationData?.documents) ? data.applicationData.documents.length : 0,
+            status: normalizeCustomerStatus(data.status),
+            rawStatus: data.status,
+            currentStage: data.currentStage || null,
+            matchPercentage: data.matchPercentage ?? 0,
+            matchDetails: data.matchBreakdown?.breakdown || null,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : null,
+            lastActivity: data.lastActivity || data.updatedAt?.toDate?.() || null,
+          }
+        })
 
-            // Calculate match percentage for each application
-            const supplierProfile = profiles.find((profile) => profile.id === data.customerId)
-            let matchPercentage = 0
-            let matchDetails = null
-
-            // Fetch additional document data
-            // Use the match score saved at the time of contact — never recalculate
-            if (data.matchPercentage !== undefined && data.matchPercentage !== null) {
-              matchPercentage = data.matchPercentage
-              matchDetails = data.matchBreakdown?.breakdown || null
-            } else {
-              // Fallback for older records that don't have a stored score
-              const docRef = doc(db, "productApplications", data.supplierId)
-              const docSnap = await getDoc(docRef)
-              const product = docSnap.data()
-              if (product && supplierProfile) {
-                const matchResult = calculateMatchScore(product, supplierProfile, ratingsData)
-                matchPercentage = matchResult.totalScore
-                matchDetails = matchResult.breakdown
-              }
-            }
-
-            return {
-              id: docSnapshot.id,
-              ...data,
-              matchPercentage,
-              matchDetails,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
-              updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : null,
-            }
-          }),
-        )
-
-        setApplications(apps)
+        setApplications(rows)
         setLoading(false)
       },
       (err) => {
         console.error("Error listening to applications:", err)
-        setError("Failed to load applications")
+        setError("Failed to load opportunities")
         setLoading(false)
       },
     )
 
-    fetchCurrentUserApplication()
-
     return () => unsubscribe()
-  }, [currentCustomerId])
+  }, [authResolved, currentCustomerId])
 
+  const customerSectorsFor = useCallback(
+    (row) => {
+      const profile = universalProfiles.find((p) => p.id === row.counterpartyId || p.id === row.customerId)
+      return profile?.entityOverview?.economicSectors || []
+    },
+    [universalProfiles],
+  )
 
-  const getSupplierRating = (supplierId) => {
-    return supplierRatings[supplierId] || {
-      average: 0,
-      count: 0,
-      latestComment: "No ratings yet"
-    }
-  }
-  // Add these helper functions inside your CustomerTable component:
-  const getCustomerEconomicSectors = (customerId) => {
-    const customerProfile = universalProfiles.find((profile) => profile.id === customerId)
-    return customerProfile?.entityOverview?.economicSectors || []
-  }
+  /* ─── View + filter persistence ─────────────────────────────────────── */
+  useEffect(() => {
+    setViewsState((prev) => {
+      const current = prev.views[prev.activeViewId]
+      if (!current) return prev
+      const updated = { ...current, columnVisibility, columnOrder, columnWidths, pinned, density }
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, columnWidths, pinned, density])
 
-  const getServiceRequested = (application) => {
-    // Use the service requested that was saved at the time of contact
-    if (
-      application.originalRequest?.purpose &&
-      application.originalRequest.purpose !== "Not specified"
-    ) {
-      return application.originalRequest.purpose
-    }
+  useEffect(() => {
+    persistFilterState(localFilters, sortConfig)
+  }, [localFilters, sortConfig])
 
-    if (
-      application.originalRequest?.serviceRequested &&
-      application.originalRequest.serviceRequested !== "Not specified"
-    ) {
-      return application.originalRequest.serviceRequested
-    }
+  const notify = useCallback((type, message, ms = 3000) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), ms)
+  }, [])
 
-    return "Not specified"
-  }
-
-  const getAllCategories = (supplierId) => {
-    const supplierProfile = universalProfiles.find((profile) => profile.id === supplierId)
-    if (!supplierProfile) return []
-
-    const productsServices = supplierProfile.productsServices || {}
-    const allCategories = []
-
-    // Add product categories
-    if (Array.isArray(productsServices.productCategories)) {
-      productsServices.productCategories.forEach((cat) => {
-        allCategories.push(typeof cat === "string" ? cat : cat?.name || "Unnamed Category")
-      })
-    }
-
-    // Add service categories
-    if (Array.isArray(productsServices.serviceCategories)) {
-      productsServices.serviceCategories.forEach((cat) => {
-        allCategories.push(typeof cat === "string" ? cat : cat?.name || "Unnamed Category")
-      })
-    }
-
-    return allCategories
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId]
+    if (!target) return
+    setViewsState((prev) => {
+      const next = { ...prev, activeViewId: viewId }
+      persistViewsState(next)
+      return next
+    })
+    setColumnVisibility(target.columnVisibility)
+    setColumnOrder(target.columnOrder)
+    setColumnWidths(target.columnWidths)
+    setPinned(target.pinned)
+    setDensity(target.density)
   }
 
-  const getBudgetText = (application) => {
-    // Use the budget saved at the time of contact, not the current live application
-    const budgetRange = application.originalRequest?.budgetRange
-    if (budgetRange) {
-      const min = parseInt((budgetRange.min || "0").replace(/\D/g, "")) || 0
-      const max = parseInt((budgetRange.max || "0").replace(/\D/g, "")) || 0
-      if (min > 0 || max > 0) {
-        return `R${min.toLocaleString()} - R${max.toLocaleString()}`
+  const createNewView = () => {
+    const trimmedName = newViewName.trim()
+    if (!trimmedName) return
+    const id = generateViewId()
+    const newView = {
+      id,
+      name: trimmedName,
+      description: newViewDescription.trim(),
+      builtin: false,
+      columnVisibility: { ...columnVisibility },
+      columnOrder: [...columnOrder],
+      columnWidths: { ...columnWidths },
+      pinned: { ...pinned },
+      density,
+    }
+    setViewsState((prev) => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
+      persistViewsState(next)
+      return next
+    })
+    setNewViewName("")
+    setNewViewDescription("")
+    setShowNewViewForm(false)
+    notify("success", `View "${trimmedName}" created`)
+  }
+
+  const startEditingViewMeta = (view) =>
+    setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin })
+
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return
+    const trimmedName = editingViewMeta.name.trim()
+    if (!trimmedName && !editingViewMeta.builtin) return
+    setViewsState((prev) => {
+      const existing = prev.views[editingViewMeta.id]
+      if (!existing) return prev
+      const updated = {
+        ...existing,
+        name: existing.builtin ? existing.name : trimmedName,
+        description: editingViewMeta.description.trim(),
       }
-    }
-    return "Not specified"
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    setEditingViewMeta(null)
   }
 
-  // Update date display to handle null values
-  const formatDate = (date) => {
-    if (!date) return "N/A"
-    return date.toLocaleDateString()
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return
+    const wasActive = viewsState.activeViewId === viewId
+    setViewsState((prev) => {
+      const { [viewId]: _removed, ...restViews } = prev.views
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId
+      const next = { activeViewId: nextActiveId, views: restViews }
+      persistViewsState(next)
+      return next
+    })
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID]
+      setColumnVisibility(def.columnVisibility)
+      setColumnOrder(def.columnOrder)
+      setColumnWidths(def.columnWidths)
+      setPinned(def.pinned)
+      setDensity(def.density)
+    }
+    notify("success", "View deleted")
   }
 
-  // 5. Add helper function for improvement suggestions (add this function in the CustomerTable component)
-  const getImprovementSuggestion = (criteriaKey, score) => {
-    const suggestions = {
-      categoryMatch:
-        "Consider expanding your service categories or highlighting relevant subcategories that align with customer needs.",
-      bbbeeMatch: "Improve your BBBEE certification level to better match customer transformation requirements.",
-      locationMatch: "Consider expanding your service delivery areas or highlighting remote service capabilities.",
-      deliveryMatch: "Add more delivery mode options (on-site, remote, hybrid) to match customer preferences.",
-      budgetMatch: "Adjust your pricing structure or highlight different service tiers to better fit customer budgets.",
-      ownershipMatch: "Highlight your transformation credentials and ownership demographics more prominently.",
-      urgencyMatch: "Improve your response times and project delivery capabilities to meet urgent requirements.",
-      experienceMatch: "Better showcase your relevant sector experience and case studies in your profile.",
-      ratingMatch: "Focus on improving customer satisfaction and collecting more positive reviews.",
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout()
+    setColumnVisibility(layout.columnVisibility)
+    setColumnOrder(layout.columnOrder)
+    setColumnWidths(layout.columnWidths)
+    setPinned(layout.pinned)
+    setDensity(layout.density)
+    notify("success", `"${activeView.name}" reset to factory defaults`)
+  }
+
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  const cyclePin = (key) =>
+    setPinned((prev) => ({
+      ...prev,
+      [key]: prev[key] === "left" ? "right" : prev[key] === "right" ? null : "left",
+    }))
+
+  /* ─── Drag to reorder ───────────────────────────────────────────────── */
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key)
+    setDragHintRect(null)
+    try {
+      e.dataTransfer.effectAllowed = "move"
+      e.dataTransfer.setData("text/plain", key)
+    } catch {}
+  }
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (key !== dragOverColumn) setDragOverColumn(key)
+  }
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault()
+    if (!draggedColumn || draggedColumn === key) {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+    setColumnOrder((prev) => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(draggedColumn)
+      const toIdx = next.indexOf(key)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, draggedColumn)
+      return next
+    })
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+  const handleColumnDragEnd = () => {
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+
+  /* ─── Resize ────────────────────────────────────────────────────────── */
+  const startResize = (e, key) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    resizingRef.current = key
+
+    const onMove = (ev) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
+      setColumnWidths((prev) => ({ ...prev, [key]: next }))
+    }
+    const onUp = () => {
+      resizingRef.current = null
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
     }
 
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
+
+  /* ─── Header filter + sort ──────────────────────────────────────────── */
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
+  }
+  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+
+  const toggleSort = (key, event) => {
+    event.stopPropagation()
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" }
+      if (prev.dir === "asc") return { key, dir: "desc" }
+      return null
+    })
+  }
+
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${
+        active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"
+      }`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  )
+
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey
     return (
-      suggestions[criteriaKey] || "Review your profile to ensure all relevant information is complete and accurate."
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${
+          isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"
+        }`}
+        title={isActive ? (sortConfig.dir === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive ? sortConfig.dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} /> : <ArrowUpDown size={11} />}
+      </button>
     )
   }
-  const filteredApplications = applications.filter((app) => {
-    if (filters.status && app.status !== filters.status) return false
-    if (app.matchPercentage < filters.minMatchScore) return false
-    if (filters.supplierLocation && !app.supplierLocation?.includes(filters.supplierLocation)) return false
-    return true
-  })
 
-  const sortedApplications = [...filteredApplications].sort((a, b) => {
-    if (filters.sortBy === "newest") {
-      return (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)
-    } else if (filters.sortBy === "oldest") {
-      return (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0)
-    } else if (filters.sortBy === "highestMatch") {
-      return b.matchPercentage - a.matchPercentage
-    } else {
-      return a.matchPercentage - b.matchPercentage
+  /* ─── Popups ────────────────────────────────────────────────────────── */
+  const openPopup = (type, row, rect) => {
+    let popupWidth
+    let popupHeight
+    switch (type) {
+      case "match":
+        popupWidth = 400
+        popupHeight = 520
+        break
+      case "quickActions":
+        popupWidth = 224
+        popupHeight = 360
+        break
+      default:
+        popupWidth = 320
+        popupHeight = 320
     }
-  })
 
-  const handleViewDetails = async (application) => {
+    let x = rect.left + rect.width / 2 - popupWidth / 2
+    let y = rect.bottom + 8
+
+    if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20
+    if (x < 20) x = 20
+    if (y + popupHeight > window.innerHeight - 20) y = rect.top - popupHeight - 8
+    if (y < 20) y = 20
+
+    setActivePopup({ type, row, position: { x, y }, rect })
+  }
+
+  const openPopupFromEvent = (type, row, event) => {
+    event.stopPropagation()
+    openPopup(type, row, event.currentTarget.getBoundingClientRect())
+  }
+
+  const closePopup = () => setActivePopup(null)
+
+  /* ─── Actions ───────────────────────────────────────────────────────── */
+  const handleStatusChange = async (applicationId, newStatus) => {
     try {
-      // First, find the complete customer profile from universalProfiles
-      const customerProfile = universalProfiles.find(profile => profile.id === application.supplierId);
-
-      if (customerProfile) {
-        // Merge the application data with the complete customer profile
-        setSelectedCustomer({
-          ...application,
-          // Add the complete customer profile data
-          entityOverview: customerProfile.entityOverview || {},
-          productsServices: customerProfile.productsServices || {},
-          legalCompliance: customerProfile.legalCompliance || {},
-          financialOverview: customerProfile.financialOverview || {},
-          ownershipManagement: customerProfile.ownershipManagement || {},
-          contactDetails: customerProfile.contactDetails || {},
-          documents: customerProfile.documents || {},
-          applicationOverview: customerProfile.applicationOverview || {}
-        });
-      } else {
-        // If no profile found, use the application data with fallbacks
-        setSelectedCustomer({
-          ...application,
-          entityOverview: {},
-          productsServices: {},
-          legalCompliance: {},
-          financialOverview: {},
-          ownershipManagement: {},
-          contactDetails: {},
-          documents: {},
-          applicationOverview: {}
-        });
-      }
-
-      setShowCustomerModal(true);
-    } catch (error) {
-      console.error("Error fetching customer details:", error);
-      setNotification({
-        type: "error",
-        message: "Failed to load customer details"
-      });
+      await updateDoc(doc(db, "supplierApplications", applicationId), {
+        status: newStatus,
+        nextStage: NEXT_STAGE_BY_STATUS[newStatus] || "—",
+        updatedAt: serverTimestamp(),
+        updatedBy: currentCustomerId,
+      })
+      notify("success", `Status updated to ${newStatus}`)
+      return true
+    } catch (err) {
+      console.error("Error updating status:", err)
+      notify("error", `Failed to update status: ${err.message}`, 4000)
+      return false
     }
   }
 
-  const handleViewDocuments = (application) => {
-    setSelectedApplication(application)
-    setShowDocumentModal(true)
+  const handleViewDetails = (row) => {
+    setActivePopup(null)
+    const profile = universalProfiles.find((p) => p.id === row.counterpartyId)
+    setSelectedCustomer({
+      ...row,
+      entityOverview: profile?.entityOverview || {},
+      productsServices: profile?.productsServices || {},
+      legalCompliance: profile?.legalCompliance || {},
+      financialOverview: profile?.financialOverview || {},
+      ownershipManagement: profile?.ownershipManagement || {},
+      contactDetails: profile?.contactDetails || {},
+      documents: profile?.documents || {},
+      applicationOverview: profile?.applicationOverview || {},
+    })
   }
 
-  const handleMessage = (application) => {
-    setSelectedApplication(application)
-    setShowModal(true)  // This will open the customer details modal
+  const handleOpenShortlist = (row) => {
+    setActivePopup(null)
+    setSelectedApplication(row)
+    setMeetingPurpose(`Meeting with ${row.customerName}`)
+    setMeetingLocation("Virtual Meeting")
+    setAvailabilities([])
+    setFormErrors({})
+    setShowShortlistModal(true)
   }
 
-  const handleOpenProposalModal = (application) => {
-    setSelectedApplication(application)
+  const handleOpenProposal = (row) => {
+    setActivePopup(null)
+    setSelectedApplication(row)
     setProposalFile(null)
     setProposalMessage("")
     setShowProposalModal(true)
   }
 
-  const handleProposalFileChange = (event) => {
-    setProposalFile(event.target.files[0])
-  }
-
-  const handleSendProposal = async () => {
-    if (!proposalFile || !selectedApplication) return
-
-    try {
-      const auth = getAuth()
-      const user = auth.currentUser
-      if (!user) throw new Error("User not authenticated")
-
-      await updateDoc(doc(db, "supplierApplications", selectedApplication.id), {
-        status: "Proposal/Quote",
-        currentStage: "Proposal Sent",
-        nextStage: "Accept/Decline",
-        updatedAt: serverTimestamp(),
-        proposalSentAt: serverTimestamp(),
-      })
-
-      // Format the attachment
-      const formattedAttachment = {
-        name: proposalFile.name,
-        type: proposalFile.type,
-        size: proposalFile.size,
-        url: "", // You'll need to upload and get URL
-      }
-
-      // Update application status
-      await updateDoc(doc(db, "supplierApplications", selectedApplication.id), {
-        status: "Proposal/Quote",
-        updatedAt: serverTimestamp(),
-        proposalSentAt: serverTimestamp(),
-      })
-
-      // Create a message with the proposal attachment
-      const baseMessage = {
-        from: user.uid,
-        to: selectedApplication.supplierId,
-        toName: selectedApplication.supplierName,
-        subject: `Proposal/Quote for your application`,
-        content: proposalMessage || "Please find attached our proposal/quote for your application.",
-        attachments: [formattedAttachment],
-        date: new Date().toISOString(),
-        read: false,
-        type: "proposal",
-      }
-
-      // Save both inbox (receiver's copy) and sent (sender's copy)
-      await addDoc(collection(db, "messages"), { ...baseMessage, type: "inbox" })
-      await addDoc(collection(db, "messages"), {
-        ...baseMessage,
-        read: true,
-        type: "sent",
-      })
-
-      setNotification({
-        type: "success",
-        message: `Proposal sent to ${selectedApplication.supplierName}`,
-      })
-
-      setShowProposalModal(false)
-    } catch (err) {
-      console.error("Error sending proposal:", err.message)
-      setNotification({
-        type: "error",
-        message: `Failed to send proposal: ${err.message}`,
-      })
-    } finally {
-      setTimeout(() => setNotification(null), 3000)
-    }
-  }
-
-  const handleDateSelect = (dates) => {
-    setTempDates(dates || [])
-  }
-
-  const handleTimeChange = (field, value) => {
-    setTimeSlot((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const saveSelectedDates = async () => {
-    const newAvailabilities = [
-      ...availabilities,
-      ...tempDates
-        .filter((date) => !availabilities.some((a) => a.date.getTime() === date.getTime()))
-        .map((date) => ({
-          date,
-          timeSlots: [{ ...timeSlot }],
-          timeZone,
-          status: "available",
-        })),
-    ]
-
-    setAvailabilities(newAvailabilities)
-    setTempDates([])
-    setShowCalendarModal(false)
-  }
-
-  const removeAvailability = (dateToRemove) => {
-    const updatedAvailabilities = availabilities.filter((item) => item.date.getTime() !== dateToRemove.getTime())
-    setAvailabilities(updatedAvailabilities)
-  }
-
-  const handleShortlist = async (application) => {
-    try {
-      const auth = getAuth()
-      const user = auth.currentUser
-
-      if (!user) {
-        throw new Error("You must be logged in to shortlist a supplier")
-      }
-
-      await updateDoc(doc(db, "supplierApplications", application.id), {
-        status: "Shortlisted",
-        currentStage: "Shortlist",
-        nextStage: "Proposal Sent",
-        updatedAt: serverTimestamp(),
-      })
-
-      // Set up the modal state
-      setSelectedApplication(application)
-      setMeetingPurpose(`Meeting with ${application.supplierName}`)
-      setMeetingLocation("Virtual Meeting")
-      setAvailabilities([])
-      setShowShortlistModal(true)
-
-      // Create calendar events in both collections
-      const supplierEventRef = await addDoc(collection(db, "supplierCalendarEvents"), {
-        supplierId: application.supplierId,
-        customerId: user.uid,
-        customerName: user.displayName || "Customer",
-        title: `Meeting with ${application.supplierName}`,
-        purpose: `Meeting regarding application ${application.id}`,
-        location: "Virtual Meeting",
-        type: "meeting",
-        status: "pending",
-        createdAt: serverTimestamp(),
-        availableDates: [], // Will be populated when dates are selected
-        smeAppId: application.id,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      })
-
-      const smeEventRef = await addDoc(collection(db, "smeCalendarEvents"), {
-        smeId: application.supplierId,
-        funderId: user.uid,
-        funderName: user.displayName || "Customer",
-        title: `Meeting with ${user.displayName || "Customer"}`,
-        purpose: `Meeting regarding your application`,
-        location: "Virtual Meeting",
-        type: "meeting",
-        status: "pending",
-        createdAt: serverTimestamp(),
-        availableDates: [], // Will be populated when dates are selected
-        smeAppId: application.id,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        supplierEventId: supplierEventRef.id, // Link between the two events
-      })
-
-      // Update the supplier event with the sme event ID
-      await updateDoc(supplierEventRef, {
-        smeEventId: smeEventRef.id,
-      })
-
-      // Update application status
-      await updateDoc(doc(db, "supplierApplications", application.id), {
-        status: "Shortlisted",
-        updatedAt: serverTimestamp(),
-        meetingStatus: "pending",
-        calendarEventId: supplierEventRef.id,
-      })
-    } catch (error) {
-      console.error("Error in handleShortlist:", error)
-      setNotification({
-        type: "error",
-        message: `Failed to shortlist: ${error.message}`,
-      })
-    }
-  }
-
+  /* Single write path. The old flow created a supplier event and an SME event
+     when the modal opened, then created a second pair when it was confirmed —
+     every shortlist produced four calendar documents. */
   const handleConfirmShortlist = async () => {
-    // Validate inputs
-    if (!meetingPurpose.trim() || !meetingLocation.trim() || availabilities.length === 0) {
-      setFormErrors({
-        meetingPurpose: !meetingPurpose.trim() ? "Meeting purpose required" : null,
-        meetingLocation: !meetingLocation.trim() ? "Location required" : null,
-        availabilities: availabilities.length === 0 ? "Select at least one date" : null,
-      })
+    const errors = {}
+    if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
+    if (!meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location"
+    if (availabilities.length === 0) errors.availabilities = "Select at least one available date"
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
       return
     }
 
     setIsSubmitting(true)
-
     try {
-      // Prepare meeting data
+      const availableDates = availabilities.map((a) => ({
+        date: a.date.toISOString(),
+        timeSlots: a.timeSlots,
+        timeZone: a.timeZone,
+        status: "available",
+      }))
+
       const meetingData = {
         title: meetingPurpose,
         purpose: meetingPurpose,
         location: meetingLocation,
-        availableDates: availabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-          status: "available",
-        })),
-        updatedAt: serverTimestamp(),
+        availableDates,
+        type: "meeting",
+        status: "pending",
+        createdAt: serverTimestamp(),
+        smeAppId: selectedApplication.id,
       }
 
-      // 1. Create supplier calendar event
       const supplierEventRef = await addDoc(collection(db, "supplierCalendarEvents"), {
         ...meetingData,
-        supplierId: selectedApplication.supplierId,
+        supplierId: selectedApplication.counterpartyId,
         customerId: currentCustomerId,
-        status: "pending",
-        smeAppId: selectedApplication.id,
-        createdAt: serverTimestamp(),
       })
 
-      // 2. Create matching SME calendar event
       await addDoc(collection(db, "smeCalendarEvents"), {
         ...meetingData,
-        smeId: selectedApplication.supplierId,
+        smeId: selectedApplication.counterpartyId,
         funderId: currentCustomerId,
-        status: "pending",
-        smeAppId: selectedApplication.id,
         supplierEventId: supplierEventRef.id,
-        createdAt: serverTimestamp(),
       })
 
-      // 3. Update supplier application
       await updateDoc(doc(db, "supplierApplications", selectedApplication.id), {
         status: "Shortlisted",
-        meetingDetails: meetingData,
+        nextStage: NEXT_STAGE_BY_STATUS.Shortlisted,
+        meetingDetails: { purpose: meetingPurpose, location: meetingLocation, availableDates },
         calendarEventId: supplierEventRef.id,
         updatedAt: serverTimestamp(),
       })
 
-      // 4. Send notification
       await addDoc(collection(db, "notifications"), {
-        recipientId: selectedApplication.supplierId,
+        recipientId: selectedApplication.counterpartyId,
         senderId: currentCustomerId,
         type: "meeting_invitation",
-        title: "Meeting Invitation",
-        message: `Meeting scheduled with ${selectedApplication.customerName}`,
+        title: "Meeting invitation",
+        message: `A meeting has been proposed regarding your opportunity`,
         read: false,
         createdAt: serverTimestamp(),
         applicationId: selectedApplication.id,
       })
 
-      setNotification({
-        type: "success",
-        message: "Supplier shortlisted and meeting scheduled",
-      })
+      notify("success", "Shortlisted and meeting proposed")
       setShowShortlistModal(false)
-    } catch (error) {
-      setNotification({
-        type: "error",
-        message: "Failed to shortlist: " + error.message,
-      })
+    } catch (err) {
+      console.error("Error shortlisting:", err)
+      notify("error", `Failed to shortlist: ${err.message}`, 4000)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedApplication) return
+  const handleSendProposal = async () => {
+    if (!proposalFile || !selectedApplication) return
+    setIsSubmitting(true)
 
     try {
       const auth = getAuth()
       const user = auth.currentUser
       if (!user) throw new Error("User not authenticated")
 
+      /* The file is not uploaded anywhere — the original code built an
+         attachment object with url: "" and a TODO. Until Storage upload is
+         wired, say so rather than silently sending an empty link. */
+      const attachment = {
+        name: proposalFile.name,
+        type: proposalFile.type,
+        size: proposalFile.size,
+        url: "",
+        pendingUpload: true,
+      }
+
+      // One write, not two.
+      await updateDoc(doc(db, "supplierApplications", selectedApplication.id), {
+        status: "Applied",
+        currentStage: "Proposal Sent",
+        nextStage: NEXT_STAGE_BY_STATUS.Applied,
+        updatedAt: serverTimestamp(),
+        proposalSentAt: serverTimestamp(),
+      })
+
       const baseMessage = {
         from: user.uid,
-        to: selectedApplication.supplierId,
-        toName: selectedApplication.supplierName,
-        subject: `Message regarding your application`,
-        content: messageText,
-        attachments: [], // or add attachments if needed later
+        to: selectedApplication.counterpartyId,
+        toName: selectedApplication.customerName,
+        subject: "Proposal / quote for your opportunity",
+        content: proposalMessage || "Please find our proposal for your opportunity attached.",
+        attachments: [attachment],
         date: new Date().toISOString(),
-        read: false,
+        applicationId: selectedApplication.id,
       }
 
-      // Save both inbox (receiver's copy) and sent (sender's copy)
-      await addDoc(collection(db, "messages"), { ...baseMessage, type: "inbox" })
-      await addDoc(collection(db, "messages"), { ...baseMessage, read: true, type: "sent" })
+      await Promise.all([
+        addDoc(collection(db, "messages"), { ...baseMessage, read: false, type: "inbox" }),
+        addDoc(collection(db, "messages"), { ...baseMessage, read: true, type: "sent" }),
+      ])
 
-      setNotification({
-        type: "success",
-        message: `Message sent to ${selectedApplication.supplierName}`,
-      })
-
-      setShowMessageModal(false)
-      setMessageText("")
+      notify("success", `Proposal sent to ${selectedApplication.customerName}`)
+      setShowProposalModal(false)
+      setProposalFile(null)
+      setProposalMessage("")
     } catch (err) {
-      console.error("Error sending message:", err.message)
-      setNotification({
-        type: "error",
-        message: `Failed to send message: ${err.message}`,
-      })
+      console.error("Error sending proposal:", err)
+      notify("error", `Failed to send proposal: ${err.message}`, 4000)
     } finally {
-      setTimeout(() => setNotification(null), 3000)
+      setIsSubmitting(false)
     }
   }
 
-  // FIXED: Completely rewritten handleStatusChange function
-  const handleStatusChange = async (applicationId, newStatus) => {
-    try {
-      // Find the application in current state
-      const application = applications.find((app) => app.id === applicationId);
-      
-      if (!application) {
-        console.error("Application not found:", applicationId);
-        setNotification({
-          type: "error",
-          message: "Application not found",
-        });
-        setTimeout(() => setNotification(null), 3000);
-        return;
+  const saveSelectedDates = () => {
+    setAvailabilities((prev) => [
+      ...prev,
+      ...tempDates
+        .filter((d) => !prev.some((a) => a.date.getTime() === d.getTime()))
+        .map((date) => ({ date, timeSlots: [{ ...timeSlot }], timeZone, status: "available" })),
+    ])
+    setTempDates([])
+    setShowCalendarModal(false)
+  }
+
+  /* ─── Derived options ───────────────────────────────────────────────── */
+  const uniqueOf = useCallback(
+    (accessor) => [...new Set(applications.map(accessor).filter((v) => v && v !== "Not specified"))].sort(),
+    [applications],
+  )
+  const opportunityTypeOptions = useMemo(() => {
+    const fromData = uniqueOf((a) => a.opportunityType)
+    return [...new Set([...OPPORTUNITY_TYPES, ...fromData])]
+  }, [uniqueOf])
+  const customerTypeOptions = useMemo(() => uniqueOf((a) => a.customerType), [uniqueOf])
+  const sectorOptions = useMemo(
+    () => [...new Set(applications.flatMap((a) => customerSectorsFor(a)).filter(Boolean))].sort(),
+    [applications, customerSectorsFor],
+  )
+
+  /* ─── Filtering + sorting ───────────────────────────────────────────── */
+  const filteredApplications = useMemo(() => {
+    const f = localFilters
+    const matchesAny = (selected, value) =>
+      selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
+    const includesText = (needle, value) =>
+      !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
+
+    const rows = applications.filter((a) => {
+      if (hiddenMatches[a.id]) return false
+      if (stageFilter && a.status !== stageFilter) return false
+
+      if (!includesText(f.name, `${a.customerName} ${a.opportunityTitle || ""}`)) return false
+      if (a.matchPercentage < f.matchRange[0] || a.matchPercentage > f.matchRange[1]) return false
+      if (!includesText(f.productService, a.productService)) return false
+      if (!matchesAny(f.opportunityType, a.opportunityType)) return false
+      if (!includesText(f.estimatedValue, a.estimatedValue)) return false
+      if (f.status.length > 0 && !f.status.includes(a.status)) return false
+
+      const closing = toISODateOnly(a.closingDate)
+      if (f.closingFrom && (!closing || closing < f.closingFrom)) return false
+      if (f.closingTo && (!closing || closing > f.closingTo)) return false
+
+      if (f.customerSector.length > 0) {
+        const sectors = customerSectorsFor(a)
+        if (!f.customerSector.some((s) => sectors.includes(s))) return false
       }
-
-      // console.log("Updating status to:", newStatus, "for application:", applicationId);
-
-      // Prepare the update data
-      const updateData = {
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentCustomerId,
-      };
-
-      // Add stage information based on status
-      if (newStatus === "Pending") {
-        updateData.currentStage = "Application Submitted";
-        updateData.nextStage = "Shortlist";
-      } else if (newStatus === "Shortlisted") {
-        updateData.currentStage = "Shortlist";
-        updateData.nextStage = "Proposal Sent";
-      } else if (newStatus === "Proposal/Quote") {
-        updateData.currentStage = "Proposal Sent";
-        updateData.nextStage = "Accept/Decline";
-      } else if (newStatus === "Accepted") {
-        updateData.currentStage = "Accepted";
-        updateData.nextStage = "Deal Closed";
-      } else if (newStatus === "Rejected") {
-        updateData.currentStage = "Rejected";
-        updateData.nextStage = "Deal Closed";
+      if (!includesText(f.deliveryLocation, a.deliveryLocation)) return false
+      if (!includesText(f.contractDuration, a.contractDuration)) return false
+      if (!includesText(f.paymentTerms, a.paymentTerms)) return false
+      if (!includesText(f.minimumRequirements, a.minimumRequirements)) return false
+      if (!matchesAny(f.bbbeeRequirement, a.bbbeeRequirement)) return false
+      if (!includesText(f.complianceRequirements, a.complianceRequirements)) return false
+      if (!includesText(f.contactPerson, a.contactPerson)) return false
+      if (!includesText(f.deliveryTurnaround, a.deliveryTurnaround)) return false
+      if (!matchesAny(f.customerType, a.customerType)) return false
+      if (f.documents.length > 0) {
+        const bucket = a.documentCount > 0 ? "Has documents" : "No documents"
+        if (!f.documents.includes(bucket)) return false
       }
+      if (f.nextStage.length > 0 && !f.nextStage.includes(NEXT_STAGE_BY_STATUS[a.status])) return false
 
-      // Update Firestore
-      const applicationRef = doc(db, "supplierApplications", applicationId);
-      await updateDoc(applicationRef, updateData);
-      
-      // console.log("Firestore update successful");
+      return true
+    })
 
-      // Update local state immediately
-      setApplications(prevApplications => 
-        prevApplications.map(app => 
-          app.id === applicationId 
-            ? { ...app, ...updateData, updatedAt: new Date() }
-            : app
-        )
-      );
-
-      // Show success notification
-      setNotification({
-        type: "success",
-        message: `Status updated to ${newStatus} successfully`,
-      });
-      
-      // Clear notification after 3 seconds
-      setTimeout(() => setNotification(null), 3000);
-      
-      // Return success
-      return true;
-      
-    } catch (err) {
-      console.error("Error updating status:", err);
-      setNotification({
-        type: "error",
-        message: `Failed to update status: ${err.message}`,
-      });
-      setTimeout(() => setNotification(null), 3000);
-      return false;
+    if (sortConfig?.key) {
+      const accessors = {
+        name: (r) => r.customerName,
+        match: (r) => r.matchPercentage || 0,
+        productService: (r) => r.productService,
+        opportunityType: (r) => r.opportunityType,
+        estimatedValue: (r) => r.estimatedValueMax || r.estimatedValueMin || 0,
+        closingDate: (r) => toDateSafe(r.closingDate)?.getTime() ?? 0,
+        status: (r) => r.status,
+        customerSector: (r) => customerSectorsFor(r).join(", "),
+        deliveryLocation: (r) => r.deliveryLocation,
+        contractDuration: (r) => r.contractDuration,
+        paymentTerms: (r) => r.paymentTerms,
+        bbbeeRequirement: (r) => r.bbbeeRequirement,
+        contactPerson: (r) => r.contactPerson,
+        deliveryTurnaround: (r) => r.deliveryTurnaround,
+        customerType: (r) => r.customerType,
+        documents: (r) => r.documentCount,
+        dateMatched: (r) => toDateSafe(r.createdAt)?.getTime() ?? 0,
+        lastActivity: (r) => toDateSafe(r.lastActivity)?.getTime() ?? 0,
+      }
+      const accessor = accessors[sortConfig.key]
+      if (accessor) {
+        rows.sort((a, b) => {
+          const av = accessor(a)
+          const bv = accessor(b)
+          if (typeof av === "number" && typeof bv === "number") {
+            return sortConfig.dir === "asc" ? av - bv : bv - av
+          }
+          const cmp = (av || "").toString().localeCompare((bv || "").toString())
+          return sortConfig.dir === "asc" ? cmp : -cmp
+        })
+      }
     }
-  }
 
-  const handleExport = () => {
-    setNotification({ type: "info", message: "Exporting applications data..." })
-    setTimeout(() => setNotification(null), 3000)
-  }
+    return rows
+  }, [applications, localFilters, sortConfig, hiddenMatches, stageFilter, customerSectorsFor])
+
+  useEffect(() => {
+    if (onCountChange) onCountChange(filteredApplications.length)
+  }, [filteredApplications, onCountChange])
+
+  const f = localFilters
+  const activeFilterCount =
+    (f.name.trim() ? 1 : 0) +
+    (f.matchRange[0] > 0 || f.matchRange[1] < 100 ? 1 : 0) +
+    (f.productService.trim() ? 1 : 0) +
+    f.opportunityType.length +
+    (f.estimatedValue.trim() ? 1 : 0) +
+    (f.closingFrom || f.closingTo ? 1 : 0) +
+    f.status.length +
+    f.customerSector.length +
+    (f.deliveryLocation.trim() ? 1 : 0) +
+    (f.contractDuration.trim() ? 1 : 0) +
+    (f.paymentTerms.trim() ? 1 : 0) +
+    (f.minimumRequirements.trim() ? 1 : 0) +
+    f.bbbeeRequirement.length +
+    (f.complianceRequirements.trim() ? 1 : 0) +
+    (f.contactPerson.trim() ? 1 : 0) +
+    (f.deliveryTurnaround.trim() ? 1 : 0) +
+    f.customerType.length +
+    f.documents.length +
+    f.nextStage.length
 
   const clearAllFilters = () => {
-    setFilters({
-      status: "",
-      minMatchScore: 0,
-      supplierLocation: "",
-      sortBy: "newest",
-    })
+    setLocalFilters({ ...EMPTY_FILTERS })
+    setSortConfig(null)
   }
 
-  if (!mounted) return <div style={loadingStyle}>Initializing...</div>
-  if (loading && applications.length === 0) return <div style={loadingStyle}>Loading applications...</div>
-  if (error) return <div style={errorStyle}>Error: {error}</div>
+  const getFilterActive = (type) => {
+    switch (type) {
+      case "match":
+        return f.matchRange[0] > 0 || f.matchRange[1] < 100
+      case "closingDate":
+        return !!f.closingFrom || !!f.closingTo
+      default: {
+        const v = f[type]
+        if (Array.isArray(v)) return v.length > 0
+        return typeof v === "string" ? !!v.trim() : false
+      }
+    }
+  }
 
+  const toggleChip = (field, value) =>
+    setLocalFilters((p) => ({
+      ...p,
+      [field]: p[field].includes(value) ? p[field].filter((x) => x !== value) : [...p[field], value],
+    }))
+
+  /* ─── Layout: responsive collapse, pinning, offsets ─────────────────── */
+  const maxPriority = viewportWidth < 640 ? 1 : viewportWidth < 1024 ? 3 : 99
+
+  const visibleColumnKeys = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key].priority <= maxPriority),
+    [columnOrder, columnVisibility, maxPriority],
+  )
+
+  const collapsedByViewport = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key].priority > maxPriority).length,
+    [columnOrder, columnVisibility, maxPriority],
+  )
+
+  const orderedColumns = useMemo(() => {
+    const left = visibleColumnKeys.filter((k) => pinned[k] === "left")
+    const right = visibleColumnKeys.filter((k) => pinned[k] === "right")
+    const middle = visibleColumnKeys.filter((k) => !pinned[k])
+    return [...left, ...middle, ...right]
+  }, [visibleColumnKeys, pinned])
+
+  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+
+  const stickyOffsets = useMemo(() => {
+    const offsets = {}
+    // Left-pinned columns stack to the right of the frozen Customer column.
+    let leftAcc = CUSTOMER_WIDTH
+    orderedColumns.forEach((key) => {
+      if (pinned[key] === "left") {
+        offsets[key] = { side: "left", value: leftAcc }
+        leftAcc += widthOf(key)
+      }
+    })
+    // Action is not pinned, so right-pinned columns stick to the table edge.
+    let rightAcc = 0
+    ;[...orderedColumns].reverse().forEach((key) => {
+      if (pinned[key] === "right") {
+        offsets[key] = { side: "right", value: rightAcc }
+        rightAcc += widthOf(key)
+      }
+    })
+    return offsets
+  }, [orderedColumns, pinned, widthOf])
+
+  const totalWidth = CUSTOMER_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+
+  const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
+  const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
+
+  const tableCellStyle = {
+    padding: cellPadding,
+    borderBottom: "1px solid #e6d7c3",
+    borderRight: "1px solid #e6d7c3",
+    fontSize: "0.8rem",
+    verticalAlign: "top",
+    color: "#4a352f",
+    lineHeight: "1.3",
+    overflow: "hidden",
+  }
+
+  const searchedColumns = DEFAULT_COLUMN_ORDER.filter((key) =>
+    COLUMN_DEFS[key].label.toLowerCase().includes(columnSearch.toLowerCase()),
+  )
+
+  /* ─── Cells ─────────────────────────────────────────────────────────── */
+  const renderCell = (key, a, rowBg) => {
+    const offset = stickyOffsets[key]
+    const stickyStyle = offset
+      ? {
+          position: "sticky",
+          [offset.side]: `${offset.value}px`,
+          zIndex: 9,
+          backgroundColor: rowBg,
+          boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+        }
+      : {}
+    const style = { ...tableCellStyle, ...stickyStyle }
+
+    switch (key) {
+      case "match":
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            <div className="flex flex-col items-center gap-1 w-full">
+              <div className="flex items-center gap-1">
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: a.matchPercentage > 75 ? "#48BB78" : a.matchPercentage > 50 ? "#D69E2E" : "#E53E3E" }}
+                >
+                  {a.matchPercentage}%
+                </span>
+                {/* Spec: "Why this match?" sits beside Match %, not in Action */}
+                <button
+                  onClick={(e) => openPopupFromEvent("match", a, e)}
+                  title="Why this match?"
+                  aria-label="Why this match?"
+                  className="text-[#a67c52] hover:text-[#4a352f]"
+                >
+                  <HelpCircle size={13} />
+                </button>
+              </div>
+              <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, a.matchPercentage))}%`,
+                    backgroundColor: a.matchPercentage > 75 ? "#48BB78" : a.matchPercentage > 50 ? "#F6AD55" : "#F56565",
+                  }}
+                />
+              </div>
+            </div>
+          </td>
+        )
+
+      case "productService":
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={a.productService} maxLength={40} />
+          </td>
+        )
+
+      case "opportunityType":
+        return (
+          <td key={key} style={style}>
+            {a.opportunityType && a.opportunityType !== "Not specified" ? (
+              <span className="inline-block px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium">
+                {a.opportunityType}
+              </span>
+            ) : (
+              <span className="text-[#a89482] text-xs">-</span>
+            )}
+          </td>
+        )
+
+      case "estimatedValue":
+        return (
+          <td key={key} style={style}>
+            <span className="text-xs font-medium">{a.estimatedValue}</span>
+          </td>
+        )
+
+      case "closingDate": {
+        const display = formatDateValue(a.closingDate)
+        const iso = toISODateOnly(a.closingDate)
+        const daysLeft = iso ? Math.ceil((new Date(iso) - new Date()) / 86400000) : null
+        return (
+          <td key={key} style={style}>
+            {display ? (
+              <div className="leading-snug">
+                <div className="text-xs">{display}</div>
+                {daysLeft !== null && (
+                  <div
+                    className="text-[10px] mt-0.5"
+                    style={{ color: daysLeft < 0 ? "#D32F2F" : daysLeft <= 7 ? "#F57C00" : "#a89482" }}
+                  >
+                    {daysLeft < 0 ? "Closed" : daysLeft === 0 ? "Closes today" : `${daysLeft} days left`}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="text-[#a89482] text-xs">Not specified</span>
+            )}
+          </td>
+        )
+      }
+
+      case "status": {
+        const s = getStatusStyle(a.status)
+        return (
+          <td key={key} style={style}>
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+              style={{ backgroundColor: s.color, color: s.textColor }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.textColor }} />
+              {a.status}
+            </span>
+          </td>
+        )
+      }
+
+      case "customerSector": {
+        const sectors = customerSectorsFor(a)
+        return (
+          <td key={key} style={style}>
+            {sectors.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {sectors.slice(0, 2).map((s) => (
+                  <span key={s} className="px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px]">
+                    {s}
+                  </span>
+                ))}
+                {sectors.length > 2 && (
+                  <span className="text-[10px] text-[#a67c52] font-semibold self-center" title={sectors.join(", ")}>
+                    +{sectors.length - 2}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-[#a89482] text-xs">-</span>
+            )}
+          </td>
+        )
+      }
+
+      case "documents":
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            {a.documentCount > 0 ? (
+              <button
+                onClick={() => {
+                  setSelectedApplication(a)
+                  setShowDocumentModal(true)
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-semibold hover:bg-[#e6d7c3]"
+              >
+                <FileText size={10} /> {a.documentCount}
+              </button>
+            ) : (
+              <span className="text-[#a89482] text-[10px]">None</span>
+            )}
+          </td>
+        )
+
+      case "dateMatched":
+        return <td key={key} style={style}>{formatDateValue(a.createdAt) || <span className="text-[#a89482]">-</span>}</td>
+
+      case "lastActivity":
+        // Was `new Date(x).toLocaleDateString() || "N/A"` — an invalid date
+        // stringifies to "Invalid Date", which is truthy, so the fallback
+        // never fired and the cell showed "Invalid Date".
+        return <td key={key} style={style}>{formatDateValue(a.lastActivity) || <span className="text-[#a89482]">-</span>}</td>
+
+      case "nextStage":
+        return (
+          <td key={key} style={style}>
+            <span className="text-xs font-medium">{NEXT_STAGE_BY_STATUS[a.status] || "—"}</span>
+          </td>
+        )
+
+      default:
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={a[key]} maxLength={30} />
+          </td>
+        )
+    }
+  }
+
+  if (!mounted || loading) {
+    return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading opportunities...</div>
+  }
+
+  if (error) {
+    return <div className="p-10 text-center text-[#D32F2F] text-sm">{error}</div>
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Render
+     ═══════════════════════════════════════════════════════════════════════ */
   return (
-    <>
-      <style>{spinAnimation}</style>
-      {/* Main content container */}
-      <div
-        style={{
-          position: "relative",
-          // Removed blur filter that was causing the table to blur
-        }}
-      >
-        {/* Notification area */}
-        {notification && (
-          <div
-            style={{
-              position: "fixed",
-              top: "1rem",
-              right: "1rem",
-              padding: "1rem",
-              borderRadius: "6px",
-              color: "white",
-              fontWeight: "500",
-              zIndex: 1001,
-              background:
-                notification.type === "success" ? "#48BB78" : notification.type === "error" ? "#F56565" : "#4299E1",
-            }}
-          >
-            {notification.message}
-          </div>
-        )}
-
-        {/* Table Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h1
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: "bold",
-              color: "#5d4037",
-              marginBottom: "0",
-              fontFamily: "Segoe UI, sans-serif",
-            }}
-          ></h1>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button onClick={() => setShowFilters(true)} style={filterButtonStyle}>
-              <Filter size={16} />
-              Filter
+    <div style={{ width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
+      {/* Inline banner, same as the other match tables */}
+      {notification && (
+        <div
+          className={`px-4 py-3 rounded-xl text-sm font-medium border mb-3 ${
+            notification.type === "success"
+              ? "bg-green-50 text-green-800 border-green-200"
+              : notification.type === "warning"
+                ? "bg-amber-50 text-amber-800 border-amber-200"
+                : notification.type === "info"
+                  ? "bg-[#faf7f2] text-[#4a352f] border-[#e6d7c3]"
+                  : "bg-red-50 text-red-800 border-red-200"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span>{notification.message}</span>
+            <button onClick={() => setNotification(null)} className="ml-2 text-current opacity-50 hover:opacity-100">
+              <X size={16} />
             </button>
           </div>
         </div>
+      )}
 
-        {/* Table Content - Always show table structure */}
-        <div style={tableContainerStyle}>
-          <table style={tableStyle}>
+      {/* Toolbar */}
+      <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-bold text-[#4a352f] m-0">Customer Matches</h2>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+              <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+              Viewing: {activeView.name}
+              {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
+            </span>
+            {activeFilterCount > 0 && (
+              <>
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+                </span>
+                <button
+                  onClick={clearAllFilters}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-white border border-[#e6d7c3] transition-colors"
+                >
+                  Clear all filters
+                </button>
+              </>
+            )}
+            {collapsedByViewport > 0 && (
+              <span className="px-3 py-1.5 rounded-xl text-xs font-medium text-[#a89482] border border-[#e6d7c3]">
+                {collapsedByViewport} column{collapsedByViewport > 1 ? "s" : ""} hidden on this screen size
+              </span>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                if (showCustomizeMenu) {
+                  setShowCustomizeMenu(false)
+                  setCustomizeMenuRect(null)
+                } else {
+                  setCustomizeMenuRect(e.currentTarget.getBoundingClientRect())
+                  setShowCustomizeMenu(true)
+                  setShowNewViewForm(false)
+                  setEditingViewMeta(null)
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+            >
+              <SlidersHorizontal size={16} /> Customize Table{" "}
+              <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? "rotate-180" : ""}`} />
+            </button>
+
+            {showCustomizeMenu &&
+              customizeMenuRect &&
+              (() => {
+                const panelWidth = 340
+                const margin = 12
+                let left = customizeMenuRect.right - panelWidth
+                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
+                const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
+                const spaceAbove = customizeMenuRect.top - margin - 8
+                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
+                const maxHeight = Math.max(200, Math.min(640, openUpward ? spaceAbove : spaceBelow))
+                const top = openUpward ? undefined : customizeMenuRect.bottom + 8
+                const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
+                const allViews = Object.values(viewsState.views).sort((a, b) =>
+                  a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name),
+                )
+
+                return (
+                  <PopupPortal>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => {
+                        setShowCustomizeMenu(false)
+                        setCustomizeMenuRect(null)
+                        setShowNewViewForm(false)
+                        setEditingViewMeta(null)
+                      }}
+                    />
+                    <div
+                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
+                      style={{ left, width: panelWidth, top, bottom, maxHeight }}
+                    >
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                      <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
+                      <div className="space-y-1 mb-3">
+                        {allViews.map((view) => {
+                          const isActive = view.id === viewsState.activeViewId
+                          const isEditing = editingViewMeta?.id === view.id
+                          if (isEditing) {
+                            return (
+                              <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                {!view.builtin ? (
+                                  <input
+                                    autoFocus
+                                    value={editingViewMeta.name}
+                                    onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))}
+                                    placeholder="View name"
+                                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-[#4a352f]">
+                                    Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span>
+                                  </p>
+                                )}
+                                <textarea
+                                  value={editingViewMeta.description}
+                                  onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Description (optional) — what is this view for?"
+                                  rows={2}
+                                  className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => setEditingViewMeta(null)}
+                                    className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={saveViewMeta}
+                                    className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div
+                              key={view.id}
+                              className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${
+                                isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"
+                              }`}
+                            >
+                              <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                  <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>
+                                    {view.name}
+                                  </span>
+                                  {view.builtin && (
+                                    <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">
+                                      Built-in
+                                    </span>
+                                  )}
+                                </div>
+                                {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                              </button>
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button
+                                  onClick={() => startEditingViewMeta(view)}
+                                  title="Rename / edit description"
+                                  className="text-[#a89482] hover:text-[#7d5a50] p-1"
+                                >
+                                  <Settings size={13} />
+                                </button>
+                                {!view.builtin && (
+                                  <button
+                                    onClick={() => removeView(view.id)}
+                                    title="Delete view"
+                                    className="text-[#a89482] hover:text-red-500 p-1"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {showNewViewForm ? (
+                        <div className="space-y-2 mb-1">
+                          <input
+                            autoFocus
+                            value={newViewName}
+                            onChange={(e) => setNewViewName(e.target.value)}
+                            placeholder="New view name..."
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                          />
+                          <textarea
+                            value={newViewDescription}
+                            onChange={(e) => setNewViewDescription(e.target.value)}
+                            placeholder="Description (optional) — what is this view for?"
+                            rows={2}
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setShowNewViewForm(false)
+                                setNewViewName("")
+                                setNewViewDescription("")
+                              }}
+                              className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={createNewView}
+                              disabled={!newViewName.trim()}
+                              className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40"
+                            >
+                              Create view
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowNewViewForm(true)}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]"
+                        >
+                          <Plus size={13} /> New view from current layout
+                        </button>
+                      )}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Columns</h4>
+
+                      <div className="relative mb-3">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
+                        <input
+                          value={columnSearch}
+                          onChange={(e) => setColumnSearch(e.target.value)}
+                          placeholder="Search columns..."
+                          className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                        />
+                      </div>
+
+                      <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                        resize.
+                      </p>
+
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Customer</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Action</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Always last</span>
+                      </div>
+                      <div className="border-t border-[#e6d7c3] my-2" />
+
+                      {searchedColumns.length === 0 && (
+                        <p className="text-xs text-[#a89482] px-2 py-1.5">No columns match that search.</p>
+                      )}
+                      {searchedColumns.map((key) => (
+                        <div key={key} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2]">
+                          <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={columnVisibility[key] || false}
+                              onChange={() => toggleColumn(key)}
+                              className="rounded border-[#c8b6a6] text-[#7d5a50]"
+                            />
+                            <span className="text-sm text-[#4a352f] truncate">{COLUMN_DEFS[key].label}</span>
+                          </label>
+                          <button
+                            onClick={() => cyclePin(key)}
+                            title={
+                              pinned[key] === "left"
+                                ? "Pinned left — click to pin right"
+                                : pinned[key] === "right"
+                                  ? "Pinned right — click to unpin"
+                                  : "Pin left"
+                            }
+                            className={`p-1 rounded flex-shrink-0 ${pinned[key] ? "text-[#7d5a50]" : "text-[#c8b6a6] hover:text-[#7d5a50]"}`}
+                          >
+                            {pinned[key] ? <Pin size={13} /> : <PinOff size={13} />}
+                          </button>
+                          <span className="text-[10px] text-[#a89482] w-7 text-right flex-shrink-0">
+                            {pinned[key] === "left" ? "L" : pinned[key] === "right" ? "R" : ""}
+                          </span>
+                        </div>
+                      ))}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                      <div className="flex gap-1.5">
+                        {[
+                          { key: "comfortable", label: "Comfortable" },
+                          { key: "compact", label: "Compact" },
+                        ].map((d) => (
+                          <button
+                            key={d.key}
+                            onClick={() => setDensity(d.key)}
+                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                              density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                            }`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <button
+                        onClick={resetActiveViewToDefault}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
+                      >
+                        <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                      </button>
+                    </div>
+                  </PopupPortal>
+                )
+              })()}
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-b-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+        <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
+          <style>{`
+            /* No 'position: relative' here — that is what the shared kit had,
+               and it silently overrode the sticky positioning on every <th>,
+               so the header scrolled away while the pinned body cells stayed.
+               Sticky is itself a positioned ancestor, so the absolutely
+               placed grip and resize handle still anchor correctly. */
+            .ct-th { color: #faf7f2 !important; vertical-align: top !important; }
+            .ct-th-draggable { cursor: grab; }
+            .ct-th-draggable:active { cursor: grabbing; }
+            .ct-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+            /* overflow-wrap: normal stops the browser splitting inside a word,
+               which is what turned "Match %" into "MAT CH.." and "Status" into
+               "STA TUS" in narrow columns. */
+            .ct-th-label {
+              flex: 1 1 auto; min-width: 0;
+              display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+              overflow: hidden; white-space: normal;
+              overflow-wrap: normal; word-break: normal; hyphens: none;
+              line-height: 1.2; letter-spacing: 0.02em;
+            }
+            .ct-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+            /* The drag grip leaves the flex flow and only appears on hover,
+               buying every header ~14px more room for its label. */
+            .ct-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+            .ct-th:hover .ct-th-grip { opacity: .45; }
+            .ct-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .ct-resize:hover { background: rgba(255,255,255,0.25); }
+          `}</style>
+
+          <table
+            style={{
+              /* separate (not collapse) — collapsed borders are dropped by
+                 sticky cells, which made the pinned column lose its edge and
+                 mispaint over its neighbour while scrolling. */
+              borderCollapse: "separate",
+              borderSpacing: 0,
+              background: "white",
+              fontSize: "0.8rem",
+              backgroundColor: "#faf7f2",
+              tableLayout: "fixed",
+              width: totalWidth,
+              minWidth: "100%",
+            }}
+          >
             <thead>
               <tr>
-                <th style={tableHeaderStyle}>Customer Name</th>
-                <th style={tableHeaderStyle}>Location</th>
-                <th style={tableHeaderStyle}>Sector Focus</th>
-                <th style={tableHeaderStyle}>Customer Type</th>
-                <th style={tableHeaderStyle}>Budget Range</th>
-                <th style={tableHeaderStyle}>Service Requested</th>
-                <th style={tableHeaderStyle}>Last Activity</th>
-                <th style={tableHeaderStyle}>Delivery Turnaround</th>
-                <th style={tableHeaderStyle}>Match %</th>
-                <th style={tableHeaderStyle}>Current Stage</th>
-                <th style={tableHeaderStyle}>Next Stage</th>
-                <th style={tableHeaderStyle}>Action</th>
+                <th
+                  className="ct-th font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30 text-left"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    width: CUSTOMER_WIDTH,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                    boxShadow: "2px 0 0 #e6d7c3",
+                  }}
+                >
+                  <div className="ct-th-row">
+                    <span className="ct-th-label" title="Customer">
+                      Customer
+                    </span>
+                    <span className="ct-th-tools">
+                      <SortTrigger columnKey="name" />
+                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                    </span>
+                  </div>
+                </th>
+
+                {orderedColumns.map((key) => {
+                  const col = COLUMN_DEFS[key]
+                  const isDragging = draggedColumn === key
+                  const isDragOver = dragOverColumn === key && draggedColumn !== key
+                  const offset = stickyOffsets[key]
+
+                  return (
+                    <th
+                      key={key}
+                      draggable
+                      onDragStart={(e) => handleColumnDragStart(e, key)}
+                      onDragOver={(e) => handleColumnDragOver(e, key)}
+                      onDrop={(e) => handleColumnDrop(e, key)}
+                      onDragEnd={handleColumnDragEnd}
+                      onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                      onMouseLeave={() => setDragHintRect(null)}
+                      className={`ct-th ct-th-draggable font-semibold uppercase tracking-wider text-xs sticky top-0 select-none transition-opacity ${
+                        col.align === "center" ? "text-center" : "text-left"
+                      } ${isDragging ? "opacity-40" : ""}`}
+                      style={{
+                        width: widthOf(key),
+                        padding: headerPadding,
+                        backgroundColor: isDragOver ? "#5a423b" : "#4a352f",
+                        zIndex: offset ? 25 : 20,
+                        borderBottom: "1px solid #e6d7c3",
+                        borderRight: "1px solid #e6d7c3",
+                        ...(offset
+                          ? {
+                              [offset.side]: `${offset.value}px`,
+                              boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+                            }
+                          : {}),
+                      }}
+                    >
+                      <GripVertical size={11} className="ct-th-grip" />
+                      <div className={`ct-th-row ${col.align === "center" ? "justify-center" : ""}`}>
+                        <span className="ct-th-label" title={col.label}>
+                          {col.label}
+                        </span>
+                        <span className="ct-th-tools">
+                          {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
+                          {col.sortable && <SortTrigger columnKey={key} />}
+                          {col.filterType && (
+                            <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                          )}
+                        </span>
+                      </div>
+                      <div className="ct-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                    </th>
+                  )
+                })}
+
+                {/* Action scrolls horizontally with the table — only top-0, so
+                    it still holds position on vertical scroll. */}
+                <th
+                  className="ct-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    width: ACTION_WIDTH,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                  }}
+                >
+                  Action
+                </th>
               </tr>
             </thead>
+
             <tbody>
-              {applications.length === 0 ? (
-                // Empty state row
+              {filteredApplications.length === 0 ? (
                 <tr>
-                  <td colSpan="12" style={{ ...tableCellStyle, textAlign: "center", padding: "2rem", border: "none" }}>
-                    {/* Empty cell to maintain table structure */}
+                  <td
+                    colSpan={orderedColumns.length + 2}
+                    style={{ ...tableCellStyle, textAlign: "center", padding: "3rem 1rem", borderRight: "none" }}
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-16 h-16 rounded-full bg-[#f5f0e1] flex items-center justify-center">
+                        <Briefcase size={26} className="text-[#7d5a50] opacity-50" />
+                      </div>
+                      <p className="text-sm font-semibold text-[#4a352f] m-0">
+                        {applications.length === 0 ? "No opportunities yet" : "No opportunities match these filters"}
+                      </p>
+                      <p className="text-xs text-[#a89482] m-0">
+                        {applications.length === 0
+                          ? "Matched procurement opportunities will appear here once customers publish them."
+                          : "Clear a filter to widen the results."}
+                      </p>
+                      {activeFilterCount > 0 && applications.length > 0 && (
+                        <button
+                          onClick={clearAllFilters}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Clear all filters
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                // Render actual applications
-                sortedApplications.map((application) => {
-                  const statusStyle = getStatusStyle(application.status)
-                  const budgetRange = application.originalRequest?.budgetRange
-                  const budgetText = getBudgetText(application)
+                filteredApplications.map((a) => {
+                  const actions = getRowActions(a.status)
+                  const isSaved = !!savedMatches[a.id]
+                  const isTerminal = a.status === "Declined" || a.status === "Closed"
+                  const rowBg = hoveredRow === a.id ? "#fdf8f4" : "#ffffff"
+
+                  const runAction = (kind) => {
+                    if (kind === "shortlist") return handleOpenShortlist(a)
+                    if (kind === "proposal") return handleOpenProposal(a)
+                    return handleViewDetails(a)
+                  }
 
                   return (
-                    <tr key={application.id} style={tableRowStyle}>
-                      {/* Supplier Name */}
-                      <td style={tableCellStyle}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <div>
-                            <span onClick={() => handleViewDetails(application)} style={supplierNameStyle}>
-                              {application.supplierName}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Location */}
-                      <td style={tableCellStyle}>
-                        <span style={locationTextStyle}>{application.supplierLocation || "Not specified"}</span>
-                      </td>
-
-                      {/* Sector Focus */}
-                      <td style={tableCellStyle}>
-                        <div style={sectorContainerStyle}>
-                          {getCustomerEconomicSectors(application.customerId)
-                            .slice(0, 2)
-                            .map((sector, idx) => (
-                              <span key={idx} style={sectorTagStyle}>
-                                <TruncatedText text={sector} maxLength={12} />
-                              </span>
-                            ))}
-                          {getCustomerEconomicSectors(application.customerId).length === 0 && (
-                            <span style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>Not specified</span>
-                          )}
-                        </div>
-                       </td>
-
-                      {/* Customer Type */}
-                      <td style={tableCellStyle}>
-                        <span style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>
-                          {application.customerType?.toLowerCase() || "Not specified"}
-                        </span>
-                       </td>
-
-                      {/* Budget Range */}
-                      <td style={tableCellStyle}>
-                        <span style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>{budgetText}</span>
-                       </td>
-
-                      {/* Service Requested */}
-                      <td style={tableCellStyle}>
-                        <div style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>
-                          <TruncatedText text={getServiceRequested(application)} maxLength={30} />
-                        </div>
-                       </td>
-
-                      {/* Last Activity */}
-                      <td style={tableCellStyle}>{new Date(application.lastActivity).toLocaleDateString() || "N/A"}</td>
-
-                      {/* Delivery Turnaround */}
-                      <td style={tableCellStyle}>
-                        {application.originalRequest?.deliveryTurnaround || "Not specified"}
-                       </td>
-
-                      {/* Match Percentage */}
-                      <td style={tableCellStyle}>
-                        <div style={matchContainerStyle}>
-                          <div style={progressBarStyle}>
-                            <div
-                              style={{
-                                ...progressFillStyle,
-                                width: `${application.matchPercentage}%`,
-                                background:
-                                  application.matchPercentage > 75
-                                    ? "#48BB78"
-                                    : application.matchPercentage > 50
-                                      ? "#F6AD55"
-                                      : "#F56565",
-                              }}
-                            />
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-                            <span
-                              style={{
-                                ...matchScoreStyle,
-                                color:
-                                  application.matchPercentage > 75
-                                    ? "#48BB78"
-                                    : application.matchPercentage > 50
-                                      ? "#D69E2E"
-                                      : "#E53E3E",
-                              }}
-                            >
-                              {application.matchPercentage}%
-                            </span>
-                            <Eye
-                              size={14}
-                              style={{
-                                cursor: "pointer",
-                                color: "#a67c52",
-                              }}
-                              onClick={() => handleShowMatchBreakdown(application)}
-                              title="View match breakdown"
-                            />
-                          </div>
-                        </div>
-                       </td>
-
-                      {/* Current Stage */}
-                      <td style={tableCellStyle}>
-                        <span style={statusBadgeStyle}>{application.currentStage || "Application Submitted"}</span>
-                       </td>
-
-                      {/* Next Stage */}
-                      <td style={tableCellStyle}>
-                        <span
-                          style={{
-                            ...statusBadgeStyle,
-                            backgroundColor: "#E8F5E8",
-                            color: "#388E3C",
-                          }}
-                        >
-                          {application.nextStage ||
-                            (application.status === "Pending"
-                              ? "Shortlist"
-                              : application.status === "Shortlisted"
-                                ? "Proposal Sent"
-                                : application.status === "Proposal/Quote"
-                                  ? "Accept/Decline"
-                                  : "Deal Closed")}
-                        </span>
-                       </td>
-
-                      {/* Action */}
-                      <td style={tableCellStyle}>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <tr
+                      key={a.id}
+                      onMouseEnter={() => setHoveredRow(a.id)}
+                      onMouseLeave={() => setHoveredRow(null)}
+                      style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
+                    >
+                      {/* Customer — pinned left. Name only; the opportunity
+                          detail lives in its own columns. */}
+                      <td
+                        className="sticky left-0 z-10"
+                        style={{
+                          ...tableCellStyle,
+                          width: CUSTOMER_WIDTH,
+                          backgroundColor: rowBg,
+                          borderRight: "none",
+                          boxShadow: "2px 0 0 #e6d7c3",
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-[#4a352f] break-words text-sm">{a.customerName}</span>
                           <button
-                            onClick={() => handleViewDetails(application)}
-                            style={{
-                              ...actionButtonStyle,
-                              backgroundColor: "#5D2A0A",
-                              color: "white",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: "0.4rem",
-                            }}
+                            onClick={() => handleViewDetails(a)}
+                            className="text-[#a89482] hover:text-[#7d5a50] flex-shrink-0"
+                            aria-label={`View ${a.customerName}`}
+                            title="View customer profile"
                           >
-                            <Eye size={14} />
-                          </button>
-                          <button onClick={() => handleMessage(application)} style={actionButtonStyle}>
-                            Message
+                            <Eye size={13} />
                           </button>
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+
+                      {orderedColumns.map((key) => renderCell(key, a, rowBg))}
+
+                      {/* Action — scrolls with the table */}
+                      <td
+                        style={{
+                          ...tableCellStyle,
+                          width: ACTION_WIDTH,
+                          borderRight: "none",
+                          backgroundColor: rowBg,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => runAction(actions.kind)}
+                            title={actions.primary}
+                            className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                              isTerminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
+                            }`}
+                            style={{ width: "126px", height: "34px", backgroundColor: isTerminal ? undefined : "#7d5a50" }}
+                          >
+                            {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
+                            <span className="truncate">{actions.primary}</span>
+                          </button>
+
+                          <button
+                            onClick={() => setSavedMatches((p) => ({ ...p, [a.id]: !p[a.id] }))}
+                            title={isSaved ? "Remove from saved" : "Save match"}
+                            aria-label={isSaved ? "Remove from saved" : "Save match"}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                            style={{ color: isSaved ? "#a67c52" : "#c8b6a6" }}
+                          >
+                            <Bookmark size={14} fill={isSaved ? "#a67c52" : "none"} />
+                          </button>
+
+                          <button
+                            onClick={(e) => openPopupFromEvent("quickActions", a, e)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                            style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
+                            title="More actions"
+                            aria-label="More actions"
+                          >
+                            <MoreVertical size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   )
                 })
               )}
             </tbody>
           </table>
         </div>
-
-        {/* Message below table when no applications */}
-        {applications.length === 0 && (
-          <div style={emptyMessageStyle}>
-            <div style={{ textAlign: "center", padding: "2rem" }}>
-              <FileText size={48} color="#a67c52" style={{ marginBottom: "1rem" }} />
-              <h3 style={{ color: "#5D2A0A", marginBottom: "0.5rem" }}>No Applications Yet</h3>
-              <p style={{ color: "#8D6E63", marginBottom: "1rem" }}>
-                You have not applied for any customers, so there are no matches available. You need to apply first
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* No results message for filtered results */}
-        {applications.length > 0 && filteredApplications.length === 0 && (
-          <div style={noResultsStyle}>
-            <p>No applications match your current filters.</p>
-            <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
-              Clear All Filters
-            </button>
-          </div>
-        )}
-
-        {/* Table Footer */}
-        {applications.length > 0 && (
-          <div style={tableFooterStyle}>
-            <div style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>
-              Showing {filteredApplications.length} of {applications.length} applications
-            </div>
-          </div>
-        )}
       </div>
 
-      {mounted &&
-        showMatchBreakdown &&
-        createPortal(
+      {/* Drag-to-reorder hint */}
+      {dragHintRect && !draggedColumn && (
+        <PopupPortal>
           <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
             style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
+              top: dragHintRect.bottom + 8,
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 210),
+              width: "200px",
             }}
           >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "800px",
-                width: "95%",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Match Breakdown - {matchBreakdownData?.supplierName}</h3>
-                <button onClick={() => setShowMatchBreakdown(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    marginBottom: "2rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #E8D5C4",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "3rem",
-                      fontWeight: "bold",
-                      color:
-                        matchBreakdownData?.matchPercentage >= 80
-                          ? "#388E3C"
-                          : matchBreakdownData?.matchPercentage >= 60
-                            ? "#F57C00"
-                            : "#D32F2F",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    {matchBreakdownData?.matchPercentage}%
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      color: "#8D6E63",
-                      margin: "0",
-                    }}
-                  >
-                    Overall Match Score
-                  </p>
-                </div>
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
+          </div>
+        </PopupPortal>
+      )}
 
-                {matchBreakdownData?.matchBreakdown?.breakdown ? (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-                      gap: "1rem",
-                      marginBottom: "2rem",
-                    }}
-                  >
-                    {Object.entries(matchBreakdownData.matchBreakdown.breakdown).map(([key, details]) => {
-                      const scoreColor = details.score >= 80 ? "#388E3C" : details.score >= 50 ? "#F57C00" : "#D32F2F"
-
-                      return (
-                        <div
-                          key={key}
-                          style={{
-                            background: "#FEFCFA",
-                            border: "1px solid #E8D5C4",
-                            borderRadius: "8px",
-                            padding: "1.25rem",
-                            borderLeft: `4px solid ${scoreColor}`,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              marginBottom: "0.75rem",
-                            }}
-                          >
-                            <h4
-                              style={{
-                                fontSize: "0.875rem",
-                                fontWeight: "600",
-                                color: "#5D2A0A",
-                                margin: "0",
-                                lineHeight: "1.3",
-                                flex: "1",
-                              }}
-                            >
-                              {details.description}
-                            </h4>
-                            <span
-                              style={{
-                                fontSize: "1.25rem",
-                                fontWeight: "bold",
-                                color: scoreColor,
-                                marginLeft: "1rem",
-                              }}
-                            >
-                              {Math.round(details.score)}%
-                            </span>
-                          </div>
-
-                          <div
-                            style={{
-                              background: "#E8D5C4",
-                              borderRadius: "4px",
-                              height: "8px",
-                              overflow: "hidden",
-                              marginBottom: "0.5rem",
-                            }}
-                          >
-                            <div
-                              style={{
-                                height: "100%",
-                                background: scoreColor,
-                                width: `${details.score}%`,
-                                transition: "width 0.3s ease",
-                              }}
-                            />
-                          </div>
-
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "0.75rem",
-                                color: "#8D6E63",
-                              }}
-                            >
-                              Weight: {details.weight}%
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "0.75rem",
-                                color: "#8D6E63",
-                              }}
-                            >
-                              Contribution: {Math.round((details.score / 100) * details.weight)}%
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "2rem",
-                      color: "#8D6E63",
-                    }}
-                  >
-                    <p>Match breakdown data is not available for this application.</p>
-                    <p style={{ fontSize: "0.875rem" }}>
-                      This may be an older application created before detailed scoring was implemented.
-                    </p>
-                  </div>
-                )}
-
-                {/* Improvement suggestions section - only show if breakdown exists and has low scores */}
-                {matchBreakdownData?.matchBreakdown?.breakdown &&
-                  Object.entries(matchBreakdownData.matchBreakdown.breakdown).some(
-                    ([key, details]) => details.score < 70,
-                  ) && (
-                    <div
-                      style={{
-                        background: "#F5EBE0",
-                        border: "1px solid #E8D5C4",
-                        borderRadius: "8px",
-                        padding: "1.5rem",
-                        marginBottom: "2rem",
-                      }}
+      {/* Column header filter popover */}
+      {headerFilterOpen && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div
+            className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
+            style={{
+              top: headerFilterOpen.rect.bottom + 8,
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312),
+              width: "300px",
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
+            {headerFilterOpen.type === "match" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">
+                    Match %: {localFilters.matchRange[0]} - {localFilters.matchRange[1]}
+                  </label>
+                  {(localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100) && (
+                    <button
+                      onClick={() => setLocalFilters((p) => ({ ...p, matchRange: [0, 100] }))}
+                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
                     >
-                      <h4
-                        style={{
-                          fontSize: "1rem",
-                          fontWeight: "600",
-                          color: "#5D2A0A",
-                          margin: "0 0 1rem 0",
-                        }}
-                      >
-                        Areas for Improvement:
-                      </h4>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                          gap: "1rem",
-                        }}
-                      >
-                        {Object.entries(matchBreakdownData.matchBreakdown.breakdown)
-                          .filter(([key, details]) => details.score < 70)
-                          .map(([key, details]) => (
-                            <div
-                              key={key}
-                              style={{
-                                background: "white",
-                                border: "1px solid #E8D5C4",
-                                borderRadius: "6px",
-                                padding: "1rem",
-                              }}
-                            >
-                              <h5
-                                style={{
-                                  fontSize: "0.875rem",
-                                  fontWeight: "600",
-                                  color: "#D32F2F",
-                                  margin: "0 0 0.5rem 0",
-                                }}
-                              >
-                                {details.description}
-                              </h5>
-                              <p
-                                style={{
-                                  fontSize: "0.8rem",
-                                  color: "#5D2A0A",
-                                  margin: "0",
-                                  lineHeight: "1.4",
-                                }}
-                              >
-                                {getImprovementSuggestion(key, details.score)}
-                              </p>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
+                      Clear
+                    </button>
                   )}
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={localFilters.matchRange[0]}
+                    onChange={(e) =>
+                      setLocalFilters((p) => ({
+                        ...p,
+                        matchRange: [Math.min(Number.parseInt(e.target.value) || 0, p.matchRange[1]), p.matchRange[1]],
+                      }))
+                    }
+                    className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
+                  />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={localFilters.matchRange[1]}
+                    onChange={(e) =>
+                      setLocalFilters((p) => ({
+                        ...p,
+                        matchRange: [p.matchRange[0], Math.max(Number.parseInt(e.target.value) || 0, p.matchRange[0])],
+                      }))
+                    }
+                    className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
+                  />
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={localFilters.matchRange[0]}
+                  onChange={(e) =>
+                    setLocalFilters((p) => ({ ...p, matchRange: [Number.parseInt(e.target.value), p.matchRange[1]] }))
+                  }
+                  className="w-full accent-[#7d5a50]"
+                />
+              </>
+            )}
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    paddingTop: "1.5rem",
-                    borderTop: "1px solid #E8D5C4",
-                  }}
-                >
-                  <button
-                    style={{
-                      padding: "0.75rem 2rem",
-                      background: "#5D2A0A",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onClick={() => setShowMatchBreakdown(false)}
-                  >
-                    Close Breakdown
+            {headerFilterOpen.type === "closingDate" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Closing date</label>
+                  {(localFilters.closingFrom || localFilters.closingTo) && (
+                    <button
+                      onClick={() => setLocalFilters((p) => ({ ...p, closingFrom: "", closingTo: "" }))}
+                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={localFilters.closingFrom}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, closingFrom: e.target.value }))}
+                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                  />
+                  <span className="text-[#7d5a50] text-xs">to</span>
+                  <input
+                    type="date"
+                    value={localFilters.closingTo}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, closingTo: e.target.value }))}
+                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                  />
+                </div>
+                <p className="text-[11px] text-[#a89482] mt-2 mb-0">
+                  Opportunities with no closing date are excluded when a range is set.
+                </p>
+              </>
+            )}
+
+            {[
+              { type: "name", label: "Customer / opportunity", placeholder: "Search..." },
+              { type: "productService", label: "Product or Service Required", placeholder: "e.g. cleaning, IT support" },
+              { type: "estimatedValue", label: "Estimated Value", placeholder: "Search value..." },
+              { type: "deliveryLocation", label: "Delivery Location", placeholder: "Search location..." },
+              { type: "contractDuration", label: "Contract Duration", placeholder: "e.g. 12 months" },
+              { type: "paymentTerms", label: "Payment Terms", placeholder: "e.g. 30 days" },
+              { type: "minimumRequirements", label: "Minimum Requirements", placeholder: "Search requirements..." },
+              { type: "complianceRequirements", label: "Compliance Requirements", placeholder: "Search compliance..." },
+              { type: "contactPerson", label: "Contact Person", placeholder: "Search contact..." },
+              { type: "deliveryTurnaround", label: "Delivery Turnaround", placeholder: "Search turnaround..." },
+            ].map(
+              ({ type, label, placeholder }) =>
+                headerFilterOpen.type === type && (
+                  <div key={type}>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                      {localFilters[type] && (
+                        <button
+                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: "" }))}
+                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={localFilters[type]}
+                      onChange={(e) => setLocalFilters((p) => ({ ...p, [type]: e.target.value }))}
+                      placeholder={placeholder}
+                      className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                    />
+                  </div>
+                ),
+            )}
+
+            {[
+              { type: "opportunityType", label: "Opportunity Type", options: opportunityTypeOptions },
+              { type: "status", label: "Status", options: CUSTOMER_STATUSES },
+              { type: "customerSector", label: "Customer Sector", options: sectorOptions },
+              { type: "bbbeeRequirement", label: "B-BBEE Requirement", options: BBBEE_LEVELS },
+              { type: "customerType", label: "Customer Type", options: customerTypeOptions },
+              { type: "documents", label: "Documents", options: DOCUMENT_BUCKETS },
+              { type: "nextStage", label: "Next Stage", options: CUSTOMER_STATUSES },
+            ].map(
+              ({ type, label, options }) =>
+                headerFilterOpen.type === type && (
+                  <div key={type}>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                      {localFilters[type].length > 0 && (
+                        <button
+                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
+                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
+                      {options.map((value) => (
+                        <button
+                          key={value}
+                          onClick={() => toggleChip(type, value)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                            localFilters[type].includes(value)
+                              ? "bg-[#7d5a50] text-white"
+                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ),
+            )}
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Quick Actions popup ───────────────────────────────────────── */}
+      {activePopup?.type === "quickActions" && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "224px" }}
+          >
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
+              <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
+              <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]">
+                <X size={14} />
+              </button>
+            </div>
+            <button
+              onClick={() => handleViewDetails(activePopup.row)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Eye size={12} /> Customer Profile
+            </button>
+            <button
+              onClick={() => openPopup("match", activePopup.row, activePopup.rect)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Target size={12} /> Why This Match?
+            </button>
+            <button
+              onClick={() => {
+                const target = activePopup.row
+                closePopup()
+                if (target.documentCount > 0) {
+                  setSelectedApplication(target)
+                  setShowDocumentModal(true)
+                } else {
+                  notify("info", "No documents on this opportunity.", 2500)
+                }
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <FileText size={12} /> RFQ / RFP / Tender
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                notify("info", '"Compare" is not wired up yet.', 2500)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Layers size={12} /> Compare
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                notify("info", '"Share" is not wired up yet.', 2500)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Share2 size={12} /> Share
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                notify("info", '"Add Note" is not wired up yet.', 2500)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <StickyNote size={12} /> Add Note
+            </button>
+            <button
+              onClick={() => {
+                const target = activePopup.row
+                closePopup()
+                setHiddenMatches((p) => ({ ...p, [target.id]: true }))
+                notify("info", `${target.customerName} hidden from your matches.`)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <EyeOff size={12} /> Hide Match
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                notify("info", '"Report" is not wired up yet.', 2500)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#D32F2F] hover:bg-[#faf7f2] text-left"
+            >
+              <Flag size={12} /> Report
+            </button>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Why this match? — anchored popover ─────────────────────────── */}
+      {activePopup?.type === "match" && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{
+              top: activePopup.position.y,
+              left: activePopup.position.x,
+              width: "400px",
+              maxHeight: "520px",
+              overflowY: "auto",
+            }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Why this match?</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[220px]">{activePopup.row.customerName}</h3>
+                  {activePopup.row.opportunityTitle && (
+                    <p className="text-[11px] text-[#e6d7c3] m-0 truncate max-w-[220px]">
+                      {activePopup.row.opportunityTitle}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xl font-bold">{activePopup.row.matchPercentage}%</div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1">
+                    <X size={18} />
                   </button>
                 </div>
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
 
-      {/* Application Details Modal */}
-      {mounted &&
-        showModal &&
-        selectedApplication &&
-        createPortal(
-          <div style={modalOverlayStyle}>
-            <div style={modalContentStyle}>
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Application from {selectedApplication.supplierName}</h3>
-                <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div style={detailGridStyle}>
-                  {/* Supplier Details */}
-                  <div style={detailCardStyle}>
-                    <h4 style={detailCardTitleStyle}>Customer Information</h4>
-                    <p style={detailTextStyle}>
-                      <strong>Name:</strong> {selectedApplication.supplierName}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Location:</strong>{" "}
-                      {selectedApplication.applicationData?.requestOverview?.location || "Not specified"}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Match Score:</strong> {selectedApplication.matchPercentage}%
-                    </p>
-                  </div>
-
-                  {/* Application Details */}
-                  <div style={detailCardStyle}>
-                    <h4 style={detailCardTitleStyle}>Application Details</h4>
-                    <p style={detailTextStyle}>
-                      <strong>Status:</strong> {selectedApplication.status}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Received:</strong> {selectedApplication.createdAt?.toLocaleString() || "N/A"}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Last Updated:</strong> {selectedApplication.updatedAt?.toLocaleString() || "N/A"}
-                    </p>
-                  </div>
-
-                  {/* Service Details */}
-                  <div style={detailCardStyle}>
-                    <h4 style={detailCardTitleStyle}>Service Details</h4>
-                    {selectedApplication.applicationData?.productsServices?.categories?.length > 0 && (
-                      <div style={{ marginBottom: "0.5rem" }}>
-                        <strong style={{ color: "#5D2A0A" }}>Categories:</strong>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.25rem" }}>
-                          {selectedApplication.applicationData.productsServices.categories.map((category, index) => (
-                            <span key={index} style={categoryTagStyle}>
-                              {category}
-                            </span>
-                          ))}
+            <div className="p-4 space-y-2">
+              {activePopup.row.matchDetails ? (
+                <>
+                  {Object.entries(activePopup.row.matchDetails).map(([key, d]) => {
+                    const color = d.score >= 80 ? "#22c55e" : d.score >= 50 ? "#f59e0b" : "#ef4444"
+                    return (
+                      <div key={key} className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
+                        <div className="flex items-center justify-between mb-1.5 gap-2">
+                          <span className="font-semibold text-[#4a352f]">{d.description}</span>
+                          <span className="font-bold flex-shrink-0" style={{ color }}>
+                            {Math.round(d.score)}%
+                          </span>
                         </div>
+                        <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden mb-1.5">
+                          <div className="h-full rounded-full" style={{ width: `${d.score}%`, backgroundColor: color }} />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-[#a89482]">
+                          <span>Weight {d.weight}%</span>
+                          <span>Contributes {Math.round((d.score / 100) * d.weight)}%</span>
+                        </div>
+                        {d.estimated && (
+                          <p className="text-[10px] text-[#a67c52] mt-1.5 m-0">
+                            Estimated — the underlying data isn't captured yet.
+                          </p>
+                        )}
+                        {d.score < 70 && IMPROVEMENT_SUGGESTIONS[key] && (
+                          <p className="text-[11px] text-[#7d5a50] mt-1.5 m-0 leading-relaxed">
+                            {IMPROVEMENT_SUGGESTIONS[key]}
+                          </p>
+                        )}
                       </div>
-                    )}
-                    {selectedApplication.applicationData?.productsServices?.keywords && (
-                      <p style={detailTextStyle}>
-                        <strong>Keywords:</strong> {selectedApplication.applicationData.productsServices.keywords}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Budget and Timeline */}
-                  <div style={detailCardStyle}>
-                    <h4 style={detailCardTitleStyle}>Budget & Timeline</h4>
-                    <p style={detailTextStyle}>
-                      <strong>Budget:</strong> R
-                      {selectedApplication.applicationData?.requestOverview?.maxBudget?.toLocaleString() ||
-                        "Not specified"}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Urgency:</strong>{" "}
-                      {selectedApplication.applicationData?.requestOverview?.urgency || "Not specified"}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Delivery Mode:</strong>{" "}
-                      {selectedApplication.applicationData?.requestOverview?.deliveryModes?.join(", ") ||
-                        "Not specified"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Status Actions - FIXED BUTTONS */}
-                <div style={statusActionsStyle}>
-                  <h4 style={detailCardTitleStyle}>Update Status</h4>
-                  <p style={{ fontSize: "0.875rem", color: "#5D2A0A", marginBottom: "1rem" }}>
-                    Click a button below to update the status
+                    )
+                  })}
+                </>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-xs text-[#a89482] m-0">No breakdown was stored for this opportunity.</p>
+                  <p className="text-[11px] text-[#a89482] mt-1 m-0">
+                    Older records created before scoring detail was captured won't have one.
                   </p>
-                  <div style={statusButtonsContainer}>
-                    <button
-                      onClick={async () => {
-                        // console.log("Pending button clicked for:", selectedApplication.id);
-                        await handleStatusChange(selectedApplication.id, "Pending");
-                        // Refresh the modal data after status change
-                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
-                        if (updatedApp) {
-                          setSelectedApplication(updatedApp);
-                        }
-                      }}
-                      style={{
-                        ...statusButtonStyle,
-                        backgroundColor: selectedApplication.status === "Pending" ? "#5D2A0A" : "#F5EBE0",
-                        color: selectedApplication.status === "Pending" ? "white" : "#5D2A0A",
-                      }}
-                    >
-                      Pending
-                    </button>
-                    <button
-                      onClick={async () => {
-                        // console.log("Shortlisted button clicked for:", selectedApplication.id);
-                        await handleStatusChange(selectedApplication.id, "Shortlisted");
-                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
-                        if (updatedApp) {
-                          setSelectedApplication(updatedApp);
-                        }
-                      }}
-                      style={{
-                        ...statusButtonStyle,
-                        backgroundColor: selectedApplication.status === "Shortlisted" ? "#5D2A0A" : "#F5EBE0",
-                        color: selectedApplication.status === "Shortlisted" ? "white" : "#5D2A0A",
-                      }}
-                    >
-                      Shortlist
-                    </button>
-                    <button
-                      onClick={async () => {
-                        // console.log("Proposal/Quote button clicked for:", selectedApplication.id);
-                        await handleStatusChange(selectedApplication.id, "Proposal/Quote");
-                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
-                        if (updatedApp) {
-                          setSelectedApplication(updatedApp);
-                        }
-                        setShowModal(false);
-                        handleOpenProposalModal(selectedApplication);
-                      }}
-                      style={{
-                        ...statusButtonStyle,
-                        backgroundColor: selectedApplication.status === "Proposal/Quote" ? "#5D2A0A" : "#F5EBE0",
-                        color: selectedApplication.status === "Proposal/Quote" ? "white" : "#5D2A0A",
-                      }}
-                    >
-                      Proposal/Quote
-                    </button>
-                    <button
-                      onClick={async () => {
-                        // console.log("Accepted button clicked for:", selectedApplication.id);
-                        await handleStatusChange(selectedApplication.id, "Accepted");
-                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
-                        if (updatedApp) {
-                          setSelectedApplication(updatedApp);
-                        }
-                      }}
-                      style={{
-                        ...statusButtonStyle,
-                        backgroundColor: selectedApplication.status === "Accepted" ? "#5D2A0A" : "#F5EBE0",
-                        color: selectedApplication.status === "Accepted" ? "white" : "#5D2A0A",
-                      }}
-                    >
-                      Accepted
-                    </button>
-                    <button
-                      onClick={async () => {
-                        // console.log("Rejected button clicked for:", selectedApplication.id);
-                        await handleStatusChange(selectedApplication.id, "Rejected");
-                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
-                        if (updatedApp) {
-                          setSelectedApplication(updatedApp);
-                        }
-                      }}
-                      style={{
-                        ...statusButtonStyle,
-                        backgroundColor: selectedApplication.status === "Rejected" ? "#5D2A0A" : "#F5EBE0",
-                        color: selectedApplication.status === "Rejected" ? "white" : "#5D2A0A",
-                      }}
-                    >
-                      Rejected
-                    </button>
-                  </div>
                 </div>
-              </div>
-              <div style={modalActionsStyle}>
-                <button
-                  onClick={async () => {
-                    setShowModal(false)
-                    handleMessage(selectedApplication)
-                  }}
-                  style={primaryButtonStyle}
-                >
-                  <MessageCircle size={16} /> Send Message
-                </button>
-                <button
-                  onClick={() => {
-                    setShowModal(false)
-                    handleViewDocuments(selectedApplication)
-                  }}
-                  style={primaryButtonStyle}
-                >
-                  <FileText size={16} /> View Documents
-                </button>
-                <button onClick={() => setShowModal(false)} style={cancelButtonStyle}>
-                  Close
-                </button>
-              </div>
+              )}
             </div>
-          </div>,
-          document.body,
-        )}
+          </div>
+        </PopupPortal>
+      )}
 
-      {/* Proposal/Quote Modal */}
-      {mounted &&
-        showProposalModal &&
+      {/* Shortlist + meeting */}
+      {showShortlistModal &&
         selectedApplication &&
         createPortal(
-          <div style={modalOverlayStyle}>
-            <div style={modalContentStyle}>
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>
-                  <FileText size={20} style={{ marginRight: "0.5rem" }} />
-                  Send Proposal/Quote to {selectedApplication.supplierName}
-                </h3>
-                <button onClick={() => setShowProposalModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
+          <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4" style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}>
+            <div className="bg-white rounded-2xl max-w-[600px] w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Shortlist</p>
+                    <h3 className="text-sm font-bold mt-0.5 truncate">{selectedApplication.customerName}</h3>
+                  </div>
+                  <button onClick={() => setShowShortlistModal(false)} className="text-white/70 hover:text-white p-1 flex-shrink-0">
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
-              <div style={modalBodyStyle}>
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                    Message (optional):
-                  </label>
-                  <textarea
-                    value={proposalMessage}
-                    onChange={(e) => setProposalMessage(e.target.value)}
-                    placeholder="Add a message to accompany your proposal..."
-                    style={messageTextareaStyle}
-                    rows={4}
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Meeting purpose</label>
+                  <input
+                    type="text"
+                    value={meetingPurpose}
+                    onChange={(e) => {
+                      setMeetingPurpose(e.target.value)
+                      if (e.target.value.trim()) setFormErrors((p) => ({ ...p, meetingPurpose: null }))
+                    }}
+                    placeholder="e.g. Initial discussion, scope review"
+                    className="w-full px-3 py-2 rounded-lg text-sm border"
+                    style={{ borderColor: formErrors.meetingPurpose ? "#D32F2F" : "#c8b6a6" }}
                   />
+                  {formErrors.meetingPurpose && <p className="text-[11px] text-[#D32F2F] mt-1 m-0">{formErrors.meetingPurpose}</p>}
                 </div>
 
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                    Attach Proposal/Quote:
-                  </label>
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Meeting location</label>
                   <input
-                    type="file"
-                    onChange={handleProposalFileChange}
-                    accept=".pdf,.doc,.docx,.xls,.xlsx"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem",
-                      border: "1px solid #E8D5C4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
+                    type="text"
+                    value={meetingLocation}
+                    onChange={(e) => {
+                      setMeetingLocation(e.target.value)
+                      if (e.target.value.trim()) setFormErrors((p) => ({ ...p, meetingLocation: null }))
                     }}
+                    placeholder="e.g. Virtual meeting, office address"
+                    className="w-full px-3 py-2 rounded-lg text-sm border"
+                    style={{ borderColor: formErrors.meetingLocation ? "#D32F2F" : "#c8b6a6" }}
                   />
-                  {proposalFile && (
-                    <div
-                      style={{
-                        marginTop: "0.5rem",
-                        padding: "0.75rem",
-                        background: "#F5EBE0",
-                        borderRadius: "6px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      <FileText size={16} />
-                      <span>{proposalFile.name}</span>
+                  {formErrors.meetingLocation && <p className="text-[11px] text-[#D32F2F] mt-1 m-0">{formErrors.meetingLocation}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Available dates</label>
+                  <button
+                    onClick={() => setShowCalendarModal(true)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#7d5a50] text-white text-xs font-semibold mb-3"
+                  >
+                    <Calendar size={14} /> Select dates
+                  </button>
+
+                  {availabilities.length > 0 && (
+                    <div className="border border-[#e6d7c3] rounded-lg p-2 max-h-[180px] overflow-y-auto">
+                      {availabilities
+                        .sort((a, b) => a.date - b.date)
+                        .map((av, i) => (
+                          <div key={i} className="flex justify-between items-center py-1.5 border-b border-[#f5f0e1] last:border-0">
+                            <span className="text-xs text-[#4a352f]">
+                              {av.date.toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" })}
+                              <span className="text-[#a89482] ml-2">
+                                {av.timeSlots[0].start} – {av.timeSlots[0].end}
+                              </span>
+                            </span>
+                            <button
+                              onClick={() => setAvailabilities((p) => p.filter((x) => x.date.getTime() !== av.date.getTime()))}
+                              className="text-[#D32F2F]"
+                              aria-label="Remove date"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ))}
                     </div>
                   )}
+                  {formErrors.availabilities && <p className="text-[11px] text-[#D32F2F] mt-1 m-0">{formErrors.availabilities}</p>}
                 </div>
               </div>
-              <div style={modalActionsStyle}>
-                <button
-                  onClick={handleSendProposal}
-                  disabled={!proposalFile}
-                  style={{
-                    ...primaryButtonStyle,
-                    opacity: proposalFile ? 1 : 0.5,
-                    cursor: proposalFile ? "pointer" : "not-allowed",
-                  }}
-                >
-                  <Send size={16} /> Send Proposal
-                </button>
-                <button onClick={() => setShowProposalModal(false)} style={cancelButtonStyle}>
+              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
+                <button onClick={() => setShowShortlistModal(false)} className="px-4 py-2 rounded-lg text-sm text-[#7d5a50] border border-[#c8b6a6]">
                   Cancel
                 </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-
-
-      {/* Shortlist Modal */}
-      {mounted &&
-        showShortlistModal &&
-        selectedApplication &&
-        createPortal(
-          <div style={modalOverlayStyle}>
-            <div style={modalContentStyle}>
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Shortlist {selectedApplication.supplierName}</h3>
-                <button onClick={() => setShowShortlistModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div style={detailCardStyle}>
-                  <h4 style={detailCardTitleStyle}>Meeting Details</h4>
-
-                  <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                      Meeting Purpose:
-                    </label>
-                    <input
-                      type="text"
-                      value={meetingPurpose}
-                      onChange={(e) => {
-                        setMeetingPurpose(e.target.value)
-                        if (e.target.value.trim()) {
-                          setFormErrors({ ...formErrors, meetingPurpose: null })
-                        }
-                      }}
-                      placeholder="e.g., Initial Discussion, Product Review"
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        border: formErrors.meetingPurpose ? "2px solid #D32F2F" : "1px solid #E8D5C4",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                      }}
-                    />
-                    {formErrors.meetingPurpose && (
-                      <p style={{ color: "#D32F2F", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                        {formErrors.meetingPurpose}
-                      </p>
-                    )}
-                  </div>
-
-                  <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                      Meeting Location:
-                    </label>
-                    <input
-                      type="text"
-                      value={meetingLocation}
-                      onChange={(e) => {
-                        setMeetingLocation(e.target.value)
-                        if (e.target.value.trim()) {
-                          setFormErrors({ ...formErrors, meetingLocation: null })
-                        }
-                      }}
-                      placeholder="e.g., Virtual Meeting, Office Address"
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        border: formErrors.meetingLocation ? "2px solid #D32F2F" : "1px solid #E8D5C4",
-                        borderRadius: "6px",
-                      }}
-                    />
-                    {formErrors.meetingLocation && (
-                      <p style={{ color: "#D32F2F", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                        {formErrors.meetingLocation}
-                      </p>
-                    )}
-                  </div>
-
-                  <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                      Available Meeting Dates:
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowCalendarModal(true)}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        background: "#5D2A0A",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        fontSize: "0.875rem",
-                        marginBottom: "1rem",
-                      }}
-                    >
-                      <Calendar size={16} /> Select Available Dates
-                    </button>
-
-                    {availabilities.length > 0 && (
-                      <div
-                        style={{
-                          border: "1px solid #E8D5C4",
-                          borderRadius: "6px",
-                          padding: "0.75rem",
-                          maxHeight: "200px",
-                          overflowY: "auto",
-                        }}
-                      >
-                        {availabilities
-                          .sort((a, b) => a.date - b.date)
-                          .map((availability, index) => (
-                            <div
-                              key={index}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                padding: "0.5rem",
-                                borderBottom: "1px solid #F5EBE0",
-                              }}
-                            >
-                              <div>
-                                <span style={{ fontWeight: "500" }}>
-                                  {availability.date.toLocaleDateString("en-US", {
-                                    weekday: "short",
-                                    month: "short",
-                                    day: "numeric",
-                                  })}
-                                </span>
-                                <span style={{ marginLeft: "1rem", color: "#666", fontSize: "0.75rem" }}>
-                                  {availability.timeSlots[0].start} - {availability.timeSlots[0].end}
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => removeAvailability(availability.date)}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  color: "#D32F2F",
-                                  cursor: "pointer",
-                                  fontSize: "1rem",
-                                }}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                    {formErrors.availabilities && (
-                      <p style={{ color: "#D32F2F", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                        {formErrors.availabilities}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div style={modalActionsStyle}>
                 <button
-                  onClick={async () => {
-                    const errors = {}
-                    if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
-                    if (!meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location"
-                    if (availabilities.length === 0) errors.availabilities = "Please select at least one available date"
-
-                    if (Object.keys(errors).length > 0) {
-                      setFormErrors(errors)
-                      return
-                    }
-
-                    setIsSubmitting(true)
-                    try {
-                      // Update application status
-                      await updateDoc(doc(db, "supplierApplications", selectedApplication.id), {
-                        status: "Shortlisted",
-                        updatedAt: serverTimestamp(),
-                        meetingDetails: {
-                          purpose: meetingPurpose,
-                          location: meetingLocation,
-                          availabilities: availabilities.map((avail) => ({
-                            date: avail.date.toISOString(),
-                            timeSlots: avail.timeSlots,
-                            timeZone: avail.timeZone,
-                          })),
-                        },
-                      })
-
-                      // Create calendar event
-                      await addDoc(collection(db, "supplierCalendarEvents"), {
-                        supplierId: selectedApplication.supplierId,
-                        customerId: currentCustomerId,
-                        title: meetingPurpose,
-                        date: availabilities[0].date.toISOString(),
-                        location: meetingLocation,
-                        type: "meeting",
-                        createdAt: serverTimestamp(),
-                        availableDates: availabilities.map((avail) => ({
-                          date: avail.date.toISOString(),
-                          timeSlots: avail.timeSlots,
-                          timeZone: avail.timeZone,
-                        })),
-                      })
-
-                      setNotification({
-                        type: "success",
-                        message: "Supplier shortlisted and meeting scheduled",
-                      })
-                      setShowShortlistModal(false)
-                    } catch (error) {
-                      console.error("Error shortlisting supplier:", error)
-                      setNotification({
-                        type: "error",
-                        message: "Failed to shortlist supplier",
-                      })
-                    } finally {
-                      setIsSubmitting(false)
-                      setTimeout(() => setNotification(null), 3000)
-                    }
-                  }}
+                  onClick={handleConfirmShortlist}
                   disabled={isSubmitting}
-                  style={{
-                    ...primaryButtonStyle,
-                    opacity: isSubmitting ? 0.7 : 1,
-                    cursor: isSubmitting ? "not-allowed" : "pointer",
-                  }}
+                  className="px-4 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-60"
                 >
-                  {isSubmitting ? (
-                    <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <span className={loadingSpinner}></span> Processing...
-                    </span>
-                  ) : (
-                    <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <Check size={16} /> Confirm Shortlist
-                    </span>
-                  )}
-                </button>
-                <button onClick={() => setShowShortlistModal(false)} style={cancelButtonStyle}>
-                  Cancel
+                  <Check size={15} /> {isSubmitting ? "Saving..." : "Confirm shortlist"}
                 </button>
               </div>
             </div>
@@ -2608,154 +2827,53 @@ export function CustomerTable() {
           document.body,
         )}
 
-      {mounted &&
-        showCalendarModal &&
+      {/* Date picker */}
+      {showCalendarModal &&
         createPortal(
-          <div style={modalOverlayStyle}>
-            <div
-              style={{
-                ...modalContentStyle,
-                maxWidth: "600px",
-                padding: "2rem",
-              }}
-            >
-              <h3
-                style={{
-                  ...modalTitleStyle,
-                  textAlign: "center",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                Select Available Meeting Dates
-              </h3>
+          <div className="fixed inset-0 flex items-center justify-center z-[1010] p-4" style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}>
+            <div className="bg-white rounded-2xl max-w-[600px] w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6">
+              <h3 className="text-lg font-semibold text-[#4a352f] text-center mb-5 m-0">Select available dates</h3>
 
-              <div
-                style={{
-                  backgroundColor: "#F5EBE0",
-                  padding: "1.5rem",
-                  borderRadius: "8px",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "0.5rem",
-                    fontWeight: "600",
-                    color: "#5D2A0A",
-                  }}
-                >
-                  Available Time:
-                </label>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "1rem",
-                    marginBottom: "1rem",
-                  }}
-                >
+              <div className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-4 mb-5">
+                <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Available time</label>
+                <div className="flex items-center gap-3 mb-3">
                   <input
                     type="time"
                     value={timeSlot.start}
-                    onChange={(e) => handleTimeChange("start", e.target.value)}
-                    style={{
-                      padding: "0.75rem",
-                      border: "1px solid #E8D5C4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      flex: 1,
-                    }}
+                    onChange={(e) => setTimeSlot((p) => ({ ...p, start: e.target.value }))}
+                    className="flex-1 px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm"
                   />
-                  <span>to</span>
+                  <span className="text-[#7d5a50] text-xs">to</span>
                   <input
                     type="time"
                     value={timeSlot.end}
-                    onChange={(e) => handleTimeChange("end", e.target.value)}
-                    style={{
-                      padding: "0.75rem",
-                      border: "1px solid #E8D5C4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      flex: 1,
-                    }}
+                    onChange={(e) => setTimeSlot((p) => ({ ...p, end: e.target.value }))}
+                    className="flex-1 px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm"
                   />
                 </div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "0.5rem",
-                    fontWeight: "600",
-                    color: "#5D2A0A",
-                  }}
-                >
-                  Time Zone:
-                </label>
-                <select
+                <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Time zone</label>
+                <input
+                  type="text"
                   value={timeZone}
                   onChange={(e) => setTimeZone(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #E8D5C4",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    backgroundColor: "white",
-                  }}
-                >
-                  <option value="Africa/Johannesburg">Africa/Johannesburg (SAST)</option>
-                  <option value="UTC">UTC</option>
-                  {/* Add more time zones as needed */}
-                </select>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                <DayPicker
-                  mode="multiple"
-                  selected={tempDates}
-                  onSelect={handleDateSelect}
-                  style={{
-                    backgroundColor: "white",
-                    borderRadius: "8px",
-                    padding: "1rem",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                  }}
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm"
                 />
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "1rem",
-                }}
-              >
-                <button
-                  onClick={() => setShowCalendarModal(false)}
-                  style={{
-                    ...cancelButtonStyle,
-                    flex: 1,
-                  }}
-                >
+              <div className="flex justify-center mb-5">
+                <DayPicker mode="multiple" selected={tempDates} onSelect={(d) => setTempDates(d || [])} />
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setShowCalendarModal(false)} className="flex-1 px-4 py-2.5 rounded-lg text-sm text-[#7d5a50] border border-[#c8b6a6]">
                   Cancel
                 </button>
                 <button
                   onClick={saveSelectedDates}
                   disabled={tempDates.length === 0}
-                  style={{
-                    ...primaryButtonStyle,
-                    flex: 1,
-                    opacity: tempDates.length === 0 ? 0.7 : 1,
-                    cursor: tempDates.length === 0 ? "not-allowed" : "pointer",
-                  }}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold disabled:opacity-50"
                 >
-                  Save Dates ({tempDates.length})
+                  Save dates ({tempDates.length})
                 </button>
               </div>
             </div>
@@ -2763,577 +2881,134 @@ export function CustomerTable() {
           document.body,
         )}
 
-      {/* Customer Details Modal */}
-      {mounted && showCustomerModal && selectedCustomer && (
-        <CustomerDetailsModal
-          customer={selectedCustomer}
-          isOpen={showCustomerModal}
-          onClose={() => setShowCustomerModal(false)}
-        />
-      )}
-
-      {/* Documents Modal */}
-      {mounted &&
-        showDocumentModal &&
+      {/* Proposal */}
+      {showProposalModal &&
         selectedApplication &&
         createPortal(
-          <div style={modalOverlayStyle}>
-            <div style={modalContentStyle}>
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Documents from {selectedApplication.supplierName}</h3>
-                <button onClick={() => setShowDocumentModal(false)} style={modalCloseButtonStyle}>
-                  ✖
+          <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4" style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}>
+            <div className="bg-white rounded-2xl max-w-[560px] w-full shadow-2xl">
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Send proposal</p>
+                    <h3 className="text-sm font-bold mt-0.5 truncate">{selectedApplication.customerName}</h3>
+                  </div>
+                  <button onClick={() => setShowProposalModal(false)} className="text-white/70 hover:text-white p-1 flex-shrink-0">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Message (optional)</label>
+                  <textarea
+                    value={proposalMessage}
+                    onChange={(e) => setProposalMessage(e.target.value)}
+                    placeholder="Add a note to accompany your proposal..."
+                    rows={4}
+                    className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm resize-vertical"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Attach proposal / quote</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setProposalFile(e.target.files[0])}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx"
+                    className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm"
+                  />
+                  {proposalFile && (
+                    <div className="mt-2 px-3 py-2 bg-[#faf7f2] rounded-lg flex items-center gap-2 text-xs text-[#4a352f]">
+                      <FileText size={14} /> {proposalFile.name}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-[#e65100] mt-2 m-0">
+                    File upload to Storage isn't wired yet — the recipient will see the filename but not be able to
+                    download it until that's connected.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
+                <button onClick={() => setShowProposalModal(false)} className="px-4 py-2 rounded-lg text-sm text-[#7d5a50] border border-[#c8b6a6]">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendProposal}
+                  disabled={!proposalFile || isSubmitting}
+                  className="px-4 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Send size={15} /> {isSubmitting ? "Sending..." : "Send proposal"}
                 </button>
               </div>
-              <div style={modalBodyStyle}>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Documents */}
+      {showDocumentModal &&
+        selectedApplication &&
+        createPortal(
+          <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4" style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}>
+            <div className="bg-white rounded-2xl max-w-[560px] w-full max-h-[80vh] overflow-y-auto shadow-2xl">
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Documents</p>
+                    <h3 className="text-sm font-bold mt-0.5 truncate">{selectedApplication.customerName}</h3>
+                  </div>
+                  <button onClick={() => setShowDocumentModal(false)} className="text-white/70 hover:text-white p-1 flex-shrink-0">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
                 {selectedApplication.applicationData?.documents?.length > 0 ? (
-                  <div style={documentsListStyle}>
-                    {selectedApplication.applicationData.documents.map((doc, index) => (
-                      <div key={index} style={documentItemStyle}>
-                        <div style={documentIconStyle}>
-                          <FileIcon size={20} />
+                  <div className="flex flex-col gap-3">
+                    {selectedApplication.applicationData.documents.map((d, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 border border-[#e6d7c3] rounded-lg bg-[#faf7f2]">
+                        <div className="w-9 h-9 rounded-lg bg-[#f5f0e1] flex items-center justify-center text-[#7d5a50] flex-shrink-0">
+                          <FileIcon size={18} />
                         </div>
-                        <div style={documentInfoStyle}>
-                          <h4 style={{ margin: "0 0 0.25rem 0", color: "#5D2A0A" }}>{doc.name}</h4>
-                          <p style={{ margin: "0", fontSize: "0.8rem", color: "#666" }}>
-                            {doc.type} • {doc.size || "N/A"}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium text-[#4a352f] m-0 truncate">{d.name}</h4>
+                          <p className="text-[11px] text-[#a89482] m-0">
+                            {d.type} · {d.size || "size unknown"}
                           </p>
                         </div>
-                        <a href={doc.url} target="_blank" rel="noopener noreferrer" style={documentDownloadStyle}>
-                          <Download size={16} />
-                        </a>
+                        {d.url ? (
+                          <a
+                            href={d.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg bg-[#7d5a50] text-white flex-shrink-0"
+                            aria-label={`Download ${d.name}`}
+                          >
+                            <Download size={15} />
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-[#a89482] flex-shrink-0">No file</span>
+                        )}
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div style={noDocumentsStyle}>
-                    <FileIcon size={48} color="#a67c52" />
-                    <p>No documents available for this application</p>
+                  <div className="text-center py-10 text-[#a89482]">
+                    <FileIcon size={40} className="mx-auto mb-3 text-[#e6d7c3]" />
+                    <p className="m-0 text-sm">No documents on this opportunity.</p>
                   </div>
                 )}
               </div>
-              <div style={modalActionsStyle}>
-                <button onClick={() => setShowDocumentModal(false)} style={primaryButtonStyle}>
-                  Close
-                </button>
-              </div>
             </div>
           </div>,
           document.body,
         )}
 
-      {/* Message Modal */}
-      {mounted &&
-        showMessageModal &&
-        selectedApplication &&
-        createPortal(
-          <div style={modalOverlayStyle}>
-            <div style={modalContentStyle}>
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Message {selectedApplication.supplierName}</h3>
-                <button onClick={() => setShowMessageModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div style={recipientInfoStyle}>
-                  <p style={{ margin: "0 0 0.5rem 0", color: "#5D2A0A" }}>
-                    <strong>To:</strong> {selectedApplication.supplierName}
-                  </p>
-                  <p style={{ margin: "0", color: "#5D2A0A" }}>
-                    <strong>Regarding:</strong> Application #{selectedApplication.id.slice(0, 8)} - Status:{" "}
-                    {temporaryStatus || selectedApplication.status}
-                  </p>
-                </div>
-                <textarea
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder="Type your message here..."
-                  style={messageTextareaStyle}
-                  rows={6}
-                />
-              </div>
-              <div style={modalActionsStyle}>
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!messageText.trim()}
-                  style={{
-                    ...primaryButtonStyle,
-                    opacity: messageText.trim() ? 1 : 0.5,
-                    cursor: messageText.trim() ? "pointer" : "not-allowed",
-                  }}
-                >
-                  <Send size={16} /> Send Message
-                </button>
-                <button onClick={() => setShowMessageModal(false)} style={cancelButtonStyle}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-    </>
+      {selectedCustomer && (
+        <CustomerDetailsModal customer={selectedCustomer} isOpen onClose={() => setSelectedCustomer(null)} />
+      )}
+    </div>
   )
 }
 
-// Styles
-const loadingStyle = {
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  height: "200px",
-  color: "#5D2A0A",
-}
-
-const errorStyle = {
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  height: "200px",
-  color: "#D32F2F",
-}
-
-const emptyMessageStyle = {
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: "200px",
-  background: "#FEFCFA",
-  borderRadius: "8px",
-  border: "1px dashed #E8D5C4",
-  marginTop: "1rem",
-}
-
-const noResultsStyle = {
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: "2rem",
-  color: "#a67c52",
-  textAlign: "center",
-}
-
-const statusUpdateMessageStyle = {
-  padding: "1rem",
-  background: "#F5EBE0",
-  borderRadius: "8px",
-  marginBottom: "1rem",
-  borderLeft: "4px solid #5D2A0A",
-}
-
-const clearFiltersButtonStyle = {
-  padding: "0.5rem 1rem",
-  background: "#F5EBE0",
-  color: "#5D2A0A",
-  border: "1px solid #E8D5C4",
-  borderRadius: "6px",
-  cursor: "pointer",
-  marginTop: "0.5rem",
-}
-
-const tableContainerStyle = {
-  overflowX: "auto",
-  borderRadius: "8px",
-  border: "1px solid #E8D5C4",
-  boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-}
-
-const tableStyle = {
-  width: "100%",
-  borderCollapse: "collapse",
-  background: "white",
-  fontSize: "0.875rem",
-  backgroundColor: "#FEFCFA",
-}
-
-const tableHeaderStyle = {
-  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-  color: "#FEFCFA",
-  padding: "0.75rem 0.4rem",
-  textAlign: "left",
-  fontWeight: "600",
-  fontSize: "0.7rem",
-  letterSpacing: "0.5px",
-  textTransform: "uppercase",
-  position: "sticky",
-  top: "0",
-  zIndex: "10",
-  borderBottom: "2px solid #1a0c02",
-  borderRight: "1px solid #1a0c02",
-  lineHeight: "1.2",
-}
-
-const tableRowStyle = {
-  borderBottom: "1px solid #E8D5C4",
-}
-
-const tableCellStyle = {
-  padding: "8px 12px",
-  fontSize: "0.75rem",
-  color: "#5d2a0a",
-  lineHeight: "1.3",
-  verticalAlign: "top",
-  borderRight: "1px solid #E8D5C4",
-  overflow: "hidden",
-}
-
-const tableFooterStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginTop: "1rem",
-  padding: "1rem",
-  background: "#FEFCFA",
-  borderRadius: "8px",
-  border: "1px solid #E8D5C4",
-}
-
-const avatarStyle = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  background: "#E8D5C4",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "0.8rem",
-  fontWeight: "bold",
-  color: "#5D2A0A",
-}
-
-const supplierNameStyle = {
-  color: "#a67c52",
-  textDecoration: "underline",
-  cursor: "pointer",
-  fontWeight: "500",
-  wordBreak: "break-word",
-}
-
-const locationTextStyle = {
-  fontSize: "0.75rem", // Match supplier table font size
-  color: "#5d2a0a", // Match supplier table text color
-  lineHeight: "1.4",
-}
-
-const matchContainerStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-start",
-  gap: "0.25rem",
-}
-
-const progressBarStyle = {
-  width: "50px",
-  height: "6px",
-  background: "#E8D5C4",
-  borderRadius: "3px",
-  overflow: "hidden",
-}
-
-const progressFillStyle = {
-  height: "100%",
-  background: "linear-gradient(90deg, #48BB78, #68d391)",
-  transition: "width 0.3s ease",
-}
-
-const matchScoreStyle = {
-  fontSize: "0.75rem", // Match supplier table font size
-  fontWeight: "600",
-  lineHeight: "1.4",
-}
-
-const statusBadgeStyle = {
-  padding: "0.2rem 0.4rem",
-  borderRadius: "4px",
-  fontSize: "0.7rem",
-  fontWeight: "500",
-  display: "inline-block",
-  whiteSpace: "nowrap",
-}
-
-const actionButtonStyle = {
-  padding: "0.4rem 0.6rem", // Slightly increased padding for icon
-  background: "#5D2A0A",
-  color: "white",
-  border: "none",
-  borderRadius: "4px",
-  cursor: "pointer",
-  fontSize: "0.875rem", // Updated font size to match supplier table
-  fontWeight: "500",
-}
-
-const filterButtonStyle = {
-  background: "#F5EBE0",
-  color: "#5D2A0A",
-  border: "1px solid #E8D5C4",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.875rem",
-  transition: "all 0.2s",
-}
-
-const exportButtonStyle = {
-  background: "#5D2A0A",
-  color: "white",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.875rem",
-  transition: "all 0.2s",
-}
-
-const modalOverlayStyle = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.5)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 1000,
-}
-
-const modalContentStyle = {
-  background: "white",
-  borderRadius: "12px",
-  maxWidth: "800px",
-  width: "90%",
-  maxHeight: "90vh",
-  overflowY: "auto",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-}
-
-const modalHeaderStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "1.5rem",
-  borderBottom: "1px solid #E8D5C4",
-  background: "#F5EBE0",
-}
-
-const modalTitleStyle = {
-  margin: 0,
-  fontSize: "1.25rem",
-  fontWeight: "600",
-  color: "#5D2A0A",
-}
-
-const modalCloseButtonStyle = {
-  background: "none",
-  border: "none",
-  fontSize: "1.5rem",
-  cursor: "pointer",
-  color: "#5D2A0A",
-}
-
-const modalBodyStyle = {
-  padding: "1.5rem",
-}
-
-const modalActionsStyle = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "0.5rem",
-  padding: "1.5rem",
-  borderTop: "1px solid #E8D5C4",
-}
-
-const primaryButtonStyle = {
-  background: "#5D2A0A",
-  color: "white",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.875rem",
-  transition: "all 0.2s",
-}
-
-const cancelButtonStyle = {
-  background: "#F5EBE0",
-  color: "#5D2A0A",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-}
-
-const detailGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-  gap: "1.5rem",
-  marginBottom: "1.5rem",
-}
-
-const detailCardStyle = {
-  padding: "1rem",
-  background: "#FEFCFA",
-  border: "1px solid #E8D5C4",
-  borderRadius: "8px",
-}
-
-const detailCardTitleStyle = {
-  fontSize: "1rem",
-  fontWeight: "600",
-  margin: "0 0 1rem 0",
-  color: "#5D2A0A",
-  borderBottom: "1px solid #E8D5C4",
-  paddingBottom: "0.5rem",
-}
-
-const detailTextStyle = {
-  margin: "0.5rem 0",
-  fontSize: "0.875rem",
-  color: "#5D2A0A",
-}
-
-const categoryTagStyle = {
-  background: "#E8D5C4",
-  color: "#5D2A0A",
-  padding: "0.2rem 0.4rem",
-  borderRadius: "4px",
-  fontSize: "0.7rem",
-}
-
-const statusActionsStyle = {
-  marginBottom: "1.5rem",
-}
-
-const statusButtonsContainer = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.5rem",
-  marginTop: "0.5rem",
-}
-
-const statusButtonStyle = {
-  padding: "0.5rem 1rem",
-  border: "1px solid #E8D5C4",
-  borderRadius: "6px",
-  cursor: "pointer",
-  fontSize: "0.875rem",
-  transition: "all 0.2s",
-}
-
-const documentsListStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "1rem",
-}
-
-const documentItemStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: "1rem",
-  padding: "1rem",
-  border: "1px solid #E8D5C4",
-  borderRadius: "8px",
-  background: "#FEFCFA",
-}
-
-const documentIconStyle = {
-  width: "40px",
-  height: "40px",
-  background: "#F5EBE0",
-  borderRadius: "8px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#5D2A0A",
-}
-
-const documentInfoStyle = {
-  flex: 1,
-}
-
-const documentDownloadStyle = {
-  padding: "0.5rem",
-  background: "#5D2A0A",
-  color: "white",
-  border: "none",
-  borderRadius: "4px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-}
-
-const noDocumentsStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "1rem",
-  padding: "2rem",
-  color: "#666",
-}
-
-const supplierIdStyle = {
-  fontSize: "0.7rem",
-  color: "#999",
-  marginTop: "0.1rem",
-}
-
-const sectorContainerStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "2px",
-}
-
-const sectorTagStyle = {
-  fontSize: "0.75rem", // Ensuring consistent font size
-  color: "#5d2a0a", // Ensuring brown color like other text
-  lineHeight: "1.4",
-}
-
-const loadingSpinner = {
-  display: "inline-block",
-  width: "16px",
-  height: "16px",
-  border: "2px solid rgba(255,255,255,0.3)",
-  borderRadius: "50%",
-  borderTopColor: "white",
-  animation: "spin 1s ease-in-out infinite",
-}
-
-// Add this to your styles section
-const spinAnimation = `
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-`
-
-const recipientInfoStyle = {
-  padding: "1rem",
-  background: "#F5EBE0",
-  borderRadius: "8px",
-  marginBottom: "1.5rem",
-  border: "1px solid #E8D5C4",
-}
-
-const messageTextareaStyle = {
-  width: "100%",
-  minHeight: "150px",
-  padding: "0.75rem",
-  border: "1px solid #E8D5C4",
-  borderRadius: "6px",
-  fontSize: "0.875rem",
-  fontFamily: "inherit",
-  resize: "vertical",
-  background: "#FEFCFA",
-}
+export default CustomerTable
