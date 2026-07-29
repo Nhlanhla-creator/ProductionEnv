@@ -1,11 +1,11 @@
+// src/pages/RapsActions.jsx
 
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "../../firebaseConfig";
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaChevronDown, FaChevronRight } from "react-icons/fa";
-import { useLocation } from "react-router-dom";
-
 
 const RapsActions = () => {
   const location = useLocation();
@@ -14,14 +14,15 @@ const RapsActions = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [expandedMeetings, setExpandedMeetings] = useState({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [editingAction, setEditingAction] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [notification, setNotification] = useState(null);
-  const [navigating, setNavigating] = useState(false);
-  const [expandedMeeting, setExpandedMeeting] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [contactingId, setContactingId] = useState(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -32,6 +33,14 @@ const RapsActions = () => {
     priority: "medium",
     status: "open",
   });
+
+  // Get meeting ID from URL
+  const getMeetingId = () => {
+    const params = new URLSearchParams(location.search);
+    return params.get("meeting");
+  };
+
+  const filterMeetingId = getMeetingId();
 
   // Get current user
   useEffect(() => {
@@ -46,94 +55,51 @@ const RapsActions = () => {
     return () => unsubscribe();
   }, []);
 
-// Load meetings from Firestore
-useEffect(() => {
-  if (!currentUser) return;
+  // Load meetings
+  useEffect(() => {
+    if (!currentUser) return;
 
-  const loadMeetings = async () => {
-    setLoading(true);
-    try {
-      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-      const calendarSnap = await getDoc(calendarRef);
+    const loadMeetings = async () => {
+      setLoading(true);
+      try {
+        const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+        const calendarSnap = await getDoc(calendarRef);
 
-      if (calendarSnap.exists()) {
-        const data = calendarSnap.data();
-        const meetingsData = data.meetings || [];
-        setMeetings(meetingsData);
+        if (calendarSnap.exists()) {
+          const data = calendarSnap.data();
+          const meetingsData = data.meetings || [];
+          setMeetings(meetingsData);
 
-        // ✅ Check for meeting query param
-        const params = new URLSearchParams(location.search);
-        const meetingId = params.get("meeting");
-        
-        if (meetingId) {
-          console.log("📋 Filtering to meeting:", meetingId);
-          const meeting = meetingsData.find(m => m.id === meetingId);
-          if (meeting) {
-            // Auto-expand the meeting
-            setExpandedMeeting(meetingId);
-            
-            // Add a small delay to ensure DOM is ready
-            setTimeout(() => {
-              const element = document.getElementById(`meeting-${meetingId}`);
-              if (element) {
-                element.scrollIntoView({ behavior: "smooth", block: "center" });
-                // Highlight the card briefly
-                element.style.transition = "box-shadow 0.3s ease";
-                element.style.boxShadow = "0 0 0 3px #7d5a50";
-                setTimeout(() => {
-                  element.style.boxShadow = "none";
-                }, 2000);
-              }
-            }, 500);
+          // Auto-expand the meeting if filtered
+          if (filterMeetingId) {
+            setExpandedMeetings({ [filterMeetingId]: true });
           }
+        } else {
+          setMeetings([]);
         }
-      } else {
-        setMeetings([]);
+      } catch (error) {
+        console.error("Error loading meetings:", error);
+        setNotification({
+          type: "error",
+          message: "Failed to load meetings. Please try again.",
+        });
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading meetings:", error);
-      setNotification({
-        type: "error",
-        message: "Failed to load meetings. Please try again.",
-      });
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    loadMeetings();
+  }, [currentUser, filterMeetingId]);
+
+  // Toggle meeting expansion
+  const toggleMeeting = (meetingId) => {
+    setExpandedMeetings(prev => ({
+      ...prev,
+      [meetingId]: !prev[meetingId],
+    }));
   };
 
-  loadMeetings();
-}, [currentUser, location.search]);
-
-  
-  // Calculate summary stats
-  const getSummaryStats = () => {
-    let open = 0;
-    let inProgress = 0;
-    let completed = 0;
-    let overdue = 0;
-    const today = new Date();
-
-    meetings.forEach((meeting) => {
-      (meeting.actions || []).forEach((action) => {
-        if (action.status === "open") open++;
-        else if (action.status === "in-progress") inProgress++;
-        else if (action.status === "completed") completed++;
-
-        if (action.dueDate && (action.status === "open" || action.status === "in-progress")) {
-          const dueDate = new Date(action.dueDate);
-          if (dueDate < today) {
-            overdue++;
-          }
-        }
-      });
-    });
-
-    return { open, inProgress, completed, overdue };
-  };
-
-  const stats = getSummaryStats();
-
-  // Get unique departments
+  // Get unique departments for filter
   const getDepartments = () => {
     const depts = new Set();
     meetings.forEach((meeting) => {
@@ -148,279 +114,29 @@ useEffect(() => {
   const getFilteredMeetings = () => {
     let filtered = meetings;
 
+    // Search filter
     if (searchTerm.trim()) {
       filtered = filtered.filter((meeting) =>
         meeting.title?.toLowerCase().includes(searchTerm.toLowerCase().trim())
       );
     }
 
+    // Department filter
     if (departmentFilter !== "all") {
       filtered = filtered.filter(
         (meeting) => meeting.department === departmentFilter
       );
     }
 
-    if (statusFilter !== "all") {
-      filtered = filtered.map((meeting) => ({
-        ...meeting,
-        actions: (meeting.actions || []).filter((action) => {
-          if (statusFilter === "overdue") {
-            const dueDate = new Date(action.dueDate);
-            const today = new Date();
-            return (
-              (action.status === "open" || action.status === "in-progress") &&
-              dueDate < today
-            );
-          }
-          return action.status === statusFilter;
-        }),
-      }));
-      filtered = filtered.filter((meeting) => (meeting.actions || []).length > 0);
+    // Meeting filter (from URL)
+    if (filterMeetingId) {
+      filtered = filtered.filter((meeting) => meeting.id === filterMeetingId);
     }
 
     return filtered;
   };
 
   const filteredMeetings = getFilteredMeetings();
-
-  // Save meetings
-  const saveMeetings = async (updatedMeetings) => {
-    try {
-      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-      await setDoc(
-        calendarRef,
-        {
-          meetings: updatedMeetings,
-          updatedAt: new Date().toISOString(),
-          userId: currentUser.uid,
-        },
-        { merge: true }
-      );
-      setMeetings(updatedMeetings);
-      return true;
-    } catch (error) {
-      console.error("Error saving meetings:", error);
-      setNotification({
-        type: "error",
-        message: "Failed to save changes. Please try again.",
-      });
-      return false;
-    }
-  };
-
-
-  // Navigation handler
-  const handleViewMeeting = (meetingId) => {
-    setNavigating(true);
-    window.location.href = `/governance-calendar?meeting=${meetingId}`;
-  };
-
-  // Get due date color
-  const getDueDateColor = (dueDate) => {
-    if (!dueDate) return "#8d6e63";
-    const today = new Date();
-    const due = new Date(dueDate);
-    const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return "#f44336";
-    if (diffDays === 0 || diffDays <= 3) return "#ff9800";
-    if (diffDays <= 7) return "#ffc107";
-    return "#4caf50";
-  };
-
-  const getDueDateLabel = (dueDate) => {
-    if (!dueDate) return "";
-    const today = new Date();
-    const due = new Date(dueDate);
-    const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)} days`;
-    if (diffDays === 0) return "Due today";
-    if (diffDays === 1) return "Due tomorrow";
-    return `Due in ${diffDays} days`;
-  };
-
-  // Add action
-  const handleAddAction = async () => {
-    if (!selectedMeeting || !formData.title.trim()) {
-      setNotification({
-        type: "error",
-        message: "Please fill in all required fields.",
-      });
-      return;
-    }
-
-    const newAction = {
-      id: Date.now().toString(),
-      title: formData.title.trim(),
-      description: formData.description.trim() || "",
-      assignedTo: formData.assignedTo || "",
-      dueDate: formData.dueDate || "",
-      priority: formData.priority || "medium",
-      status: formData.status || "open",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const updatedMeetings = meetings.map((meeting) => {
-      if (meeting.id === selectedMeeting.id) {
-        return {
-          ...meeting,
-          actions: [...(meeting.actions || []), newAction],
-        };
-      }
-      return meeting;
-    });
-
-    const success = await saveMeetings(updatedMeetings);
-    if (success) {
-      setNotification({ type: "success", message: "Action added successfully!" });
-      setShowAddModal(false);
-      setSelectedMeeting(null);
-      setFormData({
-        title: "",
-        description: "",
-        assignedTo: "",
-        dueDate: "",
-        priority: "medium",
-        status: "open",
-      });
-      setTimeout(() => setNotification(null), 3000);
-    }
-  };
-
-  // Edit action
-  const handleEditAction = async () => {
-    if (!editingAction || !formData.title.trim()) {
-      setNotification({
-        type: "error",
-        message: "Please fill in all required fields.",
-      });
-      return;
-    }
-
-    const updatedMeetings = meetings.map((meeting) => {
-      if (meeting.id === editingAction.meetingId) {
-        return {
-          ...meeting,
-          actions: (meeting.actions || []).map((action) => {
-            if (action.id === editingAction.action.id) {
-              return {
-                ...action,
-                title: formData.title.trim(),
-                description: formData.description.trim() || "",
-                assignedTo: formData.assignedTo || "",
-                dueDate: formData.dueDate || "",
-                priority: formData.priority || "medium",
-                status: formData.status || "open",
-                updatedAt: new Date().toISOString(),
-              };
-            }
-            return action;
-          }),
-        };
-      }
-      return meeting;
-    });
-
-    const success = await saveMeetings(updatedMeetings);
-    if (success) {
-      setNotification({ type: "success", message: "Action updated successfully!" });
-      setShowEditModal(false);
-      setEditingAction(null);
-      setFormData({
-        title: "",
-        description: "",
-        assignedTo: "",
-        dueDate: "",
-        priority: "medium",
-        status: "open",
-      });
-      setTimeout(() => setNotification(null), 3000);
-    }
-  };
-
-  // Delete action
-  const handleDeleteAction = async (meetingId, actionId) => {
-    if (!window.confirm("Are you sure you want to delete this action?")) return;
-
-    const updatedMeetings = meetings.map((meeting) => {
-      if (meeting.id === meetingId) {
-        return {
-          ...meeting,
-          actions: (meeting.actions || []).filter(
-            (action) => action.id !== actionId
-          ),
-        };
-      }
-      return meeting;
-    });
-
-    const success = await saveMeetings(updatedMeetings);
-    if (success) {
-      setNotification({ type: "warning", message: "Action deleted successfully." });
-      setTimeout(() => setNotification(null), 3000);
-    }
-  };
-
-  // Toggle action status
-  const toggleActionStatus = async (meetingId, action) => {
-    const newStatus = action.status === "completed" ? "open" : "completed";
-
-    const updatedMeetings = meetings.map((meeting) => {
-      if (meeting.id === meetingId) {
-        return {
-          ...meeting,
-          actions: (meeting.actions || []).map((a) => {
-            if (a.id === action.id) {
-              return {
-                ...a,
-                status: newStatus,
-                updatedAt: new Date().toISOString(),
-              };
-            }
-            return a;
-          }),
-        };
-      }
-      return meeting;
-    });
-
-    await saveMeetings(updatedMeetings);
-  };
-
-  // Open add modal
-  const openAddModal = (meeting) => {
-    setSelectedMeeting(meeting);
-    setFormData({
-      title: "",
-      description: "",
-      assignedTo: "",
-      dueDate: "",
-      priority: "medium",
-      status: "open",
-    });
-    setShowAddModal(true);
-  };
-
-  // Open edit modal
-  const openEditModal = (meetingId, action) => {
-    setEditingAction({ meetingId, action });
-    setFormData({
-      title: action.title || "",
-      description: action.description || "",
-      assignedTo: action.assignedTo || "",
-      dueDate: action.dueDate || "",
-      priority: action.priority || "medium",
-      status: action.status || "open",
-    });
-    setShowEditModal(true);
-  };
-
-  // Toggle meeting expansion (only one at a time)
-  const toggleMeeting = (meetingId) => {
-    setExpandedMeeting(expandedMeeting === meetingId ? null : meetingId);
-  };
 
   // Status badge
   const getStatusBadge = (status) => {
@@ -482,12 +198,252 @@ useEffect(() => {
     return dueDate < today;
   };
 
+  // Get due date color
+  const getDueDateColor = (dueDate) => {
+    if (!dueDate) return "#8d6e63";
+    const today = new Date();
+    const due = new Date(dueDate);
+    const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return "#f44336";
+    if (diffDays === 0 || diffDays <= 3) return "#ff9800";
+    if (diffDays <= 7) return "#ffc107";
+    return "#4caf50";
+  };
+
+  const getDueDateLabel = (dueDate) => {
+    if (!dueDate) return "";
+    const today = new Date();
+    const due = new Date(dueDate);
+    const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)} days`;
+    if (diffDays === 0) return "Due today";
+    if (diffDays === 1) return "Due tomorrow";
+    return `Due in ${diffDays} days`;
+  };
+
+  // Save meetings to Firestore
+  const saveMeetings = async (updatedMeetings) => {
+    try {
+      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+      await setDoc(
+        calendarRef,
+        {
+          meetings: updatedMeetings,
+          updatedAt: new Date().toISOString(),
+          userId: currentUser.uid,
+        },
+        { merge: true }
+      );
+      setMeetings(updatedMeetings);
+      return true;
+    } catch (error) {
+      console.error("Error saving meetings:", error);
+      setNotification({
+        type: "error",
+        message: "Failed to save changes. Please try again.",
+      });
+      return false;
+    }
+  };
+
+  // Add action
+  const handleAddAction = async () => {
+    if (!selectedMeeting || !formData.title.trim()) {
+      setNotification({
+        type: "error",
+        message: "Please fill in all required fields.",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+
+    const newAction = {
+      id: Date.now().toString(),
+      title: formData.title.trim(),
+      description: formData.description.trim() || "",
+      assignedTo: formData.assignedTo || "",
+      dueDate: formData.dueDate || "",
+      priority: formData.priority || "medium",
+      status: formData.status || "open",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedMeetings = meetings.map((meeting) => {
+      if (meeting.id === selectedMeeting.id) {
+        return {
+          ...meeting,
+          actions: [...(meeting.actions || []), newAction],
+        };
+      }
+      return meeting;
+    });
+
+    const success = await saveMeetings(updatedMeetings);
+    if (success) {
+      setNotification({
+        type: "success",
+        message: "Action added successfully!",
+      });
+      setShowAddModal(false);
+      setSelectedMeeting(null);
+      setFormData({
+        title: "",
+        description: "",
+        assignedTo: "",
+        dueDate: "",
+        priority: "medium",
+        status: "open",
+      });
+      setTimeout(() => setNotification(null), 3000);
+    }
+    setSubmitting(false);
+  };
+
+  // Edit action
+  const handleEditAction = async () => {
+    if (!editingAction || !formData.title.trim()) {
+      setNotification({
+        type: "error",
+        message: "Please fill in all required fields.",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+
+    const updatedMeetings = meetings.map((meeting) => {
+      if (meeting.id === editingAction.meetingId) {
+        return {
+          ...meeting,
+          actions: (meeting.actions || []).map((action) => {
+            if (action.id === editingAction.action.id) {
+              return {
+                ...action,
+                title: formData.title.trim(),
+                description: formData.description.trim() || "",
+                assignedTo: formData.assignedTo || "",
+                dueDate: formData.dueDate || "",
+                priority: formData.priority || "medium",
+                status: formData.status || "open",
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return action;
+          }),
+        };
+      }
+      return meeting;
+    });
+
+    const success = await saveMeetings(updatedMeetings);
+    if (success) {
+      setNotification({
+        type: "success",
+        message: "Action updated successfully!",
+      });
+      setShowEditModal(false);
+      setEditingAction(null);
+      setFormData({
+        title: "",
+        description: "",
+        assignedTo: "",
+        dueDate: "",
+        priority: "medium",
+        status: "open",
+      });
+      setTimeout(() => setNotification(null), 3000);
+    }
+    setSubmitting(false);
+  };
+
+  // Delete action
+  const handleDeleteAction = async (meetingId, actionId) => {
+    if (!window.confirm("Are you sure you want to delete this action?")) return;
+
+    const updatedMeetings = meetings.map((meeting) => {
+      if (meeting.id === meetingId) {
+        return {
+          ...meeting,
+          actions: (meeting.actions || []).filter(
+            (action) => action.id !== actionId
+          ),
+        };
+      }
+      return meeting;
+    });
+
+    const success = await saveMeetings(updatedMeetings);
+    if (success) {
+      setNotification({
+        type: "warning",
+        message: "Action deleted successfully.",
+      });
+      setTimeout(() => setNotification(null), 3000);
+    }
+  };
+
+  // Toggle action status
+  const toggleActionStatus = async (meetingId, action) => {
+    const newStatus = action.status === "completed" ? "open" : "completed";
+
+    const updatedMeetings = meetings.map((meeting) => {
+      if (meeting.id === meetingId) {
+        return {
+          ...meeting,
+          actions: (meeting.actions || []).map((a) => {
+            if (a.id === action.id) {
+              return {
+                ...a,
+                status: newStatus,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return a;
+          }),
+        };
+      }
+      return meeting;
+    });
+
+    await saveMeetings(updatedMeetings);
+  };
+
+  // Open add modal
+  const openAddModal = (meeting) => {
+    setSelectedMeeting(meeting);
+    setFormData({
+      title: "",
+      description: "",
+      assignedTo: "",
+      dueDate: "",
+      priority: "medium",
+      status: "open",
+    });
+    setShowAddModal(true);
+  };
+
+  // Open edit modal
+  const openEditModal = (meetingId, action) => {
+    setEditingAction({ meetingId, action });
+    setFormData({
+      title: action.title || "",
+      description: action.description || "",
+      assignedTo: action.assignedTo || "",
+      dueDate: action.dueDate || "",
+      priority: action.priority || "medium",
+      status: action.status || "open",
+    });
+    setShowEditModal(true);
+  };
+
   // Styles
   const containerStyles = {
     padding: "40px",
     maxWidth: "1200px",
     margin: "0 auto",
-    marginTop: "0px",
+    marginTop: "5px",
     backgroundColor: "#fdfcfb",
     borderRadius: "8px",
     boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
@@ -515,35 +471,6 @@ useEffect(() => {
     color: "#8d6e63",
     fontSize: "15px",
     margin: "4px 0 0 0",
-  };
-
-  const summaryContainerStyles = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: "12px",
-    marginBottom: "24px",
-  };
-
-  const summaryCardStyles = (bg, borderColor) => ({
-    backgroundColor: bg || "#f7f3f0",
-    padding: "16px",
-    borderRadius: "8px",
-    borderLeft: `4px solid ${borderColor || "#8d6e63"}`,
-    textAlign: "center",
-  });
-
-  const summaryNumberStyles = {
-    fontSize: "28px",
-    fontWeight: "700",
-    color: "#5d4037",
-  };
-
-  const summaryLabelStyles = {
-    fontSize: "12px",
-    color: "#8d6e63",
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
   };
 
   const filterContainerStyles = {
@@ -590,30 +517,24 @@ useEffect(() => {
     minWidth: "120px",
   };
 
-  // ✅ Meeting Card Styles (Accordion)
   const meetingCardStyles = {
     backgroundColor: "white",
     borderRadius: "8px",
     border: "1px solid #e8ddd4",
     marginBottom: "12px",
     overflow: "hidden",
-    transition: "all 0.2s ease",
   };
 
-  // ✅ Meeting Header Styles (clickable accordion)
-  const meetingHeaderStyles = (hasOverdue) => ({
+  const meetingHeaderStyles = {
     padding: "14px 20px",
-    backgroundColor: hasOverdue ? "#FFF8F0" : "#f7f3f0",
-    borderBottom: "1px solid #e8ddd4",
+    backgroundColor: "#f7f3f0",
     cursor: "pointer",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     flexWrap: "wrap",
     gap: "8px",
-    transition: "background 0.2s",
-    borderLeft: hasOverdue ? `4px solid #f44336` : "4px solid transparent",
-  });
+  };
 
   const meetingTitleStyles = {
     fontSize: "16px",
@@ -626,63 +547,31 @@ useEffect(() => {
     color: "#8d6e63",
   };
 
-  const meetingPurposeStyles = {
-    fontSize: "13px",
-    color: "#6d5a4f",
-    marginTop: "2px",
-    fontStyle: "italic",
-  };
-
-  // ✅ Meeting Summary Stats
-  const meetingSummaryStyles = {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    fontSize: "12px",
-    flexWrap: "wrap",
-  };
-
-  // ✅ Expanded content
-  const expandedContentStyles = {
-    padding: "0 20px 20px",
-  };
-
-  const actionItemStyles = {
-    padding: "10px 0",
-    borderBottom: "1px solid #f5f0e8",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: "8px",
-  };
-
-  const actionContentStyles = {
-    flex: 1,
-    minWidth: "200px",
-  };
-
-  const actionTitleStyles = {
+  const tableStyles = {
+    width: "100%",
+    borderCollapse: "collapse",
     fontSize: "14px",
-    fontWeight: "500",
+  };
+
+  const tableHeaderStyles = {
+    padding: "10px 12px",
+    textAlign: "left",
+    backgroundColor: "#f0e6d9",
     color: "#4a352f",
+    fontWeight: "600",
+    fontSize: "12px",
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+    borderBottom: "2px solid #d7ccc8",
   };
 
-  const actionDescriptionStyles = {
-    fontSize: "13px",
-    color: "#8d6e63",
-    marginTop: "2px",
+  const tableCellStyles = {
+    padding: "10px 12px",
+    borderBottom: "1px solid #f0e6d9",
+    verticalAlign: "middle",
   };
 
-  const actionMetaStyles = {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    flexWrap: "wrap",
-    marginTop: "4px",
-  };
-
-  const actionButtonsStyles = {
+  const tableActionStyles = {
     display: "flex",
     gap: "6px",
     alignItems: "center",
@@ -700,17 +589,17 @@ useEffect(() => {
   };
 
   const addButtonStyles = {
-    padding: "8px 16px",
+    padding: "10px 20px",
     backgroundColor: "#7d5a50",
     color: "white",
     border: "none",
     borderRadius: "6px",
     cursor: "pointer",
-    fontWeight: "500",
-    fontSize: "13px",
+    fontWeight: "600",
+    fontSize: "14px",
     display: "flex",
     alignItems: "center",
-    gap: "6px",
+    gap: "8px",
   };
 
   const emptyStateStyles = {
@@ -841,42 +730,10 @@ useEffect(() => {
     color: "white",
     border: "none",
     borderRadius: "6px",
-    cursor: "pointer",
+    cursor: submitting ? "not-allowed" : "pointer",
     fontWeight: "500",
     fontSize: "14px",
-  };
-
-  const navigationOverlayStyles = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 9999,
-    backdropFilter: "blur(4px)",
-  };
-
-  const navigationModalStyles = {
-    backgroundColor: "white",
-    padding: "32px 40px",
-    borderRadius: "12px",
-    boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-    textAlign: "center",
-  };
-
-  const spinnerStyles = {
-    width: "48px",
-    height: "48px",
-    border: "4px solid #f3e5f5",
-    borderTop: "4px solid #7d5a50",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-    margin: "0 auto 16px",
+    opacity: submitting ? 0.6 : 1,
   };
 
   const notificationBannerStyles = (type) => {
@@ -921,18 +778,6 @@ useEffect(() => {
   return (
     <>
       <SpinKeyframes />
-
-      {navigating && (
-        <div style={navigationOverlayStyles}>
-          <div style={navigationModalStyles}>
-            <div style={spinnerStyles} />
-            <p style={{ color: "#4a352f", fontSize: "16px", fontWeight: "500", margin: 0 }}>
-              Loading meeting...
-            </p>
-          </div>
-        </div>
-      )}
-
       <div style={containerStyles}>
         {notification && (
           <div style={notificationBannerStyles(notification.type)}>
@@ -956,26 +801,22 @@ useEffect(() => {
             </div>
             <p style={subtitleStyles}>Manage all Governance Meeting Actions</p>
           </div>
-        </div>
-
-        {/* Summary Cards */}
-        <div style={summaryContainerStyles}>
-          <div style={summaryCardStyles("#FFF3E0", "#FF9800")}>
-            <div style={summaryNumberStyles}>{stats.open}</div>
-            <div style={summaryLabelStyles}>Open</div>
-          </div>
-          <div style={summaryCardStyles("#E3F2FD", "#2196F3")}>
-            <div style={summaryNumberStyles}>{stats.inProgress}</div>
-            <div style={summaryLabelStyles}>In Progress</div>
-          </div>
-          <div style={summaryCardStyles("#E8F5E9", "#4CAF50")}>
-            <div style={summaryNumberStyles}>{stats.completed}</div>
-            <div style={summaryLabelStyles}>Completed</div>
-          </div>
-          <div style={summaryCardStyles("#FFEBEE", "#F44336")}>
-            <div style={summaryNumberStyles}>{stats.overdue}</div>
-            <div style={summaryLabelStyles}>Overdue</div>
-          </div>
+          <button
+            onClick={() => {
+              if (filteredMeetings.length === 0) {
+                setNotification({
+                  type: "warning",
+                  message: "No meetings found. Create a meeting first.",
+                });
+                setTimeout(() => setNotification(null), 3000);
+                return;
+              }
+              openAddModal(filteredMeetings[0]);
+            }}
+            style={addButtonStyles}
+          >
+            <FaPlus size={14} /> New Action
+          </button>
         </div>
 
         {/* Filters */}
@@ -1016,7 +857,7 @@ useEffect(() => {
           </select>
         </div>
 
-        {/* Meeting Cards - Accordion */}
+        {/* Meeting Cards */}
         {filteredMeetings.length === 0 ? (
           <div style={emptyStateStyles}>
             <div style={emptyIconStyles}>📋</div>
@@ -1026,314 +867,167 @@ useEffect(() => {
                 ? "Create your first meeting to start adding actions."
                 : "No actions match your current filters."}
             </p>
-            {meetings.length > 0 && (
-              <button
-                onClick={() => {
-                  const firstMeeting = meetings[0];
-                  if (firstMeeting) {
-                    setExpandedMeeting(firstMeeting.id);
-                    openAddModal(firstMeeting);
-                  }
-                }}
-                style={addButtonStyles}
-              >
-                <FaPlus size={14} /> Create First Action
-              </button>
-            )}
           </div>
         ) : (
           filteredMeetings.map((meeting) => {
             const actions = meeting.actions || [];
-            const hasActions = actions.length > 0;
+            const isExpanded = expandedMeetings[meeting.id] || false;
             const totalActions = actions.length;
-            const completedActions = actions.filter(a => a.status === "completed").length;
-            const openActions = actions.filter(a => a.status === "open" || a.status === "in-progress").length;
-            const overdueActions = actions.filter(a => isOverdue(a)).length;
-            const isExpanded = expandedMeeting === meeting.id;
-            const hasOverdue = overdueActions > 0;
+
+            // Filter actions by status
+            const filteredActions = statusFilter === "all" 
+              ? actions 
+              : actions.filter(a => {
+                  if (statusFilter === "overdue") {
+                    return isOverdue(a);
+                  }
+                  return a.status === statusFilter;
+                });
 
             // Sort actions by priority
-            const sortedActions = [...actions].sort((a, b) => {
+            const sortedActions = [...filteredActions].sort((a, b) => {
               const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
               return (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
             });
 
             return (
-             <div key={meeting.id} style={meetingCardStyles}>
-                <div
-                  style={meetingHeaderStyles(hasOverdue)}
-                  onClick={() => toggleMeeting(meeting.id)}
-                >
-                  <div style={{ flex: 1 }}>
+              <div key={meeting.id} style={meetingCardStyles}>
+                <div style={meetingHeaderStyles} onClick={() => toggleMeeting(meeting.id)}>
+                  <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "16px", color: "#8d6e63" }}>
+                      <span style={{ fontSize: "14px", color: "#8d6e63" }}>
                         {isExpanded ? <FaChevronDown size={14} /> : <FaChevronRight size={14} />}
                       </span>
-                      {/* ✅ Meeting Title - Clickable */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewMeeting(meeting.id);
-                        }}
-                        style={{
-                          color: "#5d4037",
-                          textDecoration: "none",
-                          cursor: "pointer",
-                          background: "none",
-                          border: "none",
-                          fontSize: "16px",
-                          fontWeight: "600",
-                          padding: 0,
-                        }}
-                        onMouseEnter={(e) => e.target.style.textDecoration = "underline"}
-                        onMouseLeave={(e) => e.target.style.textDecoration = "none"}
-                      >
-                        {meeting.title}
-                      </button>
+                      <span style={meetingTitleStyles}>{meeting.title}</span>
                     </div>
                     <div style={meetingMetaStyles}>
-                      {meeting.department} • {meeting.instances?.[0]?.date
-                        ? new Date(meeting.instances[0].date).toLocaleDateString()
-                        : "No date"}
-                    </div>
-                    {meeting.purpose && (
-                      <div style={meetingPurposeStyles}>
-                        "{meeting.purpose}"
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-                    {/* ✅ View Meeting Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewMeeting(meeting.id);
-                      }}
-                      style={{
-                        padding: "4px 12px",
-                        backgroundColor: "#e6d7c3",
-                        color: "#4a352f",
-                        borderRadius: "4px",
-                        fontSize: "12px",
-                        border: "none",
-                        cursor: "pointer",
-                        fontWeight: "500",
-                      }}
-                    >
-                      View Meeting
-                    </button>
-
-                    <div style={meetingSummaryStyles}>
-                      {hasOverdue && (
-                        <span style={{ color: "#f44336", fontWeight: "600", fontSize: "13px" }}>
-                          ⚠️ {overdueActions} Overdue
-                        </span>
-                      )}
-                      {openActions > 0 && (
-                        <span style={{ color: "#E65100", fontWeight: "500", fontSize: "13px" }}>
-                          {openActions} Open
-                        </span>
-                      )}
-                      {completedActions > 0 && (
-                        <span style={{ color: "#2E7D32", fontWeight: "500", fontSize: "13px" }}>
-                          ✓ {completedActions} Done
-                        </span>
-                      )}
-                      {!hasActions && (
-                        <span style={{ color: "#8d6e63", fontSize: "12px", fontStyle: "italic" }}>
-                          No actions
-                        </span>
-                      )}
-                      <span style={{ color: "#8d6e63", fontSize: "12px" }}>
-                        {totalActions} action{totalActions !== 1 ? 's' : ''}
-                      </span>
+                      {meeting.department} • {totalActions} action{totalActions !== 1 ? 's' : ''}
                     </div>
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openAddModal(meeting);
+                    }}
+                    style={{
+                      padding: "4px 12px",
+                      backgroundColor: "#e6d7c3",
+                      color: "#4a352f",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                    }}
+                  >
+                    <FaPlus size={12} /> Add Action
+                  </button>
                 </div>
 
-                {/* ✅ Expanded Content */}
                 {isExpanded && (
-                  <div style={expandedContentStyles}>
-                    {/* Outstanding Actions */}
-                    {(() => {
-                      const outstanding = actions.filter(a => a.status !== "completed");
-                      if (outstanding.length > 0) {
-                        return (
-                          <div style={{
-                            backgroundColor: "#FFF8E1",
-                            padding: "10px 14px",
-                            borderRadius: "6px",
-                            margin: "16px 0 12px 0",
-                            borderLeft: "4px solid #FF9800",
-                          }}>
-                            <div style={{ fontSize: "12px", fontWeight: "600", color: "#E65100", marginBottom: "4px" }}>
-                              📌 Outstanding Actions
-                            </div>
-                            {outstanding.slice(0, 3).map((action) => (
-                              <div key={action.id} style={{ fontSize: "13px", color: "#4a352f", padding: "2px 0" }}>
-                                • {action.title}
-                                {isOverdue(action) && (
-                                  <span style={{ color: "#f44336", fontSize: "11px", fontWeight: "600", marginLeft: "6px" }}>
-                                    ⚠️ Overdue
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                            {outstanding.length > 3 && (
-                              <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "2px" }}>
-                                +{outstanding.length - 3} more outstanding
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {/* Actions List */}
-                    {hasActions ? (
-                      sortedActions.map((action) => {
-                        const overdue = isOverdue(action);
-                        const dueDateColor = getDueDateColor(action.dueDate);
-                        const dueDateLabel = getDueDateLabel(action.dueDate);
-
-                        return (
-                          <div
-                            key={action.id}
-                            style={{
-                              ...actionItemStyles,
-                              backgroundColor: overdue ? "#FFF8F0" : "transparent",
-                            }}
-                          >
-                            <div style={actionContentStyles}>
-                              <div style={actionTitleStyles}>
-                                {action.title}
-                                {overdue && (
-                                  <span style={{ color: "#f44336", fontSize: "11px", fontWeight: "600", marginLeft: "8px" }}>
-                                    ⚠️ Overdue
-                                  </span>
-                                )}
-                              </div>
-                              {action.description && (
-                                <div style={actionDescriptionStyles}>
-                                  {action.description}
-                                </div>
-                              )}
-                              <div style={actionMetaStyles}>
-                                {getStatusBadge(action.status)}
-                                {getPriorityBadge(action.priority)}
-                                {action.assignedTo && (
-                                  <span style={{ fontSize: "12px", color: "#8d6e63" }}>
-                                    👤 {action.assignedTo}
-                                  </span>
-                                )}
-                                {action.dueDate && (
-                                  <span style={{ fontSize: "12px", color: dueDateColor, fontWeight: "500" }}>
-                                    📅 {dueDateLabel}
-                                  </span>
-                                )}
-                                {action.createdAt && (
-                                  <span style={{ fontSize: "10px", color: "#bdbdbd" }}>
-                                    Created {new Date(action.createdAt).toLocaleDateString()}
-                                    {action.updatedAt && action.updatedAt !== action.createdAt && (
-                                      <> • Updated {new Date(action.updatedAt).toLocaleDateString()}</>
-                                    )}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div style={actionButtonsStyles}>
-                              <button
-                                onClick={() => toggleActionStatus(meeting.id, action)}
-                                style={{
-                                  ...iconButtonStyles,
-                                  color: action.status === "completed" ? "#4CAF50" : "#8d6e63",
-                                  fontSize: "18px",
-                                }}
-                                title={action.status === "completed" ? "Reopen" : "Complete"}
-                              >
-                                {action.status === "completed" ? "✅" : "☐"}
-                              </button>
-                              <button
-                                onClick={() => openEditModal(meeting.id, action)}
-                                style={{ ...iconButtonStyles, color: "#2196F3" }}
-                                title="Edit"
-                              >
-                                <FaEdit size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAction(meeting.id, action.id)}
-                                style={{ ...iconButtonStyles, color: "#f44336" }}
-                                title="Delete"
-                              >
-                                <FaTrash size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div style={{
-                        padding: "16px",
-                        textAlign: "center",
-                        color: "#8d6e63",
-                        fontSize: "14px",
-                      }}>
-                        No actions have been assigned for this meeting.
-                        <br />
-                        <span style={{ fontSize: "13px", fontStyle: "italic" }}>
-                          Create the first action after the meeting discussion.
-                        </span>
+                  <div style={{ padding: "16px 20px", overflowX: "auto" }}>
+                    {sortedActions.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "20px", color: "#8d6e63", fontSize: "14px" }}>
+                        No actions match the current filter.
                       </div>
-                    )}
+                    ) : (
+                      <table style={tableStyles}>
+                        <thead>
+                          <tr>
+                            <th style={tableHeaderStyles}>Action</th>
+                            <th style={tableHeaderStyles}>Assigned To</th>
+                            <th style={tableHeaderStyles}>Due Date</th>
+                            <th style={tableHeaderStyles}>Priority</th>
+                            <th style={tableHeaderStyles}>Status</th>
+                            <th style={{ ...tableHeaderStyles, textAlign: "center" }}>Actions</th>                        
+                              </tr>
+                        </thead>
+                        <tbody>
+                          {sortedActions.map((action) => {
+                            const overdue = isOverdue(action);
+                            const dueDateColor = getDueDateColor(action.dueDate);
+                            const dueDateLabel = getDueDateLabel(action.dueDate);
 
-                    {/* ✅ Add Action button inside expanded content */}
-                    <div style={{ marginTop: "12px", textAlign: "center" }}>
-                      <button
-                        onClick={() => openAddModal(meeting)}
-                        style={{
-                          padding: "8px 20px",
-                          backgroundColor: "transparent",
-                          color: "#7d5a50",
-                          border: "2px dashed #e8ddd4",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "13px",
-                          fontWeight: "500",
-                          width: "100%",
-                          transition: "all 0.2s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = "#f7f3f0";
-                          e.currentTarget.style.borderColor = "#7d5a50";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = "transparent";
-                          e.currentTarget.style.borderColor = "#e8ddd4";
-                        }}
-                      >
-                        <FaPlus size={12} /> Add Action
-                      </button>
-                    </div>
+                            return (
+                              <tr key={action.id}>
+                                <td style={tableCellStyles}>
+                                  <div style={{ fontWeight: "500", color: "#4a352f" }}>
+                                    {action.title}
+                                    {overdue && (
+                                      <span style={{ color: "#f44336", fontSize: "11px", fontWeight: "600", marginLeft: "8px" }}>
+                                        ⚠️ Overdue
+                                      </span>
+                                    )}
+                                  </div>
+                                  {action.description && (
+                                    <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "2px" }}>
+                                      {action.description}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={tableCellStyles}>
+                                  {action.assignedTo || "Unassigned"}
+                                </td>
+                                <td style={tableCellStyles}>
+                                  {action.dueDate ? (
+                                    <span style={{ color: dueDateColor, fontWeight: "500" }}>
+                                      {dueDateLabel}
+                                    </span>
+                                  ) : (
+                                    "No due date"
+                                  )}
+                                </td>
+                                <td style={tableCellStyles}>
+                                  {getPriorityBadge(action.priority)}
+                                </td>
+                                <td style={tableCellStyles}>
+                                  {getStatusBadge(action.status)}
+                                </td>
+                                <td style={{ ...tableCellStyles, textAlign: "center" }}>
+                                  <div style={tableActionStyles}>
+                                    <button
+                                      onClick={() => toggleActionStatus(meeting.id, action)}
+                                      style={{
+                                        ...iconButtonStyles,
+                                        color: action.status === "completed" ? "#4CAF50" : "#8d6e63",
+                                        fontSize: "18px",
+                                      }}
+                                      title={action.status === "completed" ? "Reopen" : "Complete"}
+                                    >
+                                      {action.status === "completed" ? "✅" : "☐"}
+                                    </button>
+                                    <button
+                                      onClick={() => openEditModal(meeting.id, action)}
+                                      style={{ ...iconButtonStyles, color: "#2196F3" }}
+                                      title="Edit"
+                                    >
+                                      <FaEdit size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteAction(meeting.id, action.id)}
+                                      style={{ ...iconButtonStyles, color: "#f44336" }}
+                                      title="Delete"
+                                    >
+                                      <FaTrash size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+
+                    )}
                   </div>
                 )}
+               
               </div>
+              
             );
+            
           })
         )}
-
- <a href="/governance-calendar"
-                style={{
-                  color: "#7d5a50",
-                  fontSize: "14px",
-                  textDecoration: "none",
-                  fontWeight: "500",
-                }}
-              >
-                ← Back to Calendar
-              </a>
 
         {/* Add Action Modal */}
         {showAddModal && selectedMeeting && (
@@ -1434,10 +1128,9 @@ useEffect(() => {
                   <button onClick={() => setShowAddModal(false)} style={cancelButtonStyles}>
                     Cancel
                   </button>
-                  <button onClick={handleAddAction} style={submitButtonStyles}>
-                    Add Action
+                  <button onClick={handleAddAction} disabled={submitting} style={submitButtonStyles}>
+                    {submitting ? "Adding..." : "Add Action"}
                   </button>
-                  
                 </div>
               </div>
             </div>
@@ -1538,13 +1231,24 @@ useEffect(() => {
                 <button onClick={() => setShowEditModal(false)} style={cancelButtonStyles}>
                   Cancel
                 </button>
-                <button onClick={handleEditAction} style={submitButtonStyles}>
-                  Update Action
+                <button onClick={handleEditAction} disabled={submitting} style={submitButtonStyles}>
+                  {submitting ? "Saving..." : "Update Action"}
                 </button>
               </div>
             </div>
           </div>
         )}
+           <a
+                href="/governance-calendar"
+                style={{
+                  color: "#7d5a50",
+                  fontSize: "14px",
+                  textDecoration: "none",
+                  fontWeight: "500",
+                }}
+              >
+                ← Back to Calendar
+              </a>
       </div>
     </>
   );

@@ -64,7 +64,19 @@ const GovernanceCalendar = (activeSection, isInvestorView ) => {
   });
   
   const [errors, setErrors] = useState({});
-  
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    title: "",
+    department: "",
+    purpose: "",
+    participants: [],
+    repeatType: "none",
+    startDate: "",
+    time: "",
+  });
+    
   const allDepartments = [...departmentOptions, ...customDepartments];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -185,67 +197,93 @@ useEffect(() => {
       });
     });
   };
-  
   const generateInstances = (startDate, endDate, repeatType) => {
-    const instances = [];
-    const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : null;
-    
-    if (repeatType === "none") {
-      if (start < today) {
-        throw new Error("Cannot schedule meetings on past dates");
-      }
-      instances.push({
-        instanceId: generateId(),
-        date: start.toISOString(),
-        time: formData.time,
-        status: "scheduled",
-      });
-      return instances;
+  const instances = [];
+  const start = new Date(startDate);
+  const end = endDate ? new Date(endDate) : null;
+  
+  // ✅ Cap at 1 year (12 months) from start date
+  const maxEndDate = new Date(start);
+  maxEndDate.setFullYear(maxEndDate.getFullYear() + 1);
+  
+  // If no end date provided or end date is beyond 1 year, cap at 1 year
+  const actualEnd = end && end < maxEndDate ? end : maxEndDate;
+  
+  if (repeatType === "none") {
+    if (start < today) {
+      throw new Error("Cannot schedule meetings on past dates");
     }
-    
-    if (repeatType === "weekly") {
-      let current = new Date(start);
-      let maxIterations = 100;
-      let iterations = 0;
-      
-      while ((!end || current <= end) && iterations < maxIterations) {
-        if (current >= today) {
-          instances.push({
-            instanceId: generateId(),
-            date: current.toISOString(),
-            time: formData.time,
-            status: "scheduled",
-          });
-        }
-        current.setDate(current.getDate() + 7);
-        iterations++;
-      }
-      return instances;
-    }
-    
-    if (repeatType === "monthly") {
-      let current = new Date(start);
-      let maxIterations = 100;
-      let iterations = 0;
-      
-      while ((!end || current <= end) && iterations < maxIterations) {
-        if (current >= today) {
-          instances.push({
-            instanceId: generateId(),
-            date: current.toISOString(),
-            time: formData.time,
-            status: "scheduled",
-          });
-        }
-        current.setMonth(current.getMonth() + 1);
-        iterations++;
-      }
-      return instances;
-    }
-    
+    instances.push({
+      instanceId: generateId(),
+      date: start.toISOString(),
+      time: formData.time,
+      status: "scheduled",
+    });
     return instances;
-  };
+  }
+  
+  if (repeatType === "weekly") {
+    let current = new Date(start);
+    let maxIterations = 52; // Max 52 weeks (1 year)
+    let iterations = 0;
+    
+    while ((!end || current <= actualEnd) && iterations < maxIterations) {
+      if (current >= today) {
+        instances.push({
+          instanceId: generateId(),
+          date: current.toISOString(),
+          time: formData.time,
+          status: "scheduled",
+        });
+      }
+      current.setDate(current.getDate() + 7);
+      iterations++;
+    }
+    return instances;
+  }
+  
+  if (repeatType === "monthly") {
+    let current = new Date(start);
+    let maxIterations = 12; // Max 12 months (1 year)
+    let iterations = 0;
+    
+    while ((!end || current <= actualEnd) && iterations < maxIterations) {
+      if (current >= today) {
+        instances.push({
+          instanceId: generateId(),
+          date: current.toISOString(),
+          time: formData.time,
+          status: "scheduled",
+        });
+      }
+      current.setMonth(current.getMonth() + 1);
+      iterations++;
+    }
+    return instances;
+  }
+  
+  if (repeatType === "quarterly") {
+    let current = new Date(start);
+    let maxIterations = 4; // Max 4 quarters (1 year)
+    let iterations = 0;
+    
+    while ((!end || current <= actualEnd) && iterations < maxIterations) {
+      if (current >= today) {
+        instances.push({
+          instanceId: generateId(),
+          date: current.toISOString(),
+          time: formData.time,
+          status: "scheduled",
+        });
+      }
+      current.setMonth(current.getMonth() + 3);
+      iterations++;
+    }
+    return instances;
+  }
+  
+  return instances;
+};
 
  const addParticipant = () => {
   console.log("Add participant clicked!");
@@ -350,9 +388,11 @@ const proceedWithBooking = async () => {
     const participantText = newMeeting.participants.length > 0 
       ? newMeeting.participants.join(", ")
       : 'No participants specified';
-    const recurrenceText = newMeeting.isRecurring 
-      ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'weekly' : 'monthly'}` 
-      : '';
+   const recurrenceText = newMeeting.isRecurring 
+  ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
+                  newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
+                  'Quarterly'}` 
+  : '';
     
     // Get user name for notification
     let userName = "User";
@@ -638,9 +678,11 @@ const handleSubmit = async () => {
   const participantText = newMeeting.participants.length > 0 
   ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
   : 'No participants specified';
-    const recurrenceText = newMeeting.isRecurring 
-      ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'weekly' : 'monthly'}` 
-      : '';
+   const recurrenceText = newMeeting.isRecurring 
+  ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
+                  newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
+                  'Quarterly'}` 
+  : '';
     const displayName = currentUser.displayName || "User";
     
     // 1. In-app banner notification
@@ -697,6 +739,288 @@ BIG Marketplace Team 🌍`,
     setNotification({ 
       type: "error", 
       message: "Failed to schedule meeting. Please try again." 
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Open edit modal with meeting data
+const handleEditMeeting = (meeting) => {
+  setEditingMeeting(meeting);
+  
+  // Get the first instance for date/time
+  const firstInstance = meeting.instances?.[0];
+  const instanceDate = firstInstance ? new Date(firstInstance.date) : new Date();
+  
+  setEditFormData({
+    title: meeting.title || "",
+    department: meeting.department || departmentOptions[0].name,
+    purpose: meeting.purpose || "",
+    participants: meeting.participants || [],
+    repeatType: meeting.recurrencePattern || "none",
+    startDate: instanceDate.toISOString().split('T')[0],
+    time: firstInstance?.time || "10:00",
+  });
+  
+  setShowEditModal(true);
+};
+
+// Update participant in edit form
+const updateEditParticipant = (index, field, value) => {
+  const updated = [...editFormData.participants];
+  updated[index] = { ...updated[index], [field]: value };
+  setEditFormData({ ...editFormData, participants: updated });
+};
+
+// Add participant to edit form
+const addEditParticipant = () => {
+  setEditFormData({
+    ...editFormData,
+    participants: [...editFormData.participants, { name: "", email: "" }],
+  });
+};
+
+// Remove participant from edit form
+const removeEditParticipant = (index) => {
+  const updated = editFormData.participants.filter((_, i) => i !== index);
+  setEditFormData({ ...editFormData, participants: updated });
+};
+const saveEditedMeeting = async () => {
+   if (!editingMeeting || !currentUser) return;
+  
+  setLoading(true);
+  setLoadingMessage("Saving changes...");
+  
+  try {
+    const originalMeeting = { ...editingMeeting };
+    
+    // ✅ Get the selected department color
+    const selectedDepartment = allDepartments.find(d => d.name === editFormData.department);
+    const departmentColor = selectedDepartment?.color || "#757575";
+    const departmentBg = selectedDepartment?.bg || "#EEEEEE";
+    
+    const updatedMeeting = {
+      ...editingMeeting,
+      title: editFormData.title,
+      department: editFormData.department,
+      departmentColor: departmentColor,  // ✅ Updated
+      departmentBg: departmentBg,        // ✅ Updated
+      purpose: editFormData.purpose,
+      participants: editFormData.participants,
+      isRecurring: editFormData.repeatType !== "none",
+      recurrencePattern: editFormData.repeatType !== "none" ? editFormData.repeatType : null,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // Update the first instance date/time if changed
+    const oldDate = updatedMeeting.instances?.[0]?.date;
+    const oldTime = updatedMeeting.instances?.[0]?.time;
+    
+    if (updatedMeeting.instances && updatedMeeting.instances.length > 0) {
+      const newDate = new Date(editFormData.startDate);
+      updatedMeeting.instances[0].date = newDate.toISOString();
+      updatedMeeting.instances[0].time = editFormData.time;
+    }
+    
+    const newDate = updatedMeeting.instances?.[0]?.date;
+    const newTime = updatedMeeting.instances?.[0]?.time;
+    
+    // Check what changed
+    const titleChanged = originalMeeting.title !== updatedMeeting.title;
+    const dateChanged = oldDate !== newDate;
+    const timeChanged = oldTime !== newTime;
+    const departmentChanged = originalMeeting.department !== updatedMeeting.department;
+    const participantsChanged = JSON.stringify(originalMeeting.participants) !== JSON.stringify(updatedMeeting.participants);
+    
+    const hasChanges = titleChanged || dateChanged || timeChanged || departmentChanged || participantsChanged;
+    
+    if (!hasChanges) {
+      setNotification({ type: "info", message: "No changes were made." });
+      setShowEditModal(false);
+      setEditingMeeting(null);
+      setLoading(false);
+      return;
+    }
+    
+    // Update in the array
+    const updatedMeetings = meetings.map(m => 
+      m.id === editingMeeting.id ? updatedMeeting : m
+    );
+    
+    setMeetings(updatedMeetings);
+    
+    // Save to Firestore
+    const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+    await setDoc(calendarRef, {
+      meetings: updatedMeetings,
+      updatedAt: new Date().toISOString(),
+      userId: currentUser.uid,
+    }, { merge: true });
+    
+    
+    // ==================== SEND NOTIFICATIONS ====================
+    
+    // Format dates for notification
+    const formattedOldDate = oldDate ? new Date(oldDate).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }) : "TBD";
+    
+    const formattedNewDate = newDate ? new Date(newDate).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }) : "TBD";
+    
+    // Build change description
+    let changes = [];
+    if (titleChanged) changes.push(`Title changed to "${updatedMeeting.title}"`);
+    if (dateChanged) changes.push(`Date changed from ${formattedOldDate} to ${formattedNewDate}`);
+    if (timeChanged) changes.push(`Time changed from ${oldTime} to ${newTime}`);
+    if (departmentChanged) changes.push(`Department changed to ${updatedMeeting.department}`);
+    if (participantsChanged) changes.push(`Participants updated`);
+    
+    const changeSummary = changes.join("; ");
+    
+    // Get user name
+    let userName = "User";
+    try {
+      const profileRef = doc(db, "universalProfiles", currentUser.uid);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        const data = profileSnap.data();
+        userName = data.entityOverview?.registeredName || 
+                   data.contactDetails?.contactName ||
+                   currentUser.displayName ||
+                   "User";
+      }
+    } catch (error) {
+      console.error("Error fetching user name:", error);
+    }
+    
+    // Build recipients list (owner + participants with emails)
+    const recipients = [];
+    let ownerEmail = null;
+    
+    try {
+      const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
+      if (userDocRef.exists()) {
+        ownerEmail = userDocRef.data().email;
+      }
+    } catch (error) {
+      console.error("Error fetching owner email:", error);
+    }
+    
+    if (ownerEmail) {
+      recipients.push({ email: ownerEmail, name: userName, isOrganizer: true });
+    }
+    
+    if (updatedMeeting.participants && updatedMeeting.participants.length > 0) {
+      updatedMeeting.participants.forEach(p => {
+        if (p.email && p.email.trim()) {
+          recipients.push({
+            email: p.email.trim(),
+            name: p.name || "Participant",
+            isOrganizer: false,
+          });
+        }
+      });
+    }
+    
+    // Send notifications to all recipients
+    for (const recipient of recipients) {
+      try {
+        // In-app notification
+        const notificationContent = `Dear ${recipient.name},\n\n` +
+          `The meeting "${updatedMeeting.title}" has been updated.\n\n` +
+          `📋 Changes:\n${changeSummary}\n\n` +
+          `${recipient.isOrganizer ? 'Your meeting has been updated successfully.' : 'Please review the updated meeting details.'}\n\n` +
+          `Best regards,\nBIG Marketplace Team 🌍`;
+        
+        await addDoc(collection(db, "messages"), {
+          to: recipient.isOrganizer ? currentUser.uid : updatedMeeting.participants.find(p => p.email === recipient.email)?.id || recipient.email,
+          toName: recipient.name,
+          from: "system",
+          fromName: "BIG Marketplace",
+          subject: `📅 Meeting Updated: ${updatedMeeting.title}`,
+          content: notificationContent,
+          date: new Date().toISOString(),
+          read: false,
+          type: "inbox",
+          meetingId: updatedMeeting.id,
+          linkTo: "/governance-calendar",
+        });
+        
+        console.log(`✅ Update notification sent to: ${recipient.name}`);
+      } catch (error) {
+        console.error(`❌ Failed to send update notification to ${recipient.name}:`, error);
+      }
+    }
+    
+    // ==================== END NOTIFICATIONS ====================
+    
+    // ==================== SEND EMAILS ====================
+
+// Get sender name for email
+let senderName = "User";
+try {
+  const profileRef = doc(db, "universalProfiles", currentUser.uid);
+  const profileSnap = await getDoc(profileRef);
+  if (profileSnap.exists()) {
+    const data = profileSnap.data();
+    senderName = data.entityOverview?.registeredName || 
+                 data.contactDetails?.contactName ||
+                 currentUser.displayName ||
+                 "User";
+  }
+} catch (error) {
+  console.error("Error fetching user name:", error);
+}
+
+// Send email to all recipients
+for (const recipient of recipients) {
+  try {
+    const functions = getFunctions();
+    const sendMeetingUpdateEmail = httpsCallable(functions, 'sendGovernanceMeetingUpdateEmail');
+    
+    await sendMeetingUpdateEmail({
+      to: recipient.email,
+      name: recipient.name,
+      meetingTitle: updatedMeeting.title,
+      changes: changeSummary,
+      meetingDate: formattedNewDate,
+      meetingTime: newTime || "TBD",
+      department: updatedMeeting.department,
+      isOrganizer: recipient.isOrganizer,
+      linkTo: "https://www.bigmarketplace.africa/governance-calendar"
+    });
+    
+    console.log(`✅ Meeting update email sent to: ${recipient.email}`);
+  } catch (emailError) {
+    console.error(`❌ Failed to send meeting update email to ${recipient.email}:`, emailError);
+  }
+}
+
+// ==================== END EMAILS ====================
+
+    setNotification({
+      type: "success",
+      message: `✅ "${updatedMeeting.title}" updated successfully!`,
+    });
+    setTimeout(() => setNotification(null), 3000);
+    
+    setShowEditModal(false);
+    setEditingMeeting(null);
+    
+  } catch (error) {
+    console.error("Error updating meeting:", error);
+    setNotification({
+      type: "error",
+      message: "Failed to update meeting. Please try again.",
     });
   } finally {
     setLoading(false);
@@ -936,12 +1260,25 @@ BIG Marketplace Team 🌍`,
     }
   };
   
-  const handleOpenAddModal = () => {
-    const targetDate = selectedDate >= today ? selectedDate : new Date();
-    setFormData(prev => ({ ...prev, startDate: targetDate.toISOString().split('T')[0] }));
-    setShowAddModal(true);
-  };
+const handleOpenAddModal = (date = null) => {
+  // Use the provided date, or fallback to selectedDate, or today
+  let targetDate = date || selectedDate || new Date();
   
+  // If it's a Date object from calendar click, use it directly
+  if (date instanceof Date) {
+    targetDate = date;
+  }
+  
+  // Don't allow pre-filling past dates
+  if (targetDate >= today) {
+    setFormData(prev => ({
+      ...prev,
+      startDate: targetDate.toISOString().split('T')[0],
+    }));
+  }
+  setShowAddModal(true);
+};
+
   const selectedMeetings = getMeetingsForDate(selectedDate);
   
   // Styles
@@ -1699,9 +2036,10 @@ const SpinKeyframes = () => (
               Track and manage board meetings, committee sessions, and key governance events in one place.
             </p>
           </div>
-        <button onClick={handleOpenAddModal} style={addButtonStyles}>
+       <button onClick={() => handleOpenAddModal(null)} style={addButtonStyles} disabled={isInvestorView}>
           + Add Meeting
         </button>
+
       </div>
       
       {/* Calendar Header */}
@@ -1779,9 +2117,9 @@ const SpinKeyframes = () => (
         {selectedMeetings.length === 0 ? (
           <div style={noEventsStyles}>
             No governance meetings scheduled for this date.
-            {selectedDate >= today && (
+            {!isInvestorView && selectedDate >= today && (
               <button
-                onClick={handleOpenAddModal}
+                onClick={() => handleOpenAddModal(selectedDate)}  // ← Pass the selected date
                 style={{
                   background: "none",
                   border: "none",
@@ -1848,10 +2186,12 @@ const SpinKeyframes = () => (
             </span>
           </>
         )}
-        {meeting.isRecurring && (
+       {meeting.isRecurring && (
           <>
             <span>•</span>
-            <span>🔄 {meeting.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}</span>
+            <span>🔄 {meeting.recurrencePattern === "weekly" ? "Weekly" : 
+                        meeting.recurrencePattern === "monthly" ? "Monthly" : 
+                        "Quarterly"}</span>
           </>
         )}
       </div>
@@ -1998,15 +2338,22 @@ const SpinKeyframes = () => (
                   </div>
               
               <div style={formGroupStyles}>
-                <label style={labelStyles}>Repeat Frequency</label>
-                <select value={formData.repeatType} onChange={(e) => setFormData({ ...formData, repeatType: e.target.value })} style={selectStyles(false)}>
-                  <option value="none">One-time meeting</option>
-                  <option value="weekly">Weekly (every 7 days)</option>
-                  <option value="monthly">Monthly (same date each month)</option>
-                </select>
-                <div style={repeatHelpStyles}>Weekly/Monthly will schedule all future instances between start and end dates</div>
-              </div>
-              
+                  <label style={labelStyles}>Repeat Frequency</label>
+                  <select
+                    value={formData.repeatType}
+                    onChange={(e) => setFormData({ ...formData, repeatType: e.target.value })}
+                    style={selectStyles(false)}
+                  >
+                    <option value="none">One-time meeting</option>
+                    <option value="weekly">Weekly (every 7 days)</option>
+                    <option value="monthly">Monthly (same date each month)</option>
+                    <option value="quarterly">Quarterly (every 3 months)</option> {/* ✅ ADD THIS */}
+                  </select>
+                  <div style={repeatHelpStyles}>
+                    Weekly/Monthly/Quarterly will schedule all future instances between start and end dates (capped at 1 year)
+                  </div>
+                </div>
+                              
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
                 <div style={formGroupStyles}>
                   <label style={labelStyles}>Start Date *</label>
@@ -2105,14 +2452,16 @@ const SpinKeyframes = () => (
           </div>
         </div>
         
-        {showDetailsModal.isRecurring && (
-          <div style={detailsSectionStyles}>
-            <div style={detailsLabelStyles}>Recurrence</div>
-            <div style={recurringBadgeStyles}>
-              🔄 Repeats {showDetailsModal.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}
-            </div>
+       {showDetailsModal.isRecurring && (
+        <div style={detailsSectionStyles}>
+          <div style={detailsLabelStyles}>Recurrence</div>
+          <div style={recurringBadgeStyles}>
+            🔄 Repeats {showDetailsModal.recurrencePattern === "weekly" ? "Weekly" : 
+                        showDetailsModal.recurrencePattern === "monthly" ? "Monthly" : 
+                        "Quarterly"}
           </div>
-        )}
+        </div>
+      )}
         
         <div style={detailsSectionStyles}>
           <div style={detailsLabelStyles}>Created</div>
@@ -2226,6 +2575,25 @@ const SpinKeyframes = () => (
             <>
               {!isPastMeeting && !isInvestorView && (
                 <div style={detailsActionButtonsStyles}>
+                   <button
+                      onClick={() => {
+                        setShowDetailsModal(null);
+                        handleEditMeeting(showDetailsModal);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "10px",
+                        backgroundColor: "#2196F3",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontWeight: "500",
+                        fontSize: "14px",
+                      }}
+                    >
+                      ✏️ Edit Meeting
+                    </button>
                   <button
                     onClick={() => {
                       setShowDetailsModal(null);
@@ -2252,8 +2620,10 @@ const SpinKeyframes = () => (
           );
         })()}
         
+
       </div>
     </div>
+    
   </div>
 )}
       
@@ -2393,6 +2763,157 @@ const SpinKeyframes = () => (
                     }}
                   >
                     No, Cancel Booking
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Meeting Modal */}
+        {showEditModal && editingMeeting && (
+          <div style={modalOverlayStyles} onClick={() => setShowEditModal(false)}>
+            <div style={modalStyles} onClick={(e) => e.stopPropagation()}>
+              <div style={modalHeaderStyles}>
+                <h3 style={modalTitleStyles}>✏️ Edit Meeting</h3>
+                <button onClick={() => setShowEditModal(false)} style={closeButtonStyles}>×</button>
+              </div>
+              <div style={modalBodyStyles}>
+                {/* Meeting Title */}
+                <div style={formGroupStyles}>
+                  <label style={labelStyles}>Meeting Title *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Q4 Board Meeting, Strategy Review"
+                    value={editFormData.title}
+                    onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                    style={inputStyles(false)}
+                  />
+                </div>
+                
+                {/* Department */}
+              <div style={formGroupStyles}>
+                <label style={labelStyles}>Department *</label>
+                <div style={departmentDropdownStyles}>
+                  {allDepartments.map((dept) => (
+                    <div
+                      key={dept.name}
+                      onClick={() => setEditFormData({ ...editFormData, department: dept.name })}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        backgroundColor: editFormData.department === dept.name ? dept.bg : "white",
+                        transition: "all 0.2s ease",
+                        borderBottom: "1px solid #f0e6d9",
+                      }}
+                    >
+                      <div style={{
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "4px",
+                        backgroundColor: dept.color,
+                      }} />
+                      <span>{dept.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+                
+                {/* Purpose */}
+                <div style={formGroupStyles}>
+                  <label style={labelStyles}>Purpose of Meeting *</label>
+                  <textarea
+                    rows="3"
+                    placeholder="What is the goal of this meeting?"
+                    value={editFormData.purpose}
+                    onChange={(e) => setEditFormData({ ...editFormData, purpose: e.target.value })}
+                    style={textareaStyles(false)}
+                  />
+                </div>
+                
+                {/* Participants */}
+                <div style={formGroupStyles}>
+                  <label style={labelStyles}>Participants</label>
+                  {editFormData.participants.map((participant, index) => (
+                    <div key={index} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                      <input
+                        type="text"
+                        placeholder="Full Name"
+                        value={participant.name || ""}
+                        onChange={(e) => updateEditParticipant(index, "name", e.target.value)}
+                        style={{ flex: 1, ...inputStyles(false) }}
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={participant.email || ""}
+                        onChange={(e) => updateEditParticipant(index, "email", e.target.value)}
+                        style={{ flex: 1, ...inputStyles(false) }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeEditParticipant(index)}
+                        style={{ padding: "8px 12px", backgroundColor: "#f44336", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addEditParticipant}
+                    style={{ padding: "8px 16px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "13px", marginTop: "8px" }}
+                  >
+                    + Add Participant
+                  </button>
+                </div>
+                
+                {/* Date & Time */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                  <div style={formGroupStyles}>
+                    <label style={labelStyles}>Date *</label>
+                    <input
+                      type="date"
+                      value={editFormData.startDate}
+                      onChange={(e) => setEditFormData({ ...editFormData, startDate: e.target.value })}
+                      style={inputStyles(false)}
+                    />
+                  </div>
+                  <div style={formGroupStyles}>
+                    <label style={labelStyles}>Time *</label>
+                    <input
+                      type="time"
+                      value={editFormData.time}
+                      onChange={(e) => setEditFormData({ ...editFormData, time: e.target.value })}
+                      style={inputStyles(false)}
+                    />
+                  </div>
+                </div>
+                
+                {/* Repeat Type */}
+               <div style={formGroupStyles}>
+                      <label style={labelStyles}>Repeat Frequency</label>
+                      <select
+                        value={editFormData.repeatType}
+                        onChange={(e) => setEditFormData({ ...editFormData, repeatType: e.target.value })}
+                        style={selectStyles(false)}
+                      >
+                        <option value="none">One-time meeting</option>
+                        <option value="weekly">Weekly (every 7 days)</option>
+                        <option value="monthly">Monthly (same date each month)</option>
+                        <option value="quarterly">Quarterly (every 3 months)</option> {/* ✅ ADD THIS */}
+                      </select>
+                    </div>
+
+                <div style={modalFooterStyles}>
+                  <button onClick={() => setShowEditModal(false)} style={cancelButtonStyles}>
+                    Cancel
+                  </button>
+                  <button onClick={saveEditedMeeting} disabled={loading} style={submitButtonStyles}>
+                    {loading ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </div>

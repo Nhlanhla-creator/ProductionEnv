@@ -676,12 +676,7 @@ export const smeMenuItems = [
             icon: <Calendar size={16} />,
             route: "/governance-calendar",
           },
-          {
-            id: "raps-overview",
-            label: "Overview",
-            icon: <LayoutDashboard size={16} />,
-            route: "/raps-overview",
-          },
+         
           {
             id: "raps-actions",
             label: "Actions",
