@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { colors } from "../../shared/theme"
 import { getSubStyles } from "./Styles"
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { 
   getPlanData, 
   getFeatureOrder, 
@@ -76,6 +77,7 @@ const saveSubscriptionToFirebase = async (subscriptionData) => {
         voucherCode: subscriptionData.voucherCode || null,
         voucherExpiresAt: subscriptionData.voucherExpiresAt || null,
         scoreState: subscriptionData.scoreState || null,
+        warningSent: false,
       }
     }, { merge: true })
     return subscriptionRef.id
@@ -85,7 +87,7 @@ const saveSubscriptionToFirebase = async (subscriptionData) => {
   }
 }
 
-// FRONTEND-ONLY: Update current plan in user document
+/// FRONTEND-ONLY: Update current plan in user document
 const updateCurrentPlan = async (planName, billingCycle, additionalData = {}) => {
   try {
     const db = getFirestore()
@@ -93,13 +95,22 @@ const updateCurrentPlan = async (planName, billingCycle, additionalData = {}) =>
     const user = auth.currentUser
     if (!user) throw new Error("No user logged in")
     const userRef = doc(db, "users", user.uid)
+    
+    // ✅ If this is a voucher source, include warningSent: false
+    const updateData = {
+      plan: planName,
+      cycle: billingCycle,
+      lastUpdated: new Date().toISOString(),
+      ...additionalData
+    }
+    
+    // If voucher is being activated, add warningSent: false
+    if (additionalData.source === "voucher" || additionalData.source === "voucher_expired") {
+      updateData.warningSent = false
+    }
+    
     await setDoc(userRef, {
-      currentSubscription: {
-        plan: planName,
-        cycle: billingCycle,
-        lastUpdated: new Date().toISOString(),
-        ...additionalData
-      }
+      currentSubscription: updateData
     }, { merge: true })
     return true
   } catch (error) {
@@ -190,80 +201,134 @@ const ReusableSubscription = ({
   }
 
   // ─── CHECK FOR EXPIRED VOUCHER AND REVERT TO BASIC ──────────────────────
-  const checkAndHandleExpiredVoucher = async () => {
-    if (!isSme || !currentSubscription) return false
+const checkAndHandleExpiredVoucher = async () => {
+  if (!isSme || !currentSubscription) return false
+  
+  // Check if subscription came from a voucher
+  if (currentSubscription.source === "voucher" && currentSubscription.voucherExpiresAt) {
+    const expiryDate = new Date(currentSubscription.voucherExpiresAt)
+    const now = new Date()
     
-    // Check if subscription came from a voucher
-    if (currentSubscription.source === "voucher" && currentSubscription.voucherExpiresAt) {
-      const expiryDate = new Date(currentSubscription.voucherExpiresAt)
-      const now = new Date()
-      
-      if (now > expiryDate) {
-        console.log("⚠️ Voucher has expired! Reverting to basic plan...")
+    // ✅ CALCULATE ALL TIME REMAINING VARIABLES
+    const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))
+    const hoursRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60))
+    const minutesRemaining = Math.ceil((expiryDate - now) / (1000 * 60))
+    
+    // ─── SEND EXPIRY WARNING EMAIL (3 days before) ──────────────────────
+    if (daysRemaining <= 3 && daysRemaining > 0 && !currentSubscription.warningSent) {
+      try {
+        const functions = getFunctions()
+        const sendVoucherExpiryWarningEmail = httpsCallable(functions, 'sendVoucherExpiryWarningEmail')
         
-        // Revert to free/basic plan
-        const freePlan = plans[freePlanKey]
-        const scoreState = getSmeScoreState(freePlanKey)
+        const userEmail = user?.email
+        const companyName = companyName || user?.displayName || "User"
         
-        try {
-          const userRef = doc(db, "users", user?.uid)
-          const expiryRecord = {
-            id: uuidv4(),
-            email: user?.email,
-            plan: freePlan.name,
-            cycle: "monthly",
-            amount: 0,
-            fullName: fullName || user?.displayName,
-            companyName,
-            createdAt: new Date().toISOString(),
-            status: "Success",
-            autoRenew: false,
-            userId: user?.uid,
-            userType,
-            action: "voucher_expired",
-            previousPlan: currentSubscription.plan,
-            previousVoucherCode: currentSubscription.voucherCode,
-            expiryDate: expiryDate.toISOString(),
-            scoreState
-          }
-          
-          await saveSubscriptionToFirebase(expiryRecord)
-          await updateCurrentPlan(freePlan.name, "monthly", { 
-            userType, 
-            scoreState,
-            source: "voucher_expired",
-            previousVoucherCode: currentSubscription.voucherCode
+        if (userEmail) {
+          await sendVoucherExpiryWarningEmail({
+            to: userEmail,
+            name: companyName,
+            daysRemaining: daysRemaining,
+            voucherCode: currentSubscription.voucherCode || "N/A",
+            planName: currentSubscription.plan || "Premium",
+            expiryDate: expiryDate.toISOString()
           })
           
-          setCurrentSubscription(expiryRecord)
-          setSelectedPlan(freePlanKey)
+          // Mark warning as sent to avoid duplicate emails
+          await updateDoc(doc(db, "users", user?.uid), {
+            "subscription.warningSent": true
+          })
           
-          // Show alert to user
-          setTimeout(() => {
-            alert(`⚠️ Your voucher has expired!\n\nYou have been reverted to the ${freePlan.name} plan.\n\nTo regain premium features, please purchase a subscription or contact your catalyst for a new voucher.`)
-          }, 500)
-          
-          return true
-        } catch (error) {
-          console.error("Error handling expired voucher:", error)
+          console.log(`✅ Voucher expiry warning email sent (${daysRemaining} days remaining)`)
         }
-      } else {
-        // Calculate time remaining
-        const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))
-        const hoursRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60))
-        const minutesRemaining = Math.ceil((expiryDate - now) / (1000 * 60))
-        
-        if (daysRemaining <= 3 && daysRemaining > 0) {
-          console.log(`⏰ Voucher expires in ${daysRemaining} days`)
-        } else if (hoursRemaining <= 24 && hoursRemaining > 0) {
-          console.log(`⏰ Voucher expires in ${hoursRemaining} hours`)
-        } else if (minutesRemaining <= 60 && minutesRemaining > 0) {
-          console.log(`⏰ Voucher expires in ${minutesRemaining} minutes`)
-        }
+      } catch (emailError) {
+        console.error("❌ Failed to send voucher expiry warning email:", emailError)
       }
     }
-    return false
+    
+    // ─── CHECK IF EXPIRED ──────────────────────────────────────────────────
+    if (now > expiryDate) {
+      console.log("⚠️ Voucher has expired! Reverting to basic plan...")
+      
+      const freePlan = plans[freePlanKey]
+      const scoreState = getSmeScoreState(freePlanKey)
+      
+      try {
+        const userRef = doc(db, "users", user?.uid)
+        const expiryRecord = {
+          id: uuidv4(),
+          email: user?.email,
+          plan: freePlan.name,
+          cycle: "monthly",
+          amount: 0,
+          fullName: fullName || user?.displayName,
+          companyName,
+          createdAt: new Date().toISOString(),
+          status: "Success",
+          autoRenew: false,
+          userId: user?.uid,
+          userType,
+          action: "voucher_expired",
+          previousPlan: currentSubscription.plan,
+          previousVoucherCode: currentSubscription.voucherCode,
+          expiryDate: expiryDate.toISOString(),
+          scoreState
+        }
+        
+        await saveSubscriptionToFirebase(expiryRecord)
+        await updateCurrentPlan(freePlan.name, "monthly", { 
+          userType, 
+          scoreState,
+          source: "voucher_expired",
+          previousVoucherCode: currentSubscription.voucherCode,
+          warningSent: false
+        })
+        
+        setCurrentSubscription(expiryRecord)
+        setSelectedPlan(freePlanKey)
+        
+        // ─── SEND EXPIRY NOTIFICATION EMAIL ──────────────────────────────
+        try {
+          const functions = getFunctions()
+          const sendVoucherExpiredEmail = httpsCallable(functions, 'sendVoucherExpiredEmail')
+          
+          const userEmail = user?.email
+          const companyName = companyName || user?.displayName || "User"
+          
+          if (userEmail) {
+            await sendVoucherExpiredEmail({
+              to: userEmail,
+              name: companyName,
+              voucherCode: currentSubscription.voucherCode || "N/A",
+              previousPlan: currentSubscription.plan || "Premium",
+              expiryDate: expiryDate.toISOString()
+            })
+            console.log("✅ Voucher expired notification email sent")
+          }
+        } catch (emailError) {
+          console.error("❌ Failed to send voucher expired email:", emailError)
+        }
+        
+        setTimeout(() => {
+          alert(`⚠️ Your voucher has expired!\n\nYou have been reverted to the ${freePlan.name} plan.\n\nTo regain premium features, please purchase a subscription or contact your catalyst for a new voucher.`)
+        }, 500)
+        
+        return true
+      } catch (error) {
+        console.error("Error handling expired voucher:", error)
+      }
+    } else {
+      // Log time remaining
+      if (daysRemaining <= 3 && daysRemaining > 0) {
+        console.log(`⏰ Voucher expires in ${daysRemaining} days`)
+      } else if (hoursRemaining <= 24 && hoursRemaining > 0) {
+        console.log(`⏰ Voucher expires in ${hoursRemaining} hours`)
+      } else if (minutesRemaining <= 60 && minutesRemaining > 0) {
+        console.log(`⏰ Voucher expires in ${minutesRemaining} minutes`)
+      }
+    }
   }
+  return false
+}
 
   const styles = {
     ...baseStyles,
