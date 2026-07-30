@@ -67,9 +67,9 @@ const STAGES = [
     borderColor: "#e6d7c3"
   },
   { 
-    id: "admitted", 
-    name: "Admitted", 
-    description: "Businesses successfully admitted/engaged",
+    id: "active", 
+    name: "Active", 
+    description: "Businesses successfully activated/engaged",
     icon: <CheckCircle size={18} />,
     color: "#2e7d32",
     bgColor: "#e8f5e9",
@@ -108,7 +108,7 @@ export default function CMFDealFlowPipeline({ onStageClick, smeMatches = [], loa
         const stage = (s || "").toLowerCase()
         return stage.includes("offer") || stage.includes("term sheet")
       },
-      admitted: (s) => {
+      active: (s) => {
         const stage = (s || "").toLowerCase()
         return stage.includes("admitted") || stage.includes("active") || stage.includes("exited") || stage.includes("completed")
       }

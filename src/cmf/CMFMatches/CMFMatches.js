@@ -2,6 +2,11 @@ import React, { useState } from "react"
 import CMFDealFlowPipeline from "./CMFDealFlowPipeline"
 import CMFTabbedTables from "./CMFTabbedTables"
 import CMFFilter from "./CMFFilter"
+import { useCMFMatches } from "./CMFMatchesContext"
+
+// (Keep INITIAL_MOCK_SMES, INITIAL_MOCK_FUNDERS, INITIAL_MOCK_CATALYSTS)
+// ... (I'll keep the mock lists to act as fallback/mock data)
+
 
 const INITIAL_MOCK_SMES = [
   {
@@ -54,26 +59,26 @@ const INITIAL_MOCK_SMES = [
   },
   {
     id: "sme_3",
-    name: "Willie Technologies",
-    location: "Gauteng",
-    sector: "Technology",
-    fundingStage: "Startup",
-    fundingRequired: "-",
-    fundingAmount: 0,
-    equityOffered: "5%",
-    guarantees: "None",
-    supportRequired: "Compliance audit assistance",
+    name: "EcoPower CleanTech",
+    location: "Eastern Cape",
+    sector: "CleanTech",
+    fundingStage: "Growth Stage",
+    fundingRequired: "R2.8M",
+    fundingAmount: 2800000,
+    equityOffered: "15%",
+    guarantees: "IP Patent Pledge",
+    supportRequired: "IP protection patent audits & capital structuring",
     servicesRequired: "Deal Readiness",
-    applicationDate: "2026-01-22",
-    pipelineStage: "Matched",
-    currentStatus: "Withdrawn",
-    matchPercentage: 50,
-    bigScore: 13,
-    compliance: 15,
-    legitimacy: 10,
-    fundability: 15,
-    leadership: 10,
-    pis: 15,
+    applicationDate: "2026-06-01",
+    pipelineStage: "Exit",
+    currentStatus: "Exit",
+    matchPercentage: 91,
+    bigScore: 86,
+    compliance: 88,
+    legitimacy: 82,
+    fundability: 88,
+    leadership: 85,
+    pis: 85,
     lastActivity: "N/A"
   },
   {
@@ -113,8 +118,8 @@ const INITIAL_MOCK_SMES = [
     supportRequired: "Fleet management software",
     servicesRequired: "Corporate Connections",
     applicationDate: "2026-02-18",
-    pipelineStage: "Admitted",
-    currentStatus: "Admitted",
+    pipelineStage: "Active",
+    currentStatus: "Active",
     matchPercentage: 88,
     bigScore: 82,
     compliance: 85,
@@ -147,11 +152,145 @@ const INITIAL_MOCK_SMES = [
     leadership: 65,
     pis: 60,
     lastActivity: "N/A"
+  },
+  {
+    id: "sme_7",
+    name: "BlueSky Logistics",
+    location: "Western Cape",
+    sector: "Retail",
+    fundingStage: "Early Stage",
+    fundingRequired: "R2.5M",
+    fundingAmount: 2500000,
+    equityOffered: "10%",
+    guarantees: "Vehicle Fleet pledge",
+    supportRequired: "Strategic expansion and supply chain consulting",
+    servicesRequired: "Advisory",
+    applicationDate: "2026-06-25",
+    pipelineStage: "Active",
+    currentStatus: "Active",
+    matchPercentage: 90,
+    bigScore: 84,
+    compliance: 85,
+    legitimacy: 80,
+    fundability: 85,
+    leadership: 85,
+    pis: 80,
+    lastActivity: "N/A"
+  }
+]
+
+const INITIAL_MOCK_FUNDERS = [
+  {
+    id: "funder_1",
+    name: "Vantage Capital Partners",
+    type: "Venture Capital",
+    location: "Gauteng",
+    fundingRange: "R5.0M - R25.0M",
+    sectors: ["Technology", "Telecommunications", "Health"],
+    matchPercentage: 92,
+    contactPerson: "Sarah Jenkins",
+    email: "s.jenkins@vantage.co.za",
+    description: "Vantage Capital provides non-dilutive growth capital to mid-market businesses across Africa, specializing in tech and telecom infrastructure.",
+    status: "Matched"
+  },
+  {
+    id: "funder_2",
+    name: "Seba Growth Fund",
+    type: "Private Equity",
+    location: "Western Cape",
+    fundingRange: "R2.0M - R10.0M",
+    sectors: ["Logistics", "Manufacturing", "Retail"],
+    matchPercentage: 85,
+    contactPerson: "Dumisani Khumalo",
+    email: "dumi@sebagrowth.com",
+    description: "Seba Growth Fund is an impact-first private equity fund targeting high-potential logistics and manufacturing suppliers in South Africa.",
+    status: "Matched"
+  },
+  {
+    id: "funder_3",
+    name: "Green Energy Fund Africa",
+    type: "Impact Grant",
+    location: "National",
+    fundingRange: "R500K - R3.0M",
+    sectors: ["Agriculture", "Renewables", "Water Tech"],
+    matchPercentage: 78,
+    contactPerson: "Elena Rostova",
+    email: "e.rostova@gefa.org",
+    description: "GEFA distributes green grants and technical support to off-grid renewables and smart agriculture startups across sub-Saharan Africa.",
+    status: "Matched"
+  },
+  {
+    id: "funder_4",
+    name: "Anglo American Zimele",
+    type: "Corporate ESD",
+    location: "Limpopo",
+    fundingRange: "R1.0M - R5.0M",
+    sectors: ["Mining Services", "Logistics", "Engineering"],
+    matchPercentage: 74,
+    contactPerson: "Tshepo Mashaba",
+    email: "tshepo.mashaba@anglo.com",
+    description: "Anglo American Zimele helps fund local supplier enterprises located in and around mine hosting communities, focusing on operational readiness.",
+    status: "Matched"
+  }
+]
+
+const INITIAL_MOCK_CATALYSTS = [
+  {
+    id: "catalyst_1",
+    name: "Seda Tech Incubator",
+    type: "Incubator",
+    location: "Gauteng",
+    focus: "Technical Advisory & Workspaces",
+    sectors: ["Technology", "Information Systems"],
+    matchPercentage: 95,
+    contactPerson: "Linda Naidoo",
+    email: "l.naidoo@seda.org.za",
+    description: "Seda Tech Incubator offers physical space, high-speed fiber, and structured systems development mentoring for young digital innovators.",
+    status: "Matched"
+  },
+  {
+    id: "catalyst_2",
+    name: "Red Bull Amaphiko",
+    type: "Accelerator",
+    location: "Western Cape",
+    focus: "Marketing, Branding & Social Impact",
+    sectors: ["Creatives", "Social Enterprise", "FMCG"],
+    matchPercentage: 88,
+    contactPerson: "Marc van der Merwe",
+    email: "marc.vdmerwe@redbull.com",
+    description: "A global program that supports social entrepreneurs using creativity, branding, storytelling, and media scaling to drive grassroots change.",
+    status: "Matched"
+  },
+  {
+    id: "catalyst_3",
+    name: "Founders Factory Africa",
+    type: "Venture Builder",
+    location: "National",
+    focus: "Product Scaling & Tech Talent",
+    sectors: ["Fintech", "Healthtech", "Logistics"],
+    matchPercentage: 82,
+    contactPerson: "Naledi Dlamini",
+    email: "naledi@foundersfactory.co.za",
+    description: "Founders Factory Africa designs, builds, and scales early-stage ventures with direct engineering, product design, and business development desks.",
+    status: "Matched"
+  },
+  {
+    id: "catalyst_4",
+    name: "SAB Foundation Boost",
+    type: "Enterprise Development",
+    location: "KwaZulu-Natal",
+    focus: "Mentorship & Corporate Supply Chains",
+    sectors: ["Agriculture", "Manufacturing", "Tourism"],
+    matchPercentage: 79,
+    contactPerson: "Gugu Mtshali",
+    email: "gugu.mtshali@sab.co.za",
+    description: "SAB Foundation Boost supports black-owned businesses with intensive mentorship, market access, and soft loans to enter larger supply chains.",
+    status: "Matched"
   }
 ]
 
 export default function CMFMatches() {
-  const [smeMatches, setSmeMatches] = useState(INITIAL_MOCK_SMES)
+  const { smeMatches, funderMatches, catalystMatches, loading, updateMatchStage } = useCMFMatches()
   const [stageFilter, setStageFilter] = useState(null)
   const [stageOverrides, setStageOverrides] = useState([])
 
@@ -172,20 +311,7 @@ export default function CMFMatches() {
     setFilters(prev => ({ ...prev, ...newFilters }))
   }
 
-  const handleUpdateStage = (smeId, newStage) => {
-    setSmeMatches(prev => 
-      prev.map(item => {
-        if (item.id === smeId) {
-          return {
-            ...item,
-            pipelineStage: newStage,
-            currentStatus: newStage
-          }
-        }
-        return item
-      })
-    )
-  }
+  const displaySMEs = smeMatches || []
 
   return (
     <div
@@ -202,8 +328,8 @@ export default function CMFMatches() {
         {/* DealFlow Pipeline */}
         <div className="w-full max-w-full mb-6">
           <CMFDealFlowPipeline 
-            smeMatches={smeMatches} 
-            loading={false} 
+            smeMatches={displaySMEs} 
+            loading={loading} 
             onStageClick={setStageFilter} 
           />
         </div>
@@ -216,9 +342,11 @@ export default function CMFMatches() {
           <CMFTabbedTables
             filters={filters}
             stageFilter={stageFilter}
-            smeMatches={smeMatches}
-            loading={false}
-            onUpdateStage={handleUpdateStage}
+            smeMatches={displaySMEs}
+            funderMatches={funderMatches}
+            catalystMatches={catalystMatches}
+            loading={loading}
+            onUpdateStage={updateMatchStage}
             onStageOverride={setStageOverrides}
           />
         </div>
