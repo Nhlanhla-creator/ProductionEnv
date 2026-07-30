@@ -134,6 +134,29 @@ export const SUPPLIER_SME_COLLECTION = "supplierApplications"
 export const smeSupplierId = (smeId, supplierId) => `${smeId}_${supplierId}`
 export const supplierSmeId = (supplierId, smeId) => `${supplierId}_${smeId}`
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Events the pipeline uses to talk to this table.
+
+   They're declared here, not in supplier-flow-pipeline.jsx, because that file
+   already imports SME_SUPPLIER_COLLECTION and normalizeSupplierStatus from
+   this one — pointing the imports both ways would make a circular module
+   dependency.
+
+     SUPPLIER_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
+                                   status name, or null to clear.
+     SUPPLIER_ROWS_EVENT           table → pipeline. Detail is every row that
+                                   passes the table's other filters, each with
+                                   its resolved status. This is what makes the
+                                   cards and the table body agree — including
+                                   New Match, which has no stored record for
+                                   the pipeline to query on its own.
+     SUPPLIER_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast,
+                                   for whichever component mounted second.
+   ════════════════════════════════════════════════════════════════════════ */
+export const SUPPLIER_STAGE_FILTER_EVENT = "supplier-pipeline-stage-filter"
+export const SUPPLIER_ROWS_EVENT = "supplier-pipeline-rows"
+export const SUPPLIER_ROWS_REQUEST_EVENT = "supplier-pipeline-rows-request"
+
 /* ─── Status vocabulary ─────────────────────────────────────────────────────
    Spec section 3, with the two application steps worded for a quote flow:
    "Application Started" → Quote Requested, "Applied" → Quote Received.
@@ -403,6 +426,29 @@ const BUILTIN_VIEW_ID = "__default__"
 // the mid-word header breaks, so old saved views fall back to the new defaults.
 const VIEWS_STORAGE_KEY = "supplier-matches-views-v2"
 const FILTERS_STORAGE_KEY = "supplier-matches-filters-v1"
+const SAVED_STORAGE_KEY = "supplier-matches-saved-v1"
+
+/* Saved matches were previously component state only, so the bookmark
+   survived until the next render of a parent and no further — pressing it
+   looked like nothing happened. */
+const loadSavedMatches = () => {
+  if (typeof window === "undefined") return {}
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SAVED_STORAGE_KEY) || "null")
+    return saved && typeof saved === "object" ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+const persistSavedMatches = (saved) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(saved))
+  } catch {
+    // Non-fatal.
+  }
+}
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
@@ -629,11 +675,30 @@ export function SupplierTable({
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [userRole, setUserRole] = useState(null)
 
+  /* A stage pressed in the pipeline arrives here. The `stageFilter` prop still
+     wins when the page passes one, so wiring props stays optional — drop
+     <SupplierFlowPipeline /> anywhere on the page and the two find each
+     other. */
+  const [eventStageFilter, setEventStageFilter] = useState(null)
+  useEffect(() => {
+    const onFilter = (e) => setEventStageFilter(e.detail ?? null)
+    window.addEventListener(SUPPLIER_STAGE_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(SUPPLIER_STAGE_FILTER_EVENT, onFilter)
+  }, [])
+  const activeStageFilter = stageFilter ?? eventStageFilter
+
   const [detailsSupplier, setDetailsSupplier] = useState(null)
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState("")
-  const [savedMatches, setSavedMatches] = useState({})
+  const [savedMatches, setSavedMatches] = useState(() => loadSavedMatches())
+  const [showSavedOnly, setShowSavedOnly] = useState(false)
   const [hoveredRow, setHoveredRow] = useState(null)
+
+  useEffect(() => {
+    persistSavedMatches(savedMatches)
+  }, [savedMatches])
+
+  const savedCount = useMemo(() => Object.values(savedMatches).filter(Boolean).length, [savedMatches])
 
   /* Popups — anchored popovers portaled to <body>, same pattern as the other
      match tables. { type, row, position:{x,y}, rect } */
@@ -687,6 +752,18 @@ export function SupplierTable({
     setNotification({ type, message })
     setTimeout(() => setNotification(null), ms)
   }, [])
+
+  /* One place that both the row bookmark and the quick-actions entry call, so
+     the two can't drift apart. Declared after `toast` because it uses it — a
+     const referenced before its initializer throws at render. */
+  const toggleSaved = useCallback(
+    (supplier) => {
+      const nowSaved = !savedMatches[supplier.id]
+      setSavedMatches((prev) => ({ ...prev, [supplier.id]: nowSaved }))
+      toast("success", nowSaved ? `${supplier.name} saved` : `${supplier.name} removed from saved`, 2000)
+    },
+    [savedMatches, toast],
+  )
 
   useEffect(() => {
     setMounted(true)
@@ -1090,8 +1167,8 @@ export function SupplierTable({
         popupHeight = 560
         break
       case "quickActions":
-        popupWidth = 216
-        popupHeight = 300
+        popupWidth = 224
+        popupHeight = 360
         break
       default:
         popupWidth = 320
@@ -1430,21 +1507,26 @@ export function SupplierTable({
   const businessSizeOptions = useMemo(() => uniqueOf((s) => s.businessSize), [uniqueOf])
   const complianceOptions = useMemo(() => uniqueOf((s) => s.complianceStatus), [uniqueOf])
 
-  /* ─── Filtering + sorting ───────────────────────────────────────────── */
-  const filteredSuppliers = useMemo(() => {
+  /* ─── Filtering + sorting ───────────────────────────────────────────────
+     Split in two on purpose. `preStageSuppliers` applies every filter except
+     the pipeline stage; that list is what gets broadcast, so a card reading 8
+     and the table showing 8 are the same 8 rows. Applying the stage filter
+     before broadcasting would collapse every other card to zero the moment
+     you pressed one. ──────────────────────────────────────────────────── */
+  const preStageSuppliers = useMemo(() => {
     const f = localFilters
     const matchesAny = (selected, value) =>
       selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
     const includesText = (needle, value) =>
       !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
 
-    const rows = suppliers.filter((s) => {
+    return suppliers.filter((s) => {
       if (records[s.id]?.hidden) return false
       if (hasTooManyMissingFields(s)) return false
       if (!showIneligible && !s.aiEligibility?.eligible) return false
+      if (showSavedOnly && !savedMatches[s.id]) return false
 
       const status = statusOf(s)
-      if (stageFilter && status !== stageFilter) return false
       if (filters?.search && !s.name.toLowerCase().includes(filters.search.toLowerCase())) return false
 
       if (!includesText(f.name, s.name)) return false
@@ -1476,6 +1558,24 @@ export function SupplierTable({
 
       return true
     })
+  }, [suppliers, records, localFilters, statusOf, filters, showIneligible, showSavedOnly, savedMatches])
+
+  /* Every row the pipeline should count, each with its resolved status. New
+     Match has no stored record, so the pipeline cannot work this out on its
+     own — it would have to guess from a total. */
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const payload = preStageSuppliers.map((s) => ({ id: s.id, name: s.name, status: statusOf(s) }))
+    const emit = () => window.dispatchEvent(new CustomEvent(SUPPLIER_ROWS_EVENT, { detail: payload }))
+    emit()
+    window.addEventListener(SUPPLIER_ROWS_REQUEST_EVENT, emit)
+    return () => window.removeEventListener(SUPPLIER_ROWS_REQUEST_EVENT, emit)
+  }, [preStageSuppliers, statusOf])
+
+  const filteredSuppliers = useMemo(() => {
+    const rows = activeStageFilter
+      ? preStageSuppliers.filter((s) => statusOf(s) === activeStageFilter)
+      : [...preStageSuppliers]
 
     if (sortConfig?.key) {
       const accessors = {
@@ -1512,7 +1612,7 @@ export function SupplierTable({
     }
 
     return rows
-  }, [suppliers, records, localFilters, sortConfig, statusOf, stageFilter, filters, showIneligible])
+  }, [preStageSuppliers, activeStageFilter, sortConfig, statusOf, records])
 
   /* Parent callbacks go through a ref so an inline arrow in the parent can't
      retrigger this effect on every render. */
@@ -1888,6 +1988,31 @@ export function SupplierTable({
               Viewing: {activeView.name}
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
+            {/* Which pipeline stage the table is narrowed to. Press the same
+                card again in the pipeline to clear it. */}
+            {activeStageFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
+                <Target size={12} className="text-[#7d5a50]" />
+                Pipeline stage: {activeStageFilter}
+                <span className="font-normal text-[#a89482]">({filteredSuppliers.length})</span>
+              </span>
+            )}
+            {/* Saved matches. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => setShowSavedOnly((v) => !v)}
+                title={showSavedOnly ? "Show all suppliers" : "Show only saved suppliers"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <>
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
@@ -2346,13 +2471,31 @@ export function SupplierTable({
                         <Package size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
-                        {suppliers.length === 0 ? "No supplier matches yet" : "No suppliers match these filters"}
+                        {suppliers.length === 0
+                          ? "No supplier matches yet"
+                          : showSavedOnly
+                            ? "No saved suppliers"
+                            : activeStageFilter
+                              ? `No suppliers at ${activeStageFilter}`
+                              : "No suppliers match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
                         {suppliers.length === 0
                           ? "Update your request with more categories or a wider location and the matches will follow."
-                          : "Clear a filter to widen the results."}
+                          : showSavedOnly
+                            ? "Bookmark a row to keep it here."
+                            : activeStageFilter
+                              ? "Press that stage card again to clear the filter."
+                              : "Clear a filter to widen the results."}
                       </p>
+                      {showSavedOnly && (
+                        <button
+                          onClick={() => setShowSavedOnly(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Show all suppliers
+                        </button>
+                      )}
                       {activeFilterCount > 0 && suppliers.length > 0 && (
                         <button onClick={clearAllFilters} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white">
                           Clear all filters
@@ -2441,9 +2584,10 @@ export function SupplierTable({
                           </button>
 
                           <button
-                            onClick={() => setSavedMatches((p) => ({ ...p, [s.id]: !p[s.id] }))}
+                            onClick={() => toggleSaved(s)}
                             title={isSaved ? "Remove from saved" : "Save match"}
                             aria-label={isSaved ? "Remove from saved" : "Save match"}
+                            aria-pressed={isSaved}
                             className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0"
                             style={{ color: isSaved ? "#a67c52" : "#c8b6a6" }}
                           >
@@ -2695,7 +2839,7 @@ export function SupplierTable({
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
           <div
             className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
-            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "216px" }}
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "224px" }}
           >
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
@@ -2715,6 +2859,34 @@ export function SupplierTable({
             >
               <Target size={12} /> Why This Match?
             </button>
+            <button
+              onClick={() => {
+                const target = activePopup.row
+                closePopup()
+                toggleSaved(target)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Bookmark size={12} fill={savedMatches[activePopup.row.id] ? "#a67c52" : "none"} />
+              {savedMatches[activePopup.row.id] ? "Remove from Saved" : "Save Match"}
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                setShowSavedOnly(true)
+                toast(
+                  "info",
+                  savedCount > 0
+                    ? `Showing your ${savedCount} saved supplier${savedCount === 1 ? "" : "s"}.`
+                    : "You haven't saved any suppliers yet — use the bookmark on a row.",
+                  3000,
+                )
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <LayoutGrid size={12} /> View Saved Suppliers ({savedCount})
+            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
             <button
               onClick={() => handleRequestQuote(activePopup.row)}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"

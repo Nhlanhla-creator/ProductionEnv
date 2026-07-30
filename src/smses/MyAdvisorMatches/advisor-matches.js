@@ -402,7 +402,7 @@ export default function SupportProgramsPage() {
         {/* Pipeline section */}
         <div style={{ width: '100%', maxWidth: '100%', padding: '5px 20px 2px 20px', margin: '0 0 5px 0', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', boxSizing: 'border-box', backdropFilter: 'blur(10px)' }} className={`${styles.sectionCard} ${styles.pipelineSection} ${styles.pipelineCard}`}>
           <div style={{ width: '100%', overflow: 'hidden' }} className={styles.sectionContent}>
-            <h2 style={headerStyle}>DealFlow Pipeline</h2>
+           
             <AdvisorFlowPipeline 
               applicationsCount={applicationsCount}
               matchesCount={matchesCount}

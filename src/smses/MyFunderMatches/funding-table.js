@@ -133,6 +133,29 @@ export const applicationIdOf = (smeId, funderId, fundName) => `${smeId}__${funde
 
 export const BIG_SCORE_MINIMUM = 85
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Events the pipeline uses to talk to this table.
+
+   They're declared here, not in deal-flow-pipeline.jsx, because that file
+   already imports the collection names and normalizeFunderStatus from this
+   one — pointing the imports both ways would make a circular module
+   dependency.
+
+     FUNDING_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
+                                  status name, or null to clear.
+     FUNDING_ROWS_EVENT           table → pipeline. Detail is every fund that
+                                  passes the table's other filters, each with
+                                  its resolved status. This is what makes the
+                                  cards and the table body agree — including
+                                  New Match, which has no stored record for
+                                  the pipeline to query on its own.
+     FUNDING_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast,
+                                  for whichever component mounted second.
+   ════════════════════════════════════════════════════════════════════════ */
+export const FUNDING_STAGE_FILTER_EVENT = "funding-pipeline-stage-filter"
+export const FUNDING_ROWS_EVENT = "funding-pipeline-rows"
+export const FUNDING_ROWS_REQUEST_EVENT = "funding-pipeline-rows-request"
+
 /* ─── Status vocabulary ─────────────────────────────────────────────────────
    Spec section 3, plus Termsheet and Funded. The spec allows per-category
    additions (it does the same for advisors with Interviewing and
@@ -367,6 +390,29 @@ const BUILTIN_VIEW_ID = "__default__"
 // the mid-word header breaks, so old saved views fall back to the new defaults.
 const VIEWS_STORAGE_KEY = "funder-matches-views-v2"
 const FILTERS_STORAGE_KEY = "funder-matches-filters-v1"
+const SAVED_STORAGE_KEY = "funder-matches-saved-v1"
+
+/* Saved matches were previously component state only, so the bookmark
+   survived until the next render of a parent and no further — pressing it
+   looked like nothing happened. */
+const loadSavedMatches = () => {
+  if (typeof window === "undefined") return {}
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SAVED_STORAGE_KEY) || "null")
+    return saved && typeof saved === "object" ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+const persistSavedMatches = (saved) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(saved))
+  } catch {
+    // Non-fatal.
+  }
+}
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
@@ -599,6 +645,17 @@ export function FundingTable({
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [userRole, setUserRole] = useState(null)
 
+  /* A stage pressed in the pipeline arrives here. The `stageFilter` prop still
+     wins when the page passes one, so wiring props stays optional — drop
+     <DealFlowPipeline /> anywhere on the page and the two find each other. */
+  const [eventStageFilter, setEventStageFilter] = useState(null)
+  useEffect(() => {
+    const onFilter = (e) => setEventStageFilter(e.detail ?? null)
+    window.addEventListener(FUNDING_STAGE_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(FUNDING_STAGE_FILTER_EVENT, onFilter)
+  }, [])
+  const activeStageFilter = stageFilter ?? eventStageFilter
+
   const [detailsFund, setDetailsFund] = useState(null)
   const [applyingFund, setApplyingFund] = useState(null)
   const [profileData, setProfileData] = useState({})
@@ -610,8 +667,15 @@ export function FundingTable({
   const [confirmHide, setConfirmHide] = useState(null)
   const [showRemoved, setShowRemoved] = useState(false)
 
-  const [savedMatches, setSavedMatches] = useState({})
+  const [savedMatches, setSavedMatches] = useState(() => loadSavedMatches())
+  const [showSavedOnly, setShowSavedOnly] = useState(false)
   const [hoveredRow, setHoveredRow] = useState(null)
+
+  useEffect(() => {
+    persistSavedMatches(savedMatches)
+  }, [savedMatches])
+
+  const savedCount = useMemo(() => Object.values(savedMatches).filter(Boolean).length, [savedMatches])
 
   /* Popups — anchored popovers portaled to <body>, same pattern as the SME,
      intern and advisor tables. { type, fund, position:{x,y}, rect } */
@@ -1126,8 +1190,8 @@ export function FundingTable({
         popupHeight = 520
         break
       case "quickActions":
-        popupWidth = 216
-        popupHeight = 280
+        popupWidth = 224
+        popupHeight = 360
         break
       default:
         popupWidth = 320
@@ -1469,12 +1533,20 @@ export function FundingTable({
     }
   }
 
-  const toggleSaved = (fund) => {
-    setSavedMatches((p) => ({ ...p, [fund.id]: !p[fund.id] }))
-    if (!savedMatches[fund.id] && !applications[fund.id]) {
-      writeRecord(fund, { status: "Shortlisted" }).catch((err) => console.error("Could not shortlist:", err))
-    }
-  }
+  /* One place that both the row bookmark and the quick-actions entry call, so
+     the two can't drift apart. Saving also shortlists the fund, which is what
+     moves it along the pipeline. */
+  const toggleSaved = useCallback(
+    (fund) => {
+      const nowSaved = !savedMatches[fund.id]
+      setSavedMatches((prev) => ({ ...prev, [fund.id]: nowSaved }))
+      toast("success", nowSaved ? `${fund.fundName} saved` : `${fund.fundName} removed from saved`, 2000)
+      if (nowSaved && !applications[fund.id]) {
+        writeRecord(fund, { status: "Shortlisted" }).catch((err) => console.error("Could not shortlist:", err))
+      }
+    },
+    [savedMatches, applications, writeRecord, toast],
+  )
 
   /* ─── Derived options ───────────────────────────────────────────────── */
   const uniqueOf = useCallback(
@@ -1491,17 +1563,22 @@ export function FundingTable({
     [applications],
   )
 
-  /* ─── Filtering + sorting ───────────────────────────────────────────── */
-  const filteredFunds = useMemo(() => {
+  /* ─── Filtering + sorting ───────────────────────────────────────────────
+     Split in two on purpose. `preStageFunds` applies every filter except the
+     pipeline stage; that list is what gets broadcast, so a card reading 8 and
+     the table showing 8 are the same 8 rows. Applying the stage filter before
+     broadcasting would collapse every other card to zero the moment you
+     pressed one. ──────────────────────────────────────────────────────── */
+  const preStageFunds = useMemo(() => {
     const f = localFilters
     const matchesAny = (selected, value) =>
       selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
     const includesText = (needle, value) =>
       !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
 
-    const rows = funds.filter((r) => {
+    return funds.filter((r) => {
       const status = statusOf(r)
-      if (stageFilter && status !== stageFilter) return false
+      if (showSavedOnly && !savedMatches[r.id]) return false
       if (filters?.search && !`${r.fundName} ${r.funderName}`.toLowerCase().includes(filters.search.toLowerCase()))
         return false
       if (filters?.showOnly === "matches" && applications[r.id]) return false
@@ -1544,6 +1621,33 @@ export function FundingTable({
 
       return true
     })
+  }, [
+    funds,
+    applications,
+    records,
+    responsiveness,
+    localFilters,
+    statusOf,
+    funderStageOf,
+    filters,
+    showSavedOnly,
+    savedMatches,
+  ])
+
+  /* Every fund the pipeline should count, each with its resolved status. New
+     Match has no stored record, so the pipeline cannot work this out on its
+     own — it would have to infer it from a total. */
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const payload = preStageFunds.map((r) => ({ id: r.id, name: r.fundName, status: statusOf(r) }))
+    const emit = () => window.dispatchEvent(new CustomEvent(FUNDING_ROWS_EVENT, { detail: payload }))
+    emit()
+    window.addEventListener(FUNDING_ROWS_REQUEST_EVENT, emit)
+    return () => window.removeEventListener(FUNDING_ROWS_REQUEST_EVENT, emit)
+  }, [preStageFunds, statusOf])
+
+  const filteredFunds = useMemo(() => {
+    const rows = activeStageFilter ? preStageFunds.filter((r) => statusOf(r) === activeStageFilter) : [...preStageFunds]
 
     if (sortConfig?.key) {
       const accessors = {
@@ -1585,16 +1689,14 @@ export function FundingTable({
 
     return rows
   }, [
-    funds,
-    applications,
-    records,
-    responsiveness,
-    localFilters,
+    preStageFunds,
+    activeStageFilter,
     sortConfig,
     statusOf,
     funderStageOf,
-    stageFilter,
-    filters,
+    applications,
+    records,
+    responsiveness,
   ])
 
   useEffect(() => {
@@ -2028,6 +2130,31 @@ export function FundingTable({
               Viewing: {activeView.name}
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
+            {/* Which pipeline stage the table is narrowed to. Press the same
+                card again in the pipeline to clear it. */}
+            {activeStageFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
+                <Target size={12} className="text-[#7d5a50]" />
+                Pipeline stage: {activeStageFilter}
+                <span className="font-normal text-[#a89482]">({filteredFunds.length})</span>
+              </span>
+            )}
+            {/* Saved matches. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => setShowSavedOnly((v) => !v)}
+                title={showSavedOnly ? "Show all funds" : "Show only saved funds"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <>
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
@@ -2506,13 +2633,31 @@ export function FundingTable({
                         <Wallet size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
-                        {funds.length === 0 ? "No funding matches yet" : "No funds match these filters"}
+                        {funds.length === 0
+                          ? "No funding matches yet"
+                          : showSavedOnly
+                            ? "No saved funds"
+                            : activeStageFilter
+                              ? `No funds at ${activeStageFilter}`
+                              : "No funds match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
                         {funds.length === 0
                           ? "Add your sector, stage and amount required to your profile and matches will follow."
-                          : "Clear a filter to widen the results."}
+                          : showSavedOnly
+                            ? "Bookmark a row to keep it here."
+                            : activeStageFilter
+                              ? "Press that stage card again to clear the filter."
+                              : "Clear a filter to widen the results."}
                       </p>
+                      {showSavedOnly && (
+                        <button
+                          onClick={() => setShowSavedOnly(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Show all funds
+                        </button>
+                      )}
                       {activeFilterCount > 0 && funds.length > 0 && (
                         <button
                           onClick={clearAllFilters}
@@ -2595,6 +2740,7 @@ export function FundingTable({
                             onClick={() => toggleSaved(r)}
                             title={isSaved ? "Remove from saved" : "Save match"}
                             aria-label={isSaved ? "Remove from saved" : "Save match"}
+                            aria-pressed={isSaved}
                             className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0"
                             style={{ color: isSaved ? "#a67c52" : "#c8b6a6" }}
                           >
@@ -2851,7 +2997,7 @@ export function FundingTable({
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
           <div
             className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
-            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "216px" }}
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "224px" }}
           >
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
@@ -2871,6 +3017,34 @@ export function FundingTable({
             >
               <Target size={12} /> Why This Match?
             </button>
+            <button
+              onClick={() => {
+                const target = activePopup.fund
+                closePopup()
+                toggleSaved(target)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Bookmark size={12} fill={savedMatches[activePopup.fund.id] ? "#a67c52" : "none"} />
+              {savedMatches[activePopup.fund.id] ? "Remove from Saved" : "Save Match"}
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                setShowSavedOnly(true)
+                toast(
+                  "info",
+                  savedCount > 0
+                    ? `Showing your ${savedCount} saved fund${savedCount === 1 ? "" : "s"}.`
+                    : "You haven't saved any funds yet — use the bookmark on a row.",
+                  3000,
+                )
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <LayoutGrid size={12} /> View Saved Funds ({savedCount})
+            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
             <button
               onClick={() => openPopup("match", activePopup.fund, activePopup.rect)}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"

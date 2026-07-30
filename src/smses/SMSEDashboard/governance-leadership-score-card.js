@@ -52,15 +52,997 @@ const SECTION_WEIGHTS = {
 //      the business is spread thin on a single individual and may carry
 //      succession and conflict-of-interest risk.
 // ─────────────────────────────────────────────────────────────────────────
-const CRITICAL_ROLE_BUCKETS = [
-  { key: "executive", label: "CEO / Managing Director", keywords: ["Chief Executive Officer", "Managing Director"] },
-  { key: "finance", label: "Finance / CFO", keywords: ["Chief Financial Officer", "Financial Manager"] },
-  { key: "tech", label: "Technology / Tech Lead", keywords: ["Chief Technology Officer", "Chief Information Officer", "IT Manager"] },
-  { key: "sales", label: "Sales & Marketing", keywords: ["Chief Marketing Officer", "Sales Manager", "Marketing Manager"] },
-  { key: "operations", label: "Operations", keywords: ["Chief Operating Officer", "Operations Manager", "General Manager"] },
+// Roles that describe WHICH SEAT a person occupies rather than WHAT THEY DO.
+// Excluded from role-concentration counting (a chairman who also ticks
+// "Board of Directors" and "Executive Director" is one seat described three
+// ways, not three jobs), and used instead to infer exec / non-exec status
+// when the Exec/Non-Exec dropdown is left blank.
+const SEAT_DESCRIPTOR_ROLES = [
+  "Board of Directors", "Chairman", "Vice-President",
+  "Executive Director", "Non-Executive Director", "Independent Director",
 ]
 
-const DIRECTOR_ROLE_OVERLOAD_THRESHOLD = 3 // 3+ distinct board roles held by one person is itself a flag
+const NON_EXEC_SIGNAL_ROLES = ["Non-Executive Director", "Independent Director"]
+const EXEC_SIGNAL_ROLES = [
+  "Executive Director", "Chief Executive Officer", "Chief Financial Officer",
+  "Chief Operating Officer", "Managing Director", "General Manager",
+  "Regional Manager", "Supervisor", "Office Manager", "Team Leader",
+]
+const INDEPENDENT_ROLE = "Independent Director"
+
+// directorRoles and execRoles are kept SEPARATE and matched separately,
+// because directorRoleOptions and executivePositions are different lists.
+// CTO / CIO / IT Manager / CMO / Sales Manager / Marketing Manager /
+// Financial Manager exist only in executivePositions — a director can never
+// hold them — so matching both against one combined list silently scored
+// those buckets as uncovered whenever the holder sat on the board.
+const CRITICAL_ROLE_BUCKETS = [
+  {
+    key: "executive", label: "CEO / Managing Director",
+    directorRoles: ["Chief Executive Officer", "Managing Director"],
+    execRoles: ["Chief Executive Officer", "Managing Director"],
+  },
+  {
+    key: "finance", label: "Finance / CFO",
+    directorRoles: ["Chief Financial Officer"],
+    execRoles: ["Chief Financial Officer", "Financial Manager"],
+  },
+  {
+    key: "tech", label: "Technology / Tech Lead",
+    directorRoles: [],
+    execRoles: ["Chief Technology Officer", "Chief Information Officer", "IT Manager"],
+  },
+  {
+    key: "sales", label: "Sales & Marketing",
+    directorRoles: [],
+    execRoles: ["Chief Marketing Officer", "Sales Manager", "Marketing Manager"],
+  },
+  {
+    key: "operations", label: "Operations",
+    directorRoles: ["Chief Operating Officer", "General Manager", "Regional Manager"],
+    execRoles: ["Chief Operating Officer", "Operations Manager", "General Manager"],
+  },
+  {
+    key: "people", label: "People / HR",
+    directorRoles: [],
+    execRoles: ["Chief Human Resources Officer", "HR Manager"],
+  },
+]
+
+// 3+ distinct FUNCTIONAL roles held by one person is a flag. Seat
+// descriptors are excluded, so this no longer fires on a normal chairman.
+const DIRECTOR_ROLE_OVERLOAD_THRESHOLD = 3
+
+// ─────────────────────────────────────────────────────────────────────────
+// BOARD STRUCTURE ASSESSMENT (5.1 → 5.2 → 5.3)
+//
+// The Board Structure section answers three questions in order, and the
+// score is built from the answers:
+//
+//   5.1  Does this business NEED a board?      — driven by PIS
+//   5.2  Does it actually HAVE one?            — declared, or inferred from
+//                                                director composition
+//   5.3  Is that board STRUCTURED CORRECTLY?   — size, independence, mix,
+//                                                cadence, concentration
+//
+// The critical rule: if 5.1 says a board is required and 5.2 says there
+// isn't one, the business is PENALISED. It does not get to score well on
+// governance maturity because everything else is tidy. The gap between what
+// is required and what exists is the single biggest driver of this score.
+// ─────────────────────────────────────────────────────────────────────────
+
+const PIS_EMERGING_THRESHOLD = 100
+const PIS_FULL_BOARD_THRESHOLD = 350
+
+// Requirement ladder (5.1) — how much governance structure is expected
+const REQ_ADVISORS = 0
+const REQ_INFORMAL = 1
+const REQ_FORMAL = 2
+
+// Provision ladder (5.2) — how much governance structure actually exists
+const PROV_NONE = -1
+const PROV_ADVISORS = 0
+const PROV_INFORMAL = 1
+const PROV_FORMAL = 2
+
+// Penalty applied to the Board Structure score per step of shortfall
+const BOARD_GAP_PENALTY = { 1: 25, 2: 45, 3: 60 }
+// Additional penalty applied to the whole Governance Maturity score, so a
+// missing board drags the pillar down rather than being diluted by weighting
+const MATURITY_GAP_PENALTY = { 1: 6, 2: 12, 3: 18 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// BOARD SKILLS MATRIX
+//
+// The named directors ARE the board — a company's directors are its board by
+// definition. So the question is never "is there a board?" when directors are
+// on record; it is "does the board around this table carry the skills the
+// business needs?"
+//
+// Each domain is matched from three sources, in descending order of strength:
+//   1. The board role the director holds (directorRoleOptions)
+//   2. The executive position they hold (executivePositions)
+//   3. Their uploaded CV — qualifications, certifications, skills, current role
+//
+// Skills held by executives who are NOT directors are tracked separately as
+// "bench" — the capability exists in the business, but not at the board table
+// where oversight happens.
+// ─────────────────────────────────────────────────────────────────────────
+// formGap flags a domain the FORM ITSELF cannot express — directorRoleOptions
+// has no legal, technical, commercial or HR option, so those competencies can
+// only ever be evidenced from an uploaded CV. Surfaced to the user rather than
+// silently scored as absent.
+const BOARD_SKILL_DOMAINS = [
+  {
+    key: "finance",
+    label: "Financial & accounting",
+    directorRoles: ["Chief Financial Officer"],
+    execRoles: ["Chief Financial Officer", "Financial Manager"],
+    keywords: [/financ/i, /account/i, /\bCA\s*\(?SA\)?/i, /CIMA/i, /ACCA/i, /audit/i, /\btax\b/i, /treasur/i, /\bB\.?Com/i, /bookkeep/i, /CFA/i, /SAIPA/i],
+  },
+  {
+    key: "legal",
+    label: "Legal, governance & compliance",
+    directorRoles: [],
+    execRoles: [],
+    keywords: [/legal/i, /governance/i, /complian/i, /\bLL\.?B/i, /attorney/i, /advocate/i, /admitted/i, /regulat/i, /company secretar/i, /King\s*I{1,3}V?/i, /\bIoDSA\b/i],
+    formGap: "Company Secretary, Legal Advisor and Compliance Officer",
+  },
+  {
+    key: "industry",
+    label: "Industry & technical expertise",
+    directorRoles: [],
+    execRoles: ["Chief Technology Officer", "Chief Information Officer", "IT Manager"],
+    keywords: [/engineer/i, /technic/i, /technolog/i, /\bB\.?Eng/i, /\bB\.?Sc/i, /software/i, /product/i, /R&D/i, /quality assur/i, /\bSHEQ\b/i, /\bPr\.?\s?Eng\b/i],
+    formGap: "Chief Technology Officer and Chief Information Officer",
+  },
+  {
+    key: "commercial",
+    label: "Commercial, sales & market",
+    directorRoles: [],
+    execRoles: ["Chief Marketing Officer", "Sales Manager", "Marketing Manager"],
+    keywords: [/sales/i, /marketing/i, /commercial/i, /business development/i, /\bBD\b/i, /customer/i, /revenue/i, /\bMBA\b/i],
+    formGap: "Chief Marketing Officer and Sales Director",
+  },
+  {
+    key: "operations",
+    label: "Operations & delivery",
+    directorRoles: ["Chief Operating Officer", "General Manager", "Regional Manager", "Office Manager"],
+    execRoles: ["Chief Operating Officer", "Operations Manager", "General Manager"],
+    keywords: [/operation/i, /supply chain/i, /logistic/i, /production/i, /manufactur/i, /procure/i, /project manage/i, /\bPMP\b/i],
+  },
+  {
+    key: "people",
+    label: "People & organisational",
+    directorRoles: [],
+    execRoles: ["Chief Human Resources Officer", "HR Manager"],
+    keywords: [/human resource/i, /\bHR\b/i, /people/i, /talent/i, /industrial relations/i, /organisational/i, /organizational/i, /\bB\.?A\.? Psych/i, /\bSHRM\b/i],
+    formGap: "HR Director",
+  },
+]
+
+// ─────────────────────────────────────────────────────────────────────────
+// QUALIFICATION EVIDENCE
+//
+// A job title says what a person does. Their CV says what they are qualified
+// to do. These tiers rank the evidence found in a parsed CV so a board seat
+// can be described as evidenced rather than merely occupied.
+// ─────────────────────────────────────────────────────────────────────────
+const QUALIFICATION_TIERS = [
+  {
+    key: "designation", label: "Professional designation", weight: 4,
+    patterns: [
+      /\bCA\s*\(?SA\)?/i, /chartered account/i, /\bCFA\b/i, /\bCIMA\b/i, /\bACCA\b/i,
+      /\bSAIPA\b/i, /\bSAICA\b/i, /\bPr\.?\s?Eng\b/i, /\bPr\.?\s?Tech\b/i, /\bPMP\b/i,
+      /\bCFP\b/i, /\bCIA\b/i, /\bCISA\b/i, /\bSHRM\b/i, /admitted\s+(attorney|advocate)/i,
+    ],
+  },
+  {
+    key: "postgrad", label: "Postgraduate qualification", weight: 3,
+    patterns: [/\bMBA\b/i, /\bMBL\b/i, /\bM\.?(Com|Sc|Eng|A|BA|Phil|Tech)\b/i, /\bPh\.?D\b/i, /\bLL\.?M\b/i, /master'?s/i, /honours/i, /postgraduate/i],
+  },
+  {
+    key: "degree", label: "Undergraduate degree", weight: 2,
+    patterns: [/\bB\.?\s?(Com|Sc|Eng|A|Tech|Bus|Admin)\b/i, /\bLL\.?B\b/i, /bachelor/i],
+  },
+  {
+    key: "diploma", label: "Diploma or certificate", weight: 1,
+    patterns: [/\bN\.?\s?Dip\b/i, /national diploma/i, /\bdiploma\b/i, /\bcertificate\b/i, /\bNQF\s*(level)?\s*\d/i],
+  },
+]
+
+// Scored separately from the tiers above: a CA(SA) is a finance
+// qualification, not evidence the person knows what a board is for.
+const GOVERNANCE_TRAINING_PATTERNS = [
+  /King\s*I{1,3}V?\b/i, /\bIoDSA\b/i, /institute of directors/i,
+  /director'?s?\s+(course|development|programme|program|training|certificate)/i,
+  /board\s+(induction|training|effectiveness)/i, /company secretar/i, /corporate governance/i,
+]
+
+// Below this a director is carrying a seat on potential rather than track record
+const MIN_BOARD_EXPERIENCE_YEARS = 5
+
+// ─────────────────────────────────────────────────────────────────────────
+// COMMITTEES — read from director.committeeMembership, which the Directors
+// table already captures. A Social & Ethics Committee is compulsory under
+// the Companies Act at a Public Interest Score of 500 or more.
+// ─────────────────────────────────────────────────────────────────────────
+const PIS_SOCIAL_ETHICS_THRESHOLD = 500
+
+const EXPECTED_COMMITTEES = [
+  {
+    key: "audit",
+    label: "Audit / Risk",
+    values: ["Audit Committee", "Risk Committee", "Audit & Risk Committee"],
+    requiredWhen: (pis, reqLevel) => reqLevel === REQ_FORMAL,
+    why: "nobody independent reviews the numbers or the risk register before they reach a funder",
+  },
+  {
+    key: "socialEthics",
+    label: "Social & Ethics",
+    values: ["Social & Ethics Committee"],
+    requiredWhen: (pis) => pis >= PIS_SOCIAL_ETHICS_THRESHOLD,
+    why: "a Social & Ethics Committee is a statutory requirement at this Public Interest Score, not a nice-to-have",
+  },
+  {
+    key: "remNom",
+    label: "Remuneration / Nomination",
+    values: ["Remuneration Committee", "Nomination Committee", "Remuneration & Nomination Committee"],
+    requiredWhen: (pis, reqLevel) => reqLevel === REQ_FORMAL,
+    why: "executive pay and board appointments are being set by the same people who receive them",
+  },
+]
+
+// ─────────────────────────────────────────────────────────────────────────
+// ADVISORS
+//
+// There is currently no advisor table in OwnershipManagement.jsx — only the
+// enterpriseReadiness.hasAdvisors yes/no. This reader checks every plausible
+// location so it starts working the moment advisor capture is added, and
+// returns [] until then. The absence is raised as an evidence gap.
+// ─────────────────────────────────────────────────────────────────────────
+const ADVISOR_SOURCES = [
+  ["enterpriseReadiness", "advisors"],
+  ["enterpriseReadiness", "advisorList"],
+  ["enterpriseReadiness", "advisoryBoard"],
+  ["ownershipManagement", "advisors"],
+  ["ownershipManagement", "advisoryBoard"],
+  ["governance", "advisors"],
+]
+
+const readAdvisors = (profileData) => {
+  for (const [group, key] of ADVISOR_SOURCES) {
+    const raw = profileData?.[group]?.[key]
+    if (Array.isArray(raw) && raw.length) {
+      return raw
+        .map((x) =>
+          typeof x === "string"
+            ? { name: x.trim(), role: "", firm: "", cv: null }
+            : {
+                name: String(x?.name || x?.advisorName || x?.fullName || "").trim(),
+                role: x?.role || x?.specialisation || x?.specialization || x?.discipline || x?.position || x?.type || "",
+                firm: x?.firm || x?.company || x?.organisation || x?.organization || "",
+                cv: x?.cv || null,
+              }
+        )
+        .filter((a) => a.name)
+    }
+  }
+  return []
+}
+
+const isYes = (v) =>
+  v === true || (typeof v === "string" && ["yes", "true", "y"].includes(v.trim().toLowerCase()))
+const isNo = (v) =>
+  v === false || (typeof v === "string" && ["no", "false", "n", "none"].includes(v.trim().toLowerCase()))
+
+const clamp100 = (n) => Math.min(Math.max(Math.round(n), 0), 100)
+
+const sameName = (a, b) =>
+  !!a && !!b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase()
+
+// Flattens a CV record into one searchable string
+const cvToText = (cv) => {
+  if (!cv) return ""
+  const bits = [cv.currentRole, cv.currentCompany, cv.summary, cv.professionalSummary]
+  if (Array.isArray(cv.skills)) bits.push(cv.skills.join(" "))
+  if (Array.isArray(cv.certifications)) bits.push(cv.certifications.join(" "))
+  if (Array.isArray(cv.education)) cv.education.forEach((ed) => bits.push(ed?.degree, ed?.field, ed?.institution))
+  if (Array.isArray(cv.experience)) cv.experience.forEach((ex) => bits.push(ex?.role, ex?.title, ex?.company, ex?.description))
+  return bits.filter(Boolean).join(" | ")
+}
+
+// ── Which skills are actually sitting at the board table? ──
+// ── Which skills are actually sitting at the board table? ──
+// Director roles and executive positions are matched against SEPARATE lists
+// (see CRITICAL_ROLE_BUCKETS above) because the two dropdowns share almost
+// no options. A director who also holds an executive position brings that
+// position's competency to the board table; an executive who is not a
+// director counts as bench only.
+const computeBoardSkills = (validDirectors, validExecutives, cvProfiles) => {
+  const cvs = cvProfiles || []
+  const boardCoverage = {}
+  const benchCoverage = {}
+  BOARD_SKILL_DOMAINS.forEach((d) => { boardCoverage[d.key] = []; benchCoverage[d.key] = [] })
+
+  const assess = ({ name, boardRoles, execRoles, target }) => {
+    const cv = cvs.find((c) => sameName(c?.personName, name))
+    const cvText = cvToText(cv)
+
+    BOARD_SKILL_DOMAINS.forEach((domain) => {
+      const boardHit = (boardRoles || []).find((r) => domain.directorRoles.includes(r))
+      const execHit = (execRoles || []).find((r) => domain.execRoles.includes(r))
+      const cvHit = cvText && domain.keywords.some((k) => k.test(cvText))
+      if (boardHit) target[domain.key].push({ name, basis: `holds the ${boardHit} board role` })
+      else if (execHit) target[domain.key].push({ name, basis: `serves as ${execHit}` })
+      else if (cvHit) target[domain.key].push({ name, basis: "CV qualifications / experience" })
+    })
+  }
+
+  ;(validDirectors || []).forEach((d) => {
+    const boardRoles = (d.roles || []).map((r) => (r === "Other" ? d.customRole : r)).filter(Boolean)
+    const execRow = (validExecutives || []).find((e) => sameName(e.name, d.name))
+    const execPos = execRow ? (execRow.position === "Other" ? execRow.customPosition : execRow.position) : null
+    assess({ name: d.name, boardRoles, execRoles: execPos ? [execPos] : [], target: boardCoverage })
+  })
+
+  ;(validExecutives || []).forEach((e) => {
+    const position = e.position === "Other" ? e.customPosition : e.position
+    const onBoard = (validDirectors || []).some((d) => sameName(d.name, e.name))
+    if (onBoard) return // already assessed at board level above
+    assess({ name: e.name, boardRoles: [], execRoles: position ? [position] : [], target: benchCoverage })
+  })
+
+  // De-duplicate people per domain
+  Object.keys(boardCoverage).forEach((k) => {
+    const seen = new Set()
+    boardCoverage[k] = boardCoverage[k].filter((h) => (seen.has(h.name) ? false : seen.add(h.name)))
+    const seenB = new Set()
+    benchCoverage[k] = benchCoverage[k].filter((h) => (seenB.has(h.name) ? false : seenB.add(h.name)))
+  })
+
+  const covered = BOARD_SKILL_DOMAINS.filter((d) => boardCoverage[d.key].length > 0)
+  const missing = BOARD_SKILL_DOMAINS.filter((d) => boardCoverage[d.key].length === 0)
+  const onBenchOnly = missing.filter((d) => benchCoverage[d.key].length > 0)
+  // Domains the form cannot capture as a director role at all
+  const formGapDomains = missing.filter((d) => d.formGap)
+
+  return {
+    boardCoverage,
+    benchCoverage,
+    covered,
+    missing,
+    onBenchOnly,
+    formGapDomains,
+    coveredCount: covered.length,
+    totalDomains: BOARD_SKILL_DOMAINS.length,
+    ratio: covered.length / BOARD_SKILL_DOMAINS.length,
+    hasCvEvidence: cvs.length > 0,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXEC / NON-EXEC AND TRUE INDEPENDENCE
+//
+// The Directors table has both a "Roles" multi-select and an "Exec/Non-Exec"
+// dropdown, and people routinely fill in one and not the other. If execType
+// is blank but the role says "Non-Executive Director", the answer is known.
+//
+// Independence is a separate question from executive status.
+// linkedShareholderId tells us a director is a shareholder's nominee. They
+// may well be non-executive, but they are not independent — they protect
+// their own capital, not the company's governance.
+// ─────────────────────────────────────────────────────────────────────────
+const resolveExecType = (director) => {
+  if (director.execType === "Executive" || director.execType === "Non-Executive") {
+    return { value: director.execType, inferred: false }
+  }
+  const roles = director.roles || []
+  if (roles.some((r) => NON_EXEC_SIGNAL_ROLES.includes(r))) return { value: "Non-Executive", inferred: true }
+  if (roles.some((r) => EXEC_SIGNAL_ROLES.includes(r))) return { value: "Executive", inferred: true }
+  return { value: "", inferred: false }
+}
+
+const classifyIndependence = (director) => {
+  const { value: execType, inferred } = resolveExecType(director)
+  const isShareholderLinked = director.linkedShareholderId !== null && director.linkedShareholderId !== undefined
+  const claimsIndependent = (director.roles || []).includes(INDEPENDENT_ROLE)
+
+  if (execType === "Executive") return { tier: "executive", label: "Executive", inferred, isShareholderLinked }
+  if (execType === "Non-Executive") {
+    if (isShareholderLinked) return { tier: "nonExecLinked", label: "Non-executive shareholder — not independent", inferred, isShareholderLinked }
+    if (claimsIndependent) return { tier: "independent", label: "Independent non-executive", inferred, isShareholderLinked }
+    return { tier: "nonExec", label: "Non-executive", inferred, isShareholderLinked }
+  }
+  return { tier: "unclassified", label: "Unclassified", inferred, isShareholderLinked }
+}
+
+const splitBoard = (validDirectors) => {
+  const acc = { executive: 0, nonExec: 0, nonExecLinked: 0, independent: 0, unclassified: 0, inferredCount: 0 }
+  ;(validDirectors || []).forEach((d) => {
+    const c = classifyIndependence(d)
+    acc[c.tier]++
+    if (c.inferred) acc.inferredCount++
+  })
+  // Legacy shape kept so existing display code keeps working
+  acc.exec = acc.executive
+  acc.trulyNonExec = acc.nonExec + acc.independent
+  return acc
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CV LINKAGE AND QUALIFICATION
+//
+// There are TWO CV stores and they answer different questions:
+//   a) director.cv = { name, url, path } — set on upload, always correct
+//   b) userCVData/{uid}/cvs             — the PARSED CV, matched on
+//                                          personName string comparison
+//
+// A CV can be uploaded (a) but unparsed or name-mismatched (b). That is a
+// different problem from "no CV was ever uploaded" and needs a different
+// message to the user, so both states are tracked separately.
+// ─────────────────────────────────────────────────────────────────────────
+const findParsedCv = (cvs, name) => (cvs || []).find((c) => sameName(c?.personName, name)) || null
+
+const functionalRoles = (director) =>
+  (director.roles || [])
+    .map((r) => (r === "Other" ? director.customRole : r))
+    .filter(Boolean)
+    .filter((r) => !SEAT_DESCRIPTOR_ROLES.includes(r))
+
+const TIER_CREDIT = { strong: 1, adequate: 0.75, thin: 0.3, unverified: 0.5 }
+
+const assessPersonQualification = ({ name, boardRoles, execRoles, uploadedCv, parsedCv, seat, isShareholderLinked, committees }) => {
+  const cvText = cvToText(parsedCv)
+  const tiersHit = QUALIFICATION_TIERS.filter((t) => cvText && t.patterns.some((p) => p.test(cvText)))
+  const highest = tiersHit.slice().sort((a, b) => b.weight - a.weight)[0] || null
+  const governanceTrained = !!cvText && GOVERNANCE_TRAINING_PATTERNS.some((p) => p.test(cvText))
+
+  const yearsRaw = Number(parsedCv?.yearsOfExperience)
+  const years = Number.isFinite(yearsRaw) && yearsRaw > 0 ? yearsRaw : null
+
+  const domains = BOARD_SKILL_DOMAINS.filter(
+    (d) =>
+      (boardRoles || []).some((r) => d.directorRoles.includes(r)) ||
+      (execRoles || []).some((r) => d.execRoles.includes(r)) ||
+      (cvText && d.keywords.some((k) => k.test(cvText)))
+  )
+
+  // Four distinct evidence states, deliberately kept apart.
+  // "upload-failed" is a cv record on the director row whose url is missing —
+  // the row was written but the file never reached storage, so the CV looks
+  // present in the UI and is in fact unreadable and unrecoverable.
+  const uploadLanded = !!(uploadedCv && uploadedCv.url)
+  let evidence
+  if (parsedCv) evidence = "parsed"
+  else if (uploadLanded) evidence = "uploaded-unparsed"
+  else if (uploadedCv) evidence = "upload-failed"
+  else evidence = "none"
+
+  let tier
+  if (evidence !== "parsed") tier = "unverified"
+  else if (highest && highest.weight >= 3 && (years === null || years >= MIN_BOARD_EXPERIENCE_YEARS)) tier = "strong"
+  else if (highest) tier = "adequate"
+  else tier = "thin"
+
+  return {
+    name, seat, evidence, tier,
+    // "unverified" scores 0.5, deliberately neutral. A missing CV is a data
+    // gap, not proof of an unqualified director, and is raised in the
+    // evidence gaps panel rather than punished in the score.
+    credit: TIER_CREDIT[tier],
+    boardRoles: boardRoles || [],
+    execRoles: execRoles || [],
+    committees: committees || [],
+    isShareholderLinked: !!isShareholderLinked,
+    hasUploadedCv: uploadLanded,
+    hasCvRecord: !!uploadedCv,
+    hasParsedCv: !!parsedCv,
+    uploadedCvName: uploadedCv?.name || null,
+    highestQualification: highest ? highest.label : null,
+    certifications: Array.isArray(parsedCv?.certifications) ? parsedCv.certifications : [],
+    governanceTrained,
+    years,
+    domains: domains.map((d) => d.label),
+    domainKeys: domains.map((d) => d.key),
+  }
+}
+
+// ── Every person holding a governance seat, assessed ──
+const buildQualificationRoster = (validDirectors, validExecutives, advisors, cvProfiles) => {
+  const cvs = cvProfiles || []
+
+  const directors = (validDirectors || []).map((d) => {
+    const boardRoles = functionalRoles(d)
+    const execRow = (validExecutives || []).find((e) => sameName(e.name, d.name))
+    const execPos = execRow ? (execRow.position === "Other" ? execRow.customPosition : execRow.position) : null
+    const ind = classifyIndependence(d)
+    const committees = (d.committeeMembership || []).map((c) => (c === "Other" ? d.customCommittee : c)).filter(Boolean)
+
+    return {
+      ...assessPersonQualification({
+        name: d.name,
+        boardRoles,
+        execRoles: execPos ? [execPos] : [],
+        uploadedCv: d.cv || execRow?.cv || null,
+        parsedCv: findParsedCv(cvs, d.name),
+        seat: ind.label,
+        isShareholderLinked: ind.isShareholderLinked,
+        committees,
+      }),
+      independenceTier: ind.tier,
+      execTypeInferred: ind.inferred,
+      doa: d.doa || null,
+      functionalRoleCount: boardRoles.length,
+    }
+  })
+
+  const advisorAssessments = (advisors || []).map((a) =>
+    assessPersonQualification({
+      name: a.name,
+      boardRoles: [],
+      execRoles: a.role ? [a.role] : [],
+      uploadedCv: a.cv || null,
+      parsedCv: findParsedCv(cvs, a.name),
+      seat: `Advisor${a.firm ? ` — ${a.firm}` : ""}`,
+      committees: [],
+    })
+  )
+
+  const seatedNames = [...directors, ...advisorAssessments].map((p) => p.name)
+  const execNames = (validExecutives || []).map((e) => e.name)
+  const unmatchedCvs = cvs
+    .filter((c) => c?.personName)
+    .filter((c) => ![...seatedNames, ...execNames].some((n) => sameName(n, c.personName)))
+    .map((c) => c.personName)
+
+  return {
+    directors,
+    advisors: advisorAssessments,
+    unmatchedCvs,
+    cvCount: cvs.length,
+    directorCount: directors.length,
+    uploadedCount: directors.filter((d) => d.hasUploadedCv).length,
+    parsedCount: directors.filter((d) => d.hasParsedCv).length,
+    unparsedCount: directors.filter((d) => d.evidence === "uploaded-unparsed").length,
+    brokenUploadCount: directors.filter((d) => d.evidence === "upload-failed").length,
+    qualifiedCount: directors.filter((d) => d.tier === "strong" || d.tier === "adequate").length,
+    governanceTrainedCount: directors.filter((d) => d.governanceTrained).length,
+    credit: directors.length ? directors.reduce((s, d) => s + d.credit, 0) / directors.length : 0,
+    assessable: directors.some((d) => d.hasParsedCv),
+  }
+}
+
+// ── Committee coverage, from director.committeeMembership ──
+const assessCommittees = (roster, pis, requirementLevel) => {
+  const all = new Set()
+  roster.directors.forEach((d) => (d.committees || []).forEach((c) => all.add(c)))
+
+  const expected = EXPECTED_COMMITTEES.filter((c) => c.requiredWhen(pis, requirementLevel))
+  const results = expected.map((c) => ({
+    key: c.key,
+    label: c.label,
+    why: c.why,
+    present: c.values.some((v) => all.has(v)),
+    members: roster.directors.filter((d) => (d.committees || []).some((x) => c.values.includes(x))).map((d) => d.name),
+  }))
+
+  return {
+    applicable: expected.length > 0,
+    anyCaptured: all.size > 0,
+    expected: results,
+    presentCount: results.filter((r) => r.present).length,
+    expectedCount: results.length,
+    ratio: results.length ? results.filter((r) => r.present).length / results.length : 1,
+    allCommittees: Array.from(all),
+  }
+}
+
+// ── What is missing, and what should the user send? ──
+const collectEvidenceGaps = (roster, ctx) => {
+  const { boardSplit, advisorsDeclared, committees, boardSkills } = ctx
+  const out = []
+  const push = (severity, what, action) => out.push({ severity, what, action })
+
+  if (roster.directorCount === 0) {
+    push("high", "No directors captured",
+      "Add every director in the Directors table under Ownership & Management. The directors are the board, so 5.2 and 5.3 cannot be assessed at all without them.")
+    return out
+  }
+
+  const noCv = roster.directors.filter((d) => d.evidence === "none")
+  if (noCv.length) {
+    push(roster.uploadedCount === 0 ? "high" : "medium",
+      `${noCv.length} of ${roster.directorCount} director${roster.directorCount === 1 ? "" : "s"} ${noCv.length === 1 ? "has" : "have"} no CV uploaded: ${noCv.map((d) => d.name).join(", ")}`,
+      "Upload a CV against each director row. Until then the seat is read from job title alone, and the Directors table has no role option for legal, technical, commercial or HR expertise — so a well-qualified board can read as empty.")
+  }
+
+  const broken = roster.directors.filter((d) => d.evidence === "upload-failed")
+  if (broken.length) {
+    push("high",
+      `${broken.length} CV${broken.length === 1 ? " shows" : "s show"} as attached but the file never reached storage: ${broken.map((d) => d.name).join(", ")}`,
+      "The director row records a CV with no download URL, so the upload failed silently and the file cannot be recovered. Re-upload it once the upload handler is fixed — see uploadDocumentWithSync, which is being called with seven arguments against a three-argument signature.")
+  }
+
+  const unparsed = roster.directors.filter((d) => d.evidence === "uploaded-unparsed")
+  if (unparsed.length) {
+    push("high",
+      `${unparsed.length} CV${unparsed.length === 1 ? " is" : "s are"} uploaded but not readable: ${unparsed.map((d) => d.name).join(", ")}`,
+      "The file is in storage but no matching parsed record exists. Either extraction failed, or the parsed name does not match the Directors table exactly. Re-upload, or correct the spelling so the two match.")
+  }
+
+  if (roster.unmatchedCvs.length) {
+    push("medium",
+      `${roster.unmatchedCvs.length} parsed CV${roster.unmatchedCvs.length === 1 ? " matches" : "s match"} nobody on the profile: ${roster.unmatchedCvs.join(", ")}`,
+      "Names are matched exactly. Correct the spelling on either the CV or the Directors table so the qualification is credited instead of scoring as absent.")
+  }
+
+  const thin = roster.directors.filter((d) => d.evidence === "parsed" && d.tier === "thin")
+  if (thin.length) {
+    push("medium",
+      `Readable CV but no formal qualification found: ${thin.map((d) => d.name).join(", ")}`,
+      "If the qualification exists, add it under education or certifications on the CV. If it genuinely does not, that is a real board skills finding rather than a data gap.")
+  }
+
+  const noYears = roster.directors.filter((d) => d.evidence === "parsed" && d.years === null)
+  if (noYears.length) {
+    push("low", `Years of experience not captured for: ${noYears.map((d) => d.name).join(", ")}`,
+      "Seniority is what separates a qualified director from a qualified employee.")
+  }
+
+  if (roster.parsedCount > 0 && roster.governanceTrainedCount === 0) {
+    push("low", "No director shows board or governance training",
+      "Capture any King IV, IoDSA or directors' development training under certifications. Common to be missing, cheap to fix, and a funder will ask.")
+  }
+
+  if (boardSplit && boardSplit.unclassified > 0) {
+    push("medium",
+      `${boardSplit.unclassified} director${boardSplit.unclassified === 1 ? " is" : "s are"} not classified executive or non-executive`,
+      "Set Exec/Non-Exec in the Directors table, or pick Executive Director / Non-Executive Director / Independent Director under Roles — either resolves it. Independence carries 18% of 5.3.")
+  }
+
+  if (boardSplit && boardSplit.nonExecLinked > 0 && boardSplit.independent === 0 && boardSplit.nonExec === 0) {
+    push("medium",
+      `Every non-executive director is also a shareholder (${boardSplit.nonExecLinked})`,
+      "This is a finding rather than a data gap, but confirm it is right. If any of them hold no shares, uncheck 'Also Director' on the shareholder row so they read as independent.")
+  }
+
+  if (committees && committees.applicable && !committees.anyCaptured) {
+    push("medium", "No committee membership captured for any director",
+      "Fill in Committee Membership in the Directors table. At this Public Interest Score an audit or risk committee is expected and is currently invisible even if it exists.")
+  }
+
+  if (advisorsDeclared && roster.advisors.length === 0) {
+    push("medium", "Advisors are declared but none are named",
+      "Only the yes/no is captured — there is no advisor table. Until advisor names, disciplines and CVs are recorded, the advisory structure cannot be qualification-checked and carries no weight with a funder.")
+  }
+
+  const advisorsNoCv = roster.advisors.filter((a) => a.evidence === "none")
+  if (advisorsNoCv.length) {
+    push("low", `${advisorsNoCv.length} named advisor${advisorsNoCv.length === 1 ? "" : "s"} without a CV: ${advisorsNoCv.map((a) => a.name).join(", ")}`,
+      "Upload advisor CVs so the competency they bring can be credited against the skills matrix.")
+  }
+
+  const formGaps = boardSkills?.formGapDomains || []
+  if (formGaps.length && roster.parsedCount === 0) {
+    push("low",
+      `The Directors table has no role option for: ${formGaps.map((d) => d.label).join(", ")}`,
+      `These competencies can only be evidenced from a CV in the current form. Adding role options for ${formGaps.map((d) => d.formGap).join("; ")} to the Directors table would let them be captured directly.`)
+  }
+
+  return out
+}
+
+
+// ── 5.1 — Does this business need a board? ──
+const deriveBoardRequirement = (pis) => {
+  if (pis >= PIS_FULL_BOARD_THRESHOLD) {
+    return {
+      level: REQ_FORMAL,
+      stage: "Full Board Stage",
+      label: "Formal board required",
+      required: true,
+      rationale: `A Public Interest Score of ${pis} sits at or above ${PIS_FULL_BOARD_THRESHOLD}. At this size, headcount and balance-sheet exposure, a properly constituted board with independent non-executive representation is what funders, auditors and the Companies Act reporting thresholds expect. Operating without one is a material governance gap, not a matter of preference.`,
+    }
+  }
+  if (pis >= PIS_EMERGING_THRESHOLD) {
+    return {
+      level: REQ_INFORMAL,
+      stage: "Emerging Board Stage",
+      label: "Informal board recommended",
+      required: true,
+      rationale: `A Public Interest Score of ${pis} falls between ${PIS_EMERGING_THRESHOLD} and ${PIS_FULL_BOARD_THRESHOLD}. The business has outgrown founder-only decision-making: an informal board — even two or three people meeting on a fixed cadence with minutes — is expected at this stage, with at least one voice from outside management.`,
+    }
+  }
+  return {
+    level: REQ_ADVISORS,
+    stage: "Advisors Stage",
+    label: "Advisors sufficient",
+    required: false,
+    rationale: `A Public Interest Score of ${pis} is below ${PIS_EMERGING_THRESHOLD}. A formal board is not expected yet. What is expected is a named advisory structure the founders actually consult on a regular basis — no structure at all is still a gap.`,
+  }
+}
+
+// ── 5.2 — Does it actually have one? ──
+// THE RULE: named directors ARE the board. A company's directors are its
+// board by definition, so if there are directors on record the board exists
+// and 5.2 is answered — full stop. There is no "de facto" inference and no
+// assuming a board is absent because the governance questions weren't filled
+// in. What varies is how well that board is composed and skilled, and that
+// is 5.3's job, not this one's.
+//
+// The only case where the board is genuinely absent is a profile with no
+// named directors at all.
+const deriveBoardProvision = (profileData, validDirectors, boardSplit) => {
+  const gov = profileData?.governance || {}
+  const er = profileData?.enterpriseReadiness || {}
+  const om = profileData?.ownershipManagement || {}
+
+  const declaredFlags = [
+    gov.hasBoard, gov.boardInPlace, gov.hasFormalBoard, gov.boardEstablished,
+    er.hasBoard, er.hasFormalBoard, om.hasBoard,
+  ]
+  const declaredYes = declaredFlags.some(isYes)
+  const boardTypeRaw = String(gov.boardStructure || gov.boardType || gov.boardStage || "")
+  const hasAdvisors = isYes(er.hasAdvisors)
+  const n = validDirectors.length
+
+  if (n > 0) {
+    const bits = []
+    if (boardSplit.executive) bits.push(`${boardSplit.executive} executive`)
+    if (boardSplit.independent) bits.push(`${boardSplit.independent} independent non-executive`)
+    if (boardSplit.nonExec) bits.push(`${boardSplit.nonExec} non-executive`)
+    if (boardSplit.nonExecLinked) bits.push(`${boardSplit.nonExecLinked} non-executive but also shareholder${boardSplit.nonExecLinked === 1 ? "" : "s"}`)
+    if (boardSplit.unclassified) bits.push(`${boardSplit.unclassified} unclassified`)
+    const composition = `${n} named director${n === 1 ? "" : "s"} on record (${bits.join(", ") || "composition not classified"}).`
+    const source = declaredYes || boardTypeRaw
+      ? `Directors on record${boardTypeRaw ? ` — declared as ${boardTypeRaw}` : ", and a board is declared on the profile"}`
+      : "Directors on record — the directors constitute the board"
+    return {
+      level: PROV_FORMAL,
+      label: n === 1 ? "Board in place — sole director" : "Board in place",
+      source,
+      detail: n === 1
+        ? `${composition} A sole director is still the board, but there is no second voice in the room — that is a composition weakness assessed in 5.3, not an absent board.`
+        : composition,
+    }
+  }
+
+  if (hasAdvisors) {
+    return {
+      level: PROV_ADVISORS,
+      label: "Advisors only — no directors on record",
+      source: "Declared",
+      detail: "An advisory structure is in place, but no directors are named on the profile, so there is no board to assess.",
+    }
+  }
+
+  return {
+    level: PROV_NONE,
+    label: "No directors on record",
+    source: "Nothing captured on the profile",
+    detail: "No directors, advisors or board recorded. Either the board exists and hasn't been captured — in which case complete the Ownership & Management section — or there is genuinely no oversight structure.",
+  }
+}
+
+// ── 5.3 — Is the board structured correctly? ──
+const assessBoardComposition = (requirement, ctx) => {
+  const {
+    validDirectors, advisorsMeetRegularly, advisorsMeetingFrequency,
+    overloadedPeople, boardSkills, qualificationRoster, committees, boardSplit,
+  } = ctx
+
+  const checks = []
+  // credit is 0..1 — lets a check score partial marks instead of pass/fail.
+  // skip removes a check from BOTH numerator and denominator, so a competency
+  // the data cannot speak to reads as "not assessed" rather than as a fail.
+  const push = (label, pass, weight, detail, credit, skip) =>
+    checks.push({
+      label, pass, weight, detail, skip: !!skip,
+      credit: credit != null ? credit : (pass ? 1 : 0),
+    })
+
+  const n = validDirectors.length
+  const minSize = requirement.level === REQ_FORMAL ? 3 : 2
+  const skills = boardSkills || { covered: [], missing: [], onBenchOnly: [], formGapDomains: [], ratio: 0, coveredCount: 0, totalDomains: BOARD_SKILL_DOMAINS.length, hasCvEvidence: false }
+  const s = boardSplit || { executive: 0, nonExec: 0, nonExecLinked: 0, independent: 0, unclassified: 0, inferredCount: 0 }
+  const trulyIndependent = s.nonExec + s.independent
+
+  // ── 1. Does the board carry the skills the business needs? (22%) ──
+  // Skipped where there is no CV evidence AND job titles alone cannot reach
+  // the competencies: directorRoleOptions has no legal, technical, commercial
+  // or HR option, so scoring those as absent would penalise a form limitation.
+  const skillsUnevidenced = !skills.hasCvEvidence && skills.coveredCount <= 1
+  push(
+    "Board skills coverage",
+    skills.ratio >= 0.66,
+    22,
+    n === 0
+      ? "Not assessable — no directors on record."
+      : skillsUnevidenced
+      ? `Not scored. ${skills.coveredCount} of ${skills.totalDomains} competencies match on job title and no director CV has been read. The Directors table has no role option for legal, technical, commercial or HR expertise, so titles alone cannot show what this board knows. Uploading director CVs makes this assessable.`
+      : `${skills.coveredCount} of ${skills.totalDomains} core competencies sit on the board: ${skills.covered.map((d) => d.label).join(", ") || "none identified"}.` +
+        (skills.missing.length
+          ? ` Missing at board level: ${skills.missing.map((d) => d.label).join(", ")}.`
+          : " The board covers every core competency.") +
+        (skills.onBenchOnly.length
+          ? ` ${skills.onBenchOnly.map((d) => d.label).join(", ")} sit${skills.onBenchOnly.length === 1 ? "s" : ""} in management but not at the board table, so ${skills.onBenchOnly.length === 1 ? "it is" : "they are"} not available for oversight.`
+          : "") +
+        (skills.hasCvEvidence ? "" : " Note: no CVs read, so this is based on job titles alone and understates the board's actual expertise."),
+    skills.ratio,
+    skillsUnevidenced
+  )
+
+  // ── 2. Is each seat held by someone qualified to hold it? (15%) ──
+  const r = qualificationRoster
+  const qualUnassessable = !r || !r.assessable
+  push(
+    "Director qualification evidence",
+    r ? r.credit >= 0.7 : false,
+    15,
+    n === 0
+      ? "Not assessable — no directors on record."
+      : qualUnassessable
+      ? `Not scored. ${r ? r.uploadedCount : 0} of ${n} director CV${n === 1 ? " is" : "s are"} uploaded and none have been read into qualification data, so no seat can be verified.`
+      : `${r.parsedCount} of ${n} director${n === 1 ? "" : "s"} ${r.parsedCount === 1 ? "has" : "have"} a readable CV; ${r.qualifiedCount} carr${r.qualifiedCount === 1 ? "ies" : "y"} a formal qualification. ` +
+        r.directors
+          .map((d) => {
+            if (d.evidence === "none") return `${d.name}: no CV`
+            if (d.evidence === "upload-failed") return `${d.name}: CV attached but the file never uploaded`
+            if (d.evidence === "uploaded-unparsed") return `${d.name}: CV uploaded but not readable`
+            const bits = [d.highestQualification || "no formal qualification found"]
+            if (d.years) bits.push(`${d.years} yrs`)
+            if (d.governanceTrained) bits.push("governance training")
+            return `${d.name}: ${bits.join(", ")}`
+          })
+          .join("; ") + ".",
+    r ? r.credit : 0,
+    qualUnassessable
+  )
+
+  // ── 3. Committees (8%) — only where a formal board or PIS >= 500 expects them ──
+  const c = committees
+  push(
+    "Board committees",
+    !!c && c.ratio >= 1,
+    8,
+    !c || !c.applicable
+      ? "Not expected at this stage — a board this size can carry audit and remuneration matters in full session."
+      : c.expected
+          .map((e) => `${e.label}: ${e.present ? `in place (${e.members.join(", ")})` : `not in place — ${e.why}`}`)
+          .join(" "),
+    c ? c.ratio : 1,
+    !c || !c.applicable
+  )
+
+  // ── 4. Size (10%) ──
+  push(
+    "Board size",
+    n >= minSize && n <= 8,
+    10,
+    n === 0
+      ? "No named directors."
+      : n < minSize
+      ? `${n} director${n === 1 ? "" : "s"} — below the ${minSize} expected at this stage. Too few people to spread the skills a board of this business needs to carry.`
+      : n > 8
+      ? `${n} directors — unusually large for an SME; decision-making slows and accountability blurs.`
+      : `${n} directors — appropriate for this stage.`
+  )
+
+  // ── 5. Independence (18%) — a shareholder's nominee is not independent ──
+  push(
+    "Independent presence",
+    trulyIndependent >= 1,
+    18,
+    trulyIndependent >= 1
+      ? `${trulyIndependent} non-executive director${trulyIndependent === 1 ? "" : "s"} with no shareholding link${s.independent ? `, ${s.independent} flagged independent` : ""} — there is a voice at the table that does not report to the founder and does not own the company.`
+      : s.nonExecLinked > 0
+      ? `${s.nonExecLinked} non-executive director${s.nonExecLinked === 1 ? " is also a shareholder" : "s are also shareholders"}. Non-executive is not the same as independent: a shareholder's nominee protects their own capital, not the company's governance. Nobody at this table is independent.`
+      : "Every director is executive. The board and the management team are the same people, so nobody at the table is positioned to challenge management decisions."
+  )
+
+  // ── 6. Ratio (8%) ──
+  const ratio = n > 0 ? trulyIndependent / n : 0
+  push(
+    "Non-executive ratio",
+    ratio >= 1 / 3,
+    8,
+    n === 0
+      ? "Not assessable — no directors."
+      : `${Math.round(ratio * 100)}% genuinely non-executive. At least a third is the working benchmark for the board to carry weight.`
+  )
+
+  // ── 7. Classification (4%) ──
+  push(
+    "Exec / non-exec classification complete",
+    s.unclassified === 0,
+    4,
+    s.unclassified === 0
+      ? `Every director is classified${s.inferredCount ? ` (${s.inferredCount} inferred from their board role rather than the Exec/Non-Exec field)` : ""}.`
+      : `${s.unclassified} director${s.unclassified === 1 ? " is" : "s are"} unclassified — a funder cannot tell who is independent.`
+  )
+
+  // ── 8. Cadence (8%) ──
+  const cadenceStated = !!advisorsMeetRegularly || /month|quarter|week|annual|bi-/i.test(String(advisorsMeetingFrequency || ""))
+  push(
+    "Meeting cadence",
+    cadenceStated,
+    8,
+    cadenceStated
+      ? `Meets on a stated cadence: ${advisorsMeetingFrequency || "regular"}.`
+      : "No meeting cadence recorded. A board that does not meet on a fixed rhythm is a board on paper only."
+  )
+
+  // ── 9. Concentration (7%) ──
+  const overloaded = overloadedPeople || []
+  push(
+    "No role concentration on the board",
+    overloaded.length === 0,
+    7,
+    overloaded.length === 0
+      ? "No single person holds an unusual concentration of functional or critical operating roles."
+      : `${overloaded.map((p) => p.name).join(", ")} carr${overloaded.length === 1 ? "ies" : "y"} multiple critical roles — oversight and execution sit with the same person.`
+  )
+
+  const scored = checks.filter((chk) => !chk.skip)
+  const total = scored.reduce((acc, chk) => acc + chk.weight, 0) || 1
+  const score = Math.round((scored.reduce((acc, chk) => acc + chk.credit * chk.weight, 0) / total) * 100)
+  return { checks, score, skippedCount: checks.length - scored.length }
+}
+
+// ── Assembles 5.1 + 5.2 + 5.3 into one assessment, with the penalty ──
+// ── Assembles 5.1 + 5.2 + 5.3 into one assessment, with the penalty ──
+// The roster, committee and independence work is done HERE rather than at the
+// call sites, so both callers only have to hand over the raw arrays.
+const buildBoardAssessment = (pis, profileData, ctx) => {
+  const { validDirectors, validExecutives, execSplit, cvProfiles } = ctx
+
+  const advisors = ctx.advisors || readAdvisors(profileData)
+  const advisorsDeclared = profileData?.enterpriseReadiness?.hasAdvisors === "yes" || isYes(profileData?.enterpriseReadiness?.hasAdvisors)
+
+  const boardSplit = splitBoard(validDirectors)
+  const qualificationRoster = buildQualificationRoster(validDirectors, validExecutives, advisors, cvProfiles)
+
+  const requirement = deriveBoardRequirement(pis)
+  const provision = deriveBoardProvision(profileData, validDirectors, boardSplit)
+
+  const committees = assessCommittees(qualificationRoster, pis, requirement.level)
+
+  const gap = Math.max(requirement.level - provision.level, 0)
+  const penalty = gap > 0 ? BOARD_GAP_PENALTY[gap] || 60 : 0
+  const maturityPenalty = gap > 0 ? MATURITY_GAP_PENALTY[gap] || 18 : 0
+
+  const boardExists = provision.level >= PROV_INFORMAL
+  const fullCtx = { ...ctx, advisors, boardSplit, qualificationRoster, committees }
+  const composition = boardExists
+    ? assessBoardComposition(requirement, fullCtx)
+    : { checks: [], score: 0, notApplicable: true }
+
+  // Base score before the shortfall penalty
+  let base
+  if (boardExists) base = composition.score
+  else if (provision.level === PROV_ADVISORS) base = requirement.required ? 40 : 75
+  else base = requirement.required ? 15 : 30
+
+  const score = clamp100(base - penalty)
+
+  const skills = ctx.boardSkills
+  const evidenceGaps = collectEvidenceGaps(qualificationRoster, {
+    boardSplit, advisorsDeclared, committees, boardSkills: skills,
+  })
+
+  const verdict = gap > 0
+    ? `${requirement.label} at a PIS of ${pis}, but what is in place is: ${provision.label.toLowerCase()}. This is a ${gap >= 2 ? "severe" : "material"} governance shortfall and the score is penalised by ${penalty} points to reflect it.`
+    : boardExists
+    ? `The board exists — the directors on record constitute it. The question is no longer whether there is a board but whether it carries the right skills and enough independence, and that is what 5.3 scores. ${skills && skills.missing.length ? `Right now ${skills.missing.length} of ${skills.totalDomains} core competencies are missing from the table.` : "It currently covers every core competency."}`
+    : `A board is not yet expected at a PIS of ${pis}. The advisory structure on record is proportionate for this stage.`
+
+  return {
+    pis, requirement, provision, gap, penalty, maturityPenalty,
+    composition, boardExists, score, base, verdict, skills,
+    boardSplit, qualificationRoster, committees, advisors, advisorsDeclared, evidenceGaps,
+  }
+}
 
 export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [showModal, setShowModal] = useState(false)
@@ -107,6 +1089,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   const [governanceStage, setGovernanceStage] = useState("")
   const [governanceRecommendation, setGovernanceRecommendation] = useState("")
   const [governanceAiResult, setGovernanceAiResult] = useState("")
+  const [boardAssessment, setBoardAssessment] = useState(null) // 5.1 / 5.2 / 5.3
+  const [cvProfiles, setCvProfiles] = useState([]) // uploaded CVs — evidence for board skills
 
   const [isEvaluating, setIsEvaluating] = useState(false)
   const [evaluationError, setEvaluationError] = useState("")
@@ -122,9 +1106,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   // ─────────────────────────────────────────────────────────────────────
   // PIS calculation — same formula as the standalone PIS card:
   //   PIS = Employees + (Turnover / R1m) + (Liabilities / R1m) + Shareholders
-  // Displayed under Governance Maturity — it determines the governance stage
-  // (Advisors / Emerging Board / Full Board) which is a maturity signal, not
-  // purely an ownership signal.
+  // Displayed at the TOP of Board Structure — it is the input to 5.1
+  // (does this business need a board at all?), so it has to be read first.
   // ─────────────────────────────────────────────────────────────────────
   const calculatePIS = () => {
     const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0
@@ -152,6 +1135,25 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     }
   }
 
+  // CVs are the strongest evidence of what skills sit on the board — a
+  // director's title says what they do, their CV says what they can do.
+  // Loaded once so the deterministic skills matrix can use them without
+  // waiting for an AI run.
+  useEffect(() => {
+    const userId = auth?.currentUser?.uid
+    if (!userId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const snap = await getDocs(collection(db, "userCVData", userId, "cvs"))
+        if (!cancelled) setCvProfiles(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      } catch (e) {
+        console.error("Error loading CV data for board skills:", e)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [auth?.currentUser?.uid])
+
   useEffect(() => {
     if (!profileData) return
     setPisCalculation(calculatePIS())
@@ -177,10 +1179,13 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
 
     const bucketsByPerson = {} // name -> Set(bucket label)
 
+    // Director roles and executive positions are matched against separate
+    // lists — the two dropdowns share almost no options.
     const registerRole = (name, roleLabel, source) => {
       if (!name || !roleLabel) return
       CRITICAL_ROLE_BUCKETS.forEach((b) => {
-        if (b.keywords.includes(roleLabel)) {
+        const list = source === "Director" ? b.directorRoles : b.execRoles
+        if (list.includes(roleLabel)) {
           bucketCoverage[b.key].push({ name, source })
           if (!bucketsByPerson[name]) bucketsByPerson[name] = new Set()
           bucketsByPerson[name].add(b.label)
@@ -188,11 +1193,15 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       })
     }
 
+    // Only FUNCTIONAL roles are counted towards concentration. "Chairman",
+    // "Board of Directors" and "Executive Director" describe one seat three
+    // ways and used to trip the overload threshold on a normal chairman.
     const directorRoleCounts = {}
     ;(validDirectors || []).forEach((d) => {
-      const roles = (d.roles || []).map((r) => (r === "Other" ? d.customRole : r)).filter(Boolean)
-      directorRoleCounts[d.name] = (directorRoleCounts[d.name] || 0) + roles.length
-      roles.forEach((r) => registerRole(d.name, r, "Director"))
+      const allRoles = (d.roles || []).map((r) => (r === "Other" ? d.customRole : r)).filter(Boolean)
+      const funcRoles = allRoles.filter((r) => !SEAT_DESCRIPTOR_ROLES.includes(r))
+      directorRoleCounts[d.name] = (directorRoleCounts[d.name] || 0) + funcRoles.length
+      allRoles.forEach((r) => registerRole(d.name, r, "Director"))
     })
     ;(validExecutives || []).forEach((e) => {
       const position = e.position === "Other" ? e.customPosition : e.position
@@ -223,49 +1232,18 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   //
   // Ownership & Structure: structural completeness heuristic based on
   // shareholder presence, director count/mix, executive presence, advisors,
-  // and conflict-of-interest signals. Board Structure scoring has moved to
-  // Governance Maturity.
+  // and conflict-of-interest signals.
   //
   // Governance Maturity: ALL calculateGovernanceScore() categories are
-  // included (Board Structure + Strategic + Risk + Transparency + Policies),
-  // re-normalised to 100% across their combined weights.
+  // included, re-normalised to 100%. The Board Structure category score is
+  // OVERRIDDEN with the 5.1/5.2/5.3 assessment below, so a business that
+  // needs a board and doesn't have one is penalised here rather than being
+  // quietly averaged out. The shortfall also applies a second penalty to
+  // the Governance Maturity total.
   // ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!profileData) return
 
-    const cleanProfile = {
-      ...profileData,
-      ownershipManagement: {
-        ...profileData?.ownershipManagement,
-        directors: (profileData?.ownershipManagement?.directors || []).filter(
-          (d) => d?.name && d.name.trim() !== ""
-        ),
-      },
-    }
-
-    const gov = calculateGovernanceScore(cleanProfile)
-
-    // ── Governance Maturity — Board Structure now included ──
-    // All categories (including Board Structure) are re-normalised to 100%
-    // so Governance Maturity reads as a complete standalone score.
-    const allWeightTotal = gov.categories.reduce((s, c) => s + c.weight, 0) || 1
-    const maturityOverall = Math.round(
-      gov.categories.reduce((s, c) => s + c.score * (c.weight / allWeightTotal), 0)
-    )
-
-    setMaturityScore(maturityOverall)
-    setMaturityBreakdown(gov.categories) // includes Board Structure
-    setGovernanceStage(gov.stage)
-
-    const recommendation =
-      gov.stage === "Full Board Stage"
-        ? "Formal board strongly recommended"
-        : gov.stage === "Emerging Board Stage"
-        ? "Informal board recommended"
-        : "Advisors sufficient"
-    setGovernanceRecommendation(recommendation)
-
-    // ── Ownership & Structure display detail ──
     const om = profileData?.ownershipManagement || {}
     const validShareholders = (om.shareholders || []).filter((s) => s?.name && s.name.trim() !== "")
     const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
@@ -281,6 +1259,55 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       { exec: 0, nonExec: 0, unspecified: 0 }
     )
 
+    const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
+
+    const cleanProfile = {
+      ...profileData,
+      ownershipManagement: { ...om, directors: validDirectors },
+    }
+
+    const gov = calculateGovernanceScore(cleanProfile)
+
+    // ── Board Structure: 5.1 → 5.2 → 5.3 ──
+    // PIS is taken from the locally displayed calculation so the number the
+    // user reads at the top of the section is the same number that drives
+    // the requirement in 5.1.
+    const pis = calculatePIS().totalPIS
+    const board = buildBoardAssessment(pis, profileData, {
+      validDirectors,
+      execSplit,
+      advisorsMeetRegularly: !!profileData?.enterpriseReadiness?.advisorsMeetRegularly,
+      advisorsMeetingFrequency: profileData?.enterpriseReadiness?.advisorsMeetingFrequency,
+      overloadedPeople: roleCoverage.overloadedPeople,
+      boardSkills: computeBoardSkills(validDirectors, validExecutives, cvProfiles),
+      validExecutives,
+      cvProfiles,
+    })
+    setBoardAssessment(board)
+
+    // ── Governance Maturity — Board Structure score replaced by ours ──
+    let categories = (gov.categories || []).map((c) =>
+      /board/i.test(c.name)
+        ? { ...c, score: board.score, boardOverride: true }
+        : c
+    )
+    if (!categories.some((c) => /board/i.test(c.name))) {
+      categories = [...categories, { name: "Board Structure", score: board.score, weight: 25, color: "#6D4C41", boardOverride: true }]
+    }
+
+    const allWeightTotal = categories.reduce((s, c) => s + c.weight, 0) || 1
+    const maturityRaw = categories.reduce((s, c) => s + c.score * (c.weight / allWeightTotal), 0)
+    const maturityOverall = clamp100(maturityRaw - board.maturityPenalty)
+
+    setMaturityScore(maturityOverall)
+    setMaturityBreakdown(categories)
+
+    // Stage and recommendation now come from the same PIS the user sees,
+    // rather than from two different sources that could disagree.
+    setGovernanceStage(board.requirement.stage)
+    setGovernanceRecommendation(board.requirement.label)
+
+    // ── Ownership & Structure display detail ──
     const activeInterests = om.activeInterests || []
     const previousInterests = om.previousInterests || []
     const activeConflicts = activeInterests.filter(
@@ -293,12 +1320,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
             .join("; ")
         : "None declared"
 
-    const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
-
     // ── Ownership & Structure score — structural completeness heuristic ──
-    // Board Structure scoring has moved to Governance Maturity.
-    // This score reflects whether the business has the basic people-structure
-    // (shareholders, directors, executives, advisors) that a funder expects.
     const shareholderScore = validShareholders.length >= 1
       ? (validShareholders.length <= 8 ? 100 : 60)
       : 0
@@ -338,7 +1360,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     profileData?.entityOverview?.operationStage,
     profileData?.entityOverview?.employeeCount,
     profileData?.governance,
-    profileData?.ownershipManagement?.directors?.length,
+    profileData?.ownershipManagement?.directors,
     profileData?.ownershipManagement?.businessLeadership?.decisionGovernance,
     profileData?.ownershipManagement?.businessLeadership?.opennessToAdvice,
     profileData?.enterpriseReadiness?.hasAdvisors,
@@ -349,6 +1371,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     profileData?.ownershipManagement?.shareholders?.length,
     profileData?.ownershipManagement?.executives?.length,
     profileData?.ownershipManagement?.activeInterests,
+    cvProfiles,
   ])
 
   // ─────────────────────────────────────────────────────────────────────
@@ -480,9 +1503,11 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   const prepareLeadershipData = async (userId) => {
     let cvText = ""
     try {
-      const cvsRef = collection(db, "userCVData", userId, "cvs")
-      const snap = await getDocs(cvsRef)
-      const cvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      let cvs = cvProfiles
+      if (!cvs.length) {
+        const snap = await getDocs(collection(db, "userCVData", userId, "cvs"))
+        cvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      }
       cvText = cvs
         .map((cv) => {
           const lines = []
@@ -579,22 +1604,152 @@ Role Concentration / "Spread Thin" Risk (one person covering multiple critical f
 ${overloadSummary}
 ${roleCoverage.overloadedPeople.length > 0 ? "NOTE: A single person covering multiple critical roles (e.g. also acting as CFO and Tech Lead) is a succession and conflict-of-interest risk — that person's attention is divided across functions that would normally be separated, and the business has a single point of failure if they leave or are unavailable. Factor this into Leadership Behaviour as a risk factor, not as evidence of a lean, capable team." : ""}
 
+FORMATTING RULES (apply to every section):
+Use bold markdown (**like this**) for every label inside a section — **Assessment:**, **Evidence:**, **How to improve:**, **Rationale:** — so they render as highlighted sub-headings.
+
 RESPONSE FORMAT (follow exactly):
 
 ### 1. Leadership Credentials
 Score: X/5
 Confidence: High | Medium | Low
-Evidence: (cite specific data)
+**Assessment:** (one short paragraph)
+**Evidence:** (cite specific data)
+**How to improve:** (concrete, specific actions)
 
 ### 2. Leadership Structure
 Score: X/5
 Confidence: High | Medium | Low
-Evidence: (cite specific data — including shareholder count/concentration, director exec/non-exec balance, management team depth, and any critical role coverage gaps)
+**Assessment:** (one short paragraph)
+**Evidence:** (cite specific data — including shareholder count/concentration, director exec/non-exec balance, management team depth, and any critical role coverage gaps)
+**How to improve:** (concrete, specific actions)
 
 ### 3. Leadership Behaviour
 Score: X/5
 Confidence: High | Medium | Low
-Evidence: (cite specific data — including openness to advice, any conflict-of-interest signal from declared active business interests, and any role-concentration / "spread thin" risk from one person holding multiple critical roles)
+**Assessment:** (one short paragraph)
+**Evidence:** (cite specific data — including openness to advice, any conflict-of-interest signal from declared active business interests, and any role-concentration / "spread thin" risk from one person holding multiple critical roles)
+**How to improve:** (concrete, specific actions)
+`
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Board Structure prompt addendum — forces the AI narrative to follow the
+  // same 5.1 → 5.2 → 5.3 order as the UI, and hands it the deterministic
+  // verdict so it cannot write a flattering paragraph that contradicts the
+  // score the user is looking at.
+  // ─────────────────────────────────────────────────────────────────────
+  const buildBoardPromptAddendum = (board) => {
+    if (!board) return ""
+    const gapLine = board.gap > 0
+      ? `SHORTFALL: YES — ${board.gap} step${board.gap === 1 ? "" : "s"} below what is required. A ${board.penalty}-point penalty has already been applied to the Board Structure score.`
+      : "SHORTFALL: NONE — what is in place meets what the PIS calls for."
+
+    const compositionLines = board.composition?.checks?.length
+      ? board.composition.checks.map((c) => `- ${c.label}: ${c.pass ? "PASS" : "FAIL"} — ${c.detail}`).join("\n")
+      : "- Not assessable: there are no directors on record."
+
+    const s = board.skills
+    const skillLines = s
+      ? BOARD_SKILL_DOMAINS.map((d) => {
+          const onBoard = s.boardCoverage[d.key] || []
+          const bench = s.benchCoverage[d.key] || []
+          if (onBoard.length) return `- ${d.label}: ON THE BOARD — ${onBoard.map((h) => `${h.name} (${h.basis})`).join(", ")}`
+          if (bench.length) return `- ${d.label}: NOT ON THE BOARD — sits in management only (${bench.map((h) => h.name).join(", ")}), so it is not available for oversight`
+          return `- ${d.label}: ABSENT — nobody on the board or in management covers this`
+        }).join("\n")
+      : "- Skills matrix unavailable."
+
+    // Per-person qualification lines — the CV evidence behind each seat
+    const r = board.qualificationRoster
+    const personLine = (p) =>
+      `- ${p.name} (${p.seat}${p.boardRoles.length ? `, ${p.boardRoles.join(" / ")}` : ""}${p.committees.length ? `; committees: ${p.committees.join(", ")}` : ""}): ` +
+      (p.evidence === "parsed"
+        ? `${p.highestQualification || "no formal qualification found on the CV"}${p.years ? `, ${p.years} years' experience` : ", experience not stated"}${p.governanceTrained ? ", has governance training" : ", no governance training evident"}${p.domains.length ? `, brings ${p.domains.join(" + ")}` : ", maps to no board competency"}`
+        : p.evidence === "upload-failed"
+        ? "CV ATTACHED BUT THE FILE NEVER UPLOADED — qualification unverified through no fault of the director"
+        : p.evidence === "uploaded-unparsed"
+        ? "CV UPLOADED BUT NOT READABLE — qualification unverified"
+        : "NO CV ON FILE — qualification unverified, assessed on job title only")
+
+    const qualificationLines = r
+      ? `Directors on record: ${r.directorCount}. CVs uploaded: ${r.uploadedCount}. CVs readable: ${r.parsedCount}. Carrying a verified formal qualification: ${r.qualifiedCount}. With governance training: ${r.governanceTrainedCount}.
+${r.directors.map(personLine).join("\n") || "- None."}
+${r.advisors.length ? `Named advisors:\n${r.advisors.map(personLine).join("\n")}` : "Named advisors: none captured on the profile."}`
+      : "Qualification roster unavailable."
+
+    const bs = board.boardSplit || {}
+    const independenceLines = `Executive: ${bs.executive || 0}. Non-executive with no shareholding: ${bs.nonExec || 0}. Flagged independent: ${bs.independent || 0}. Non-executive but ALSO A SHAREHOLDER (therefore NOT independent): ${bs.nonExecLinked || 0}. Unclassified: ${bs.unclassified || 0}.`
+
+    const cm = board.committees
+    const committeeLines = cm && cm.applicable
+      ? cm.expected.map((e) => `- ${e.label}: ${e.present ? `IN PLACE — ${e.members.join(", ")}` : `NOT IN PLACE — ${e.why}`}`).join("\n")
+      : "- Not expected at this Public Interest Score / board stage."
+
+    const gapLines = (board.evidenceGaps || []).length
+      ? board.evidenceGaps.map((g) => `- [${g.severity.toUpperCase()}] ${g.what} -> ${g.action}`).join("\n")
+      : "- None. Every seat is named, classified and CV-backed."
+
+    const boardExistsRule = board.boardExists
+      ? `THE BOARD EXISTS. ${board.provision.detail} The directors on record ARE the board — a company's directors constitute its board by definition. Do NOT write that the business "has no board", "has not yet established a board", "lacks a formal board", or that it "should form a board". Do not describe the board as informal, de facto, or notional. Where the board is weak, say precisely what it is missing — a competency, an independent voice, a meeting rhythm — never that it is missing.`
+      : `There are no directors on record at all, so there is genuinely nothing to assess. Say so plainly, and note that if directors do exist the Ownership & Management section needs completing.`
+
+    return `
+
+BOARD STRUCTURE — MANDATORY STRUCTURE AND DETERMINISTIC FACTS
+
+${boardExistsRule}
+
+Write the "Board Structure" section using exactly these three numbered sub-headings, in this order, each in bold:
+
+**5.1 Does this business need a board?**
+**5.2 Does it have one, and who sits on it?**
+**5.3 Is it structured and skilled correctly?**
+
+Under each, use bold labels: **Assessment:**, **Rationale:**, **How to improve:**.
+
+You must not contradict the deterministic facts below. Restate them in plain language and explain the consequence for the business.
+
+5.1 REQUIREMENT
+Public Interest Score: ${board.pis}
+Stage: ${board.requirement.stage}
+Requirement: ${board.requirement.label}
+Rationale: ${board.requirement.rationale}
+
+5.2 WHAT IS ACTUALLY IN PLACE
+Finding: ${board.provision.label}
+Basis: ${board.provision.source} — ${board.provision.detail}
+${gapLine}
+
+5.3 BOARD SKILLS MATRIX (the largest single component of 5.3, 22%)
+${skillLines}
+Coverage: ${s ? `${s.coveredCount} of ${s.totalDomains} core competencies sit on the board` : "unknown"}.${s && !s.hasCvEvidence ? " No CVs have been uploaded, so this matrix is built from job titles alone — say explicitly that uploading director CVs would sharpen the assessment, and do not treat an uncovered domain as proof the skill is absent." : ""}
+
+5.3 DIRECTOR & ADVISOR QUALIFICATION EVIDENCE (15% of 5.3)
+${qualificationLines}
+
+5.3 INDEPENDENCE
+${independenceLines}
+A non-executive director who is also a shareholder is NOT independent. Do not describe them as independent, and do not count them towards independent representation.
+
+5.3 COMMITTEES (8% of 5.3, where applicable)
+${committeeLines}
+
+EVIDENCE GAPS — this exact list is displayed to the user in the app, alongside a request to supply the missing items:
+${gapLines}
+
+5.3 COMPOSITION CHECKS
+${compositionLines}
+
+DETERMINISTIC BOARD STRUCTURE SCORE (after penalty): ${board.score}/100
+
+SCORING INSTRUCTION: convert ${board.score}/100 to the nearest 0.5 on a 5-point scale and do not score Board Structure above it.
+${board.gap > 0
+  ? "Because the business needs a governance structure it does not have, state plainly in 5.2 that this is a material governance failing and name the funding consequence."
+  : "Do not inflate the score for the mere existence of a board — the board existing is the baseline, not an achievement. The skills matrix and composition checks in 5.3 are what carry the marks."}
+
+WHAT 5.3 MUST DO: assess the skills sitting around this board table, one competency at a time. For each gap, name the competency, say what decision the board is currently unequipped to interrogate because of it (e.g. no financial skill means nobody can challenge management's own numbers), and describe the specific person who would close it — their qualification, sector background and whether they should be executive or non-executive (e.g. "a non-executive with a CA(SA) and SME lending experience"). Where a competency sits in management but not on the board, say that the skill exists in the business but is not available for oversight, because management cannot hold itself to account. Recommendations must be about strengthening, skilling or diversifying the existing board — never about forming one.
+
+HOW TO HANDLE MISSING EVIDENCE: where a director has NO CV on file, or a CV that could not be read, do NOT treat that as evidence they are unqualified and do NOT score them down for it. Say plainly that the seat is unverified, that the assessment is running on job title alone, and that supplying the CV would change the finding. Where a readable CV shows a qualification that does not match the seat — a marketing background in the finance seat, for instance — name that mismatch explicitly. Note also that the Directors table offers no role option for legal, technical, commercial or HR expertise, so a director qualified in those areas is invisible unless their CV is read: never conclude a competency is absent from the board on the strength of job titles alone.
 `
   }
 
@@ -611,20 +1766,43 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
       const generateLeadershipAnalysis = httpsCallable(functions, "generateLeadershipAnalysis")
       const generateGovernanceAnalysis = httpsCallable(functions, "generateGovernanceAnalysis")
 
-      const cleanProfile = {
-        ...profileData,
-        ownershipManagement: {
-          ...profileData?.ownershipManagement,
-          directors: (profileData?.ownershipManagement?.directors || []).filter((d) => d?.name && d.name.trim() !== ""),
+      // Rebuild the board assessment at call time so the prompt is never
+      // built from stale state.
+      const om = profileData?.ownershipManagement || {}
+      const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
+      const validExecutives = (om.executives || []).filter((e) => e?.name && e.name.trim() !== "")
+      const execSplit = validDirectors.reduce(
+        (acc, d) => {
+          if (d.execType === "Executive") acc.exec++
+          else if (d.execType === "Non-Executive") acc.nonExec++
+          else acc.unspecified++
+          return acc
         },
-      }
-      const gov = calculateGovernanceScore(cleanProfile)
-      const pisCalc = { totalPIS: gov.pisTotal }
-      const stage = gov.stage === "startup" ? "Advisors Stage" : gov.pisTotal >= 350 ? "Full Board Stage" : "Emerging Board Stage"
-      const recommendation = stage === "Advisors Stage" ? "Advisors sufficient" : stage === "Full Board Stage" ? "Formal board strongly recommended" : "Informal board recommended"
+        { exec: 0, nonExec: 0, unspecified: 0 }
+      )
+      const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
+      const pisCalc = calculatePIS()
+      const board = buildBoardAssessment(pisCalc.totalPIS, profileData, {
+        validDirectors,
+        execSplit,
+        advisorsMeetRegularly: !!profileData?.enterpriseReadiness?.advisorsMeetRegularly,
+        advisorsMeetingFrequency: profileData?.enterpriseReadiness?.advisorsMeetingFrequency,
+        overloadedPeople: roleCoverage.overloadedPeople,
+        boardSkills: computeBoardSkills(validDirectors, validExecutives, cvProfiles),
+        validExecutives,
+        cvProfiles,
+      })
+
+      const stage = board.requirement.stage
+      const recommendation = board.requirement.label
 
       const leadershipPrompt = await prepareLeadershipData(userId)
-      const governancePrompt = buildGovernancePrompt(profileData, pisCalc, stage, recommendation)
+      const governancePrompt =
+        // buildGovernancePrompt reads pisCalc.employees / .turnover / .liabilities
+        // / .shareholders for the PIS block. Passing only totalPIS left every one
+        // of those lines reading zero in the prompt.
+        buildGovernancePrompt(profileData, pisCalc, stage, recommendation) +
+        buildBoardPromptAddendum(board)
 
       const [leadershipResp, governanceResp] = await Promise.all([
         generateLeadershipAnalysis({ prompt: leadershipPrompt }),
@@ -709,30 +1887,133 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
   const scoreLevel = getScoreLevel(overallScore)
   const ScoreIcon = scoreLevel.icon
 
-  // injections: { "keyword": <JSX> } — keyword is matched case-insensitively against the
-  // ### section heading. When a match is found the JSX is rendered as a data panel that is
-  // visually attached to the bottom of that section's content block, making it feel like a
-  // first-class part of that section rather than a separate panel stapled above everything.
+  // ─────────────────────────────────────────────────────────────────────
+  // Rich text rendering for AI output.
+  // Labels the model writes inside a section — "Assessment:", "How to
+  // improve:", "Rationale:", "Evidence:" and friends — are pulled out and
+  // rendered as bold, highlighted sub-headings instead of being lost in a
+  // wall of pre-wrapped text. Numbered sub-headings (5.1, 5.2, 5.3) get
+  // their own heavier treatment with a rule underneath.
+  // ─────────────────────────────────────────────────────────────────────
+  const HIGHLIGHT_LABELS = [
+    "assessment", "how to improve", "improvement", "improve", "rationale", "reasoning",
+    "evidence", "confidence", "score", "recommendation", "recommendations", "requirement",
+    "finding", "findings", "verdict", "gap", "risk", "risks", "impact", "current state",
+    "why this matters", "next steps", "action", "actions", "strengths", "weaknesses",
+    "what good looks like", "funder view", "consequence",
+  ]
+
+  const SUBHEADING_LINE = /^\s*(\d+\.\d+[\s.):-]+\S.{0,90})$/
+  const LABEL_LINE = /^\s*(?:[-•*]\s*)?((?:\d+(?:\.\d+)*\s+)?[A-Za-z][A-Za-z0-9 /&'()–-]{1,44}):\s*(.*)$/
+
+  const stripMd = (s) => String(s || "").replace(/\*\*/g, "").trim()
+
+  // Inline **bold** support
+  const renderInline = (text, keyPrefix) => {
+    const src = String(text)
+    const re = /\*\*(.+?)\*\*/g
+    const parts = []
+    let last = 0
+    let m
+    let i = 0
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) parts.push(src.slice(last, m.index))
+      parts.push(
+        <strong key={`${keyPrefix}-b${i++}`} style={{ color: "#4e342e", fontWeight: 700 }}>{m[1]}</strong>
+      )
+      last = m.index + m[0].length
+    }
+    if (last < src.length) parts.push(src.slice(last))
+    return parts.length ? parts : src
+  }
+
+  const renderRichText = (text) =>
+    String(text).split("\n").map((line, i) => {
+      if (!line.trim()) return <div key={i} style={{ height: "7px" }} />
+
+      const bare = stripMd(line)
+
+      // 5.1 / 5.2 / 5.3 style sub-headings
+      const sub = bare.match(SUBHEADING_LINE)
+      if (sub && !/:/.test(bare.slice(0, 6))) {
+        return (
+          <div key={i} style={{
+            fontWeight: 800, color: "#4e342e", fontSize: "13.5px",
+            margin: i === 0 ? "0 0 6px 0" : "16px 0 6px 0",
+            paddingBottom: "5px", borderBottom: "2px solid #e6d3c4",
+            letterSpacing: "0.2px",
+          }}>
+            {sub[1]}
+          </div>
+        )
+      }
+
+      // "Assessment:", "How to improve:", "Rationale:" etc.
+      const m = bare.match(LABEL_LINE)
+      if (m) {
+        const labelKey = m[1].toLowerCase().replace(/^\d+(\.\d+)*\s+/, "").trim()
+        if (HIGHLIGHT_LABELS.some((l) => labelKey === l || labelKey.startsWith(l))) {
+          return (
+            <div key={i} style={{ margin: "10px 0 3px 0" }}>
+              <span style={{
+                fontWeight: 800, color: "#4e342e", backgroundColor: "#f3e8dc",
+                padding: "2px 8px", borderRadius: "4px", fontSize: "11px",
+                textTransform: "uppercase", letterSpacing: "0.6px",
+                border: "1px solid #e6d3c4", display: "inline-block",
+              }}>
+                {m[1]}
+              </span>
+              {m[2] ? <span style={{ marginLeft: "8px" }}>{renderInline(m[2], i)}</span> : null}
+            </div>
+          )
+        }
+      }
+
+      // Bullets
+      if (/^\s*[-•*]\s+/.test(line)) {
+        return (
+          <div key={i} style={{ display: "flex", gap: "8px", margin: "3px 0 3px 4px" }}>
+            <span style={{ color: "#a1887f" }}>•</span>
+            <span>{renderInline(line.replace(/^\s*[-•*]\s+/, ""), i)}</span>
+          </div>
+        )
+      }
+
+      return <div key={i} style={{ margin: "3px 0" }}>{renderInline(line, i)}</div>
+    })
+
+  // injections: { "keyword": <JSX> } or { "keyword": { position: "top"|"bottom", content: <JSX> } }
+  // The keyword is matched case-insensitively against the ### section heading. A "top"
+  // injection renders directly under the section heading and above the AI text — used for
+  // the Board Structure panel, where PIS has to be read before the narrative makes sense.
   const formatAiResult = (text, injections = {}) => {
     if (!text) return null
-    const cleaned = text.replace(/\*\*(.*?)\*\*/g, "$1")
-    const sections = cleaned.split(/(?=###\s)/g)
+    const sections = String(text).split(/(?=###\s)/g)
     return sections.map((section, index) => {
       const trimmed = section.trim()
       if (!trimmed) return null
 
       const headingMatch = trimmed.match(/^###\s*(.+?)(?=\s+Score\s*:|\n|$)/i)
-      const heading = headingMatch ? headingMatch[1].trim() : null
-      const rest = heading
-        ? trimmed.slice(trimmed.indexOf(heading) + heading.length).replace(/^###\s*/, "").trim()
+      const rawHeading = headingMatch ? headingMatch[1].trim() : null
+      const heading = rawHeading ? stripMd(rawHeading) : null
+      const rest = rawHeading
+        ? trimmed.slice(trimmed.indexOf(rawHeading) + rawHeading.length).replace(/^###\s*/, "").trim()
         : trimmed.replace(/^###\s*/, "")
 
       // Find a matching injection for this heading (case-insensitive substring)
-      const injectedContent = heading
-        ? (Object.entries(injections).find(([key]) =>
-            heading.toLowerCase().includes(key.toLowerCase())
-          ) || [])[1]
+      const found = heading
+        ? (Object.entries(injections).find(([key]) => heading.toLowerCase().includes(key.toLowerCase())) || [])[1]
         : undefined
+      const injectedContent = found && found.content !== undefined ? found.content : found
+      const injectPosition = found && found.position ? found.position : "bottom"
+      const hasTop = !!injectedContent && injectPosition === "top"
+      const hasBottom = !!injectedContent && injectPosition === "bottom"
+
+      const panelStyle = {
+        backgroundColor: "#efebe9",
+        border: "1px solid #e8d8cf",
+        padding: "14px 16px",
+      }
 
       return (
         <div key={index} style={{ marginBottom: "15px" }}>
@@ -741,26 +2022,32 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
               {heading}
             </div>
           )}
-          {/* AI text — bottom radius removed when an injection follows */}
+
+          {/* Injected data panel above the narrative (PIS-first for Board Structure) */}
+          {hasTop && (
+            <div style={{ ...panelStyle, borderTop: heading ? "none" : panelStyle.border, borderBottom: "1px dashed #d7ccc8", borderRadius: heading ? "0" : "8px 8px 0 0" }}>
+              <div style={{ fontSize: "10px", color: "#8d6e63", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "10px" }}>
+                Supporting data
+              </div>
+              {injectedContent}
+            </div>
+          )}
+
+          {/* AI text */}
           <div style={{
-            fontSize: "14px", lineHeight: "1.6", color: "#6d4c41", whiteSpace: "pre-wrap",
+            fontSize: "14px", lineHeight: "1.6", color: "#6d4c41",
             backgroundColor: "white", padding: "16px",
-            borderRadius: heading ? (injectedContent ? "0" : "0 0 8px 8px") : "8px",
+            borderRadius: heading ? (hasBottom ? "0" : "0 0 8px 8px") : "8px",
             border: "1px solid #e8d8cf",
-            borderTop: heading ? "none" : "1px solid #e8d8cf",
-            borderBottom: injectedContent ? "none" : "1px solid #e8d8cf",
+            borderTop: heading || hasTop ? "none" : "1px solid #e8d8cf",
+            borderBottom: hasBottom ? "none" : "1px solid #e8d8cf",
           }}>
-            {rest || trimmed}
+            {renderRichText(rest || trimmed)}
           </div>
-          {/* Injected data panel — visually connected to the section above */}
-          {injectedContent && (
-            <div style={{
-              backgroundColor: "#efebe9",
-              border: "1px solid #e8d8cf",
-              borderTop: "1px dashed #d7ccc8",
-              borderRadius: "0 0 8px 8px",
-              padding: "14px 16px",
-            }}>
+
+          {/* Injected data panel below the narrative (default) */}
+          {hasBottom && (
+            <div style={{ ...panelStyle, borderTop: "1px dashed #d7ccc8", borderRadius: "0 0 8px 8px" }}>
               <div style={{ fontSize: "10px", color: "#8d6e63", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "10px" }}>
                 Supporting data
               </div>
@@ -773,11 +2060,6 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
   }
 
   // ── Reusable collapsible sub-section ──
-  // aiInjections: { "section keyword": <JSX> } — when provided, the matching JSX is
-  // embedded inside the ### section of that name in the AI text (see formatAiResult).
-  // extra: content that renders when no AI text is loaded yet (fallback state).
-  //   For sections with no AI at all (Ownership), extra always renders.
-  //   For sections with AI (Leadership, Maturity), extra only shows until AI loads.
   const SubSection = ({ id, title, score, breakdown, aiText, extra, aiInjections }) => {
     const isOpen = openSection === id
     const hasInjections = aiInjections && Object.keys(aiInjections).length > 0
@@ -840,6 +2122,355 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
   }
 
   const o = ownershipStructureDetail
+  const b = boardAssessment
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Board Structure panel — PIS first, then 5.1 → 5.2 → 5.3.
+  // Rendered both as the "top" injection inside the AI's Board Structure
+  // section and as the fallback before AI loads, so the assessment is
+  // always visible.
+  // ─────────────────────────────────────────────────────────────────────
+  const stepHeading = (num, text) => (
+    <div style={{
+      fontWeight: 800, color: "#4e342e", fontSize: "12.5px",
+      marginBottom: "6px", paddingBottom: "4px", borderBottom: "2px solid #e6d3c4",
+      display: "flex", alignItems: "center", gap: "8px",
+    }}>
+      <span style={{
+        backgroundColor: "#8d6e63", color: "white", borderRadius: "4px",
+        padding: "1px 6px", fontSize: "11px", fontWeight: 800, letterSpacing: "0.4px",
+      }}>{num}</span>
+      <span style={{ textTransform: "uppercase", letterSpacing: "0.5px" }}>{text}</span>
+    </div>
+  )
+
+  const labelChip = (text) => (
+    <span style={{
+      fontWeight: 800, color: "#4e342e", backgroundColor: "#f3e8dc",
+      padding: "2px 8px", borderRadius: "4px", fontSize: "10.5px",
+      textTransform: "uppercase", letterSpacing: "0.6px",
+      border: "1px solid #e6d3c4", display: "inline-block", marginRight: "8px",
+    }}>{text}</span>
+  )
+
+  // ── Qualification tiers → dot colour and wording ──
+  const QUAL_TIER_STYLE = {
+    strong: { dot: "#1B5E20", label: "Evidenced" },
+    adequate: { dot: "#4CAF50", label: "Adequate" },
+    thin: { dot: "#FF9800", label: "Thin evidence" },
+    unverified: { dot: "#9e9e9e", label: "Unverified" },
+  }
+
+  const PersonQualificationRow = ({ p }) => {
+    const t = QUAL_TIER_STYLE[p.tier] || QUAL_TIER_STYLE.unverified
+    return (
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "7px" }}>
+        <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", marginTop: "6px", flexShrink: 0, backgroundColor: t.dot }} />
+        <span>
+          <strong style={{ color: "#4e342e" }}>{p.name}</strong>
+          <span style={{ color: "#a1887f", fontSize: "11px" }}>
+            {" "}· {p.seat}
+            {p.boardRoles.length ? ` · ${p.boardRoles.join(", ")}` : ""}
+            {p.committees.length ? ` · ${p.committees.join(", ")}` : ""}
+          </span>
+          <br />
+          {p.evidence === "parsed" ? (
+            <span style={{ color: "#6d4c41" }}>
+              {p.highestQualification || "No formal qualification found on the CV"}
+              {p.years ? ` · ${p.years} years' experience` : ""}
+              {p.governanceTrained ? " · board/governance training" : ""}
+              {p.domains.length ? ` · brings ${p.domains.join(", ")}` : " · does not map to a board competency"}
+            </span>
+          ) : p.evidence === "upload-failed" ? (
+            <span style={{ color: "#B71C1C" }}>
+              A CV{p.uploadedCvName ? ` (${p.uploadedCvName})` : ""} is attached to this director but the file never reached storage — it looks uploaded and is not. Re-upload it.
+            </span>
+          ) : p.evidence === "uploaded-unparsed" ? (
+            <span style={{ color: "#8a5a00" }}>
+              CV uploaded{p.uploadedCvName ? ` (${p.uploadedCvName})` : ""} but not yet readable — the qualification behind this seat cannot be verified.
+            </span>
+          ) : (
+            <span style={{ color: "#8d6e63" }}>
+              No CV on file — this seat is read from job title alone, so the qualification behind it is unverified rather than absent.
+            </span>
+          )}
+        </span>
+      </div>
+    )
+  }
+
+  const GAP_SEVERITY_STYLE = {
+    high: { bg: "#fdecea", border: "#e6b8ac", text: "#B71C1C", label: "Blocking" },
+    medium: { bg: "#fff6e8", border: "#e8d0a8", text: "#8a5a00", label: "Weakens the score" },
+    low: { bg: "#f5f2f0", border: "#e6d3c4", text: "#6d4c41", label: "Sharpens the score" },
+  }
+
+  const boardStructurePanel = !b ? null : (
+    <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
+
+      {/* PIS — read this first; it drives 5.1 */}
+      <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #e6d3c4", marginBottom: "14px" }}>
+        <div style={{ fontWeight: 800, color: "#4e342e", marginBottom: "8px", fontSize: "12.5px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Public Interest Score (PIS)
+        </div>
+        <div>Employees: <strong>{pisCalculation.employees}</strong></div>
+        <div>Annual turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
+        <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
+        <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
+        <div style={{ marginTop: "8px", fontFamily: "monospace", fontSize: "12px", backgroundColor: "#f9f5f0", padding: "7px 9px", borderRadius: "6px", border: "1px solid #e6d3c4" }}>
+          PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <strong>{pisCalculation.totalPIS}</strong>
+        </div>
+      </div>
+
+      {/* 5.1 — Does this business need a board? */}
+      <div style={{ marginBottom: "14px" }}>
+        {stepHeading("5.1", "Does this business need a board?")}
+        <div style={{ marginBottom: "5px" }}>
+          {labelChip("Requirement")}
+          <strong style={{ color: "#4e342e" }}>{b.requirement.label}</strong>
+          <span style={{ marginLeft: "6px", color: "#8d6e63" }}>({b.requirement.stage}, PIS {b.pis})</span>
+        </div>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", margin: "8px 0" }}>
+          {[
+            { label: `Advisors sufficient — PIS < ${PIS_EMERGING_THRESHOLD}`, active: b.requirement.level === REQ_ADVISORS },
+            { label: `Informal board — PIS ${PIS_EMERGING_THRESHOLD}–${PIS_FULL_BOARD_THRESHOLD - 1}`, active: b.requirement.level === REQ_INFORMAL },
+            { label: `Formal board — PIS ≥ ${PIS_FULL_BOARD_THRESHOLD}`, active: b.requirement.level === REQ_FORMAL },
+          ].map((band, i) => (
+            <span key={i} style={{
+              padding: "3px 9px", borderRadius: "20px", fontSize: "11px", fontWeight: band.active ? 700 : 500,
+              backgroundColor: band.active ? "#8d6e63" : "#f5f2f0",
+              color: band.active ? "white" : "#a1887f",
+              border: `1px solid ${band.active ? "#6d4c41" : "#e6d3c4"}`,
+            }}>{band.label}</span>
+          ))}
+        </div>
+        <div>{labelChip("Rationale")}<span>{b.requirement.rationale}</span></div>
+      </div>
+
+      {/* 5.2 — Does it have one, and who sits on it? */}
+      <div style={{ marginBottom: "14px" }}>
+        {stepHeading("5.2", "Does it have one, and who sits on it?")}
+        <div style={{ marginBottom: "5px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+          <span style={{
+            display: "inline-block", width: "9px", height: "9px", borderRadius: "50%", marginTop: "6px", flexShrink: 0,
+            backgroundColor: b.gap > 0 ? "#B71C1C" : "#4CAF50",
+          }} />
+          <span>
+            {labelChip("Finding")}
+            <strong style={{ color: b.gap > 0 ? "#B71C1C" : "#2E7D32" }}>{b.provision.label}</strong>
+          </span>
+        </div>
+        <div style={{ marginBottom: "5px" }}>{labelChip("Basis")}<span>{b.provision.source} — {b.provision.detail}</span></div>
+
+        {b.gap > 0 ? (
+          <div style={{ marginTop: "9px", padding: "11px 13px", background: "#fdecea", borderRadius: "8px", border: "1px solid #e6b8ac" }}>
+            <div style={{ fontWeight: 800, color: "#B71C1C", marginBottom: "5px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              <AlertCircle size={14} /> Required but not in place — penalty applied
+            </div>
+            <div style={{ color: "#8d3a2e", lineHeight: 1.7 }}>
+              {b.verdict} A funder reads a missing board as unchecked founder risk: there is no one with standing to challenge a bad decision before it is made.
+              <div style={{ marginTop: "7px", fontFamily: "monospace", fontSize: "11.5px", background: "white", padding: "6px 8px", borderRadius: "6px", border: "1px solid #e6b8ac", color: "#8d3a2e" }}>
+                Board Structure = {b.base} − {b.penalty} penalty = <strong>{b.score}%</strong> · Governance Maturity − {b.maturityPenalty} points
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginTop: "9px", padding: "11px 13px", background: "#f1f8f1", borderRadius: "8px", border: "1px solid #c8e6c9", color: "#2E7D32", lineHeight: 1.7 }}>
+            <div style={{ fontWeight: 800, marginBottom: "4px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              <CheckCircle size={14} /> No shortfall
+            </div>
+            {b.verdict}
+          </div>
+        )}
+      </div>
+
+      {/* 5.3 — Is it structured and skilled correctly? */}
+      <div>
+        {stepHeading("5.3", "Is it structured and skilled correctly?")}
+        {b.boardExists ? (
+          <>
+            {/* Board skills matrix — the largest single component of 5.3 */}
+            {b.skills && (
+              <div style={{ marginBottom: "12px", padding: "11px 13px", background: "white", borderRadius: "8px", border: "1px solid #e6d3c4" }}>
+                <div style={{ marginBottom: "8px" }}>
+                  {labelChip("Board skills")}
+                  <strong style={{ color: getProgressBarColor(Math.round(b.skills.ratio * 100)) }}>
+                    {b.skills.coveredCount} of {b.skills.totalDomains}
+                  </strong>
+                  <span style={{ color: "#8d6e63" }}> core competencies sit at the board table</span>
+                </div>
+                {BOARD_SKILL_DOMAINS.map((d) => {
+                  const onBoard = b.skills.boardCoverage?.[d.key] || []
+                  const bench = b.skills.benchCoverage?.[d.key] || []
+                  const state = onBoard.length ? "board" : bench.length ? "bench" : "absent"
+                  const dot = state === "board" ? "#4CAF50" : state === "bench" ? "#FF9800" : "#F44336"
+                  return (
+                    <div key={d.key} style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "4px" }}>
+                      <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", marginTop: "6px", flexShrink: 0, backgroundColor: dot }} />
+                      <span>
+                        <strong style={{ color: "#4e342e" }}>{d.label}:</strong>{" "}
+                        {state === "board" && (
+                          <span>{onBoard.map((h) => `${h.name} — ${h.basis}`).join("; ")}</span>
+                        )}
+                        {state === "bench" && (
+                          <span style={{ color: "#8d6e63" }}>
+                            {bench.map((h) => h.name).join(", ")} — in management, not on the board, so it isn't available for oversight
+                          </span>
+                        )}
+                        {state === "absent" && (
+                          <span style={{ color: "#B71C1C", fontWeight: 600 }}>Not covered anywhere — skills gap</span>
+                        )}
+                      </span>
+                    </div>
+                  )
+                })}
+                {!b.skills.hasCvEvidence && (
+                  <div style={{ marginTop: "8px", fontStyle: "italic", color: "#8d6e63", fontSize: "11.5px" }}>
+                    Built from job titles only — no director CVs uploaded. Uploading them will surface qualifications the titles don't show.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Who is at the table, and are they qualified to be? */}
+            {b.qualificationRoster && (
+              <div style={{ marginBottom: "12px", padding: "11px 13px", background: "white", borderRadius: "8px", border: "1px solid #e6d3c4" }}>
+                <div style={{ marginBottom: "9px" }}>
+                  {labelChip("Who is at the table")}
+                  <strong style={{ color: "#4e342e" }}>
+                    {b.qualificationRoster.directorCount} director{b.qualificationRoster.directorCount === 1 ? "" : "s"}
+                  </strong>
+                  <span style={{ color: "#8d6e63" }}>
+                    {" "}· {b.qualificationRoster.parsedCount} with a readable CV
+                    {b.qualificationRoster.unparsedCount > 0 ? ` · ${b.qualificationRoster.unparsedCount} uploaded but unreadable` : ""}
+                    {b.qualificationRoster.brokenUploadCount > 0 ? ` · ${b.qualificationRoster.brokenUploadCount} failed to upload` : ""}
+                    {" "}· {b.qualificationRoster.qualifiedCount} with a verified qualification
+                    {b.qualificationRoster.advisors.length ? ` · ${b.qualificationRoster.advisors.length} named advisor${b.qualificationRoster.advisors.length === 1 ? "" : "s"}` : ""}
+                  </span>
+                </div>
+
+                {b.qualificationRoster.directors.map((p, i) => <PersonQualificationRow key={`d${i}`} p={p} />)}
+
+                {b.qualificationRoster.advisors.length > 0 && (
+                  <>
+                    <div style={{ marginTop: "10px", marginBottom: "6px", fontWeight: 700, color: "#4e342e", fontSize: "11.5px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Advisors
+                    </div>
+                    {b.qualificationRoster.advisors.map((p, i) => <PersonQualificationRow key={`a${i}`} p={p} />)}
+                  </>
+                )}
+
+                {b.advisorsDeclared && b.qualificationRoster.advisors.length === 0 && (
+                  <div style={{ marginTop: "9px", fontStyle: "italic", color: "#8d6e63", fontSize: "11.5px" }}>
+                    Advisors are declared on the profile but none are named, so their qualifications cannot be checked.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Committees — only shown where they are expected */}
+            {b.committees?.applicable && (
+              <div style={{ marginBottom: "12px", padding: "11px 13px", background: "white", borderRadius: "8px", border: "1px solid #e6d3c4" }}>
+                <div style={{ marginBottom: "8px" }}>
+                  {labelChip("Committees")}
+                  <strong style={{ color: getProgressBarColor(Math.round(b.committees.ratio * 100)) }}>
+                    {b.committees.presentCount} of {b.committees.expectedCount}
+                  </strong>
+                  <span style={{ color: "#8d6e63" }}> expected committees in place</span>
+                </div>
+                {b.committees.expected.map((e) => (
+                  <div key={e.key} style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", marginTop: "6px", flexShrink: 0, backgroundColor: e.present ? "#4CAF50" : "#F44336" }} />
+                    <span>
+                      <strong style={{ color: "#4e342e" }}>{e.label}:</strong>{" "}
+                      {e.present
+                        ? <span>{e.members.join(", ")}</span>
+                        : <span style={{ color: "#B71C1C" }}>Not in place — {e.why}.</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginBottom: "7px" }}>
+              {labelChip("Composition")}
+              <strong style={{ color: "#4e342e" }}>{b.composition.score}%</strong>
+              <span style={{ color: "#8d6e63" }}> across the weighted composition checks</span>
+            </div>
+            <div>
+              {b.composition.checks.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "5px" }}>
+                  <span style={{
+                    display: "inline-block", width: "9px", height: "9px", borderRadius: "50%", marginTop: "6px", flexShrink: 0,
+                    backgroundColor: c.skip ? "#bdbdbd" : c.pass ? "#4CAF50" : c.credit > 0 ? "#FF9800" : "#F44336",
+                  }} />
+                  <span>
+                    <strong style={{ color: c.skip ? "#8d6e63" : "#4e342e" }}>{c.label}</strong>
+                    <span style={{ color: "#a1887f", fontSize: "11px" }}>
+                      {c.skip
+                        ? " · not scored — the data cannot answer this yet"
+                        : `${" "}· ${c.weight}% of 5.3${c.credit > 0 && c.credit < 1 ? ` · ${Math.round(c.credit * 100)}% credit` : ""}`}
+                    </span>
+                    <br />
+                    <span style={{ color: c.skip ? "#8d6e63" : c.pass ? "#6d4c41" : "#8d3a2e", fontStyle: c.skip ? "italic" : "normal" }}>{c.detail}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: "11px 13px", background: "#f5f2f0", borderRadius: "8px", border: "1px dashed #d7ccc8", color: "#8d6e63", fontStyle: "italic" }}>
+            Not assessable — no directors are captured, so there is nobody to assess. If the company has directors, adding them under Ownership &amp; Management will populate this section, since the directors are the board.
+          </div>
+        )}
+
+        <div style={{ marginTop: "10px", paddingTop: "9px", borderTop: "1px dashed #d7ccc8" }}>
+          {labelChip("Board structure score")}
+          <strong style={{ color: getProgressBarColor(b.score), fontSize: "13px" }}>{b.score}%</strong>
+          {b.penalty > 0 && (
+            <span style={{ color: "#B71C1C", marginLeft: "8px", fontSize: "11.5px", fontWeight: 600 }}>
+              (after a {b.penalty}-point shortfall penalty)
+            </span>
+          )}
+          {b.composition?.skippedCount > 0 && (
+            <span style={{ color: "#8d6e63", marginLeft: "8px", fontSize: "11.5px" }}>
+              — {b.composition.skippedCount} check{b.composition.skippedCount === 1 ? "" : "s"} not scored for want of evidence
+            </span>
+          )}
+        </div>
+
+        {/* What is missing, and what to send */}
+        {b.evidenceGaps && (
+          b.evidenceGaps.length === 0 ? (
+            <div style={{ marginTop: "12px", padding: "11px 13px", background: "#f1f8f1", borderRadius: "8px", border: "1px solid #c8e6c9", color: "#2E7D32", lineHeight: 1.7 }}>
+              <div style={{ fontWeight: 800, marginBottom: "4px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <CheckCircle size={14} /> Evidence complete
+              </div>
+              Every director and advisor is named, classified and backed by a readable CV. This assessment rests on evidence rather than inference.
+            </div>
+          ) : (
+            <div style={{ marginTop: "14px" }}>
+              <div style={{ fontWeight: 800, color: "#4e342e", fontSize: "12.5px", marginBottom: "8px", paddingBottom: "4px", borderBottom: "2px solid #e6d3c4", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                What is missing
+              </div>
+              {b.evidenceGaps.map((g, i) => {
+                const st = GAP_SEVERITY_STYLE[g.severity] || GAP_SEVERITY_STYLE.low
+                return (
+                  <div key={i} style={{ padding: "10px 12px", background: st.bg, border: `1px solid ${st.border}`, borderRadius: "8px", marginBottom: "6px" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 800, color: st.text, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "4px" }}>
+                      {st.label}
+                    </div>
+                    <div style={{ color: "#4e342e", fontWeight: 600, marginBottom: "3px" }}>{g.what}</div>
+                    <div style={{ color: st.text, lineHeight: 1.7 }}>{g.action}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <>
@@ -848,7 +2479,6 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
         <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 20px 20px 20px", color: "white", position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
             <h2 style={{ margin: 0, fontSize: "15px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership &amp; Governance</h2>
-           
           </div>
           <p style={{ margin: 0, fontSize: "13px", opacity: 0.9 }}>Who's in charge, and can we trust them</p>
           <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "80px", height: "80px", background: "rgba(255,255,255,0.1)", borderRadius: "50%", opacity: 0.6 }} />
@@ -905,6 +2535,13 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                     </span>
                   </div>
                 )}
+                {b && b.gap > 0 && (
+                  <div style={{ marginTop: "8px" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 16px", background: "#B71C1C", borderRadius: "20px", color: "white", fontWeight: "700", fontSize: "11.5px" }}>
+                      <AlertCircle size={13} /> Board required but not in place — {b.penalty}-point penalty
+                    </span>
+                  </div>
+                )}
               </div>
 
               {!leadershipAiResult && !governanceAiResult && (
@@ -934,18 +2571,23 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                       <li><strong>Governance Maturity ({SECTION_WEIGHTS.maturity}%)</strong> — Public Interest Score (PIS) and governance stage, board structure, advisors, policies, reporting, risk management, integrity &amp; risk, sanctions, conflicts, legal, reputation</li>
                     </ul>
 
-                    {/* <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>Public Interest Score (PIS) — shown under Governance Maturity</p>
-                      <p style={{ marginBottom: "8px" }}>PIS decides which governance stage a business sits in, and is displayed alongside the Board Structure score under Governance Maturity:</p>
+                    <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
+                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>How Board Structure is scored</p>
+                      <p style={{ marginBottom: "8px" }}>The Board Structure section under Governance Maturity works through three questions in order, starting from the Public Interest Score:</p>
                       <ul style={{ margin: "0 0 10px 0", paddingLeft: "18px", color: "#6d4c41" }}>
-                        <li style={{ marginBottom: "4px" }}>PIS &lt; 100: <strong>Advisors Stage</strong> — light governance structures suitable for smaller operations</li>
-                        <li style={{ marginBottom: "4px" }}>PIS 100–349: <strong>Emerging Board Stage</strong> — informal board recommended for growing businesses</li>
-                        <li>PIS ≥ 350: <strong>Full Board Stage</strong> — formal board strongly recommended for complex operations</li>
+                        <li style={{ marginBottom: "4px" }}><strong>5.1 Does the business need a board?</strong> PIS &lt; {PIS_EMERGING_THRESHOLD}: advisors are sufficient. PIS {PIS_EMERGING_THRESHOLD}–{PIS_FULL_BOARD_THRESHOLD - 1}: an informal board is expected. PIS ≥ {PIS_FULL_BOARD_THRESHOLD}: a formal board is required.</li>
+                        <li style={{ marginBottom: "4px" }}><strong>5.2 Does it have one, and who sits on it?</strong> The named directors <em>are</em> the board, so this is answered by the director list rather than by a separate governance question. Only a profile with no directors captured at all counts as having no board.</li>
+                        <li style={{ marginBottom: "4px" }}><strong>5.3 Is it structured and skilled correctly?</strong> Led by the board skills matrix (22%) — whether financial, legal &amp; governance, industry, commercial, operational and people expertise actually sit at the table, drawn from director roles and uploaded CVs — then director qualification evidence (15%), independent presence (18%), size (10%), non-executive ratio (8%), meeting cadence (8%), committees (8%), role concentration (7%) and classification completeness (4%). A competency that sits in management but not on the board counts as partial: the skill exists, but not where oversight happens.</li>
+                        <li style={{ marginBottom: "4px" }}><strong>Evidence, not inference.</strong> Each director is checked against their uploaded CV for a formal qualification, years of experience and governance training. A missing CV is scored as neutral rather than as a failure — it means the seat is unverified, not that the person is unqualified — and is listed under "What is missing" with the specific action that would close it. Where the data cannot answer a check at all, that check is dropped from the calculation instead of scored as zero.</li>
+                        <li style={{ marginBottom: "4px" }}><strong>Non-executive is not the same as independent.</strong> A director linked to a shareholder row is a shareholder's nominee. They may sit as a non-executive, but they protect their own capital rather than the company's governance, so they are not counted towards independent representation.</li>
                       </ul>
+                      <p style={{ margin: "0 0 10px 0" }}>
+                        If 5.1 says a board is needed and 5.2 says there isn't one, the score is <strong>penalised by {BOARD_GAP_PENALTY[1]}–{BOARD_GAP_PENALTY[3]} points</strong> depending on the size of the gap, and Governance Maturity takes a further deduction. A tidy set of policies does not compensate for a missing board.
+                      </p>
                       <p style={{ margin: 0, fontFamily: "monospace", fontSize: "12.5px", backgroundColor: "white", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0d5c8" }}>
                         PIS = Employees + (Turnover ÷ R1m) + (Liabilities ÷ R1m) + Shareholders
                       </p>
-                    </div> */}
+                    </div>
                   </div>
                 )}
               </div>
@@ -956,10 +2598,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 <span>Governance Maturity {SECTION_WEIGHTS.maturity}%</span>
               </div>
 
-              {/* ── A. Ownership & Structure ──
-                  Shows: structural completeness (shareholders, directors, executives, advisors, conflicts).
-                  PIS and Board Structure have moved to Governance Maturity.
-                  Critical role coverage has moved to Leadership Quality. ── */}
+              {/* ── A. Ownership & Structure ── */}
               <SubSection
                 id="ownership"
                 title="Ownership & Structure"
@@ -972,14 +2611,10 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                       Directors, shareholders and succession readiness — derived from your board composition, exec / non-exec mix, decision governance and advisory structure.
                     </p>
 
-                    {/* Directors / shareholders / advisors / conflicts breakdown */}
                     <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0" }}>
                       <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Structure detail</div>
                       <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.8 }}>
                         <div>Shareholders: <strong>{o.shareholderCount}</strong>{o.shareholderCount > 8 ? " — high count for an SME; can signal fragmented decision-making and dilution risk" : ""}</div>
-                        <div>Directors: <strong>{o.directorCount}</strong> (Executive: {o.execDirectors}, Non-Executive: {o.nonExecDirectors}, Unspecified: {o.unspecifiedDirectors})</div>
-                        <div>Executives (management beyond the board): <strong>{o.executiveCount}</strong></div>
-                        <div>Advisors in place: <strong>{o.hasAdvisors ? "Yes" : "No"}</strong>{o.hasAdvisors ? ` — meets ${o.advisorsMeetRegularly ? "regularly" : "irregularly"} (${o.advisorsMeetingFrequency})` : ""}</div>
                         <div>Conflict of interest signal: <strong>{o.activeConflictsCount > 0 ? `${o.activeConflictsCount} active` : "None declared"}</strong></div>
                         {o.activeConflictsCount > 0 && (
                           <div style={{ marginTop: "4px", fontStyle: "italic", color: "#8d6e63" }}>{o.conflictSummary}</div>
@@ -990,11 +2625,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 }
               />
 
-              {/* ── B. Leadership Quality ──
-                  Shows: AI score breakdown (Credentials / Structure / Behaviour),
-                  then AI analysis text with critical role coverage injected INTO
-                  the "Leadership Structure" section where it belongs contextually.
-                  Before AI loads, the role coverage panel shows as a fallback via extra. ── */}
+              {/* ── B. Leadership Quality ── */}
               <SubSection
                 id="leadership"
                 title="Leadership Quality"
@@ -1002,21 +2633,19 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 breakdown={leadershipBreakdown}
                 aiText={leadershipAiResult}
                 aiInjections={{
-                  // "leadership structure" matches "### 2. Leadership Structure" case-insensitively
                   "leadership structure": (
                     <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.6 }}>
-                      {/* Critical role coverage */}
                       <div style={{ marginBottom: o.roleCoverage?.overloadedPeople?.length > 0 ? "10px" : "0" }}>
                         <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px" }}>Critical role coverage</div>
                         <div style={{ lineHeight: 1.9 }}>
-                          {CRITICAL_ROLE_BUCKETS.map((b) => {
-                            const holders = o.roleCoverage?.bucketCoverage?.[b.key] || []
+                          {CRITICAL_ROLE_BUCKETS.map((bkt) => {
+                            const holders = o.roleCoverage?.bucketCoverage?.[bkt.key] || []
                             const covered = holders.length > 0
                             return (
-                              <div key={b.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                              <div key={bkt.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
                                 <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, backgroundColor: covered ? "#4CAF50" : "#F44336" }} />
                                 <span>
-                                  <strong>{b.label}:</strong>{" "}
+                                  <strong>{bkt.label}:</strong>{" "}
                                   {covered
                                     ? holders.map((h) => `${h.name} (${h.source})`).join(", ")
                                     : <span style={{ color: "#B71C1C", fontWeight: 600 }}>Not covered — risk</span>}
@@ -1026,7 +2655,6 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                           })}
                         </div>
                       </div>
-                      {/* Role concentration / spread-thin risk */}
                       {o.roleCoverage?.overloadedPeople?.length > 0 && (
                         <div style={{ padding: "10px 12px", background: "#fdecea", borderRadius: "6px", border: "1px solid #e6b8ac" }}>
                           <div style={{ fontWeight: "700", color: "#B71C1C", marginBottom: "5px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1049,19 +2677,18 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                   ),
                 }}
                 extra={
-                  // Fallback: shown only before AI loads
                   <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
                     <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
                       <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Critical role coverage</div>
                       <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.9 }}>
-                        {CRITICAL_ROLE_BUCKETS.map((b) => {
-                          const holders = o.roleCoverage?.bucketCoverage?.[b.key] || []
+                        {CRITICAL_ROLE_BUCKETS.map((bkt) => {
+                          const holders = o.roleCoverage?.bucketCoverage?.[bkt.key] || []
                           const covered = holders.length > 0
                           return (
-                            <div key={b.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                            <div key={bkt.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
                               <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, backgroundColor: covered ? "#4CAF50" : "#F44336" }} />
                               <span>
-                                <strong>{b.label}:</strong>{" "}
+                                <strong>{bkt.label}:</strong>{" "}
                                 {covered
                                   ? holders.map((h) => `${h.name} (${h.source})`).join(", ")
                                   : <span style={{ color: "#B71C1C", fontWeight: 600 }}>Not covered — risk</span>}
@@ -1094,11 +2721,10 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
               />
 
               {/* ── C. Governance Maturity ──
-                  Shows: all category scores including Board Structure,
-                  then AI analysis text with PIS injected INTO the "Board Structure"
-                  section where it belongs contextually (PIS is what drives the stage
-                  that determines the board structure requirement).
-                  Before AI loads, PIS shows as a fallback via extra. ── */}
+                  Board Structure now leads with PIS, then 5.1 → 5.2 → 5.3.
+                  The panel is injected ABOVE the AI narrative so the numbers
+                  are read before the commentary, and shows as a fallback
+                  before AI loads. ── */}
               <SubSection
                 id="maturity"
                 title="Governance Maturity"
@@ -1106,40 +2732,15 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 breakdown={maturityBreakdown}
                 aiText={governanceAiResult}
                 aiInjections={{
-                  // "board structure" matches "### Board Structure" case-insensitively
-                  "board structure": (
-                    <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
-                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px" }}>Public Interest Score (PIS)</div>
-                      <div>Employees: <strong>{pisCalculation.employees}</strong></div>
-                      <div>Annual Turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
-                      <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
-                      <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
-                      <div style={{ marginTop: "8px", fontFamily: "monospace", fontSize: "12px", backgroundColor: "white", padding: "6px 8px", borderRadius: "6px", border: "1px solid #d7ccc8" }}>
-                        PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <strong>{pisCalculation.totalPIS}</strong>
-                      </div>
-                      <div style={{ marginTop: "6px" }}>
-                        Stage: <strong>{governanceStage || "—"}</strong>{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
-                      </div>
-                    </div>
-                  ),
+                  "board structure": { position: "top", content: boardStructurePanel },
                 }}
                 extra={
-                  // Fallback: shown only before AI loads
                   <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
-                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
-                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Public Interest Score (PIS)</div>
-                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
-                        <div>Employees: <strong>{pisCalculation.employees}</strong></div>
-                        <div>Annual Turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
-                        <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
-                        <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
-                        <div style={{ marginTop: "8px", fontFamily: "monospace", fontSize: "12px", backgroundColor: "#f9f5f0", padding: "6px 8px", borderRadius: "6px" }}>
-                          PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <strong>{pisCalculation.totalPIS}</strong>
-                        </div>
-                        <div style={{ marginTop: "6px" }}>
-                          Stage: <strong>{governanceStage || "—"}</strong>{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
-                        </div>
+                    <div style={{ padding: "14px 16px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
+                      <div style={{ fontWeight: "800", color: "#4e342e", marginBottom: "12px", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                        Board structure
                       </div>
+                      {boardStructurePanel}
                     </div>
                   </div>
                 }

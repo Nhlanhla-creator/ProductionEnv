@@ -93,6 +93,29 @@ const formatCurrency = (value) => {
   return `R${num}`;
 };
 
+
+// Derives how many calendar days have elapsed since the stage was last
+// updated, using the `updatedAt` field written by serverTimestamp().
+// Handles three shapes the field can arrive in from Firestore:
+//   • Firestore Timestamp object  → .toDate()
+//   • Plain object { seconds, nanoseconds } → seconds * 1000
+//   • Already a JS Date           → use directly
+const calculateDaysInStage = (updatedAt) => {
+  if (!updatedAt) return 0;
+  let date;
+  if (typeof updatedAt?.toDate === "function") {
+    date = updatedAt.toDate();           // Firestore SDK Timestamp
+  } else if (updatedAt?.seconds != null) {
+    date = new Date(updatedAt.seconds * 1000); // serialised { seconds, nanoseconds }
+  } else if (updatedAt instanceof Date) {
+    date = updatedAt;
+  } else {
+    return 0;
+  }
+  const diffMs = Date.now() - date.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+};
+
 // ─── Attention indicator ────────────────────────────────────
 const getAttentionReasons = (sme, stages = DEFAULT_STAGES) => {
   const reasons = [];
@@ -327,7 +350,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [newViewName, setNewViewName] = useState("");
   const [newViewDescription, setNewViewDescription] = useState("");
   const [editingViewMeta, setEditingViewMeta] = useState(null); // { id, name, description } while renaming/describing an existing view
-
+  const [bigScoreLoading, setBigScoreLoading] = useState(false);
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
     name: '', fundingStage: [], bigScoreRange: [0, 100], matchRange: [0, 100], status: [], sector: [], equity: [],
@@ -354,7 +377,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [selectedSMEDetails, setSelectedSMEDetails] = useState(null);
   const [bigScoreData, setBigScoreData] = useState({
     compliance: { score: 0 }, legitimacy: { score: 0 },
-    fundability: { score: 0 }, pis: { score: 0 }, leadership: { score: 0 }
+    fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
   });
   const [matchBreakdownData, setMatchBreakdownData] = useState(null);
   const [stageUpdateData, setStageUpdateData] = useState({
@@ -533,6 +556,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         location: entity.location || a.location || "N/A",
         province: entity.province || a.province || "N/A",
         sector: (entity.economicSectors || []).join(", ") || a.sector || "N/A",
+        daysInStage: calculateDaysInStage(a.updatedAt),
         fundingStage: entity.operationStage || a.fundingStage || "N/A",
         fundingRequired: formatCurrency(funding.amountRequested || a.fundingRequired || "N/A"),
         fundingAmount: parseFloat((funding.amountRequested || a.fundingRequired || "0").toString().replace(/[^0-9.]/g, "")) || 0,
@@ -550,7 +574,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         pipelineStage: a.pipelineStage || a.status || "Matched",
         nextStage: a.nextStage || getNextStage(a.pipelineStage || a.status, activeStages),
         availableDates: a.availableDates || [],
-        lastActivity: a.lastActivity || "N/A", daysInStage: a.daysInStage || 0,
+       lastActivity: a.lastActiveDate || a.lastActivity || "N/A",
         assignedUser: a.assignedUser || "Unassigned",
         notes: a.notes || "", documents: a.documents || [],
         matchBreakdown: a.matchBreakdown || null,
@@ -816,12 +840,30 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     setActivePopup({ type, smeKey: `${sme.id}_${sme.programIndex}`, position: { x, y }, rect });
 
     if (type === 'bigScore') {
-      setBigScoreData({
-        compliance: { score: sme.compliance || 0 }, legitimacy: { score: sme.legitimacy || 0 },
-        fundability: { score: sme.fundability || 0 }, pis: { score: sme.pis || 0 },
-        leadership: { score: sme.leadership || 0 }
-      });
-    }
+  setBigScoreLoading(true);
+  setBigScoreData({
+    compliance: { score: 0 }, legitimacy: { score: 0 },
+    fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
+  });
+  const userId = sme.userId || sme.id;
+  getDoc(doc(db, "bigEvaluations", userId))
+    .then((snap) => {
+      if (snap.exists()) {
+        const s = snap.data().scores || {};
+        setBigScoreData({
+          compliance:          { score: s.compliance          || 0 },
+          legitimacy:          { score: s.legitimacy          || 0 },
+          fundability:         { score: s.fundability         || 0 },
+          governanceLeadership:{ score: s.governanceLeadership|| 0 },
+          operational:         { score: s.operational         || 0 },
+          _bigScore:           s.bigScore    || 0,
+          _lastUpdated:        s.lastUpdated || null,
+        });
+      }
+    })
+    .catch((err) => console.error("bigEvaluations fetch error:", err))
+    .finally(() => setBigScoreLoading(false));
+}
     if (type === 'match') {
       if (sme.matchBreakdown) {
         setMatchBreakdownData(sme.matchBreakdown);
@@ -876,13 +918,16 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       const smeId = selectedSMEForPopup.id;
       const programIndex = selectedSMEForPopup.programIndex || "0";
       const documentId = `${user.uid}_${smeId}_${programIndex}`;
-
-      const updateData = {
-        status: stageUpdateData.nextStage, pipelineStage: stageUpdateData.nextStage,
-        nextStage: getNextStage(stageUpdateData.nextStage, activeStages),
-        updatedAt: serverTimestamp(), lastMessage: stageUpdateData.message,
-        lastActivity: new Date().toISOString()
-      };
+const nextStage = getNextStage(stageUpdateData.nextStage, activeStages);
+const updateData = {
+  status: stageUpdateData.nextStage,
+  pipelineStage: stageUpdateData.nextStage,
+  nextStage: nextStage,                     // 👈 store it
+  updatedAt: serverTimestamp(),
+  lastMessage: stageUpdateData.message,
+  lastActivity: new Date().toISOString()
+};
+  
 
       if (stageFields.showMeeting && stageUpdateData.meetingLocation && stageUpdateData.meetingPurpose) {
         updateData.meetingDetails = {
@@ -892,6 +937,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       }
 
       await updateDoc(doc(db, "catalystApplications", documentId), updateData);
+      
 
       const stageKey = `${smeId}_${programIndex}`;
       setUpdatedStages(prev => ({ ...prev, [stageKey]: stageUpdateData.nextStage }));
@@ -1239,14 +1285,14 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
                         <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
                       </p>
-                      {[{ key: 'sme', label: 'Business Name' },{ key: 'bigScore', label: 'BIG Score' },{ key: 'match', label: 'Match %' },{ key: 'status', label: 'Status' },{ key: 'action', label: 'Action' }].map(({ key, label }) => (
+                      {[{ key: 'sme', label: 'Business Name' }, { key: 'bigScore', label: 'BIG Score' }, { key: 'match', label: 'Match %' }, { key: 'status', label: 'Status' }, { key: 'action', label: 'Action' }].map(({ key, label }) => (
                         <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
                           <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
                           <span className="text-sm text-[#4a352f]">{label}</span>
                         </label>
                       ))}
                       <div className="border-t border-[#e6d7c3] my-2" />
-                      {[{ key: 'fundingStage', label: 'Funding Stage' },{ key: 'fundingRequired', label: 'Funding Required' },{ key: 'applied', label: 'Applied Date' },{ key: 'daysInStage', label: 'Days in Stage' },{ key: 'lastActivity', label: 'Last Activity' },{ key: 'location', label: 'Location' },{ key: 'sector', label: 'Sector' },{ key: 'equity', label: 'Equity Offered' },{ key: 'guarantees', label: 'Guarantees' },{ key: 'support', label: 'Support Required' },{ key: 'services', label: 'Services Required' }].map(({ key, label }) => (
+                      {[{ key: 'fundingStage', label: 'Funding Stage' }, { key: 'fundingRequired', label: 'Funding Required' }, { key: 'applied', label: 'Applied Date' }, { key: 'daysInStage', label: 'Days in Stage' }, { key: 'lastActivity', label: 'Last Activity' }, { key: 'location', label: 'Location' }, { key: 'sector', label: 'Sector' }, { key: 'equity', label: 'Equity Offered' }, { key: 'guarantees', label: 'Guarantees' }, { key: 'support', label: 'Support Required' }, { key: 'services', label: 'Services Required' }].map(({ key, label }) => (
                         <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
                           <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
                           <span className="text-sm text-[#4a352f]">{label}</span>
@@ -1502,17 +1548,16 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           {columnVisibility.action && (
                             <td className={`${ds.cell} text-center`} style={{ minWidth: '190px' }}>
                               <div className="flex flex-col items-center gap-1">
-                                
+
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
                                     onClick={(e) => { if (!isTerminalNegative) openPopupFromEvent('stage', sme, e); }}
                                     disabled={isTerminalNegative}
                                     title={isTerminalNegative ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
-                                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
-                                      isTerminalNegative
+                                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${isTerminalNegative
                                         ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
                                         : "text-white hover:shadow-md hover:brightness-105"
-                                    }`}
+                                      }`}
                                     style={{ width: '128px', height: '34px', backgroundColor: isTerminalNegative ? undefined : "#7d5a50" }}
                                   >
                                     {!isTerminalNegative && <ArrowRight size={13} className="flex-shrink-0" />}
@@ -1541,20 +1586,20 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             {/* Pagination */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
               <div className="flex items-center gap-4">
-                <span className="text-sm text-[#4a352f]">Showing {Math.min((currentPage-1)*pageSize+1, filteredAndSortedSMEs.length)}-{Math.min(currentPage*pageSize, filteredAndSortedSMEs.length)} of {filteredAndSortedSMEs.length} Businesses</span>
+                <span className="text-sm text-[#4a352f]">Showing {Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedSMEs.length)}-{Math.min(currentPage * pageSize, filteredAndSortedSMEs.length)} of {filteredAndSortedSMEs.length} Businesses</span>
                 <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f]">
                   <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
                 </select>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentPage(1)} disabled={currentPage===1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">First</button>
-                <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage===1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Prev</button>
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">First</button>
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Prev</button>
                 {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                  let pn; if(totalPages<=5) pn=i+1; else if(currentPage<=3) pn=i+1; else if(currentPage>=totalPages-2) pn=totalPages-4+i; else pn=currentPage-2+i;
-                  return <button key={pn} onClick={() => setCurrentPage(pn)} className={`w-8 h-8 rounded-lg text-sm font-medium ${currentPage===pn ? 'bg-[#7d5a50] text-white' : 'bg-white border border-[#c8b6a6] text-[#4a352f]'}`}>{pn}</button>;
+                  let pn; if (totalPages <= 5) pn = i + 1; else if (currentPage <= 3) pn = i + 1; else if (currentPage >= totalPages - 2) pn = totalPages - 4 + i; else pn = currentPage - 2 + i;
+                  return <button key={pn} onClick={() => setCurrentPage(pn)} className={`w-8 h-8 rounded-lg text-sm font-medium ${currentPage === pn ? 'bg-[#7d5a50] text-white' : 'bg-white border border-[#c8b6a6] text-[#4a352f]'}`}>{pn}</button>;
                 })}
-                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage===totalPages} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Next</button>
-                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage===totalPages} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Last</button>
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Next</button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Last</button>
               </div>
             </div>
           </>
@@ -1650,7 +1695,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                   )}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {["Startup","Growth","Scale","Established"].map(s => (
+                  {["Startup", "Growth", "Scale", "Established"].map(s => (
                     <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, fundingStage: prev.fundingStage.includes(s) ? prev.fundingStage.filter(x => x !== s) : [...prev.fundingStage, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.fundingStage.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
                   ))}
                 </div>
@@ -1816,49 +1861,73 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             )}
           </div>
         </PopupPortal>
-      )}
-      {activePopup?.type === 'bigScore' && selectedSMEForPopup && (
-        <PopupPortal>
-          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
-          <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden animate-fadeIn"
-            style={{ top: activePopup.position.y, left: activePopup.position.x, width: '380px', maxHeight: '450px', overflowY: 'auto' }}>
-            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
-                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+      )}{activePopup?.type === 'bigScore' && selectedSMEForPopup && (
+  <PopupPortal>
+    <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+    <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden animate-fadeIn"
+      style={{ top: activePopup.position.y, left: activePopup.position.x, width: '380px', maxHeight: '480px', overflowY: 'auto' }}>
+
+      {/* Header */}
+      <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
+            <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+            {bigScoreData._lastUpdated && (
+              <p className="text-[10px] text-[#f5f0e1]/70 mt-0.5">
+                Updated {new Date(bigScoreData._lastUpdated).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+              {bigScoreLoading ? '…' : (bigScoreData._bigScore || selectedSMEForPopup.bigScore)}
+            </div>
+            <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-4 space-y-3">
+        {bigScoreLoading ? (
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-16 bg-[#f5f0e1] rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          [
+            { key: 'compliance',           label: 'Compliance',            desc: 'Regulatory & legal standing' },
+            { key: 'legitimacy',           label: 'Legitimacy',            desc: 'Business verification status' },
+            { key: 'fundability',          label: 'Capital Appeal',        desc: 'Investment readiness & fundability' },
+            { key: 'governanceLeadership', label: 'Governance & Leadership',desc: 'Governance structure & leadership capability' },
+            { key: 'operational',          label: 'Operational',           desc: 'Operational capacity & systems' },
+          ].map(({ key, label, desc }) => {
+            const score = bigScoreData[key]?.score || 0;
+            const lbl = getBigScoreLabel(score);
+            return (
+              <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <span className="text-xs font-semibold text-[#4a352f]">{label}</span>
+                    <p className="text-[10px] text-[#7d5a50]">{desc}</p>
+                  </div>
+                  <span className="text-sm font-bold" style={{ color: lbl.color }}>{score}%</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">{selectedSMEForPopup.bigScore}</div>
-                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1">
-                    <X size={18} />
-                  </button>
+                <div className="w-full h-2 bg-[#e6d7c3] rounded-full">
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, backgroundColor: lbl.color }} />
                 </div>
               </div>
-            </div>
-            <div className="p-4 space-y-3">
-              {[{ key: 'compliance', label: 'Compliance', desc: 'Regulatory & legal standing' },
-                { key: 'legitimacy', label: 'Legitimacy', desc: 'Business verification status' },
-                { key: 'fundability', label: 'Fundability', desc: 'Investment readiness' },
-                { key: 'pis', label: 'PIS Score', desc: 'Public Interest Score' },
-                { key: 'leadership', label: 'Leadership', desc: 'Management capability' }
-              ].map(({ key, label, desc }) => {
-                const score = bigScoreData[key]?.score || 0;
-                const lbl = getBigScoreLabel(score);
-                return (
-                  <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <div><span className="text-xs font-semibold text-[#4a352f]">{label}</span><p className="text-[10px] text-[#7d5a50]">{desc}</p></div>
-                      <span className="text-sm font-bold" style={{ color: lbl.color }}>{score}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full"><div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: lbl.color }} /></div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </PopupPortal>
-      )}
+            );
+          })
+        )}
+      </div>
+    </div>
+  </PopupPortal>
+)}
 
       {/* ─── Match Breakdown Popup ─────────────────────────── */}
       {activePopup?.type === 'match' && selectedSMEForPopup && (
@@ -2076,6 +2145,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         <SMEDetailsModal sme={selectedSMEDetails} isOpen={showSMEDetails} onClose={() => { setShowSMEDetails(false); setSelectedSMEDetails(null); }} />
       )}
     </div>
+
+
+
   );
 }
 
@@ -2084,3 +2156,4 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 // `import SupportSMETable from "./SupportSMETable"` (default) or
 // `import { SupportSMETable } from "./SupportSMETable"` (named).
 export default SupportSMETable;
+

@@ -71,6 +71,29 @@ export const ADVISOR_SME_COLLECTION = "AdvisorApplications"
 export const smeAdvisorId = (smeId, advisorId) => `${smeId}_${advisorId}`
 export const advisorSmeId = (advisorId, smeId) => `${advisorId}_${smeId}`
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Events the pipeline uses to talk to this table.
+
+   They're declared here, not in advisor-flow-pipeline.jsx, because that file
+   already imports SME_ADVISOR_COLLECTION and normalizeAdvisorStatus from this
+   one — pointing the imports both ways would make a circular module
+   dependency.
+
+     ADVISOR_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
+                                  status name, or null to clear.
+     ADVISOR_ROWS_EVENT           table → pipeline. Detail is every advisor
+                                  that passes the table's other filters, each
+                                  with its resolved status. This is what makes
+                                  the cards and the table body agree —
+                                  including New Match, which has no stored
+                                  record for the pipeline to query on its own.
+     ADVISOR_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast,
+                                  for whichever component mounted second.
+   ════════════════════════════════════════════════════════════════════════ */
+export const ADVISOR_STAGE_FILTER_EVENT = "advisor-pipeline-stage-filter"
+export const ADVISOR_ROWS_EVENT = "advisor-pipeline-rows"
+export const ADVISOR_ROWS_REQUEST_EVENT = "advisor-pipeline-rows-request"
+
 /* ─── Status vocabulary (spec section 3 + advisor additions) ─────────────── */
 export const ADVISOR_STATUSES = [
   "New Match",
@@ -278,6 +301,29 @@ const BUILTIN_VIEW_ID = "__default__"
 // the mid-word header breaks, so old saved views fall back to the new defaults.
 const VIEWS_STORAGE_KEY = "advisor-matches-views-v3"
 const FILTERS_STORAGE_KEY = "advisor-matches-filters-v1"
+const SAVED_STORAGE_KEY = "advisor-matches-saved-v1"
+
+/* Saved matches were previously component state only, so the bookmark
+   survived until the next render of a parent and no further — pressing it
+   looked like nothing happened. */
+const loadSavedMatches = () => {
+  if (typeof window === "undefined") return {}
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SAVED_STORAGE_KEY) || "null")
+    return saved && typeof saved === "object" ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+const persistSavedMatches = (saved) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(saved))
+  } catch {
+    // Non-fatal.
+  }
+}
 
 const EMPTY_FILTERS = {
   name: "",
@@ -587,10 +633,29 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [userRole, setUserRole] = useState(null)
 
+  /* A stage pressed in the pipeline arrives here. The `stageFilter` prop still
+     wins when the page passes one, so wiring props stays optional — drop
+     <AdvisorFlowPipeline /> anywhere on the page and the two find each
+     other. */
+  const [eventStageFilter, setEventStageFilter] = useState(null)
+  useEffect(() => {
+    const onFilter = (e) => setEventStageFilter(e.detail ?? null)
+    window.addEventListener(ADVISOR_STAGE_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(ADVISOR_STAGE_FILTER_EVENT, onFilter)
+  }, [])
+  const activeStageFilter = stageFilter ?? eventStageFilter
+
   const [detailsAdvisor, setDetailsAdvisor] = useState(null)
-  const [savedMatches, setSavedMatches] = useState({})
+  const [savedMatches, setSavedMatches] = useState(() => loadSavedMatches())
+  const [showSavedOnly, setShowSavedOnly] = useState(false)
   const [hiddenMatches, setHiddenMatches] = useState({})
   const [hoveredRow, setHoveredRow] = useState(null)
+
+  useEffect(() => {
+    persistSavedMatches(savedMatches)
+  }, [savedMatches])
+
+  const savedCount = useMemo(() => Object.values(savedMatches).filter(Boolean).length, [savedMatches])
 
   /* Popups — anchored popovers portaled to <body>, same pattern as the SME
      and intern tables. { type, advisor, position:{x,y}, rect } */
@@ -634,6 +699,25 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   }, [])
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+
+  /* Every notification in this file used to be a setNotification plus its own
+     setTimeout. One helper, so the timings can't drift. */
+  const toast = useCallback((type, message, ms = 3000) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), ms)
+  }, [])
+
+  /* One place that both the row bookmark and the quick-actions entry call, so
+     the two can't drift apart. Declared after `toast` because it uses it — a
+     const referenced before its initializer throws at render. */
+  const toggleSaved = useCallback(
+    (advisor) => {
+      const nowSaved = !savedMatches[advisor.id]
+      setSavedMatches((prev) => ({ ...prev, [advisor.id]: nowSaved }))
+      toast("success", nowSaved ? `${advisor.name} saved` : `${advisor.name} removed from saved`, 2000)
+    },
+    [savedMatches, toast],
+  )
 
   useEffect(() => {
     setMounted(true)
@@ -806,7 +890,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     setNewViewName("")
     setNewViewDescription("")
     setShowNewViewForm(false)
-    setNotification({ type: "success", message: `View "${trimmedName}" created` })
+    toast("success", `View "${trimmedName}" created`)
   }
 
   const startEditingViewMeta = (view) =>
@@ -849,7 +933,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
       setPinned(def.pinned)
       setDensity(def.density)
     }
-    setNotification({ type: "success", message: "View deleted" })
+    toast("success", "View deleted")
   }
 
   const resetActiveViewToDefault = () => {
@@ -859,7 +943,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     setColumnWidths(layout.columnWidths)
     setPinned(layout.pinned)
     setDensity(layout.density)
-    setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` })
+    toast("success", `"${activeView.name}" reset to factory defaults`)
   }
 
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -990,8 +1074,8 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
         popupHeight = 460
         break
       case "quickActions":
-        popupWidth = 210
-        popupHeight = 260
+        popupWidth = 224
+        popupHeight = 340
         break
       default:
         popupWidth = 320
@@ -1025,12 +1109,11 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   const handleConnect = async (advisor) => {
     const user = auth.currentUser
     if (!user) {
-      setNotification({ type: "error", message: "Please log in to connect." })
+      toast("error", "Please log in to connect.")
       return
     }
     if (isCompanyMember && !["owner", "admin"].includes(userRole)) {
-      setNotification({ type: "warning", message: "Only company owners and admins can connect with advisors." })
-      setTimeout(() => setNotification(null), 4000)
+      toast("warning", "Only company owners and admins can connect with advisors.", 4000)
       return
     }
 
@@ -1135,13 +1218,11 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
         }),
       )
 
-      setNotification({ type: "success", message: `Connection request sent to ${advisor.name}` })
+      toast("success", `Connection request sent to ${advisor.name}`)
       if (onConnectionRequested) onConnectionRequested(advisor)
-      setTimeout(() => setNotification(null), 3000)
     } catch (error) {
       console.error("Error connecting with advisor:", error)
-      setNotification({ type: "error", message: "Failed to send connection request." })
-      setTimeout(() => setNotification(null), 4000)
+      toast("error", "Failed to send connection request.", 4000)
     } finally {
       setConnectingId(null)
     }
@@ -1153,8 +1234,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     const user = auth.currentUser
     if (!user || !effectiveUserId) return
     if (isCompanyMember && !["owner", "admin", "manager"].includes(userRole)) {
-      setNotification({ type: "warning", message: "You don't have permission to update advisor statuses." })
-      setTimeout(() => setNotification(null), 4000)
+      toast("warning", "You don't have permission to update advisor statuses.", 4000)
       return
     }
     const id = smeAdvisorId(effectiveUserId, advisor.id)
@@ -1173,12 +1253,10 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
         { merge: true },
       )
       setStatuses((prev) => ({ ...prev, [advisor.id]: { status: nextStatus, dateMatched: new Date() } }))
-      setNotification({ type: "success", message: `${advisor.name} moved to ${nextStatus}.` })
-      setTimeout(() => setNotification(null), 3000)
+      toast("success", `${advisor.name} moved to ${nextStatus}.`)
     } catch (error) {
       console.error("Failed to update advisor status:", error)
-      setNotification({ type: "error", message: "Could not update status." })
-      setTimeout(() => setNotification(null), 4000)
+      toast("error", "Could not update status.", 4000)
     }
   }
 
@@ -1195,20 +1273,25 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   const verificationOptions = useMemo(() => uniqueOf((a) => a.verification), [uniqueOf])
   const stageFitOptions = useMemo(() => uniqueOf((a) => a.smeStageFit), [uniqueOf])
 
-  /* ─── Filtering + sorting ───────────────────────────────────────────── */
-  const filteredAdvisors = useMemo(() => {
+  /* ─── Filtering + sorting ───────────────────────────────────────────────
+     Split in two on purpose. `preStageAdvisors` applies every filter except
+     the pipeline stage; that list is what gets broadcast, so a card reading 8
+     and the table showing 8 are the same 8 rows. Applying the stage filter
+     before broadcasting would collapse every other card to zero the moment
+     you pressed one. ──────────────────────────────────────────────────── */
+  const preStageAdvisors = useMemo(() => {
     const f = localFilters
     const matchesAny = (selected, value) =>
       selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
     const includesText = (needle, value) =>
       !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
 
-    const rows = advisors.filter((a) => {
+    return advisors.filter((a) => {
       if (hiddenMatches[a.id]) return false
       if (hasTooManyMissingFields(a)) return false
+      if (showSavedOnly && !savedMatches[a.id]) return false
 
       const status = statusOf(a)
-      if (stageFilter && status !== stageFilter) return false
       if (filters?.search && !a.name.toLowerCase().includes(filters.search.toLowerCase())) return false
 
       if (!includesText(f.name, a.name)) return false
@@ -1232,6 +1315,24 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
 
       return true
     })
+  }, [advisors, localFilters, statusOf, hiddenMatches, filters, showSavedOnly, savedMatches])
+
+  /* Every advisor the pipeline should count, each with its resolved status.
+     New Match has no stored record, so the pipeline cannot work this out on
+     its own — it would have to infer it from a total. */
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const payload = preStageAdvisors.map((a) => ({ id: a.id, name: a.name, status: statusOf(a) }))
+    const emit = () => window.dispatchEvent(new CustomEvent(ADVISOR_ROWS_EVENT, { detail: payload }))
+    emit()
+    window.addEventListener(ADVISOR_ROWS_REQUEST_EVENT, emit)
+    return () => window.removeEventListener(ADVISOR_ROWS_REQUEST_EVENT, emit)
+  }, [preStageAdvisors, statusOf])
+
+  const filteredAdvisors = useMemo(() => {
+    const rows = activeStageFilter
+      ? preStageAdvisors.filter((a) => statusOf(a) === activeStageFilter)
+      : [...preStageAdvisors]
 
     if (sortConfig?.key) {
       const accessors = {
@@ -1267,7 +1368,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     }
 
     return rows
-  }, [advisors, localFilters, sortConfig, statuses, statusOf, hiddenMatches, stageFilter, filters])
+  }, [preStageAdvisors, activeStageFilter, sortConfig, statusOf, statuses])
 
   useEffect(() => {
     if (onCountChange) onCountChange(filteredAdvisors.length)
@@ -1591,6 +1692,31 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               Viewing: {activeView.name}
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
+            {/* Which pipeline stage the table is narrowed to. Press the same
+                card again in the pipeline to clear it. */}
+            {activeStageFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
+                <Target size={12} className="text-[#7d5a50]" />
+                Pipeline stage: {activeStageFilter}
+                <span className="font-normal text-[#a89482]">({filteredAdvisors.length})</span>
+              </span>
+            )}
+            {/* Saved matches. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => setShowSavedOnly((v) => !v)}
+                title={showSavedOnly ? "Show all advisors" : "Show only saved advisors"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <>
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
@@ -2042,13 +2168,31 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                         <Users size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
-                        {advisors.length === 0 ? "No advisor matches yet" : "No advisors match these filters"}
+                        {advisors.length === 0
+                          ? "No advisor matches yet"
+                          : showSavedOnly
+                            ? "No saved advisors"
+                            : activeStageFilter
+                              ? `No advisors at ${activeStageFilter}`
+                              : "No advisors match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
                         {advisors.length === 0
                           ? "Complete your advisory needs assessment to start seeing matches."
-                          : "Clear a filter to widen the results."}
+                          : showSavedOnly
+                            ? "Bookmark a row to keep it here."
+                            : activeStageFilter
+                              ? "Press that stage card again to clear the filter."
+                              : "Clear a filter to widen the results."}
                       </p>
+                      {showSavedOnly && (
+                        <button
+                          onClick={() => setShowSavedOnly(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Show all advisors
+                        </button>
+                      )}
                       {activeFilterCount > 0 && advisors.length > 0 && (
                         <button
                           onClick={clearAllFilters}
@@ -2127,9 +2271,10 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                           </button>
 
                           <button
-                            onClick={() => setSavedMatches((p) => ({ ...p, [a.id]: !p[a.id] }))}
+                            onClick={() => toggleSaved(a)}
                             title={isSaved ? "Remove from saved" : "Save match"}
                             aria-label={isSaved ? "Remove from saved" : "Save match"}
+                            aria-pressed={isSaved}
                             className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0"
                             style={{ color: isSaved ? "#a67c52" : "#c8b6a6" }}
                           >
@@ -2333,7 +2478,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
           <div
             className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
-            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "210px" }}
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "224px" }}
           >
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
@@ -2357,19 +2502,46 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               onClick={() => {
                 const target = activePopup.advisor
                 closePopup()
+                toggleSaved(target)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Bookmark size={12} fill={savedMatches[activePopup.advisor.id] ? "#a67c52" : "none"} />
+              {savedMatches[activePopup.advisor.id] ? "Remove from Saved" : "Save Match"}
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                setShowSavedOnly(true)
+                toast(
+                  "info",
+                  savedCount > 0
+                    ? `Showing your ${savedCount} saved advisor${savedCount === 1 ? "" : "s"}.`
+                    : "You haven't saved any advisors yet — use the bookmark on a row.",
+                  3000,
+                )
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <LayoutGrid size={12} /> View Saved Advisors ({savedCount})
+            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
+            <button
+              onClick={() => {
+                const target = activePopup.advisor
+                closePopup()
                 handleSetStatus(target, "Shortlisted")
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
-              <Bookmark size={12} /> Shortlist
+              <CheckCircle size={12} /> Move to Shortlisted
             </button>
             <button
               onClick={() => {
                 const target = activePopup.advisor
                 closePopup()
                 setHiddenMatches((p) => ({ ...p, [target.id]: true }))
-                setNotification({ type: "info", message: `${target.name} hidden from your matches.` })
-                setTimeout(() => setNotification(null), 2500)
+                toast("info", `${target.name} hidden from your matches.`, 2500)
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
