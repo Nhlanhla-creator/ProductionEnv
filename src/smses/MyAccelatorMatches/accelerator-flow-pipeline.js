@@ -16,11 +16,40 @@ import {
   Briefcase,
   Sparkles,
   HelpCircle,
+  X,
 } from "lucide-react"
 import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth, db } from "../../firebaseConfig"
 import { DEFAULT_STAGES, mapStatusToStageId, getStageColors } from "../../catalyst/CatalystMatches/stageConfig"
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Events the table can use to talk to this pipeline.
+
+   Declared here rather than in accelerator-table.jsx because this file
+   imports nothing from the table — so the table can import these without
+   creating a circular module dependency. (Every other pipeline in the app
+   has it the other way round, because those pipelines import their status
+   vocabulary from their table.)
+
+     ACCELERATOR_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
+                                      stage id, or null to clear. The page
+                                      already wires this through
+                                      `onStageClick`; the event is the
+                                      fallback for when it doesn't.
+     ACCELERATOR_ROWS_EVENT           table → pipeline. Detail is every row
+                                      the table holds, each with a resolved
+                                      `status`. Send it and the cards count
+                                      exactly what the table shows — including
+                                      Matched, which has no Firestore record
+                                      and is otherwise inferred.
+     ACCELERATOR_ROWS_REQUEST_EVENT   pipeline → table. Asks for a
+                                      re-broadcast, for whichever component
+                                      mounted second.
+   ════════════════════════════════════════════════════════════════════════ */
+export const ACCELERATOR_STAGE_FILTER_EVENT = "accelerator-pipeline-stage-filter"
+export const ACCELERATOR_ROWS_EVENT = "accelerator-pipeline-rows"
+export const ACCELERATOR_ROWS_REQUEST_EVENT = "accelerator-pipeline-rows-request"
 
 /* ────────────────────────────────────────────────────────────────────────────
    Shares the stage vocabulary with the catalyst side via stageConfig.js.
@@ -51,6 +80,8 @@ const LEGACY_STATUS_ALIASES = {
 }
 const normalizeStatus = (status) => LEGACY_STATUS_ALIASES[status] || status
 
+const ENTRY_STAGE_ID = "matched"
+
 const ICONS = { Target, FileText, Search, Shield, AlertCircle, FileCheck, CheckCircle, XCircle, LogOut }
 const getIcon = (name, size = 16, color = "#4a352f") => {
   const Cmp = ICONS[name] || Target
@@ -63,30 +94,69 @@ const PopupPortal = ({ children }) => {
 }
 
 const PipelineSkeleton = () => (
-  <div className="flex gap-2 overflow-x-auto pb-4 px-1">
+  <div className="flex items-center gap-1 overflow-x-auto pb-4 px-1">
     {[...Array(8)].map((_, i) => (
-      <div
-        key={i}
-        className="bg-gradient-to-br from-[#f5f0e1]/60 to-[#e6d7c3]/30 rounded-xl flex-shrink-0 animate-pulse"
-        style={{ width: "104px", height: "84px" }}
-      >
-        <div className="p-2.5 flex flex-col h-full justify-between">
-          <div className="h-2.5 w-16 rounded-full bg-[#c8b6a6]/40" />
-          <div className="h-5 w-10 rounded bg-[#c8b6a6]/30 mx-auto" />
-          <div className="h-1.5 w-full rounded-full bg-[#c8b6a6]/30" />
+      <div key={i} className="flex items-center flex-shrink-0">
+        <div
+          className="bg-gradient-to-br from-[#f5f0e1]/60 to-[#e6d7c3]/30 rounded-xl flex-shrink-0 animate-pulse"
+          style={{ width: "112px", height: "88px" }}
+        >
+          <div className="p-2.5 flex flex-col h-full justify-between">
+            <div className="h-2.5 w-16 rounded-full bg-[#c8b6a6]/40" />
+            <div className="h-5 w-10 rounded bg-[#c8b6a6]/30 mx-auto" />
+            <div className="h-1.5 w-full rounded-full bg-[#c8b6a6]/30" />
+          </div>
         </div>
+        {i < 7 && <div className="w-8 h-[2px] mx-1 rounded-full bg-[#e6d7c3] animate-pulse" />}
       </div>
     ))}
   </div>
 )
 
-export function AcceleratorFlowPipeline({ accelerators = [], applications = [], onStageClick }) {
+/* ════════════════════════════════════════════════════════════════════════════
+   AcceleratorFlowPipeline
+
+   Props (all optional):
+     accelerators   every catalyst programme the SME can see. Used with
+                    `applications` to derive Matched, which has no Firestore
+                    record of its own.
+     applications   the SME's smeCatalystApplications rows.
+     onStageClick   called with the stage id on press, null when cleared.
+
+   Where the counts come from, in order of preference:
+     1. The table's broadcast, if accelerator-table.jsx sends one. Its rows
+        carry a resolved status, so the cards and the table body can't
+        disagree.
+     2. This component's own query plus the `accelerators` prop.
+
+   Selection lives here. Pressing a card fires both the callback and the
+   window event, so the table filters whether or not the page wires props.
+   ════════════════════════════════════════════════════════════════════════ */
+export function AcceleratorFlowPipeline({ accelerators = [], applications = [], onStageClick, className = "" }) {
   const [effectiveUserId, setEffectiveUserId] = useState(null)
   const [authResolved, setAuthResolved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [hoveredStage, setHoveredStage] = useState(null)
   const [selectedStage, setSelectedStage] = useState(null)
   const [smeApplications, setSmeApplications] = useState([])
+  const [tableRows, setTableRows] = useState(null)
+
+  /* The table's broadcast beats every other source. Asking for it on mount
+     covers the case where the table rendered first. Nothing breaks if the
+     table never sends one — the query below still runs. */
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const onRows = (e) => {
+      if (!Array.isArray(e.detail)) return
+      setTableRows(e.detail)
+      setLoading(false)
+    }
+    window.addEventListener(ACCELERATOR_ROWS_EVENT, onRows)
+    window.dispatchEvent(new Event(ACCELERATOR_ROWS_REQUEST_EVENT))
+    return () => window.removeEventListener(ACCELERATOR_ROWS_EVENT, onRows)
+  }, [])
+
+  const usingTable = Array.isArray(tableRows)
 
   /* Was a bare auth.currentUser read on mount with no retry — on a cold load
      Firebase hasn't restored the session yet, so effectiveUserId stayed null
@@ -126,6 +196,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
   }, [])
 
   useEffect(() => {
+    if (usingTable) return
     if (!authResolved) return
     if (!effectiveUserId) {
       setLoading(false)
@@ -145,7 +216,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
     }
 
     fetchApplications()
-  }, [authResolved, effectiveUserId, applications])
+  }, [usingTable, authResolved, effectiveUserId, applications])
 
   /* "Matched" means available to apply to and not yet applied — there is no
      Firestore record for those, so it's derived from the matches table
@@ -161,14 +232,48 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
   const counts = useMemo(() => {
     const result = {}
     for (const stage of DEFAULT_STAGES) result[stage.id] = 0
-    result.matched = matchedCount
-    smeApplications.forEach((app) => {
-      const stageId = mapStatusToStageId(normalizeStatus(app.status || app.pipelineStage), DEFAULT_STAGES)
-      if (stageId === "matched") return
-      if (result[stageId] !== undefined) result[stageId] += 1
-    })
+    const unrecognised = []
+
+    if (usingTable) {
+      /* Every broadcast row already carries a resolved status, Matched
+         included, so this is a straight tally. */
+      tableRows.forEach((row) => {
+        const stageId = mapStatusToStageId(normalizeStatus(row.status || row.pipelineStage), DEFAULT_STAGES)
+        if (result[stageId] !== undefined) {
+          result[stageId] += 1
+        } else {
+          result[ENTRY_STAGE_ID] += 1
+          unrecognised.push(row.status || row.pipelineStage)
+        }
+      })
+    } else {
+      result[ENTRY_STAGE_ID] = matchedCount
+      smeApplications.forEach((app) => {
+        const raw = app.status || app.pipelineStage
+        const stageId = mapStatusToStageId(normalizeStatus(raw), DEFAULT_STAGES)
+        if (stageId === ENTRY_STAGE_ID) return
+        if (result[stageId] !== undefined) {
+          result[stageId] += 1
+        } else {
+          /* Counted under Matched rather than dropped. The old version had a
+             bare `if (result[stageId] !== undefined)` with no else, so an
+             unrecognised status silently vanished from every card while the
+             percentages carried on as if it had never existed. */
+          result[ENTRY_STAGE_ID] += 1
+          unrecognised.push(raw)
+        }
+      })
+    }
+
+    if (unrecognised.length > 0) {
+      console.warn(
+        "[AcceleratorFlowPipeline] counted under Matched — no stage covers these statuses:",
+        [...new Set(unrecognised)],
+      )
+    }
+
     return result
-  }, [smeApplications, matchedCount])
+  }, [usingTable, tableRows, smeApplications, matchedCount])
 
   const liveStages = useMemo(() => DEFAULT_STAGES.filter((s) => !s.terminal).sort((a, b) => a.order - b.order), [])
   const terminalStages = useMemo(() => DEFAULT_STAGES.filter((s) => s.terminal), [])
@@ -200,6 +305,9 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
       setSelectedStage((prev) => {
         const next = prev === stageId ? null : stageId
         onStageClick?.(next)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent(ACCELERATOR_STAGE_FILTER_EVENT, { detail: next }))
+        }
         return next
       })
     },
@@ -218,7 +326,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
     const hideTip = () => setHoveredStage(null)
 
     return (
-      <div className="relative flex-shrink-0" style={{ width: "104px" }}>
+      <div className="relative flex-shrink-0" style={{ width: "112px" }}>
         <button
           type="button"
           onClick={() => handleStageClick(stage.id)}
@@ -282,7 +390,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
                   </span>
                 </div>
                 <p className="text-[10px] text-[#c8b6a6] mt-1.5">
-                  {isSelected ? "Click to clear this filter" : "Click to filter the table"}
+                  {isSelected ? "Press to clear this filter" : "Press to filter the table"}
                 </p>
               </div>
             </div>
@@ -292,8 +400,33 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
     )
   }
 
+  const renderArrow = (idx) => {
+    const stage = liveStages[idx]
+    const nextStage = liveStages[idx + 1]
+    const fromCount = cumulativeCounts[stage.id] || 0
+    const toCount = cumulativeCounts[nextStage.id] || 0
+    const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0"
+
+    return (
+      <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "38px" }}>
+        <span
+          className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap"
+          title="Share of catalysts at this step or beyond that reach the next step"
+        >
+          {rate}%
+        </span>
+        <div className="flex items-center">
+          <div className="w-5 h-[2px] bg-gradient-to-r from-[#7d5a50] to-[#a67c52]" />
+          <ArrowRight size={14} className="text-[#5a4038] -ml-1" strokeWidth={2.5} />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="w-full font-sans bg-gradient-to-br from-[#faf7f2] to-[#f5f0e1] rounded-3xl p-7 shadow-xl border border-[#e6d7c3]">
+    <div
+      className={`w-full font-sans bg-gradient-to-br from-[#faf7f2] to-[#f5f0e1] rounded-3xl p-7 shadow-xl border border-[#e6d7c3] ${className}`}
+    >
       <div className="flex items-center justify-between mb-7 flex-wrap gap-5">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center shadow-md">
@@ -301,7 +434,10 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-[#4a352f] tracking-tight">Dealflow Pipeline</h2>
+              {/* Named for what it holds. Four other pipelines in this app were
+                  also called "Dealflow Pipeline", which is unhelpful the
+                  moment two of them appear in the same session. */}
+              <h2 className="text-xl font-bold text-[#4a352f] tracking-tight">Catalyst Pipeline</h2>
               <Sparkles size={14} className="text-[#a67c52]" />
             </div>
             <p className="text-xs text-[#7d5a50] mt-0.5">
@@ -322,35 +458,18 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
         <PipelineSkeleton />
       ) : (
         <>
-          <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent gap-1">
+          <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent">
+            {/* Live funnel — one card per stage, an arrow in every gap */}
             {liveStages.map((stage, idx) => (
-              <div key={stage.id} className="flex items-center">
+              <div key={stage.id} className="flex items-center flex-shrink-0">
                 {renderStageCard(stage)}
-
-                {idx < liveStages.length - 1 &&
-                  (() => {
-                    const nextStage = liveStages[idx + 1]
-                    const fromCount = cumulativeCounts[stage.id] || 0
-                    const toCount = cumulativeCounts[nextStage.id] || 0
-                    const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : null
-                    return (
-                      <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "34px" }}>
-                        <span
-                          className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap"
-                          title="Share of catalysts at this step or beyond that reach the next step"
-                        >
-                          {rate === null ? "—" : `${rate}%`}
-                        </span>
-                        <div className="flex items-center">
-                          <div className="w-5 h-[2px] bg-gradient-to-r from-[#7d5a50] to-[#a67c52]" />
-                          <ArrowRight size={14} className="text-[#5a4038] -ml-1" strokeWidth={2.5} />
-                        </div>
-                      </div>
-                    )
-                  })()}
+                {idx < liveStages.length - 1 && renderArrow(idx)}
               </div>
             ))}
 
+            {/* Exit states. Positive endings (Admitted) sit after the divider
+                on their own; Declined and Withdrawn share one red outline,
+                with no arrows into or between them. */}
             {terminalStages.length > 0 &&
               (() => {
                 const negativeStages = terminalStages.filter((s) => /declined|withdrawn/i.test(s.name || ""))
@@ -367,7 +486,10 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
                         </div>
                       ))}
                       {negativeStages.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl" style={{ border: "2px solid #D32F2F" }}>
+                        <div
+                          className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl"
+                          style={{ border: "2px solid #D32F2F" }}
+                        >
                           {negativeStages.map((stage) => (
                             <div key={stage.id} className="flex-shrink-0">
                               {renderStageCard(stage)}
@@ -394,11 +516,11 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
                   title="Clear filter"
                   aria-label="Clear filter"
                 >
-                  ✕
+                  <X size={12} />
                 </button>
               </div>
             ) : (
-              <p className="text-xs text-[#a89482] font-medium">Click a stage to filter the list below</p>
+              <p className="text-xs text-[#a89482] font-medium">Click a stage to filter the table below</p>
             )}
           </div>
         </>

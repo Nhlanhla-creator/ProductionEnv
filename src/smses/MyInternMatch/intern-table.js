@@ -52,6 +52,26 @@ import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
 import InternDetailsModal from "./InternDetailsModal"
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Events the pipeline uses to talk to this table.
+
+   They're declared here, not in intern-dealflow-page.jsx, because that file
+   already imports calculateMatchScoreForSponsor from this one — pointing the
+   imports both ways would make a circular module dependency.
+
+     INTERN_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed status
+                                 name, or null to clear.
+     INTERN_ROWS_EVENT           table → pipeline. Detail is every candidate
+                                 that passes the table's other filters, each
+                                 with its resolved status. This is what makes
+                                 the cards and the table body agree.
+     INTERN_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast, for
+                                 whichever component mounted second.
+   ════════════════════════════════════════════════════════════════════════ */
+export const INTERN_STAGE_FILTER_EVENT = "intern-pipeline-stage-filter"
+export const INTERN_ROWS_EVENT = "intern-pipeline-rows"
+export const INTERN_ROWS_REQUEST_EVENT = "intern-pipeline-rows-request"
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Reference data
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -877,6 +897,29 @@ const BUILTIN_VIEW_ID = "__default__"
 // new defaults rather than resurrect the cramped layout.
 const VIEWS_STORAGE_KEY = "intern-table-views-v3"
 const FILTERS_STORAGE_KEY = "intern-table-filters-v1"
+const SAVED_STORAGE_KEY = "intern-table-saved-v1"
+
+/* Saved matches were previously component state only, so the bookmark
+   survived until the next render of a parent and no further — pressing it
+   looked like nothing happened. */
+const loadSavedMatches = () => {
+  if (typeof window === "undefined") return {}
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SAVED_STORAGE_KEY) || "null")
+    return saved && typeof saved === "object" ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+const persistSavedMatches = (saved) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(saved))
+  } catch {
+    // Non-fatal.
+  }
+}
 
 const EMPTY_FILTERS = {
   name: "",
@@ -1041,12 +1084,7 @@ const hasTooManyMissingFields = (intern) => {
    Component
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export function InternTablePage({
-  filters,
-  stageFilter,
-  profileMatchesCount,
-  onMatchesCountChange,
-}) {
+export function InternTablePage({ filters, stageFilter, profileMatchesCount, onMatchesCountChange }) {
   const [interns, setInterns] = useState([])
   const [showInternDetails, setShowInternDetails] = useState(false)
   const [selectedInternDetails, setSelectedInternDetails] = useState(null)
@@ -1086,8 +1124,26 @@ export function InternTablePage({
   const [effectiveUserId, setEffectiveUserId] = useState(null)
   const [userRole, setUserRole] = useState(null)
 
-  const [savedMatches, setSavedMatches] = useState({})
+  const [savedMatches, setSavedMatches] = useState(() => loadSavedMatches())
+  const [showSavedOnly, setShowSavedOnly] = useState(false)
   const [hoveredRowKey, setHoveredRowKey] = useState(null)
+
+  useEffect(() => {
+    persistSavedMatches(savedMatches)
+  }, [savedMatches])
+
+  const savedCount = useMemo(() => Object.values(savedMatches).filter(Boolean).length, [savedMatches])
+
+  /* A stage pressed in the pipeline arrives here. The `stageFilter` prop still
+     wins when the page passes one, so wiring props stays optional — drop
+     <InternDealflowPage /> anywhere on the page and the two find each other. */
+  const [eventStageFilter, setEventStageFilter] = useState(null)
+  useEffect(() => {
+    const onFilter = (e) => setEventStageFilter(e.detail ?? null)
+    window.addEventListener(INTERN_STAGE_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(INTERN_STAGE_FILTER_EVENT, onFilter)
+  }, [])
+  const activeStageFilter = stageFilter ?? eventStageFilter
 
   // Filters + sort, restored from the last visit
   const initialFilterState = useMemo(() => loadFilterState(), [])
@@ -1120,9 +1176,7 @@ export function InternTablePage({
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
 
   // Viewport, for responsive column collapse
-  const [viewportWidth, setViewportWidth] = useState(
-    typeof window === "undefined" ? 1440 : window.innerWidth,
-  )
+  const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth)
     window.addEventListener("resize", onResize)
@@ -1130,6 +1184,25 @@ export function InternTablePage({
   }, [])
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+
+  /* Every notification in this file used to be a setNotification plus its own
+     setTimeout, with timings that had drifted apart. One helper. */
+  const toast = useCallback((type, message, ms = 3000) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), ms)
+  }, [])
+
+  /* One place that both the row bookmark and the quick-actions entry call, so
+     the two can't drift apart. Declared after `toast` because it uses it — a
+     const referenced before its initializer throws at render. */
+  const toggleSaved = useCallback(
+    (intern) => {
+      const nowSaved = !savedMatches[intern.id]
+      setSavedMatches((prev) => ({ ...prev, [intern.id]: nowSaved }))
+      toast("success", nowSaved ? `${intern.internName} saved` : `${intern.internName} removed from saved`, 2000)
+    },
+    [savedMatches, toast],
+  )
 
   /* ─── Company membership ──────────────────────────────────────────────── */
   useEffect(() => {
@@ -1558,7 +1631,7 @@ export function InternTablePage({
     setNewViewName("")
     setNewViewDescription("")
     setShowNewViewForm(false)
-    setNotification({ type: "success", message: `View "${trimmedName}" created` })
+    toast("success", `View "${trimmedName}" created`)
   }
 
   const startEditingViewMeta = (view) =>
@@ -1601,7 +1674,7 @@ export function InternTablePage({
       setPinned(def.pinned)
       setDensity(def.density)
     }
-    setNotification({ type: "success", message: "View deleted" })
+    toast("success", "View deleted")
   }
 
   const resetActiveViewToDefault = () => {
@@ -1611,7 +1684,7 @@ export function InternTablePage({
     setColumnWidths(layout.columnWidths)
     setPinned(layout.pinned)
     setDensity(layout.density)
-    setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` })
+    toast("success", `"${activeView.name}" reset to factory defaults`)
   }
 
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -1779,8 +1852,8 @@ export function InternTablePage({
         popupHeight = 560
         break
       case "quickActions":
-        popupWidth = 210
-        popupHeight = 280
+        popupWidth = 224
+        popupHeight = 340
         break
       default:
         popupWidth = 300
@@ -1911,14 +1984,13 @@ export function InternTablePage({
      document yet, so one is created with a deterministic id. */
   const handleQuickStage = async (intern, nextStatus) => {
     if (isCompanyMember && !["owner", "admin", "manager"].includes(userRole)) {
-      setNotification({ type: "warning", message: "You don't have permission to update application stages." })
-      setTimeout(() => setNotification(null), 4000)
+      toast("warning", "You don't have permission to update application stages.", 4000)
       return
     }
 
     const user = auth.currentUser
     if (!user) {
-      setNotification({ type: "error", message: "User not authenticated. Please log in." })
+      toast("error", "User not authenticated. Please log in.")
       return
     }
 
@@ -1953,18 +2025,16 @@ export function InternTablePage({
         ),
       )
       setUpdatedStages((prev) => ({ ...prev, [intern.id]: nextStatus }))
-      setNotification({ type: "success", message: `${intern.internName} moved to ${nextStatus}.` })
-      setTimeout(() => setNotification(null), 4000)
+      toast("success", `${intern.internName} moved to ${nextStatus}.`, 4000)
     } catch (error) {
       console.error("Quick stage update failed:", error)
-      setNotification({ type: "error", message: `Could not update ${intern.internName}: ${error.message}` })
-      setTimeout(() => setNotification(null), 5000)
+      toast("error", `Could not update ${intern.internName}: ${error.message}`, 5000)
     }
   }
 
   const handleStageUpdate = async () => {
     if (isCompanyMember && !["owner", "admin", "manager"].includes(userRole)) {
-      setNotification({ type: "warning", message: "You don't have permission to update application stages." })
+      toast("warning", "You don't have permission to update application stages.", 4000)
       return
     }
 
@@ -2079,7 +2149,7 @@ export function InternTablePage({
       )
 
       setUpdatedStages((prev) => ({ ...prev, [internId]: selectedStage }))
-      setNotification({ type: "success", message: `Application status updated to ${selectedStage} successfully` })
+      toast("success", `Application status updated to ${selectedStage} successfully`)
       closePopup()
       resetStageForm()
 
@@ -2235,27 +2305,18 @@ export function InternTablePage({
             emailjsConfig.publicKey,
           )
 
-          setNotification({
-            type: "success",
-            message: `Stage updated to ${selectedStage} and email notification sent successfully`,
-          })
+          toast("success", `Stage updated to ${selectedStage} and email notification sent successfully`)
         } catch (emailError) {
           console.error("Email to intern failed:", emailError)
-          setNotification({
-            type: "success",
-            message: `Stage updated to ${selectedStage} successfully (email notification failed)`,
-          })
+          toast("success", `Stage updated to ${selectedStage} successfully (email notification failed)`)
         }
       } else {
         console.warn("No intern email found, skipping email notification")
-        setNotification({
-          type: "success",
-          message: `Stage updated to ${selectedStage} successfully (no email available)`,
-        })
+        toast("success", `Stage updated to ${selectedStage} successfully (no email available)`)
       }
     } catch (error) {
       console.error("Detailed error:", { message: error.message, code: error.code, stack: error.stack })
-      setNotification({ type: "error", message: `Failed to update status: ${error.message}` })
+      toast("error", `Failed to update status: ${error.message}`, 5000)
     } finally {
       setIsSubmitting(false)
     }
@@ -2265,12 +2326,12 @@ export function InternTablePage({
     try {
       const user = auth.currentUser
       if (!user) {
-        setNotification({ type: "error", message: "User not authenticated. Please log in." })
+        toast("error", "User not authenticated. Please log in.")
         return
       }
 
       if (isCompanyMember && !["owner", "admin"].includes(userRole)) {
-        setNotification({ type: "warning", message: "Only company owners and admins can request interns." })
+        toast("warning", "Only company owners and admins can request interns.", 4000)
         return
       }
 
@@ -2576,8 +2637,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
       })
       setTimeout(() => window.dispatchEvent(event), 100)
 
-      setNotification({ type: "success", message: `Intern request successfully sent to ${intern.internName}!` })
-      setTimeout(() => setNotification(null), 4000)
+      toast("success", `Intern request successfully sent to ${intern.internName}!`, 4000)
     } catch (error) {
       console.error("Detailed error in handleRequestIntern:", error)
 
@@ -2598,8 +2658,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         }),
       )
 
-      setNotification({ type: "error", message: errorMessage })
-      setTimeout(() => setNotification(null), 5000)
+      toast("error", errorMessage, 5000)
     }
   }
 
@@ -2626,22 +2685,27 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
   )
   const statusFilterOptions = APPLICATION_STAGES.map((s) => s.name)
 
-  /* ─── Filtering + sorting ─────────────────────────────────────────────── */
-  const filteredInterns = useMemo(() => {
+  const statusOf = useCallback(
+    (intern) => updatedStages[intern.id] || intern.pipelineStage || intern.status,
+    [updatedStages],
+  )
+
+  /* ─── Filtering + sorting ───────────────────────────────────────────────
+     Split in two on purpose. `preStageInterns` applies every filter except the
+     pipeline stage; that list is what gets broadcast, so a card reading 8 and
+     the table showing 8 are the same 8 rows. Applying the stage filter before
+     broadcasting would collapse every other card to zero the moment you
+     pressed one. ──────────────────────────────────────────────────────── */
+  const preStageInterns = useMemo(() => {
     const user = auth.currentUser
     const matchesAny = (selected, value) =>
       selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
 
-    const rows = interns.filter((intern) => {
+    return interns.filter((intern) => {
       if ((user && intern.internId === user.uid) || (effectiveUserId && intern.internId === effectiveUserId))
         return false
       if (hasTooManyMissingFields(intern)) return false
-
-      // Optional stage filter driven from the pipeline above the table.
-      if (stageFilter) {
-        const current = updatedStages[intern.id] || intern.pipelineStage || intern.status
-        if ((current || "").toLowerCase() !== stageFilter.toLowerCase()) return false
-      }
+      if (showSavedOnly && !savedMatches[intern.id]) return false
 
       // Optional external filters passed down from the page shell.
       if (filters?.search && !intern.internName.toLowerCase().includes(filters.search.toLowerCase())) return false
@@ -2649,7 +2713,10 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
       if (localFilters.name.trim() && !intern.internName.toLowerCase().includes(localFilters.name.toLowerCase().trim()))
         return false
 
-      if ((intern.matchPercentage || 0) < localFilters.matchRange[0] || (intern.matchPercentage || 0) > localFilters.matchRange[1])
+      if (
+        (intern.matchPercentage || 0) < localFilters.matchRange[0] ||
+        (intern.matchPercentage || 0) > localFilters.matchRange[1]
+      )
         return false
       if ((intern.bigScore || 0) < localFilters.bigScoreRange[0] || (intern.bigScore || 0) > localFilters.bigScoreRange[1])
         return false
@@ -2680,7 +2747,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         if (!localFilters.languages.some((l) => langs.some((v) => v.toLowerCase() === l.toLowerCase()))) return false
       }
 
-      const currentStatusForFilter = updatedStages[intern.id] || intern.pipelineStage || intern.status
+      const currentStatusForFilter = statusOf(intern)
       if (!matchesAny(localFilters.status, currentStatusForFilter)) return false
 
       if (localFilters.nextStage.length > 0) {
@@ -2691,6 +2758,22 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
       return true
     })
+  }, [interns, localFilters, effectiveUserId, filters, showSavedOnly, savedMatches, statusOf])
+
+  /* Every candidate the pipeline should count, each with its resolved status. */
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const payload = preStageInterns.map((i) => ({ id: i.id, name: i.internName, status: statusOf(i) }))
+    const emit = () => window.dispatchEvent(new CustomEvent(INTERN_ROWS_EVENT, { detail: payload }))
+    emit()
+    window.addEventListener(INTERN_ROWS_REQUEST_EVENT, emit)
+    return () => window.removeEventListener(INTERN_ROWS_REQUEST_EVENT, emit)
+  }, [preStageInterns, statusOf])
+
+  const filteredInterns = useMemo(() => {
+    const rows = activeStageFilter
+      ? preStageInterns.filter((i) => (statusOf(i) || "").toLowerCase() === activeStageFilter.toLowerCase())
+      : [...preStageInterns]
 
     if (sortConfig?.key) {
       const accessors = {
@@ -2699,7 +2782,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         bigScore: (r) => r.bigScore || 0,
         qualification: (r) => `${r.degree || ""} ${r.field || ""}`,
         availability: (r) => new Date(r.availabilityStart || r.startDate).getTime() || 0,
-        status: (r) => updatedStages[r.id] || r.pipelineStage || r.status,
+        status: (r) => statusOf(r),
         institution: (r) => r.institution,
         degree: (r) => r.degree,
         field: (r) => r.field,
@@ -2722,7 +2805,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     }
 
     return rows
-  }, [interns, localFilters, sortConfig, updatedStages, effectiveUserId, stageFilter, filters])
+  }, [preStageInterns, activeStageFilter, sortConfig, statusOf])
 
   useEffect(() => {
     if (onMatchesCountChange) onMatchesCountChange(filteredInterns.length)
@@ -2835,8 +2918,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     return offsets
   }, [orderedColumns, pinned, widthOf])
 
-  const totalWidth =
-    CANDIDATE_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = CANDIDATE_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.3rem" : "0.6rem 0.4rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -3127,7 +3209,9 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
               ? "bg-green-50 text-green-800 border-green-200"
               : notification.type === "warning"
                 ? "bg-amber-50 text-amber-800 border-amber-200"
-                : "bg-red-50 text-red-800 border-red-200"
+                : notification.type === "info"
+                  ? "bg-[#faf7f2] text-[#4a352f] border-[#e6d7c3]"
+                  : "bg-red-50 text-red-800 border-red-200"
           }`}
         >
           <div className="flex items-center justify-between">
@@ -3151,6 +3235,31 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
               )}
             </span>
+            {/* Which pipeline stage the table is narrowed to. Press the same
+                card again in the pipeline to clear it. */}
+            {activeStageFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
+                <Target size={12} className="text-[#7d5a50]" />
+                Pipeline stage: {activeStageFilter}
+                <span className="font-normal text-[#a89482]">({filteredInterns.length})</span>
+              </span>
+            )}
+            {/* Saved matches. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => setShowSavedOnly((v) => !v)}
+                title={showSavedOnly ? "Show all candidates" : "Show only saved candidates"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <>
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
@@ -3603,7 +3712,23 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                     colSpan={orderedColumns.length + 2}
                     style={{ ...tableCellStyle, textAlign: "center", color: "#a89482", padding: "2.5rem 1rem", borderRight: "none" }}
                   >
-                    {interns.length === 0 ? "No intern matches yet." : "No candidates match these filters."}
+                    {interns.length === 0
+                      ? "No intern matches yet."
+                      : showSavedOnly
+                        ? "No saved candidates. Bookmark a row to keep it here."
+                        : activeStageFilter
+                          ? `No candidates at ${activeStageFilter}. Press that stage card again to clear the filter.`
+                          : "No candidates match these filters."}
+                    {showSavedOnly && (
+                      <div style={{ marginTop: "0.75rem" }}>
+                        <button
+                          onClick={() => setShowSavedOnly(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Show all candidates
+                        </button>
+                      </div>
+                    )}
                     {activeFilterCount > 0 && (
                       <div style={{ marginTop: "0.75rem" }}>
                         <button
@@ -3618,7 +3743,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 </tr>
               ) : (
                 filteredInterns.map((intern) => {
-                  const currentStatus = updatedStages[intern.id] || intern.pipelineStage || intern.status
+                  const currentStatus = statusOf(intern)
                   const statusStyle = getStatusStyle(currentStatus)
                   const actions = getRowActions(currentStatus)
                   const isSaved = !!savedMatches[intern.id]
@@ -3696,9 +3821,10 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                           </button>
 
                           <button
-                            onClick={() => setSavedMatches((p) => ({ ...p, [intern.id]: !p[intern.id] }))}
+                            onClick={() => toggleSaved(intern)}
                             title={isSaved ? "Remove from saved" : "Save match"}
                             aria-label={isSaved ? "Remove from saved" : "Save match"}
+                            aria-pressed={isSaved}
                             className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0"
                             style={{ color: isSaved ? "#a67c52" : "#c8b6a6" }}
                           >
@@ -4073,7 +4199,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
           <div
             className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
-            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "210px" }}
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "224px" }}
           >
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
@@ -4093,6 +4219,34 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
             >
               <Target size={12} /> Why This Match?
             </button>
+            <button
+              onClick={() => {
+                const target = selectedInternForPopup
+                closePopup()
+                toggleSaved(target)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Bookmark size={12} fill={savedMatches[selectedInternForPopup.id] ? "#a67c52" : "none"} />
+              {savedMatches[selectedInternForPopup.id] ? "Remove from Saved" : "Save Match"}
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                setShowSavedOnly(true)
+                toast(
+                  "info",
+                  savedCount > 0
+                    ? `Showing your ${savedCount} saved candidate${savedCount === 1 ? "" : "s"}.`
+                    : "You haven't saved any candidates yet — use the bookmark on a row.",
+                  3000,
+                )
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <LayoutGrid size={12} /> View Saved Candidates ({savedCount})
+            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
             <button
               onClick={() => openPopup("stage", selectedInternForPopup, activePopup.rect)}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"

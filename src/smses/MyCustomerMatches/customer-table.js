@@ -83,6 +83,26 @@ import CustomerDetailsModal from "./CustomerDetailsModal"
    data actually is. Renaming the fields is a migration, not a UI change.
    ════════════════════════════════════════════════════════════════════════ */
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Events the pipeline uses to talk to this table.
+
+   They're declared here, not in customer-flow-pipeline.jsx, because that file
+   already imports the status vocabulary from this one — pointing the imports
+   both ways would make a circular module dependency.
+
+     CUSTOMER_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
+                                   status name, or null to clear.
+     CUSTOMER_ROWS_EVENT           table → pipeline. Detail is the full,
+                                   unfiltered row list, so the cards count
+                                   exactly what this component holds.
+     CUSTOMER_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast,
+                                   for a pipeline that mounted after the
+                                   first one went out.
+   ════════════════════════════════════════════════════════════════════════ */
+export const CUSTOMER_STAGE_FILTER_EVENT = "customer-pipeline-stage-filter"
+export const CUSTOMER_ROWS_EVENT = "customer-pipeline-rows"
+export const CUSTOMER_ROWS_REQUEST_EVENT = "customer-pipeline-rows-request"
+
 /* ─── Status vocabulary (spec section 3) ────────────────────────────────── */
 export const CUSTOMER_STATUSES = [
   "New Match",
@@ -292,6 +312,28 @@ const BUILTIN_VIEW_ID = "__default__"
 // the mid-word header breaks, so old saved views fall back to the new defaults.
 const VIEWS_STORAGE_KEY = "customer-matches-views-v2"
 const FILTERS_STORAGE_KEY = "customer-matches-filters-v1"
+const SAVED_STORAGE_KEY = "customer-matches-saved-v1"
+
+/* Saved matches were previously component state only, so the bookmark
+   survived until the next render of a parent and no further. */
+const loadSavedMatches = () => {
+  if (typeof window === "undefined") return {}
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SAVED_STORAGE_KEY) || "null")
+    return saved && typeof saved === "object" ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+const persistSavedMatches = (saved) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(saved))
+  } catch {
+    // Non-fatal.
+  }
+}
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
@@ -669,6 +711,18 @@ export function CustomerTable({ stageFilter, onCountChange }) {
   const [currentCustomerId, setCurrentCustomerId] = useState(null)
   const [authResolved, setAuthResolved] = useState(false)
 
+  /* A stage pressed in the pipeline arrives here. The `stageFilter` prop
+     still wins when the page passes one, so wiring props is optional rather
+     than required — drop <CustomerFlowPipeline /> anywhere on the page and
+     the two find each other. */
+  const [eventStageFilter, setEventStageFilter] = useState(null)
+  useEffect(() => {
+    const onFilter = (e) => setEventStageFilter(e.detail ?? null)
+    window.addEventListener(CUSTOMER_STAGE_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(CUSTOMER_STAGE_FILTER_EVENT, onFilter)
+  }, [])
+  const activeStageFilter = stageFilter ?? eventStageFilter
+
   const [selectedApplication, setSelectedApplication] = useState(null)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [showProposalModal, setShowProposalModal] = useState(false)
@@ -687,9 +741,16 @@ export function CustomerTable({ stageFilter, onCountChange }) {
   const [formErrors, setFormErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const [savedMatches, setSavedMatches] = useState({})
+  const [savedMatches, setSavedMatches] = useState(() => loadSavedMatches())
+  const [showSavedOnly, setShowSavedOnly] = useState(false)
   const [hiddenMatches, setHiddenMatches] = useState({})
   const [hoveredRow, setHoveredRow] = useState(null)
+
+  useEffect(() => {
+    persistSavedMatches(savedMatches)
+  }, [savedMatches])
+
+  const savedCount = useMemo(() => Object.values(savedMatches).filter(Boolean).length, [savedMatches])
 
   /* Popups — anchored popovers portaled to <body>, same pattern as the other
      match tables. { type, row, position:{x,y}, rect } */
@@ -862,6 +923,19 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     return () => unsubscribe()
   }, [authResolved, currentCustomerId])
 
+  /* Publish the unfiltered rows. This is what makes a card reading 8 and the
+     table showing 8 the same number — the pipeline used to count whatever
+     list the page handed it, which came from a different query than this
+     component's own listener. The request handler covers a pipeline that
+     mounts after the first broadcast has already gone out. */
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const emit = () => window.dispatchEvent(new CustomEvent(CUSTOMER_ROWS_EVENT, { detail: applications }))
+    emit()
+    window.addEventListener(CUSTOMER_ROWS_REQUEST_EVENT, emit)
+    return () => window.removeEventListener(CUSTOMER_ROWS_REQUEST_EVENT, emit)
+  }, [applications])
+
   const customerSectorsFor = useCallback(
     (row) => {
       const profile = universalProfiles.find((p) => p.id === row.counterpartyId || p.id === row.customerId)
@@ -891,6 +965,18 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     setNotification({ type, message })
     setTimeout(() => setNotification(null), ms)
   }, [])
+
+  /* One place that both the row bookmark and the quick-actions entry call,
+     so the two can't drift apart. Declared after `notify` because it uses
+     it — a const referenced before its initializer throws at render. */
+  const toggleSaved = useCallback(
+    (row) => {
+      const nowSaved = !savedMatches[row.id]
+      setSavedMatches((prev) => ({ ...prev, [row.id]: nowSaved }))
+      notify("success", nowSaved ? `${row.customerName} saved` : `${row.customerName} removed from saved`, 2000)
+    },
+    [savedMatches, notify],
+  )
 
   const switchToView = (viewId) => {
     const target = viewsState.views[viewId]
@@ -1360,7 +1446,8 @@ export function CustomerTable({ stageFilter, onCountChange }) {
 
     const rows = applications.filter((a) => {
       if (hiddenMatches[a.id]) return false
-      if (stageFilter && a.status !== stageFilter) return false
+      if (showSavedOnly && !savedMatches[a.id]) return false
+      if (activeStageFilter && a.status !== activeStageFilter) return false
 
       if (!includesText(f.name, `${a.customerName} ${a.opportunityTitle || ""}`)) return false
       if (a.matchPercentage < f.matchRange[0] || a.matchPercentage > f.matchRange[1]) return false
@@ -1431,7 +1518,16 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     }
 
     return rows
-  }, [applications, localFilters, sortConfig, hiddenMatches, stageFilter, customerSectorsFor])
+  }, [
+    applications,
+    localFilters,
+    sortConfig,
+    hiddenMatches,
+    activeStageFilter,
+    showSavedOnly,
+    savedMatches,
+    customerSectorsFor,
+  ])
 
   useEffect(() => {
     if (onCountChange) onCountChange(filteredApplications.length)
@@ -1776,6 +1872,31 @@ export function CustomerTable({ stageFilter, onCountChange }) {
               Viewing: {activeView.name}
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
+            {/* Which pipeline stage the table is narrowed to. Press the same
+                card again in the pipeline to clear it. */}
+            {activeStageFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
+                <Target size={12} className="text-[#7d5a50]" />
+                Pipeline stage: {activeStageFilter}
+                <span className="font-normal text-[#a89482]">({filteredApplications.length})</span>
+              </span>
+            )}
+            {/* Saved matches. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => setShowSavedOnly((v) => !v)}
+                title={showSavedOnly ? "Show all opportunities" : "Show only saved opportunities"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <>
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
@@ -2229,13 +2350,31 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                         <Briefcase size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
-                        {applications.length === 0 ? "No opportunities yet" : "No opportunities match these filters"}
+                        {applications.length === 0
+                          ? "No opportunities yet"
+                          : showSavedOnly
+                            ? "No saved opportunities"
+                            : activeStageFilter
+                              ? `No opportunities at ${activeStageFilter}`
+                              : "No opportunities match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
                         {applications.length === 0
                           ? "Matched procurement opportunities will appear here once customers publish them."
-                          : "Clear a filter to widen the results."}
+                          : showSavedOnly
+                            ? "Bookmark a row to keep it here."
+                            : activeStageFilter
+                              ? "Press that stage card again to clear the filter."
+                              : "Clear a filter to widen the results."}
                       </p>
+                      {showSavedOnly && (
+                        <button
+                          onClick={() => setShowSavedOnly(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Show all opportunities
+                        </button>
+                      )}
                       {activeFilterCount > 0 && applications.length > 0 && (
                         <button
                           onClick={clearAllFilters}
@@ -2318,9 +2457,10 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                           </button>
 
                           <button
-                            onClick={() => setSavedMatches((p) => ({ ...p, [a.id]: !p[a.id] }))}
+                            onClick={() => toggleSaved(a)}
                             title={isSaved ? "Remove from saved" : "Save match"}
                             aria-label={isSaved ? "Remove from saved" : "Save match"}
+                            aria-pressed={isSaved}
                             className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0"
                             style={{ color: isSaved ? "#a67c52" : "#c8b6a6" }}
                           >
@@ -2578,6 +2718,34 @@ export function CustomerTable({ stageFilter, onCountChange }) {
             >
               <Target size={12} /> Why This Match?
             </button>
+            <button
+              onClick={() => {
+                const target = activePopup.row
+                closePopup()
+                toggleSaved(target)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Bookmark size={12} fill={savedMatches[activePopup.row.id] ? "#a67c52" : "none"} />
+              {savedMatches[activePopup.row.id] ? "Remove from Saved" : "Save Match"}
+            </button>
+            <button
+              onClick={() => {
+                closePopup()
+                setShowSavedOnly(true)
+                notify(
+                  "info",
+                  savedCount > 0
+                    ? `Showing your ${savedCount} saved opportunit${savedCount === 1 ? "y" : "ies"}.`
+                    : "You haven't saved any opportunities yet — use the bookmark on a row.",
+                  3000,
+                )
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <LayoutGrid size={12} /> View Saved Customers ({savedCount})
+            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
             <button
               onClick={() => {
                 const target = activePopup.row
