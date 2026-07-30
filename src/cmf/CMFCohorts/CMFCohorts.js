@@ -1,8 +1,14 @@
 "use client"
 import React, { useState, useEffect } from "react"
-import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, RefreshCw, X, BarChart3, ChevronDown, FileText, Copy, CheckCircle, Ticket, MoreVertical } from "lucide-react"
+import { createPortal } from "react-dom"
+import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, RefreshCw, X, BarChart3, ChevronDown, FileText, Copy, CheckCircle, Ticket, MoreVertical, Lock } from "lucide-react"
 import { collection, addDoc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
+import { useCMFMatches } from "../CMFMatches/CMFMatchesContext"
+
+// (Keep INITIAL_MOCK_COHORTS list)
+// ...
+
 
 const INITIAL_MOCK_COHORTS = [
   {
@@ -17,7 +23,7 @@ const INITIAL_MOCK_COHORTS = [
     location: "Eastern Cape",
     teamSize: "24",
     description: "Fleet management and logistics operations across South Africa.",
-    currentStatus: "Active Support",
+    currentStatus: "Active",
     lastUpdated: "2026-07-17T12:00:00.000Z",
     dealStructure: "Support Program",
     dealDuration: "Ongoing",
@@ -41,7 +47,7 @@ const INITIAL_MOCK_COHORTS = [
     location: "Western Cape",
     teamSize: "18",
     description: "Last-mile courier and retail shipping operations.",
-    currentStatus: "Active Support",
+    currentStatus: "Active",
     lastUpdated: "2026-07-17T12:00:00.000Z",
     dealStructure: "Support Program",
     dealDuration: "Ongoing",
@@ -112,7 +118,7 @@ const formatDate = (dateString) => {
 }
 
 export default function CMFCohorts() {
-  const [cohorts, setCohorts] = useState(INITIAL_MOCK_COHORTS)
+  const { smeMatches, loading: contextLoading, reloadMatches } = useCMFMatches()
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedCohort, setSelectedCohort] = useState(null)
@@ -127,9 +133,44 @@ export default function CMFCohorts() {
   const [savingVoucher, setSavingVoucher] = useState(false)
   const [openActionMenuId, setOpenActionMenuId] = useState(null)
 
+  const cohortsFromContext = React.useMemo(() => {
+    return smeMatches
+      .filter((sme) => {
+        const status = (sme.currentStatus || sme.pipelineStage || "").toLowerCase()
+        return status.includes("active") || status.includes("exit") || status.includes("completed")
+      })
+      .map((sme) => ({
+        id: sme.id,
+        smeId: sme.id,
+        smeName: sme.name,
+        dealAmount: sme.fundingRequired,
+        dealAmountRaw: sme.fundingAmount,
+        dealType: `Equity (${sme.equityOffered})`,
+        completionDate: sme.applicationDate,
+        sector: sme.sector,
+        location: sme.location,
+        teamSize: "18",
+        description: sme.supportRequired || sme.reason,
+        currentStatus: sme.currentStatus || sme.pipelineStage,
+        lastUpdated: sme.lastActivity,
+        dealStructure: "Support Program",
+        dealDuration: "Ongoing",
+        supportProvided: sme.supportRequired || "Advisory and growth support",
+        roi: "65%",
+        exitStrategy: "M&A advisory integration",
+        revenueGrowth: "+20%",
+        guarantees: sme.guarantees || "Personal pledge",
+        servicesRequired: sme.servicesRequired || "Advisory",
+        applicationDate: sme.applicationDate
+      }))
+  }, [smeMatches])
+
+  const cohorts = cohortsFromContext
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
+
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (!event.target.closest('.action-dropdown-container')) {
+      if (!event.target.closest('.action-dropdown-container') && !event.target.closest('.portal-action-dropdown')) {
         setOpenActionMenuId(null)
       }
     }
@@ -139,10 +180,11 @@ export default function CMFCohorts() {
 
   const handleRefresh = () => {
     setRefreshing(true)
-    setTimeout(() => {
-      setCohorts(INITIAL_MOCK_COHORTS)
-      setRefreshing(false)
-    }, 800)
+    if (reloadMatches) {
+      reloadMatches().then(() => setRefreshing(false))
+    } else {
+      setTimeout(() => setRefreshing(false), 800)
+    }
   }
 
   const generateVoucherCode = (type) => {
@@ -393,7 +435,7 @@ export default function CMFCohorts() {
           <div className="bg-white p-5 rounded-xl shadow-md border-2 border-[#e6d7c3]">
             <div className="flex items-center gap-3 mb-2">
               <h3 className="text-sm font-semibold text-[#7d5a50] m-0">
-                Active Support Deals
+                Cohort Portfolio
               </h3>
             </div>
             <p className="text-3xl font-bold text-[#a67c52] m-0">
@@ -404,11 +446,11 @@ export default function CMFCohorts() {
           <div className="bg-white p-5 rounded-xl shadow-md border-2 border-[#e6d7c3]">
             <div className="flex items-center gap-3 mb-2">
               <h3 className="text-sm font-semibold text-[#7d5a50] m-0">
-                Active Support
+                Active
               </h3>
             </div>
             <p className="text-3xl font-bold text-green-600 m-0">
-              {cohorts.filter(c => c.currentStatus === "Active Support").length}
+              {cohorts.filter(c => c.currentStatus === "Active").length}
             </p>
           </div>
 
@@ -537,6 +579,11 @@ export default function CMFCohorts() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation()
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              setMenuPosition({
+                                top: rect.bottom + window.scrollY,
+                                left: rect.right - 170 + window.scrollX // dropdown width is 170px
+                              })
                               setOpenActionMenuId(openActionMenuId === cohort.id ? null : cohort.id)
                             }}
                             title="More actions"
@@ -545,8 +592,14 @@ export default function CMFCohorts() {
                             <MoreVertical size={15} />
                           </button>
 
-                          {openActionMenuId === cohort.id && (
-                            <div className="absolute right-0 top-full mt-1.5 z-50 bg-white border border-[#e6d7c3] rounded-xl shadow-xl p-1.5 min-w-[170px] flex flex-col gap-0.5 animate-in fade-in duration-150 text-left">
+                          {openActionMenuId === cohort.id && createPortal(
+                            <div 
+                              className="portal-action-dropdown absolute z-[9999] bg-white border border-[#e6d7c3] rounded-xl shadow-xl p-1.5 min-w-[170px] flex flex-col gap-0.5 animate-in fade-in duration-150 text-left"
+                              style={{
+                                top: menuPosition.top,
+                                left: menuPosition.left,
+                              }}
+                            >
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -573,6 +626,19 @@ export default function CMFCohorts() {
                                 <span>Generate Voucher</span>
                               </button>
 
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOpenActionMenuId(null)
+                                  alert(`Access request successfully sent to ${cohort.smeName}!`)
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold text-[#4a352f] hover:bg-[#FAF5EF] hover:text-[#8D6E63] rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer border-t border-[#f0e6d9]/60"
+                              >
+                                <Lock size={14} className="text-[#8D6E63]" />
+                                <span>Request Access</span>
+                              </button>
+
                               <div className="my-1 border-t border-[#f0e6d9]" />
 
                               <button
@@ -587,7 +653,8 @@ export default function CMFCohorts() {
                                 <Eye size={14} className="text-[#a67c52]" />
                                 <span>View Summary</span>
                               </button>
-                            </div>
+                            </div>,
+                            document.body
                           )}
                         </div>
                       </td>
@@ -600,7 +667,7 @@ export default function CMFCohorts() {
         ) : (
           <div className="text-center p-[60px_20px] bg-white rounded-2xl shadow-md border border-[#e6d7c3] w-full">
             <h3 className="text-2xl font-semibold text-[#4a352f] mb-3">
-              No Active Support or Exited Deals Yet
+              No Cohorts to Show Yet
             </h3>
             <p className="text-[#7d5a50] text-base max-w-[500px] mx-auto">
               Your active support deals and exited investments will appear here once you approve support for SMEs and they reach the "Active" or "Exit" stage.

@@ -185,6 +185,7 @@ import CMFSidebar from "./cmf/CMFSidebar/CMFSidebar"
 import CMFHeader from "./cmf/CMFHeader/CMFHeader"
 import CMFUniversalProfile from "./cmf/CMFUniversalProfile/CMFUniversalProfile"
 import CMFMatches from "./cmf/CMFMatches/CMFMatches"
+import { CMFMatchesProvider } from "./cmf/CMFMatches/CMFMatchesContext"
 import CMFCohorts from "./cmf/CMFCohorts/CMFCohorts"
 import CMFDocuments from "./cmf/CMFDocuments/CMFDocuments"
 
@@ -714,7 +715,7 @@ function App() {
   const renderInternRoute = (Component, props = {}) => (<InternLayout><Component {...props} /></InternLayout>)
   const renderProgramSponsorRoute = (Component, props = {}) => (<ProgramSponsorLayout><Component {...props} /></ProgramSponsorLayout>)
   const renderAssociatorRoute = (Component, props = {}) => (<AssociatorLayout><Component {...props} /></AssociatorLayout>)
-  const renderCMFRoute = (Component, props = {}) => (<CMFLayout><Component {...props} /></CMFLayout>)
+  const renderCMFRoute = (Component, props = {}) => (<CMFLayout><CMFMatchesProvider><Component {...props} /></CMFMatchesProvider></CMFLayout>)
 
   // ─── Profile section renderers ────────────────────────────────────────────────
   const renderSMEProfileSection = (Component, section) => (

@@ -66,7 +66,7 @@ const PIPELINE_STAGES = {
   "evaluation": "Due Diligence",
   "due diligence": "Decision",
   "decision": "Offer",
-  "offer": "Admitted"
+  "offer": "Active"
 }
 
 const getNextStage = (currentStage) => {
@@ -552,7 +552,7 @@ export default function CMFSMETable({
                         <div className="flex items-center gap-1.5 relative">
                           <button
                             onClick={() => {
-                              onUpdateStage(item.id, nextStageName || "Admitted")
+                              onUpdateStage(item.id, nextStageName || "Active")
                             }}
                             className="px-3 py-1.5 bg-[#4a352f] text-white hover:bg-[#3E2723] rounded-lg text-xs font-bold transition-all shadow-sm"
                           >
