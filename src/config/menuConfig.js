@@ -679,7 +679,7 @@ export const smeMenuItems = [
          
           {
             id: "raps-actions",
-            label: "Actions",
+            label: "Integrated Actions",
             icon: <ListChecks size={16} />,
             route: "/raps-actions",
           },

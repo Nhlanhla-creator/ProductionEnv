@@ -10,8 +10,36 @@ import { useLocation } from "react-router-dom";
 
 const functions = getFunctions();
 
+// ============================================
+// CATEGORY OPTIONS (Single Select)
+// ============================================
+const categoryOptions = [
+  { name: "Strategy & Execution", color: "#2196F3", bg: "#E3F2FD" },
+  { name: "Financial Performance", color: "#FF9800", bg: "#FFF3E0" },
+  { name: "Operational Performance", color: "#9C27B0", bg: "#F3E5F5" },
+  { name: "People", color: "#FF5722", bg: "#FBE9E7" },
+  { name: "ESG Impact", color: "#8BC34A", bg: "#F1F8E9" },
+  { name: "Marketing & Sales", color: "#E91E63", bg: "#FCE4EC" },
+  { name: "Overall Company Health", color: "#4CAF50", bg: "#E8F5E9" },
+];
 
-const GovernanceCalendar = (activeSection, isInvestorView ) => {
+// ============================================
+// DEPARTMENT OPTIONS (Multi-Select)
+// ============================================
+const departmentOptions = [
+  { name: "Marketing", color: "#E91E63", bg: "#FCE4EC" },
+  { name: "Finance", color: "#FF9800", bg: "#FFF3E0" },
+  { name: "Operations", color: "#9C27B0", bg: "#F3E5F5" },
+  { name: "Human Resources", color: "#FF5722", bg: "#FBE9E7" },
+  { name: "Sales", color: "#4CAF50", bg: "#E8F5E9" },
+  { name: "Information Technology", color: "#2196F3", bg: "#E3F2FD" },
+  { name: "Legal", color: "#795548", bg: "#EFEBE9" },
+  { name: "Research & Development", color: "#607D8B", bg: "#ECEFF1" },
+  { name: "Customer Support", color: "#009688", bg: "#E0F2F1" },
+  { name: "Product", color: "#3F51B5", bg: "#E8EAF6" },
+];
+
+const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   const location = useLocation();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -20,13 +48,13 @@ const GovernanceCalendar = (activeSection, isInvestorView ) => {
   const [showDetailsModal, setShowDetailsModal] = useState(null);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+    const [currentUser, setCurrentUser] = useState(null);
+  const [loadingMessage, setLoadingMessage] = useState("Processing...");
   const [notification, setNotification] = useState(null);
   const [showDoubleBookingWarning, setShowDoubleBookingWarning] = useState(false);
   const [pendingMeetingData, setPendingMeetingData] = useState(null);
   const [conflictingMeetingData, setConflictingMeetingData] = useState(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("Processing..."); 
   const [showRecurringDeleteModal, setShowRecurringDeleteModal] = useState(false);
   const [recurringDeleteMeeting, setRecurringDeleteMeeting] = useState(null);
   const [rescheduleMeeting, setRescheduleMeeting] = useState(null);
@@ -38,7 +66,7 @@ const GovernanceCalendar = (activeSection, isInvestorView ) => {
   });
 
   // Department options with colors
-  const departmentOptions = [
+  const departmentOptionsOld = [
     { name: "Overall Company Health", color: "#4CAF50", bg: "#E8F5E9" },
     { name: "Strategy & Execution", color: "#2196F3", bg: "#E3F2FD" },
     { name: "Financial Performance", color: "#FF9800", bg: "#FFF3E0" },
@@ -51,10 +79,13 @@ const GovernanceCalendar = (activeSection, isInvestorView ) => {
   const [customDepartments, setCustomDepartments] = useState([]);
   const [showAddDepartment, setShowAddDepartment] = useState(false);
   const [newDepartmentName, setNewDepartmentName] = useState("");
+  const [newDepartmentColor, setNewDepartmentColor] = useState("#607D8B");
   
   const [formData, setFormData] = useState({
     title: "",
-    department: departmentOptions[0].name,
+    category: categoryOptions[0].name,  // ← NEW: Category
+    department: departmentOptionsOld[0].name,  // ← Keep for backward compatibility
+    departments: [],  // ← NEW: Multi-select departments
     purpose: "",
     participants: [],
     repeatType: "none",
@@ -69,7 +100,9 @@ const GovernanceCalendar = (activeSection, isInvestorView ) => {
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [editFormData, setEditFormData] = useState({
     title: "",
-    department: "",
+    category: categoryOptions[0].name,  // ← NEW: Category
+    department: "",  // ← Keep for backward compatibility
+    departments: [],  // ← NEW: Multi-select departments
     purpose: "",
     participants: [],
     repeatType: "none",
@@ -82,6 +115,37 @@ const GovernanceCalendar = (activeSection, isInvestorView ) => {
   today.setHours(0, 0, 0, 0);
   
   const [userProfile, setUserProfile] = useState(null);
+
+  // Helper functions for departments
+  const getDepartmentColor = (deptName) => {
+    const found = allDepartments.find(d => d.name === deptName);
+    return found?.color || "#757575";
+  };
+
+  const getDepartmentBg = (deptName) => {
+    const found = allDepartments.find(d => d.name === deptName);
+    return found?.bg || "#EEEEEE";
+  };
+
+  // Toggle department selection in add form
+  const toggleDepartment = (deptName) => {
+    const current = formData.departments || [];
+    if (current.includes(deptName)) {
+      setFormData({ ...formData, departments: current.filter(d => d !== deptName) });
+    } else {
+      setFormData({ ...formData, departments: [...current, deptName] });
+    }
+  };
+
+  // Toggle department selection in edit form
+  const toggleEditDepartment = (deptName) => {
+    const current = editFormData.departments || [];
+    if (current.includes(deptName)) {
+      setEditFormData({ ...editFormData, departments: current.filter(d => d !== deptName) });
+    } else {
+      setEditFormData({ ...editFormData, departments: [...current, deptName] });
+    }
+  };
 
 useEffect(() => {
   const fetchUserProfile = async () => {
@@ -155,7 +219,7 @@ useEffect(() => {
   
   const handleAddCustomDepartment = () => {
     if (!newDepartmentName.trim()) return;
-    const newColor = getRandomColor();
+    const newColor = newDepartmentColor || getRandomColor();
     setCustomDepartments([
       ...customDepartments,
       {
@@ -165,6 +229,7 @@ useEffect(() => {
       },
     ]);
     setNewDepartmentName("");
+    setNewDepartmentColor("#607D8B");
     setShowAddDepartment(false);
   };
   
@@ -197,6 +262,15 @@ useEffect(() => {
       });
     });
   };
+
+  // Get department colors for a meeting (for calendar dots)
+  const getMeetingDepartmentColors = (meeting) => {
+    if (!meeting.departments || meeting.departments.length === 0) {
+      return [meeting.categoryColor || meeting.departmentColor || "#757575"];
+    }
+    return meeting.departments.map(dept => getDepartmentColor(dept));
+  };
+  
   const generateInstances = (startDate, endDate, repeatType) => {
   const instances = [];
   const start = new Date(startDate);
@@ -319,6 +393,7 @@ const proceedWithBooking = async () => {
 
 
   try {
+    const selectedCategory = categoryOptions.find(c => c.name === formData.category);
     const selectedDepartment = allDepartments.find(d => d.name === formData.department);
     let instances;
     
@@ -339,12 +414,16 @@ const proceedWithBooking = async () => {
     const newMeeting = {
       id: generateId(),
       title: formData.title,
-      department: formData.department,
+      category: formData.category,  // ← NEW: Category
+      department: formData.department,  // ← Keep for backward compatibility
+      categoryColor: selectedCategory?.color || "#757575",  // ← NEW
+      categoryBg: selectedCategory?.bg || "#EEEEEE",  // ← NEW
       departmentColor: selectedDepartment?.color || "#757575",
       departmentBg: selectedDepartment?.bg || "#EEEEEE",
+      departments: formData.departments || [],  // ← NEW: Multi-select departments
       purpose: formData.purpose,
-    participants: formData.participants,
-    isRecurring: formData.repeatType !== "none",
+      participants: formData.participants,
+      isRecurring: formData.repeatType !== "none",
       recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
       recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
       instances: instances,
@@ -364,9 +443,11 @@ const proceedWithBooking = async () => {
     
     setFormData({
       title: "",
-      department: departmentOptions[0].name,
+      category: categoryOptions[0].name,
+      department: departmentOptionsOld[0].name,
+      departments: [],
       purpose: "",
-      participants: "",
+      participants: [],
       repeatType: "none",
       startDate: "",
       endDate: "",
@@ -386,13 +467,16 @@ const proceedWithBooking = async () => {
     
     const meetingTime = formData.time;
     const participantText = newMeeting.participants.length > 0 
-      ? newMeeting.participants.join(", ")
+      ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
       : 'No participants specified';
-   const recurrenceText = newMeeting.isRecurring 
-  ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
-                  newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
-                  'Quarterly'}` 
-  : '';
+    const departmentsText = newMeeting.departments.length > 0 
+      ? newMeeting.departments.join(", ")
+      : 'No departments specified';
+    const recurrenceText = newMeeting.isRecurring 
+      ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
+                      newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
+                      'Quarterly'}` 
+      : '';
     
     // Get user name for notification
     let userName = "User";
@@ -433,7 +517,7 @@ Your meeting "${formData.title}" has been successfully added to your calendar.`;
       notificationContent += `\n\n⚠️ Notice: You already have ${conflictingMeetingData.length} other meeting${conflictingMeetingData.length > 1 ? 's' : ''} scheduled at the same time:\n\n`;
       
       conflictingMeetingData.forEach((meeting, index) => {
-        notificationContent += `${index + 1}. "${meeting.title}" (${meeting.department})\n`;
+        notificationContent += `${index + 1}. "${meeting.title}" (${meeting.category || meeting.department})\n`;
       });
       
       notificationContent += `\nPlease check your calendar and manage your schedule accordingly.`;
@@ -443,7 +527,8 @@ Your meeting "${formData.title}" has been successfully added to your calendar.`;
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📅 Date: ${formattedDate}
 ⏰ Time: ${meetingTime}
-🏢 Department: ${formData.department}
+📂 Category: ${formData.category}
+📁 Departments: ${departmentsText}
 👥 Attendees: ${participantText}
 
 📌 Purpose:
@@ -492,7 +577,7 @@ if (userEmail) {
       meetingTitle: formData.title,
       meetingDate: formattedDate,
       meetingTime: meetingTime,
-      department: formData.department,
+      department: formData.category,  // ← Use category for email
       participants: formData.participants,
       purpose: formData.purpose,
       isRecurring: newMeeting.isRecurring,
@@ -582,14 +667,14 @@ const handleSubmit = async () => {
   });
   
   if (conflictingMeetings.length > 0) {
-    // Get the selected department for the new meeting
-    const selectedDepartment = allDepartments.find(d => d.name === formData.department);
+    // Get the selected category for the new meeting
+    const selectedCategory = categoryOptions.find(c => c.name === formData.category);
     
     // Prepare the pending meeting data for the modal
     setPendingMeetingData({
       title: formData.title,
-      department: formData.department,
-      departmentColor: selectedDepartment?.color || "#757575",
+      category: formData.category,
+      categoryColor: selectedCategory?.color || "#757575",
       time: formData.time,
       date: formattedDateForCheck,
       purpose: formData.purpose,
@@ -609,6 +694,7 @@ const handleSubmit = async () => {
   
   
   try {
+    const selectedCategory = categoryOptions.find(c => c.name === formData.category);
     const selectedDepartment = allDepartments.find(d => d.name === formData.department);
     let instances;
     
@@ -629,11 +715,15 @@ const handleSubmit = async () => {
     const newMeeting = {
       id: generateId(),
       title: formData.title,
+      category: formData.category,  // ← NEW: Category
       department: formData.department,
+      categoryColor: selectedCategory?.color || "#757575",  // ← NEW
+      categoryBg: selectedCategory?.bg || "#EEEEEE",  // ← NEW
       departmentColor: selectedDepartment?.color || "#757575",
       departmentBg: selectedDepartment?.bg || "#EEEEEE",
+      departments: formData.departments || [],  // ← NEW: Multi-select departments
       purpose: formData.purpose,
-      participants: formData.participants,  // ← Already an array of { name, email }
+      participants: formData.participants,
       isRecurring: formData.repeatType !== "none",
       recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
       recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
@@ -654,7 +744,9 @@ const handleSubmit = async () => {
     
     setFormData({
       title: "",
-      department: departmentOptions[0].name,
+      category: categoryOptions[0].name,
+      department: departmentOptionsOld[0].name,
+      departments: [],
       purpose: "",
       participants: [],
       repeatType: "none",
@@ -675,14 +767,17 @@ const handleSubmit = async () => {
     });
     
     const meetingTime = formData.time;
-  const participantText = newMeeting.participants.length > 0 
-  ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
-  : 'No participants specified';
-   const recurrenceText = newMeeting.isRecurring 
-  ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
-                  newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
-                  'Quarterly'}` 
-  : '';
+    const participantText = newMeeting.participants.length > 0 
+      ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
+      : 'No participants specified';
+    const departmentsText = newMeeting.departments.length > 0 
+      ? newMeeting.departments.join(", ")
+      : 'No departments specified';
+    const recurrenceText = newMeeting.isRecurring 
+      ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
+                      newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
+                      'Quarterly'}` 
+      : '';
     const displayName = currentUser.displayName || "User";
     
     // 1. In-app banner notification
@@ -705,7 +800,8 @@ Your "${formData.title}" meeting has been successfully added to your calendar.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📅 Date: ${formattedDate}
 ⏰ Time: ${meetingTime}
-🏢 Department: ${formData.department}
+📂 Category: ${formData.category}
+📁 Departments: ${departmentsText}
 👥 Attendees: ${participantText}
 
 📌 Purpose:
@@ -755,7 +851,9 @@ const handleEditMeeting = (meeting) => {
   
   setEditFormData({
     title: meeting.title || "",
-    department: meeting.department || departmentOptions[0].name,
+    category: meeting.category || categoryOptions[0].name,  // ← NEW: Category
+    department: meeting.department || departmentOptionsOld[0].name,
+    departments: meeting.departments || [],  // ← NEW: Multi-select departments
     purpose: meeting.purpose || "",
     participants: meeting.participants || [],
     repeatType: meeting.recurrencePattern || "none",
@@ -786,6 +884,7 @@ const removeEditParticipant = (index) => {
   const updated = editFormData.participants.filter((_, i) => i !== index);
   setEditFormData({ ...editFormData, participants: updated });
 };
+
 const saveEditedMeeting = async () => {
    if (!editingMeeting || !currentUser) return;
   
@@ -795,7 +894,12 @@ const saveEditedMeeting = async () => {
   try {
     const originalMeeting = { ...editingMeeting };
     
-    // ✅ Get the selected department color
+    // ✅ Get the selected category color
+    const selectedCategory = categoryOptions.find(c => c.name === editFormData.category);
+    const categoryColor = selectedCategory?.color || "#757575";
+    const categoryBg = selectedCategory?.bg || "#EEEEEE";
+    
+    // ✅ Get the selected department color (for backward compatibility)
     const selectedDepartment = allDepartments.find(d => d.name === editFormData.department);
     const departmentColor = selectedDepartment?.color || "#757575";
     const departmentBg = selectedDepartment?.bg || "#EEEEEE";
@@ -803,9 +907,13 @@ const saveEditedMeeting = async () => {
     const updatedMeeting = {
       ...editingMeeting,
       title: editFormData.title,
+      category: editFormData.category,  // ← NEW: Category
       department: editFormData.department,
-      departmentColor: departmentColor,  // ✅ Updated
-      departmentBg: departmentBg,        // ✅ Updated
+      categoryColor: categoryColor,  // ← NEW
+      categoryBg: categoryBg,  // ← NEW
+      departmentColor: departmentColor,
+      departmentBg: departmentBg,
+      departments: editFormData.departments || [],  // ← NEW: Multi-select departments
       purpose: editFormData.purpose,
       participants: editFormData.participants,
       isRecurring: editFormData.repeatType !== "none",
@@ -830,10 +938,12 @@ const saveEditedMeeting = async () => {
     const titleChanged = originalMeeting.title !== updatedMeeting.title;
     const dateChanged = oldDate !== newDate;
     const timeChanged = oldTime !== newTime;
+    const categoryChanged = originalMeeting.category !== updatedMeeting.category;
     const departmentChanged = originalMeeting.department !== updatedMeeting.department;
+    const departmentsChanged = JSON.stringify(originalMeeting.departments) !== JSON.stringify(updatedMeeting.departments);
     const participantsChanged = JSON.stringify(originalMeeting.participants) !== JSON.stringify(updatedMeeting.participants);
     
-    const hasChanges = titleChanged || dateChanged || timeChanged || departmentChanged || participantsChanged;
+    const hasChanges = titleChanged || dateChanged || timeChanged || categoryChanged || departmentChanged || departmentsChanged || participantsChanged;
     
     if (!hasChanges) {
       setNotification({ type: "info", message: "No changes were made." });
@@ -881,7 +991,9 @@ const saveEditedMeeting = async () => {
     if (titleChanged) changes.push(`Title changed to "${updatedMeeting.title}"`);
     if (dateChanged) changes.push(`Date changed from ${formattedOldDate} to ${formattedNewDate}`);
     if (timeChanged) changes.push(`Time changed from ${oldTime} to ${newTime}`);
+    if (categoryChanged) changes.push(`Category changed to ${updatedMeeting.category}`);
     if (departmentChanged) changes.push(`Department changed to ${updatedMeeting.department}`);
+    if (departmentsChanged) changes.push(`Departments updated`);
     if (participantsChanged) changes.push(`Participants updated`);
     
     const changeSummary = changes.join("; ");
@@ -994,7 +1106,7 @@ for (const recipient of recipients) {
       changes: changeSummary,
       meetingDate: formattedNewDate,
       meetingTime: newTime || "TBD",
-      department: updatedMeeting.department,
+      department: updatedMeeting.category || updatedMeeting.department,
       isOrganizer: recipient.isOrganizer,
       linkTo: "https://www.bigmarketplace.africa/governance-calendar"
     });
@@ -1103,7 +1215,7 @@ for (const recipient of recipients) {
             meetingTitle: deletedMeeting.title,
             meetingDate: formattedDate,
             meetingTime: meetingTime,
-            department: deletedMeeting.department,
+            department: deletedMeeting.category || deletedMeeting.department,
             purpose: deletedMeeting.purpose,
             isRecurring: deletedMeeting.isRecurring || false,
             participants: deletedMeeting.participants || []  // ✅ ADD THIS
@@ -1138,7 +1250,8 @@ The meeting "${deletedMeeting.title}" has been cancelled and removed from your c
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📅 Originally Scheduled: ${formattedDate}
 ⏰ Time: ${meetingTime}
-🏢 Department: ${deletedMeeting.department}
+📂 Category: ${deletedMeeting.category || deletedMeeting.department}
+📁 Departments: ${deletedMeeting.departments?.join(", ") || "None"}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📌 Purpose:
@@ -1174,7 +1287,7 @@ BIG Marketplace Team 🌍`,
   }
 };
   
-  const getMeetingColor = (meeting) => meeting.departmentColor || "#757575";
+  const getMeetingColor = (meeting) => meeting.categoryColor || meeting.departmentColor || "#757575";
   
   // Calendar helper functions
   const getMonthYear = () => {
@@ -1457,6 +1570,7 @@ const handleOpenAddModal = (date = null) => {
     backgroundColor: "#f7f3f0",
     padding: "12px 16px",
     borderRadius: "6px",
+    marginTop: "20px",
     marginBottom: "20px",
     border: "1px solid #e8ddd4",
   };
@@ -2086,13 +2200,16 @@ const SpinKeyframes = () => (
             <span style={dayNumberStyles}>{day.day}</span>
             {day.meetings && day.meetings.length > 0 && (
               <div style={eventIndicatorsContainer}>
-                {day.meetings.slice(0, 3).map((meeting, idx) => (
-                  <div
-                    key={idx}
-                    style={eventDotStyles(getMeetingColor(meeting))}
-                    title={meeting.title}
-                  />
-                ))}
+                {day.meetings.slice(0, 3).map((meeting, idx) => {
+                  const colors = getMeetingDepartmentColors(meeting);
+                  return colors.slice(0, 3).map((color, colorIdx) => (
+                    <div
+                      key={`${idx}-${colorIdx}`}
+                      style={eventDotStyles(color)}
+                      title={`${meeting.title}${meeting.departments?.length > 0 ? ` - ${meeting.departments.join(", ")}` : ''}`}
+                    />
+                  ));
+                })}
                 {day.meetings.length > 3 && (
                   <span style={{ fontSize: "10px", color: "#8d6e63" }}>
                     +{day.meetings.length - 3}
@@ -2102,6 +2219,19 @@ const SpinKeyframes = () => (
             )}
           </div>
         ))}
+      </div>
+
+        {/* Color Legend */}
+      <div style={legendContainerStyles}>
+        <div style={legendTitleStyles}>Department Color Guide</div>
+        <div style={legendItemsContainer}>
+          {allDepartments.map((dept) => (
+            <div key={dept.name} style={legendItemStyles}>
+              <div style={legendColorBlockStyles(dept.color)} />
+              <span>{dept.name}</span>
+            </div>
+          ))}
+        </div>
       </div>
       
       {/* Selected Date Information - Meeting Cards (Clickable) */}
@@ -2153,7 +2283,7 @@ const SpinKeyframes = () => (
   return (
     <div
       key={idx}
-      style={meetingItemStyles(meeting.departmentColor, meeting.departmentBg)}
+      style={meetingItemStyles(meeting.categoryColor || meeting.departmentColor, meeting.categoryBg || meeting.departmentBg)}
       onClick={() => setShowDetailsModal(meeting)}
     >
       <div style={meetingTitleStyles}>
@@ -2175,7 +2305,7 @@ const SpinKeyframes = () => (
         )}
       </div>
       <div style={meetingMetaStyles}>
-        <span>{meeting.department}</span>
+        <span>{meeting.category || meeting.department}</span>
         <span>•</span>
         <span>{instance?.time || "Time TBD"}</span>
         {participantCount > 0 && (
@@ -2198,25 +2328,32 @@ const SpinKeyframes = () => (
       <div style={purposePreviewStyles}>
         {meeting.purpose.length > 100 ? meeting.purpose.substring(0, 100) + "..." : meeting.purpose}
       </div>
+      {meeting.departments && meeting.departments.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+          {meeting.departments.map((dept, deptIdx) => (
+            <span key={deptIdx} style={{
+              fontSize: "9px",
+              padding: "2px 8px",
+              borderRadius: "10px",
+              backgroundColor: getDepartmentBg(dept),
+              color: getDepartmentColor(dept),
+              fontWeight: "500",
+              display: "inline-block",
+              border: `1px solid ${getDepartmentColor(dept)}40`,
+            }}>
+              {dept}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
             );
           })
         )}
       </div>
+    
       
-      {/* Color Legend */}
-      <div style={legendContainerStyles}>
-        <div style={legendTitleStyles}>Department Color Guide</div>
-        <div style={legendItemsContainer}>
-          {allDepartments.map((dept) => (
-            <div key={dept.name} style={legendItemStyles}>
-              <div style={legendColorBlockStyles(dept.color)} />
-              <span>{dept.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      
+    
       {/* KPIs Section */}
       <div style={{ backgroundColor: "#f7f3f0", padding: "20px", borderRadius: "6px" }}>
         <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>
@@ -2232,7 +2369,9 @@ const SpinKeyframes = () => (
             <div style={{ fontSize: "12px", color: "#8d6e63" }}>Recurring Meetings</div>
           </div>
           <div style={{ backgroundColor: "#fdfcfb", padding: "15px", borderRadius: "4px", border: "2px solid #e8ddd4", textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#5d4037" }}>{[...new Set(meetings.map(m => m.department))].length}</div>
+            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#5d4037" }}>
+              {[...new Set(meetings.flatMap(m => m.departments || []))].length}
+            </div>
             <div style={{ fontSize: "12px", color: "#8d6e63" }}>Active Departments</div>
           </div>
         </div>
@@ -2253,26 +2392,108 @@ const SpinKeyframes = () => (
                 {errors.title && <div style={errorTextStyles}>{errors.title}</div>}
               </div>
               
+              {/* Category - Single Select */}
               <div style={formGroupStyles}>
-                <label style={labelStyles}>Department *</label>
-                <div style={departmentDropdownStyles}>
-                  {allDepartments.map((dept) => (
-                    <div key={dept.name} onClick={() => setFormData({ ...formData, department: dept.name })} style={departmentOptionStyles(dept, formData.department === dept.name)}>
-                      <div style={departmentColorBlockStyles(dept.color)} />
-                      <span>{dept.name}</span>
+                <label style={labelStyles}>Category *</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px", border: "2px solid #e8ddd4", borderRadius: "6px", minHeight: "50px", backgroundColor: "white" }}>
+                  {categoryOptions.map((cat) => (
+                    <div
+                      key={cat.name}
+                      onClick={() => setFormData({ ...formData, category: cat.name })}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "8px 14px",
+                        cursor: "pointer",
+                        backgroundColor: formData.category === cat.name ? cat.bg : "#f7f3f0",
+                        border: formData.category === cat.name ? `2px solid ${cat.color}` : "2px solid transparent",
+                        borderRadius: "20px",
+                        transition: "all 0.2s ease",
+                        fontWeight: formData.category === cat.name ? "600" : "400",
+                        color: formData.category === cat.name ? cat.color : "#4a352f",
+                      }}
+                    >
+                      <div style={{ width: "16px", height: "16px", borderRadius: "4px", backgroundColor: cat.color }} />
+                      <span>{cat.name}</span>
                     </div>
                   ))}
                 </div>
+              </div>
+              
+              {/* Departments - Multi-Select */}
+              <div style={formGroupStyles}>
+                <label style={labelStyles}>Departments</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px", border: "2px solid #e8ddd4", borderRadius: "6px", minHeight: "50px", backgroundColor: "white" }}>
+                  {allDepartments.map((dept) => {
+                    const isSelected = formData.departments?.includes(dept.name) || false;
+                    return (
+                      <div
+                        key={dept.name}
+                        onClick={() => toggleDepartment(dept.name)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
+                          borderRadius: "20px",
+                          cursor: "pointer",
+                          backgroundColor: isSelected ? dept.bg : "#f7f3f0",
+                          border: isSelected ? `2px solid ${dept.color}` : "2px solid transparent",
+                          transition: "all 0.2s ease",
+                          fontSize: "13px",
+                          fontWeight: isSelected ? "600" : "400",
+                          color: isSelected ? dept.color : "#4a352f",
+                        }}
+                      >
+                        <div style={{ width: "14px", height: "14px", borderRadius: "3px", backgroundColor: dept.color }} />
+                        <span>{dept.name}</span>
+                        {isSelected && <span style={{ marginLeft: "4px", fontSize: "12px" }}>✓</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                
                 {showAddDepartment ? (
                   <div style={{ marginTop: "12px" }}>
-                    <input type="text" placeholder="Enter department name" value={newDepartmentName} onChange={(e) => setNewDepartmentName(e.target.value)} style={inputStyles(false)} autoFocus />
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                      <button onClick={handleAddCustomDepartment} style={{ padding: "6px 12px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}>Add</button>
-                      <button onClick={() => setShowAddDepartment(false)} style={{ padding: "6px 12px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}>Cancel</button>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                      <input
+                        type="text"
+                        placeholder="Enter department name"
+                        value={newDepartmentName}
+                        onChange={(e) => setNewDepartmentName(e.target.value)}
+                        style={{ flex: 1, ...inputStyles(false) }}
+                        autoFocus
+                      />
+                      <input
+                        type="color"
+                        value={newDepartmentColor}
+                        onChange={(e) => setNewDepartmentColor(e.target.value)}
+                        style={{ width: "50px", padding: "4px", border: "2px solid #e8ddd4", borderRadius: "4px", cursor: "pointer" }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        onClick={handleAddCustomDepartment}
+                        style={{ padding: "6px 12px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}
+                      >
+                        Add
+                      </button>
+                      <button
+                        onClick={() => setShowAddDepartment(false)}
+                        style={{ padding: "6px 12px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setShowAddDepartment(true)} style={addDepartmentButtonStyles}>+ Add Custom Department</button>
+                  <button
+                    onClick={() => setShowAddDepartment(true)}
+                    style={addDepartmentButtonStyles}
+                  >
+                    + Add Custom Department
+                  </button>
                 )}
               </div>
               
@@ -2393,7 +2614,7 @@ const SpinKeyframes = () => (
         <button onClick={() => setShowDetailsModal(null)} style={closeButtonStyles}>×</button>
       </div>
       <div style={modalBodyStyles}>
-        <div style={departmentColorStripStyles(showDetailsModal.departmentColor)} />
+        <div style={departmentColorStripStyles(showDetailsModal.categoryColor || showDetailsModal.departmentColor)} />
         
         <div style={detailsSectionStyles}>
           <div style={detailsLabelStyles}>Meeting Title</div>
@@ -2401,10 +2622,34 @@ const SpinKeyframes = () => (
         </div>
         
         <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Department</div>
+          <div style={detailsLabelStyles}>Category</div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: showDetailsModal.departmentColor }} />
-            <span style={detailsValueStyles}>{showDetailsModal.department}</span>
+            <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: showDetailsModal.categoryColor || "#757575" }} />
+            <span style={detailsValueStyles}>{showDetailsModal.category || showDetailsModal.department}</span>
+          </div>
+        </div>
+        
+        <div style={detailsSectionStyles}>
+          <div style={detailsLabelStyles}>Departments</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+            {showDetailsModal.departments && showDetailsModal.departments.length > 0 ? (
+              showDetailsModal.departments.map((dept, idx) => (
+                <span key={idx} style={{
+                  fontSize: "11px",
+                  padding: "3px 10px",
+                  borderRadius: "12px",
+                  backgroundColor: getDepartmentBg(dept),
+                  color: getDepartmentColor(dept),
+                  fontWeight: "500",
+                  display: "inline-block",
+                  border: `1px solid ${getDepartmentColor(dept)}40`,
+                }}>
+                  {dept}
+                </span>
+              ))
+            ) : (
+              <span style={{ color: "#8d6e63", fontSize: "14px" }}>No departments specified</span>
+            )}
           </div>
         </div>
         
@@ -2673,13 +2918,13 @@ const SpinKeyframes = () => (
                         padding: "12px",
                         backgroundColor: "#f5f5f5",
                         borderRadius: "6px",
-                        borderLeft: `4px solid ${meeting.departmentColor || "#757575"}`,
+                        borderLeft: `4px solid ${meeting.categoryColor || meeting.departmentColor || "#757575"}`,
                         marginBottom: index < conflictingMeetingData.length - 1 ? "8px" : "0",
                       }}
                     >
                       <div><strong>{meeting.title}</strong></div>
                       <div style={{ fontSize: "13px", color: "#6d5a4f" }}>
-                        {meeting.department} • {
+                        {meeting.category || meeting.department} • {
                           new Date(meeting.instances?.[0]?.date).toLocaleTimeString([], { 
                             hour: '2-digit', 
                             minute: '2-digit' 
@@ -2701,11 +2946,11 @@ const SpinKeyframes = () => (
                     padding: "12px",
                     backgroundColor: "#f5f5f5",
                     borderRadius: "6px",
-                    borderLeft: `4px solid ${pendingMeetingData?.departmentColor || "#757575"}`,
+                    borderLeft: `4px solid ${pendingMeetingData?.categoryColor || "#757575"}`,
                   }}>
                     <div><strong>{pendingMeetingData?.title}</strong></div>
                     <div style={{ fontSize: "13px", color: "#6d5a4f" }}>
-                      {pendingMeetingData?.department} • {pendingMeetingData?.time}
+                      {pendingMeetingData?.category || pendingMeetingData?.department} • {pendingMeetingData?.time}
                     </div>
                     <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px" }}>
                       {pendingMeetingData?.purpose}
@@ -2791,36 +3036,68 @@ const SpinKeyframes = () => (
                   />
                 </div>
                 
-                {/* Department */}
-              <div style={formGroupStyles}>
-                <label style={labelStyles}>Department *</label>
-                <div style={departmentDropdownStyles}>
-                  {allDepartments.map((dept) => (
-                    <div
-                      key={dept.name}
-                      onClick={() => setEditFormData({ ...editFormData, department: dept.name })}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        padding: "10px 12px",
-                        cursor: "pointer",
-                        backgroundColor: editFormData.department === dept.name ? dept.bg : "white",
-                        transition: "all 0.2s ease",
-                        borderBottom: "1px solid #f0e6d9",
-                      }}
-                    >
-                      <div style={{
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "4px",
-                        backgroundColor: dept.color,
-                      }} />
-                      <span>{dept.name}</span>
-                    </div>
-                  ))}
+                {/* Category - Single Select */}
+                <div style={formGroupStyles}>
+                  <label style={labelStyles}>Category *</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px", border: "2px solid #e8ddd4", borderRadius: "6px", minHeight: "50px", backgroundColor: "white" }}>
+                    {categoryOptions.map((cat) => (
+                      <div
+                        key={cat.name}
+                        onClick={() => setEditFormData({ ...editFormData, category: cat.name })}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "8px 14px",
+                          cursor: "pointer",
+                          backgroundColor: editFormData.category === cat.name ? cat.bg : "#f7f3f0",
+                          border: editFormData.category === cat.name ? `2px solid ${cat.color}` : "2px solid transparent",
+                          borderRadius: "20px",
+                          transition: "all 0.2s ease",
+                          fontWeight: editFormData.category === cat.name ? "600" : "400",
+                          color: editFormData.category === cat.name ? cat.color : "#4a352f",
+                        }}
+                      >
+                        <div style={{ width: "16px", height: "16px", borderRadius: "4px", backgroundColor: cat.color }} />
+                        <span>{cat.name}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+                
+                {/* Departments - Multi-Select */}
+                <div style={formGroupStyles}>
+                  <label style={labelStyles}>Departments</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px", border: "2px solid #e8ddd4", borderRadius: "6px", minHeight: "50px", backgroundColor: "white" }}>
+                    {allDepartments.map((dept) => {
+                      const isSelected = editFormData.departments?.includes(dept.name) || false;
+                      return (
+                        <div
+                          key={dept.name}
+                          onClick={() => toggleEditDepartment(dept.name)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            cursor: "pointer",
+                            backgroundColor: isSelected ? dept.bg : "#f7f3f0",
+                            border: isSelected ? `2px solid ${dept.color}` : "2px solid transparent",
+                            transition: "all 0.2s ease",
+                            fontSize: "13px",
+                            fontWeight: isSelected ? "600" : "400",
+                            color: isSelected ? dept.color : "#4a352f",
+                          }}
+                        >
+                          <div style={{ width: "14px", height: "14px", borderRadius: "3px", backgroundColor: dept.color }} />
+                          <span>{dept.name}</span>
+                          {isSelected && <span style={{ marginLeft: "4px", fontSize: "12px" }}>✓</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
                 
                 {/* Purpose */}
                 <div style={formGroupStyles}>
@@ -2895,18 +3172,18 @@ const SpinKeyframes = () => (
                 
                 {/* Repeat Type */}
                <div style={formGroupStyles}>
-                      <label style={labelStyles}>Repeat Frequency</label>
-                      <select
-                        value={editFormData.repeatType}
-                        onChange={(e) => setEditFormData({ ...editFormData, repeatType: e.target.value })}
-                        style={selectStyles(false)}
-                      >
-                        <option value="none">One-time meeting</option>
-                        <option value="weekly">Weekly (every 7 days)</option>
-                        <option value="monthly">Monthly (same date each month)</option>
-                        <option value="quarterly">Quarterly (every 3 months)</option> {/* ✅ ADD THIS */}
-                      </select>
-                    </div>
+                  <label style={labelStyles}>Repeat Frequency</label>
+                  <select
+                    value={editFormData.repeatType}
+                    onChange={(e) => setEditFormData({ ...editFormData, repeatType: e.target.value })}
+                    style={selectStyles(false)}
+                  >
+                    <option value="none">One-time meeting</option>
+                    <option value="weekly">Weekly (every 7 days)</option>
+                    <option value="monthly">Monthly (same date each month)</option>
+                    <option value="quarterly">Quarterly (every 3 months)</option>
+                  </select>
+                </div>
 
                 <div style={modalFooterStyles}>
                   <button onClick={() => setShowEditModal(false)} style={cancelButtonStyles}>
