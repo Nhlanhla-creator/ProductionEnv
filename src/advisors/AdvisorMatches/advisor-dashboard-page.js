@@ -397,7 +397,7 @@ export default function AdvisorDashboardPage() {
             }}
             className={styles.sectionContent}
           >
-            <h2 style={{ ...headerStyle, margin: "0 0 5px 0" }}>DealFlow Pipeline</h2>
+
             <AdvisorDealFlowPipeline onStageSelect={setStageFilter} />
           </div>
         </div>

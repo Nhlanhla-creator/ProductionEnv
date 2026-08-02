@@ -1,70 +1,123 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { FileText, MessageCircle, Filter, Download, Send, FileIcon, User, Check, X, Eye, } from "lucide-react"
+import {
+  FileText,
+  MessageCircle,
+  Send,
+  FileIcon,
+  User,
+  Check,
+  X,
+  Eye,
+  Trophy,
+  SlidersHorizontal,
+  GripVertical,
+  ChevronDown,
+  RotateCcw,
+  Settings,
+  Trash2,
+  Plus,
+  LayoutGrid,
+  CheckCircle,
+  Search,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  Pin,
+  PinOff,
+} from "lucide-react"
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
-import emailjs from '@emailjs/browser';
-import { API_KEYS } from "../../API";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import emailjs from "@emailjs/browser"
+import { API_KEYS } from "../../API"
+import { getFunctions, httpsCallable } from "firebase/functions"
+
+/* ════════════════════════════════════════════════════════════════════════════
+   intern-table.jsx
+
+   Same chrome as the advisor tables: saved views, column drag / resize / pin,
+   per-column header filters, sorting, density, responsive collapse, a sticky
+   pinned first column and the Customize Table menu.
+
+   Every selector here is prefixed it- (intern table) so it can share a page
+   with the other match tables without their <style> blocks fighting, and the
+   sticky headers declare `position: sticky !important` so a global `th` rule
+   from another table's kit can't scroll them away.
+
+   None of the data logic changed: calculateMatchScore, checkApplicationStatus,
+   fetchSMes, handleConnectClick, acceptRequest, handleStageUpdate, the emails
+   and the cloud-function calls are all as they were.
+
+   Design tokens — do not introduce new ones:
+     header #4a352f · header text #faf7f2 · toolbar #faf7f2 · border #e6d7c3
+     border2 #c8b6a6 · chip #f5f0e1 · chip active #7d5a50 · accent #a67c52
+     muted #a89482 · body text #4a352f
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Must stay identical to the strings intern-dealflow.jsx uses. */
+export const INTERN_STAGE_FILTER_EVENT = "intern-stage-filter"
+export const INTERN_ROWS_EVENT = "intern-rows"
+export const INTERN_ROWS_REQUEST_EVENT = "intern-rows-request"
 
 // Status definitions with color scheme
 const STATUS_TYPES = {
-  "New Match": {
-    color: "#EFEBE9",
-    textColor: "#3E2723",
-  },
-  Shortlisted: {
-    color: "#E8F5E9",
-    textColor: "#2E7D32",
-  },
-  Contacted: {
-    color: "#FFF8E1",
-    textColor: "#F57F17",
-  },
-  Confirmed: {
-    color: "#E8F5E9",
-    textColor: "#1B5E20",
-  },
-  Declined: {
-    color: "#FFEBEE",
-    textColor: "#C62828",
-  },
+  "New Match": { color: "#EFEBE9", textColor: "#3E2723" },
+  Applied: { color: "#E3F2FD", textColor: "#1565C0" },
+  Requested: { color: "#EDE7F6", textColor: "#5E35B1" },
+  Matched: { color: "#E0F2F1", textColor: "#00695C" },
+  Shortlisted: { color: "#E8F5E9", textColor: "#2E7D32" },
+  Contacted: { color: "#FFF8E1", textColor: "#F57F17" },
+  "Contacted/Interview": { color: "#FFF8E1", textColor: "#F57F17" },
+  Confirmed: { color: "#E8F5E9", textColor: "#1B5E20" },
+  "Confirmed/Term Sheet Sign": { color: "#E8F5E9", textColor: "#1B5E20" },
+  Accepted: { color: "#E0F2F1", textColor: "#00695C" },
+  "Contract Signed": { color: "#E8F5E8", textColor: "#388E3C" },
+  Active: { color: "#E8F5E8", textColor: "#388E3C" },
+  Completed: { color: "#F5F0E1", textColor: "#7D5A50" },
+  Declined: { color: "#FFEBEE", textColor: "#C62828" },
 }
 
-// Text truncation component
+const getStatusStyle = (status) => STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#616161" }
+
+/* ─── Shared primitives ─────────────────────────────────────────────────── */
+
+const PopupPortal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
+
 const TruncatedText = ({ text, maxLength = 25 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#999" }}>{text || "-"}</span>
+    return <span style={{ color: "#a89482", fontSize: "0.75rem" }}>{text || "-"}</span>
   }
 
-  const shouldTruncate = text.length > maxLength
-  const displayText = isExpanded || !shouldTruncate ? text : `${text.slice(0, maxLength)}...`
-
-  const toggleExpanded = (e) => {
-    e.stopPropagation()
-    setIsExpanded(!isExpanded)
-  }
+  const value = text.toString()
+  const shouldTruncate = value.length > maxLength
+  const displayText = isExpanded || !shouldTruncate ? value : `${value.slice(0, maxLength)}...`
 
   return (
-    <div style={{ lineHeight: "1.4" }}>
+    <div style={{ lineHeight: "1.3", fontSize: "0.75rem" }}>
       <span style={{ wordBreak: "break-word" }}>{displayText}</span>
       {shouldTruncate && (
         <button
           style={{
             background: "none",
             border: "none",
-            color: "#5D4037",
+            color: "#a67c52",
             cursor: "pointer",
             fontSize: "0.7rem",
             marginLeft: "4px",
             textDecoration: "underline",
             padding: "0",
           }}
-          onClick={toggleExpanded}
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsExpanded(!isExpanded)
+          }}
         >
           {isExpanded ? "Less" : "More"}
         </button>
@@ -73,111 +126,133 @@ const TruncatedText = ({ text, maxLength = 25 }) => {
   )
 }
 
-const getStatusStyle = (status) => {
-  return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
+const toDateSafe = (value) => {
+  if (!value || value === "-" || value === "TBD" || value === "unspecified") return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value?.toDate === "function") return value.toDate()
+  if (value?.seconds != null) return new Date(value.seconds * 1000)
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+const toISODateOnly = (value) => {
+  const d = toDateSafe(value)
+  if (!d) return ""
+  return d.toISOString().slice(0, 10)
+}
+
+const formatDateValue = (value) => {
+  const d = toDateSafe(value)
+  if (!d) return null
+  return d.toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })
 }
 
 // Match calculation function
 const calculateMatchScore = (internData, sponsorData) => {
-  const internProfile = internData?.formData || {};
-  const sponsorIR = sponsorData?.internshipRequest || {};
-  const sponsorJob = sponsorData?.jobOverview || {};
+  const internProfile = internData?.formData || {}
+  const sponsorIR = sponsorData?.internshipRequest || {}
+  const sponsorJob = sponsorData?.jobOverview || {}
 
-  let score = 0;
-  
+  let score = 0
+
   // Initialize breakdown object
   const breakdown = {
     skillsMatch: { score: 0, maxScore: 30, matched: false, description: "", details: {} },
     workModeMatch: { score: 0, maxScore: 25, matched: false, description: "", details: {} },
     locationMatch: { score: 0, maxScore: 20, matched: false, description: "", details: {} },
     availabilityMatch: { score: 0, maxScore: 15, matched: false, description: "", details: {} },
-    additionalFactors: { score: 0, maxScore: 10, matched: false, description: "", details: {} }
-  };
+    additionalFactors: { score: 0, maxScore: 10, matched: false, description: "", details: {} },
+  }
 
   // 1. Skills/Role Match (30%)
-  const internSkills = internProfile?.skillsInterests?.technicalSkills || [];
-  const sponsorRole = sponsorIR?.internRolesText || "";
-  const sponsorSkills = sponsorJob?.preferredSkills || [];
+  const internSkills = internProfile?.skillsInterests?.technicalSkills || []
+  const sponsorRole = sponsorIR?.internRolesText || ""
+  const sponsorSkills = sponsorJob?.preferredSkills || []
 
-  let skillsMatch = false;
+  let skillsMatch = false
   if (internSkills.length > 0 && (sponsorRole || sponsorSkills.length > 0)) {
-    skillsMatch = internSkills.some(skill =>
-      sponsorRole.toLowerCase().includes(skill.toLowerCase()) ||
-      sponsorSkills.some(reqSkill => reqSkill.toLowerCase().includes(skill.toLowerCase()))
-    );
+    skillsMatch = internSkills.some(
+      (skill) =>
+        sponsorRole.toLowerCase().includes(skill.toLowerCase()) ||
+        sponsorSkills.some((reqSkill) => reqSkill.toLowerCase().includes(skill.toLowerCase())),
+    )
   }
 
   breakdown.skillsMatch.details = {
     internSkills: internSkills,
     sponsorRole: sponsorRole,
-    sponsorSkills: sponsorSkills
-  };
+    sponsorSkills: sponsorSkills,
+  }
 
   if (skillsMatch) {
-    breakdown.skillsMatch.score = 30;
-    breakdown.skillsMatch.matched = true;
-    breakdown.skillsMatch.description = `Your skills (${internSkills.join(', ')}) match the required role: ${sponsorRole}`;
-    score += 30;
+    breakdown.skillsMatch.score = 30
+    breakdown.skillsMatch.matched = true
+    breakdown.skillsMatch.description = `Your skills (${internSkills.join(", ")}) match the required role: ${sponsorRole}`
+    score += 30
   } else {
-    breakdown.skillsMatch.description = internSkills.length > 0 ? 
-      `Your skills (${internSkills.join(', ')}) don't match the required role: ${sponsorRole || 'Not specified'}` :
-      "No technical skills specified in your profile";
+    breakdown.skillsMatch.description =
+      internSkills.length > 0
+        ? `Your skills (${internSkills.join(", ")}) don't match the required role: ${sponsorRole || "Not specified"}`
+        : "No technical skills specified in your profile"
   }
 
   // 2. Work Mode / Location Flexibility (25%)
-  const internLocationFlexibility = internProfile?.academicOverview?.locationFlexibility || [];
-  const sponsorType = sponsorIR?.internType || "";
+  const internLocationFlexibility = internProfile?.academicOverview?.locationFlexibility || []
+  const sponsorType = sponsorIR?.internType || ""
 
-  let workModeMatch = false;
+  let workModeMatch = false
   if (internLocationFlexibility.length > 0) {
     for (const flexibility of internLocationFlexibility) {
-      const flexLower = flexibility.toLowerCase();
-      const sponsorLower = sponsorType.toLowerCase();
+      const flexLower = flexibility.toLowerCase()
+      const sponsorLower = sponsorType.toLowerCase()
 
       if (flexLower === "all") {
-        workModeMatch = true;
-        break;
+        workModeMatch = true
+        break
       }
 
       if (flexLower === sponsorLower) {
-        workModeMatch = true;
-        break;
+        workModeMatch = true
+        break
       }
 
-      if ((flexLower === "hybrid" && (sponsorLower === "remote" || sponsorLower === "in-person")) ||
+      if (
+        (flexLower === "hybrid" && (sponsorLower === "remote" || sponsorLower === "in-person")) ||
         (flexLower === "remote" && sponsorLower === "hybrid") ||
-        (flexLower === "in-person" && sponsorLower === "hybrid")) {
-        workModeMatch = true;
-        break;
+        (flexLower === "in-person" && sponsorLower === "hybrid")
+      ) {
+        workModeMatch = true
+        break
       }
     }
   }
 
   breakdown.workModeMatch.details = {
     internFlexibility: internLocationFlexibility,
-    sponsorType: sponsorType
-  };
+    sponsorType: sponsorType,
+  }
 
   if (workModeMatch) {
-    breakdown.workModeMatch.score = 25;
-    breakdown.workModeMatch.matched = true;
-    breakdown.workModeMatch.description = `Your flexibility (${internLocationFlexibility.join(', ')}) is compatible with ${sponsorType}`;
-    score += 25;
+    breakdown.workModeMatch.score = 25
+    breakdown.workModeMatch.matched = true
+    breakdown.workModeMatch.description = `Your flexibility (${internLocationFlexibility.join(", ")}) is compatible with ${sponsorType}`
+    score += 25
   } else {
-    breakdown.workModeMatch.description = `Your flexibility (${internLocationFlexibility.join(', ')}) is not compatible with ${sponsorType}`;
+    breakdown.workModeMatch.description = `Your flexibility (${internLocationFlexibility.join(", ")}) is not compatible with ${sponsorType}`
   }
 
   // 3. Location Match (20%)
-  let locationScore = 0;
-  const isLocationRelevant = sponsorType.toLowerCase() === "in-person" || sponsorType.toLowerCase() === "hybrid";
-  const internHasAll = internLocationFlexibility.some(flex => flex.toLowerCase() === "all");
-  const internHasRemoteOnly = internLocationFlexibility.length === 1 && internLocationFlexibility[0].toLowerCase() === "remote";
-  const internHasRemote = internLocationFlexibility.some(flex => flex.toLowerCase() === "remote");
+  let locationScore = 0
+  const isLocationRelevant = sponsorType.toLowerCase() === "in-person" || sponsorType.toLowerCase() === "hybrid"
+  const internHasAll = internLocationFlexibility.some((flex) => flex.toLowerCase() === "all")
+  const internHasRemoteOnly =
+    internLocationFlexibility.length === 1 && internLocationFlexibility[0].toLowerCase() === "remote"
+  const internHasRemote = internLocationFlexibility.some((flex) => flex.toLowerCase() === "remote")
 
-  const sponsorProvince = sponsorJob?.province || "";
-  const sponsorCities = sponsorJob?.cities || [];
-  const internProvinces = internProfile?.personalOverview?.provinces || [];
-  const internCities = internProfile?.personalOverview?.cities || [];
+  const sponsorProvince = sponsorJob?.province || ""
+  const sponsorCities = sponsorJob?.cities || []
+  const internProvinces = internProfile?.personalOverview?.provinces || []
+  const internCities = internProfile?.personalOverview?.cities || []
 
   breakdown.locationMatch.details = {
     isLocationRelevant,
@@ -186,107 +261,108 @@ const calculateMatchScore = (internData, sponsorData) => {
     internProvinces,
     internCities,
     internHasAll,
-    internHasRemote
-  };
+    internHasRemote,
+  }
 
   if (!isLocationRelevant || (internHasRemoteOnly && sponsorType.toLowerCase() === "remote")) {
-    locationScore = 20;
-    breakdown.locationMatch.description = "Full score for remote work compatibility";
+    locationScore = 20
+    breakdown.locationMatch.description = "Full score for remote work compatibility"
   } else if (internHasAll) {
-    locationScore = 20;
-    breakdown.locationMatch.description = "Full score - you selected 'All' locations";
+    locationScore = 20
+    breakdown.locationMatch.description = "Full score - you selected 'All' locations"
   } else if (internHasRemote && !isLocationRelevant) {
-    locationScore = 20;
-    breakdown.locationMatch.description = "Full score for remote capability match";
+    locationScore = 20
+    breakdown.locationMatch.description = "Full score for remote capability match"
   } else {
-    const provinceMatch = internProvinces.some(province =>
-      province.toLowerCase() === sponsorProvince.toLowerCase()
-    );
-    const cityMatch = internCities.some(city =>
-      sponsorCities.some(sponsorCity => city.toLowerCase() === sponsorCity.toLowerCase())
-    );
+    const provinceMatch = internProvinces.some(
+      (province) => province.toLowerCase() === sponsorProvince.toLowerCase(),
+    )
+    const cityMatch = internCities.some((city) =>
+      sponsorCities.some((sponsorCity) => city.toLowerCase() === sponsorCity.toLowerCase()),
+    )
 
     if (provinceMatch || cityMatch) {
-      locationScore = 20;
-      breakdown.locationMatch.description = `Location match: ${provinceMatch ? 'Same province' : 'Same city'}`;
+      locationScore = 20
+      breakdown.locationMatch.description = `Location match: ${provinceMatch ? "Same province" : "Same city"}`
     } else if (internProvinces.length > 1 || internCities.length > 1) {
-      locationScore = 10;
-      breakdown.locationMatch.description = "Partial score for geographic flexibility";
+      locationScore = 10
+      breakdown.locationMatch.description = "Partial score for geographic flexibility"
     } else if (internHasRemote && sponsorType.toLowerCase() === "hybrid") {
-      locationScore = 15;
-      breakdown.locationMatch.description = "Partial score - remote capability with hybrid role";
+      locationScore = 15
+      breakdown.locationMatch.description = "Partial score - remote capability with hybrid role"
     } else {
-      breakdown.locationMatch.description = `No location match: You (${internProvinces.join(', ')}) vs Required (${sponsorProvince})`;
+      breakdown.locationMatch.description = `No location match: You (${internProvinces.join(", ")}) vs Required (${sponsorProvince})`
     }
   }
 
-  breakdown.locationMatch.score = locationScore;
-  score += locationScore;
+  breakdown.locationMatch.score = locationScore
+  score += locationScore
 
   // 4. Availability Date Match (15%)
-  const internStartDate = internProfile?.skillsInterests?.availabilityStart || "";
-  const sponsorStartDate = sponsorIR?.startDate || "";
-  let availabilityScore = 0;
+  const internStartDate = internProfile?.skillsInterests?.availabilityStart || ""
+  const sponsorStartDate = sponsorIR?.startDate || ""
+  let availabilityScore = 0
 
   breakdown.availabilityMatch.details = {
     internStartDate,
-    sponsorStartDate
-  };
-
-  if (internStartDate && sponsorStartDate) {
-    const internStart = new Date(internStartDate);
-    const sponsorStart = new Date(sponsorStartDate);
-    const daysDiff = Math.abs((internStart - sponsorStart) / (1000 * 60 * 60 * 24));
-
-    if (internStart <= sponsorStart) {
-      availabilityScore = 15;
-      breakdown.availabilityMatch.description = `Perfect timing - you're available from ${internStartDate}, they need ${sponsorStartDate}`;
-    } else if (daysDiff <= 30) {
-      availabilityScore = 10;
-      breakdown.availabilityMatch.description = `Good timing - only ${Math.round(daysDiff)} days difference`;
-    } else if (daysDiff <= 60) {
-      availabilityScore = 5;
-      breakdown.availabilityMatch.description = `Acceptable timing - ${Math.round(daysDiff)} days difference`;
-    } else {
-      breakdown.availabilityMatch.description = `Poor timing - ${Math.round(daysDiff)} days difference`;
-    }
-  } else {
-    breakdown.availabilityMatch.description = `Missing availability data: Your start: ${internStartDate || 'Not set'}, Required: ${sponsorStartDate || 'Not set'}`;
+    sponsorStartDate,
   }
 
-  breakdown.availabilityMatch.score = availabilityScore;
-  breakdown.availabilityMatch.matched = availabilityScore > 0;
-  score += availabilityScore;
+  if (internStartDate && sponsorStartDate) {
+    const internStart = new Date(internStartDate)
+    const sponsorStart = new Date(sponsorStartDate)
+    const daysDiff = Math.abs((internStart - sponsorStart) / (1000 * 60 * 60 * 24))
+
+    if (internStart <= sponsorStart) {
+      availabilityScore = 15
+      breakdown.availabilityMatch.description = `Perfect timing - you're available from ${internStartDate}, they need ${sponsorStartDate}`
+    } else if (daysDiff <= 30) {
+      availabilityScore = 10
+      breakdown.availabilityMatch.description = `Good timing - only ${Math.round(daysDiff)} days difference`
+    } else if (daysDiff <= 60) {
+      availabilityScore = 5
+      breakdown.availabilityMatch.description = `Acceptable timing - ${Math.round(daysDiff)} days difference`
+    } else {
+      breakdown.availabilityMatch.description = `Poor timing - ${Math.round(daysDiff)} days difference`
+    }
+  } else {
+    breakdown.availabilityMatch.description = `Missing availability data: Your start: ${internStartDate || "Not set"}, Required: ${sponsorStartDate || "Not set"}`
+  }
+
+  breakdown.availabilityMatch.score = availabilityScore
+  breakdown.availabilityMatch.matched = availabilityScore > 0
+  score += availabilityScore
 
   // 5. Additional Factors (10%)
-  let additionalScore = 0;
-  const hasGradYear = internProfile.academicOverview?.graduationYear ? 1 : 0;
-  const hasInternType = sponsorIR.internType ? 1 : 0;
+  let additionalScore = 0
+  const hasGradYear = internProfile.academicOverview?.graduationYear ? 1 : 0
+  const hasInternType = sponsorIR.internType ? 1 : 0
 
-  additionalScore = hasGradYear + hasInternType;
+  additionalScore = hasGradYear + hasInternType
 
-  breakdown.additionalFactors.score = additionalScore;
-  breakdown.additionalFactors.matched = additionalScore > 0;
+  breakdown.additionalFactors.score = additionalScore
+  breakdown.additionalFactors.matched = additionalScore > 0
   breakdown.additionalFactors.details = {
     hasGradYear,
     hasInternType,
     graduationYear: internProfile.academicOverview?.graduationYear,
-    internType: sponsorIR.internType
-  };
-
-  if (additionalScore > 0) {
-    breakdown.additionalFactors.description = `Profile completeness bonus: ${hasGradYear ? 'Has graduation year' : ''} ${hasInternType ? 'Has internship type' : ''}`;
-  } else {
-    breakdown.additionalFactors.description = "No profile completeness bonus - missing graduation year or internship type";
+    internType: sponsorIR.internType,
   }
 
-  score += additionalScore;
+  if (additionalScore > 0) {
+    breakdown.additionalFactors.description = `Profile completeness bonus: ${hasGradYear ? "Has graduation year" : ""} ${hasInternType ? "Has internship type" : ""}`
+  } else {
+    breakdown.additionalFactors.description =
+      "No profile completeness bonus - missing graduation year or internship type"
+  }
+
+  score += additionalScore
 
   return {
     score: Math.min(score, 100),
-    breakdown: breakdown
-  };
-};
+    breakdown: breakdown,
+  }
+}
 
 const checkApplicationStatus = async (userId, sponsorId) => {
   try {
@@ -296,27 +372,27 @@ const checkApplicationStatus = async (userId, sponsorId) => {
     if (applicationDoc.exists()) {
       const appData = applicationDoc.data()
       const status = appData.status || "Applied"
-      
+
       // Normalize status - treat both "Applied" and "Requested" as applied
-      const normalizedStatus = (status === "Applied" ) ? "Applied" : ( status === "Requested") ? "Requested" :status
-      
+      const normalizedStatus = status === "Applied" ? "Applied" : status === "Requested" ? "Requested" : status
+
       return {
         status: normalizedStatus,
         exists: true,
-        data: appData
+        data: appData,
       }
     }
     return {
       status: "New Match",
       exists: false,
-      data: null
+      data: null,
     }
   } catch (error) {
     console.warn(`Could not fetch application status for ${sponsorId}_${userId}:`, error)
     return {
       status: "New Match",
       exists: false,
-      data: null
+      data: null,
     }
   }
 }
@@ -338,58 +414,230 @@ const formatLabel = (value) => {
     .join(", ")
 }
 
-export function InternTable({ interns = [] }) {
-  const [showFilters, setShowFilters] = useState(false)
+/* ════════════════════════════════════════════════════════════════════════════
+   Column configuration.
+
+   SMSE Name is the pinned first column and Action the last, so neither appears
+   here. Widths are generous: each header carries a grip, a sort control and a
+   filter control (~60px of chrome), and narrow columns break labels mid-word.
+   ════════════════════════════════════════════════════════════════════════ */
+const COLUMN_DEFS = {
+  location: { label: "Location", width: 152, filterType: "location", visible: true, priority: 2, sortable: true },
+  sector: { label: "Sector", width: 158, filterType: "sector", visible: true, priority: 3, sortable: true },
+  operationStage: { label: "Stage", width: 150, filterType: "operationStage", visible: true, priority: 3, sortable: true },
+  internshipRole: { label: "Role", width: 210, filterType: "internshipRole", visible: true, priority: 2, sortable: true },
+  stipend: { label: "Stipend", width: 150, filterType: "stipend", visible: true, priority: 3, sortable: true },
+  startDate: { label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 3, sortable: true },
+  matchPercentage: { label: "Match %", align: "center", width: 150, filterType: "matchPercentage", visible: true, priority: 1, sortable: true },
+  status: { label: "Status", width: 158, filterType: "status", visible: true, priority: 1, sortable: true },
+
+  ratingRecommendation: { label: "Rating", width: 152, filterType: "ratingRecommendation", visible: false, priority: 4, sortable: true },
+}
+
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
+const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
+  DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].visible !== false]),
+)
+const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width]))
+const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
+const DEFAULT_DENSITY = "comfortable"
+
+const SMSE_WIDTH = 230
+const ACTION_WIDTH = 190
+const MIN_COLUMN_WIDTH = 84
+
+const EMPTY_FILTERS = {
+  name: "",
+  location: [],
+  sector: [],
+  operationStage: [],
+  internshipRole: "",
+  stipend: [],
+  startFrom: "",
+  startTo: "",
+  matchRange: [0, 100],
+  status: [],
+  ratingRecommendation: "",
+}
+
+/* ─── Saved views + filter persistence ──────────────────────────────────── */
+const BUILTIN_VIEW_ID = "__default__"
+const VIEWS_STORAGE_KEY = "intern-matches-views-v1"
+const FILTERS_STORAGE_KEY = "intern-matches-filters-v1"
+
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
+  const known = new Set(DEFAULT_COLUMN_ORDER)
+  const deduped = order.filter((key) => known.has(key))
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key))
+  return [...deduped, ...missing]
+}
+
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  pinned: { ...DEFAULT_PINNED },
+  density: DEFAULT_DENSITY,
+})
+
+const createBuiltinDefaultView = () => ({
+  id: BUILTIN_VIEW_ID,
+  name: "Default",
+  description: "",
+  builtin: true,
+  ...createDefaultViewLayout(),
+})
+
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
+  density: view?.density || DEFAULT_DENSITY,
+})
+
+const loadViewsState = () => {
+  const freshDefault = () => ({
+    activeViewId: BUILTIN_VIEW_ID,
+    views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() },
+  })
+  if (typeof window === "undefined") return freshDefault()
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null")
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {}
+    const views = {}
+    Object.entries(rawViews).forEach(([id, v]) => {
+      views[id] = sanitizeView(v, id)
+    })
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView()
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID
+    return { activeViewId, views }
+  } catch {
+    return freshDefault()
+  }
+}
+
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // Storage can fail (private browsing, quota) — the table still works this session.
+  }
+}
+
+const loadFilterState = () => {
+  if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
+    return {
+      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
+      sort: saved?.sort?.key ? saved.sort : null,
+    }
+  } catch {
+    return { filters: { ...EMPTY_FILTERS }, sort: null }
+  }
+}
+
+const persistFilterState = (filters, sort) => {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({ filters, sort }))
+  } catch {
+    // Non-fatal.
+  }
+}
+
+const generateViewId = () => {
+  try {
+    return `view_${crypto.randomUUID()}`
+  } catch {
+    return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   InternTable
+   ════════════════════════════════════════════════════════════════════════ */
+export function InternTable({ interns = [], stageFilter: stageFilterProp = null, onRefresh, onCountChange }) {
   const [showModal, setShowModal] = useState(false)
-  const [showDocumentModal, setShowDocumentModal] = useState(false)
   const [showMessageModal, setShowMessageModal] = useState(false)
-  const [showNoteModal, setShowNoteModal] = useState(false)
   const [showBriefModal, setShowBriefModal] = useState(false)
   const [selectedIntern, setSelectedIntern] = useState(null)
   const [messageText, setMessageText] = useState("")
-  const [noteText, setNoteText] = useState("")
   const [statuses, setStatuses] = useState({})
   const [notification, setNotification] = useState(null)
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [programSponsors, setProgramSponsors] = useState([])
-  const [showMatchBreakdown, setShowMatchBreakdown] = useState(false);
-  const [showStageModal, setShowStageModal] = useState(false);
-  const [nextStage, setNextStage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
+  const [showStageModal, setShowStageModal] = useState(false)
+  const [nextStage, setNextStage] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [hoveredRow, setHoveredRow] = useState(null)
 
-  const [filters, setFilters] = useState({
-    location: "",
-    matchScore: 0,
-    sector: "",
-    operationStage: "",
-    internshipRole: "",
-    stipend: "",
-    startDate: "",
-    sortBy: "",
-  })
+  // Stage filter coming from the pipeline (prop or window event)
+  const [eventStageFilter, setEventStageFilter] = useState(null)
+  const stageFilter = stageFilterProp ?? eventStageFilter
 
-  const filterPanelRef = useRef(null)
+  // Filters + sort, restored from the last visit
+  const initialFilterState = useMemo(() => loadFilterState(), [])
+  const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
+  const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+
+  // Views
+  const [viewsState, setViewsState] = useState(() => loadViewsState())
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths)
+  const [pinned, setPinned] = useState(() => initialActiveView.pinned)
+  const [density, setDensity] = useState(() => initialActiveView.density)
+
+  const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
+  const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
+  const [showNewViewForm, setShowNewViewForm] = useState(false)
+  const [newViewName, setNewViewName] = useState("")
+  const [newViewDescription, setNewViewDescription] = useState("")
+  const [editingViewMeta, setEditingViewMeta] = useState(null)
+  const [columnSearch, setColumnSearch] = useState("")
+
+  // Drag-to-reorder / resize
+  const [draggedColumn, setDraggedColumn] = useState(null)
+  const [dragOverColumn, setDragOverColumn] = useState(null)
+  const [dragHintRect, setDragHintRect] = useState(null)
+  const resizingRef = useRef(null)
+
+  // Viewport, for responsive column collapse
+  const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+
   const isMountedRef = useRef(false)
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
 
   const handleViewMatchBreakdown = (intern) => {
-    setSelectedIntern(intern);
-    setShowMatchBreakdown(true);
-  };
-
-  const handleStageAction = (intern) => {
-    setSelectedIntern(intern);
-    setShowStageModal(true);
-    setNextStage("");
-    setMessageText("");
-  };
+    setSelectedIntern(intern)
+    setShowMatchBreakdown(true)
+  }
 
   const resetStageModal = () => {
-    setSelectedIntern(null);
-    setShowStageModal(false);
-    setNextStage("");
-    setMessageText("");
-  };
+    setSelectedIntern(null)
+    setShowStageModal(false)
+    setNextStage("")
+    setMessageText("")
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -399,46 +647,247 @@ export function InternTable({ interns = [] }) {
       setMounted(false)
       isMountedRef.current = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const matchBreakdownSection = {
-    marginBottom: "1.5rem",
-    padding: "1rem",
-    background: "#F8F9FA",
-    borderRadius: "8px",
-    border: "1px solid #E0E0E0",
+  /* Pipeline → table filtering */
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined
+    const onStageFilter = (e) => setEventStageFilter(e.detail || null)
+    window.addEventListener(INTERN_STAGE_FILTER_EVENT, onStageFilter)
+    return () => window.removeEventListener(INTERN_STAGE_FILTER_EVENT, onStageFilter)
+  }, [])
+
+  /* ─── View + filter persistence ─────────────────────────────────────── */
+  useEffect(() => {
+    setViewsState((prev) => {
+      const current = prev.views[prev.activeViewId]
+      if (!current) return prev
+      const updated = { ...current, columnVisibility, columnOrder, columnWidths, pinned, density }
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, columnWidths, pinned, density])
+
+  useEffect(() => {
+    persistFilterState(localFilters, sortConfig)
+  }, [localFilters, sortConfig])
+
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId]
+    if (!target) return
+    setViewsState((prev) => {
+      const next = { ...prev, activeViewId: viewId }
+      persistViewsState(next)
+      return next
+    })
+    setColumnVisibility(target.columnVisibility)
+    setColumnOrder(target.columnOrder)
+    setColumnWidths(target.columnWidths)
+    setPinned(target.pinned)
+    setDensity(target.density)
   }
 
-  const matchBreakdownTitle = {
-    color: "#5D4037",
-    margin: "0 0 0.5rem 0",
-    fontSize: "0.9rem",
-    fontWeight: "600",
+  const createNewView = () => {
+    const trimmedName = newViewName.trim()
+    if (!trimmedName) return
+    const id = generateViewId()
+    const newView = {
+      id,
+      name: trimmedName,
+      description: newViewDescription.trim(),
+      builtin: false,
+      columnVisibility: { ...columnVisibility },
+      columnOrder: [...columnOrder],
+      columnWidths: { ...columnWidths },
+      pinned: { ...pinned },
+      density,
+    }
+    setViewsState((prev) => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
+      persistViewsState(next)
+      return next
+    })
+    setNewViewName("")
+    setNewViewDescription("")
+    setShowNewViewForm(false)
+    setNotification({ type: "success", message: `View "${trimmedName}" created` })
+    setTimeout(() => setNotification(null), 3000)
   }
 
-  const matchBreakdownItem = {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "0.25rem",
+  const startEditingViewMeta = (view) =>
+    setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin })
+
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return
+    const trimmedName = editingViewMeta.name.trim()
+    if (!trimmedName && !editingViewMeta.builtin) return
+    setViewsState((prev) => {
+      const existing = prev.views[editingViewMeta.id]
+      if (!existing) return prev
+      const updated = {
+        ...existing,
+        name: existing.builtin ? existing.name : trimmedName,
+        description: editingViewMeta.description.trim(),
+      }
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    setEditingViewMeta(null)
   }
 
-  const matchBreakdownLabel = {
-    fontWeight: "500",
-    color: "#5D4037",
-    fontSize: "0.8rem",
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return
+    const wasActive = viewsState.activeViewId === viewId
+    setViewsState((prev) => {
+      const { [viewId]: _removed, ...restViews } = prev.views
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId
+      const next = { activeViewId: nextActiveId, views: restViews }
+      persistViewsState(next)
+      return next
+    })
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID]
+      setColumnVisibility(def.columnVisibility)
+      setColumnOrder(def.columnOrder)
+      setColumnWidths(def.columnWidths)
+      setPinned(def.pinned)
+      setDensity(def.density)
+    }
+    setNotification({ type: "success", message: "View deleted" })
+    setTimeout(() => setNotification(null), 3000)
   }
 
-  const matchBreakdownValue = {
-    fontWeight: "600",
-    color: "#5D4037",
-    fontSize: "0.8rem",
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout()
+    setColumnVisibility(layout.columnVisibility)
+    setColumnOrder(layout.columnOrder)
+    setColumnWidths(layout.columnWidths)
+    setPinned(layout.pinned)
+    setDensity(layout.density)
+    setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` })
+    setTimeout(() => setNotification(null), 3000)
   }
 
-  const matchBreakdownDescription = {
-    margin: "0.5rem 0 0 0",
-    color: "#666",
-    fontSize: "0.8rem",
-    lineHeight: "1.4",
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  const cyclePin = (key) =>
+    setPinned((prev) => ({
+      ...prev,
+      [key]: prev[key] === "left" ? "right" : prev[key] === "right" ? null : "left",
+    }))
+
+  /* ─── Drag to reorder ───────────────────────────────────────────────── */
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key)
+    setDragHintRect(null)
+    try {
+      e.dataTransfer.effectAllowed = "move"
+      e.dataTransfer.setData("text/plain", key)
+    } catch {}
+  }
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (key !== dragOverColumn) setDragOverColumn(key)
+  }
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault()
+    if (!draggedColumn || draggedColumn === key) {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+    setColumnOrder((prev) => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(draggedColumn)
+      const toIdx = next.indexOf(key)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, draggedColumn)
+      return next
+    })
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+  const handleColumnDragEnd = () => {
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+
+  /* ─── Resize ────────────────────────────────────────────────────────── */
+  const startResize = (e, key) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    resizingRef.current = key
+
+    const onMove = (ev) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
+      setColumnWidths((prev) => ({ ...prev, [key]: next }))
+    }
+    const onUp = () => {
+      resizingRef.current = null
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
+
+  /* ─── Header filter + sort ──────────────────────────────────────────── */
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
+  }
+  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+
+  const toggleSort = (key, event) => {
+    event.stopPropagation()
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" }
+      if (prev.dir === "asc") return { key, dir: "desc" }
+      return null
+    })
+  }
+
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${
+        active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"
+      }`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  )
+
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${
+          isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"
+        }`}
+        title={isActive ? (sortConfig.dir === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive ? sortConfig.dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} /> : <ArrowUpDown size={11} />}
+      </button>
+    )
   }
 
   // Fetch program sponsors from Firestore
@@ -509,7 +958,8 @@ export function InternTable({ interns = [] }) {
             const matchPrefs = formData.generalMatchingPreference || {}
 
             // Only include profiles that have some relevant data
-            const hasRelevantData = overview.registeredName ||
+            const hasRelevantData =
+              overview.registeredName ||
               overview.organizationName ||
               programs.length > 0 ||
               Object.keys(matchPrefs).length > 0
@@ -522,55 +972,59 @@ export function InternTable({ interns = [] }) {
             const applicationStatusData = await checkApplicationStatus(userId, sponsorId)
 
             // Calculate match result with breakdown
-            const matchResult = calculateMatchScore(userData, AppData);
+            const matchResult = calculateMatchScore(userData, AppData)
 
             // If no programs, create one entry with default values
             if (programs.length === 0) {
-              return [{
-                id: sponsorId,
-                originalSponsorId: sponsorId,
-                programIndex: 0,
-                smseName: overview.registeredName || overview.organizationName || "Unnamed Organization",
-                location: overview.province || overview.regionCovered || "N/A",
-                sector: formatLabel(matchPrefs.sectorFocus) || "Various",
-                operationStage: overview.operationStage || "N/A",
-                internshipRole: Application.internRolesText || matchPrefs.supportFocus || "Not Provided",
-                briefDescription: {
-                  title: `Internship at ${overview.registeredName || overview.organizationName || "Organization"}`,
-                  company: overview.registeredName || overview.organizationName || "Organization",
-                  duration: Application.duration || "unspecified",
-                  requirements: ApplicationOverview.briefDescription || [
-                    "Currently pursuing relevant degree",
-                    "Strong communication skills",
-                    "Willingness to learn",
-                    "Team collaboration abilities"
-                  ],
-                  responsibilities: ApplicationOverview.keyTasks || [
-                    "Support daily operations",
-                    "Participate in projects",
-                    "Learn industry best practices",
-                    "Contribute to team initiatives"
-                  ],
-                  benefits: ApplicationOverview.learningOutcomes || [
-                    "Professional development",
-                    "Mentorship opportunities",
-                    "Industry exposure",
-                    "Networking opportunities"
-                  ],
-                  applicationProcess: formData.applicationBrief?.applicationProcess || "Submit application through our portal. Successful candidates will be contacted for interviews."
+              return [
+                {
+                  id: sponsorId,
+                  originalSponsorId: sponsorId,
+                  programIndex: 0,
+                  smseName: overview.registeredName || overview.organizationName || "Unnamed Organization",
+                  location: overview.province || overview.regionCovered || "N/A",
+                  sector: formatLabel(matchPrefs.sectorFocus) || "Various",
+                  operationStage: overview.operationStage || "N/A",
+                  internshipRole: Application.internRolesText || matchPrefs.supportFocus || "Not Provided",
+                  briefDescription: {
+                    title: `Internship at ${overview.registeredName || overview.organizationName || "Organization"}`,
+                    company: overview.registeredName || overview.organizationName || "Organization",
+                    duration: Application.duration || "unspecified",
+                    requirements: ApplicationOverview.briefDescription || [
+                      "Currently pursuing relevant degree",
+                      "Strong communication skills",
+                      "Willingness to learn",
+                      "Team collaboration abilities",
+                    ],
+                    responsibilities: ApplicationOverview.keyTasks || [
+                      "Support daily operations",
+                      "Participate in projects",
+                      "Learn industry best practices",
+                      "Contribute to team initiatives",
+                    ],
+                    benefits: ApplicationOverview.learningOutcomes || [
+                      "Professional development",
+                      "Mentorship opportunities",
+                      "Industry exposure",
+                      "Networking opportunities",
+                    ],
+                    applicationProcess:
+                      formData.applicationBrief?.applicationProcess ||
+                      "Submit application through our portal. Successful candidates will be contacted for interviews.",
+                  },
+                  stipend: Application.stipendAmount || "not specified",
+                  startDate: Application.startDate || "TBD",
+                  matchPercentage: matchResult.score,
+                  matchBreakdown: matchResult.breakdown,
+                  status: applicationStatusData.status,
+                  action: applicationStatusData.exists ? "Application exists" : "Send Application",
+                  applicationExists: applicationStatusData.exists,
+                  applicationData: applicationStatusData.data,
+                  ratingRecommendation: "Not Yet Completed",
+                  documents: [],
+                  notes: [],
                 },
-                stipend: Application.stipendAmount || "not specified",
-                startDate: Application.startDate || "TBD",
-                matchPercentage: matchResult.score,
-                matchBreakdown: matchResult.breakdown,
-                status: applicationStatusData.status,
-                action: applicationStatusData.exists ? "Application exists" : "Send Application",
-                applicationExists: applicationStatusData.exists,
-                applicationData: applicationStatusData.data,
-                ratingRecommendation: "Not Yet Completed",
-                documents: [],
-                notes: []
-              }]
+              ]
             }
 
             // Create an entry for each program
@@ -592,21 +1046,24 @@ export function InternTable({ interns = [] }) {
                     "Currently pursuing relevant degree",
                     "Strong communication skills",
                     "Willingness to learn",
-                    "Team collaboration abilities"
+                    "Team collaboration abilities",
                   ],
                   responsibilities: program.responsibilities || [
                     "Support program activities",
                     "Participate in training sessions",
                     "Assist with project implementation",
-                    "Contribute to program objectives"
+                    "Contribute to program objectives",
                   ],
                   benefits: program.benefits || [
                     "Professional development",
                     "Mentorship from experienced professionals",
                     "Industry-specific training",
-                    "Certificate of completion"
+                    "Certificate of completion",
                   ],
-                  applicationProcess: program.applicationProcess || formData.applicationBrief?.applicationProcess || "Submit application through our portal. Shortlisted candidates will be invited for interviews."
+                  applicationProcess:
+                    program.applicationProcess ||
+                    formData.applicationBrief?.applicationProcess ||
+                    "Submit application through our portal. Shortlisted candidates will be invited for interviews.",
                 },
                 stipend: Application.stipendAmount || "not specified",
                 startDate: program.startDate || formData.applicationBrief?.startDate || "TBD",
@@ -618,19 +1075,18 @@ export function InternTable({ interns = [] }) {
                 applicationData: applicationStatusData.data,
                 ratingRecommendation: "Not Yet Completed",
                 documents: [],
-                notes: []
+                notes: [],
               }
             })
-
           } catch (docError) {
             console.log(`Error processing document ${docSnap.id}:`, docError)
             return [] // Return empty array for failed documents
           }
-        })
+        }),
       )
 
       // Flatten the array and filter out empty arrays
-      const flattenedSponsors = sponsors.flat().filter(sponsor => sponsor && Object.keys(sponsor).length > 0)
+      const flattenedSponsors = sponsors.flat().filter((sponsor) => sponsor && Object.keys(sponsor).length > 0)
 
       console.log(`Found ${flattenedSponsors.length} program sponsors`)
       setProgramSponsors(flattenedSponsors)
@@ -642,7 +1098,6 @@ export function InternTable({ interns = [] }) {
         setNotification({ type: "success", message: `Found ${flattenedSponsors.length} program sponsor(s)` })
         setTimeout(() => setNotification(null), 3000)
       }
-
     } catch (error) {
       console.error("Error loading program sponsor profiles:", error)
       console.error("Error details:", error.message, error.code)
@@ -652,11 +1107,11 @@ export function InternTable({ interns = [] }) {
 
       // More specific error message
       let errorMessage = "Failed to load program sponsor data."
-      if (error.code === 'permission-denied') {
+      if (error.code === "permission-denied") {
         errorMessage = "Permission denied. Please check your authentication."
-      } else if (error.code === 'unavailable') {
+      } else if (error.code === "unavailable") {
         errorMessage = "Service temporarily unavailable. Please try again later."
-      } else if (error.message.includes('network')) {
+      } else if (error.message.includes("network")) {
         errorMessage = "Network error. Please check your connection."
       }
 
@@ -667,604 +1122,675 @@ export function InternTable({ interns = [] }) {
     }
   }
 
-  // Use program sponsors data if available, otherwise fallback to mock data
+  // Use program sponsors data if available, otherwise fallback to passed-in rows
   const displayData = programSponsors.length > 0 ? programSponsors : interns.length > 0 ? interns : []
 
-  const filteredInterns = displayData.filter((intern) => {
-    if (filters.location && !intern.location.toLowerCase().includes(filters.location.toLowerCase())) return false
-    if (intern.matchPercentage < filters.matchScore) return false
-    if (filters.sector && !intern.sector.toLowerCase().includes(filters.sector.toLowerCase())) return false
-    if (filters.operationStage && intern.operationStage !== filters.operationStage) return false
-    if (filters.internshipRole && !intern.internshipRole.toLowerCase().includes(filters.internshipRole.toLowerCase())) return false
-    if (filters.stipend && intern.stipend !== filters.stipend) return false
-    if (filters.startDate && intern.startDate < filters.startDate) return false
-    return true
-  })
+  /* A row's live status: the optimistic value written by an action wins over
+     the one fetched at load, so the Action cell updates the moment you apply. */
+  const statusOf = useCallback((intern) => statuses[intern.id] || intern.status, [statuses])
+
+  /* ─── Filtering + sorting ───────────────────────────────────────────── */
+  const filteredInterns = useMemo(() => {
+    const f = localFilters
+    const matchesAny = (selected, value) =>
+      selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
+    const includesText = (needle, value) =>
+      !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
+
+    const rows = displayData.filter((intern) => {
+      const status = statusOf(intern)
+
+      if (stageFilter && status !== stageFilter) return false
+      if (!includesText(f.name, intern.smseName)) return false
+      if (!matchesAny(f.location, intern.location)) return false
+      if (!matchesAny(f.sector, intern.sector)) return false
+      if (!matchesAny(f.operationStage, intern.operationStage)) return false
+      if (!includesText(f.internshipRole, intern.internshipRole)) return false
+      if (!matchesAny(f.stipend, intern.stipend)) return false
+      if (f.status.length > 0 && !f.status.includes(status)) return false
+      if (!includesText(f.ratingRecommendation, intern.ratingRecommendation)) return false
+
+      const iso = toISODateOnly(intern.startDate)
+      if (f.startFrom && (!iso || iso < f.startFrom)) return false
+      if (f.startTo && (!iso || iso > f.startTo)) return false
+
+      const match = intern.matchPercentage || 0
+      if (match < f.matchRange[0] || match > f.matchRange[1]) return false
+
+      return true
+    })
+
+    if (sortConfig?.key) {
+      const accessors = {
+        name: (r) => r.smseName,
+        location: (r) => r.location,
+        sector: (r) => r.sector,
+        operationStage: (r) => r.operationStage,
+        internshipRole: (r) => r.internshipRole,
+        stipend: (r) => r.stipend,
+        startDate: (r) => toDateSafe(r.startDate)?.getTime() ?? 0,
+        matchPercentage: (r) => r.matchPercentage || 0,
+        status: (r) => statusOf(r),
+        ratingRecommendation: (r) => r.ratingRecommendation,
+      }
+      const accessor = accessors[sortConfig.key]
+      if (accessor) {
+        rows.sort((a, b) => {
+          const av = accessor(a)
+          const bv = accessor(b)
+          if (typeof av === "number" && typeof bv === "number") {
+            return sortConfig.dir === "asc" ? av - bv : bv - av
+          }
+          const cmp = (av || "").toString().localeCompare((bv || "").toString())
+          return sortConfig.dir === "asc" ? cmp : -cmp
+        })
+      }
+    }
+
+    return rows
+  }, [displayData, localFilters, sortConfig, stageFilter, statusOf])
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (filterPanelRef.current && !filterPanelRef.current.contains(event.target)) {
-        setShowFilters(false)
-      }
-    }
+    if (onCountChange) onCountChange(filteredInterns.length)
+  }, [filteredInterns, onCountChange])
 
-    if (showFilters) {
-      document.addEventListener("mousedown", handleClickOutside)
-    }
+  /* Broadcast every row (unfiltered) so the pipeline cards and this table can
+     never disagree. Also answer a request from a pipeline that mounted first. */
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined
+    const payload = displayData.map((r) => ({ id: r.id, status: statusOf(r) }))
+    const broadcast = () => window.dispatchEvent(new CustomEvent(INTERN_ROWS_EVENT, { detail: payload }))
+    if (displayData.length > 0) broadcast()
+    window.addEventListener(INTERN_ROWS_REQUEST_EVENT, broadcast)
+    return () => window.removeEventListener(INTERN_ROWS_REQUEST_EVENT, broadcast)
+  }, [displayData, statusOf])
 
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [showFilters])
-  const handleConnectClick = async (intern) => {
-  try {
-    const user = auth.currentUser;
-    if (!user) {
-      setNotification({ type: "error", message: "User not authenticated. Please log in." });
-      return;
-    }
+  /* ─── Filter options + chrome ───────────────────────────────────────── */
+  const uniqueOf = useCallback(
+    (accessor) => [...new Set(displayData.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
+    [displayData],
+  )
+  const locationOptions = useMemo(() => uniqueOf((d) => d.location), [uniqueOf])
+  const sectorOptions = useMemo(() => uniqueOf((d) => d.sector), [uniqueOf])
+  const stageOptions = useMemo(() => uniqueOf((d) => d.operationStage), [uniqueOf])
+  const stipendOptions = useMemo(() => uniqueOf((d) => d.stipend), [uniqueOf])
+  const statusOptions = useMemo(() => {
+    const found = [...new Set(displayData.map((d) => statusOf(d)).filter(Boolean))].sort()
+    return found.length > 0 ? found : Object.keys(STATUS_TYPES)
+  }, [displayData, statusOf])
 
-    console.log("Starting application submission for:", intern.smseName);
-    console.log("User ID:", user.uid);
+  const f = localFilters
+  const activeFilterCount =
+    (f.name.trim() ? 1 : 0) +
+    f.location.length +
+    f.sector.length +
+    f.operationStage.length +
+    (f.internshipRole.trim() ? 1 : 0) +
+    f.stipend.length +
+    (f.startFrom || f.startTo ? 1 : 0) +
+    (f.matchRange[0] > 0 || f.matchRange[1] < 100 ? 1 : 0) +
+    f.status.length +
+    (f.ratingRecommendation.trim() ? 1 : 0)
 
-    // Get user profile data
-    let userData = {};
-    try {
-      const userDoc = await getDoc(doc(db, "internProfiles", user.uid));
-      userData = userDoc.exists() ? userDoc.data() : {};
-    } catch (userError) {
-      console.warn("Could not retrieve user profile:", userError);
-    }
-
-    // Get sponsor data
-    let sponsorData = {};
-    try {
-      const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId));
-      sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {};
-    } catch (sponsorError) {
-      console.warn("Could not retrieve sponsor profile:", sponsorError);
-    }
-
-    // Fetch evaluation scores
-    let evaluationScores = {
-      academic: 0,
-      bigInternScore: 0,
-      professionalPresentation: 0,
-      professionalSkills: 0,
-      workExperience: 0,
-      lastUpdated: null,
-      updatedAt: null
-    };
-
-    try {
-      const evaluationDoc = await getDoc(doc(db, "internEvaluations", user.uid));
-      if (evaluationDoc.exists()) {
-        const evalData = evaluationDoc.data();
-        evaluationScores = {
-          academic: evalData.scores?.academic || 0,
-          bigInternScore: evalData.scores?.bigInternScore || 0,
-          professionalPresentation: evalData.scores?.professionalPresentation || 0,
-          professionalSkills: evalData.scores?.professionalSkills || 0,
-          workExperience: evalData.scores?.workExperience || 0,
-          lastUpdated: evalData.scores?.lastUpdated || null,
-          updatedAt: evalData.scores?.updatedAt || null
-        };
-      }
-    } catch (evaluationError) {
-      console.warn("Could not retrieve evaluation scores:", evaluationError);
-    }
-
-    // Build application ID
-    const internId = user.uid;
-    const sponsorId = intern.originalSponsorId || intern.id.split("_")[0] || intern.id;
-    const applicationDocId = `${sponsorId}_${internId}`;
-
-    // Get user details
-    const userFormData = userData.formData || {};
-    const userProfile = userData.entityOverview || {};
-
-    // Calculate match score
-    const matchResult = calculateMatchScore(userData, sponsorData);
-
-    // Build application data
-    const applicationData = {
-      applicantId: internId,
-      applicantName: userFormData.personalOverview?.fullName || "Anonymous",
-      applicantEmail: user.email || userFormData.personalOverview?.email || "Not provided",
-      institution: userFormData.academicOverview?.institution || userProfile.organizationName || "Not Provided",
-      degree: userFormData.academicOverview?.degree || userFormData.studyLevel || "Not Provided",
-      field: userFormData.academicOverview?.fieldOfStudy || userFormData.sector || "Not Provided",
-      locationFlexibility: userFormData.academicOverview?.locationFlexibility || userFormData.locationFlexibility || "Not Provided",
-      technicalSkills: userFormData.skillsInterests?.technicalSkills || [],
-      availabilityStart: userFormData.skillsInterests?.availabilityStart || "Not specified",
-      provinces: userFormData.personalOverview?.provinces || [],
-      cities: userFormData.personalOverview?.cities || [],
-      sponsorId: sponsorId,
-      sponsorName: intern.smseName,
-      location: intern.location || "N/A",
-      type: "Internship",
-      role: intern.internshipRole || "N/A",
-      sector: intern.sector || "N/A",
-      funding: intern.stipend === "Pro-Bono" || intern.stipend === "not specified" ? "No" : "Yes",
-      fundType: intern.stipend || "not specified",
-      startDate: intern.startDate || "TBD",
-      appliedDate: new Date().toISOString(),
-      aiAcademicScore: evaluationScores.academic,
-      aiProfessionalSkillsScore: evaluationScores.professionalSkills,
-      aiWorkExperienceScore: evaluationScores.workExperience,
-      aiPresentationScore: evaluationScores.professionalPresentation,
-      bigInternScore: evaluationScores.bigInternScore,
-      evaluationLastUpdated: evaluationScores.lastUpdated,
-      evaluationUpdatedAt: evaluationScores.updatedAt,
-      matchAnalysis: {
-        overallScore: matchResult.score,
-        calculatedAt: new Date().toISOString(),
-        breakdown: {
-          skillsMatch: {
-            score: matchResult.breakdown.skillsMatch.score,
-            maxScore: matchResult.breakdown.skillsMatch.maxScore,
-            matched: matchResult.breakdown.skillsMatch.matched,
-            description: matchResult.breakdown.skillsMatch.description,
-            applicantSkills: matchResult.breakdown.skillsMatch.details.internSkills,
-            requiredRole: matchResult.breakdown.skillsMatch.details.sponsorRole,
-            preferredSkills: matchResult.breakdown.skillsMatch.details.sponsorSkills
-          },
-          workModeCompatibility: {
-            score: matchResult.breakdown.workModeMatch.score,
-            maxScore: matchResult.breakdown.workModeMatch.maxScore,
-            matched: matchResult.breakdown.workModeMatch.matched,
-            description: matchResult.breakdown.workModeMatch.description,
-            applicantFlexibility: matchResult.breakdown.workModeMatch.details.internFlexibility,
-            requiredType: matchResult.breakdown.workModeMatch.details.sponsorType
-          },
-          locationCompatibility: {
-            score: matchResult.breakdown.locationMatch.score,
-            maxScore: matchResult.breakdown.locationMatch.maxScore,
-            description: matchResult.breakdown.locationMatch.description,
-            applicantProvinces: matchResult.breakdown.locationMatch.details.internProvinces,
-            applicantCities: matchResult.breakdown.locationMatch.details.internCities,
-            requiredProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
-            requiredCities: matchResult.breakdown.locationMatch.details.sponsorCities,
-            isLocationRelevant: matchResult.breakdown.locationMatch.details.isLocationRelevant
-          },
-          availabilityAlignment: {
-            score: matchResult.breakdown.availabilityMatch.score,
-            maxScore: matchResult.breakdown.availabilityMatch.maxScore,
-            matched: matchResult.breakdown.availabilityMatch.matched,
-            description: matchResult.breakdown.availabilityMatch.description,
-            applicantStartDate: matchResult.breakdown.availabilityMatch.details.internStartDate,
-            requiredStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate
-          },
-          profileCompleteness: {
-            score: matchResult.breakdown.additionalFactors.score,
-            maxScore: matchResult.breakdown.additionalFactors.maxScore,
-            matched: matchResult.breakdown.additionalFactors.matched,
-            description: matchResult.breakdown.additionalFactors.description,
-            hasGraduationYear: matchResult.breakdown.additionalFactors.details.hasGradYear,
-            hasInternshipType: matchResult.breakdown.additionalFactors.details.hasInternType
-          }
-        },
-        matchSummary: {
-          strongPoints: [],
-          weakPoints: [],
-          recommendations: [],
-          overallAssessment: matchResult.score >= 80 ? "Excellent Match" :
-                            matchResult.score >= 60 ? "Good Match" :
-                            matchResult.score >= 40 ? "Fair Match" : "Poor Match"
-        }
-      },
-      status: "Applied",
-      action: intern.action || "Send Application",
-      rating: intern.ratingRecommendation || "Pending",
-      submittedAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
-      applicationVersion: "2.1"
-    };
-
-    // Build match summary
-    const breakdown = matchResult.breakdown;
-    const strongPoints = [];
-    const weakPoints = [];
-    const recommendations = [];
-
-    if (breakdown.skillsMatch.matched) {
-      strongPoints.push("Skills align well with role requirements");
-    } else {
-      weakPoints.push("Skills don't match role requirements");
-      recommendations.push("Consider highlighting transferable skills or willingness to learn");
-    }
-
-    if (breakdown.workModeMatch.matched) {
-      strongPoints.push("Work mode preferences are compatible");
-    } else {
-      weakPoints.push("Work mode preferences don't align");
-      recommendations.push("Consider discussing flexibility in work arrangements");
-    }
-
-    if (breakdown.locationMatch.score >= 15) {
-      strongPoints.push("Good location compatibility");
-    } else if (breakdown.locationMatch.score > 0) {
-      strongPoints.push("Some location flexibility");
-    } else {
-      weakPoints.push("Location requirements not met");
-      recommendations.push("Discuss remote work possibilities or relocation");
-    }
-
-    if (breakdown.availabilityMatch.matched) {
-      strongPoints.push("Availability aligns with timeline");
-    } else {
-      weakPoints.push("Availability doesn't match preferred timeline");
-      recommendations.push("Discuss flexible start dates");
-    }
-
-    if (evaluationScores.bigInternScore >= 70) {
-      strongPoints.push("High overall evaluation score");
-    } else if (evaluationScores.bigInternScore >= 50) {
-      strongPoints.push("Good evaluation score");
-    } else if (evaluationScores.bigInternScore > 0) {
-      weakPoints.push("Lower evaluation score");
-      recommendations.push("Consider highlighting achievements and growth potential");
-    }
-
-    applicationData.matchAnalysis.matchSummary.strongPoints = strongPoints;
-    applicationData.matchAnalysis.matchSummary.weakPoints = weakPoints;
-    applicationData.matchAnalysis.matchSummary.recommendations = recommendations;
-
-    // Save to Firestore
-    await setDoc(doc(db, "internshipApplications", applicationDocId), applicationData, { merge: true });
-    console.log("Application successfully saved to Firestore");
-
-    // Update UI state
-    setStatuses((prev) => ({ ...prev, [intern.id]: "Applied" }));
-
-    // ==========================================
-    // GET INTERN NAME FOR MESSAGES
-    // ==========================================
-
-    let internName = user.displayName || "Intern";
-    try {
-      const internProfileRef = doc(db, "internProfiles", user.uid);
-      const internProfileSnap = await getDoc(internProfileRef);
-      if (internProfileSnap.exists()) {
-        const profileData = internProfileSnap.data();
-        const formData = profileData.formData || {};
-        const personalOverview = formData.personalOverview || {};
-        internName = personalOverview.fullName || user.displayName || "Intern";
-      }
-    } catch (error) {
-      console.error("Error fetching intern profile:", error);
-    }
-
-    // ==========================================
-    // SEND IN-APP MESSAGES
-    // ==========================================
-
-    // 1. Message to sponsor (SME)
-    try {
-      await addDoc(collection(db, "messages"), {
-        to: sponsorId,
-        toName: intern.smseName || "Sponsor",
-         from: "system",           // ← Change this
-        fromName: "BIG Marketplace",  // ← Change this
-        subject: `📋 New Application: ${intern.internshipRole}`,
-        content: `Dear ${intern.smseName},\n\n` +
-                 `You have received a new internship application from ${internName}.\n\n` +
-                `📧 Contact: ${applicationData.applicantEmail}\n\n` +  // ← Use this
-                 `Application Details:\n` +
-                 `- Role: ${intern.internshipRole}\n` +
-                 `- Match Score: ${applicationData.matchAnalysis?.overallScore || 0}%\n` +
-                 `- Institution: ${applicationData.institution}\n` +
-                 `- Field of Study: ${applicationData.field}\n` +
-                 `- Availability: ${applicationData.availabilityStart}\n\n` +
-                 `Match Analysis Summary:\n` +
-                 `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
-                 `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
-                 `Please get back to the intern once you have made a decision.`,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        applicationId: applicationDocId,
-        linkTo: "/sponsor/applications"
-      });
-      console.log("✅ In-app message sent to sponsor");
-    } catch (error) {
-      console.warn("Could not send in-app message to sponsor:", error);
-    }
-
-    // 2. Confirmation message to intern (applicant)
-    try {
-      await addDoc(collection(db, "messages"), {
-        to: user.uid,
-        toName: internName,
-        from: "system",
-        fromName: "BIG Marketplace",
-        subject: `✅ Application Submitted: ${intern.internshipRole}`,
-        content: `Dear ${internName},\n\n` +
-                 `Your application for "${intern.internshipRole}" at ${intern.smseName} has been submitted successfully.\n\n` +
-                 `Application Details:\n` +
-                 `- Role: ${intern.internshipRole}\n` +
-                 `- Sponsor: ${intern.smseName}\n` +
-                 `- Match Score: ${applicationData.matchAnalysis?.overallScore || 0}%\n` +
-                 `- Institution: ${applicationData.institution}\n` +
-                 `- Field of Study: ${applicationData.field}\n` +
-                 `- Availability: ${applicationData.availabilityStart}\n\n` +
-                 `Match Analysis Summary:\n` +
-                 `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
-                 `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
-                 `The sponsor will review your application and contact you.`,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        applicationId: applicationDocId,
-        linkTo: "/intern/applications"
-      });
-      console.log("✅ In-app confirmation sent to intern");
-    } catch (error) {
-      console.warn("Could not send in-app confirmation to intern:", error);
-    }
-
-    // ==========================================
-    // SEND EMAIL NOTIFICATIONS
-    // ==========================================
-
-    // 1. Email to sponsor (SME)
-    try {
-      const functions = getFunctions();
-      const sendInternApplicationEmail = httpsCallable(functions, 'internSendApplicationEmail');
-      
-      let sponsorEmail = null;
-      try {
-        const sponsorProfileRef = doc(db, "universalProfiles", sponsorId);
-        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
-        if (sponsorProfileSnap.exists()) {
-          const profileData = sponsorProfileSnap.data();
-          sponsorEmail = profileData.email || 
-                         profileData.contactDetails?.email ||
-                         profileData.contactEmail ||
-                         profileData.businessEmail ||
-                         profileData.personalEmail;
-        }
-      } catch (fetchError) {
-        console.error("Error fetching sponsor email:", fetchError);
-      }
-
-      if (sponsorEmail) {
-        const emailMessage = `Dear ${intern.smseName},\n\n` +
-          `You have received a new internship application from ${applicationData.applicantName}.\n\n` +
-         `📧 Contact: ${applicationData.applicantEmail}\n\n` +  // ← Use this
-          `Application Details:\n` +
-          `- Role: ${intern.internshipRole}\n` +
-          `- Match Score: ${applicationData.matchAnalysis.overallScore}%\n` +
-          `- Institution: ${applicationData.institution}\n` +
-          `- Field of Study: ${applicationData.field}\n` +
-          `- Availability: ${applicationData.availabilityStart}\n\n` +
-          `Match Analysis Summary:\n` +
-          `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
-          `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
-          `Please log in to review the full application.\n\n` +
-          `Best regards,\nBIG Marketplace Africa Internship Team`;
-
-        await sendInternApplicationEmail({
-          sponsorEmail: sponsorEmail,
-          sponsorName: intern.smseName || "Sponsor",
-          applicantName: applicationData.applicantName,
-          applicantEmail: user.email,
-          role: intern.internshipRole,
-          matchScore: applicationData.matchAnalysis.overallScore,
-          applicationId: applicationDocId,
-          applicationLink: `https://www.bigmarketplace.africa/applications/${applicationDocId}`,
-          message: emailMessage
-        });
-        console.log("✅ Application email sent to sponsor:", sponsorEmail);
-      }
-    } catch (emailError) {
-      console.error("❌ Application email to sponsor failed:", emailError);
-    }
-
-    // 2. Confirmation email to intern (applicant)
-    try {
-      const functions = getFunctions();
-      const sendApplicationConfirmation = httpsCallable(functions, 'internSendApplicationConfirmation');
-      
-      await sendApplicationConfirmation({
-        to: user.email,
-        name: applicationData.applicantName,
-        sponsorName: intern.smseName || "Sponsor",
-        role: intern.internshipRole,
-        applicationDate: new Date().toISOString(),
-        applicationId: applicationDocId,
-        linkTo: "https://www.bigmarketplace.africa/intern/applications"
-      });
-      console.log("✅ Confirmation email sent to intern:", user.email);
-    } catch (emailError) {
-      console.error("❌ Confirmation email to intern failed:", emailError);
-    }
-
-    // ==========================================
-    // DISPATCH NOTIFICATION
-    // ==========================================
-
-    const dispatchNotification = () => {
-      const notificationMessage = `New application from ${internName} for ${intern.internshipRole}!`;
-      const event = new CustomEvent('newNotification', {
-        detail: { 
-          message: notificationMessage,
-          type: 'success',
-          timestamp: new Date().toISOString(),
-          recipientId: sponsorId
-        },
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      });
-      setTimeout(() => {
-        window.dispatchEvent(event);
-      }, 100);
-    };
-    dispatchNotification();
-
-    setNotification({ 
-      type: "success", 
-      message: `Application successfully submitted to ${intern.smseName}!` 
-    });
-    setTimeout(() => setNotification(null), 4000);
-
-  } catch (error) {
-    console.error("Detailed error in handleConnectClick:", error);
-    console.error("Error code:", error.code);
-    console.error("Error message:", error.message);
-    
-    let errorMessage = "Failed to submit application.";
-    if (error.code === 'permission-denied') {
-      errorMessage = "Permission denied. Please check your account permissions.";
-    } else if (error.code === 'unavailable') {
-      errorMessage = "Service temporarily unavailable. Please try again.";
-    } else if (error.code === 'network-request-failed') {
-      errorMessage = "Network error. Please check your internet connection.";
-    } else if (error.message.includes('auth')) {
-      errorMessage = "Authentication error. Please log in again.";
-    }
-    
-    const errorEvent = new CustomEvent('newNotification', {
-      detail: {
-        message: errorMessage,
-        type: 'error',
-        timestamp: new Date().toISOString()
-      }
-    });
-    window.dispatchEvent(errorEvent);
-    
-    setNotification({ type: "error", message: errorMessage });
-    setTimeout(() => setNotification(null), 5000);
+  const clearAllFilters = () => {
+    setLocalFilters({ ...EMPTY_FILTERS })
+    setSortConfig(null)
   }
-};
 
-  const sendApplicationEmail = async (intern, user, applicationData) => {
+  const getFilterActive = (type) => {
+    switch (type) {
+      case "startDate":
+        return !!f.startFrom || !!f.startTo
+      case "matchPercentage":
+        return f.matchRange[0] > 0 || f.matchRange[1] < 100
+      default: {
+        const v = f[type]
+        if (Array.isArray(v)) return v.length > 0
+        return typeof v === "string" ? !!v.trim() : false
+      }
+    }
+  }
+
+  const toggleChip = (field, value) =>
+    setLocalFilters((p) => ({
+      ...p,
+      [field]: p[field].includes(value) ? p[field].filter((x) => x !== value) : [...p[field], value],
+    }))
+
+  /* ─── Layout: responsive collapse, pinning, offsets ─────────────────── */
+  const maxPriority = viewportWidth < 640 ? 1 : viewportWidth < 1024 ? 3 : 99
+
+  const visibleColumnKeys = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key].priority <= maxPriority),
+    [columnOrder, columnVisibility, maxPriority],
+  )
+
+  const collapsedByViewport = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key].priority > maxPriority).length,
+    [columnOrder, columnVisibility, maxPriority],
+  )
+
+  const orderedColumns = useMemo(() => {
+    const left = visibleColumnKeys.filter((k) => pinned[k] === "left")
+    const right = visibleColumnKeys.filter((k) => pinned[k] === "right")
+    const middle = visibleColumnKeys.filter((k) => !pinned[k])
+    return [...left, ...middle, ...right]
+  }, [visibleColumnKeys, pinned])
+
+  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+
+  const stickyOffsets = useMemo(() => {
+    const offsets = {}
+    // Left-pinned columns stack to the right of the frozen SMSE column.
+    let leftAcc = SMSE_WIDTH
+    orderedColumns.forEach((key) => {
+      if (pinned[key] === "left") {
+        offsets[key] = { side: "left", value: leftAcc }
+        leftAcc += widthOf(key)
+      }
+    })
+    // Action is not pinned, so right-pinned columns stick to the table edge.
+    let rightAcc = 0
+    ;[...orderedColumns].reverse().forEach((key) => {
+      if (pinned[key] === "right") {
+        offsets[key] = { side: "right", value: rightAcc }
+        rightAcc += widthOf(key)
+      }
+    })
+    return offsets
+  }, [orderedColumns, pinned, widthOf])
+
+  const totalWidth = SMSE_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+
+  const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
+  const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
+
+  const tableCellStyle = {
+    padding: cellPadding,
+    borderBottom: "1px solid #e6d7c3",
+    borderRight: "1px solid #e6d7c3",
+    fontSize: "0.8rem",
+    verticalAlign: "top",
+    color: "#4a352f",
+    lineHeight: "1.3",
+    overflow: "hidden",
+  }
+
+  const searchedColumns = DEFAULT_COLUMN_ORDER.filter((key) =>
+    COLUMN_DEFS[key].label.toLowerCase().includes(columnSearch.toLowerCase()),
+  )
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Actions — unchanged behaviour
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  const handleConnectClick = async (intern) => {
     try {
-      console.log("🔄 Sending application email...");
-
-      const emailjsConfig = {
-        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
-        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-      };
-
-      console.log("📧 Using email config:", emailjsConfig);
-
-      if (!window.emailjs) {
-        emailjs.init(emailjsConfig.publicKey);
-        window.emailjs = emailjs;
+      const user = auth.currentUser
+      if (!user) {
+        setNotification({ type: "error", message: "User not authenticated. Please log in." })
+        return
       }
 
-      const internName = user?.displayName || applicationData.applicantName || "Intern Applicant";
-      const sponsorName = intern.smseName;
+      console.log("Starting application submission for:", intern.smseName)
+      console.log("User ID:", user.uid)
 
-      // Get sponsor email
-      let sponsorEmail = null;
-      console.log("📋 Fetching sponsor email for:", intern.originalSponsorId);
+      // Get user profile data
+      let userData = {}
+      try {
+        const userDoc = await getDoc(doc(db, "internProfiles", user.uid))
+        userData = userDoc.exists() ? userDoc.data() : {}
+      } catch (userError) {
+        console.warn("Could not retrieve user profile:", userError)
+      }
+
+      // Get sponsor data
+      let sponsorData = {}
+      try {
+        const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId))
+        sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {}
+      } catch (sponsorError) {
+        console.warn("Could not retrieve sponsor profile:", sponsorError)
+      }
+
+      // Fetch evaluation scores
+      let evaluationScores = {
+        academic: 0,
+        bigInternScore: 0,
+        professionalPresentation: 0,
+        professionalSkills: 0,
+        workExperience: 0,
+        lastUpdated: null,
+        updatedAt: null,
+      }
 
       try {
-        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
-        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
-        
-        if (sponsorProfileSnap.exists()) {
-          const profileData = sponsorProfileSnap.data();
-          console.log("📄 Sponsor profile data:", profileData);
-          
-          sponsorEmail = profileData.email || 
-                         profileData.contactDetails?.email ||
-                         profileData.contactEmail ||
-                         profileData.businessEmail ||
-                         profileData.personalEmail;
-          
-          if (sponsorEmail) {
-            console.log("✅ Found sponsor email:", sponsorEmail);
-          } else {
-            console.log("❌ No email found in sponsor profile");
+        const evaluationDoc = await getDoc(doc(db, "internEvaluations", user.uid))
+        if (evaluationDoc.exists()) {
+          const evalData = evaluationDoc.data()
+          evaluationScores = {
+            academic: evalData.scores?.academic || 0,
+            bigInternScore: evalData.scores?.bigInternScore || 0,
+            professionalPresentation: evalData.scores?.professionalPresentation || 0,
+            professionalSkills: evalData.scores?.professionalSkills || 0,
+            workExperience: evalData.scores?.workExperience || 0,
+            lastUpdated: evalData.scores?.lastUpdated || null,
+            updatedAt: evalData.scores?.updatedAt || null,
           }
-        } else {
-          console.log("❌ No document found for sponsor:", intern.originalSponsorId);
         }
-      } catch (fetchError) {
-        console.error("❌ Error fetching sponsor email:", fetchError);
+      } catch (evaluationError) {
+        console.warn("Could not retrieve evaluation scores:", evaluationError)
       }
 
-      if (!sponsorEmail) {
-        console.warn("⚠️ No sponsor email found, using fallback");
-        sponsorEmail = "support@bigmarketplace.africa";
+      // Build application ID
+      const internId = user.uid
+      const sponsorId = intern.originalSponsorId || intern.id.split("_")[0] || intern.id
+      const applicationDocId = `${sponsorId}_${internId}`
+
+      // Get user details
+      const userFormData = userData.formData || {}
+      const userProfile = userData.entityOverview || {}
+
+      // Calculate match score
+      const matchResult = calculateMatchScore(userData, sponsorData)
+
+      // Build application data
+      const applicationData = {
+        applicantId: internId,
+        applicantName: userFormData.personalOverview?.fullName || "Anonymous",
+        applicantEmail: user.email || userFormData.personalOverview?.email || "Not provided",
+        institution: userFormData.academicOverview?.institution || userProfile.organizationName || "Not Provided",
+        degree: userFormData.academicOverview?.degree || userFormData.studyLevel || "Not Provided",
+        field: userFormData.academicOverview?.fieldOfStudy || userFormData.sector || "Not Provided",
+        locationFlexibility:
+          userFormData.academicOverview?.locationFlexibility || userFormData.locationFlexibility || "Not Provided",
+        technicalSkills: userFormData.skillsInterests?.technicalSkills || [],
+        availabilityStart: userFormData.skillsInterests?.availabilityStart || "Not specified",
+        provinces: userFormData.personalOverview?.provinces || [],
+        cities: userFormData.personalOverview?.cities || [],
+        sponsorId: sponsorId,
+        sponsorName: intern.smseName,
+        location: intern.location || "N/A",
+        type: "Internship",
+        role: intern.internshipRole || "N/A",
+        sector: intern.sector || "N/A",
+        funding: intern.stipend === "Pro-Bono" || intern.stipend === "not specified" ? "No" : "Yes",
+        fundType: intern.stipend || "not specified",
+        startDate: intern.startDate || "TBD",
+        appliedDate: new Date().toISOString(),
+        aiAcademicScore: evaluationScores.academic,
+        aiProfessionalSkillsScore: evaluationScores.professionalSkills,
+        aiWorkExperienceScore: evaluationScores.workExperience,
+        aiPresentationScore: evaluationScores.professionalPresentation,
+        bigInternScore: evaluationScores.bigInternScore,
+        evaluationLastUpdated: evaluationScores.lastUpdated,
+        evaluationUpdatedAt: evaluationScores.updatedAt,
+        matchAnalysis: {
+          overallScore: matchResult.score,
+          calculatedAt: new Date().toISOString(),
+          breakdown: {
+            skillsMatch: {
+              score: matchResult.breakdown.skillsMatch.score,
+              maxScore: matchResult.breakdown.skillsMatch.maxScore,
+              matched: matchResult.breakdown.skillsMatch.matched,
+              description: matchResult.breakdown.skillsMatch.description,
+              applicantSkills: matchResult.breakdown.skillsMatch.details.internSkills,
+              requiredRole: matchResult.breakdown.skillsMatch.details.sponsorRole,
+              preferredSkills: matchResult.breakdown.skillsMatch.details.sponsorSkills,
+            },
+            workModeCompatibility: {
+              score: matchResult.breakdown.workModeMatch.score,
+              maxScore: matchResult.breakdown.workModeMatch.maxScore,
+              matched: matchResult.breakdown.workModeMatch.matched,
+              description: matchResult.breakdown.workModeMatch.description,
+              applicantFlexibility: matchResult.breakdown.workModeMatch.details.internFlexibility,
+              requiredType: matchResult.breakdown.workModeMatch.details.sponsorType,
+            },
+            locationCompatibility: {
+              score: matchResult.breakdown.locationMatch.score,
+              maxScore: matchResult.breakdown.locationMatch.maxScore,
+              description: matchResult.breakdown.locationMatch.description,
+              applicantProvinces: matchResult.breakdown.locationMatch.details.internProvinces,
+              applicantCities: matchResult.breakdown.locationMatch.details.internCities,
+              requiredProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
+              requiredCities: matchResult.breakdown.locationMatch.details.sponsorCities,
+              isLocationRelevant: matchResult.breakdown.locationMatch.details.isLocationRelevant,
+            },
+            availabilityAlignment: {
+              score: matchResult.breakdown.availabilityMatch.score,
+              maxScore: matchResult.breakdown.availabilityMatch.maxScore,
+              matched: matchResult.breakdown.availabilityMatch.matched,
+              description: matchResult.breakdown.availabilityMatch.description,
+              applicantStartDate: matchResult.breakdown.availabilityMatch.details.internStartDate,
+              requiredStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate,
+            },
+            profileCompleteness: {
+              score: matchResult.breakdown.additionalFactors.score,
+              maxScore: matchResult.breakdown.additionalFactors.maxScore,
+              matched: matchResult.breakdown.additionalFactors.matched,
+              description: matchResult.breakdown.additionalFactors.description,
+              hasGraduationYear: matchResult.breakdown.additionalFactors.details.hasGradYear,
+              hasInternshipType: matchResult.breakdown.additionalFactors.details.hasInternType,
+            },
+          },
+          matchSummary: {
+            strongPoints: [],
+            weakPoints: [],
+            recommendations: [],
+            overallAssessment:
+              matchResult.score >= 80
+                ? "Excellent Match"
+                : matchResult.score >= 60
+                  ? "Good Match"
+                  : matchResult.score >= 40
+                    ? "Fair Match"
+                    : "Poor Match",
+          },
+        },
+        status: "Applied",
+        action: intern.action || "Send Application",
+        rating: intern.ratingRecommendation || "Pending",
+        submittedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        applicationVersion: "2.1",
       }
 
-      console.log("📧 Final recipient email:", sponsorEmail);
+      // Build match summary
+      const breakdown = matchResult.breakdown
+      const strongPoints = []
+      const weakPoints = []
+      const recommendations = []
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(sponsorEmail)) {
-        throw new Error(`Invalid email format: "${sponsorEmail}"`);
+      if (breakdown.skillsMatch.matched) {
+        strongPoints.push("Skills align well with role requirements")
+      } else {
+        weakPoints.push("Skills don't match role requirements")
+        recommendations.push("Consider highlighting transferable skills or willingness to learn")
       }
 
-      // Create email content
-      let emailMessage = `Dear ${sponsorName},\n\n`;
-      emailMessage += `You have received a new internship application from ${internName}.\n\n`;
-      emailMessage += `Application Details:\n`;
-      emailMessage += `- Role: ${intern.internshipRole}\n`;
-      emailMessage += `- Match Score: ${applicationData.matchAnalysis.overallScore}%\n`;
-      emailMessage += `- Institution: ${applicationData.institution}\n`;
-      emailMessage += `- Field of Study: ${applicationData.field}\n`;
-      emailMessage += `- Availability: ${applicationData.availabilityStart}\n\n`;
-      
-      emailMessage += `Match Analysis Summary:\n`;
-      emailMessage += `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n`;
-      
-      if (applicationData.matchAnalysis.matchSummary.strongPoints.length > 0) {
-        emailMessage += `- Strong Points:\n`;
-        applicationData.matchAnalysis.matchSummary.strongPoints.forEach(point => {
-          emailMessage += `  • ${point}\n`;
-        });
+      if (breakdown.workModeMatch.matched) {
+        strongPoints.push("Work mode preferences are compatible")
+      } else {
+        weakPoints.push("Work mode preferences don't align")
+        recommendations.push("Consider discussing flexibility in work arrangements")
       }
-      
-      emailMessage += `\nPlease log in to your dashboard to review the full application and match breakdown.\n\n`;
-      emailMessage += `Best regards,\nBIG Marketplace Africa Internship Team`;
 
-      const templateParams = {
-        to_email: sponsorEmail,
-        subject: `New Internship Application: ${internName} for ${intern.internshipRole}`,
-        from_name: "BIG Marketplace Africa",
-        date: new Date().toLocaleDateString(),
-        message: emailMessage,
-        portal_url: `https://www.bigmarketplace.africa/applications/${intern.originalSponsorId}_${user.uid}`,
-        has_attachments: "false",
-        attachments_count: "0"
-      };
+      if (breakdown.locationMatch.score >= 15) {
+        strongPoints.push("Good location compatibility")
+      } else if (breakdown.locationMatch.score > 0) {
+        strongPoints.push("Some location flexibility")
+      } else {
+        weakPoints.push("Location requirements not met")
+        recommendations.push("Discuss remote work possibilities or relocation")
+      }
 
-      console.log("📨 Sending application email...", templateParams);
+      if (breakdown.availabilityMatch.matched) {
+        strongPoints.push("Availability aligns with timeline")
+      } else {
+        weakPoints.push("Availability doesn't match preferred timeline")
+        recommendations.push("Discuss flexible start dates")
+      }
 
-      const response = await window.emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.templateId,
-        templateParams,
-        emailjsConfig.publicKey
-      );
-      
-      console.log("✅ Application email sent successfully!", response);
-      
-    } catch (emailError) {
-      console.error("❌ Application email failed:", emailError);
-      // Don't throw error here - application should still be saved even if email fails
+      if (evaluationScores.bigInternScore >= 70) {
+        strongPoints.push("High overall evaluation score")
+      } else if (evaluationScores.bigInternScore >= 50) {
+        strongPoints.push("Good evaluation score")
+      } else if (evaluationScores.bigInternScore > 0) {
+        weakPoints.push("Lower evaluation score")
+        recommendations.push("Consider highlighting achievements and growth potential")
+      }
+
+      applicationData.matchAnalysis.matchSummary.strongPoints = strongPoints
+      applicationData.matchAnalysis.matchSummary.weakPoints = weakPoints
+      applicationData.matchAnalysis.matchSummary.recommendations = recommendations
+
+      // Save to Firestore
+      await setDoc(doc(db, "internshipApplications", applicationDocId), applicationData, { merge: true })
+      console.log("Application successfully saved to Firestore")
+
+      // Update UI state
+      setStatuses((prev) => ({ ...prev, [intern.id]: "Applied" }))
+
+      // ==========================================
+      // GET INTERN NAME FOR MESSAGES
+      // ==========================================
+
+      let internName = user.displayName || "Intern"
+      try {
+        const internProfileRef = doc(db, "internProfiles", user.uid)
+        const internProfileSnap = await getDoc(internProfileRef)
+        if (internProfileSnap.exists()) {
+          const profileData = internProfileSnap.data()
+          const formData = profileData.formData || {}
+          const personalOverview = formData.personalOverview || {}
+          internName = personalOverview.fullName || user.displayName || "Intern"
+        }
+      } catch (error) {
+        console.error("Error fetching intern profile:", error)
+      }
+
+      // ==========================================
+      // SEND IN-APP MESSAGES
+      // ==========================================
+
+      // 1. Message to sponsor (SME)
+      try {
+        await addDoc(collection(db, "messages"), {
+          to: sponsorId,
+          toName: intern.smseName || "Sponsor",
+          from: "system",
+          fromName: "BIG Marketplace",
+          subject: `📋 New Application: ${intern.internshipRole}`,
+          content:
+            `Dear ${intern.smseName},\n\n` +
+            `You have received a new internship application from ${internName}.\n\n` +
+            `📧 Contact: ${applicationData.applicantEmail}\n\n` +
+            `Application Details:\n` +
+            `- Role: ${intern.internshipRole}\n` +
+            `- Match Score: ${applicationData.matchAnalysis?.overallScore || 0}%\n` +
+            `- Institution: ${applicationData.institution}\n` +
+            `- Field of Study: ${applicationData.field}\n` +
+            `- Availability: ${applicationData.availabilityStart}\n\n` +
+            `Match Analysis Summary:\n` +
+            `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
+            `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
+            `Please get back to the intern once you have made a decision.`,
+          date: new Date().toISOString(),
+          read: false,
+          type: "inbox",
+          applicationId: applicationDocId,
+          linkTo: "/sponsor/applications",
+        })
+        console.log("✅ In-app message sent to sponsor")
+      } catch (error) {
+        console.warn("Could not send in-app message to sponsor:", error)
+      }
+
+      // 2. Confirmation message to intern (applicant)
+      try {
+        await addDoc(collection(db, "messages"), {
+          to: user.uid,
+          toName: internName,
+          from: "system",
+          fromName: "BIG Marketplace",
+          subject: `✅ Application Submitted: ${intern.internshipRole}`,
+          content:
+            `Dear ${internName},\n\n` +
+            `Your application for "${intern.internshipRole}" at ${intern.smseName} has been submitted successfully.\n\n` +
+            `Application Details:\n` +
+            `- Role: ${intern.internshipRole}\n` +
+            `- Sponsor: ${intern.smseName}\n` +
+            `- Match Score: ${applicationData.matchAnalysis?.overallScore || 0}%\n` +
+            `- Institution: ${applicationData.institution}\n` +
+            `- Field of Study: ${applicationData.field}\n` +
+            `- Availability: ${applicationData.availabilityStart}\n\n` +
+            `Match Analysis Summary:\n` +
+            `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
+            `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
+            `The sponsor will review your application and contact you.`,
+          date: new Date().toISOString(),
+          read: false,
+          type: "inbox",
+          applicationId: applicationDocId,
+          linkTo: "/intern/applications",
+        })
+        console.log("✅ In-app confirmation sent to intern")
+      } catch (error) {
+        console.warn("Could not send in-app confirmation to intern:", error)
+      }
+
+      // ==========================================
+      // SEND EMAIL NOTIFICATIONS
+      // ==========================================
+
+      // 1. Email to sponsor (SME)
+      try {
+        const functions = getFunctions()
+        const sendInternApplicationEmail = httpsCallable(functions, "internSendApplicationEmail")
+
+        let sponsorEmail = null
+        try {
+          const sponsorProfileRef = doc(db, "universalProfiles", sponsorId)
+          const sponsorProfileSnap = await getDoc(sponsorProfileRef)
+          if (sponsorProfileSnap.exists()) {
+            const profileData = sponsorProfileSnap.data()
+            sponsorEmail =
+              profileData.email ||
+              profileData.contactDetails?.email ||
+              profileData.contactEmail ||
+              profileData.businessEmail ||
+              profileData.personalEmail
+          }
+        } catch (fetchError) {
+          console.error("Error fetching sponsor email:", fetchError)
+        }
+
+        if (sponsorEmail) {
+          const emailMessage =
+            `Dear ${intern.smseName},\n\n` +
+            `You have received a new internship application from ${applicationData.applicantName}.\n\n` +
+            `📧 Contact: ${applicationData.applicantEmail}\n\n` +
+            `Application Details:\n` +
+            `- Role: ${intern.internshipRole}\n` +
+            `- Match Score: ${applicationData.matchAnalysis.overallScore}%\n` +
+            `- Institution: ${applicationData.institution}\n` +
+            `- Field of Study: ${applicationData.field}\n` +
+            `- Availability: ${applicationData.availabilityStart}\n\n` +
+            `Match Analysis Summary:\n` +
+            `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
+            `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
+            `Please log in to review the full application.\n\n` +
+            `Best regards,\nBIG Marketplace Africa Internship Team`
+
+          await sendInternApplicationEmail({
+            sponsorEmail: sponsorEmail,
+            sponsorName: intern.smseName || "Sponsor",
+            applicantName: applicationData.applicantName,
+            applicantEmail: user.email,
+            role: intern.internshipRole,
+            matchScore: applicationData.matchAnalysis.overallScore,
+            applicationId: applicationDocId,
+            applicationLink: `https://www.bigmarketplace.africa/applications/${applicationDocId}`,
+            message: emailMessage,
+          })
+          console.log("✅ Application email sent to sponsor:", sponsorEmail)
+        }
+      } catch (emailError) {
+        console.error("❌ Application email to sponsor failed:", emailError)
+      }
+
+      // 2. Confirmation email to intern (applicant)
+      try {
+        const functions = getFunctions()
+        const sendApplicationConfirmation = httpsCallable(functions, "internSendApplicationConfirmation")
+
+        await sendApplicationConfirmation({
+          to: user.email,
+          name: applicationData.applicantName,
+          sponsorName: intern.smseName || "Sponsor",
+          role: intern.internshipRole,
+          applicationDate: new Date().toISOString(),
+          applicationId: applicationDocId,
+          linkTo: "https://www.bigmarketplace.africa/intern/applications",
+        })
+        console.log("✅ Confirmation email sent to intern:", user.email)
+      } catch (emailError) {
+        console.error("❌ Confirmation email to intern failed:", emailError)
+      }
+
+      // ==========================================
+      // DISPATCH NOTIFICATION
+      // ==========================================
+
+      const dispatchNotification = () => {
+        const notificationMessage = `New application from ${internName} for ${intern.internshipRole}!`
+        const event = new CustomEvent("newNotification", {
+          detail: {
+            message: notificationMessage,
+            type: "success",
+            timestamp: new Date().toISOString(),
+            recipientId: sponsorId,
+          },
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        })
+        setTimeout(() => {
+          window.dispatchEvent(event)
+        }, 100)
+      }
+      dispatchNotification()
+
+      onRefresh?.()
+
+      setNotification({
+        type: "success",
+        message: `Application successfully submitted to ${intern.smseName}!`,
+      })
+      setTimeout(() => setNotification(null), 4000)
+    } catch (error) {
+      console.error("Detailed error in handleConnectClick:", error)
+      console.error("Error code:", error.code)
+      console.error("Error message:", error.message)
+
+      let errorMessage = "Failed to submit application."
+      if (error.code === "permission-denied") {
+        errorMessage = "Permission denied. Please check your account permissions."
+      } else if (error.code === "unavailable") {
+        errorMessage = "Service temporarily unavailable. Please try again."
+      } else if (error.code === "network-request-failed") {
+        errorMessage = "Network error. Please check your internet connection."
+      } else if (error.message.includes("auth")) {
+        errorMessage = "Authentication error. Please log in again."
+      }
+
+      const errorEvent = new CustomEvent("newNotification", {
+        detail: {
+          message: errorMessage,
+          type: "error",
+          timestamp: new Date().toISOString(),
+        },
+      })
+      window.dispatchEvent(errorEvent)
+
+      setNotification({ type: "error", message: errorMessage })
+      setTimeout(() => setNotification(null), 5000)
     }
-  };
+  }
 
   const acceptRequest = async (intern) => {
     try {
-      const user = auth.currentUser;
+      const user = auth.currentUser
       if (!user) {
-        setNotification({ type: "error", message: "User not authenticated. Please log in." });
-        return;
+        setNotification({ type: "error", message: "User not authenticated. Please log in." })
+        return
       }
 
-      const internId = user.uid;
-      const sponsorId = intern.originalSponsorId || intern.id.split("_")[0];
-      const applicationDocId = `${sponsorId}_${internId}`;
+      const internId = user.uid
+      const sponsorId = intern.originalSponsorId || intern.id.split("_")[0]
+      const applicationDocId = `${sponsorId}_${internId}`
 
-      console.log("Accepting request for application:", applicationDocId);
+      console.log("Accepting request for application:", applicationDocId)
 
       // Update the application status to "Accepted"
       await setDoc(
@@ -1274,104 +1800,107 @@ export function InternTable({ interns = [] }) {
           acceptedDate: new Date().toISOString(),
           lastUpdated: new Date().toISOString(),
         },
-        { merge: true }
-      );
+        { merge: true },
+      )
 
       // Update UI state
-      setStatuses((prev) => ({ ...prev, [intern.id]: "Accepted" }));
-      
+      setStatuses((prev) => ({ ...prev, [intern.id]: "Accepted" }))
+
       // Send acceptance email
-      await sendAcceptanceEmail(intern, user);
+      await sendAcceptanceEmail(intern, user)
 
       // Notify the sponsor/SME
       const dispatchNotification = () => {
-        const notificationMessage = `Your internship request has been accepted by ${user.displayName || "an intern"}!`;
-        console.log('Dispatching sponsor notification:', notificationMessage);
-        
-        const event = new CustomEvent('newNotification', {
-          detail: { 
+        const notificationMessage = `Your internship request has been accepted by ${user.displayName || "an intern"}!`
+        console.log("Dispatching sponsor notification:", notificationMessage)
+
+        const event = new CustomEvent("newNotification", {
+          detail: {
             message: notificationMessage,
-            type: 'success',
+            type: "success",
             timestamp: new Date().toISOString(),
             recipientId: sponsorId,
-            applicationId: applicationDocId
+            applicationId: applicationDocId,
           },
           bubbles: true,
           cancelable: true,
-          composed: true
-        });
+          composed: true,
+        })
 
         setTimeout(() => {
-          window.dispatchEvent(event);
-          console.log('Sponsor notification event dispatched');
-        }, 100);
-      };
+          window.dispatchEvent(event)
+          console.log("Sponsor notification event dispatched")
+        }, 100)
+      }
 
-      dispatchNotification();
+      dispatchNotification()
+
+      onRefresh?.()
 
       // Show success notification to intern
-      setNotification({ 
-        type: "success", 
-        message: `Request accepted! ${intern.smseName} has been notified.` 
-      });
-      setTimeout(() => setNotification(null), 4000);
-
+      setNotification({
+        type: "success",
+        message: `Request accepted! ${intern.smseName} has been notified.`,
+      })
+      setTimeout(() => setNotification(null), 4000)
     } catch (error) {
-      console.error("Error accepting request:", error);
-      
-      let errorMessage = "Failed to accept request.";
-      if (error.code === 'permission-denied') {
-        errorMessage = "Permission denied. Please check your account permissions.";
-      } else if (error.code === 'unavailable') {
-        errorMessage = "Service temporarily unavailable. Please try again.";
+      console.error("Error accepting request:", error)
+
+      let errorMessage = "Failed to accept request."
+      if (error.code === "permission-denied") {
+        errorMessage = "Permission denied. Please check your account permissions."
+      } else if (error.code === "unavailable") {
+        errorMessage = "Service temporarily unavailable. Please try again."
       }
-      
-      setNotification({ type: "error", message: errorMessage });
-      setTimeout(() => setNotification(null), 5000);
+
+      setNotification({ type: "error", message: errorMessage })
+      setTimeout(() => setNotification(null), 5000)
     }
-  };
+  }
 
   const sendAcceptanceEmail = async (intern, user) => {
     try {
-      console.log("🔄 Sending acceptance email...");
+      console.log("🔄 Sending acceptance email...")
 
       const emailjsConfig = {
         serviceId: API_KEYS.SERVICE_ID_MESSAGES,
         templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-      };
-
-      if (!window.emailjs) {
-        emailjs.init(emailjsConfig.publicKey);
-        window.emailjs = emailjs;
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
       }
 
-      const internName = user?.displayName || "Intern";
-      const sponsorName = intern.smseName;
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey)
+        window.emailjs = emailjs
+      }
+
+      const internName = user?.displayName || "Intern"
+      const sponsorName = intern.smseName
 
       // Get sponsor email
-      let sponsorEmail = null;
+      let sponsorEmail = null
       try {
-        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
-        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
-        
+        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId)
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef)
+
         if (sponsorProfileSnap.exists()) {
-          const profileData = sponsorProfileSnap.data();
-          sponsorEmail = profileData.email || 
-                         profileData.contactDetails?.email ||
-                         profileData.contactEmail ||
-                         profileData.businessEmail ||
-                         profileData.personalEmail;
+          const profileData = sponsorProfileSnap.data()
+          sponsorEmail =
+            profileData.email ||
+            profileData.contactDetails?.email ||
+            profileData.contactEmail ||
+            profileData.businessEmail ||
+            profileData.personalEmail
         }
       } catch (fetchError) {
-        console.error("Error fetching sponsor email:", fetchError);
+        console.error("Error fetching sponsor email:", fetchError)
       }
 
       if (!sponsorEmail) {
-        sponsorEmail = "support@bigmarketplace.africa";
+        sponsorEmail = "support@bigmarketplace.africa"
       }
 
-      const emailMessage = `Dear ${sponsorName},\n\n` +
+      const emailMessage =
+        `Dear ${sponsorName},\n\n` +
         `We are pleased to inform you that your internship request has been accepted by ${internName}!\n\n` +
         `Internship Details:\n` +
         `- Role: ${intern.internshipRole}\n` +
@@ -1382,7 +1911,7 @@ export function InternTable({ interns = [] }) {
         `2. Schedule an introductory meeting\n` +
         `3. Discuss project details and expectations\n\n` +
         `You can contact ${internName} directly through the messaging system in your dashboard.\n\n` +
-        `Best regards,\nBIG Marketplace Africa Internship Team`;
+        `Best regards,\nBIG Marketplace Africa Internship Team`
 
       const templateParams = {
         to_email: sponsorEmail,
@@ -1392,146 +1921,147 @@ export function InternTable({ interns = [] }) {
         message: emailMessage,
         portal_url: `https://www.bigmarketplace.africa/applications/${intern.originalSponsorId}_${user.uid}`,
         has_attachments: "false",
-        attachments_count: "0"
-      };
+        attachments_count: "0",
+      }
 
-      console.log("📨 Sending acceptance email...");
+      console.log("📨 Sending acceptance email...")
 
       await window.emailjs.send(
         emailjsConfig.serviceId,
         emailjsConfig.templateId,
         templateParams,
-        emailjsConfig.publicKey
-      );
-      
-      console.log("✅ Acceptance email sent successfully!");
-      
+        emailjsConfig.publicKey,
+      )
+
+      console.log("✅ Acceptance email sent successfully!")
     } catch (emailError) {
-      console.error("❌ Acceptance email failed:", emailError);
+      console.error("❌ Acceptance email failed:", emailError)
       // Don't throw error - acceptance should still proceed
     }
-  };
+  }
 
   const handleStageUpdate = async () => {
     if (!nextStage) {
-      setNotification({ type: "error", message: "Please select a stage" });
-      return;
+      setNotification({ type: "error", message: "Please select a stage" })
+      return
     }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true)
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-      
-      const internId = user.uid;
-      const sponsorId = selectedIntern.originalSponsorId;
+      const user = auth.currentUser
+      if (!user) throw new Error("User not authenticated")
+
+      const internId = user.uid
+      const sponsorId = selectedIntern.originalSponsorId
 
       console.log("Updating status for application:", {
         internId,
         sponsorId,
-        nextStage
-      });
+        nextStage,
+      })
 
       const updateData = {
         status: nextStage,
         updatedAt: serverTimestamp(),
         ...(messageText && { lastMessage: messageText }),
-      };
-
-      const applicationDocId = `${sponsorId}_${internId}`;
-      const docRef = doc(db, "internshipApplications", applicationDocId);
-      
-      const docSnapshot = await getDoc(docRef);
-      if (!docSnapshot.exists()) {
-        throw new Error(`Application document does not exist`);
       }
 
-      await updateDoc(docRef, updateData);
+      const applicationDocId = `${sponsorId}_${internId}`
+      const docRef = doc(db, "internshipApplications", applicationDocId)
+
+      const docSnapshot = await getDoc(docRef)
+      if (!docSnapshot.exists()) {
+        throw new Error(`Application document does not exist`)
+      }
+
+      await updateDoc(docRef, updateData)
 
       // Update UI state
-      setStatuses((prev) => ({ ...prev, [selectedIntern.id]: nextStage }));
-      
+      setStatuses((prev) => ({ ...prev, [selectedIntern.id]: nextStage }))
+
       // Send stage update email
-      await sendStageUpdateEmail(selectedIntern, user, nextStage, messageText);
+      await sendStageUpdateEmail(selectedIntern, user, nextStage, messageText)
+
+      onRefresh?.()
 
       setNotification({
         type: "success",
-        message: `Application status updated to ${nextStage} successfully`
-      });
-      
-      setShowStageModal(false);
-      resetStageModal();
-      
+        message: `Application status updated to ${nextStage} successfully`,
+      })
+
+      setShowStageModal(false)
+      resetStageModal()
     } catch (error) {
-      console.error("Error updating stage:", error);
+      console.error("Error updating stage:", error)
       setNotification({
         type: "error",
-        message: `Failed to update status: ${error.message}`
-      });
+        message: `Failed to update status: ${error.message}`,
+      })
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   const sendStageUpdateEmail = async (intern, user, stage, message) => {
     try {
-      console.log("🔄 Sending stage update email...");
+      console.log("🔄 Sending stage update email...")
 
       const emailjsConfig = {
         serviceId: API_KEYS.SERVICE_ID_MESSAGES,
         templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-      };
-
-      if (!window.emailjs) {
-        emailjs.init(emailjsConfig.publicKey);
-        window.emailjs = emailjs;
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
       }
 
-      const internName = user?.displayName || "Intern";
-      const sponsorName = intern.smseName;
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey)
+        window.emailjs = emailjs
+      }
+
+      const internName = user?.displayName || "Intern"
+      const sponsorName = intern.smseName
 
       // Get sponsor email
-      let sponsorEmail = null;
+      let sponsorEmail = null
       try {
-        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
-        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
-        
+        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId)
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef)
+
         if (sponsorProfileSnap.exists()) {
-          const profileData = sponsorProfileSnap.data();
-          sponsorEmail = profileData.email || 
-                         profileData.contactDetails?.email ||
-                         profileData.contactEmail ||
-                         profileData.businessEmail ||
-                         profileData.personalEmail;
+          const profileData = sponsorProfileSnap.data()
+          sponsorEmail =
+            profileData.email ||
+            profileData.contactDetails?.email ||
+            profileData.contactEmail ||
+            profileData.businessEmail ||
+            profileData.personalEmail
         }
       } catch (fetchError) {
-        console.error("Error fetching sponsor email:", fetchError);
+        console.error("Error fetching sponsor email:", fetchError)
       }
 
       if (!sponsorEmail) {
-        sponsorEmail = "support@bigmarketplace.africa";
+        sponsorEmail = "support@bigmarketplace.africa"
       }
 
-      let emailMessage = `Dear ${sponsorName},\n\n`;
-      
+      let emailMessage = `Dear ${sponsorName},\n\n`
+
       if (stage === "Declined") {
-        emailMessage += `We regret to inform you that the internship application has been moved to the "${stage}" stage.\n\n`;
+        emailMessage += `We regret to inform you that the internship application has been moved to the "${stage}" stage.\n\n`
       } else {
-        emailMessage += `The internship application has progressed to the "${stage}" stage.\n\n`;
-      }
-      
-      if (message) {
-        emailMessage += `Message from ${internName}:\n${message}\n\n`;
+        emailMessage += `The internship application has progressed to the "${stage}" stage.\n\n`
       }
 
-      emailMessage += `Application Details:\n`;
-      emailMessage += `- Role: ${intern.internshipRole}\n`;
-      emailMessage += `- Intern: ${internName}\n`;
-      emailMessage += `- Current Stage: ${stage}\n\n`;
-      
-      emailMessage += `Please log in to your dashboard for more details.\n\n`;
-      emailMessage += `Best regards,\nBIG Marketplace Africa Internship Team`;
+      if (message) {
+        emailMessage += `Message from ${internName}:\n${message}\n\n`
+      }
+
+      emailMessage += `Application Details:\n`
+      emailMessage += `- Role: ${intern.internshipRole}\n`
+      emailMessage += `- Intern: ${internName}\n`
+      emailMessage += `- Current Stage: ${stage}\n\n`
+
+      emailMessage += `Please log in to your dashboard for more details.\n\n`
+      emailMessage += `Best regards,\nBIG Marketplace Africa Internship Team`
 
       const templateParams = {
         to_email: sponsorEmail,
@@ -1541,187 +2071,171 @@ export function InternTable({ interns = [] }) {
         message: emailMessage,
         portal_url: `https://www.bigmarketplace.africa/applications/${intern.originalSponsorId}_${user.uid}`,
         has_attachments: "false",
-        attachments_count: "0"
-      };
+        attachments_count: "0",
+      }
 
-      console.log("📨 Sending stage update email...");
+      console.log("📨 Sending stage update email...")
 
       await window.emailjs.send(
         emailjsConfig.serviceId,
         emailjsConfig.templateId,
         templateParams,
-        emailjsConfig.publicKey
-      );
-      
-      console.log("✅ Stage update email sent successfully!");
-      
+        emailjsConfig.publicKey,
+      )
+
+      console.log("✅ Stage update email sent successfully!")
     } catch (emailError) {
-      console.error("❌ Stage update email failed:", emailError);
+      console.error("❌ Stage update email failed:", emailError)
     }
-  };
-
-
-const handleSendInternMessage = async () => {
-  if (!selectedIntern || !messageText.trim()) return;
-
-  const user = auth.currentUser;
-  if (!user) {
-    setNotification({ type: "error", message: "User not authenticated" });
-    return;
   }
 
-  // ✅ DECLARE VARIABLES OUTSIDE THE TRY BLOCK
-  let sponsorId;
-  let internId;
-  let subject;
-  let content;
+  const handleSendInternMessage = async () => {
+    if (!selectedIntern || !messageText.trim()) return
 
-  try {
-    internId = user.uid;
-    sponsorId = selectedIntern.originalSponsorId || selectedIntern.id.split("_")[0];
+    const user = auth.currentUser
+    if (!user) {
+      setNotification({ type: "error", message: "User not authenticated" })
+      return
+    }
 
-    subject = `Message regarding Internship Application at ${selectedIntern.smseName}`;
-    content = messageText.trim();
+    let sponsorId
+    let internId
+    let subject
+    let content
 
-    // Get intern name
-    let internName = user.displayName || "Intern";
     try {
-      const internProfileRef = doc(db, "internProfiles", user.uid);
-      const internProfileSnap = await getDoc(internProfileRef);
-      if (internProfileSnap.exists()) {
-        const profileData = internProfileSnap.data();
-        const formData = profileData.formData || {};
-        const personalOverview = formData.personalOverview || {};
-        internName = personalOverview.fullName || user.displayName || "Intern";
+      internId = user.uid
+      sponsorId = selectedIntern.originalSponsorId || selectedIntern.id.split("_")[0]
+
+      subject = `Message regarding Internship Application at ${selectedIntern.smseName}`
+      content = messageText.trim()
+
+      // Get intern name
+      let internName = user.displayName || "Intern"
+      try {
+        const internProfileRef = doc(db, "internProfiles", user.uid)
+        const internProfileSnap = await getDoc(internProfileRef)
+        if (internProfileSnap.exists()) {
+          const profileData = internProfileSnap.data()
+          const formData = profileData.formData || {}
+          const personalOverview = formData.personalOverview || {}
+          internName = personalOverview.fullName || user.displayName || "Intern"
+        }
+      } catch (error) {
+        console.error("Error fetching intern profile:", error)
       }
+
+      const basePayload = {
+        to: sponsorId,
+        toName: selectedIntern.smseName,
+        from: internId,
+        fromName: internName,
+        subject,
+        content,
+        date: new Date().toISOString(),
+        applicationId: `${sponsorId}_${internId}`,
+        read: false,
+        attachments: [],
+      }
+
+      await Promise.all([
+        addDoc(collection(db, "messages"), { ...basePayload, type: "inbox" }),
+        addDoc(collection(db, "messages"), { ...basePayload, type: "sent", read: true }),
+      ])
+
+      // Send email notification
+      await sendMessageEmail(selectedIntern, user, content)
+
+      setNotification({
+        type: "success",
+        message: `Message sent to ${selectedIntern.smseName}`,
+      })
+
+      setShowMessageModal(false)
+      setMessageText("")
     } catch (error) {
-      console.error("Error fetching intern profile:", error);
+      console.error("Error sending message:", error)
+      setNotification({ type: "error", message: "Failed to send message" })
     }
-
-    const basePayload = {
-      to: sponsorId,
-      toName: selectedIntern.smseName,
-      from: internId,
-      fromName: internName,
-      subject,
-      content,
-      date: new Date().toISOString(),
-      applicationId: `${sponsorId}_${internId}`,
-      read: false,
-      attachments: [],
-    };
-
-    await Promise.all([
-      addDoc(collection(db, "messages"), { ...basePayload, type: "inbox" }),
-      addDoc(collection(db, "messages"), { ...basePayload, type: "sent", read: true }),
-    ]);
-
-    // Send email notification
-    await sendMessageEmail(selectedIntern, user, content);
-
-    setNotification({
-      type: "success",
-      message: `Message sent to ${selectedIntern.smseName}`,
-    });
-
-    setShowMessageModal(false);
-    setMessageText("");
-
-  } catch (error) {
-    console.error("Error sending message:", error);
-    setNotification({ type: "error", message: "Failed to send message" });
   }
-};
 
-const sendMessageEmail = async (intern, user, message) => {
-  try {
-    console.log("🔄 Sending message email via Cloud Function...");
-
-    const functions = getFunctions();
-    const sendInternMessageEmail = httpsCallable(functions, 'internSendMessageEmail');
-
-    // Get intern name from internProfiles
-    let internName = "Intern";
-    let internEmail = user?.email || "No email provided";
-
+  const sendMessageEmail = async (intern, user, message) => {
     try {
-      const internProfileRef = doc(db, "internProfiles", user.uid);
-      const internProfileSnap = await getDoc(internProfileRef);
-      if (internProfileSnap.exists()) {
-        const profileData = internProfileSnap.data();
-        const formData = profileData.formData || {};
-        const personalOverview = formData.personalOverview || {};
-        internName = personalOverview.fullName || "Intern";
-        internEmail = personalOverview.email || user?.email || "No email provided";
+      console.log("🔄 Sending message email via Cloud Function...")
+
+      const functions = getFunctions()
+      const sendInternMessageEmail = httpsCallable(functions, "internSendMessageEmail")
+
+      // Get intern name from internProfiles
+      let internName = "Intern"
+      let internEmail = user?.email || "No email provided"
+
+      try {
+        const internProfileRef = doc(db, "internProfiles", user.uid)
+        const internProfileSnap = await getDoc(internProfileRef)
+        if (internProfileSnap.exists()) {
+          const profileData = internProfileSnap.data()
+          const formData = profileData.formData || {}
+          const personalOverview = formData.personalOverview || {}
+          internName = personalOverview.fullName || "Intern"
+          internEmail = personalOverview.email || user?.email || "No email provided"
+        }
+      } catch (error) {
+        console.error("Error fetching intern profile:", error)
       }
-    } catch (error) {
-      console.error("Error fetching intern profile:", error);
-    }
 
-    const sponsorName = intern.smseName;
+      const sponsorName = intern.smseName
 
-    // Get sponsor email
-    let sponsorEmail = null;
-    try {
-      const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
-      const sponsorProfileSnap = await getDoc(sponsorProfileRef);
-      
-      if (sponsorProfileSnap.exists()) {
-        const profileData = sponsorProfileSnap.data();
-        sponsorEmail = profileData.email || 
-                       profileData.contactDetails?.email ||
-                       profileData.contactEmail ||
-                       profileData.businessEmail ||
-                       profileData.personalEmail;
+      // Get sponsor email
+      let sponsorEmail = null
+      try {
+        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId)
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef)
+
+        if (sponsorProfileSnap.exists()) {
+          const profileData = sponsorProfileSnap.data()
+          sponsorEmail =
+            profileData.email ||
+            profileData.contactDetails?.email ||
+            profileData.contactEmail ||
+            profileData.businessEmail ||
+            profileData.personalEmail
+        }
+      } catch (fetchError) {
+        console.error("Error fetching sponsor email:", fetchError)
       }
-    } catch (fetchError) {
-      console.error("Error fetching sponsor email:", fetchError);
+
+      if (!sponsorEmail) {
+        console.warn("⚠️ No sponsor email found, using fallback")
+        sponsorEmail = "support@bigmarketplace.africa"
+      }
+
+      await sendInternMessageEmail({
+        to: sponsorEmail,
+        name: sponsorName,
+        internName: internName,
+        internEmail: internEmail,
+        message: message,
+        role: intern.internshipRole,
+        applicationId: intern.id,
+        dashboardLink: "https://www.bigmarketplace.africa/messages",
+      })
+
+      console.log("✅ Message email sent to sponsor:", sponsorEmail)
+    } catch (emailError) {
+      console.error("❌ Message email failed:", emailError)
     }
-
-    if (!sponsorEmail) {
-      console.warn("⚠️ No sponsor email found, using fallback");
-      sponsorEmail = "support@bigmarketplace.africa";
-    }
-
-    // ✅ Send only raw data - template will build the email
-    await sendInternMessageEmail({
-      to: sponsorEmail,
-      name: sponsorName,
-      internName: internName,
-      internEmail: internEmail,
-      message: message,  // ← Raw user message only
-      role: intern.internshipRole,
-      applicationId: intern.id,
-      dashboardLink: "https://www.bigmarketplace.africa/messages"
-    });
-    
-    console.log("✅ Message email sent to sponsor:", sponsorEmail);
-
-  } catch (emailError) {
-    console.error("❌ Message email failed:", emailError);
   }
-};
 
   const handleViewDetails = (intern) => {
     setSelectedIntern(intern)
     setShowModal(true)
   }
 
-  const handleViewDocuments = (intern) => {
-    setSelectedIntern(intern)
-    setShowDocumentModal(true)
-  }
-
   const handleMessage = (intern) => {
     setSelectedIntern(intern)
     setMessageText("")
     setShowMessageModal(true)
-  }
-
-  const handleAddNote = (intern) => {
-    setSelectedIntern(intern)
-    setNoteText("")
-    setShowNoteModal(true)
   }
 
   const handleViewBrief = (intern) => {
@@ -1731,417 +2245,749 @@ const sendMessageEmail = async (intern, user, message) => {
 
   const handleSendMessage = () => {
     if (messageText.trim()) {
-      handleSendInternMessage();
+      handleSendInternMessage()
     }
-  };
-
-  const handleSaveNote = () => {
-    if (noteText.trim()) {
-      setNotification({ type: "info", message: `Note saved for ${selectedIntern.smseName}` })
-      setShowNoteModal(false)
-      setNoteText("")
-      setTimeout(() => setNotification(null), 3000)
-    }
-  }
-
-  const handleExport = () => {
-    setNotification({ type: "info", message: "Exporting intern data..." })
-    setTimeout(() => setNotification(null), 3000)
   }
 
   const closeAllModals = () => {
     setShowModal(false)
-    setShowDocumentModal(false)
     setShowMessageModal(false)
-    setShowNoteModal(false)
     setShowBriefModal(false)
     setShowMatchBreakdown(false)
     setShowStageModal(false)
     setSelectedIntern(null)
   }
 
-  if (loading) {
+  /* ─── Cells ─────────────────────────────────────────────────────────── */
+  const renderCell = (key, intern, rowBg) => {
+    const offset = stickyOffsets[key]
+    const stickyStyle = offset
+      ? {
+          position: "sticky",
+          [offset.side]: `${offset.value}px`,
+          zIndex: 9,
+          backgroundColor: rowBg,
+          boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+        }
+      : {}
+    const style = { ...tableCellStyle, ...stickyStyle }
+
+    switch (key) {
+      case "sector":
+        return (
+          <td key={key} style={style}>
+            <span className="inline-block px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium">
+              {intern.sector || "-"}
+            </span>
+          </td>
+        )
+
+      case "internshipRole":
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={intern.internshipRole} maxLength={26} />
+            <button
+              onClick={() => handleViewBrief(intern)}
+              className="mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] transition-colors"
+              title="Read the internship brief"
+            >
+              Brief
+            </button>
+          </td>
+        )
+
+      case "stipend":
+        return (
+          <td key={key} style={style}>
+            <span
+              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+              style={
+                intern.stipend === "not specified" || intern.stipend === "Pro-Bono"
+                  ? { backgroundColor: "#f5f0e1", color: "#a89482" }
+                  : { backgroundColor: "#E8F5E8", color: "#388E3C" }
+              }
+            >
+              {intern.stipend}
+            </span>
+          </td>
+        )
+
+      case "startDate":
+        return (
+          <td key={key} style={style}>
+            {formatDateValue(intern.startDate) || <span className="text-[#a89482]">{intern.startDate || "-"}</span>}
+          </td>
+        )
+
+      case "matchPercentage":
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-full h-1.5 rounded-full overflow-hidden bg-[#e6d7c3]">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${intern.matchPercentage || 0}%`,
+                    background: "linear-gradient(90deg, #7d5a50, #a67c52)",
+                    transition: "width .3s ease",
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => handleViewMatchBreakdown(intern)}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#7d5a50] hover:text-[#4a352f]"
+                title="View match breakdown"
+              >
+                {intern.matchPercentage || 0}%
+                <Eye size={12} className="text-[#a67c52]" />
+              </button>
+            </div>
+          </td>
+        )
+
+      case "status": {
+        const status = statusOf(intern)
+        const s = getStatusStyle(status)
+        return (
+          <td key={key} style={style}>
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+              style={{ backgroundColor: s.color, color: s.textColor }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.textColor }} />
+              {status}
+            </span>
+          </td>
+        )
+      }
+
+      default:
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={intern[key]} maxLength={24} />
+          </td>
+        )
+    }
+  }
+
+  const renderActionCell = (intern, rowBg) => {
+    const currentStatus = statusOf(intern)
+    const btn =
+      "w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap overflow-hidden text-ellipsis transition-all"
+
+    let control
+    if (currentStatus === "Confirmed" || currentStatus === "Confirmed/Term Sheet Sign") {
+      control = (
+        <span className="inline-flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#E8F5E9] text-[#1B5E20]">
+          <Check size={12} /> Confirmed
+        </span>
+      )
+    } else if (currentStatus === "Contacted" || currentStatus === "Contacted/Interview") {
+      control = (
+        <span className="inline-flex items-center justify-center w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#FFF8E1] text-[#F57F17]">
+          Contacted
+        </span>
+      )
+    } else if (currentStatus === "Applied" || currentStatus === "Accepted") {
+      control = (
+        <span className="inline-flex items-center justify-center w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#E3F2FD] text-[#1565C0]">
+          Application sent
+        </span>
+      )
+    } else if (currentStatus === "Requested") {
+      control = (
+        <button onClick={() => acceptRequest(intern)} className={`${btn} text-white bg-[#7d5a50] hover:brightness-105`}>
+          Accept request
+        </button>
+      )
+    } else {
+      control = (
+        <button
+          onClick={() => handleConnectClick(intern)}
+          className={`${btn} text-white bg-[#7d5a50] hover:brightness-105`}
+        >
+          {intern.action || "Send Application"}
+        </button>
+      )
+    }
+
     return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "4rem",
-        color: "#5D4037"
-      }}>
-        <p>Loading program sponsors...</p>
-      </div>
+      <td
+        style={{
+          ...tableCellStyle,
+          width: ACTION_WIDTH,
+          borderRight: "none",
+          backgroundColor: rowBg,
+          textAlign: "center",
+        }}
+      >
+        <div className="flex flex-col gap-1.5">
+          {control}
+          <button
+            onClick={() => handleMessage(intern)}
+            className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] transition-colors inline-flex items-center justify-center gap-1.5"
+          >
+            <MessageCircle size={12} /> Message
+          </button>
+        </div>
+      </td>
     )
   }
 
-  return (
-    <>
-      {/* Main content container */}
-      <div
-        style={{
-          position: "relative",
-          filter: selectedIntern || showFilters ? "blur(2px)" : "none",
-          transition: "filter 0.2s ease",
-        }}
-      >
-        {/* Notification area */}
-        {notification && (
-          <div
-            style={{
-              position: "fixed",
-              top: "1rem",
-              right: "1rem",
-              padding: "1rem",
-              borderRadius: "6px",
-              color: "white",
-              fontWeight: "500",
-              zIndex: 1001,
-              background:
-                notification.type === "success" ? "#48BB78" : notification.type === "error" ? "#F56565" : "#5D4037",
-            }}
-          >
-            {notification.message}
-          </div>
-        )}
+  if (loading) {
+    return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading program sponsors...</div>
+  }
 
-        {/* Table header with filter button */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h1
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: "bold",
-              color: "#5D4037",
-              marginBottom: "0",
-              fontFamily: "Segoe UI, sans-serif",
-            }}
-          >
-        
-          </h1>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              style={{
-                background: "#EFEBE9",
-                color: "#5D4037",
-                border: "1px solid #D7CCC8",
-                padding: "0.5rem 1rem",
-                borderRadius: "6px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                fontSize: "0.875rem",
-                transition: "all 0.2s",
-              }}
-              onClick={() => setShowFilters(true)}
-            >
-              <Filter size={16} />
-              Filters
-              {Object.keys(filters).some(
-                (key) =>
-                  key !== "matchScore" &&
-                  filters[key] !== "" &&
-                  filters[key] !== 50 &&
-                  (!Array.isArray(filters[key]) || filters[key].length > 0),
-              ) && (
-                <span
-                  style={{
-                    background: "#5D4037",
-                    color: "white",
-                    borderRadius: "50%",
-                    width: "20px",
-                    height: "20px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "0.75rem",
-                  }}
-                >
-                  {
-                    Object.keys(filters).filter(
-                      (key) =>
-                        key !== "matchScore" &&
-                        filters[key] !== "" &&
-                        filters[key] !== 50 &&
-                        (!Array.isArray(filters[key]) || filters[key].length > 0),
-                    ).length
-                  }
-                </span>
-              )}
+  /* ═══════════════════════════════════════════════════════════════════════
+     Render
+     ═══════════════════════════════════════════════════════════════════════ */
+  return (
+    <div style={{ width: "100%" }} className="font-sans">
+      {/* Inline banner */}
+      {notification && (
+        <div
+          className={`px-4 py-3 rounded-xl text-sm font-medium border mb-3 ${
+            notification.type === "success"
+              ? "bg-green-50 text-green-800 border-green-200"
+              : notification.type === "error"
+                ? "bg-red-50 text-red-800 border-red-200"
+                : "bg-[#faf7f2] text-[#4a352f] border-[#e6d7c3]"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span>{notification.message}</span>
+            <button onClick={() => setNotification(null)} className="ml-2 text-current opacity-50 hover:opacity-100">
+              <X size={16} />
             </button>
           </div>
         </div>
+      )}
 
-        {/* Always show table structure */}
-        <div
-          style={{
-            borderRadius: "8px",
-            border: "1px solid #E0E0E0",
-            boxShadow: "0 4px 24px rgba(93, 64, 55, 0.08)",
-            width: "100%",
-          }}
-        >
+      {/* Toolbar */}
+      <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-bold text-[#4a352f] m-0">My Matches</h2>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+              <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+              Viewing: {activeView.name}
+              {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
+            </span>
+            {stageFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#7d5a50] border border-[#a67c52]/40">
+                Stage: {stageFilter}
+              </span>
+            )}
+            {activeFilterCount > 0 && (
+              <>
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+                </span>
+                <button
+                  onClick={clearAllFilters}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-white border border-[#e6d7c3] transition-colors"
+                >
+                  Clear all filters
+                </button>
+              </>
+            )}
+            {collapsedByViewport > 0 && (
+              <span className="px-3 py-1.5 rounded-xl text-xs font-medium text-[#a89482] border border-[#e6d7c3]">
+                {collapsedByViewport} column{collapsedByViewport > 1 ? "s" : ""} hidden on this screen size
+              </span>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                if (showCustomizeMenu) {
+                  setShowCustomizeMenu(false)
+                  setCustomizeMenuRect(null)
+                } else {
+                  setCustomizeMenuRect(e.currentTarget.getBoundingClientRect())
+                  setShowCustomizeMenu(true)
+                  setShowNewViewForm(false)
+                  setEditingViewMeta(null)
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+            >
+              <SlidersHorizontal size={16} /> Customize Table{" "}
+              <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? "rotate-180" : ""}`} />
+            </button>
+
+            {showCustomizeMenu &&
+              customizeMenuRect &&
+              (() => {
+                const panelWidth = 340
+                const margin = 12
+                let left = customizeMenuRect.right - panelWidth
+                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
+                const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
+                const spaceAbove = customizeMenuRect.top - margin - 8
+                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
+                const maxHeight = Math.max(200, Math.min(640, openUpward ? spaceAbove : spaceBelow))
+                const top = openUpward ? undefined : customizeMenuRect.bottom + 8
+                const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
+                const allViews = Object.values(viewsState.views).sort((a, b) =>
+                  a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name),
+                )
+
+                return (
+                  <PopupPortal>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => {
+                        setShowCustomizeMenu(false)
+                        setCustomizeMenuRect(null)
+                        setShowNewViewForm(false)
+                        setEditingViewMeta(null)
+                      }}
+                    />
+                    <div
+                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
+                      style={{ left, width: panelWidth, top, bottom, maxHeight }}
+                    >
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                      <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
+                      <div className="space-y-1 mb-3">
+                        {allViews.map((view) => {
+                          const isActive = view.id === viewsState.activeViewId
+                          const isEditing = editingViewMeta?.id === view.id
+                          if (isEditing) {
+                            return (
+                              <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                {!view.builtin ? (
+                                  <input
+                                    autoFocus
+                                    value={editingViewMeta.name}
+                                    onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))}
+                                    placeholder="View name"
+                                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-[#4a352f]">
+                                    Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span>
+                                  </p>
+                                )}
+                                <textarea
+                                  value={editingViewMeta.description}
+                                  onChange={(e) =>
+                                    setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))
+                                  }
+                                  placeholder="Description (optional) — what is this view for?"
+                                  rows={2}
+                                  className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => setEditingViewMeta(null)}
+                                    className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={saveViewMeta}
+                                    className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div
+                              key={view.id}
+                              className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"}`}
+                            >
+                              <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                  <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>
+                                    {view.name}
+                                  </span>
+                                  {view.builtin && (
+                                    <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">
+                                      Built-in
+                                    </span>
+                                  )}
+                                </div>
+                                {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                              </button>
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button
+                                  onClick={() => startEditingViewMeta(view)}
+                                  title="Rename / edit description"
+                                  className="text-[#a89482] hover:text-[#7d5a50] p-1"
+                                >
+                                  <Settings size={13} />
+                                </button>
+                                {!view.builtin && (
+                                  <button
+                                    onClick={() => removeView(view.id)}
+                                    title="Delete view"
+                                    className="text-[#a89482] hover:text-red-500 p-1"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {showNewViewForm ? (
+                        <div className="space-y-2 mb-1">
+                          <input
+                            autoFocus
+                            value={newViewName}
+                            onChange={(e) => setNewViewName(e.target.value)}
+                            placeholder="New view name..."
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                          />
+                          <textarea
+                            value={newViewDescription}
+                            onChange={(e) => setNewViewDescription(e.target.value)}
+                            placeholder="Description (optional) — what is this view for?"
+                            rows={2}
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setShowNewViewForm(false)
+                                setNewViewName("")
+                                setNewViewDescription("")
+                              }}
+                              className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={createNewView}
+                              disabled={!newViewName.trim()}
+                              className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40"
+                            >
+                              Create view
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowNewViewForm(true)}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]"
+                        >
+                          <Plus size={13} /> New view from current layout
+                        </button>
+                      )}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Columns</h4>
+
+                      <div className="relative mb-3">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
+                        <input
+                          value={columnSearch}
+                          onChange={(e) => setColumnSearch(e.target.value)}
+                          placeholder="Search columns..."
+                          className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                        />
+                      </div>
+
+                      <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                      </p>
+
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Business Name</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Action</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Always last</span>
+                      </div>
+                      <div className="border-t border-[#e6d7c3] my-2" />
+
+                      {searchedColumns.length === 0 && (
+                        <p className="text-xs text-[#a89482] px-2 py-1.5">No columns match that search.</p>
+                      )}
+                      {searchedColumns.map((key) => (
+                        <div key={key} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2]">
+                          <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={columnVisibility[key] || false}
+                              onChange={() => toggleColumn(key)}
+                              className="rounded border-[#c8b6a6] text-[#7d5a50]"
+                            />
+                            <span className="text-sm text-[#4a352f] truncate">{COLUMN_DEFS[key].label}</span>
+                          </label>
+                          <button
+                            onClick={() => cyclePin(key)}
+                            title={
+                              pinned[key] === "left"
+                                ? "Pinned left — click to pin right"
+                                : pinned[key] === "right"
+                                  ? "Pinned right — click to unpin"
+                                  : "Pin left"
+                            }
+                            className={`p-1 rounded flex-shrink-0 ${pinned[key] ? "text-[#7d5a50]" : "text-[#c8b6a6] hover:text-[#7d5a50]"}`}
+                          >
+                            {pinned[key] ? <Pin size={13} /> : <PinOff size={13} />}
+                          </button>
+                          <span className="text-[10px] text-[#a89482] w-7 text-right flex-shrink-0">
+                            {pinned[key] === "left" ? "L" : pinned[key] === "right" ? "R" : ""}
+                          </span>
+                        </div>
+                      ))}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                      <div className="flex gap-1.5">
+                        {[
+                          { key: "comfortable", label: "Comfortable" },
+                          { key: "compact", label: "Compact" },
+                        ].map((d) => (
+                          <button
+                            key={d.key}
+                            onClick={() => setDensity(d.key)}
+                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                              density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                            }`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <button
+                        onClick={resetActiveViewToDefault}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
+                      >
+                        <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                      </button>
+                    </div>
+                  </PopupPortal>
+                )
+              })()}
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-b-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+        <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
+          <style>{`
+            /* 'position: sticky !important' wins even when another table's kit
+               puts a global 'position: relative' on every th. Sticky is itself
+               a positioned ancestor, so the absolutely placed grip and resize
+               handle still anchor correctly. Prefix is it- (intern table). */
+            .it-th { position: sticky !important; color: #faf7f2 !important; vertical-align: top !important; }
+            .it-th-draggable { cursor: grab; }
+            .it-th-draggable:active { cursor: grabbing; }
+            .it-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+            /* overflow-wrap: normal stops the browser splitting inside a word. */
+            .it-th-label {
+              flex: 1 1 auto; min-width: 0;
+              display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+              overflow: hidden; white-space: normal;
+              overflow-wrap: normal; word-break: normal; hyphens: none;
+              line-height: 1.2; letter-spacing: 0.02em;
+            }
+            .it-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+            /* The drag grip leaves the flex flow and only appears on hover,
+               buying every header ~14px more room for its label. */
+            .it-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+            .it-th:hover .it-th-grip { opacity: .45; }
+            .it-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .it-resize:hover { background: rgba(255,255,255,0.25); }
+          `}</style>
+
           <table
             style={{
-              width: "100%",
-              borderCollapse: "collapse",
+              /* separate (not collapse) — collapsed borders are dropped by
+                 sticky cells, which makes the pinned column lose its edge. */
+              borderCollapse: "separate",
+              borderSpacing: 0,
               background: "white",
               fontSize: "0.8rem",
-              backgroundColor: "#FFFFFF",
-              tableLayout: "fixed", // This makes columns respect width settings
+              backgroundColor: "#faf7f2",
+              tableLayout: "fixed",
+              width: totalWidth,
+              minWidth: "100%",
             }}
           >
-            <colgroup>
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "15%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "7%" }} />
-            </colgroup>
             <thead>
               <tr>
-                <th style={tableHeaderStyle}>SMSE Name</th>
-                <th style={tableHeaderStyle}>Location</th>
-                <th style={tableHeaderStyle}>Sector</th>
-                <th style={tableHeaderStyle}>Stage</th>
-                <th style={tableHeaderStyle}>Role</th>
-                <th style={tableHeaderStyle}>Stipend</th>
-                <th style={tableHeaderStyle}>Start Date</th>
-                <th style={tableHeaderStyle}>Match %</th>
-                <th style={tableHeaderStyle}>Status</th>
-                <th style={tableHeaderStyle}>Action</th>
-                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Rating</th>
+                <th
+                  className="it-th font-semibold uppercase tracking-wider text-xs top-0 left-0 z-30 text-left"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    width: SMSE_WIDTH,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                    boxShadow: "2px 0 0 #e6d7c3",
+                  }}
+                >
+                  <div className="it-th-row">
+                    <span className="it-th-label" title="SMSE Name">
+                      Business Name
+                    </span>
+                    <span className="it-th-tools">
+                      <SortTrigger columnKey="name" />
+                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                    </span>
+                  </div>
+                </th>
+
+                {orderedColumns.map((key) => {
+                  const col = COLUMN_DEFS[key]
+                  const isDragging = draggedColumn === key
+                  const isDragOver = dragOverColumn === key && draggedColumn !== key
+                  const offset = stickyOffsets[key]
+
+                  return (
+                    <th
+                      key={key}
+                      draggable
+                      onDragStart={(e) => handleColumnDragStart(e, key)}
+                      onDragOver={(e) => handleColumnDragOver(e, key)}
+                      onDrop={(e) => handleColumnDrop(e, key)}
+                      onDragEnd={handleColumnDragEnd}
+                      onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                      onMouseLeave={() => setDragHintRect(null)}
+                      className={`it-th it-th-draggable font-semibold uppercase tracking-wider text-xs top-0 select-none transition-opacity ${
+                        col.align === "center" ? "text-center" : "text-left"
+                      } ${isDragging ? "opacity-40" : ""}`}
+                      style={{
+                        width: widthOf(key),
+                        padding: headerPadding,
+                        backgroundColor: isDragOver ? "#5a423b" : "#4a352f",
+                        zIndex: offset ? 25 : 20,
+                        borderBottom: "1px solid #e6d7c3",
+                        borderRight: "1px solid #e6d7c3",
+                        ...(offset
+                          ? {
+                              [offset.side]: `${offset.value}px`,
+                              boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+                            }
+                          : {}),
+                      }}
+                    >
+                      <GripVertical size={11} className="it-th-grip" />
+                      <div className={`it-th-row ${col.align === "center" ? "justify-center" : ""}`}>
+                        <span className="it-th-label" title={col.label}>
+                          {col.label}
+                        </span>
+                        <span className="it-th-tools">
+                          {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
+                          {col.sortable && <SortTrigger columnKey={key} />}
+                          {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                        </span>
+                      </div>
+                      <div className="it-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                    </th>
+                  )
+                })}
+
+                {/* Action scrolls horizontally with the table — only top-0, so
+                    it still holds position on vertical scroll. */}
+                <th
+                  className="it-th text-center font-semibold uppercase tracking-wider text-xs top-0 z-20"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    width: ACTION_WIDTH,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                  }}
+                >
+                  Action
+                </th>
               </tr>
             </thead>
+
             <tbody>
               {filteredInterns.length === 0 ? (
-                // Empty state - show empty table row with message
                 <tr>
-                  <td colSpan="11" style={{
-                    padding: "3rem 2rem",
-                    textAlign: "center",
-                    color: "#666",
-                    fontSize: "1rem",
-                    borderBottom: "1px solid #E0E0E0"
-                  }}>
-                    <div style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: "1rem"
-                    }}>
-                      <div style={{
-                        fontSize: "3rem",
-                        color: "#D7CCC8"
-                      }}>
-                        📋
+                  <td
+                    colSpan={orderedColumns.length + 2}
+                    style={{ ...tableCellStyle, textAlign: "center", padding: "3rem 1rem", borderRight: "none" }}
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-16 h-16 rounded-full bg-[#f5f0e1] flex items-center justify-center">
+                        <Trophy size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
-                      <div>
-                        <h3 style={{
-                          margin: "0 0 0.5rem 0",
-                          color: "#5D4037",
-                          fontSize: "1.2rem"
-                        }}>
-                          You have not applied for any customers, so there are no matches available.
-                        </h3>
-                        <p style={{
-                          margin: "0",
-                          color: "#666",
-                          fontSize: "0.9rem"
-                        }}>
-                          You need to apply first. Once you start applying to internship opportunities, your matches will appear in this table with details like company name, location, sector, and match percentage.
-                        </p>
-                      </div>
+                      <p className="text-sm font-semibold text-[#4a352f] m-0">
+                        {displayData.length === 0 ? "No matches yet" : "No matches fit these filters"}
+                      </p>
+                      <p className="text-xs text-[#a89482] m-0 max-w-md">
+                        {displayData.length === 0
+                          ? "Sponsors that publish an internship appear here with their location, sector and how well they match your profile."
+                          : "Clear a filter to widen the results."}
+                      </p>
+                      {(activeFilterCount > 0 || stageFilter) && displayData.length > 0 && (
+                        <button
+                          onClick={clearAllFilters}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Clear all filters
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
               ) : (
-                // Show actual data rows
                 filteredInterns.map((intern) => {
-                  const currentStatus =  intern.status || statuses[intern.id]
-                  const statusStyle = getStatusStyle(currentStatus)
+                  const rowBg = hoveredRow === intern.id ? "#fdf8f4" : "#ffffff"
+
                   return (
-                    <tr key={intern.id} style={{ borderBottom: "1px solid #E0E0E0" }}>
-                      {/* SMSE Name */}
-                      <td style={tableCellStyle}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <div
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "50%",
-                              background: "#EFEBE9",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "0.7rem",
-                              fontWeight: "bold",
-                              color: "#5D4037",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {intern.smseName.charAt(0)}
+                    <tr
+                      key={intern.id}
+                      onMouseEnter={() => setHoveredRow(intern.id)}
+                      onMouseLeave={() => setHoveredRow(null)}
+                      style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
+                    >
+                      {/* SMSE — pinned left, sector underneath. */}
+                      <td
+                        className="sticky left-0 z-10"
+                        style={{
+                          ...tableCellStyle,
+                          width: SMSE_WIDTH,
+                          backgroundColor: rowBg,
+                          borderRight: "none",
+                          boxShadow: "2px 0 0 #e6d7c3",
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-6 h-6 rounded-full bg-[#f5f0e1] text-[#7d5a50] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                            {(intern.smseName || "?").charAt(0)}
                           </div>
-                          <div style={{ minWidth: 0 }}>
-                            <span
-                              onClick={() => handleViewDetails(intern)}
-                              style={{
-                                color: "#5D4037",
-                                textDecoration: "underline",
-                                cursor: "pointer",
-                                fontWeight: "500",
-                                wordBreak: "break-word",
-                                fontSize: "0.8rem",
-                              }}
-                            >
-                              {intern.smseName}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Location */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={intern.location} maxLength={12} />
-                      </td>
-
-                      {/* Sector */}
-                      <td style={tableCellStyle}>
-                        <span style={{ wordBreak: "break-word", fontSize: "0.8rem" }}>{intern.sector}</span>
-                      </td>
-
-                      {/* Operation Stage */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={intern.operationStage} maxLength={10} />
-                      </td>
-
-                      {/* Internship Role */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={intern.internshipRole} maxLength={15} />
-                        <div style={{ marginTop: "4px" }}>
                           <button
-                            style={{
-                              background: "#4CAF50",
-                              color: "white",
-                              border: "none",
-                              padding: "2px 6px",
-                              borderRadius: "3px",
-                              fontSize: "0.6rem",
-                              cursor: "pointer",
-                            }}
-                            onClick={() => handleViewBrief(intern)}
+                            onClick={() => handleViewDetails(intern)}
+                            className="font-medium text-[#4a352f] break-words text-sm text-left hover:text-[#7d5a50]"
                           >
-                            Brief
+                            {intern.smseName}
                           </button>
+                          <Eye
+                            size={13}
+                            className="text-[#a89482] hover:text-[#7d5a50] flex-shrink-0 cursor-pointer"
+                            onClick={() => handleViewDetails(intern)}
+                          />
                         </div>
+                        {intern.location && intern.location !== "N/A" && (
+                          <div className="text-[10px] text-[#a89482] mt-0.5 pl-7">{intern.location}</div>
+                        )}
                       </td>
 
-                      {/* Stipend */}
-                      <td style={tableCellStyle}>
-                        <span
-                          style={{
-                            background: intern.stipend === "Pro-Bono" ? "#FFEBEE" : "#E8F5E9",
-                            color: intern.stipend === "not specified" ? "#C62828" : "#2E7D32",
-                            padding: "0.2rem 0.3rem",
-                            borderRadius: "3px",
-                            fontSize: "0.6rem",
-                            fontWeight: "500",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {intern.stipend}
-                        </span>
-                      </td>
+                      {orderedColumns.map((key) => renderCell(key, intern, rowBg))}
 
-                      {/* Start Date */}
-                      <td style={tableCellStyle}>
-                        <span style={{ fontSize: "0.75rem" }}>{intern.startDate || "-"}</span>
-                      </td>
-
-                      {/* Match % */}
-                      <td style={tableCellStyle}>
-                        <div style={matchContainerStyle}>
-                          <div style={progressBarStyle}>
-                            <div style={{ ...progressFillStyle, width: `${intern.matchPercentage}%` }} />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={matchScoreStyle}>{intern.matchPercentage}%</span>
-                          
-                            <Eye
-                              size={14}
-                              style={{ cursor: "pointer", color: "#a67c52" }}
-                              onClick={() => handleViewMatchBreakdown(intern)}
-                            />
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td style={tableCellStyle}>
-                        <span
-                          style={{
-                            ...statusBadgeStyle,
-                            background: statusStyle.color,
-                            color: statusStyle.textColor,
-                            fontSize: "0.65rem",
-                          }}
-                        >
-                          {intern.status || currentStatus}
-                        </span>
-                      </td>
-      
-            <td style={tableCellStyle}>
-              <div style={actionButtonsStyle}>
-                {currentStatus === "Confirmed" ? (
-                  <span style={confirmedBadgeStyle}>
-                    <Check size={12} /> Confirmed
-                  </span>
-                ) : currentStatus === "Contacted" ? (
-                  <span style={contactedBadgeStyle}>Contacted</span>
-                ) : currentStatus === "Applied" || currentStatus === "Accepted" ? (
-                  <span style={{
-                    background: "#E3F2FD",
-                    color: "#1976D2", 
-                    padding: "0.3rem 0.5rem",
-                    borderRadius: "3px",
-                    fontSize: "0.65rem",
-                    fontWeight: "500",
-                    whiteSpace: "nowrap"
-                  }}>
-                    Application Sent
-                  </span>
-                ) : currentStatus === "Requested" ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <button onClick={() => acceptRequest(intern)} style={connectButtonStyle}>
-                      Accept
-                    </button>
-                  </div>
-                ) : currentStatus === "New Match" ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <button onClick={() => handleConnectClick(intern)} style={connectButtonStyle}>
-                      {intern.action || "Send Application"}
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <button onClick={() => handleConnectClick(intern)} style={connectButtonStyle}>
-                      {intern.action || "Send Application"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </td>
-                      {/* Rating & Recommendation */}
-                      <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                        <span style={{ color: "#999", fontSize: "0.65rem" }}>
-                          <TruncatedText text={intern.ratingRecommendation} maxLength={8} />
-                        </span>
-                      </td>
+                      {renderActionCell(intern, rowBg)}
                     </tr>
                   )
                 })
@@ -2151,838 +2997,608 @@ const sendMessageEmail = async (intern, user, message) => {
         </div>
       </div>
 
-      {/* Stage Update Modal */}
-      {mounted && showStageModal && selectedIntern && createPortal(
-        <div style={modalOverlayStyle}>
-          <div style={{ ...modalContentStyle, maxWidth: "500px" }}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>Update Application Stage</h3>
-              <button onClick={resetStageModal} style={modalCloseButtonStyle}>
-                ✖
-              </button>
-            </div>
-            <div style={modalBodyStyle}>
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={labelStyle}>Select Next Stage:</label>
-                <select
-                  value={nextStage}
-                  onChange={(e) => setNextStage(e.target.value)}
-                  style={selectStyle}
-                >
-                  <option value="">Choose a stage...</option>
-                  <option value="Shortlisted">Shortlisted</option>
-                  <option value="Contacted">Contacted</option>
-                  <option value="Confirmed">Confirmed</option>
-                  <option value="Declined">Declined</option>
-                </select>
-              </div>
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={labelStyle}>Message to Sponsor:</label>
-                <textarea
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Enter your message..."
+      {/* Drag-to-reorder hint */}
+      {dragHintRect && !draggedColumn && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
+            style={{
+              top: dragHintRect.bottom + 8,
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 210),
+              width: "200px",
+            }}
+          >
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* Column header filter popover */}
+      {headerFilterOpen && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div
+            className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
+            style={{
+              top: headerFilterOpen.rect.bottom + 8,
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312),
+              width: "300px",
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
+            {headerFilterOpen.type === "startDate" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Start date</label>
+                  {(localFilters.startFrom || localFilters.startTo) && (
+                    <button
+                      onClick={() => setLocalFilters((p) => ({ ...p, startFrom: "", startTo: "" }))}
+                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={localFilters.startFrom}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, startFrom: e.target.value }))}
+                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                  />
+                  <span className="text-[#7d5a50] text-xs">to</span>
+                  <input
+                    type="date"
+                    value={localFilters.startTo}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, startTo: e.target.value }))}
+                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                  />
+                </div>
+                <p className="text-[10px] text-[#a89482] mt-2">Rows with a start date of "TBD" are hidden while this filter is on.</p>
+              </>
+            )}
+
+            {headerFilterOpen.type === "matchPercentage" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">
+                    Match %: {localFilters.matchRange[0]} - {localFilters.matchRange[1]}
+                  </label>
+                  {(localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100) && (
+                    <button
+                      onClick={() => setLocalFilters((p) => ({ ...p, matchRange: [0, 100] }))}
+                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={localFilters.matchRange[0]}
+                    onChange={(e) =>
+                      setLocalFilters((p) => ({
+                        ...p,
+                        matchRange: [Math.min(Number.parseInt(e.target.value, 10) || 0, p.matchRange[1]), p.matchRange[1]],
+                      }))
+                    }
+                    className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
+                  />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={localFilters.matchRange[1]}
+                    onChange={(e) =>
+                      setLocalFilters((p) => ({
+                        ...p,
+                        matchRange: [p.matchRange[0], Math.max(Number.parseInt(e.target.value, 10) || 0, p.matchRange[0])],
+                      }))
+                    }
+                    className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
+                  />
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={localFilters.matchRange[0]}
+                  onChange={(e) =>
+                    setLocalFilters((p) => ({ ...p, matchRange: [Number.parseInt(e.target.value, 10), p.matchRange[1]] }))
+                  }
+                  className="w-full accent-[#7d5a50]"
                 />
-              </div>
-            </div>
-            <div style={modalActionsStyle}>
-              <button onClick={resetStageModal} style={cancelButtonStyle}>
-                Cancel
-              </button>
-              <button 
-                onClick={handleStageUpdate} 
-                style={primaryButtonStyle}
-                disabled={isSubmitting || !nextStage}
-              >
-                {isSubmitting ? "Updating..." : "Update Stage"}
-              </button>
-            </div>
+              </>
+            )}
+
+            {[
+              { type: "name", label: "SMSE name", placeholder: "Search name..." },
+              { type: "internshipRole", label: "Role", placeholder: "Search role..." },
+              { type: "ratingRecommendation", label: "Rating", placeholder: "Search rating..." },
+            ].map(
+              ({ type, label, placeholder }) =>
+                headerFilterOpen.type === type && (
+                  <div key={type}>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                      {localFilters[type] && (
+                        <button
+                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: "" }))}
+                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={localFilters[type]}
+                      onChange={(e) => setLocalFilters((p) => ({ ...p, [type]: e.target.value }))}
+                      placeholder={placeholder}
+                      className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                    />
+                  </div>
+                ),
+            )}
+
+            {[
+              { type: "location", label: "Location", options: locationOptions },
+              { type: "sector", label: "Sector", options: sectorOptions },
+              { type: "operationStage", label: "Stage", options: stageOptions },
+              { type: "stipend", label: "Stipend", options: stipendOptions },
+              { type: "status", label: "Status", options: statusOptions },
+            ].map(
+              ({ type, label, options }) =>
+                headerFilterOpen.type === type && (
+                  <div key={type}>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                      {localFilters[type].length > 0 && (
+                        <button
+                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
+                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
+                      {options.map((value) => (
+                        <button
+                          key={value}
+                          onClick={() => toggleChip(type, value)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                            localFilters[type].includes(value)
+                              ? "bg-[#7d5a50] text-white"
+                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ),
+            )}
           </div>
-        </div>,
-        document.body
+        </PopupPortal>
       )}
 
-      {/* All other modals remain the same */}
-      {/* Brief Description Modal */}
-      {mounted && showBriefModal && selectedIntern && createPortal(
-        <div style={modalOverlayStyle}>
-          <div style={modalContentStyle}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>
-                <FileText size={20} style={{ marginRight: "0.5rem" }} />
-                {selectedIntern.briefDescription.title}
-              </h3>
-              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                <X size={20} />
-              </button>
-            </div>
-            <div style={modalBodyStyle}>
-              {/* Company Info */}
-              <div style={detailCardStyle}>
-                <h4 style={detailCardTitleStyle}>
-                  {selectedIntern.briefDescription.company}
-                </h4>
-                <p style={detailTextStyle}>
-                  <strong>Duration:</strong> {selectedIntern.briefDescription.duration}
-                </p>
+      {/* Stage Update Modal */}
+      {mounted &&
+        showStageModal &&
+        selectedIntern &&
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center z-[1000] p-4"
+            style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}
+            onClick={resetStageModal}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-[520px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white flex items-center justify-between">
+                <h3 className="text-sm font-bold m-0">Update application stage</h3>
+                <button onClick={resetStageModal} className="text-white/70 hover:text-white p-1">
+                  <X size={18} />
+                </button>
               </div>
-
-              {/* Requirements */}
-              <div style={{ marginBottom: "1.5rem" }}>
-                <h4 style={sectionTitleStyle}>📋 Requirements</h4>
-                <ul style={listStyle}>
-                  {selectedIntern.briefDescription.requirements.map((req, index) => (
-                    <li key={index}>{req}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Responsibilities */}
-              <div style={{ marginBottom: "1.5rem" }}>
-                <h4 style={sectionTitleStyle}>💼 Key Responsibilities</h4>
-                <ul style={listStyle}>
-                  {selectedIntern.briefDescription.responsibilities.map((resp, index) => (
-                    <li key={index}>{resp}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Benefits */}
-              <div style={{ marginBottom: "1.5rem" }}>
-                <h4 style={sectionTitleStyle}>🎯 What You'll Gain</h4>
-                <ul style={listStyle}>
-                  {selectedIntern.briefDescription.benefits.map((benefit, index) => (
-                    <li key={index}>{benefit}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Application Process */}
-              <div style={infoCardStyle}>
-                <h4 style={sectionTitleStyle}>📝 Application Process</h4>
-                <p style={detailTextStyle}>
-                  {selectedIntern.briefDescription.applicationProcess}
-                </p>
-              </div>
-            </div>
-            <div style={modalActionsStyle}>
-              <button
-                style={primaryButtonStyle}
-                onClick={() => {
-                  closeAllModals()
-                  handleConnectClick(selectedIntern)
-                }}
-              >
-                <Send size={16} /> Apply Now
-              </button>
-              <button
-                style={secondaryButtonStyle}
-                onClick={() => {
-                  closeAllModals()
-                  handleMessage(selectedIntern)
-                }}
-              >
-                <MessageCircle size={16} /> Ask Questions
-              </button>
-              <button style={cancelButtonStyle} onClick={closeAllModals}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
-
-      {/* Match Breakdown Modal */}
-      {mounted && showMatchBreakdown && selectedIntern && createPortal(
-        <div style={modalOverlayStyle}>
-          <div style={{ ...modalContentStyle, maxWidth: "700px" }}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>
-                Match Breakdown: {selectedIntern.smseName}
-              </h3>
-              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                ✖
-              </button>
-            </div>
-            <div style={modalBodyStyle}>
-              <div style={{ marginBottom: "1.5rem" }}>
-                <h4 style={sectionTitleStyle}>
-                  Overall Match Score: {selectedIntern.matchPercentage}%
-                </h4>
-                <div style={{...progressBarStyle, width: "100%", height: "10px"}}>
-                  <div
-                    style={{
-                      ...progressFillStyle,
-                      width: `${selectedIntern.matchPercentage}%`,
-                    }}
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Next stage</label>
+                  <select
+                    value={nextStage}
+                    onChange={(e) => setNextStage(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm bg-white text-[#4a352f]"
+                  >
+                    <option value="">Choose a stage...</option>
+                    <option value="Shortlisted">Shortlisted</option>
+                    <option value="Contacted">Contacted</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Declined">Declined</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1.5">Message to sponsor</label>
+                  <textarea
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    rows={4}
+                    placeholder="Enter your message..."
+                    className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm resize-y"
                   />
                 </div>
               </div>
+              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
+                <button
+                  onClick={resetStageModal}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStageUpdate}
+                  disabled={isSubmitting || !nextStage}
+                  className="px-5 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold disabled:opacity-40"
+                >
+                  {isSubmitting ? "Updating..." : "Update stage"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
-              {selectedIntern.matchBreakdown && Object.entries(selectedIntern.matchBreakdown).map(([key, breakdown]) => {
-                const titles = {
-                  skillsMatch: "Skills/Role Match",
-                  workModeMatch: "Work Mode Compatibility", 
-                  locationMatch: "Location Match",
-                  availabilityMatch: "Availability Date",
-                  additionalFactors: "Profile Completeness"
-                };
-
-                const getStatusColor = (score, maxScore) => {
-                  const percentage = (score / maxScore) * 100;
-                  if (percentage >= 90) return "#2E7D32";
-                  if (percentage >= 50) return "#F57F17"; 
-                  return "#C62828";
-                };
-
-                const getStatusText = (score, maxScore) => {
-                  if (score === maxScore) return "✓ Perfect Match";
-                  if (score > maxScore * 0.5) return "◐ Partial Match";
-                  if (score > 0) return "◒ Some Match";
-                  return "✗ No Match";
-                };
-
-                return (
-                  <div key={key} style={matchBreakdownSection}>
-                    <h4 style={matchBreakdownTitle}>{titles[key]}</h4>
-                    <div style={matchBreakdownItem}>
-                      <span style={matchBreakdownLabel}>Weight:</span>
-                      <span style={matchBreakdownValue}>{((breakdown.maxScore / 100) * 100).toFixed(0)}%</span>
+      {/* Brief Description Modal */}
+      {mounted &&
+        showBriefModal &&
+        selectedIntern &&
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center z-[1000] p-4"
+            style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}
+            onClick={closeAllModals}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-[820px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <FileText size={20} className="text-[#f5f0e1] flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Internship brief</p>
+                      <h3 className="text-sm font-bold mt-0.5 truncate">{selectedIntern.briefDescription.title}</h3>
                     </div>
-                    <div style={matchBreakdownItem}>
-                      <span style={matchBreakdownLabel}>Score:</span>
-                      <span style={matchBreakdownValue}>{breakdown.score}/{breakdown.maxScore}</span>
-                    </div>
-                    <div style={matchBreakdownItem}>
-                      <span style={matchBreakdownLabel}>Status:</span>
-                      <span style={{ 
-                        ...matchBreakdownValue, 
-                        color: getStatusColor(breakdown.score, breakdown.maxScore)
-                      }}>
-                        {getStatusText(breakdown.score, breakdown.maxScore)}
-                      </span>
-                    </div>
-                    <p style={matchBreakdownDescription}>
-                      {breakdown.description}
-                    </p>
                   </div>
-                );
-              })}
-            </div>
-            <div style={modalActionsStyle}>
-              <button 
-                style={primaryButtonStyle}
-                onClick={() => {
-                  setShowMatchBreakdown(false);
-                  handleMessage(selectedIntern);
-                }}
-              >
-                <MessageCircle size={16} /> Ask Questions
-              </button>
-              <button 
-                style={cancelButtonStyle}
-                onClick={() => setShowMatchBreakdown(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+                  <button onClick={closeAllModals} className="text-white/70 hover:text-white p-1 flex-shrink-0">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
 
-      {/* Filter Modal */}
-      {mounted && showFilters && createPortal(
-        <div style={modalOverlayStyle}>
-          <div style={{ ...modalContentStyle, maxWidth: "1000px" }}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>Filter Interns</h3>
-              <button onClick={() => setShowFilters(false)} style={modalCloseButtonStyle}>
-                ✖
-              </button>
-            </div>
-            <div style={modalBodyStyle}>
-              <div style={headerSectionStyle}>
-                <h1 style={mainTitleStyle}>
-                  Filter Intern Matches
-                </h1>
-                <p style={subtitleStyle}>
-                  Find the perfect intern candidates for your organization
-                </p>
-              </div>
-              <div style={filterGridStyle}>
-                <div style={filterCardStyle}>
-                  <h3 style={filterTitleStyle}>
-                    📍 Location
-                  </h3>
-                  <select
-                    style={selectStyle}
-                    value={filters.location}
-                    onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-                  >
-                    <option value="">Select Location</option>
-                    {["Cape Town", "Johannesburg", "Pretoria", "Durban", "Port Elizabeth"].map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    ))}
-                  </select>
+              <div className="p-6">
+                <div className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-4">
+                  <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Organisation</div>
+                  <p className="text-sm font-semibold text-[#4a352f] m-0">{selectedIntern.briefDescription.company}</p>
+                  <p className="text-xs text-[#7d5a50] mt-1 m-0">Duration: {selectedIntern.briefDescription.duration}</p>
                 </div>
-                <div style={filterCardStyle}>
-                  <h3 style={filterTitleStyle}>
-                    🏢 Sector
-                  </h3>
-                  <select
-                    style={selectStyle}
-                    value={filters.sector}
-                    onChange={(e) => setFilters({ ...filters, sector: e.target.value })}
-                  >
-                    <option value="">Select Sector</option>
-                    {["Tech", "Agri", "Finance", "Healthcare", "Education"].map((sector) => (
-                      <option key={sector} value={sector}>
-                        {sector}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div style={filterCardStyle}>
-                  <h3 style={filterTitleStyle}>
-                    📈 Operation Stage
-                  </h3>
-                  <select
-                    style={selectStyle}
-                    value={filters.operationStage}
-                    onChange={(e) => setFilters({ ...filters, operationStage: e.target.value })}
-                  >
-                    <option value="">Select Stage</option>
-                    {["Seed", "Series A", "Series B", "Growth", "Mature"].map((stage) => (
-                      <option key={stage} value={stage}>
-                        {stage}
-                      </option>
-                    ))}
-                  </select>
+
+                {[
+                  ["Requirements", selectedIntern.briefDescription.requirements],
+                  ["Key responsibilities", selectedIntern.briefDescription.responsibilities],
+                  ["What you'll gain", selectedIntern.briefDescription.benefits],
+                ].map(([label, items]) => (
+                  <div key={label} className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-4 mt-4">
+                    <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-2">{label}</div>
+                    <ul className="list-disc pl-5 text-sm text-[#4a352f] space-y-1 m-0">
+                      {(Array.isArray(items) ? items : [items]).map((item, index) => (
+                        <li key={index}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+
+                <div className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-4 mt-4">
+                  <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">
+                    Application process
+                  </div>
+                  <p className="text-sm text-[#7d5a50] m-0 leading-relaxed">
+                    {selectedIntern.briefDescription.applicationProcess}
+                  </p>
                 </div>
               </div>
-              <div style={filterActionsStyle}>
+
+              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
                 <button
-                  style={clearButtonStyle}
                   onClick={() => {
-                    setFilters({
-                      location: "",
-                      matchScore: 50,
-                      sector: "",
-                      operationStage: "",
-                      internshipRole: "",
-                      stipend: "",
-                      startDate: "",
-                      sortBy: "",
-                    })
+                    const intern = selectedIntern
+                    closeAllModals()
+                    handleMessage(intern)
                   }}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] inline-flex items-center gap-1.5"
                 >
-                  Clear All Filters
+                  <MessageCircle size={14} /> Ask a question
                 </button>
                 <button
-                  style={applyButtonStyle}
-                  onClick={() => setShowFilters(false)}
+                  onClick={() => {
+                    const intern = selectedIntern
+                    closeAllModals()
+                    handleConnectClick(intern)
+                  }}
+                  className="px-5 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold inline-flex items-center gap-1.5"
                 >
-                  Apply Filters
+                  <Send size={14} /> Apply now
                 </button>
               </div>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </div>,
+          document.body,
+        )}
+
+      {/* Match Breakdown Modal */}
+      {mounted &&
+        showMatchBreakdown &&
+        selectedIntern &&
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center z-[1000] p-4"
+            style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}
+            onClick={() => setShowMatchBreakdown(false)}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-[760px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Match breakdown</p>
+                    <h3 className="text-sm font-bold mt-0.5 truncate">{selectedIntern.smseName}</h3>
+                  </div>
+                  <button onClick={() => setShowMatchBreakdown(false)} className="text-white/70 hover:text-white p-1">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="text-center pb-5 border-b border-[#e6d7c3]">
+                  <div className="text-4xl font-extrabold text-[#7d5a50]">{selectedIntern.matchPercentage}%</div>
+                  <p className="text-xs text-[#a89482] mt-1 m-0">Overall match score</p>
+                  <div className="h-2 rounded-full overflow-hidden bg-[#e6d7c3] mt-3">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${selectedIntern.matchPercentage}%`,
+                        background: "linear-gradient(90deg, #7d5a50, #a67c52)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 mt-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
+                  {selectedIntern.matchBreakdown &&
+                    Object.entries(selectedIntern.matchBreakdown).map(([key, breakdown]) => {
+                      const titles = {
+                        skillsMatch: "Skills / role match",
+                        workModeMatch: "Work mode compatibility",
+                        locationMatch: "Location match",
+                        availabilityMatch: "Availability date",
+                        additionalFactors: "Profile completeness",
+                      }
+                      const pct = (breakdown.score / breakdown.maxScore) * 100
+                      const color = pct >= 90 ? "#2E7D32" : pct >= 50 ? "#F57C00" : "#D32F2F"
+                      const statusText =
+                        breakdown.score === breakdown.maxScore
+                          ? "Perfect match"
+                          : breakdown.score > breakdown.maxScore * 0.5
+                            ? "Partial match"
+                            : breakdown.score > 0
+                              ? "Some match"
+                              : "No match"
+
+                      return (
+                        <div
+                          key={key}
+                          className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-4"
+                          style={{ borderLeft: `4px solid ${color}` }}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h4 className="text-sm font-semibold text-[#4a352f] m-0">{titles[key] || key}</h4>
+                            <span className="text-sm font-bold" style={{ color }}>
+                              {breakdown.score}/{breakdown.maxScore}
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full overflow-hidden bg-[#e6d7c3] mb-2">
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                          </div>
+                          <div className="text-[11px] font-semibold mb-1" style={{ color }}>
+                            {statusText}
+                          </div>
+                          <p className="text-xs text-[#7d5a50] m-0 leading-relaxed">{breakdown.description}</p>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
+                <button
+                  onClick={() => {
+                    const intern = selectedIntern
+                    setShowMatchBreakdown(false)
+                    handleMessage(intern)
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] inline-flex items-center gap-1.5"
+                >
+                  <MessageCircle size={14} /> Ask a question
+                </button>
+                <button
+                  onClick={() => setShowMatchBreakdown(false)}
+                  className="px-5 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* Detail Modal */}
-      {mounted && showModal && selectedIntern && createPortal(
-        <div style={modalOverlayStyle}>
-          <div style={{ ...modalContentStyle, maxWidth: "700px" }}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>
-                <User size={20} style={{ marginRight: "0.5rem" }} />
-                SMSE Details
-              </h3>
-              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                ✖
-              </button>
-            </div>
-            <div style={modalBodyStyle}>
-              <div style={detailGridStyle}>
-                <div style={detailCardStyle}>
-                  <h4 style={detailCardTitleStyle}>
-                    <User size={16} style={{ marginRight: "0.5rem" }} />
-                    Company Information
-                  </h4>
-                  <p style={detailTextStyle}>
-                    <strong>SMSE Name:</strong> {selectedIntern.smseName}
-                  </p>
-                  <p style={detailTextStyle}>
-                    <strong>Location:</strong> {selectedIntern.location}
-                  </p>
-                  <p style={detailTextStyle}>
-                    <strong>Sector:</strong> {selectedIntern.sector}
-                  </p>
-                  <p style={detailTextStyle}>
-                    <strong>Operation Stage:</strong> {selectedIntern.operationStage}
-                  </p>
+      {mounted &&
+        showModal &&
+        selectedIntern &&
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center z-[1000] p-4"
+            style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}
+            onClick={closeAllModals}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-[820px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <User size={20} className="text-[#f5f0e1] flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">SMSE details</p>
+                      <h3 className="text-sm font-bold mt-0.5 truncate">{selectedIntern.smseName}</h3>
+                    </div>
+                  </div>
+                  <button onClick={closeAllModals} className="text-white/70 hover:text-white p-1 flex-shrink-0">
+                    <X size={18} />
+                  </button>
                 </div>
-                <div style={detailCardStyle}>
-                  <h4 style={detailCardTitleStyle}>
-                    <FileIcon size={16} style={{ marginRight: "0.5rem" }} />
-                    Internship Details
-                  </h4>
-                  <p style={detailTextStyle}>
-                    <strong>Role:</strong> {selectedIntern.internshipRole}
-                  </p>
-                  <p style={detailTextStyle}>
-                    <strong>Stipend:</strong> {selectedIntern.stipend}
-                  </p>
-                  <p style={detailTextStyle}>
-                    <strong>Start Date:</strong> {selectedIntern.startDate}
-                  </p>
-                  <p style={detailTextStyle}>
-                    <strong>Match Score:</strong> {selectedIntern.matchPercentage}%
+              </div>
+
+              <div className="p-6">
+                <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+                  {[
+                    ["SMSE name", selectedIntern.smseName],
+                    ["Location", selectedIntern.location],
+                    ["Sector", selectedIntern.sector],
+                    ["Operation stage", selectedIntern.operationStage],
+                    ["Role", selectedIntern.internshipRole],
+                    ["Stipend", selectedIntern.stipend],
+                    ["Start date", formatDateValue(selectedIntern.startDate) || selectedIntern.startDate || "-"],
+                    ["Match score", `${selectedIntern.matchPercentage}%`],
+                    ["Status", statusOf(selectedIntern)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-3 text-sm text-[#4a352f]">
+                      <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</div>
+                      {value || "-"}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-4 mt-4">
+                  <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">
+                    <FileIcon size={11} className="inline mr-1" /> Internship brief
+                  </div>
+                  <p className="text-sm text-[#7d5a50] m-0 leading-relaxed">
+                    {selectedIntern.briefDescription?.title} — {selectedIntern.briefDescription?.duration}
                   </p>
                 </div>
               </div>
+
+              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
+                <button
+                  onClick={() => {
+                    const intern = selectedIntern
+                    closeAllModals()
+                    handleViewBrief(intern)
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] inline-flex items-center gap-1.5"
+                >
+                  <FileText size={14} /> Read the brief
+                </button>
+                <button
+                  onClick={() => {
+                    const intern = selectedIntern
+                    closeAllModals()
+                    handleMessage(intern)
+                  }}
+                  className="px-5 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold inline-flex items-center gap-1.5"
+                >
+                  <MessageCircle size={14} /> Send a message
+                </button>
+              </div>
             </div>
-            <div style={modalActionsStyle}>
-              <button
-                style={primaryButtonStyle}
-                onClick={() => {
-                  closeAllModals()
-                  handleMessage(selectedIntern)
-                }}
-              >
-                <MessageCircle size={16} /> Send Message
-              </button>
-              <button style={cancelButtonStyle} onClick={closeAllModals}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* Message Modal */}
-      {mounted && showMessageModal && selectedIntern && createPortal(
-        <div style={modalOverlayStyle}>
-          <div style={{ ...modalContentStyle, maxWidth: "600px" }}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>
-                <MessageCircle size={20} style={{ marginRight: "0.5rem" }} />
-                Send Message to {selectedIntern.smseName}
-              </h3>
-              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                ✖
-              </button>
+      {mounted &&
+        showMessageModal &&
+        selectedIntern &&
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center z-[1000] p-4"
+            style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}
+            onClick={closeAllModals}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-[620px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white flex items-center justify-between">
+                <div className="min-w-0 flex items-center gap-2">
+                  <MessageCircle size={20} className="text-[#f5f0e1] flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Message</p>
+                    <h3 className="text-sm font-bold mt-0.5 truncate">{selectedIntern.smseName}</h3>
+                  </div>
+                </div>
+                <button onClick={closeAllModals} className="text-white/70 hover:text-white p-1 flex-shrink-0">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6">
+                <textarea
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  placeholder="Type your message here..."
+                  rows={8}
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
+                <button
+                  onClick={closeAllModals}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!messageText.trim()}
+                  className="px-5 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold inline-flex items-center gap-1.5 disabled:opacity-40"
+                >
+                  <Send size={14} /> Send message
+                </button>
+              </div>
             </div>
-            <div style={modalBodyStyle}>
-              <textarea
-                style={messageTextareaStyle}
-                placeholder="Type your message here..."
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-              />
-            </div>
-            <div style={modalActionsStyle}>
-              <button
-                style={primaryButtonStyle}
-                onClick={handleSendMessage}
-                disabled={!messageText.trim()}
-              >
-                <Send size={16} /> Send Message
-              </button>
-              <button style={cancelButtonStyle} onClick={closeAllModals}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
-    </>
+          </div>,
+          document.body,
+        )}
+    </div>
   )
 }
 
-// Style constants with brown color scheme
-const tableHeaderStyle = {
-  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-  color: "#FEFCFA",
-  padding: "0.75rem 0.5rem",
-  textAlign: "left",
-  fontWeight: "600",
-  fontSize: "0.65rem",
-  letterSpacing: "0.5px",
-  textTransform: "uppercase",
-  position: "sticky",
-  top: "0",
-  zIndex: "10",
-  borderBottom: "2px solid #1a0c02",
-  borderRight: "1px solid #1a0c02",
-  lineHeight: "1.2",
-}
-
-const tableCellStyle = {
-  padding: "0.6rem 0.4rem",
-  borderBottom: "1px solid #E8D5C4",
-  borderRight: "1px solid #E8D5C4",
-  fontSize: "0.75rem",
-  verticalAlign: "top",
-  color: "#5d2a0a",
-  lineHeight: "1.3",
-  wordWrap: "break-word",
-  overflow: "hidden",
-}
-
-const matchContainerStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-start",
-  gap: "0.25rem",
-}
-
-const progressBarStyle = {
-  width: "40px",
-  height: "5px",
-  background: "#E0E0E0",
-  borderRadius: "3px",
-  overflow: "hidden",
-}
-
-const progressFillStyle = {
-  height: "100%",
-  background: "linear-gradient(90deg, #5D4037, #8D6E63)",
-  transition: "width 0.3s ease",
-}
-
-const matchScoreStyle = {
-  fontWeight: "600",
-  color: "#202124",
-  fontSize: "0.7rem",
-}
-
-const statusBadgeStyle = {
-  padding: "0.2rem 0.3rem",
-  borderRadius: "3px",
-  fontSize: "0.65rem",
-  fontWeight: "500",
-  display: "inline-block",
-  whiteSpace: "nowrap",
-}
-
-const actionButtonsStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-  width: "100%",
-}
-
-const connectButtonStyle = {
-  padding: "0.3rem 0.5rem",
-  background: "#5D4037",
-  color: "white",
-  border: "none",
-  borderRadius: "3px",
-  fontSize: "0.65rem",
-  cursor: "pointer",
-  transition: "background 0.2s",
-  whiteSpace: "nowrap",
-}
-
-const confirmedBadgeStyle = {
-  background: "#8D6E63",
-  color: "white",
-  padding: "0.3rem 0.5rem",
-  borderRadius: "3px",
-  fontSize: "0.65rem",
-  fontWeight: "500",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.25rem",
-  whiteSpace: "nowrap",
-}
-
-const contactedBadgeStyle = {
-  background: "#F3E5F5",
-  color: "#7B1FA2",
-  padding: "0.3rem 0.5rem",
-  borderRadius: "3px",
-  fontSize: "0.65rem",
-  fontWeight: "500",
-  whiteSpace: "nowrap",
-}
-
-// Modal Styles
-const modalOverlayStyle = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.5)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 1000,
-}
-
-const modalContentStyle = {
-  background: "white",
-  borderRadius: "12px",
-  maxWidth: "800px",
-  width: "90%",
-  maxHeight: "90vh",
-  overflowY: "auto",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-}
-
-const modalHeaderStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "1.5rem",
-  borderBottom: "1px solid #E0E0E0",
-  background: "#EFEBE9",
-}
-
-const modalTitleStyle = {
-  margin: "0",
-  fontSize: "1.25rem",
-  fontWeight: "600",
-  color: "#5D4037",
-  display: "flex",
-  alignItems: "center",
-}
-
-const modalCloseButtonStyle = {
-  background: "none",
-  border: "none",
-  fontSize: "1.5rem",
-  cursor: "pointer",
-  color: "#5D4037",
-}
-
-const modalBodyStyle = {
-  padding: "1.5rem",
-}
-
-const modalActionsStyle = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "0.5rem",
-  padding: "1.5rem",
-  borderTop: "1px solid #E0E0E0",
-}
-
-// Button Styles
-const primaryButtonStyle = {
-  background: "#5D4037",
-  color: "white",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.875rem",
-  transition: "all 0.2s",
-}
-
-const secondaryButtonStyle = {
-  background: "#EFEBE9",
-  color: "#5D4037",
-  border: "1px solid #D7CCC8",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.875rem",
-}
-
-const cancelButtonStyle = {
-  background: "#F1F3F4",
-  color: "#5F6368",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-}
-
-// Detail Styles
-const detailGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-  gap: "1.5rem",
-}
-
-const detailCardStyle = {
-  padding: "1rem",
-  background: "#F8F9FA",
-  border: "1px solid #E0E0E0",
-  borderRadius: "8px",
-}
-
-const detailCardTitleStyle = {
-  fontSize: "1rem",
-  fontWeight: "600",
-  margin: "0 0 0.5rem 0",
-  color: "#5D4037",
-  display: "flex",
-  alignItems: "center",
-}
-
-const detailTextStyle = {
-  margin: "0.25rem 0",
-  fontSize: "0.875rem",
-  color: "#202124",
-}
-
-// Filter Styles
-const headerSectionStyle = {
-  textAlign: "center",
-  marginBottom: "2rem",
-  paddingBottom: "1rem",
-  borderBottom: "2px solid #E0E0E0",
-}
-
-const mainTitleStyle = {
-  fontSize: "1.5rem",
-  fontWeight: "bold",
-  color: "#5D4037",
-  margin: "0 0 0.5rem 0",
-}
-
-const subtitleStyle = {
-  fontSize: "1rem",
-  color: "#5F6368",
-  margin: "0",
-}
-
-const filterGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-  gap: "1.5rem",
-  marginBottom: "2rem",
-}
-
-const filterCardStyle = {
-  background: "#F8F9FA",
-  border: "1px solid #E0E0E0",
-  borderRadius: "8px",
-  padding: "1.25rem",
-}
-
-const filterTitleStyle = {
-  fontSize: "1rem",
-  fontWeight: "600",
-  color: "#5D4037",
-  margin: "0 0 0.75rem 0",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-}
-
-const filterActionsStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "1rem",
-  paddingTop: "1.5rem",
-  borderTop: "1px solid #E0E0E0",
-}
-
-const clearButtonStyle = {
-  flex: "1",
-  padding: "0.75rem 1.5rem",
-  background: "#EFEBE9",
-  color: "#5D4037",
-  border: "1px solid #D7CCC8",
-  borderRadius: "6px",
-  fontSize: "0.875rem",
-  fontWeight: "500",
-  cursor: "pointer",
-  transition: "all 0.2s",
-}
-
-const applyButtonStyle = {
-  flex: "1",
-  padding: "0.75rem 1.5rem",
-  background: "#5D4037",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  fontSize: "0.875rem",
-  fontWeight: "500",
-  cursor: "pointer",
-  transition: "all 0.2s",
-}
-
-// Form Styles
-const labelStyle = {
-  display: "block",
-  fontSize: "0.875rem",
-  fontWeight: "600",
-  color: "#5D4037",
-  marginBottom: "0.5rem",
-}
-
-const selectStyle = {
-  width: "100%",
-  padding: "0.75rem",
-  border: "1px solid #E0E0E0",
-  borderRadius: "6px",
-  fontSize: "0.875rem",
-  background: "white",
-  color: "#202124",
-}
-
-const textareaStyle = {
-  width: "100%",
-  padding: "0.75rem",
-  border: "1px solid #E0E0E0",
-  borderRadius: "6px",
-  fontSize: "0.875rem",
-  fontFamily: "inherit",
-  resize: "vertical",
-  minHeight: "100px",
-}
-
-const messageTextareaStyle = {
-  width: "100%",
-  height: "200px",
-  padding: "1rem",
-  border: "1px solid #E0E0E0",
-  borderRadius: "8px",
-  fontSize: "0.875rem",
-  fontFamily: "inherit",
-  resize: "vertical",
-  outline: "none",
-}
-
-// Section Styles
-const sectionTitleStyle = {
-  color: "#5D4037",
-  marginBottom: "0.75rem",
-  fontSize: "1rem",
-  fontWeight: "600",
-}
-
-const listStyle = {
-  margin: "0",
-  paddingLeft: "1.5rem",
-  color: "#333",
-}
-
-const infoCardStyle = {
-  padding: "1rem",
-  background: "#EFEBE9",
-  borderRadius: "8px",
-  border: "1px solid #D7CCC8",
-}
+export default InternTable
