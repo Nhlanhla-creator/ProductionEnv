@@ -1,7 +1,7 @@
 import React, { useState } from "react"
 import CMFDealFlowPipeline from "./CMFDealFlowPipeline"
 import CMFTabbedTables from "./CMFTabbedTables"
-import CMFFilter from "./CMFFilter"
+
 import { useCMFMatches } from "./CMFMatchesContext"
 
 // (Keep INITIAL_MOCK_SMES, INITIAL_MOCK_FUNDERS, INITIAL_MOCK_CATALYSTS)
@@ -334,13 +334,12 @@ export default function CMFMatches() {
           />
         </div>
 
-        {/* Filters */}
-        <CMFFilter filters={filters} onFilterChange={handleFilterChange} />
+     
 
         {/* Tabbed Tables */}
         <div className="w-full max-w-full mb-6">
           <CMFTabbedTables
-            filters={filters}
+         
             stageFilter={stageFilter}
             smeMatches={displaySMEs}
             funderMatches={funderMatches}

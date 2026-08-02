@@ -1,731 +1,956 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { BarChart3, MapPin, Calendar, Filter, X, Info, Eye } from "lucide-react"
-import { collection, getDocs, query, where, serverTimestamp, doc, writeBatch, updateDoc, getDoc, addDoc } from "firebase/firestore"
-import { auth, db } from "../../firebaseConfig"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "../../firebaseConfig"
+import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
+import {
+  Info, Calendar, X, Eye, ChevronDown, MoreVertical, CheckCircle,
+  Clock, Users, Download, MessageSquare, ArrowRight, SlidersHorizontal,
+  RotateCcw, Settings, Target, Briefcase, Video, LayoutGrid, Trash2, Plus,
+  GripVertical, AlertTriangle, XCircle
+} from "lucide-react";
+import {
+  collection, getDocs, query, where, serverTimestamp, doc, updateDoc, getDoc, addDoc
+} from "firebase/firestore";
+import { auth, db, storage } from "../../firebaseConfig";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import * as XLSX from "xlsx";
 import { API_KEYS } from "../../API";
-import emailjs from '@emailjs/browser';
+import emailjs from "@emailjs/browser";
+import {
+  DEFAULT_STAGES, PROGRAMME_TEMPLATES, mapStatusToStageId, getStageColors,
+  getNextStageId, getStageActionConfig, loadPipelineSettings, getActiveStages,
+  PIPELINE_SETTINGS_EVENT, notifyPipelineRefresh,
+} from "./advisorStageConfig";
+
+// ─── Constants & Helpers ──────────────────────────────────────────────────────
+const BIG_SCORE_LABELS = {
+  excellent: { min: 80, label: "Excellent", color: "#22c55e" },
+  strong: { min: 60, label: "Strong", color: "#86efac" },
+  moderate: { min: 40, label: "Moderate", color: "#f59e0b" },
+  weak: { min: 20, label: "Weak", color: "#ef4444" },
+  critical: { min: 0, label: "Critical", color: "#dc2626" }
+};
+
+// Match % maps to a plain label + fit bar rather than a raw number alone
+const MATCH_LABELS = {
+  excellent: { min: 80, label: "Excellent Fit", color: "#22c55e" },
+  strong: { min: 60, label: "Strong Fit", color: "#86efac" },
+  moderate: { min: 40, label: "Moderate Fit", color: "#f59e0b" },
+  weak: { min: 20, label: "Weak Fit", color: "#ef4444" },
+  poor: { min: 0, label: "Poor Fit", color: "#dc2626" }
+};
+
+const getBigScoreLabel = (score) => {
+  for (const value of Object.values(BIG_SCORE_LABELS)) {
+    if (score >= value.min) return value;
+  }
+  return BIG_SCORE_LABELS.critical;
+};
+
+const getMatchLabel = (score) => {
+  for (const value of Object.values(MATCH_LABELS)) {
+    if (score >= value.min) return value;
+  }
+  return MATCH_LABELS.poor;
+};
 
 const formatLabel = (value) => {
-  if (!value) return ""
+  if (!value) return "";
   return value
     .toString()
     .split(",")
     .map((item) => item.trim())
     .map((word) => {
-      if (word.toLowerCase() === "ict") return "ICT"
-      if (word.toLowerCase() === "southafrica" || word.toLowerCase() === "south_africa") return "South Africa"
+      if (word.toLowerCase() === "ict") return "ICT";
+      if (word.toLowerCase() === "southafrica" || word.toLowerCase() === "south_africa") return "South Africa";
       return word
         .split(/[_\s-]+/)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-        .join(" ")
+        .join(" ");
     })
-    .join(", ")
-}
+    .join(", ");
+};
 
-const TruncatedText = ({ text, maxLines = 2, maxLength = 25 }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
+// Stage lookups take the currently *active* stage list as a parameter (BIG
+// Default, or whichever PROGRAMME_TEMPLATES entry the advisor has switched to,
+// with any customization applied) — rather than a hard-coded list. Without
+// this, switching to e.g. the Project template (which introduces a "Proposal"
+// stage) would leave that stage invisible in this table.
+const getStageById = (id, stages = DEFAULT_STAGES) =>
+  stages.find((s) => s.id === id) || stages[0];
 
-  if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#999" }}>{text || "-"}</span>
-  }
+const getStatusStyle = (status, stages = DEFAULT_STAGES) => {
+  const stage = getStageById(mapStatusToStageId(status, stages), stages);
+  const colors = getStageColors(stage.group);
+  return { bg: colors.bgColor, text: colors.color, border: colors.borderColor, dot: colors.color, stage };
+};
 
-  const shouldTruncate = text.length > maxLength
-  const displayText = isExpanded || !shouldTruncate ? text : `${text.slice(0, maxLength)}...`
+// Reads whatever the advisor configured in the pipeline's "Stage Actions" panel.
+const getStageFields = (stageName, stages = DEFAULT_STAGES) => {
+  const id = mapStatusToStageId(stageName, stages);
+  const overrides = loadPipelineSettings().customization?.stageActions || {};
+  return getStageActionConfig(id, overrides);
+};
 
-  const toggleExpanded = (e) => {
-    e.stopPropagation()
-    setIsExpanded(!isExpanded)
-  }
+const getNextStage = (currentStage, stages = DEFAULT_STAGES) => {
+  const currentId = mapStatusToStageId(currentStage, stages);
+  const nextId = getNextStageId(stages, currentId);
+  return getStageById(nextId, stages).name;
+};
 
+const toDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (value?.seconds != null) return new Date(value.seconds * 1000);
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const formatDate = (value) => {
+  const d = toDate(value);
+  return d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "N/A";
+};
+
+// Days in stage derives from `updatedAt` (written by serverTimestamp on every
+// stage change), falling back to the application date for rows never moved.
+const calculateDaysInStage = (updatedAt, createdAt) => {
+  const d = toDate(updatedAt) || toDate(createdAt);
+  if (!d) return 0;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
+};
+
+// ─── Attention indicator ──────────────────────────────────────────────────────
+const getAttentionReasons = (sme, stages = DEFAULT_STAGES) => {
+  const reasons = [];
+  if ((sme.daysInStage || 0) >= 14) reasons.push("Stalled for 14+ days");
+  if ((sme.bigScore || 0) < 40 && sme.bigScore > 0) reasons.push("BIG Score below threshold");
+  const stageId = mapStatusToStageId(sme.pipelineStage, stages);
+  if (stageId === "decision") reasons.push("Decision pending");
+  if (stageId === "evaluation" && (sme.daysInStage || 0) >= 7) reasons.push("Evaluation overdue");
+  if (stageId === "terms" && (sme.daysInStage || 0) >= 7) reasons.push("Terms awaiting response");
+  if (stageId === "newMatch" && (sme.daysInStage || 0) >= 5) reasons.push("Not yet contacted");
+  return reasons;
+};
+
+// Small helper component so all popups can be portaled straight to <body>.
+const PopupPortal = ({ children }) => {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+};
+
+// ─── Column header info tooltip ───────────────────────────────────────────────
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null);
   return (
-    <div
-      style={{
-        lineHeight: "1.2",
-        maxHeight: isExpanded ? "none" : `${maxLines * 1.2}em`,
-        overflow: "hidden",
-      }}
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
     >
-      <span
-        style={{
-          wordBreak: "break-word",
-          overflowWrap: "break-word",
-          display: "-webkit-box",
-          WebkitLineClamp: isExpanded ? "none" : maxLines,
-          WebkitBoxOrient: "vertical",
-          overflow: isExpanded ? "visible" : "hidden",
-        }}
-      >
-        {displayText}
-      </span>
-      {shouldTruncate && (
-        <button
-          style={{
-            background: "none",
-            border: "none",
-            color: "#a67c52",
-            cursor: "pointer",
-            fontSize: "0.6rem",
-            marginLeft: "4px",
-            textDecoration: "underline",
-            padding: "0",
-            display: "block",
-            marginTop: "2px",
-          }}
-          onClick={toggleExpanded}
-        >
-          {isExpanded ? "Less" : "See more"}
-        </button>
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
       )}
-    </div>
-  )
-}
+    </span>
+  );
+};
 
-const getScoreColor = (score) => {
-  if (score >= 80) return "#22c55e"
-  if (score >= 60) return "#f59e0b"
-  return "#ef4444"
-}
+// ─── Reorderable column definitions ───────────────────────────────────────────
+// These are the columns that live *between* the pinned "Business Name" (always
+// first) and "Actions" (always last) columns. Users can drag these to reorder
+// them; the array below is only the default/fallback order.
+const DEFAULT_COLUMN_ORDER = [
+  "bigScore", "match", "fundingStage", "supportRequired", "status", "applied",
+  "daysInStage", "lastActivity", "location", "sector", "revenueBand", "compensationModel"
+];
 
-const STATUS_TYPES = {
-  "New Match": {
-    color: "#E3F2FD",
-    textColor: "#1976D2",
-  },
-  Shortlisted: {
-    color: "#FFF3E0",
-    textColor: "#F57C00",
-  },
-  Contacted: {
-    color: "#F3E5F5",
-    textColor: "#7B1FA2",
-  },
-  Confirmed: {
-    color: "#E8F5E8",
-    textColor: "#388E3C",
-  },
-  Declined: {
-    color: "#FFEBEE",
-    textColor: "#D32F2F",
-  },
-}
+const COLUMN_DEFS = {
+  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", tooltip: "BIG Score measures business credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
+  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", tooltip: "Match Score measures fit between the business's needs and your advisory expertise." },
+  fundingStage: { label: "Funding Stage", align: "left", minWidth: "94px", filterType: "fundingStage" },
+  supportRequired: { label: "Support Required", align: "left", minWidth: "120px", filterType: "supportRequired" },
+  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status" },
+  applied: { label: "Applied", align: "left", minWidth: "92px", filterType: "applied" },
+  daysInStage: { label: "Days in Stage", align: "left", minWidth: "134px", filterType: "daysInStage" },
+  lastActivity: { label: "Last Activity", align: "left", minWidth: "108px", filterType: "lastActivity" },
+  location: { label: "Location", align: "left", minWidth: "92px", filterType: "location" },
+  sector: { label: "Sector", align: "left", minWidth: "100px", filterType: "sector" },
+  revenueBand: { label: "Revenue Band", align: "left", minWidth: "104px", filterType: "revenueBand" },
+  compensationModel: { label: "Compensation", align: "left", minWidth: "110px", filterType: "compensationModel" }
+};
 
-const getStatusStyle = (status) => {
-  return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
-}
+// Maps a column key to the field on the mapped row object — these don't always
+// match (e.g. "sme" shows `name`, "match" shows `matchPercentage`).
+const EXPORT_FIELD_MAP = {
+  sme: "name", bigScore: "bigScore", match: "matchPercentage",
+  fundingStage: "fundingStage", supportRequired: "supportRequired",
+  status: "statusLabel", applied: "applicationDateLabel", daysInStage: "daysInStage",
+  lastActivity: "lastActivityLabel", location: "location", sector: "sector",
+  revenueBand: "revenueBand", compensationModel: "compensationModel"
+  // Note: "action" is intentionally omitted — it's a UI-only column.
+};
 
-export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
-  const [advisors, setAdvisors] = useState([])
-  const [selectedAdvisor, setSelectedAdvisor] = useState(null)
-  const [modalType, setModalType] = useState(null)
-  const [message, setMessage] = useState("")
-  const [meetingTime, setMeetingTime] = useState("")
-  const [meetingLocation, setMeetingLocation] = useState("")
-  const [meetingPurpose, setMeetingPurpose] = useState("")
-  const [formErrors, setFormErrors] = useState({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [notification, setNotification] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [nextStage, setNextStage] = useState("")
-  const [showStageModal, setShowStageModal] = useState(false)
-  const [selectedAdvisorForStage, setSelectedAdvisorForStage] = useState(null)
-  const [updatedStages, setUpdatedStages] = useState({})
-  const [availabilities, setAvailabilities] = useState([])
-  const [showCalendarModal, setShowCalendarModal] = useState(false)
-  const [tempDates, setTempDates] = useState([])
-  const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" })
-  const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
-  const [bigScoreData, setBigScoreData] = useState({
-    pis: { score: 0, color: "#4E342E" },
-    compliance: { score: 0, color: "#8D6E63" },
-    legitimacy: { score: 0, color: "#5D4037" },
-    fundability: { score: 0, color: "#3E2723" },
-    leadership: { score: 0, color: "#4E342E" },
-  })
-  const [showFilters, setShowFilters] = useState(false)
+const EXPORT_HEADERS = {
+  sme: "Business Name", bigScore: "BIG Score", match: "Match %",
+  fundingStage: "Funding Stage", supportRequired: "Support Required",
+  status: "Status", applied: "Applied Date", daysInStage: "Days in Stage",
+  lastActivity: "Last Activity", location: "Location", sector: "Sector",
+  revenueBand: "Revenue Band", compensationModel: "Compensation Model"
+};
+
+// ─── Custom Views ─────────────────────────────────────────────────────────────
+// A "view" bundles every layout preference — column visibility, column order,
+// sort, and density — into one named, describable object, with exactly one view
+// active at a time. Editing the table always edits the active view; there's no
+// separate hidden "current layout" that can silently drift out of sync.
+const DEFAULT_COLUMN_VISIBILITY = {
+  sme: true, bigScore: true, match: true, fundingStage: true,
+  supportRequired: true, status: true, applied: true, action: true,
+  daysInStage: true, lastActivity: true,
+  location: false, sector: false, revenueBand: false, compensationModel: false
+};
+const DEFAULT_SORT_CONFIG = { key: "attentionThenScore", direction: "desc" };
+const DEFAULT_DENSITY = "comfortable";
+
+const BUILTIN_VIEW_ID = "__default__";
+const VIEWS_STORAGE_KEY = "advisor-sme-table-views-v2";
+
+// Keeps a stored column order valid against the columns this build actually
+// knows about: drops keys that no longer exist, appends newly-introduced ones.
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
+  const known = new Set(DEFAULT_COLUMN_ORDER);
+  const deduped = order.filter((key) => known.has(key));
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key));
+  return [...deduped, ...missing];
+};
+
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  sortConfig: { ...DEFAULT_SORT_CONFIG },
+  density: DEFAULT_DENSITY,
+  columnWidths: {},
+});
+
+const createBuiltinDefaultView = () => ({
+  id: BUILTIN_VIEW_ID, name: "Default", description: "", builtin: true,
+  ...createDefaultViewLayout(),
+});
+
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
+  density: view?.density || DEFAULT_DENSITY,
+  columnWidths: view?.columnWidths || {},
+});
+
+const loadViewsState = () => {
+  const freshDefault = () => ({ activeViewId: BUILTIN_VIEW_ID, views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() } });
+  if (typeof window === "undefined") return freshDefault();
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null");
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {};
+    const views = {};
+    Object.entries(rawViews).forEach(([id, v]) => { views[id] = sanitizeView(v, id); });
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView();
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID;
+    return { activeViewId, views };
+  } catch {
+    return freshDefault();
+  }
+};
+
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage can fail (private browsing, quota) — the table still works for
+    // the current session, it just won't persist across reloads.
+  }
+};
+
+const generateViewId = () => {
+  try {
+    return `view_${crypto.randomUUID()}`;
+  } catch {
+    return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+};
+
+// ─── Default stage messages ───────────────────────────────────────────────────
+const DEFAULT_STAGE_MESSAGES = {
+  contacted: "Dear Partner,\n\nThank you for your interest. I have reviewed your profile and would like to explore how my advisory support could help your business.\n\nPlease let me know a time that suits you from the options below.\n\nBest regards,\nAdvisory Support Team",
+  intro: "Dear Partner,\n\nLooking forward to our introductory session. It's a chance for us both to test fit before committing to anything.\n\nPlease confirm one of the times below.\n\nBest regards,\nAdvisory Support Team",
+  evaluation: "Dear Partner,\n\nYour application has progressed to the evaluation stage. I'm assessing your needs against my areas of expertise and will share feedback shortly.\n\nBest regards,\nAdvisory Support Team",
+  diligence: "Dear Partner,\n\nWe are now scoping the engagement in detail. I may reach out for additional information about your operations and objectives.\n\nBest regards,\nAdvisory Support Team",
+  proposal: "Dear Partner,\n\nPlease find attached my proposal covering scope, deliverables and pricing for your review.\n\nHappy to walk through it whenever suits you.\n\nBest regards,\nAdvisory Support Team",
+  decision: "Dear Partner,\n\nWe have reached the decision stage. I'll confirm the outcome and next steps shortly.\n\nBest regards,\nAdvisory Support Team",
+  terms: "Dear Partner,\n\nPlease find the engagement terms attached for your review and signature.\n\nOnce signed, we can schedule our first working session.\n\nBest regards,\nAdvisory Support Team",
+  successful: "Dear Partner,\n\nDelighted to confirm our engagement is now under way. I'll be in touch shortly with our working schedule and first milestones.\n\nWarm regards,\nAdvisory Support Team",
+  declined: "Dear Partner,\n\nThank you for considering my advisory support. After careful thought, I'm unable to take on this engagement at present.\n\nThis is not a reflection on your business, and I wish you every success.\n\nRespectfully,\nAdvisory Support Team",
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSMEsLoaded }) {
+  const [rawApps, setRawApps] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notification, setNotification] = useState(null);
+  const [updatedStages, setUpdatedStages] = useState({});
+
+  // ─── Views ────────────────────────────────────────────────────────────────
+  const [viewsState, setViewsState] = useState(() => loadViewsState());
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility);
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder);
+  const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig);
+  const [density, setDensity] = useState(() => initialActiveView.density);
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths || {});
+
+  const [showColumnChooser, setShowColumnChooser] = useState(false);
+  const [columnChooserRect, setColumnChooserRect] = useState(null);
+  const [showNewViewForm, setShowNewViewForm] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+  const [newViewDescription, setNewViewDescription] = useState("");
+  const [editingViewMeta, setEditingViewMeta] = useState(null);
+
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
-    location: "",
-    matchScore: 50,
-    minValue: "",
-    maxValue: "",
-    instruments: [],
-    stages: [],
-    sectors: [],
-    supportTypes: [],
-    smeType: "",
-    sortBy: "",
-  })
-  const [termSheetFile, setTermSheetFile] = useState(null)
+    name: "", fundingStage: [], bigScoreRange: [0, 100], matchRange: [0, 100], status: [],
+    sector: [], daysInStageRange: [null, null], appliedRange: [null, null],
+    location: "", lastActivity: "", supportRequired: "", revenueBand: "", compensationModel: ""
+  });
 
-  const modalHeaderStyle = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "32px",
-    paddingBottom: "16px",
-    borderBottom: "2px solid #E8D5C4"
-  }
+  const [hoveredRowKey, setHoveredRowKey] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
-  const modalTitleStyle = {
-    fontSize: "28px",
-    fontWeight: "800",
-    color: "#3e2723",
-    margin: 0
-  }
+  // Column drag-to-reorder state
+  const [draggedColumn, setDraggedColumn] = useState(null);
+  const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [dragHintRect, setDragHintRect] = useState(null);
 
-  const modalCloseButtonStyle = {
-    background: "none",
-    border: "none",
-    fontSize: "24px",
-    cursor: "pointer",
-    color: "#666",
-    padding: "4px",
-    borderRadius: "4px",
-    transition: "color 0.2s ease"
-  }
+  // Popups
+  const [activePopup, setActivePopup] = useState(null);
+  const [selectedSMEForPopup, setSelectedSMEForPopup] = useState(null);
+  const [showDetails, setShowDetails] = useState(null);
 
-  const modalBodyStyle = {
-    marginBottom: "24px",
-    maxHeight: "400px",
-    overflowY: "auto"
-  }
+  // Stage update form
+  const [stageUpdateData, setStageUpdateData] = useState({
+    nextStage: "", message: "", meetingTime: "", meetingLocation: "", meetingPurpose: "", termSheetFile: null
+  });
+  const [stageFormErrors, setStageFormErrors] = useState({});
+  const [isStageSubmitting, setIsStageSubmitting] = useState(false);
+  const [availabilities, setAvailabilities] = useState([]);
+  const [showCalendarPopup, setShowCalendarPopup] = useState(false);
+  const [tempDates, setTempDates] = useState([]);
+  const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" });
+  const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-  const modalActionsStyle = {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: "16px",
-    paddingTop: "16px",
-    borderTop: "1px solid #E8D5C4"
-  }
-
-  const cancelButtonStyle = {
-    padding: "12px 24px",
-    backgroundColor: "#e6d7c3",
-    color: "#4a352f",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "600",
-    fontSize: "16px",
-    transition: "all 0.2s ease"
-  }
-
-  const loadApplicationAvailability = (application) => {
-    if (application.availableDates) {
-      const appAvailabilities = application.availableDates.map((avail) => ({
-        ...avail,
-        date: new Date(avail.date),
-      }))
-      setAvailabilities(appAvailabilities)
-    } else {
-      setAvailabilities([])
-    }
-  }
-
-  const handleDateSelect = (dates) => {
-    setTempDates(dates || [])
-  }
-
-  const handleTimeChange = (field, value) => {
-    setTimeSlot((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const saveSelectedDates = async () => {
-    const newAvailabilities = [
-      ...availabilities,
-      ...tempDates
-        .filter((date) => !availabilities.some((a) => a.date.getTime() === date.getTime()))
-        .map((date) => ({
-          date,
-          timeSlots: [{ ...timeSlot }],
-          timeZone,
-          status: "available",
-        })),
-    ]
-
-    setAvailabilities(newAvailabilities)
-
-    if (selectedAdvisor) {
-      try {
-        const availabilityData = newAvailabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-          status: avail.status,
-        }))
-
-        const docId = `${auth.currentUser.uid}_${selectedAdvisor.id}`
-        await updateDoc(doc(db, "AdvisorApplications", docId), {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-
-        const smeDocRef = doc(db, "SmeAdvisorApplications", docId)
-        await updateDoc(smeDocRef, {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-
-      } catch (error) {
-        console.error("Error updating availabilities:", error)
-        setNotification({
-          type: "error",
-          message: "Failed to update availability dates",
-        })
-      }
-    }
-
-    setTempDates([])
-    setShowCalendarModal(false)
-  }
-
-  const removeAvailability = async (dateToRemove) => {
-    const updatedAvailabilities = availabilities.filter((item) => item.date.getTime() !== dateToRemove.getTime())
-
-    setAvailabilities(updatedAvailabilities)
-
-    if (selectedAdvisor) {
-      try {
-        const availabilityData = updatedAvailabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-        }))
-
-        const docId = `${auth.currentUser.uid}_${selectedAdvisor.id}`
-        await updateDoc(doc(db, "AdvisorApplications", docId), {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-
-        const smeDocRef = doc(db, "SmeAdvisorApplications", docId)
-        await updateDoc(smeDocRef, {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-
-      } catch (error) {
-        console.error("Error updating availabilities:", error)
-        setNotification({
-          type: "error",
-          message: "Failed to update availability dates",
-        })
-      }
-    }
-  }
-
-  const hasAvailability = (advisor) => {
-    return advisor.availableDates && advisor.availableDates.length > 0
-  }
-
-  const applicationStages = [
-    { id: "evaluation", name: "Evaluation", color: "#3b82f6" },
-    { id: "due_diligence", name: "Due Diligence", color: "#8b5cf6" },
-    { id: "decision", name: "Decision", color: "#f59e0b" },
-    { id: "term_issue", name: "Term Issue", color: "#06b6d4" },
-    { id: "deal_successful", name: "Deal Successful", color: "#10b981" },
-    { id: "deal_declined", name: "Deal Declined", color: "#ef4444" },
-  ]
-
-  const getStageFields = (stageName) => {
-    const baseFields = {
-      showMessage: true,
-      showMeeting: true,
-      showTermSheet: false,
-      showAvailability: false,
-    }
-
-    switch (stageName) {
-      case "Evaluation":
-        return { ...baseFields, showTermSheet: false, showAvailability: true }
-      case "Due Diligence":
-        return { ...baseFields, showTermSheet: false, showAvailability: true }
-      case "Decision":
-        return { ...baseFields, showTermSheet: false, showAvailability: true }
-      case "Term Issue":
-        return { ...baseFields, showTermSheet: true, showAvailability: true }
-      case "Deal Successful":
-        return { 
-          ...baseFields, 
-          showTermSheet: true, 
-          showAvailability: false,
-          showMeeting: false // ✅ Hide meeting for successful deal
-        }
-      case "Deal Declined":
-        return { 
-          ...baseFields, 
-          showTermSheet: false, 
-          showAvailability: false,
-          showMeeting: false // ✅ Hide meeting for declined deal
-        }
-      default:
-        return baseFields
-    }
-  }
+  // ─── Engagement-aware pipeline stages ─────────────────────────────────────
+  // Pipeline settings live in the shared localStorage key
+  // AdvisorDealFlowPipeline.jsx writes to, so the table's stage list always
+  // matches whatever engagement type is actually selected.
+  const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
 
   useEffect(() => {
-    const fetchAdvisorApplications = async () => {
-      const user = auth.currentUser
-      if (!user) return
+    const refresh = () => setPipelineSettings(loadPipelineSettings());
+    window.addEventListener("storage", refresh);
+    window.addEventListener(PIPELINE_SETTINGS_EVENT, refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener(PIPELINE_SETTINGS_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
 
-      try {
-        const advisorId = user.uid
-        const q = query(collection(db, "AdvisorApplications"), where("advisorId", "==", advisorId))
-        const snapshot = await getDocs(q)
-        const advisorMatches = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          setBigScoreData({
-            pis: { score: data.pis || 0, color: getScoreColor(data.pis || 0) },
-            compliance: { score: data.compliance || 0, color: getScoreColor(data.compliance || 0) },
-            legitimacy: { score: data.legitimacy || 0, color: getScoreColor(data.legitimacy || 0) },
-            fundability: { score: data.fundability || 0, color: getScoreColor(data.fundability || 0) },
-            leadership: { score: data.leadership || 0, color: getScoreColor(data.leadership || 0) },
-          })
-          
-          const availabilityData = data.availableDates ? data.availableDates.map((avail) => ({
-            ...avail,
-            date: new Date(avail.date),
-          })) : []
+  const activeProgrammeLabel = (PROGRAMME_TEMPLATES[pipelineSettings.programmeType] || PROGRAMME_TEMPLATES.default).label;
+  const activeStages = useMemo(() => getActiveStages(pipelineSettings), [pipelineSettings]);
 
-          return {
-            id: data.smeId,
-            name: data.smeName,
-            location: data.smeLocation,
-            sector: data.smeSector,
-            fundingStage: data.smeStage,
-            supportRequired: data.smeSupport,
-            bigScore: data.bigScore,
-            revenueBand: data.revenue || "N/A",
-            compensationModel: data.advisorCompensationModel,
-            applicationDate: data.createdAt?.toDate().toLocaleDateString() || "N/A",
-            matchPercentage: data.matchPercentage || 70,
-            matchBreakdown: data.breakdown || {},
-            status: data.status || "New Match",
-            pipelineStage: data.status || "New Match",
-            action: "Application Received",
-            availableDates: availabilityData,
-          }
-        })
-        
-        setAdvisors(advisorMatches)
-        setLoading(false)
-        
-        if (onMatchesCountChange) {
-          onMatchesCountChange(advisorMatches.length)
-        }
-      } catch (error) {
-        console.error("Failed to fetch advisor applications:", error)
-        setAdvisors([])
-        setLoading(false)
-        
-        if (onMatchesCountChange) {
-          onMatchesCountChange(0)
-        }
-      }
-    }
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
 
-    fetchAdvisorApplications()
-  }, [onMatchesCountChange])
+  // Auto-save: any edit to columns/order/sort/density writes straight back into
+  // the active view (and persists immediately).
+  useEffect(() => {
+    setViewsState((prev) => {
+      const current = prev.views[prev.activeViewId];
+      if (!current) return prev;
+      const updated = { ...current, columnVisibility, columnOrder, sortConfig, density, columnWidths };
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } };
+      persistViewsState(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, sortConfig, density, columnWidths]);
 
-  const handleFilterChange = (key, value) => {
-    setLocalFilters((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const clearFilters = () => {
-    setLocalFilters({
-      location: "",
-      matchScore: 50,
-      minValue: "",
-      maxValue: "",
-      instruments: [],
-      stages: [],
-      sectors: [],
-      supportTypes: [],
-      smeType: "",
-      sortBy: "",
-    })
-  }
-
-  const applyFilters = () => {
-    console.log("Applying filters:", localFilters)
-    setShowFilters(false)
-  }
-
-  const handleStageAction = (advisor) => {
-    setSelectedAdvisorForStage(advisor)
-    setShowStageModal(true)
-    setNextStage("")
-    setMessage("")
-    setMeetingTime("")
-    setMeetingLocation("")
-    setMeetingPurpose("")
-    setTermSheetFile(null)
-    setFormErrors({})
-    
-    loadApplicationAvailability(advisor)
-  }
-
-  const breakdownItemStyle = (matched, label) => ({
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '0.75rem',
-    background: matched ? '#E8F5E8' : '#FFEBEE',
-    borderRadius: '6px',
-    color: matched ? '#388E3C' : '#D32F2F',
-    fontSize: '0.875rem',
-    marginBottom: '0.5rem',
-    borderLeft: `4px solid ${matched ? '#388E3C' : '#D32F2F'}`
-  })
-
-  const resetStageModal = () => {
-    setSelectedAdvisorForStage(null)
-    setShowStageModal(false)
-    setNextStage("")
-    setMessage("")
-    setMeetingTime("")
-    setMeetingLocation("")
-    setMeetingPurpose("")
-    setTermSheetFile(null)
-    setFormErrors({})
-    setAvailabilities([])
-  }
-
-  const findDocumentIds = async (advisorId, smeId) => {
-    const collections = ["AdvisorApplications", "AdvisoryMatches", "SmeAdvisorApplications"];
-    const results = {};
-    
-    for (const collectionName of collections) {
-      try {
-        console.log(`\n=== Checking ${collectionName} ===`);
-        
-        const allDocs = await getDocs(collection(db, collectionName));
-        console.log(`Total documents in ${collectionName}: ${allDocs.size}`);
-        
-        const matchingDocs = [];
-        allDocs.forEach(doc => {
-          const data = doc.data();
-          console.log(`Document ID: ${doc.id}`, {
-            advisorId: data.advisorId,
-            smeId: data.smeId,
-            status: data.status
-          });
-          
-          if (data.advisorId === advisorId && data.smeId === smeId) {
-            matchingDocs.push({
-              id: doc.id,
-              data: data
-            });
-          }
-        });
-        
-        results[collectionName] = matchingDocs;
-        console.log(`Found ${matchingDocs.length} matching documents in ${collectionName}`);
-        
-      } catch (error) {
-        console.error(`Error checking ${collectionName}:`, error);
-        results[collectionName] = [];
-      }
-    }
-    
-    return results;
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId];
+    if (!target) return;
+    setViewsState((prev) => {
+      const next = { ...prev, activeViewId: viewId };
+      persistViewsState(next);
+      return next;
+    });
+    setColumnVisibility(target.columnVisibility);
+    setColumnOrder(target.columnOrder);
+    setSortConfig(target.sortConfig);
+    setDensity(target.density);
+    setColumnWidths(target.columnWidths || {});
   };
 
-  const handleStageUpdate = async () => {
-    const stageFields = getStageFields(nextStage);
-    const errors = {};
+  const createNewView = () => {
+    const trimmedName = newViewName.trim();
+    if (!trimmedName) return;
+    const id = generateViewId();
+    const newView = {
+      id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
+      columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
+      sortConfig: { ...sortConfig }, density, columnWidths: { ...columnWidths },
+    };
+    setViewsState((prev) => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } };
+      persistViewsState(next);
+      return next;
+    });
+    setNewViewName("");
+    setNewViewDescription("");
+    setShowNewViewForm(false);
+    setNotification({ type: "success", message: `View "${trimmedName}" created` });
+  };
 
-    if (!nextStage) {
-      errors.nextStage = "Please select a stage";
-    }
-    if (stageFields.showMessage && !message.trim()) {
-      errors.message = "Please provide a message";
-    }
+  const startEditingViewMeta = (view) =>
+    setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin });
 
-    // ✅ ONLY validate meeting fields if stage is NOT successful or declined
-    if (stageFields.showMeeting) {
-      if (!meetingLocation.trim()) {
-        errors.meetingLocation = "Please provide a meeting location";
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return;
+    const trimmedName = editingViewMeta.name.trim();
+    if (!trimmedName && !editingViewMeta.builtin) return;
+    setViewsState((prev) => {
+      const existing = prev.views[editingViewMeta.id];
+      if (!existing) return prev;
+      const updated = {
+        ...existing,
+        name: existing.builtin ? existing.name : trimmedName,
+        description: editingViewMeta.description.trim(),
+      };
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } };
+      persistViewsState(next);
+      return next;
+    });
+    setEditingViewMeta(null);
+  };
+
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return;
+    const wasActive = viewsState.activeViewId === viewId;
+    setViewsState((prev) => {
+      const { [viewId]: _removed, ...restViews } = prev.views;
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId;
+      const next = { activeViewId: nextActiveId, views: restViews };
+      persistViewsState(next);
+      return next;
+    });
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID];
+      setColumnVisibility(def.columnVisibility);
+      setColumnOrder(def.columnOrder);
+      setSortConfig(def.sortConfig);
+      setDensity(def.density);
+      setColumnWidths(def.columnWidths || {});
+    }
+    setNotification({ type: "success", message: "View deleted" });
+  };
+
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout();
+    setColumnVisibility(layout.columnVisibility);
+    setColumnOrder(layout.columnOrder);
+    setSortConfig(layout.sortConfig);
+    setDensity(layout.density);
+    setColumnWidths(layout.columnWidths || {});
+    setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` });
+  };
+
+  // ─── Data loading ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchAdvisorApplications = async () => {
+      const user = auth.currentUser;
+      if (!user) { setLoading(false); return; }
+
+      try {
+        const snapshot = await getDocs(
+          query(collection(db, "AdvisorApplications"), where("advisorId", "==", user.uid))
+        );
+        // BIG Score components are kept *per row* here. Previously a single
+        // shared state object was overwritten inside the map, so every row's
+        // breakdown popup showed the last-fetched application's scores.
+        const rows = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            docId: docSnap.id,
+            id: data.smeId,
+            ...data,
+            bigScoreBreakdown: {
+              pis: data.pis || 0,
+              compliance: data.compliance || 0,
+              legitimacy: data.legitimacy || 0,
+              fundability: data.fundability || 0,
+              leadership: data.leadership || 0,
+            },
+            availableDates: (data.availableDates || []).map((a) => ({ ...a, date: new Date(a.date) })),
+          };
+        });
+        setRawApps(rows);
+        onMatchesCountChange?.(rows.length);
+      } catch (error) {
+        console.error("Failed to fetch advisor applications:", error);
+        setRawApps([]);
+        onMatchesCountChange?.(0);
+        setNotification({ type: "error", message: "Failed to load applications" });
+      } finally {
+        setLoading(false);
       }
-      if (!meetingPurpose.trim()) {
-        errors.meetingPurpose = "Please provide a meeting purpose";
+    };
+
+    fetchAdvisorApplications();
+  }, [onMatchesCountChange]);
+
+  // ─── Row mapping ──────────────────────────────────────────────────────────
+  const smes = useMemo(() => {
+    let mapped = rawApps.map((a) => {
+      const currentStatus = updatedStages[a.id] || a.status || a.pipelineStage || "New Match";
+      return {
+        id: a.id,
+        docId: a.docId,
+        smeId: a.smeId,
+        name: a.smeName || "Unnamed Business",
+        location: formatLabel(a.smeLocation) || "N/A",
+        sector: formatLabel(a.smeSector) || "N/A",
+        fundingStage: formatLabel(a.smeStage) || "N/A",
+        supportRequired: formatLabel(a.smeSupport) || "N/A",
+        revenueBand: a.revenue || "N/A",
+        compensationModel: formatLabel(a.advisorCompensationModel) || "N/A",
+        bigScore: a.bigScore || 0,
+        bigScoreBreakdown: a.bigScoreBreakdown,
+        matchPercentage: a.matchPercentage || 0,
+        matchBreakdown: a.breakdown || {},
+        applicationDateLabel: formatDate(a.createdAt),
+        applicationDateRaw: toDate(a.createdAt),
+        lastActivityLabel: formatDate(a.updatedAt),
+        daysInStage: calculateDaysInStage(a.updatedAt, a.createdAt),
+        currentStatus,
+        pipelineStage: currentStatus,
+        statusLabel: getStatusStyle(currentStatus, activeStages).stage.name,
+        nextStage: getNextStage(currentStatus, activeStages),
+        availableDates: a.availableDates || [],
+        raw: a,
+      };
+    });
+
+    if (stageFilter) {
+      mapped = mapped.filter((s) => mapStatusToStageId(s.pipelineStage, activeStages) === stageFilter);
+    }
+
+    return mapped;
+  }, [rawApps, updatedStages, activeStages, stageFilter]);
+
+  useEffect(() => { onSMEsLoaded?.(smes); }, [smes, onSMEsLoaded]);
+
+  // ─── Filtering & Sorting ──────────────────────────────────────────────────
+  const filteredAndSortedSMEs = useMemo(() => {
+    let result = [...smes];
+
+
+    // External filters panel (owned by the parent).
+    if (filters?.location) {
+      result = result.filter((s) => (s.location || "").toLowerCase().includes(filters.location.toLowerCase()));
+    }
+    if (filters?.matchScore) {
+      result = result.filter((s) => (s.matchPercentage || 0) >= filters.matchScore);
+    }
+    if (filters?.sectors?.length > 0) {
+      result = result.filter((s) => filters.sectors.some((sec) => (s.sector || "").toLowerCase().includes(sec.toLowerCase())));
+    }
+    if (filters?.stages?.length > 0) {
+      result = result.filter((s) => filters.stages.some((st) => (s.fundingStage || "").toLowerCase().includes(st.toLowerCase())));
+    }
+
+    // Per-column header filters.
+    if (localFilters.name?.trim()) {
+      const q = localFilters.name.toLowerCase().trim();
+      result = result.filter((s) => s.name.toLowerCase().includes(q));
+    }
+    if (localFilters.fundingStage?.length > 0) {
+      result = result.filter((s) => localFilters.fundingStage.some((st) => s.fundingStage.toLowerCase().includes(st.toLowerCase())));
+    }
+    result = result.filter((s) => s.bigScore >= localFilters.bigScoreRange[0] && s.bigScore <= localFilters.bigScoreRange[1]);
+    result = result.filter((s) => s.matchPercentage >= localFilters.matchRange[0] && s.matchPercentage <= localFilters.matchRange[1]);
+
+    if (localFilters.status?.length > 0) {
+      result = result.filter((s) => localFilters.status.includes(s.statusLabel));
+    }
+    if (localFilters.sector?.length > 0) {
+      result = result.filter((s) => localFilters.sector.some((sec) => s.sector.toLowerCase().includes(sec.toLowerCase())));
+    }
+
+    const [daysMin, daysMax] = localFilters.daysInStageRange;
+    if (daysMin != null) result = result.filter((s) => (s.daysInStage || 0) >= daysMin);
+    if (daysMax != null) result = result.filter((s) => (s.daysInStage || 0) <= daysMax);
+
+    const [appliedFrom, appliedTo] = localFilters.appliedRange;
+    if (appliedFrom) result = result.filter((s) => s.applicationDateRaw && s.applicationDateRaw >= new Date(appliedFrom));
+    if (appliedTo) result = result.filter((s) => s.applicationDateRaw && s.applicationDateRaw <= new Date(new Date(appliedTo).setHours(23, 59, 59, 999)));
+
+    const textFilter = (key, field) => {
+      if (localFilters[key]?.trim()) {
+        const q = localFilters[key].toLowerCase().trim();
+        result = result.filter((s) => (s[field] || "").toString().toLowerCase().includes(q));
       }
+    };
+    textFilter("location", "location");
+    textFilter("lastActivity", "lastActivityLabel");
+    textFilter("supportRequired", "supportRequired");
+    textFilter("revenueBand", "revenueBand");
+    textFilter("compensationModel", "compensationModel");
+
+    if (sortConfig.key === "attentionThenScore") {
+      result.sort((a, b) => {
+        const aFlag = getAttentionReasons(a, activeStages).length > 0 ? 1 : 0;
+        const bFlag = getAttentionReasons(b, activeStages).length > 0 ? 1 : 0;
+        if (aFlag !== bFlag) return bFlag - aFlag;
+        return b.bigScore - a.bigScore;
+      });
+    } else if (sortConfig.key) {
+      result.sort((a, b) => {
+        let aVal = a[sortConfig.key], bVal = b[sortConfig.key];
+        if (typeof aVal === "string") aVal = aVal.toLowerCase();
+        if (typeof bVal === "string") bVal = bVal.toLowerCase();
+        if (aVal == null) aVal = ""; if (bVal == null) bVal = "";
+        if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
     }
 
-    if (stageFields.showAvailability && !availabilities.length) {
-      errors.availabilities = "Please select at least one available date";
-    }
+    return result;
+  }, [smes, filters, localFilters, sortConfig, activeStages]);
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
+  const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const sectorOptions = useMemo(
+    () => [...new Set(smes.map((s) => s.sector).filter((s) => s && s !== "N/A"))].sort(),
+    [smes]
+  );
+  const fundingStageOptions = useMemo(
+    () => [...new Set(smes.map((s) => s.fundingStage).filter((s) => s && s !== "N/A"))].sort(),
+    [smes]
+  );
+
+  const activeFilterCount = (localFilters.name?.trim() ? 1 : 0)
+    + localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length
+    + (localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100 ? 1 : 0)
+    + (localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100 ? 1 : 0)
+    + (localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null ? 1 : 0)
+    + (localFilters.appliedRange[0] || localFilters.appliedRange[1] ? 1 : 0)
+    + ["location", "lastActivity", "supportRequired", "revenueBand", "compensationModel"]
+      .filter((k) => localFilters[k]?.trim()).length;
+
+  // ─── Handlers ─────────────────────────────────────────────────────────────
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const getFilterActive = (filterType) => {
+    switch (filterType) {
+      case "bigScore": return localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100;
+      case "match": return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100;
+      case "fundingStage": return localFilters.fundingStage.length > 0;
+      case "status": return localFilters.status.length > 0;
+      case "applied": return !!(localFilters.appliedRange[0] || localFilters.appliedRange[1]);
+      case "daysInStage": return localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null;
+      case "sector": return localFilters.sector.length > 0;
+      default: return !!localFilters[filterType]?.toString().trim();
+    }
+  };
+
+  // ─── Column drag-to-reorder ───────────────────────────────────────────────
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key);
+    setDragHintRect(null);
+    try {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", key);
+    } catch {
+      // Some browsers are picky about dataTransfer in certain contexts.
+    }
+  };
+
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (key !== dragOverColumn) setDragOverColumn(key);
+  };
+
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault();
+    if (!draggedColumn || draggedColumn === key) {
+      setDraggedColumn(null);
+      setDragOverColumn(null);
       return;
     }
+    setColumnOrder((prev) => {
+      const next = [...prev];
+      const fromIdx = next.indexOf(draggedColumn);
+      const toIdx = next.indexOf(key);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, draggedColumn);
+      return next;
+    });
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
 
-    setIsSubmitting(true);
+  const handleColumnDragEnd = () => {
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }));
+  };
+  const closeHeaderFilter = () => setHeaderFilterOpen(null);
+
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  );
+
+  // ─── Popups ───────────────────────────────────────────────────────────────
+  const openPopup = (type, sme, rect, options = {}) => {
+    let popupWidth, popupHeight;
+    switch (type) {
+      case "bigScore": popupWidth = 380; popupHeight = 450; break;
+      case "match": popupWidth = 380; popupHeight = 420; break;
+      case "stage": popupWidth = 450; popupHeight = 520; break;
+      case "quickActions": popupWidth = 210; popupHeight = 240; break;
+      default: popupWidth = 300; popupHeight = 300;
+    }
+
+    let x = rect.left + (rect.width / 2) - (popupWidth / 2);
+    let y = rect.bottom + 8;
+    if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20;
+    if (x < 20) x = 20;
+    if (y + popupHeight > window.innerHeight - 20) y = rect.top - popupHeight - 8;
+    if (y < 20) y = 20;
+
+    setSelectedSMEForPopup(sme);
+    setActivePopup({ type, smeKey: sme.id, position: { x, y }, rect });
+
+    if (type === "stage") {
+      const presetStage = options.presetStage || sme.nextStage || getNextStage(sme.currentStatus, activeStages);
+      const presetId = mapStatusToStageId(presetStage, activeStages);
+      setStageUpdateData({
+        nextStage: presetStage,
+        message: DEFAULT_STAGE_MESSAGES[presetId] || "",
+        meetingTime: "", meetingLocation: "", meetingPurpose: "", termSheetFile: null,
+      });
+      setStageFormErrors({});
+      setAvailabilities(sme.availableDates || []);
+    }
+  };
+
+  const openPopupFromEvent = (type, sme, event, options) => {
+    event.stopPropagation();
+    openPopup(type, sme, event.currentTarget.getBoundingClientRect(), options);
+  };
+
+  const closePopup = () => {
+    setActivePopup(null);
+    setSelectedSMEForPopup(null);
+    setShowCalendarPopup(false);
+  };
+
+  // Forward-only through the live stages, with terminal outcomes always
+  // reachable.
+  const getStageProgressionError = (targetStageName, sme) => {
+    const targetId = mapStatusToStageId(targetStageName, activeStages);
+    const currentId = mapStatusToStageId(sme.currentStatus, activeStages);
+    const target = activeStages.find((s) => s.id === targetId);
+    const current = activeStages.find((s) => s.id === currentId);
+    if (!target || !current) return null;
+    if (target.id === current.id) return "This business is already at that stage";
+    if (target.terminal) return null;
+    if (current.terminal) return "This application has reached a final stage";
+    if (target.order < current.order) return "Stages move forward only — use a terminal outcome to close or decline";
+    return null;
+  };
+
+  // ─── Stage update ─────────────────────────────────────────────────────────
+  const handleStageUpdate = async () => {
+    const sme = selectedSMEForPopup;
+    if (!sme) return;
+
+    const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
+    const targetId = mapStatusToStageId(stageUpdateData.nextStage, activeStages);
+    const targetStage = activeStages.find((s) => s.id === targetId);
+
+    const errors = {};
+    if (!stageUpdateData.nextStage) errors.nextStage = "Please select a stage";
+    else {
+      const progressionError = getStageProgressionError(stageUpdateData.nextStage, sme);
+      if (progressionError) errors.nextStage = progressionError;
+    }
+    if (stageFields.showMessage && !stageUpdateData.message.trim()) errors.message = "Please provide a message";
+    if (stageFields.showMeeting) {
+      if (!stageUpdateData.meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location";
+      if (!stageUpdateData.meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose";
+    }
+    if (stageFields.showAvailability && availabilities.length === 0) {
+      errors.availabilities = "Please add at least one available date";
+    }
+
+    if (Object.keys(errors).length > 0) { setStageFormErrors(errors); return; }
+
+    setIsStageSubmitting(true);
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("User not authenticated");
-      
-      const advisorId = user.uid;
-      const smeId = selectedAdvisorForStage.id;
 
-      console.log("Updating status for application:", {
-        advisorId,
-        smeId,
-        nextStage
-      });
+      const advisorId = user.uid;
+      const smeId = sme.id;
+      const stageName = targetStage?.name || stageUpdateData.nextStage;
 
       let attachmentUrl = null;
-
-      if (termSheetFile) {
-        const storageRef = ref(storage, `advisor_termsheets/${selectedAdvisorForStage.id}/${termSheetFile.name}`);
-        const snapshot = await uploadBytes(storageRef, termSheetFile);
+      if (stageUpdateData.termSheetFile) {
+        const storageRef = ref(storage, `advisor_termsheets/${smeId}/${stageUpdateData.termSheetFile.name}`);
+        const snapshot = await uploadBytes(storageRef, stageUpdateData.termSheetFile);
         attachmentUrl = await getDownloadURL(snapshot.ref);
       }
 
+      const availabilityData = availabilities.map((a) => ({
+        date: a.date instanceof Date ? a.date.toISOString() : a.date,
+        timeSlots: a.timeSlots,
+        timeZone: a.timeZone,
+        status: a.status || "available",
+      }));
+
       const updateData = {
-        status: nextStage,
-        pipelineStage: nextStage,
+        status: stageName,
+        pipelineStage: stageName,
         updatedAt: serverTimestamp(),
-        ...(message && { lastMessage: message }),
+        ...(stageUpdateData.message && { lastMessage: stageUpdateData.message }),
       };
 
-      // ✅ ONLY add meeting details if stage allows meetings
-      if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
+      if (stageFields.showMeeting) {
         updateData.meetingDetails = {
-          time: meetingTime,
-          location: meetingLocation,
-          purpose: meetingPurpose
-        }
+          time: stageUpdateData.meetingTime,
+          location: stageUpdateData.meetingLocation,
+          purpose: stageUpdateData.meetingPurpose,
+        };
       }
-
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        const availabilityData = availabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-          status: avail.status,
-        }));
+      if (stageFields.showAvailability && availabilityData.length > 0) {
         updateData.availableDates = availabilityData;
       }
-
-      console.log("Update data:", updateData);
+      if (attachmentUrl) updateData.termsheetUrl = attachmentUrl;
 
       const documentId = `${advisorId}_${smeId}`;
-      const documentsmeId = `${smeId}_${advisorId}`;
+      const documentSmeId = `${smeId}_${advisorId}`;
 
       const docRef = doc(db, "AdvisorApplications", documentId);
-      
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
-        throw new Error(`Document with ID ${documentId} does not exist in AdvisorApplications`);
+        throw new Error(`Document ${documentId} does not exist in AdvisorApplications`);
       }
-
       await updateDoc(docRef, updateData);
 
+      // Mirror onto the related collections. Failures here are logged rather
+      // than thrown, so a missing mirror doc can't roll back a valid update.
       try {
-        const matchesDocRef = doc(db, "AdvisoryMatches", documentsmeId);
-        await updateDoc(matchesDocRef, { 
-          status: nextStage,
-          ...(updateData.availableDates && { availableDates: updateData.availableDates })
+        await updateDoc(doc(db, "AdvisoryMatches", documentSmeId), {
+          status: stageName,
+          ...(updateData.availableDates && { availableDates: updateData.availableDates }),
         });
-        
-        const smeDocRef = doc(db, "SmeAdvisorApplications", documentsmeId);
-        await updateDoc(smeDocRef, { 
-          status: nextStage,
-          ...(updateData.availableDates && { availableDates: updateData.availableDates })
+        await updateDoc(doc(db, "SmeAdvisorApplications", documentSmeId), {
+          status: stageName,
+          ...(updateData.availableDates && { availableDates: updateData.availableDates }),
         });
       } catch (matchError) {
         console.warn("Could not update related collections:", matchError.message);
       }
 
-      // ✅ ONLY create calendar event if stage allows meetings
-      if (stageFields.showMeeting && meetingTime && meetingLocation && meetingPurpose) {
+      if (stageFields.showMeeting && stageUpdateData.meetingTime && stageUpdateData.meetingLocation) {
         try {
           await addDoc(collection(db, "smeCalendarEvents"), {
-            smeId: smeId,
-            advisorId: advisorId,
-            title: meetingPurpose,
-            date: meetingTime,
-            location: meetingLocation,
+            smeId,
+            advisorId,
+            title: stageUpdateData.meetingPurpose,
+            date: stageUpdateData.meetingTime,
+            location: stageUpdateData.meetingLocation,
             type: "advisory_meeting",
             createdAt: new Date().toISOString(),
-            ...(updateData.availableDates && { availableDates: updateData.availableDates })
+            ...(updateData.availableDates && { availableDates: updateData.availableDates }),
           });
         } catch (calendarError) {
           console.error("Error creating calendar event:", calendarError);
         }
       }
 
-      setAdvisors(prevAdvisors => 
-        prevAdvisors.map(advisor => 
-          advisor.id === smeId 
-            ? { 
-                ...advisor, 
-                status: nextStage,
-                pipelineStage: nextStage,
-                ...(message && { lastMessage: message }),
-                ...(stageFields.showMeeting && {
-                  meetingDetails: {
-                    time: meetingTime,
-                    location: meetingLocation,
-                    purpose: meetingPurpose
-                  }
-                }),
-                ...(updateData.availableDates && { availableDates: updateData.availableDates })
-              }
-            : advisor
-        )
-      );
+      // In-app message to the business (inbox + sent copies).
+      const subject = `Update: ${stageName} Stage for Your Application`;
+      const isNegative = targetStage?.group === "negative";
+      let content = isNegative
+        ? `Dear ${sme.name},\n\nWe regret to inform you that your application has been moved to the "${stageName}" stage.\n\n${stageUpdateData.message}`
+        : `Dear ${sme.name},\n\nYour application has progressed to the "${stageName}" stage.\n\n${stageUpdateData.message}`;
 
-      setUpdatedStages((prev) => ({ ...prev, [smeId]: nextStage }));
-      setNotification({
-        type: "success",
-        message: `Application status updated to ${nextStage} successfully`
-      });
-      
-      setShowStageModal(false);
-      resetStageModal();
-      
-      let subject = `Update: ${nextStage} Stage for Your Application`;
-      let content = "";
-
-      if (nextStage === "Deal Declined") {
-        content = `Dear ${selectedAdvisorForStage.name},\n\nWe regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n${message}`;
-      } else {
-        content = `Dear ${selectedAdvisorForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`;
-      }
-
-      // ✅ ONLY add meeting details to email if stage allows meetings
       if (stageFields.showMeeting) {
-        content += `\n\nMeeting Details:\n- Date: ${new Date(meetingTime).toLocaleString()}\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`;
+        content += `\n\nMeeting Details:`;
+        if (stageUpdateData.meetingTime) content += `\n- Date: ${new Date(stageUpdateData.meetingTime).toLocaleString()}`;
+        content += `\n- Location: ${stageUpdateData.meetingLocation}\n- Purpose: ${stageUpdateData.meetingPurpose}`;
       }
-
       if (stageFields.showAvailability && availabilities.length > 0) {
         content += `\n\nAvailable Meeting Times:\n`;
-        content += availabilities
-          .map((avail, idx) => {
-            const dateStr = avail.date.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            });
-            const timeStr = avail.timeSlots?.[0]
-              ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-              : "Time not specified";
-            return `${idx + 1}. ${dateStr} (${timeStr})`;
-          })
-          .join("\n");
-        
-        content += `\n\nPlease reply with your preferred meeting time from the above options.`;
+        content += availabilities.map((a, idx) => {
+          const dateStr = a.date instanceof Date
+            ? a.date.toLocaleDateString("en-ZA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+            : "Date unavailable";
+          const timeStr = a.timeSlots?.[0]
+            ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}`
+            : "Time not specified";
+          return `${idx + 1}. ${dateStr} (${timeStr})`;
+        }).join("\n");
+        content += `\n\nPlease reply with your preferred meeting time from the options above.`;
       }
-
       content += `\n\nBest regards,\nAdvisory Support Team`;
 
       const messagePayload = {
@@ -736,2105 +961,1227 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
         date: new Date().toISOString(),
         read: false,
         type: "inbox",
-        applicationId: `${advisorId}_${smeId}`,
+        applicationId: documentId,
         attachments: attachmentUrl ? [attachmentUrl] : [],
-        ...(updateData.availableDates && { availableDates: updateData.availableDates })
-      };
-
-      const sentMessagePayload = {
-        ...messagePayload,
-        read: true,
-        type: "sent",
+        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
       };
 
       await Promise.all([
         addDoc(collection(db, "messages"), messagePayload),
-        addDoc(collection(db, "messages"), sentMessagePayload),
+        addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
       ]);
 
+      // Email notification (best effort — never blocks the stage update).
       try {
-        console.log("🔄 Using Feedback service configuration...");
-
         const emailjsConfig = {
           serviceId: API_KEYS.SERVICE_ID_MESSAGES,
           templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-          publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+          publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
         };
-
-        console.log("📧 Using Feedback config:", emailjsConfig);
-
         if (!window.emailjs) {
           emailjs.init(emailjsConfig.publicKey);
           window.emailjs = emailjs;
         }
 
-        const user = auth.currentUser;
         const advisorName = user?.displayName || "Advisory Team";
-        const smeName = selectedAdvisorForStage.name;
-
         let smeEmail = null;
-        console.log("📋 Fetching SMSE email for:", smeId);
-
-        try {
-          const universalProfileRef = doc(db, "universalProfiles", smeId);
-          const universalProfileSnap = await getDoc(universalProfileRef);
-          
-          if (universalProfileSnap.exists()) {
-            const profileData = universalProfileSnap.data();
-            console.log("📄 universalProfiles data:", profileData);
-            
-            smeEmail = profileData.email || 
-                       profileData.contactDetails?.email ||
-                       profileData.contactEmail ||
-                       profileData.businessEmail ||
-                       profileData.personalEmail;
-            
-            if (smeEmail) {
-              console.log("✅ Found SMSE email:", smeEmail);
-            } else {
-              console.log("❌ No email found in universalProfiles");
-            }
-          } else {
-            console.log("❌ No document in universalProfiles for:", smeId);
-          }
-        } catch (fetchError) {
-          console.error("❌ Error fetching SMSE email:", fetchError);
+        const profileSnap = await getDoc(doc(db, "universalProfiles", smeId));
+        if (profileSnap.exists()) {
+          const p = profileSnap.data();
+          smeEmail = p.email || p.contactDetails?.email || p.contactEmail || p.businessEmail || p.personalEmail;
         }
-
-        if (!smeEmail) {
-          console.warn("⚠️ No SMSE email found, using fallback");
-          smeEmail = "support@bigmarketplace.africa";
-        }
-
-        console.log("📧 Final recipient email:", smeEmail);
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(smeEmail)) {
-          throw new Error(`Invalid email format: "${smeEmail}"`);
-        }
-
-        let emailMessage = "";
-
-        if (nextStage === "Deal Declined") {
-          emailMessage = `Dear ${smeName},\n\n`;
-          emailMessage += `We regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n`;
+        if (smeEmail && emailRegex.test(smeEmail)) {
+          await window.emailjs.send(
+            emailjsConfig.serviceId,
+            emailjsConfig.templateId,
+            {
+              to_email: smeEmail,
+              subject: `Application Stage Update: ${stageName}`,
+              from_name: advisorName,
+              date: new Date().toLocaleDateString(),
+              message: content,
+              portal_url: `https://www.bigmarketplace.africa/applications/${documentId}`,
+              has_attachments: attachmentUrl ? "true" : "false",
+              attachments_count: attachmentUrl ? "1" : "0",
+            },
+            emailjsConfig.publicKey
+          );
         } else {
-          emailMessage = `Dear ${smeName},\n\n`;
-          emailMessage += `We are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n`;
+          console.warn("No valid email found for business", smeId);
         }
-        
-        if (message) {
-          emailMessage += `Message from ${advisorName}:\n${message}\n\n`;
-        }
-
-        // ✅ ONLY add meeting details to email if stage allows meetings
-        if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-          emailMessage += `Meeting Details:\n`;
-          if (meetingTime) {
-            emailMessage += `- Date: ${new Date(meetingTime).toLocaleString()}\n`;
-          }
-          emailMessage += `- Location: ${meetingLocation}\n`;
-          emailMessage += `- Purpose: ${meetingPurpose}\n\n`;
-        }
-
-        if (stageFields.showAvailability && availabilities.length > 0) {
-          emailMessage += `Available Meeting Times:\n`;
-          availabilities.forEach((avail, idx) => {
-            const dateStr = avail.date.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            });
-            const timeStr = avail.timeSlots?.[0]
-              ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-              : "Time not specified";
-            emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`;
-          });
-          emailMessage += `\nPlease reply with your preferred meeting time from the above options.\n\n`;
-        }
-
-        emailMessage += `Best regards,\n${advisorName}\nAdvisory Support Team\nBIG Marketplace Africa`;
-
-        const templateParams = {
-          to_email: smeEmail,
-          subject: `Application Stage Update: ${nextStage}`,
-          from_name: advisorName,
-          date: new Date().toLocaleDateString(),
-          message: emailMessage,
-          portal_url: `https://www.bigmarketplace.africa/applications/${advisorId}_${smeId}`,
-          has_attachments: termSheetFile ? "true" : "false",
-          attachments_count: termSheetFile ? "1" : "0"
-        };
-
-        console.log("📨 Sending with Feedback service...", templateParams);
-
-        const response = await window.emailjs.send(
-          emailjsConfig.serviceId,
-          emailjsConfig.templateId,
-          templateParams,
-          emailjsConfig.publicKey
-        );
-        
-        console.log("✅ Email sent successfully with Feedback service!", response);
-        
-        setNotification({
-          type: "success",
-          message: `Stage updated to ${nextStage} and notification sent successfully`
-        });
-
       } catch (emailError) {
-        console.error("❌ Email failed:", emailError);
-        
-        setNotification({
-          type: "success", 
-          message: `Stage updated to ${nextStage} successfully`
-        });
+        console.error("Email notification failed:", emailError);
       }
+
+      setUpdatedStages((prev) => ({ ...prev, [smeId]: stageName }));
+      setRawApps((prev) => prev.map((a) =>
+        a.id === smeId
+          ? { ...a, status: stageName, pipelineStage: stageName, updatedAt: new Date(), availableDates: availabilities }
+          : a
+      ));
+      notifyPipelineRefresh();
+
+      setNotification({ type: "success", message: `${sme.name} moved to ${stageName}` });
+      closePopup();
     } catch (error) {
-      console.error("Detailed error:", error);
-      
-      setNotification({
-        type: "error",
-        message: `Failed to update status: ${error.message}`
-      });
+      console.error("Stage update error:", error);
+      setNotification({ type: "error", message: `Failed to update stage: ${error.message}` });
     } finally {
-      setIsSubmitting(false);
+      setIsStageSubmitting(false);
     }
   };
 
-  const handleViewDetails = (advisor) => {
-    setSelectedAdvisor(advisor)
-    setModalType("view")
-  }
+  // ─── Export ───────────────────────────────────────────────────────────────
+  const handleExport = () => {
+    try {
+      // Respect the table's current visual order: pinned "Business Name"
+      // first, then the reorderable columns in whatever order they've been
+      // dragged into, skipping the UI-only "Action" column and hidden columns.
+      const visibleCols = [
+        "sme",
+        ...columnOrder.filter((key) => key !== "sme" && key !== "action" && columnVisibility[key])
+      ].filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key]);
 
-  const handleBigScoreClick = (advisor) => {
-    setSelectedAdvisor(advisor)
-    setModalType("bigScore")
-  }
+      if (visibleCols.length === 0) {
+        setNotification({ type: "error", message: "No visible columns to export" });
+        return;
+      }
+      if (filteredAndSortedSMEs.length === 0) {
+        setNotification({ type: "error", message: "No businesses to export" });
+        return;
+      }
 
-  const handleScoreBreakdown = (advisor) => {
-    setSelectedAdvisor(advisor)
-    setModalType("scoreBreakdown")
-  }
+      const rows = filteredAndSortedSMEs.map((sme) => {
+        const row = {};
+        visibleCols.forEach((key) => {
+          const label = EXPORT_HEADERS[key] || key;
+          let value = sme[EXPORT_FIELD_MAP[key]];
+          if (key === "match") value = value != null ? `${value}%` : "";
+          if (value === null || value === undefined) value = "";
+          row[label] = value;
+        });
+        return row;
+      });
 
-  const resetModal = () => {
-    setSelectedAdvisor(null)
-    setModalType(null)
-    setMessage("")
-    setMeetingTime("")
-    setMeetingLocation("")
-    setMeetingPurpose("")
-    setFormErrors({})
-  }
+      const headerOrder = visibleCols.map((key) => EXPORT_HEADERS[key] || key);
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: headerOrder });
 
-  const modalOverlayStyle = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(62, 39, 35, 0.85)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-    animation: "fadeIn 0.3s ease-out",
-    backdropFilter: "blur(4px)",
-  }
+      worksheet["!cols"] = headerOrder.map((label) => {
+        const contentLengths = rows.map((r) => String(r[label] ?? "").length);
+        const maxLen = Math.max(label.length, ...contentLengths, 8);
+        return { wch: Math.min(maxLen + 2, 45) };
+      });
 
-  const modalContentStyle = {
-    backgroundColor: "#ffffff",
-    borderRadius: "20px",
-    padding: "40px",
-    maxWidth: "900px",
-    width: "95%",
-    maxHeight: "90vh",
-    overflowY: "auto",
-    boxShadow: "0 20px 60px rgba(62, 39, 35, 0.5), 0 0 0 1px rgba(141, 110, 99, 0.1)",
-    border: "none",
-    animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-    position: "relative",
-  }
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Businesses");
+      XLSX.writeFile(workbook, `advisory-export-${new Date().toISOString().split("T")[0]}.xlsx`);
+      setNotification({ type: "success", message: "Export downloaded" });
+    } catch (error) {
+      console.error("Export error:", error);
+      setNotification({ type: "error", message: `Export failed: ${error.message}` });
+    }
+  };
 
-  const tableHeaderStyle = {
-    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-    color: "#FEFCFA",
-    padding: "0.4rem 0.2rem",
-    textAlign: "left",
-    fontWeight: "600",
-    fontSize: "0.7rem",
-    letterSpacing: "0.3px",
-    textTransform: "uppercase",
-    position: "sticky",
-    top: "0",
-    zIndex: "10",
-    borderBottom: "2px solid #1a0c02",
-    borderRight: "1px solid #1a0c02",
-    lineHeight: "1.1",
-    verticalAlign: "top",
-  }
+  // ─── Availability helpers ─────────────────────────────────────────────────
+  const handleDateSelect = (dates) => setTempDates(dates || []);
+  const handleTimeChange = (field, value) => setTimeSlot((prev) => ({ ...prev, [field]: value }));
+  const removeAvailability = (date) =>
+    setAvailabilities((prev) => prev.filter((a) => a.date?.getTime?.() !== date?.getTime?.()));
 
-  const tableCellStyle = {
-    padding: "0.5rem 0.2rem",
-    borderBottom: "1px solid #E8D5C4",
-    borderRight: "1px solid #E8D5C4",
-    fontSize: "0.8rem",
-    verticalAlign: "top",
-    color: "#5d2a0a",
-    lineHeight: "1.2",
-    wordBreak: "break-word",
-    overflowWrap: "break-word",
-  }
+  const saveSelectedDates = () => {
+    setAvailabilities((prev) => ([
+      ...prev,
+      ...tempDates
+        .filter((date) => !prev.some((a) => a.date?.getTime?.() === date.getTime?.()))
+        .map((date) => ({ date, timeSlots: [{ ...timeSlot }], timeZone, status: "available" })),
+    ]));
+    setTempDates([]);
+    setShowCalendarPopup(false);
+  };
 
-  const matchContainerStyle = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: "0.2rem",
-  }
+  const densityStyles = {
+    comfortable: { cell: "py-3 px-3", fontSize: "text-sm", avatarSize: "w-8 h-8" },
+    compact: { cell: "py-2 px-2", fontSize: "text-xs", avatarSize: "w-7 h-7" },
+    "ultra-compact": { cell: "py-1.5 px-1.5", fontSize: "text-xs", avatarSize: "w-6 h-6" },
+  };
+  const ds = densityStyles[density] || densityStyles.comfortable;
 
-  const progressBarStyle = {
-    width: "35px",
-    height: "4px",
-    background: "#E8D5C4",
-    borderRadius: "2px",
-    overflow: "hidden",
-  }
+  // ─── Column resizing ──────────────────────────────────────────────────────
+  // Drag the divider on a header's right edge to resize the column; double-click
+  // it to snap that column back to auto width. Widths are stored per view
+  // alongside visibility/order/sort/density, so they persist and travel with
+  // whichever view is active.
+  const [resizingColumn, setResizingColumn] = useState(null);
 
-  const progressFillStyle = {
-    height: "100%",
-    background: "linear-gradient(90deg, #48BB78, #68d391)",
-    transition: "width 0.3s ease",
-  }
+  const widthStyle = (key, fallbackMin, fallbackMax) => {
+    const w = columnWidths[key];
+    if (w) return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
+    return fallbackMax ? { minWidth: fallbackMin, maxWidth: fallbackMax } : { minWidth: fallbackMin };
+  };
 
-  const matchScoreStyle = {
-    fontWeight: "600",
-    color: "#5D2A0A",
-    fontSize: "0.7rem",
-  }
+  const startResize = (event, key) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const th = event.currentTarget.closest("th");
+    const startX = event.clientX;
+    const startWidth = th ? th.getBoundingClientRect().width : 120;
+    setResizingColumn(key);
 
-  const statusBadgeStyle = {
-    padding: "0.1rem 0.25rem",
-    borderRadius: "3px",
-    fontSize: "0.59rem",
-    fontWeight: "500",
-    display: "inline-block",
-    whiteSpace: "nowrap",
-  }
+    const onMove = (moveEvent) => {
+      const next = Math.max(64, Math.round(startWidth + (moveEvent.clientX - startX)));
+      setColumnWidths((prev) => ({ ...prev, [key]: next }));
+    };
+    const onUp = () => {
+      setResizingColumn(null);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
 
-  if (loading) {
-    return <div style={{ padding: "40px", textAlign: "center" }}>Loading applications...</div>
-  }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
+    // the 6px handle mid-drag, and so text can't be selected while resizing.
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
 
-  const currentStageFields = getStageFields(nextStage)
+  const autoFitColumn = (key) =>
+    setColumnWidths((prev) => { const { [key]: _dropped, ...rest } = prev; return rest; });
 
+  const ColumnResizer = ({ colKey }) => (
+    <span
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => { e.stopPropagation(); autoFitColumn(colKey); }}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onClick={(e) => e.stopPropagation()}
+      title="Drag to resize · double-click to auto-fit"
+      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none z-10"
+      style={{ backgroundColor: resizingColumn === colKey ? "#a67c52" : "transparent" }}
+    />
+  );
+
+  useEffect(() => {
+    if (!notification) return;
+    const t = setTimeout(() => setNotification(null), 4000);
+    return () => clearTimeout(t);
+  }, [notification]);
+
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: "20px", width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-
-        <button
-          onClick={() => setShowFilters(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "10px 20px",
-            backgroundColor: "#a67c52",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "500",
-            fontSize: "0.8rem",
-            boxShadow: "0 2px 6px rgba(166, 124, 82, 0.3)",
-          }}
-        >
-          <Filter size={14} />
-          Filter Applications
-        </button>
-      </div>
-
+    <div className="w-full space-y-4 p-6">
       {notification && (
-        <div
-          style={{
-            padding: "12px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-            backgroundColor: notification.type === "success" ? "#d4edda" : "#f8d7da",
-            color: notification.type === "success" ? "#155724" : "#721c24",
-            border: `1px solid ${notification.type === "success" ? "#c3e6cb" : "#f5c6cb"}`,
-            fontSize: "0.8rem",
-          }}
-        >
-          {notification.message}
-        </div>
-      )}
-
-      <div
-        style={{
-          borderRadius: "6px",
-          border: "1px solid #E8D5C4",
-          boxShadow: "0 3px 20px rgba(139, 69, 19, 0.08)",
-          width: "100%",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            background: "white",
-            fontSize: "0.8rem",
-            backgroundColor: "#FEFCFA",
-            tableLayout: "fixed",
-          }}
-        >
-          <colgroup>
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "6%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "13%" }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th style={tableHeaderStyle}>
-                SMSE
-                <br />
-                Name
-              </th>
-              <th style={tableHeaderStyle}>Location</th>
-              <th style={tableHeaderStyle}>Sector</th>
-              <th style={tableHeaderStyle}>
-                Funding
-                <br />
-                Stage
-              </th>
-              <th style={tableHeaderStyle}>
-                Support
-                <br />
-                Required
-              </th>
-              <th style={tableHeaderStyle}>
-                Revenue
-                <br />
-                Band
-              </th>
-              <th style={tableHeaderStyle}>
-                Compensation
-                <br />
-                Model
-              </th>
-              <th style={tableHeaderStyle}>
-                Application
-                <br />
-                Date
-              </th>
-              <th style={tableHeaderStyle}>Match %</th>
-              <th style={tableHeaderStyle}>BIG Score</th>
-              <th style={tableHeaderStyle}>Status</th>
-              <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {advisors.length === 0 ? (
-              <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
-                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem", borderRight: "none" }}>-</td>
-              </tr>
-            ) : (
-              advisors.map((advisor) => {
-                const currentStatus = updatedStages[advisor.id] || advisor.pipelineStage || advisor.status
-                const statusStyle = getStatusStyle(currentStatus)
-                return (
-                  <tr key={advisor.id} style={{ borderBottom: "1px solid #E8D5C4" }}>
-                    <td style={tableCellStyle}>
-                      <button
-                        onClick={() => handleViewDetails(advisor)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#a67c52",
-                          textDecoration: "underline",
-                          cursor: "pointer",
-                          fontWeight: "500",
-                          padding: "0",
-                          fontSize: "0.80rem",
-                          textAlign: "left",
-                          wordBreak: "break-word",
-                          width: "100%",
-                          lineHeight: "1.2",
-                        }}
-                      >
-                        {advisor.name}
-                      </button>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "2px", fontSize: "0.8rem" }}>
-                        <MapPin size={8} />
-                        <span style={{ wordBreak: "break-word" }}>{advisor.location}</span>
-                      </div>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={advisor.sector} maxLines={2} maxLength={20} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={advisor.fundingStage} maxLength={15} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={advisor.supportRequired} maxLength={20} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={advisor.revenueBand} maxLength={12} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={advisor.compensationModel} maxLength={15} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "2px", fontSize: "0.7rem" }}>
-                        <Calendar size={8} />
-                        <span style={{ wordBreak: "break-word" }}>{advisor.applicationDate}</span>
-                      </div>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <div style={matchContainerStyle}>
-                        <div style={progressBarStyle}>
-                          <div style={{ 
-                            ...progressFillStyle, 
-                            width: `${advisor.matchPercentage}%` 
-                          }} />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={matchScoreStyle}>{advisor.matchPercentage}%</span>
-                          <Eye 
-                            size={14} 
-                            style={{ cursor: 'pointer', color: '#a67c52' }} 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAdvisor(advisor);
-                              setModalType("matchBreakdown");
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <div style={matchContainerStyle}>
-                        <div style={progressBarStyle}>
-                          <div
-                            style={{
-                              ...progressFillStyle,
-                              width: `${advisor.bigScore}%`,
-                              background: `linear-gradient(90deg, ${getScoreColor(advisor.bigScore)}, ${getScoreColor(advisor.bigScore)}aa)`,
-                            }}
-                          />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ 
-                            ...matchScoreStyle, 
-                            color: getScoreColor(advisor.bigScore) 
-                          }}>
-                            {advisor.bigScore}%
-                          </span>
-                          <Eye 
-                            size={14} 
-                            style={{ 
-                              cursor: 'pointer', 
-                              color: getScoreColor(advisor.bigScore) 
-                            }} 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAdvisor(advisor);
-                              setModalType("bigScoreBreakdown");
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <span
-                        style={{
-                          ...statusBadgeStyle,
-                          backgroundColor: statusStyle.color,
-                          color: statusStyle.textColor,
-                        }}
-                      >
-                        {currentStatus}
-                      </span>
-                    </td>
-                    <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                      <button
-                        onClick={() => handleStageAction(advisor)}
-                        style={{
-                          padding: "6px 8px",
-                          backgroundColor: "#5d4037",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "0.8rem",
-                          fontWeight: "500",
-                          width: "100%",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Application Received
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {advisors.length === 0 && (
-        <div
-          style={{
-            backgroundColor: "#f8f5f3",
-            padding: "24px",
-            borderRadius: "8px",
-            textAlign: "center",
-            border: "1px solid #e8d5c4",
-            marginTop: "24px",
-          }}
-        >
-          <Info size={48} style={{ color: "#a67c52", marginBottom: "16px" }} />
-          <h3 style={{ color: "#5d4037", marginBottom: "8px" }}>You have not applied for any SMSEs, so there are no matches available.</h3>
-          <p style={{ color: "#7d5a50" }}>
-            You need to apply first. Your applications will appear here once you apply to SMSEs.
-          </p>
-        </div>
-      )}
-
-      {selectedAdvisor && modalType === "matchBreakdown" && (
-        <div style={modalOverlayStyle} onClick={resetModal}>
-          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>
-                Match Score Breakdown - {selectedAdvisor.name}
-              </h3>
-              <button onClick={resetModal} style={modalCloseButtonStyle}>
-                ✖
-              </button>
-            </div>
-            
-            <div style={modalBodyStyle}>
-              <div style={{ marginBottom: '1rem' }}>
-                <p style={{ color: '#5D2A0A', marginBottom: '0.5rem' }}>
-                  Match score: {selectedAdvisor.matchPercentage}%
-                </p>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {selectedAdvisor.matchBreakdown && Object.entries(selectedAdvisor.matchBreakdown).map(([key, criteria]) => (
-                    <div key={key} style={breakdownItemStyle(criteria.matched, key)}>
-                      <span style={{ fontWeight: '500' }}>{formatLabel(key)}</span>
-                      <span>
-                        {criteria.matched ? (
-                          <span style={{ color: '#388E3C' }}>✓ Matched</span>
-                        ) : (
-                          <span style={{ color: '#D32F2F' }}>✗ Not matched</span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div style={{ 
-                background: '#F5EBE0', 
-                padding: '1rem', 
-                borderRadius: '8px',
-                marginTop: '1rem'
-              }}>
-                <p style={{ fontSize: '0.875rem', color: '#5D2A0A' }}>
-                  This score represents how well this advisor matches your specific needs and criteria.
-                </p>
-              </div>
-            </div>
-            
-            <div style={modalActionsStyle}>
-              <button 
-                onClick={resetModal}
-                style={cancelButtonStyle}
-              >
-                Close
-              </button>
-            </div>
+        <div className={`px-4 py-3 rounded-xl text-sm font-medium border ${notification.type === "success" ? "bg-green-50 text-green-800 border-green-200" : "bg-red-50 text-red-800 border-red-200"}`}>
+          <div className="flex items-center justify-between">
+            <span>{notification.message}</span>
+            <button onClick={() => setNotification(null)} className="ml-2 text-current opacity-50 hover:opacity-100"><X size={16} /></button>
           </div>
         </div>
       )}
 
-      {selectedAdvisor && modalType === "bigScoreBreakdown" && (
-        <div style={modalOverlayStyle} onClick={resetModal}>
-          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>
-                BIG Score Breakdown - {selectedAdvisor.name}
-              </h3>
-              <button onClick={resetModal} style={modalCloseButtonStyle}>
-                ✖
-              </button>
-            </div>
-            
-            <div style={modalBodyStyle}>
-              <div style={{ marginBottom: '1rem' }}>
-                <p style={{ color: '#5D2A0A', marginBottom: '0.5rem' }}>
-                  BIG Score: {selectedAdvisor.bigScore}%
-                </p>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {Object.entries(bigScoreData).map(([key, data]) => (
-                    <div key={key} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.75rem',
-                      background: '#F5F5F5',
-                      borderRadius: '6px',
-                      color: '#333',
-                      fontSize: '0.875rem',
-                      marginBottom: '0.5rem',
-                      borderLeft: `4px solid ${data.color}`
-                    }}>
-                      <span style={{ fontWeight: '500', textTransform: 'capitalize' }}>
-                        {key === 'pis' ? 'PIS Score' : key}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{
-                          width: '60px',
-                          height: '6px',
-                          background: '#E0E0E0',
-                          borderRadius: '3px',
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{
-                            width: `${data.score}%`,
-                            height: '100%',
-                            background: data.color,
-                            borderRadius: '3px'
-                          }} />
-                        </div>
-                        <span style={{ 
-                          fontWeight: '600', 
-                          color: data.color,
-                          minWidth: '35px',
-                          textAlign: 'right'
-                        }}>
-                          {data.score}%
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div style={{ 
-                background: '#F5EBE0', 
-                padding: '1rem', 
-                borderRadius: '8px',
-                marginTop: '1rem'
-              }}>
-                <p style={{ fontSize: '0.875rem', color: '#5D2A0A' }}>
-                  The BIG Score evaluates advisory readiness across key dimensions: PIS (Performance Indicators), Compliance, Legitimacy, and Fundability.
-                </p>
-              </div>
-            </div>
-            
-            <div style={modalActionsStyle}>
-              <button 
-                onClick={resetModal}
-                style={cancelButtonStyle}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showFilters && (
-        <div style={modalOverlayStyle} onClick={() => setShowFilters(false)}>
-          <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
-            <div
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}
-            >
-              <h3 style={{ fontSize: "28px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
-                Filter Advisory Applications
-              </h3>
-              <button
-                onClick={() => setShowFilters(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  color: "#666",
-                }}
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#4a352f",
-                    marginBottom: "12px",
-                  }}
-                >
-                  Location
-                </label>
-                <select
-                  value={localFilters.location}
-                  onChange={(e) => handleFilterChange("location", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #c8b6a6",
-                    borderRadius: "8px",
-                    fontSize: "16px",
-                    backgroundColor: "#f5f0e1",
-                  }}
-                >
-                  <option value="">All Locations</option>
-                  <option value="cape-town">Cape Town</option>
-                  <option value="johannesburg">Johannesburg</option>
-                  <option value="durban">Durban</option>
-                  <option value="pretoria">Pretoria</option>
-                </select>
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#4a352f",
-                    marginBottom: "12px",
-                  }}
-                >
-                  Sector
-                </label>
-                <select
-                  value={localFilters.sectors[0] || ""}
-                  onChange={(e) => handleFilterChange("sectors", e.target.value ? [e.target.value] : [])}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #c8b6a6",
-                    borderRadius: "8px",
-                    fontSize: "16px",
-                    backgroundColor: "#f5f0e1",
-                  }}
-                >
-                  <option value="">All Sectors</option>
-                  <option value="tech">Technology</option>
-                  <option value="agri">Agriculture</option>
-                  <option value="cleantech">CleanTech</option>
-                  <option value="healthtech">HealthTech</option>
-                  <option value="edtech">EdTech</option>
-                </select>
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#4a352f",
-                    marginBottom: "12px",
-                  }}
-                >
-                  Funding Stage
-                </label>
-                <select
-                  value={localFilters.stages[0] || ""}
-                  onChange={(e) => handleFilterChange("stages", e.target.value ? [e.target.value] : [])}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #c8b6a6",
-                    borderRadius: "8px",
-                    fontSize: "16px",
-                    backgroundColor: "#f5f0e1",
-                  }}
-                >
-                  <option value="">All Stages</option>
-                  <option value="pre-seed">Pre-Seed</option>
-                  <option value="seed">Seed</option>
-                  <option value="series-a">Series A</option>
-                  <option value="series-b">Series B</option>
-                </select>
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#4a352f",
-                    marginBottom: "12px",
-                  }}
-                >
-                  Minimum Match Score: {localFilters.matchScore}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={localFilters.matchScore}
-                  onChange={(e) => handleFilterChange("matchScore", Number.parseInt(e.target.value))}
-                  style={{
-                    width: "100%",
-                    height: "8px",
-                    borderRadius: "4px",
-                    background: "#e6d7c3",
-                    outline: "none",
-                  }}
-                />
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: "12px",
-                    color: "#7d5a50",
-                    marginTop: "4px",
-                  }}
-                >
-                  <span>0%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
-              <button
-                onClick={clearFilters}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <X size={16} />
-                Clear All
-              </button>
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  style={{
-                    padding: "12px 24px",
-                    backgroundColor: "#c8b6a6",
-                    color: "#4a352f",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={applyFilters}
-                  style={{
-                    padding: "12px 24px",
-                    backgroundColor: "#a67c52",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <Filter size={16} />
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedAdvisor && modalType === "view" && (
-        <div style={modalOverlayStyle} onClick={resetModal}>
-          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            <div
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}
-            >
-              <h3 style={{ fontSize: "28px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
-                {selectedAdvisor.name} - Application Details
-              </h3>
-              <button
-                onClick={resetModal}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  color: "#666",
-                }}
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
-              <div>
-                <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                  Basic Information
-                </h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div>
-                    <strong>Location:</strong> {selectedAdvisor.location}
-                  </div>
-                  <div>
-                    <strong>Sector:</strong> {selectedAdvisor.sector}
-                  </div>
-                  <div>
-                    <strong>Application Date:</strong> {selectedAdvisor.applicationDate}
-                  </div>
-                  <div>
-                    <strong>Status:</strong> {selectedAdvisor.status}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                  Business Details
-                </h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div>
-                    <strong>Funding Stage:</strong> {selectedAdvisor.fundingStage}
-                  </div>
-                  <div>
-                    <strong>Revenue Band:</strong> {selectedAdvisor.revenueBand}
-                  </div>
-                  <div>
-                    <strong>Compensation Model:</strong> {selectedAdvisor.compensationModel}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                  Support Requirements
-                </h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div>
-                    <strong>Support Required:</strong> {selectedAdvisor.supportRequired}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                  Evaluation Scores
-                </h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div>
-                    <strong>Match Score:</strong>{" "}
-                    <span style={{ color: getScoreColor(selectedAdvisor.matchPercentage) }}>
-                      {selectedAdvisor.matchPercentage}%
-                    </span>
-                  </div>
-                  <div>
-                    <strong>BIG Score:</strong>{" "}
-                    <span style={{ color: getScoreColor(selectedAdvisor.bigScore) }}>{selectedAdvisor.bigScore}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px" }}>
-              <button
-                onClick={() => handleBigScoreClick(selectedAdvisor)}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#a67c52",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <BarChart3 size={16} />
-                View BIG Score Breakdown
-              </button>
-              <button
-                onClick={resetModal}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedAdvisor && modalType === "bigScore" && (
-        <div style={modalOverlayStyle} onClick={resetModal}>
-          <div style={{ ...modalContentStyle, maxWidth: "1000px" }} onClick={(e) => e.stopPropagation()}>
-            <div
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "40px" }}
-            >
-              <h3 style={{ fontSize: "32px", fontWeight: "800", color: "#3e2723", margin: 0 }}>BIG Score Breakdown</h3>
-              <div
-                style={{
-                  backgroundColor: getScoreColor(selectedAdvisor.bigScore),
-                  color: "white",
-                  borderRadius: "50%",
-                  width: "100px",
-                  height: "100px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "32px",
-                  fontWeight: "800",
-                  boxShadow: "0 12px 32px rgba(93, 64, 55, 0.4)",
-                }}
-              >
-                {selectedAdvisor.bigScore}
-              </div>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: "#f8f5f3",
-                padding: "24px",
-                borderRadius: "16px",
-                marginBottom: "32px",
-                border: "2px solid #8d6e63",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: "20px",
-                  color: "#5d4037",
-                  marginBottom: "16px",
-                  lineHeight: "1.6",
-                  fontWeight: "500",
-                }}
-              >
-                The BIG Score is a comprehensive evaluation of {selectedAdvisor.name}'s advisory readiness across key
-                dimensions:
-              </p>
-              <div
-                style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#4E342E" }}></div>
-                  <span style={{ fontWeight: "600", color: "#3e2723" }}>PIS Score (15%)</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#8D6E63" }}></div>
-                  <span style={{ fontWeight: "600", color: "#3e2723" }}>Compliance (35%)</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#5D4037" }}></div>
-                  <span style={{ fontWeight: "600", color: "#3e2723" }}>Legitimacy (15%)</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#3E2723" }}></div>
-                  <span style={{ fontWeight: "600", color: "#3e2723" }}>Fundability (35%)</span>
-                </div>
-              </div>
-            </div>
-
-            {Object.entries(bigScoreData).map(([key, data]) => (
-              <div
-                key={key}
-                style={{
-                  backgroundColor: "#ffffff",
-                  borderRadius: "20px",
-                  padding: "32px",
-                  marginBottom: "24px",
-                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)",
-                  border: `2px solid ${data.color}20`,
-                  transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)"
-                  e.currentTarget.style.boxShadow = "0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1)"
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)"
-                  e.currentTarget.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)"
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <div>
-                    <h4
-                      style={{
-                        margin: 0,
-                        fontSize: "24px",
-                        fontWeight: "700",
-                        textTransform: "capitalize",
-                        color: "#3e2723",
-                      }}
-                    >
-                      {key === "pis" ? "PIS Score" : `${key} Score`}
-                    </h4>
-                    <p style={{ margin: "8px 0 0 0", fontSize: "16px", color: "#666", fontWeight: "400" }}>
-                      {key === "pis" && "Performance indicators and strategic metrics"}
-                      {key === "compliance" && "Legal and regulatory documentation completeness"}
-                      {key === "legitimacy" && "Professional presentation and market credibility"}
-                      {key === "fundability" && "Investment readiness and growth potential"}
-                      {key === "leadership" && "Management team quality and experience"}
-                    </p>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "16px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "36px",
-                        fontWeight: "800",
-                        color: data.color,
-                        textShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-                      }}
-                    >
-                      {data.score}%
-                    </div>
-                    <div
-                      style={{
-                        width: "60px",
-                        height: "60px",
-                        borderRadius: "50%",
-                        backgroundColor: `${data.color}20`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: `3px solid ${data.color}`,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "24px",
-                          height: "24px",
-                          borderRadius: "50%",
-                          backgroundColor: data.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    width: "100%",
-                    height: "20px",
-                    backgroundColor: "#f5f5f5",
-                    borderRadius: "10px",
-                    overflow: "hidden",
-                    boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.1)",
-                    position: "relative",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${data.score}%`,
-                      height: "100%",
-                      background: `linear-gradient(90deg, ${data.color}, ${data.color}dd)`,
-                      borderRadius: "10px",
-                      transition: "width 2s cubic-bezier(0.4, 0, 0.2, 1)",
-                      position: "relative",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)",
-                        animation: "shimmer 2s infinite",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <div
-              style={{
-                backgroundColor: "#f3e5f5",
-                padding: "24px",
-                borderRadius: "16px",
-                marginTop: "32px",
-                marginBottom: "32px",
-                border: "2px solid #ce93d8",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                <Info size={24} style={{ color: "#5d4037" }} />
-                <p style={{ margin: 0, color: "#5d4037", fontSize: "16px", lineHeight: "1.5", fontWeight: "500" }}>
-                  The BIG Score is calculated using a weighted average: PIS (15%) + Compliance (35%) + Legitimacy (15%)
-                  + Fundability (35%)
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                onClick={resetModal}
-                style={{
-                  background: "linear-gradient(135deg, #5d4037 0%, #4e342e 100%)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "16px 32px",
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 16px rgba(93, 64, 55, 0.3)",
-                  transition: "all 0.3s ease",
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.transform = "translateY(-2px)"
-                  e.target.style.boxShadow = "0 8px 24px rgba(93, 64, 55, 0.4)"
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.transform = "translateY(0)"
-                  e.target.style.boxShadow = "0 4px 16px rgba(93, 64, 55, 0.3)"
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedAdvisor && modalType === "scoreBreakdown" && (
-        <div style={modalOverlayStyle} onClick={resetModal}>
-          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            <div
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}
-            >
-              <h3 style={{ fontSize: "28px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
-                Score Breakdown - {selectedAdvisor.name}
-              </h3>
-              <button
-                onClick={resetModal}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  color: "#666",
-                }}
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "20px",
-                  borderRadius: "12px",
-                  border: `3px solid ${getScoreColor(selectedAdvisor.matchPercentage)}`,
-                }}
-              >
-                <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                  Match Score
-                </h4>
-                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                  <div
-                    style={{
-                      fontSize: "36px",
-                      fontWeight: "800",
-                      color: getScoreColor(selectedAdvisor.matchPercentage),
-                    }}
-                  >
-                    {selectedAdvisor.matchPercentage}%
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "12px",
-                        backgroundColor: "#e9ecef",
-                        borderRadius: "6px",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${selectedAdvisor.matchPercentage}%`,
-                          height: "100%",
-                          backgroundColor: getScoreColor(selectedAdvisor.matchPercentage),
-                          borderRadius: "6px",
-                          transition: "width 1s ease",
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <p style={{ fontSize: "14px", color: "#666", marginTop: "12px" }}>
-                  Overall compatibility between advisor expertise and SMSE needs
-                </p>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "20px",
-                  borderRadius: "12px",
-                  border: `3px solid ${getScoreColor(selectedAdvisor.bigScore)}`,
-                }}
-              >
-                <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                  BIG Score
-                </h4>
-                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                  <div
-                    style={{
-                      fontSize: "36px",
-                      fontWeight: "800",
-                      color: getScoreColor(selectedAdvisor.bigScore),
-                    }}
-                  >
-                    {selectedAdvisor.bigScore}%
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "12px",
-                        backgroundColor: "#e9ecef",
-                        borderRadius: "6px",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${selectedAdvisor.bigScore}%`,
-                          height: "100%",
-                          backgroundColor: getScoreColor(selectedAdvisor.bigScore),
-                          borderRadius: "6px",
-                          transition: "width 1s ease",
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <p style={{ fontSize: "14px", color: "#666", marginTop: "12px" }}>
-                  Comprehensive evaluation across PIS, compliance, legitimacy, and fundability
-                </p>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "24px" }}>
-              <h4 style={{ fontSize: "20px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                Detailed BIG Score Components
-              </h4>
-              <div style={{ display: "grid", gap: "16px" }}>
-                {Object.entries(bigScoreData).map(([key, data]) => (
-                  <div
-                    key={key}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "16px",
-                      backgroundColor: "#ffffff",
-                      borderRadius: "8px",
-                      border: "1px solid #e9ecef",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: "16px",
-                          fontWeight: "600",
-                          textTransform: "capitalize",
-                          marginBottom: "8px",
-                        }}
-                      >
-                        {key === "pis" ? "PIS" : key}
-                      </div>
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "8px",
-                          backgroundColor: "#f1f3f4",
-                          borderRadius: "4px",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${data.score}%`,
-                            height: "100%",
-                            backgroundColor: data.color,
-                            borderRadius: "4px",
-                            transition: "width 1s ease",
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "20px",
-                        fontWeight: "700",
-                        color: data.color,
-                        marginLeft: "16px",
-                        minWidth: "60px",
-                        textAlign: "right",
-                      }}
-                    >
-                      {data.score}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px" }}>
-              <button
-                onClick={() => handleBigScoreClick(selectedAdvisor)}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#a67c52",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <BarChart3 size={16} />
-                View Full BIG Score
-              </button>
-              <button
-                onClick={resetModal}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCalendarModal && (
-        <div style={{ ...modalOverlayStyle, zIndex: 1100 }} onClick={() => setShowCalendarModal(false)}>
-          <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-              <h3 style={{ fontSize: "24px", fontWeight: "700", color: "#3e2723", margin: 0 }}>
-                Select Available Dates
-              </h3>
-              <button
-                onClick={() => setShowCalendarModal(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  color: "#666",
-                }}
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-                Time Zone
-              </label>
-              <select
-                value={timeZone}
-                onChange={(e) => setTimeZone(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                }}
-              >
-                <option value="Africa/Johannesburg">South Africa Time (SAST)</option>
-                <option value="UTC">UTC</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-                Time Slot
-              </label>
-              <div style={{ display: "flex", gap: "16px" }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: "block", marginBottom: "4px" }}>Start Time</label>
-                  <input
-                    type="time"
-                    value={timeSlot.start}
-                    onChange={(e) => handleTimeChange("start", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "1px solid #ddd",
-                      borderRadius: "4px",
-                    }}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: "block", marginBottom: "4px" }}>End Time</label>
-                  <input
-                    type="time"
-                    value={timeSlot.end}
-                    onChange={(e) => handleTimeChange("end", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "1px solid #ddd",
-                      borderRadius: "4px",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-                Select Dates
-              </label>
-              <DayPicker
-                mode="multiple"
-                selected={tempDates}
-                onSelect={handleDateSelect}
-                fromDate={new Date()}
-                styles={{
-                  caption: { color: "#4a352f", fontWeight: "bold" },
-                  day_selected: { backgroundColor: "#5d4037", color: "white" },
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "24px" }}>
-              <h4 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "12px" }}>
-                Selected Availability
-              </h4>
-              {tempDates.length > 0 ? (
-                <div style={{ 
-                  border: "1px solid #eee", 
-                  borderRadius: "8px", 
-                  padding: "12px",
-                  maxHeight: "200px",
-                  overflowY: "auto"
-                }}>
-                  {tempDates.map((date, index) => (
-                    <div key={index} style={{ 
-                      display: "flex", 
-                      justifyContent: "space-between", 
-                      alignItems: "center",
-                      padding: "8px 0",
-                      borderBottom: "1px solid #f0f0f0"
-                    }}>
-                      <span>
-                        {date.toLocaleDateString("en-US", { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                        {timeSlot.start && timeSlot.end && (
-                          <span style={{ color: "#666", marginLeft: "8px" }}>
-                            {timeSlot.start} - {timeSlot.end}
-                          </span>
-                        )}
-                      </span>
-                      <button
-                        onClick={() => setTempDates(tempDates.filter((d, i) => i !== index))}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#ff4444",
-                          cursor: "pointer",
-                          padding: "4px"
-                        }}
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p style={{ color: "#666", fontStyle: "italic" }}>No dates selected yet</p>
+      {/* Toolbar */}
+      <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]" title="Determined by the pipeline's engagement type setting">
+              <Briefcase size={12} /> {activeProgrammeLabel} pipeline
+            </span>
+            {/* Always-visible active view name (+ description, if any) — no
+                hover required, so it's never ambiguous which view is live. */}
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+              <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+              Viewing: {activeView.name}
+              {activeView.description && (
+                <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
               )}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-              <button
-                onClick={() => setShowCalendarModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "transparent",
-                  color: "#666",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  cursor: "pointer"
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveSelectedDates}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer"
-                }}
-                disabled={tempDates.length === 0}
-              >
-                Save Availability
-              </button>
-            </div>
+            </span>
+            {activeFilterCount > 0 && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+              </span>
+            )}
           </div>
-        </div>
-      )}
 
-      {showStageModal && selectedAdvisorForStage && (
-        <div style={modalOverlayStyle} onClick={() => setShowStageModal(false)}>
-          <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ textAlign: "center", marginBottom: "32px" }}>
-              <h3 style={{ fontSize: "24px", fontWeight: "700", color: "#3e2723", margin: "0 0 8px 0" }}>
-                Update Application Stage
-              </h3>
-              <p style={{ fontSize: "16px", color: "#666", margin: 0 }}>{selectedAdvisorForStage.name}</p>
-            </div>
+          <div className="flex items-center gap-2 flex-wrap">
 
-            <div style={{ marginBottom: "24px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  color: "#4a352f",
-                  marginBottom: "12px",
-                }}
-              >
-                Select Next Stage:
-              </label>
-              <select
-                value={nextStage}
-                onChange={(e) => {
-                  setNextStage(e.target.value)
-                  if (e.target.value) {
-                    setFormErrors({ ...formErrors, nextStage: "" })
+            {/* ─── Customize Table (Views + Hide/Unhide + Density + Reset) ── */}
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  if (showColumnChooser) {
+                    setShowColumnChooser(false);
+                    setColumnChooserRect(null);
+                  } else {
+                    setColumnChooserRect(e.currentTarget.getBoundingClientRect());
+                    setShowColumnChooser(true);
+                    setShowNewViewForm(false);
+                    setEditingViewMeta(null);
                   }
                 }}
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  border: formErrors.nextStage ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                  borderRadius: "8px",
-                  fontSize: "16px",
-                  backgroundColor: "#f5f0e1",
-                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
               >
-                <option value="">Choose a stage...</option>
-                {applicationStages.map((stage) => (
-                  <option key={stage.id} value={stage.name}>
-                    {stage.name}
-                  </option>
-                ))}
-              </select>
-              {formErrors.nextStage && (
-                <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>{formErrors.nextStage}</p>
-              )}
-            </div>
-
-            {nextStage && (
-              <>
-                {currentStageFields.showMessage && (
-                  <div style={{ marginBottom: "24px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "16px",
-                        fontWeight: "600",
-                        color: "#4a352f",
-                        marginBottom: "12px",
-                      }}
+                <SlidersHorizontal size={16} /> Customize Table <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? "rotate-180" : ""}`} />
+              </button>
+              {showColumnChooser && columnChooserRect && (() => {
+                const panelWidth = 320;
+                const margin = 12;
+                let left = columnChooserRect.right - panelWidth;
+                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
+                const spaceBelow = window.innerHeight - columnChooserRect.bottom - margin - 8;
+                const spaceAbove = columnChooserRect.top - margin - 8;
+                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
+                const maxHeight = Math.max(200, Math.min(620, openUpward ? spaceAbove : spaceBelow));
+                const top = openUpward ? undefined : columnChooserRect.bottom + 8;
+                const bottom = openUpward ? window.innerHeight - columnChooserRect.top + 8 : undefined;
+                const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)));
+                return (
+                  <PopupPortal>
+                    <div className="fixed inset-0 z-40" onClick={() => { setShowColumnChooser(false); setColumnChooserRect(null); setShowNewViewForm(false); setEditingViewMeta(null); }} />
+                    <div
+                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
+                      style={{ left, width: panelWidth, top, bottom, maxHeight }}
                     >
-                      Message to SMSE:
-                    </label>
-                    <textarea
-                      value={message}
-                      onChange={(e) => {
-                        setMessage(e.target.value)
-                        if (e.target.value.trim()) {
-                          setFormErrors({ ...formErrors, message: "" })
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "12px 16px",
-                        border: formErrors.message ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                        borderRadius: "8px",
-                        minHeight: "100px",
-                        resize: "vertical",
-                        fontSize: "16px",
-                        fontFamily: "inherit",
-                        backgroundColor: "#f5f0e1",
-                      }}
-                      placeholder="Enter your message..."
-                    />
-                    {formErrors.message && (
-                      <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>{formErrors.message}</p>
-                    )}
-                  </div>
-                )}
-                {currentStageFields.showAvailability && (
-                  <div style={{ 
-                    backgroundColor: "#f8f5f3", 
-                    padding: "20px", 
-                    borderRadius: "12px", 
-                    marginBottom: "24px" 
-                  }}>
-                    <div style={{ 
-                      display: "flex", 
-                      justifyContent: "space-between", 
-                      alignItems: "center",
-                      marginBottom: "16px"
-                    }}>
-                      <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>
-                        Your Availability
-                      </h4>
-                      <button
-                        onClick={() => setShowCalendarModal(true)}
-                        style={{
-                          padding: "6px 12px",
-                          backgroundColor: "#5d4037",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px"
-                        }}
-                      >
-                        <Calendar size={14} />
-                        Add Dates
-                      </button>
-                    </div>
+                      {/* ─── Views ─────────────────────────────────────── */}
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                      <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
 
-                    {availabilities.length > 0 ? (
-                      <div style={{ 
-                        border: "1px solid #eee", 
-                        borderRadius: "8px", 
-                        maxHeight: "200px",
-                        overflowY: "auto"
-                      }}>
-                        {availabilities.map((availability, index) => (
-                          <div key={index} style={{ 
-                            display: "flex", 
-                            justifyContent: "space-between", 
-                            alignItems: "center",
-                            padding: "8px 12px",
-                            borderBottom: "1px solid #f0f0f0"
-                          }}>
-                            <div>
-                              <div style={{ fontWeight: "500" }}>
-                                {availability.date.toLocaleDateString("en-US", { 
-                                  weekday: 'short', 
-                                  month: 'short', 
-                                  day: 'numeric' 
-                                })}
-                              </div>
-                              {availability.timeSlots?.[0] && (
-                                <div style={{ fontSize: "12px", color: "#666" }}>
-                                  {availability.timeSlots[0].start} - {availability.timeSlots[0].end} ({availability.timeZone})
+                      <div className="space-y-1 mb-3">
+                        {allViews.map((view) => {
+                          const isActive = view.id === viewsState.activeViewId;
+                          const isEditing = editingViewMeta?.id === view.id;
+                          if (isEditing) {
+                            return (
+                              <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                {!view.builtin ? (
+                                  <input
+                                    autoFocus
+                                    value={editingViewMeta.name}
+                                    onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))}
+                                    placeholder="View name"
+                                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-[#4a352f]">Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span></p>
+                                )}
+                                <textarea
+                                  value={editingViewMeta.description}
+                                  onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Description (optional) — what is this view for?"
+                                  rows={2}
+                                  className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => setEditingViewMeta(null)} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                                  <button onClick={saveViewMeta} className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold">Save</button>
                                 </div>
-                              )}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={view.id} className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"}`}>
+                              <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                  <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>{view.name}</span>
+                                  {view.builtin && <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Built-in</span>}
+                                </div>
+                                {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                              </button>
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button onClick={() => startEditingViewMeta(view)} title="Rename / edit description" className="text-[#a89482] hover:text-[#7d5a50] p-1">
+                                  <Settings size={13} />
+                                </button>
+                                {!view.builtin && (
+                                  <button onClick={() => removeView(view.id)} title="Delete view" className="text-[#a89482] hover:text-red-500 p-1">
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <button
-                              onClick={() => removeAvailability(availability.date)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "#ff4444",
-                                cursor: "pointer",
-                                padding: "4px"
-                              }}
-                            >
-                              <X size={16} />
-                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {showNewViewForm ? (
+                        <div className="space-y-2 mb-1">
+                          <input
+                            autoFocus
+                            value={newViewName}
+                            onChange={(e) => setNewViewName(e.target.value)}
+                            placeholder="New view name..."
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                          />
+                          <textarea
+                            value={newViewDescription}
+                            onChange={(e) => setNewViewDescription(e.target.value)}
+                            placeholder="Description (optional) — what is this view for?"
+                            rows={2}
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => { setShowNewViewForm(false); setNewViewName(""); setNewViewDescription(""); }} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                            <button onClick={createNewView} disabled={!newViewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Create view</button>
                           </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowNewViewForm(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]">
+                          <Plus size={13} /> New view from current layout
+                        </button>
+                      )}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+
+                      {/* ─── Hide/Unhide ─────────────────────────────── */}
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
+                      <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                      </p>
+                      {[{ key: "sme", label: "Business Name" }, { key: "bigScore", label: "BIG Score" }, { key: "match", label: "Match %" }, { key: "status", label: "Status" }, { key: "action", label: "Action" }].map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
+                          <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f]">{label}</span>
+                        </label>
+                      ))}
+                      <div className="border-t border-[#e6d7c3] my-2" />
+                      {[
+                        { key: "fundingStage", label: "Funding Stage" }, { key: "supportRequired", label: "Support Required" },
+                        { key: "applied", label: "Applied Date" }, { key: "daysInStage", label: "Days in Stage" },
+                        { key: "lastActivity", label: "Last Activity" }, { key: "location", label: "Location" },
+                        { key: "sector", label: "Sector" }, { key: "revenueBand", label: "Revenue Band" },
+                        { key: "compensationModel", label: "Compensation Model" },
+                      ].map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
+                          <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                          <span className="text-sm text-[#4a352f]">{label}</span>
+                        </label>
+                      ))}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                      <div className="flex gap-1.5 mb-1">
+                        {[{ key: "comfortable", label: "Comfortable" }, { key: "compact", label: "Compact" }, { key: "ultra-compact", label: "Ultra Compact" }].map((d) => (
+                          <button
+                            key={d.key}
+                            onClick={() => setDensity(d.key)}
+                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}
+                          >
+                            {d.label}
+                          </button>
                         ))}
                       </div>
-                    ) : (
-                      <p style={{ color: "#666", fontStyle: "italic" }}>No availability slots added yet</p>
-                    )}
-                    {formErrors.availabilities && (
-                      <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>
-                        {formErrors.availabilities}
-                      </p>
-                    )}
-                  </div>
-                )}
 
-                {currentStageFields.showMeeting && (
-                  <div
-                    style={{ backgroundColor: "#f8f5f3", padding: "20px", borderRadius: "12px", marginBottom: "24px" }}
-                  >
-                    <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                      Schedule Meeting
-                    </h4>
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <button onClick={resetActiveViewToDefault} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]">
+                        <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                      </button>
+                    </div>
+                  </PopupPortal>
+                );
+              })()}
+            </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "14px",
-                            fontWeight: "600",
-                            color: "#4a352f",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          Location:
-                        </label>
-                        <input
-                          type="text"
-                          value={meetingLocation}
-                          onChange={(e) => {
-                            setMeetingLocation(e.target.value)
-                            if (e.target.value.trim()) {
-                              setFormErrors({ ...formErrors, meetingLocation: "" })
-                            }
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            border: formErrors.meetingLocation ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            backgroundColor: "white",
-                          }}
-                          placeholder="Office, Virtual, etc."
-                        />
-                        {formErrors.meetingLocation && (
-                          <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>
-                            {formErrors.meetingLocation}
-                          </p>
-                        )}
+            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all shadow-sm" title="Export the currently filtered/sorted businesses to Excel (.xlsx)">
+              <Download size={16} /> Export to Excel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+        {loading ? (
+          <div className="p-8"><div className="space-y-4">{[...Array(8)].map((_, i) => (<div key={i} className="h-10 bg-[#f5f0e1] rounded-lg animate-pulse" />))}</div></div>
+        ) : (
+          <>
+            <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
+              <style>{`
+                .adt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
+                .adt-th-draggable { cursor: grab; }
+                .adt-th-draggable:active { cursor: grabbing; }
+                /* Wrap header labels onto at most 2 lines instead of forcing
+                   the column wider than needed. This only lays out cleanly
+                   because each column also has a real min-width in
+                   COLUMN_DEFS — without that floor, the browser sizes
+                   wrapped-text columns to their smallest possible content. */
+                .adt-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+                /* Column resizing: an explicit header width only holds if the
+                   cells below can shrink, so long values wrap rather than
+                   forcing the column wider than the width that was dragged. */
+                .bigt-fit th, .bigt-fit td { overflow: hidden; }
+                .bigt-fit td { word-break: break-word; }
+              `}</style>
+              <table className="border-collapse bigt-fit" style={{ tableLayout: "auto" }}>
+                <thead>
+                  <tr className="bg-[#4a352f]">
+                    <th className="adt-th py-3 px-3 relative text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30" style={{ backgroundColor: "#4a352f", ...widthStyle("__name__", "170px", "190px") }}>
+                      <div className="flex items-start gap-1 min-w-0">
+                        <span className="adt-th-label">Business Name</span>
+                        <FilterTrigger type="name" active={!!localFilters.name.trim()} />
                       </div>
-                    </div>
+                      <ColumnResizer colKey="__name__" />
+                    </th>
 
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          color: "#4a352f",
-                          marginBottom: "8px",
-                        }}
-                      >
-                        Meeting Purpose:
-                      </label>
-                      <input
-                        type="text"
-                        value={meetingPurpose}
-                        onChange={(e) => {
-                          setMeetingPurpose(e.target.value)
-                          if (e.target.value.trim()) {
-                            setFormErrors({ ...formErrors, meetingPurpose: "" })
-                          }
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "10px 12px",
-                          border: formErrors.meetingPurpose ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                          borderRadius: "6px",
-                          fontSize: "14px",
-                          backgroundColor: "white",
-                        }}
-                        placeholder="Initial discussion, strategy review, etc."
-                      />
-                      {formErrors.meetingPurpose && (
-                        <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>
-                          {formErrors.meetingPurpose}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                    {/* ─── Reorderable columns ──────────────────────── */}
+                    {columnOrder.filter((key) => columnVisibility[key]).map((key) => {
+                      const col = COLUMN_DEFS[key];
+                      if (!col) return null;
+                      const isDragging = draggedColumn === key;
+                      const isDragOver = dragOverColumn === key && draggedColumn !== key;
+                      return (
+                        <th
+                          key={key}
+                          draggable={!resizingColumn}
+                          onDragStart={(e) => handleColumnDragStart(e, key)}
+                          onDragOver={(e) => handleColumnDragOver(e, key)}
+                          onDrop={(e) => handleColumnDrop(e, key)}
+                          onDragEnd={handleColumnDragEnd}
+                          onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                          onMouseLeave={() => setDragHintRect(null)}
+                          className={`adt-th adt-th-draggable py-3 px-3 relative font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
+                          style={{ ...widthStyle(key, col.minWidth), backgroundColor: isDragOver ? "#5a423b" : "#4a352f" }}
+                        >
+                          <div className={`flex items-start gap-1 min-w-0 ${col.align === "center" ? "justify-center" : ""}`}>
+                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
+                            <span className="adt-th-label">{col.label}</span>
+                            <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                          </div>
+                          <ColumnResizer colKey={key} />
+                        </th>
+                      );
+                    })}
 
-                {currentStageFields.showTermSheet && (
-                  <div style={{ marginBottom: "24px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "16px",
-                        fontWeight: "600",
-                        color: "#4a352f",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      Term Sheet Upload:
-                    </label>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={(e) => setTermSheetFile(e.target.files[0])}
-                      style={{
-                        width: "100%",
-                        padding: "12px 16px",
-                        border: "2px solid #c8b6a6",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        backgroundColor: "#f5f0e1",
-                      }}
-                    />
-                    {termSheetFile && (
-                      <p style={{ fontSize: "14px", color: "#666", marginTop: "8px" }}>
-                        Selected: {termSheetFile.name}
-                      </p>
+                    {columnVisibility.action && (
+                      <th className="adt-th py-3 px-3 relative text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "190px", backgroundColor: "#4a352f" }}>Actions</th>
                     )}
-                  </div>
-                )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedSMEs.length === 0 ? (
+                    <tr><td colSpan={Object.values(columnVisibility).filter(Boolean).length + 1} className="text-center py-20">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
+                        <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
+                        <p className="text-sm text-[#7d5a50] max-w-xs">
+                          {activeFilterCount > 0
+                            ? "Clear a filter to widen the list."
+                            : "Apply to businesses that match your expertise — your applications appear here."}
+                        </p>
+                      </div>
+                    </td></tr>
+                  ) : (
+                    paginatedSMEs.map((sme) => {
+                      const bigScoreLabel = getBigScoreLabel(sme.bigScore);
+                      const matchLabel = getMatchLabel(sme.matchPercentage);
+                      const statusStyle = getStatusStyle(sme.currentStatus, activeStages);
+                      const isTerminal = !!statusStyle.stage.terminal;
+                      const nextStageLabel = sme.nextStage || "—";
+
+                      const renderCell = (key) => {
+                        switch (key) {
+                          case "bigScore":
+                            return (
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent("bigScore", sme, e)}>
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="relative w-11 h-11">
+                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                      <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                                      <circle cx="18" cy="18" r="14" fill="none" stroke={bigScoreLabel.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
+                                    </svg>
+                                    <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-normal`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
+                                  </div>
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
+                                </div>
+                              </td>
+                            );
+                          case "match":
+                            return (
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent("match", sme, e)}>
+                                <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
+                                  <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
+                                  <span className="text-xs font-medium" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
+                                  <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: matchLabel.color }} />
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          case "fundingStage":
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span>
+                              </td>
+                            );
+                          case "status":
+                            return (
+                              <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}>
+                                <span
+                                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+                                  style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
+                                  title={statusStyle.stage.tooltip}
+                                >
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
+                                </span>
+                              </td>
+                            );
+                          case "applied":
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{sme.applicationDateLabel}</div>
+                              </td>
+                            );
+                          case "daysInStage":
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <div className="flex items-center gap-1.5"><Clock size={14} className="text-[#7d5a50]" />{sme.daysInStage} days</div>
+                              </td>
+                            );
+                          case "lastActivity":
+                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.lastActivityLabel}</td>;
+                          case "location":
+                          case "sector":
+                          case "revenueBand":
+                          case "compensationModel":
+                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme[key]}</td>;
+                          case "supportRequired":
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <span className="line-clamp-2">{sme.supportRequired}</span>
+                              </td>
+                            );
+                          default:
+                            return null;
+                        }
+                      };
+
+                      return (
+                        <tr
+                          key={sme.id}
+                          className="border-b border-[#f0e6d9] transition-all"
+                          style={{ backgroundColor: hoveredRowKey === sme.id ? "#fdf8f4" : undefined }}
+                          onMouseEnter={() => setHoveredRowKey(sme.id)}
+                          onMouseLeave={() => setHoveredRowKey(null)}
+                        >
+                          {columnVisibility.sme && (
+                            <td
+                              className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 border-r border-b border-[#e6d7c3] z-10 transition-colors`}
+                              style={{ ...widthStyle("__name__", "170px", "190px"), backgroundColor: hoveredRowKey === sme.id ? "#fdf8f4" : "#ffffff" }}
+                            >
+                              <div className="flex items-start gap-2">
+                                <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{(sme.name || "B").charAt(0)}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start gap-1.5 flex-wrap">
+                                    <span className={`${ds.fontSize} font-normal leading-snug text-[#4a352f]`}>{sme.name}</span>
+                                    <button
+                                      onClick={() => setShowDetails(sme)}
+                                      className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
+                                      aria-label={`View profile for ${sme.name}`}
+                                      title="View profile"
+                                    >
+                                      <Eye size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          )}
+
+                          {columnOrder.filter((key) => columnVisibility[key]).map((key) => renderCell(key))}
+
+                          {columnVisibility.action && (
+                            <td className={`${ds.cell} text-center`} style={{ minWidth: "190px" }}>
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={(e) => { if (!isTerminal) openPopupFromEvent("stage", sme, e); }}
+                                  disabled={isTerminal}
+                                  title={isTerminal ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
+                                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                                    isTerminal
+                                      ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
+                                      : "text-white hover:shadow-md hover:brightness-105"
+                                  }`}
+                                  style={{ width: "128px", height: "34px", backgroundColor: isTerminal ? undefined : "#7d5a50" }}
+                                >
+                                  {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
+                                  <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
+                                </button>
+                                <button
+                                  onClick={(e) => openPopupFromEvent("quickActions", sme, e)}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                                  style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
+                                  title="More actions"
+                                >
+                                  <MoreVertical size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-[#4a352f]">
+                  Showing {Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedSMEs.length)}-{Math.min(currentPage * pageSize, filteredAndSortedSMEs.length)} of {filteredAndSortedSMEs.length} Businesses
+                </span>
+                <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f]">
+                  <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">First</button>
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Prev</button>
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  let pn;
+                  if (totalPages <= 5) pn = i + 1;
+                  else if (currentPage <= 3) pn = i + 1;
+                  else if (currentPage >= totalPages - 2) pn = totalPages - 4 + i;
+                  else pn = currentPage - 2 + i;
+                  return <button key={pn} onClick={() => setCurrentPage(pn)} className={`w-8 h-8 rounded-lg text-sm font-medium ${currentPage === pn ? "bg-[#7d5a50] text-white" : "bg-white border border-[#c8b6a6] text-[#4a352f]"}`}>{pn}</button>;
+                })}
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Next</button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Last</button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ─── Drag-to-reorder hint tooltip ─────────────────────────────────── */}
+      {dragHintRect && !draggedColumn && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
+            style={{
+              top: dragHintRect.bottom + 8,
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200),
+              width: "190px",
+            }}
+          >
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Column header filter popover ─────────────────────────────────── */}
+      {headerFilterOpen && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div
+            className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
+            style={{
+              top: headerFilterOpen.rect.bottom + 8,
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292),
+              width: "280px",
+            }}
+          >
+            {headerFilterOpen.type === "name" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Filter by business name</label>
+                  {localFilters.name && (
+                    <button onClick={() => setLocalFilters((p) => ({ ...p, name: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input
+                  autoFocus type="text" value={localFilters.name}
+                  onChange={(e) => { setLocalFilters((p) => ({ ...p, name: e.target.value })); setCurrentPage(1); }}
+                  placeholder="Search business name..."
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                />
               </>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-              <button
-                onClick={() => {
-                  setShowStageModal(false)
-                  resetStageModal()
-                }}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "transparent",
-                  color: "#666",
-                  border: "2px solid #ddd",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "16px",
-                }}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleStageUpdate}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Updating..." : "Update Stage"}
-              </button>
-            </div>
+            {(headerFilterOpen.type === "bigScore" || headerFilterOpen.type === "match") && (() => {
+              const isBig = headerFilterOpen.type === "bigScore";
+              const rangeKey = isBig ? "bigScoreRange" : "matchRange";
+              const range = localFilters[rangeKey];
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-[#4a352f]">{isBig ? "BIG Score" : "Match %"}: {range[0]} - {range[1]}</label>
+                    {(range[0] > 0 || range[1] < 100) && (
+                      <button onClick={() => setLocalFilters((p) => ({ ...p, [rangeKey]: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <input type="number" min="0" max="100" value={range[0]}
+                      onChange={(e) => setLocalFilters((p) => ({ ...p, [rangeKey]: [Math.min(parseInt(e.target.value) || 0, p[rangeKey][1]), p[rangeKey][1]] }))}
+                      className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                    <span className="text-[#7d5a50]">to</span>
+                    <input type="number" min="0" max="100" value={range[1]}
+                      onChange={(e) => setLocalFilters((p) => ({ ...p, [rangeKey]: [p[rangeKey][0], Math.max(parseInt(e.target.value) || 0, p[rangeKey][0])] }))}
+                      className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  </div>
+                  <input type="range" min="0" max="100" value={range[0]}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, [rangeKey]: [parseInt(e.target.value), p[rangeKey][1]] }))}
+                    className="w-full accent-[#7d5a50]" />
+                </>
+              );
+            })()}
+
+            {headerFilterOpen.type === "status" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Status</label>
+                  {localFilters.status.length > 0 && (
+                    <button onClick={() => setLocalFilters((p) => ({ ...p, status: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeStages.map((s) => (
+                    <button key={s.id}
+                      onClick={() => setLocalFilters((p) => ({ ...p, status: p.status.includes(s.name) ? p.status.filter((x) => x !== s.name) : [...p.status, s.name] }))}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s.name) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {(headerFilterOpen.type === "fundingStage" || headerFilterOpen.type === "sector") && (() => {
+              const isStage = headerFilterOpen.type === "fundingStage";
+              const key = isStage ? "fundingStage" : "sector";
+              const options = isStage
+                ? (fundingStageOptions.length ? fundingStageOptions : ["Pre-Seed", "Seed", "Series A", "Series B", "Growth"])
+                : sectorOptions;
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-[#4a352f]">{isStage ? "Funding Stage" : "Sector"}</label>
+                    {localFilters[key].length > 0 && (
+                      <button onClick={() => setLocalFilters((p) => ({ ...p, [key]: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                    {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
+                    {options.map((s) => (
+                      <button key={s}
+                        onClick={() => setLocalFilters((p) => ({ ...p, [key]: p[key].includes(s) ? p[key].filter((x) => x !== s) : [...p[key], s] }))}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters[key].includes(s) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
+
+            {headerFilterOpen.type === "daysInStage" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Days in Stage</label>
+                  {(localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null) && (
+                    <button onClick={() => setLocalFilters((p) => ({ ...p, daysInStageRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="number" min="0" placeholder="Min" value={localFilters.daysInStageRange[0] ?? ""}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, daysInStageRange: [e.target.value === "" ? null : Number(e.target.value), p.daysInStageRange[1]] }))}
+                    className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" placeholder="Max" value={localFilters.daysInStageRange[1] ?? ""}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, daysInStageRange: [p.daysInStageRange[0], e.target.value === "" ? null : Number(e.target.value)] }))}
+                    className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "applied" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Applied Date</label>
+                  {(localFilters.appliedRange[0] || localFilters.appliedRange[1]) && (
+                    <button onClick={() => setLocalFilters((p) => ({ ...p, appliedRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input type="date" value={localFilters.appliedRange[0] || ""}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, appliedRange: [e.target.value || null, p.appliedRange[1]] }))}
+                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                  <input type="date" value={localFilters.appliedRange[1] || ""}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, appliedRange: [p.appliedRange[0], e.target.value || null] }))}
+                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                </div>
+              </>
+            )}
+
+            {["location", "lastActivity", "supportRequired", "revenueBand", "compensationModel"].includes(headerFilterOpen.type) && (() => {
+              const key = headerFilterOpen.type;
+              const labels = {
+                location: "location", lastActivity: "last activity", supportRequired: "support required",
+                revenueBand: "revenue band", compensationModel: "compensation model",
+              };
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">Filter by {labels[key]}</label>
+                    {localFilters[key] && (
+                      <button onClick={() => setLocalFilters((p) => ({ ...p, [key]: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    )}
+                  </div>
+                  <input autoFocus type="text" value={localFilters[key]}
+                    onChange={(e) => setLocalFilters((p) => ({ ...p, [key]: e.target.value }))}
+                    placeholder={`Search ${labels[key]}...`}
+                    className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+                </>
+              );
+            })()}
           </div>
-        </div>
+        </PopupPortal>
       )}
 
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
+      {/* ─── BIG Score Popup ──────────────────────────────────────────────── */}
+      {activePopup?.type === "bigScore" && selectedSMEForPopup && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px", maxHeight: "480px", overflowY: "auto" }}>
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {selectedSMEForPopup.bigScore}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 space-y-3">
+              {[
+                { key: "compliance", label: "Compliance", desc: "Regulatory & legal standing" },
+                { key: "legitimacy", label: "Legitimacy", desc: "Business verification status" },
+                { key: "fundability", label: "Capital Appeal", desc: "Investment readiness & fundability" },
+                { key: "pis", label: "Performance", desc: "Performance indicators & strategic metrics" },
+                { key: "leadership", label: "Leadership", desc: "Management team quality & experience" },
+              ].map(({ key, label, desc }) => {
+                const score = selectedSMEForPopup.bigScoreBreakdown?.[key] || 0;
+                const lbl = getBigScoreLabel(score);
+                return (
+                  <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <div>
+                        <span className="text-xs font-semibold text-[#4a352f]">{label}</span>
+                        <p className="text-[10px] text-[#7d5a50]">{desc}</p>
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: lbl.color }}>{score}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, backgroundColor: lbl.color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Match Breakdown Popup ────────────────────────────────────────── */}
+      {activePopup?.type === "match" && selectedSMEForPopup && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px", maxHeight: "420px", overflowY: "auto" }}>
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Why this match?</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xl font-bold">{selectedSMEForPopup.matchPercentage}%</div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 space-y-2">
+              {Object.keys(selectedSMEForPopup.matchBreakdown || {}).length > 0
+                ? Object.entries(selectedSMEForPopup.matchBreakdown).map(([key, criteria]) => {
+                    const matched = !!criteria?.matched;
+                    return (
+                      <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
+                        <span className="font-semibold text-[#4a352f]">{formatLabel(key)}</span>
+                        <span className="font-semibold" style={{ color: matched ? "#22c55e" : "#ef4444" }}>
+                          {matched ? "Matched" : "Not matched"}
+                        </span>
+                      </div>
+                    );
+                  })
+                : <p className="text-xs text-[#a89482] text-center py-4">No breakdown available for this application.</p>}
+            </div>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Stage Update Popup ───────────────────────────────────────────── */}
+      {activePopup?.type === "stage" && selectedSMEForPopup && (() => {
+        const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
+        return (
+          <PopupPortal>
+            <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+            <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+              style={{ top: activePopup.position.y, left: activePopup.position.x, width: "450px", maxHeight: "550px", overflowY: "auto" }}>
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Update Stage</p>
+                    <h3 className="text-sm font-bold mt-0.5 truncate max-w-[300px]">{selectedSMEForPopup.name}</h3>
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1"><X size={18} /></button>
+                </div>
+              </div>
+              <div className="p-4 space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#4a352f] mb-1">Select Next Stage *</label>
+                  <select
+                    value={stageUpdateData.nextStage}
+                    onChange={(e) => {
+                      const stageId = mapStatusToStageId(e.target.value, activeStages);
+                      setStageUpdateData((prev) => ({
+                        ...prev,
+                        nextStage: e.target.value,
+                        message: DEFAULT_STAGE_MESSAGES[stageId] || prev.message,
+                      }));
+                      setStageFormErrors((prev) => ({ ...prev, nextStage: null }));
+                    }}
+                    className={`w-full px-3 py-2 border-2 rounded-lg text-xs ${stageFormErrors.nextStage ? "border-red-500" : "border-[#c8b6a6]"}`}
+                  >
+                    <option value="">Choose a stage...</option>
+                    {activeStages.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}
+                  </select>
+                  {stageFormErrors.nextStage && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertTriangle size={12} /> {stageFormErrors.nextStage}</p>}
+                </div>
+
+                {stageUpdateData.nextStage && (
+                  <>
+                    {stageFields.showMessage && (
+                      <div>
+                        <label className="block text-xs font-semibold text-[#4a352f] mb-1">Message to Business *</label>
+                        <textarea
+                          value={stageUpdateData.message}
+                          onChange={(e) => setStageUpdateData((prev) => ({ ...prev, message: e.target.value }))}
+                          placeholder="Enter your message..." rows={4}
+                          className={`w-full px-3 py-2 border-2 rounded-lg text-xs resize-y ${stageFormErrors.message ? "border-red-500" : "border-[#c8b6a6]"}`}
+                        />
+                        <p className="text-[11px] text-[#a89482] mt-1">A template is loaded for this stage — edit it to suit.</p>
+                        {stageFormErrors.message && <p className="text-red-500 text-xs mt-1">{stageFormErrors.message}</p>}
+                      </div>
+                    )}
+
+                    {stageFields.showMeeting && (
+                      <div className="bg-[#faf7f2] rounded-xl p-4 space-y-3">
+                        <h4 className="text-xs font-semibold text-[#4a352f] flex items-center gap-2"><Video size={14} /> Schedule Meeting</h4>
+                        <div>
+                          <label className="block text-xs text-[#4a352f] mb-1">Meeting Time</label>
+                          <input type="datetime-local" value={stageUpdateData.meetingTime}
+                            onChange={(e) => setStageUpdateData((prev) => ({ ...prev, meetingTime: e.target.value }))}
+                            className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-xs" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#4a352f] mb-1">Location *</label>
+                          <input type="text" value={stageUpdateData.meetingLocation}
+                            onChange={(e) => setStageUpdateData((prev) => ({ ...prev, meetingLocation: e.target.value }))}
+                            placeholder="Office, Virtual, etc."
+                            className={`w-full px-3 py-2 border-2 rounded-lg text-xs ${stageFormErrors.meetingLocation ? "border-red-500" : "border-[#c8b6a6]"}`} />
+                          {stageFormErrors.meetingLocation && <p className="text-red-500 text-xs mt-1">{stageFormErrors.meetingLocation}</p>}
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#4a352f] mb-1">Purpose *</label>
+                          <input type="text" value={stageUpdateData.meetingPurpose}
+                            onChange={(e) => setStageUpdateData((prev) => ({ ...prev, meetingPurpose: e.target.value }))}
+                            placeholder="Initial discussion, strategy review, etc."
+                            className={`w-full px-3 py-2 border-2 rounded-lg text-xs ${stageFormErrors.meetingPurpose ? "border-red-500" : "border-[#c8b6a6]"}`} />
+                          {stageFormErrors.meetingPurpose && <p className="text-red-500 text-xs mt-1">{stageFormErrors.meetingPurpose}</p>}
+                        </div>
+                      </div>
+                    )}
+
+                    {stageFields.showAvailability && (
+                      <div className="bg-[#faf7f2] rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-xs font-semibold text-[#4a352f] flex items-center gap-2"><Calendar size={14} /> Your Availability</h4>
+                          <button onClick={() => setShowCalendarPopup(true)} className="flex items-center gap-1 px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs hover:bg-[#4a352f] transition-all">
+                            <Calendar size={12} /> Add Dates
+                          </button>
+                        </div>
+                        {availabilities.length > 0 ? (
+                          <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                            {availabilities.map((a, i) => (
+                              <div key={i} className="flex items-center justify-between bg-white p-2 rounded-lg border border-[#e6d7c3]">
+                                <div>
+                                  <div className="text-xs font-medium text-[#4a352f]">
+                                    {a.date?.toLocaleDateString?.("en-ZA", { weekday: "short", month: "short", day: "numeric" }) || "Date unavailable"}
+                                  </div>
+                                  {a.timeSlots?.[0] && (<div className="text-xs text-[#7d5a50]">{a.timeSlots[0].start} – {a.timeSlots[0].end}</div>)}
+                                </div>
+                                <button onClick={() => removeAvailability(a.date)} className="text-red-500 hover:text-red-700 p-1"><X size={14} /></button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#7d5a50] italic">No availability added yet</p>
+                        )}
+                        {stageFormErrors.availabilities && <p className="text-red-500 text-xs mt-2">{stageFormErrors.availabilities}</p>}
+                      </div>
+                    )}
+
+                    {stageFields.showTermSheet && (
+                      <div>
+                        <label className="block text-xs font-semibold text-[#4a352f] mb-1">Terms / Agreement Document (PDF, DOC)</label>
+                        <input type="file" accept=".pdf,.doc,.docx"
+                          onChange={(e) => setStageUpdateData((prev) => ({ ...prev, termSheetFile: e.target.files[0] }))}
+                          className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-xs" />
+                        {stageUpdateData.termSheetFile && (
+                          <p className="text-xs text-green-700 mt-1">Selected: {stageUpdateData.termSheetFile.name}</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button onClick={closePopup} className="px-4 py-2 bg-[#faf7f2] text-[#7d5a50] rounded-lg text-xs font-medium hover:bg-[#f5f0e1] transition-all">Cancel</button>
+                  <button onClick={handleStageUpdate} disabled={isStageSubmitting} className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold hover:bg-[#4a352f] transition-all disabled:opacity-50">
+                    {isStageSubmitting ? "Updating..." : "Update Stage"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Calendar Popup */}
+            {showCalendarPopup && (
+              <>
+                <div className="fixed inset-0 z-[1100]" onClick={() => setShowCalendarPopup(false)} />
+                <div className="fixed z-[1101] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-6"
+                  style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "400px", maxHeight: "80vh", overflowY: "auto" }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-bold text-[#4a352f]">Select Available Dates</h4>
+                    <button onClick={() => setShowCalendarPopup(false)} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={18} /></button>
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold text-[#4a352f] mb-2">Time Slot</label>
+                    <div className="flex gap-2">
+                      <input type="time" value={timeSlot.start} onChange={(e) => handleTimeChange("start", e.target.value)} className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs" />
+                      <span className="text-[#7d5a50] self-center">to</span>
+                      <input type="time" value={timeSlot.end} onChange={(e) => handleTimeChange("end", e.target.value)} className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs" />
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <DayPicker mode="multiple" selected={tempDates} onSelect={handleDateSelect} fromDate={new Date()} />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowCalendarPopup(false)} className="px-4 py-2 bg-[#faf7f2] text-[#7d5a50] rounded-lg text-xs">Cancel</button>
+                    <button onClick={saveSelectedDates} disabled={tempDates.length === 0} className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs disabled:opacity-50">
+                      Save Dates ({tempDates.length})
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </PopupPortal>
+        );
+      })()}
+
+      {/* ─── Quick Actions Popup ──────────────────────────────────────────── */}
+      {activePopup?.type === "quickActions" && selectedSMEForPopup && (() => {
+        const sme = selectedSMEForPopup;
+        const stage = getStatusStyle(sme.currentStatus, activeStages).stage;
+        const declinedStage = activeStages.find((s) => s.terminal && /declined/i.test(s.name));
+        return (
+          <PopupPortal>
+            <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+            <div className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
+              style={{ top: activePopup.position.y, left: activePopup.position.x, width: "210px" }}>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
+                <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
+                <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
+              </div>
+              <button onClick={() => { setShowDetails(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
+              <button onClick={() => openPopup("bigScore", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> BIG Score Breakdown</button>
+              <button onClick={() => openPopup("match", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
+              <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
+              {!stage.terminal && declinedStage && (
+                <button
+                  onClick={(e) => openPopupFromEvent("stage", sme, e, { presetStage: declinedStage.name })}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 text-left border-t border-[#e6d7c3]"
+                >
+                  <XCircle size={12} /> Decline Engagement
+                </button>
+              )}
+            </div>
+          </PopupPortal>
+        );
+      })()}
+
+      {/* ─── Business Details Drawer ──────────────────────────────────────── */}
+      {showDetails && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans p-4" onClick={() => setShowDetails(null)}>
+            <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[640px] max-w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-5 text-white sticky top-0 z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Business Profile</p>
+                  <h3 className="text-lg font-bold mt-0.5">{showDetails.name}</h3>
+                </div>
+                <button onClick={() => setShowDetails(null)} className="text-white/70 hover:text-white p-1"><X size={20} /></button>
+              </div>
+              <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-4">
+                {[
+                  ["Status", showDetails.statusLabel],
+                  ["Days in stage", `${showDetails.daysInStage} days`],
+                  ["Location", showDetails.location],
+                  ["Sector", showDetails.sector],
+                  ["Funding stage", showDetails.fundingStage],
+                  ["Revenue band", showDetails.revenueBand],
+                  ["Support required", showDetails.supportRequired],
+                  ["Compensation model", showDetails.compensationModel],
+                  ["Applied", showDetails.applicationDateLabel],
+                  ["Last activity", showDetails.lastActivityLabel],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</p>
+                    <p className="text-sm text-[#4a352f]">{value}</p>
+                  </div>
+                ))}
+                <div className="col-span-2 grid grid-cols-2 gap-4 pt-2 border-t border-[#e6d7c3]">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">BIG Score</p>
+                    <p className="text-2xl font-bold" style={{ color: getBigScoreLabel(showDetails.bigScore).color }}>
+                      {showDetails.bigScore}% <span className="text-sm font-medium">{getBigScoreLabel(showDetails.bigScore).label}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Match</p>
+                    <p className="text-2xl font-bold" style={{ color: getMatchLabel(showDetails.matchPercentage).color }}>
+                      {showDetails.matchPercentage}% <span className="text-sm font-medium">{getMatchLabel(showDetails.matchPercentage).label}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </PopupPortal>
+      )}
     </div>
-  )
+  );
 }
+
+// Default export alongside the named export so this component resolves whether
+// the importing file uses `import AdvisorTable from "./AdvisorTable"` or
+// `import { AdvisorTable } from "./AdvisorTable"`.
+export default AdvisorTable;
