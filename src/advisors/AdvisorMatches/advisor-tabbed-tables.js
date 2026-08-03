@@ -3,14 +3,15 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  Users, Trophy, Eye, X, Info, Calendar, ChevronDown, Download, Plus,
+  Users, XCircle, Eye, X, Info, Calendar, ChevronDown, Download, Plus,
   Trash2, Settings, RotateCcw, SlidersHorizontal, LayoutGrid, GripVertical,
-  CheckCircle, ArrowUp, ArrowDown, Briefcase
+  CheckCircle, ArrowUp, ArrowDown
 } from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import * as XLSX from "xlsx";
 import { AdvisorTable } from "./advisor-sme-table";
+import BusinessDetailsModal from "./BusinessDetailsModal";
 import { mapStatusToStageId, getActiveStages, PIPELINE_REFRESH_EVENT } from "./advisorStageConfig";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,36 +71,39 @@ const HeaderInfoTooltip = ({ text }) => {
 };
 
 // ─── Columns ──────────────────────────────────────────────────────────────────
+// Deal-shaped columns (contract value, duration, next review) were dropped when
+// this table moved from successful engagements to declined ones — none of them
+// carry a value on an application that never became an engagement. What matters
+// on a decline is when it came in, when it closed, and why.
 const DEFAULT_COLUMN_ORDER = [
-  "dealType", "compensationModel", "startDate", "dealDuration", "currentStatus",
-  "sector", "location", "revenueBand", "smeStage", "contractValue", "nextRenewal"
+  "dealType", "appliedDate", "declinedDate", "currentStatus", "reason",
+  "sector", "location", "compensationModel", "revenueBand", "smeStage"
 ];
 
 const COLUMN_DEFS = {
   dealType: { label: "Support Required", minWidth: "134px", filter: "select", type: "badge" },
-  compensationModel: { label: "Compensation Model", minWidth: "140px", filter: "select" },
-  startDate: { label: "Start Date", minWidth: "112px", filter: "date", type: "date" },
-  dealDuration: { label: "Duration", minWidth: "100px", filter: "select" },
-  currentStatus: { label: "Status", minWidth: "124px", filter: "select", type: "status" },
+  appliedDate: { label: "Date Applied", minWidth: "112px", filter: "date", type: "date", tooltip: "When the business first applied to work with you." },
+  declinedDate: { label: "Date Declined", minWidth: "116px", filter: "date", type: "date", tooltip: "When the application was last updated — for these rows, when it was declined or withdrawn." },
+  currentStatus: { label: "Outcome", minWidth: "124px", filter: "select", type: "status" },
+  reason: { label: "Reason Given", minWidth: "180px", filter: "text" },
   sector: { label: "Sector", minWidth: "110px", filter: "select" },
   location: { label: "Location", minWidth: "104px", filter: "text" },
+  compensationModel: { label: "Compensation Model", minWidth: "140px", filter: "select" },
   revenueBand: { label: "Revenue Band", minWidth: "112px", filter: "select" },
   smeStage: { label: "Business Stage", minWidth: "116px", filter: "select" },
-  contractValue: { label: "Contract Value", minWidth: "120px", filter: "text" },
-  nextRenewal: { label: "Next Review", minWidth: "116px", filter: "text" },
 };
 
 const DEFAULT_COLUMN_VISIBILITY = {
-  dealType: true, compensationModel: true, startDate: true, dealDuration: true,
-  currentStatus: true, sector: true, location: true,
-  revenueBand: false, smeStage: false, contractValue: false, nextRenewal: false,
+  dealType: true, appliedDate: true, declinedDate: true, currentStatus: true,
+  reason: true, sector: true, location: true,
+  compensationModel: false, revenueBand: false, smeStage: false,
 };
 
 const EXPORT_HEADERS = {
-  sme: "Business Name", dealType: "Support Required", compensationModel: "Compensation Model",
-  startDate: "Start Date", dealDuration: "Duration", currentStatus: "Status",
-  sector: "Sector", location: "Location", revenueBand: "Revenue Band",
-  smeStage: "Business Stage", contractValue: "Contract Value", nextRenewal: "Next Review",
+  sme: "Business Name", dealType: "Support Required", appliedDate: "Date Applied",
+  declinedDate: "Date Declined", currentStatus: "Outcome", reason: "Reason Given",
+  sector: "Sector", location: "Location", compensationModel: "Compensation Model",
+  revenueBand: "Revenue Band", smeStage: "Business Stage",
 };
 
 // ─── Views ────────────────────────────────────────────────────────────────────
@@ -107,8 +111,10 @@ const EXPORT_HEADERS = {
 // object, with exactly one active at a time. Editing the table edits the active
 // view, so there's no hidden layout that can drift out of sync.
 const BUILTIN_VIEW_ID = "__default__";
-const VIEWS_STORAGE_KEY = "advisor-successful-deals-views-v1";
-const DEFAULT_SORT = { key: "startDate", direction: "desc" };
+// New key: the old "successful deals" views stored a column set that no longer
+// exists here, so they're deliberately not carried over.
+const VIEWS_STORAGE_KEY = "advisor-declined-deals-views-v1";
+const DEFAULT_SORT = { key: "declinedDate", direction: "desc" };
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
@@ -172,8 +178,8 @@ const DENSITY = {
   "ultra-compact": { cell: "py-1.5 px-1.5", fontSize: "text-xs", avatar: "w-6 h-6" },
 };
 
-// ─── Successful Deals ─────────────────────────────────────────────────────────
-const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
+// ─── Declined Deals ───────────────────────────────────────────────────────────
+const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDeal, setSelectedDeal] = useState(null);
@@ -276,13 +282,16 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
 
     try {
       setLoading(true);
-      // This previously queried `status == "Deal Successful"` — a literal that
-      // stops matching the moment a stage is renamed or a different engagement
-      // template is picked. Rows now resolve through the shared stage config,
-      // so "Retainer Active", "Project Started" and "Mentorship Active" all
-      // land here correctly.
+      // Rows resolve through the shared stage config rather than a hard-coded
+      // status string, so a renamed stage or a different engagement template
+      // can't quietly empty this table. Anything that ends negatively —
+      // "Declined", "Withdrawn", "Not Proceeding" — lands here.
       const stages = getActiveStages();
-      const successIds = new Set(stages.filter((s) => s.terminal && s.group === "success").map((s) => s.id));
+      const declinedIds = new Set(
+        stages
+          .filter((s) => s.terminal && (s.group === "negative" || /declin|withdraw|unsuccess|reject|not proceed/i.test(s.name || "")))
+          .map((s) => s.id)
+      );
 
       const snapshot = await getDocs(query(collection(db, "AdvisorApplications"), where("advisorId", "==", user.uid)));
 
@@ -290,34 +299,38 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         const stageId = mapStatusToStageId(data.status || data.pipelineStage, stages);
-        if (!successIds.has(stageId)) return;
+        if (!declinedIds.has(stageId)) return;
         const stage = stages.find((s) => s.id === stageId);
 
         rows.push({
           id: docSnap.id,
+          // The universalProfiles document id — `id` above is only the
+          // AdvisorApplications doc id (advisorId_smeId), which the shared
+          // profile modal can't look a business up by.
+          smeId: data.smeId,
           smseName: data.smeName || "N/A",
           compensationModel: formatLabel(data.advisorCompensationModel) || "N/A",
           dealType: formatLabel(data.smeSupport) || "N/A",
-          startDate: data.createdAt || null,
+          appliedDate: data.createdAt || null,
+          // `updatedAt` is written by serverTimestamp on every stage change, so
+          // for a terminal row it is the moment the decline was recorded.
+          declinedDate: data.updatedAt || data.createdAt || null,
+          reason: data.declineReason || data.lastMessage || "No reason recorded",
           sector: formatLabel(data.smeSector) || "N/A",
           location: formatLabel(data.smeLocation) || "N/A",
-          dealStructure: data.dealStructure || "Advisory contract",
-          dealDuration: data.dealDuration || "Ongoing",
-          serviceDelivered: data.serviceDelivered || "Strategic advisory services",
-          currentStatus: stage?.name || "Active Advisory",
-          contractValue: data.contractValue || "N/A",
-          nextRenewal: data.nextRenewal || "To be determined",
-          advisoryType: data.advisoryType || "Strategic Advisor",
+          currentStatus: stage?.name || "Declined",
           smeStage: formatLabel(data.smeStage) || "N/A",
           revenueBand: data.revenue || "N/A",
+          matchPercentage: data.matchPercentage ?? null,
+          bigScore: data.bigScore ?? null,
         });
       });
 
       setDeals(rows);
       onCountChange?.(rows.length);
     } catch (error) {
-      console.error("Error fetching successful deals:", error);
-      setNotification({ type: "error", message: "Failed to load deals" });
+      console.error("Error fetching declined applications:", error);
+      setNotification({ type: "error", message: "Failed to load declined applications" });
       onCountChange?.(0);
     } finally {
       setLoading(false);
@@ -326,7 +339,7 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
 
   useEffect(() => { fetchDeals(); }, [fetchDeals]);
 
-  // Concluding an engagement in the pipeline table lands it here — refresh on
+  // Declining an application in the pipeline table lands it here — refresh on
   // that signal rather than making the advisor reload the page.
   useEffect(() => {
     const refresh = () => fetchDeals();
@@ -413,7 +426,6 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
   // ─── Filter / sort ──────────────────────────────────────────────────────
   const processed = useMemo(() => {
     let result = [...deals];
-
 
     if (filters.__name__?.trim()) {
       const q = filters.__name__.toLowerCase().trim();
@@ -514,7 +526,7 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
   const handleExport = () => {
     try {
       const visible = columnOrder.filter((k) => columnVisibility[k] && COLUMN_DEFS[k]);
-      if (processed.length === 0) { setNotification({ type: "error", message: "No deals to export" }); return; }
+      if (processed.length === 0) { setNotification({ type: "error", message: "No declined applications to export" }); return; }
       const header = [EXPORT_HEADERS.sme, ...visible.map((k) => EXPORT_HEADERS[k])];
       const rows = processed.map((d) => {
         const row = { [EXPORT_HEADERS.sme]: d.smseName };
@@ -527,8 +539,8 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
         return { wch: Math.min(Math.max(label.length, ...lengths, 8) + 2, 45) };
       });
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Advisory Deals");
-      XLSX.writeFile(workbook, `advisory-deals-${new Date().toISOString().split("T")[0]}.xlsx`);
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Declined Applications");
+      XLSX.writeFile(workbook, `advisory-declined-${new Date().toISOString().split("T")[0]}.xlsx`);
       setNotification({ type: "success", message: "Export downloaded" });
     } catch (error) {
       console.error("Export error:", error);
@@ -545,10 +557,11 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
       case "badge":
         return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#f5f0e1] text-[#4a352f]">{value || "—"}</span>;
       case "status":
+        // Red rather than green — these are negative outcomes.
         return (
           <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
-            style={{ backgroundColor: "#dcfce7", color: "#166534", borderColor: "#bbf7d0" }}>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#166534" }} />{value}
+            style={{ backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fecaca" }}>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#991b1b" }} />{value}
           </span>
         );
       case "date":
@@ -574,7 +587,7 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]">
-              <Trophy size={12} /> {deals.length} engagement{deals.length === 1 ? "" : "s"}
+              <XCircle size={12} /> {deals.length} declined application{deals.length === 1 ? "" : "s"}
             </span>
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
@@ -713,7 +726,7 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
             </div>
 
             <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all shadow-sm"
-              title="Export the current filtered/sorted engagements to Excel (.xlsx)">
+              title="Export the current filtered/sorted declined applications to Excel (.xlsx)">
               <Download size={16} /> Export to Excel
             </button>
           </div>
@@ -786,13 +799,13 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
                     <tr><td colSpan={visibleColumns.length + 2} className="text-center py-20">
                       <div className="flex flex-col items-center gap-4">
                         <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center">
-                          <Trophy size={32} className="text-[#7d5a50] opacity-50" />
+                          <XCircle size={32} className="text-[#7d5a50] opacity-50" />
                         </div>
-                        <p className="text-lg font-semibold text-[#4a352f]">No Successful Deals Yet</p>
+                        <p className="text-lg font-semibold text-[#4a352f]">No Declined Applications</p>
                         <p className="text-sm text-[#7d5a50] max-w-sm">
                           {activeFilterCount > 0
                             ? "Clear a filter to widen the list."
-                            : "Engagements appear here once they reach the successful stage in your pipeline."}
+                            : "Applications appear here once you decline them in your pipeline."}
                         </p>
                       </div>
                     </td></tr>
@@ -811,7 +824,7 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
                               <div className="flex items-start gap-1.5 flex-wrap">
                                 <span className={`${ds.fontSize} leading-snug text-[#4a352f]`}>{deal.smseName}</span>
                                 <button onClick={() => setSelectedDeal(deal)} className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
-                                  aria-label={`View advisory details for ${deal.smseName}`} title="View details">
+                                  aria-label={`View declined application for ${deal.smseName}`} title="View details">
                                   <Eye size={13} />
                                 </button>
                               </div>
@@ -843,7 +856,7 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl flex-wrap gap-3">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-[#4a352f]">
-                  Showing {Math.min((currentPage - 1) * pageSize + 1, processed.length)}-{Math.min(currentPage * pageSize, processed.length)} of {processed.length} Engagements
+                  Showing {Math.min((currentPage - 1) * pageSize + 1, processed.length)}-{Math.min(currentPage * pageSize, processed.length)} of {processed.length} Applications
                 </span>
                 <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f]">
                   <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
@@ -931,62 +944,21 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
         );
       })()}
 
-      {/* Deal details */}
+      {/* ─── Business Profile pop-up ───────────────────────────────────────
+          The same shared modal the advisor pipeline table opens from its
+          business-name eye icon, so a business looks identical whichever tab
+          you reach it from. smeId is the universalProfiles document id;
+          deal.id is only the AdvisorApplications row key. */}
       {selectedDeal && (
-        <PopupPortal>
-          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans p-4" onClick={() => setSelectedDeal(null)}>
-            <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[640px] max-w-full max-h-[86vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-5 text-white sticky top-0 z-10 flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Advisory Engagement</p>
-                  <h3 className="text-lg font-bold mt-0.5 truncate">{selectedDeal.smseName}</h3>
-                  <p className="text-xs text-[#e6d7c3] mt-0.5">{selectedDeal.sector} · {selectedDeal.location}</p>
-                </div>
-                <button onClick={() => setSelectedDeal(null)} className="text-white/70 hover:text-white p-1 flex-shrink-0"><X size={20} /></button>
-              </div>
-
-              <div className="p-6 space-y-6">
-                {[
-                  { label: "Commercials", fields: [
-                    ["Compensation model", selectedDeal.compensationModel],
-                    ["Contract value", selectedDeal.contractValue],
-                    ["Support required", selectedDeal.dealType],
-                    ["Deal structure", selectedDeal.dealStructure],
-                  ]},
-                  { label: "Timeline", fields: [
-                    ["Start date", formatDate(selectedDeal.startDate)],
-                    ["Duration", selectedDeal.dealDuration],
-                    ["Next review", selectedDeal.nextRenewal],
-                    ["Status", selectedDeal.currentStatus],
-                  ]},
-                  { label: "Business", fields: [
-                    ["Sector", selectedDeal.sector],
-                    ["Stage", selectedDeal.smeStage],
-                    ["Location", selectedDeal.location],
-                    ["Revenue band", selectedDeal.revenueBand],
-                  ]},
-                ].map((section) => (
-                  <div key={section.label}>
-                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-3">{section.label}</p>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                      {section.fields.map(([label, value]) => (
-                        <div key={label}>
-                          <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</p>
-                          <p className="text-sm text-[#4a352f]">{value ?? "N/A"}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-                <div className="px-4 py-3 rounded-xl bg-[#faf7f2] border border-[#e6d7c3]">
-                  <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Services delivered</p>
-                  <p className="text-sm text-[#4a352f] leading-relaxed">{selectedDeal.serviceDelivered}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </PopupPortal>
+        <BusinessDetailsModal
+          business={{
+            businessId: selectedDeal.smeId || selectedDeal.id,
+            businessName: selectedDeal.smseName,
+            finalScore: selectedDeal.matchPercentage,
+          }}
+          isOpen
+          onClose={() => setSelectedDeal(null)}
+        />
       )}
     </div>
   );
@@ -996,14 +968,14 @@ const SuccessfulAdvisorDealsTable = ({ onCountChange }) => {
 const AdvisorTabbedTables = ({ filters, stageFilter, loading }) => {
   const [activeTab, setActiveTab] = useState("my-matches");
   const [matchesCount, setMatchesCount] = useState(0);
-  const [dealsCount, setDealsCount] = useState(0);
+  const [declinedCount, setDeclinedCount] = useState(0);
 
   const handleMatchesCount = useCallback((n) => setMatchesCount(n), []);
-  const handleDealsCount = useCallback((n) => setDealsCount(n), []);
+  const handleDeclinedCount = useCallback((n) => setDeclinedCount(n), []);
 
   const TABS = [
     { id: "my-matches", label: "My Matches", icon: <Users size={16} />, count: matchesCount },
-    { id: "successful-deals", label: "Successful Deals", icon: <Trophy size={16} />, count: dealsCount },
+    { id: "declined-deals", label: "Declined Deals", icon: <XCircle size={16} />, count: declinedCount },
   ];
 
   return (
@@ -1030,9 +1002,9 @@ const AdvisorTabbedTables = ({ filters, stageFilter, loading }) => {
         {activeTab === "my-matches" && (
           <AdvisorTable filters={filters} stageFilter={stageFilter} onMatchesCountChange={handleMatchesCount} />
         )}
-        {activeTab === "successful-deals" && (
+        {activeTab === "declined-deals" && (
           <div className="p-6">
-            <SuccessfulAdvisorDealsTable onCountChange={handleDealsCount} />
+            <DeclinedAdvisorDealsTable onCountChange={handleDeclinedCount} />
           </div>
         )}
       </div>

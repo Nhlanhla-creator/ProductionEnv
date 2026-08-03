@@ -63,6 +63,13 @@ const LIVE_STAGES = STAGE_DEFINITIONS.filter((s) => !s.terminal)
 const TERMINAL_STAGES = STAGE_DEFINITIONS.filter((s) => s.terminal)
 const ENTRY_STAGE_ID = STAGE_DEFINITIONS[0].id
 
+/* Cards are wider than they were and the stage name is allowed to wrap onto a
+   second line instead of being cut off with an ellipsis — a stage nobody can
+   read isn't a stage. Every card in the row stretches to the height of the
+   tallest one (see `h-full` below plus `items-stretch` on the row), so a
+   two-line name never leaves a card sitting short next to its neighbours. */
+const CARD_WIDTH = 124
+
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
@@ -74,10 +81,10 @@ const PipelineSkeleton = () => (
       <div key={i} className="flex items-center flex-shrink-0">
         <div
           className="bg-gradient-to-br from-[#f5f0e1]/60 to-[#e6d7c3]/30 rounded-xl flex-shrink-0 animate-pulse"
-          style={{ width: "112px", height: "88px" }}
+          style={{ width: `${CARD_WIDTH}px`, height: "98px" }}
         >
           <div className="p-2.5 flex flex-col h-full justify-between">
-            <div className="h-2.5 w-16 rounded-full bg-[#c8b6a6]/40" />
+            <div className="h-2.5 w-20 rounded-full bg-[#c8b6a6]/40" />
             <div className="h-5 w-10 rounded bg-[#c8b6a6]/30 mx-auto" />
             <div className="h-1.5 w-full rounded-full bg-[#c8b6a6]/30" />
           </div>
@@ -281,7 +288,12 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
   )
 
   /* One renderer for every card — live and terminal — so Declined/Closed keep
-     the same shape and size as the rest. Only the palette differs. */
+     the same shape and size as the rest. Only the palette differs.
+
+     The card body is a flex column at `h-full`: the name block sits at the top
+     and is free to run to two lines, while `mt-auto` pins the count and the
+     progress bar to the bottom edge. That keeps the numbers on one baseline
+     across the row no matter how many lines each name takes. */
   const renderStageCard = (stage) => {
     const isHovered = hoveredStage?.id === stage.id
     const status = stage.statuses[0]
@@ -298,7 +310,7 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
         className={`relative flex-shrink-0 cursor-pointer group transition-all duration-300 ${
           isSelected ? "scale-105" : "hover:scale-[1.02]"
         }`}
-        style={{ width: "112px" }}
+        style={{ width: `${CARD_WIDTH}px` }}
         role="button"
         tabIndex={0}
         aria-pressed={isSelected}
@@ -314,7 +326,7 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
         }}
       >
         <div
-          className={`rounded-xl p-2.5 transition-all duration-300 ${
+          className={`rounded-xl p-2.5 h-full flex flex-col transition-all duration-300 ${
             isHovered || isSelected ? "shadow-xl -translate-y-1" : "shadow-md hover:shadow-lg"
           }`}
           style={{
@@ -322,15 +334,16 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
             border: `1.5px solid ${isSelected ? "#d9b98a" : "rgba(255,255,255,0.1)"}`,
           }}
         >
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex items-start gap-1.5 mb-1.5">
             <div className="w-5 h-5 rounded-lg flex items-center justify-center bg-white/10 flex-shrink-0">
               <Icon size={11} className="text-white" />
             </div>
-            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-tight truncate flex-1">
+            {/* Full stage name, wrapped rather than truncated. */}
+            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-[11px] break-words flex-1 min-w-0 pt-[3px]">
               {stage.name}
             </h3>
           </div>
-          <div className="flex items-baseline justify-center">
+          <div className="flex items-baseline justify-center mt-auto pt-1">
             <span className="text-lg font-extrabold leading-none text-white">{count}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-2">
@@ -386,7 +399,7 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
     const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0"
 
     return (
-      <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "38px" }}>
+      <div className="flex flex-col items-center justify-center px-0.5 flex-shrink-0" style={{ minWidth: "38px" }}>
         <span
           className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap"
           title="Share of advisors at this step or beyond that reach the next step"
@@ -433,10 +446,12 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
         <PipelineSkeleton />
       ) : (
         <>
+          {/* `items-stretch` here and `h-full` on each card body are what keep a
+              two-line name from making one card shorter than its neighbours. */}
           <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent">
             {/* Live funnel — one card per stage, an arrow in every gap */}
             {LIVE_STAGES.map((stage, idx) => (
-              <div key={stage.id} className="flex items-center flex-shrink-0">
+              <div key={stage.id} className="flex items-stretch flex-shrink-0">
                 {renderStageCard(stage)}
                 {idx < LIVE_STAGES.length - 1 && renderArrow(idx)}
               </div>
@@ -444,16 +459,16 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
 
             {/* Exit states — one shared red border, no arrows */}
             {TERMINAL_STAGES.length > 0 && (
-              <div className="flex items-center flex-shrink-0">
+              <div className="flex items-stretch flex-shrink-0">
                 <div className="flex flex-col items-center px-2 flex-shrink-0 self-stretch justify-center">
                   <div className="w-px h-10 bg-[#e6d7c3]" />
                 </div>
                 <div
-                  className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl"
+                  className="flex items-stretch gap-1.5 flex-shrink-0 p-1.5 rounded-2xl"
                   style={{ border: "2px solid #D32F2F" }}
                 >
                   {TERMINAL_STAGES.map((stage) => (
-                    <div key={stage.id} className="flex-shrink-0">
+                    <div key={stage.id} className="flex flex-shrink-0">
                       {renderStageCard(stage)}
                     </div>
                   ))}

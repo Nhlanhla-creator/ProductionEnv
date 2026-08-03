@@ -1,17 +1,19 @@
 "use client"
 
-import React, { useState, useEffect, useMemo, useRef } from "react"
+import React, { useState, useEffect, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { 
-  Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, 
-  Loader, RefreshCw, X, BarChart3, Briefcase, Award, Package, ChevronDown, ChevronUp,
-  AlertCircle, Info, Layers, GraduationCap, MoreVertical, FileText, Ticket, Copy,
+import {
+  Trophy, TrendingUp, Building, DollarSign, Calendar, Eye, Wrench,
+  RefreshCw, X, BarChart3, Briefcase, Package, ChevronDown, ChevronUp,
+  AlertCircle, Info, GraduationCap, MoreVertical,
   CheckCircle, SlidersHorizontal, LayoutGrid, Settings, RotateCcw, GripVertical,
   Square, CheckSquare, ArrowUpDown, Download, Archive, StickyNote, Plus, Trash2,
-  FileCheck, Star, Clock, Activity
+  Star, ExternalLink
 } from "lucide-react"
+import { getActiveStages, mapStatusToStageId, PIPELINE_REFRESH_EVENT } from "../AdvisorMatches/advisorStageConfig"
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -59,11 +61,15 @@ const formatDate = (dateValue, { fallback = "Not recorded" } = {}) => {
 }
 
 // ─── Status vocabulary ──────────────────────────────────────────────────────
+// These are the statuses this page owns. A row that has been moved to one of
+// them here must keep showing up on the next fetch, which is why the query
+// below matches on these *as well as* on the pipeline's success stages.
 const STATUS_META = {
   "Active Advisory": { label: "Active Advisory", color: "#4caf50", group: "active" },
   "Completed Successfully": { label: "Completed", color: "#2196f3", group: "completed" },
   "Under Review": { label: "Under Review", color: "#ff9800", group: "active" },
 }
+const PAGE_MANAGED_STATUSES = new Set(Object.keys(STATUS_META))
 
 const getStatusMeta = (status) => STATUS_META[status] || { label: status || "Active Advisory", color: "#7d5a50", group: "active" }
 
@@ -86,9 +92,46 @@ const getRatingLabel = (rating) => {
   return "Needs Improvement"
 }
 
+// ─── Portal + tooltip helpers ──────────────────────────────────────────────
+// Popups render straight to <body> so a `position: fixed` panel can't be
+// trapped by an ancestor that establishes a containing block (the table's
+// `overflow: auto` scroller is exactly such an ancestor).
+const PopupPortal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
+
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal tracking-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
+}
+
 // ─── Stage pipeline ─────────────────────────────────────────────────────────
 const ADVISOR_STAGE_CARDS = [
-  { key: "active", label: "Active Engagements", icon: TrendingUp, note: true, noteText: "SMEs you're currently providing advisory services to." },
+  { key: "active", label: "Active Engagements", icon: TrendingUp, note: true, noteText: "Businesses you're currently providing advisory services to." },
   { key: "completed", label: "Completed", icon: GraduationCap, note: true, noteText: "Advisory engagements that have been successfully completed." },
 ]
 
@@ -101,7 +144,7 @@ const AdvisorStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-[#4a352f]">Advisory Portfolio</h3>
-          <span title="Your successful advisory engagements with SMEs">
+          <span title="Every engagement that reached a successful stage in your pipeline, plus anything you've since marked completed here">
             <Info size={12} className="text-[#a89482]" />
           </span>
         </div>
@@ -159,15 +202,57 @@ const AdvisorStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
 }
 
 // ─── Column definitions ────────────────────────────────────────────────────
+// `value` returns exactly what the cell displays. The header filter builds its
+// chip list from that same function, so what you filter on is always what you
+// can see in the column — no free-text search, no values that aren't there.
 const COLUMN_DEFS = {
-  compensation: { label: "Compensation", minWidth: "112px", filterType: "compensation" },
-  startDate: { label: "Start Date", minWidth: "96px", filterType: "startDate" },
-  sector: { label: "Sector", minWidth: "100px", filterType: "sector" },
-  location: { label: "Location", minWidth: "92px", filterType: "location" },
-  teamSize: { label: "Team Size", minWidth: "80px", filterType: "teamSize" },
-  status: { label: "Status", minWidth: "130px", filterType: "status" },
-  rating: { label: "Performance", minWidth: "100px", filterType: "rating" },
-  advisoryType: { label: "Advisory Type", minWidth: "120px", filterType: "advisoryType" },
+  compensation: {
+    label: "Compensation", minWidth: "130px",
+    value: (c) => formatCurrency(c.dealAmount),
+    tooltip: "How you're paid on this engagement — retainer, success fee, equity share, and so on.",
+  },
+  startDate: {
+    label: "Start Date", minWidth: "120px",
+    value: (c) => formatDate(c.completionDate),
+    tooltip: "When this advisory engagement began.",
+  },
+  sector: {
+    label: "Sector", minWidth: "100px",
+    value: (c) => c.sector,
+    tooltip: "The industry the business trades in.",
+  },
+  location: {
+    label: "Location", minWidth: "92px",
+    value: (c) => c.location,
+    tooltip: "Where the business operates from.",
+  },
+  teamSize: {
+    label: "Team Size", minWidth: "88px",
+    value: (c) => c.teamSize,
+    tooltip: "How many people the business employs.",
+  },
+  status: {
+    label: "Status", minWidth: "130px",
+    value: (c) => getStatusMeta(c.currentStatus).label,
+    tooltip: "Whether the engagement is still running or has been completed. Change it from the row's More menu.",
+  },
+  rating: {
+    label: "Performance", minWidth: "110px",
+    value: (c) => c.performanceRating,
+    tooltip: "Your performance rating for this engagement, out of 5.",
+  },
+  advisoryType: {
+    label: "Advisory Type", minWidth: "120px",
+    value: (c) => c.advisoryType,
+    tooltip: "The advisory role you play for this business.",
+  },
+}
+
+const NAME_COLUMN_KEY = "__name__"
+const NAME_COLUMN = {
+  label: "Business",
+  value: (c) => c.smeName,
+  tooltip: "The business you're advising. Click the eye for a summary, or the chevron to open notes.",
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -176,6 +261,10 @@ const DEFAULT_COLUMN_VISIBILITY = {
   sector: true, location: false, teamSize: false, advisoryType: false,
 }
 const DEFAULT_DENSITY = "comfortable"
+
+// The checkbox column is pinned at the very left; the Business column pins
+// immediately after it, so this offset has to match its rendered width exactly.
+const SELECT_COL_WIDTH = 44
 
 // ─── Custom Views ──────────────────────────────────────────────────────────
 const BUILTIN_VIEW_ID = "__default__"
@@ -194,6 +283,7 @@ const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
   density: DEFAULT_DENSITY,
+  columnWidths: {},
 })
 
 const createBuiltinDefaultView = () => ({
@@ -208,6 +298,8 @@ const sanitizeView = (view, fallbackId) => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
   density: view?.density || DEFAULT_DENSITY,
+  // Views saved before resizing existed simply come back with no widths.
+  columnWidths: view?.columnWidths || {},
 })
 
 const loadViewsState = () => {
@@ -311,7 +403,7 @@ const TableRowSkeleton = () => {
       <td className="p-3"><div className={`w-24 h-3 bg-shimmer-mid bg-shimmer ${delays[2]} rounded`} /></td>
       <td className="p-3"><div className={`w-16 h-3 bg-shimmer-mid bg-shimmer ${delays[2]} rounded`} /></td>
       <td className="p-3"><div className={`w-20 h-6 bg-shimmer-light bg-shimmer ${delays[3]} rounded-full`} /></td>
-      <td className="p-3"><div className={`w-24 h-8 bg-shimmer-dark bg-shimmer ${delays[4]} rounded mx-auto`} /></td>
+      <td className="p-3"><div className={`w-24 h-8 bg-shimmer-dark bg-shimmer ${delays[3]} rounded mx-auto`} /></td>
     </tr>
   )
 }
@@ -360,13 +452,21 @@ function AdvisorCohorts() {
   const [showArchived, setShowArchived] = useState(false)
   const [bulkConfirm, setBulkConfirm] = useState(null)
   const [statusModal, setStatusModal] = useState(null)
-  
-  // ─── Views (column visibility / order / density) ─────────────────────────
+
+  // ─── Header filters ───────────────────────────────────────────────────────
+  // { [columnKey]: [selected display values] } — one entry per column that has
+  // something selected. Nothing here is free text: every option comes from the
+  // rows themselves.
+  const [columnFilters, setColumnFilters] = useState({})
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null) // { key, rect }
+
+  // ─── Views (column visibility / order / density / widths) ─────────────────
   const [viewsState, setViewsState] = useState(() => loadViewsState())
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
   const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
   const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
   const [density, setDensity] = useState(() => initialActiveView.density)
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths || {})
 
   const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
   const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
@@ -378,6 +478,7 @@ function AdvisorCohorts() {
   const [draggedColumn, setDraggedColumn] = useState(null)
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   const navigate = useNavigate()
 
@@ -386,12 +487,12 @@ function AdvisorCohorts() {
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId]
       if (!current) return prev
-      const updated = { ...current, columnVisibility, columnOrder, density }
+      const updated = { ...current, columnVisibility, columnOrder, density, columnWidths }
       const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
       persistViewsState(next)
       return next
     })
-  }, [columnVisibility, columnOrder, density])
+  }, [columnVisibility, columnOrder, density, columnWidths])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -401,6 +502,7 @@ function AdvisorCohorts() {
   // ─── Load cohorts ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetchCohorts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const getCachedCohorts = () => {
@@ -432,7 +534,7 @@ function AdvisorCohorts() {
   const fetchCohorts = async (forceRefresh = false) => {
     try {
       setLoading(true)
-      
+
       if (!forceRefresh) {
         const cachedCohorts = getCachedCohorts()
         if (cachedCohorts) {
@@ -448,10 +550,23 @@ function AdvisorCohorts() {
         return
       }
 
+      // The query used to filter on the literal status "Deal Successful", which
+      // quietly returned nothing the moment a stage was renamed or a different
+      // engagement template was in use. It now pulls every application for this
+      // advisor and decides membership through the shared stage config:
+      //   • any terminal stage in the "success" group  → an engagement
+      //   • any status this page itself writes         → stays put
+      // so "Retainer Active", "Project Started", "Mentorship Active" and legacy
+      // "Deal Successful" rows all land here, and a row moved to "Completed"
+      // here doesn't vanish on the next load.
+      const stages = getActiveStages()
+      const successIds = new Set(
+        stages.filter((s) => s.terminal && s.group === "success").map((s) => s.id)
+      )
+
       const q = query(
         collection(db, "AdvisorApplications"),
-        where("advisorId", "==", currentUser.uid),
-        where("status", "==", "Deal Successful")
+        where("advisorId", "==", currentUser.uid)
       )
 
       const querySnapshot = await getDocs(q)
@@ -460,6 +575,11 @@ function AdvisorCohorts() {
         querySnapshot.docs.map(async (docSnap) => {
           const data = docSnap.data()
           try {
+            const rawStatus = (data.status || data.pipelineStage || "").toString()
+            const isManagedHere = PAGE_MANAGED_STATUSES.has(rawStatus)
+            const isSuccessStage = successIds.has(mapStatusToStageId(rawStatus, stages))
+            if (!isManagedHere && !isSuccessStage) return null
+
             let profileData = {}
             if (data.smeId) {
               const profileRef = doc(db, "universalProfiles", data.smeId)
@@ -478,12 +598,15 @@ function AdvisorCohorts() {
               smeName: smeName,
               dealAmount: data.advisorCompensationModel || "Not specified",
               dealType: data.smeSupport || "Advisory",
-              completionDate: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+              completionDate: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || new Date().toISOString(),
               sector: formatLabel(data.smeSector) || "Not specified",
               location: formatLabel(data.smeLocation) || "Not specified",
               teamSize: data.teamSize || "Not specified",
               description: data.serviceDelivered || "Advisory services provided",
-              currentStatus: "Active Advisory",
+              // A row that's only just arrived from the pipeline starts as
+              // Active Advisory; one already managed here keeps its status.
+              currentStatus: isManagedHere ? rawStatus : "Active Advisory",
+              pipelineStatus: rawStatus,
               profileData: profileData,
               lastUpdated: new Date().toISOString(),
               dealStructure: data.dealStructure || "Advisory contract",
@@ -516,6 +639,20 @@ function AdvisorCohorts() {
       setLoading(false)
     }
   }
+
+  // Concluding an engagement in the pipeline table fires this event. The cache
+  // is bypassed deliberately — a five-minute-old cache is exactly what would
+  // hide a deal that was successful thirty seconds ago.
+  useEffect(() => {
+    const refresh = () => fetchCohorts(true)
+    window.addEventListener(PIPELINE_REFRESH_EVENT, refresh)
+    window.addEventListener("focus", refresh)
+    return () => {
+      window.removeEventListener(PIPELINE_REFRESH_EVENT, refresh)
+      window.removeEventListener("focus", refresh)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -579,7 +716,8 @@ function AdvisorCohorts() {
       onConfirm: async () => {
         try {
           await updateDoc(doc(db, "AdvisorApplications", cohort.docId), { archived: true })
-          await fetchCohorts()
+          // Force past the cache — otherwise the row reappears unarchived.
+          await fetchCohorts(true)
         } catch (error) {
           console.error("Error archiving record:", error)
           alert("Failed to archive. Please try again.")
@@ -616,7 +754,7 @@ function AdvisorCohorts() {
             statusHistory: arrayUnion(historyEntry),
           })
         }
-        await fetchCohorts()
+        await fetchCohorts(true)
         setStatusModal(null)
         setSelectedRows(new Set())
       } catch (error) {
@@ -648,7 +786,7 @@ function AdvisorCohorts() {
 
   const toggleSelectAll = (rows) => {
     setSelectedRows((prev) => {
-      const allSelected = rows.every((r) => prev.has(r.id))
+      const allSelected = rows.length > 0 && rows.every((r) => prev.has(r.id))
       if (allSelected) return new Set()
       return new Set(rows.map((r) => r.id))
     })
@@ -687,13 +825,18 @@ function AdvisorCohorts() {
     setColumnVisibility(target.columnVisibility)
     setColumnOrder(target.columnOrder)
     setDensity(target.density)
+    setColumnWidths(target.columnWidths || {})
   }
 
   const createNewView = () => {
     const trimmedName = newViewName.trim()
     if (!trimmedName) return
     const id = generateViewId()
-    const newView = { id, name: trimmedName, description: newViewDescription.trim(), builtin: false, columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder], density }
+    const newView = {
+      id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
+      columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
+      density, columnWidths: { ...columnWidths },
+    }
     setViewsState((prev) => {
       const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
       persistViewsState(next)
@@ -736,6 +879,7 @@ function AdvisorCohorts() {
       setColumnVisibility(def.columnVisibility)
       setColumnOrder(def.columnOrder)
       setDensity(def.density)
+      setColumnWidths(def.columnWidths || {})
     }
   }
 
@@ -744,6 +888,7 @@ function AdvisorCohorts() {
     setColumnVisibility(layout.columnVisibility)
     setColumnOrder(layout.columnOrder)
     setDensity(layout.density)
+    setColumnWidths(layout.columnWidths || {})
   }
 
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -776,14 +921,68 @@ function AdvisorCohorts() {
   }
   const handleColumnDragEnd = () => { setDraggedColumn(null); setDragOverColumn(null) }
 
+  // ─── Column resizing ─────────────────────────────────────────────────────
+  // Drag the divider on a header's right edge to resize; double-click it to
+  // snap that column back to auto width. Widths live in the active view
+  // alongside visibility/order/density, so they persist and travel with it.
+  const widthStyle = (key, fallbackMin, fallbackMax) => {
+    const w = columnWidths[key]
+    if (w) return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }
+    return fallbackMax ? { minWidth: fallbackMin, maxWidth: fallbackMax } : { minWidth: fallbackMin }
+  }
+
+  const startResize = (event, key) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const th = event.currentTarget.closest("th")
+    const startX = event.clientX
+    const startWidth = th ? th.getBoundingClientRect().width : 120
+    setResizingColumn(key)
+
+    const onMove = (moveEvent) => {
+      const next = Math.max(64, Math.round(startWidth + (moveEvent.clientX - startX)))
+      setColumnWidths((prev) => ({ ...prev, [key]: next }))
+    }
+    const onUp = () => {
+      setResizingColumn(null)
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+    }
+
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
+    // the handle mid-drag, and so text can't be selected while resizing.
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+  }
+
+  const autoFitColumn = (key) =>
+    setColumnWidths((prev) => { const { [key]: _dropped, ...rest } = prev; return rest })
+
+  const ColumnResizer = ({ colKey }) => (
+    <span
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => { e.stopPropagation(); autoFitColumn(colKey) }}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation() }}
+      onClick={(e) => e.stopPropagation()}
+      title="Drag to resize · double-click to auto-fit"
+      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none z-10"
+      style={{ backgroundColor: resizingColumn === colKey ? "#a67c52" : "transparent" }}
+    />
+  )
+
   const openRowMenu = (cohort, event) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
-    const menuWidth = 220
+    const menuWidth = 230
+    const menuHeight = 330 // grew when "Open BIG Score Page" was added
     let x = rect.right - menuWidth
     let y = rect.bottom + 6
     if (x < 12) x = 12
-    if (y + 280 > window.innerHeight - 12) y = rect.top - 280 - 6
+    if (y + menuHeight > window.innerHeight - 12) y = Math.max(12, rect.top - menuHeight - 6)
     setRowMenu({ cohort, position: { x, y } })
   }
 
@@ -793,6 +992,18 @@ function AdvisorCohorts() {
     sessionStorage.setItem('advisorViewMode', 'true')
     sessionStorage.setItem('viewOrigin', 'advisor')
     window.location.href = '/overall-company-health'
+  }
+
+  // Opens the business's own dashboard, locked to the BIG Score tab, with a
+  // Back control to return here. Same session-storage "investor view" contract
+  // the catalyst and advisor pipeline tables use.
+  const handleViewBigScorePage = (cohort) => {
+    sessionStorage.setItem('viewingSMEId', cohort.smeId)
+    sessionStorage.setItem('viewingSMEName', cohort.smeName)
+    sessionStorage.setItem('investorViewMode', 'true')
+    sessionStorage.setItem('viewOrigin', 'advisor')
+    sessionStorage.setItem('viewOnlyBigScore', 'true')
+    window.location.href = '/dashboard'
   }
 
   const handleViewDetails = (cohort) => {
@@ -816,6 +1027,39 @@ function AdvisorCohorts() {
     completed: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "completed").length,
   }
 
+  // Chip options come from the rows themselves, using the same accessor the
+  // cell renders with — so the list is always exactly what's in the column.
+  const getColumnValue = (key, cohort) =>
+    (key === NAME_COLUMN_KEY ? NAME_COLUMN.value(cohort) : COLUMN_DEFS[key]?.value(cohort)) ?? ""
+
+  const filterOptions = useMemo(() => {
+    const keys = [NAME_COLUMN_KEY, ...Object.keys(COLUMN_DEFS)]
+    const out = {}
+    keys.forEach((key) => {
+      out[key] = [...new Set(
+        visibleCohorts
+          .map((c) => (getColumnValue(key, c) || "").toString().trim())
+          .filter((v) => v && v !== "Not specified" && v !== "Not recorded" && v !== "N/A")
+      )].sort((a, b) => a.localeCompare(b))
+    })
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCohorts])
+
+  const activeFilterCount = Object.values(columnFilters).filter((v) => v?.length).length
+
+  const toggleFilterValue = (key, value) => {
+    setColumnFilters((prev) => {
+      const current = prev[key] || []
+      const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
+      if (next.length === 0) { const { [key]: _drop, ...rest } = prev; return rest }
+      return { ...prev, [key]: next }
+    })
+  }
+
+  const clearFilter = (key) => setColumnFilters((prev) => { const { [key]: _drop, ...rest } = prev; return rest })
+  const clearAllFilters = () => setColumnFilters({})
+
   const filteredCohorts = useMemo(() => {
     let result = visibleCohorts
     if (activeFilter === "active") {
@@ -823,17 +1067,42 @@ function AdvisorCohorts() {
     } else if (activeFilter === "completed") {
       result = result.filter((c) => getStatusMeta(c.currentStatus).group === "completed")
     }
+    Object.entries(columnFilters).forEach(([key, selected]) => {
+      if (!selected?.length) return
+      result = result.filter((c) => selected.includes((getColumnValue(key, c) || "").toString().trim()))
+    })
     return result
-  }, [visibleCohorts, activeFilter])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCohorts, activeFilter, columnFilters])
 
   const rowPad = density === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"
 
+  const FilterTrigger = ({ colKey }) => {
+    const active = (columnFilters[colKey] || []).length > 0
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          const rect = e.currentTarget.getBoundingClientRect()
+          setHeaderFilterOpen((prev) => (prev?.key === colKey ? null : { key: colKey, rect }))
+        }}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title="Filter this column"
+      >
+        <SlidersHorizontal size={11} />
+      </button>
+    )
+  }
+
   // ─── Data-driven cell renderer ───────────────────────────────────────────
   const renderCell = (key, cohort) => {
+    const col = COLUMN_DEFS[key]
+    const cellStyle = widthStyle(key, col.minWidth)
     switch (key) {
       case "compensation":
         return (
-          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}>
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}>
             <div className="flex flex-col gap-0.5">
               <span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span>
               {cohort.contractValue !== "Not specified" && (
@@ -843,17 +1112,17 @@ function AdvisorCohorts() {
           </td>
         )
       case "startDate":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}><span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span></td>
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}><span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span></td>
       case "sector":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.sector}</span></td>
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}><span className="text-[#5d4037]">{cohort.sector}</span></td>
       case "location":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.location}</span></td>
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}><span className="text-[#5d4037]">{cohort.location}</span></td>
       case "teamSize":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
       case "status": {
         const meta = getStatusMeta(cohort.currentStatus)
         return (
-          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}>
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}>
             <span className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap" style={{ backgroundColor: meta.color + "20", color: meta.color }}>
               {meta.label}
             </span>
@@ -862,7 +1131,7 @@ function AdvisorCohorts() {
       }
       case "rating":
         return (
-          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '100px' }}>
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}>
             <div className="flex flex-col gap-0.5">
               <span className="font-semibold" style={{ color: getRatingColor(cohort.performanceRating) }}>
                 {cohort.performanceRating}
@@ -872,7 +1141,7 @@ function AdvisorCohorts() {
           </td>
         )
       case "advisoryType":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] text-sm">{cohort.advisoryType}</span></td>
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={cellStyle}><span className="text-[#5d4037] text-sm">{cohort.advisoryType}</span></td>
       default:
         return null
     }
@@ -882,6 +1151,7 @@ function AdvisorCohorts() {
 
   const visibleColumnKeys = columnOrder.filter((key) => columnVisibility[key])
   const allVisibleSelected = filteredCohorts.length > 0 && filteredCohorts.every((c) => selectedRows.has(c.id))
+  const nameWidth = widthStyle(NAME_COLUMN_KEY, "200px", "240px")
 
   return (
     <div className="min-h-screen box-border transition-[margin-left] duration-300">
@@ -891,7 +1161,7 @@ function AdvisorCohorts() {
           <div>
             <h1 className="text-[28px] font-bold text-[#4a352f] mb-1">My Advisory Cohorts</h1>
             <p className="text-[#7d5a50] text-base m-0">
-              View and manage your portfolio of successful SME advisory engagements
+              View and manage your portfolio of active and completed advisory engagements
             </p>
           </div>
 
@@ -924,6 +1194,15 @@ function AdvisorCohorts() {
                 Viewing: {activeView.name}
                 {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
               </span>
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30 hover:bg-[#ffe0b2]"
+                  title="Clear all column filters"
+                >
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active — clear
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -949,8 +1228,9 @@ function AdvisorCohorts() {
                   const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
                   const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)))
                   return (
-                    <div className="fixed inset-0 z-40" onClick={() => { setShowCustomizeMenu(false); setCustomizeMenuRect(null); setShowNewViewForm(false); setEditingViewMeta(null) }}>
-                      <div className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto" style={{ left, width: panelWidth, top, bottom, maxHeight }} onClick={(e) => e.stopPropagation()}>
+                    <PopupPortal>
+                      <div className="fixed inset-0 z-40" onClick={() => { setShowCustomizeMenu(false); setCustomizeMenuRect(null); setShowNewViewForm(false); setEditingViewMeta(null) }} />
+                      <div className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto" style={{ left, width: panelWidth, top, bottom, maxHeight }}>
                         <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
                         <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
                         <div className="space-y-1 mb-3">
@@ -1010,10 +1290,10 @@ function AdvisorCohorts() {
 
                         <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
                         <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                          <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                          <GripVertical size={12} className="flex-shrink-0" /> Tip: drag a column header to reorder it, or drag its right edge to resize.
                         </p>
                         <label className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
-                          <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
+                          <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
                           <span className="text-sm text-[#4a352f]">Business</span>
                         </label>
                         <div className="border-t border-[#e6d7c3] my-2" />
@@ -1039,7 +1319,7 @@ function AdvisorCohorts() {
                           <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
                         </button>
                       </div>
-                    </div>
+                    </PopupPortal>
                   )
                 })()}
               </div>
@@ -1078,19 +1358,30 @@ function AdvisorCohorts() {
                 .mc-th-draggable { cursor: grab; }
                 .mc-th-draggable:active { cursor: grabbing; }
                 .mc-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+                /* An explicit header width only holds if the cells below can
+                   shrink, so long values wrap rather than forcing the column
+                   wider than the width that was dragged. */
+                .mc-fit th, .mc-fit td { overflow: hidden; }
+                .mc-fit td { word-break: break-word; }
               `}</style>
-              <table className="border-collapse text-sm" style={{ tableLayout: 'auto' }}>
+              <table className="border-collapse text-sm mc-fit" style={{ tableLayout: 'auto' }}>
                 <thead>
                   <tr className="bg-[#4a352f]">
-                    <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30 border-r border-[#e6d7c3]`} style={{ backgroundColor: '#4a352f', width: '40px' }}>
-                      <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center">
+                    <th className="mc-th py-3 px-2 text-center sticky top-0 left-0 z-30 border-r border-[#e6d7c3]" style={{ backgroundColor: '#4a352f', width: SELECT_COL_WIDTH, minWidth: SELECT_COL_WIDTH, maxWidth: SELECT_COL_WIDTH }}>
+                      <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center mx-auto" title="Select all rows">
                         {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
                     </th>
-                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '200px', maxWidth: '240px' }}>
+                    <th
+                      className={`mc-th ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-30`}
+                      style={{ backgroundColor: '#4a352f', left: SELECT_COL_WIDTH, ...nameWidth }}
+                    >
                       <div className="flex items-start gap-1 min-w-0">
-                        <span className="mc-th-label">Business</span>
+                        <span className="mc-th-label">{NAME_COLUMN.label}</span>
+                        <FilterTrigger colKey={NAME_COLUMN_KEY} />
+                        <HeaderInfoTooltip text={NAME_COLUMN.tooltip} />
                       </div>
+                      <ColumnResizer colKey={NAME_COLUMN_KEY} />
                     </th>
 
                     {visibleColumnKeys.map((key) => {
@@ -1100,25 +1391,31 @@ function AdvisorCohorts() {
                       return (
                         <th
                           key={key}
-                          draggable
+                          draggable={!resizingColumn}
                           onDragStart={(e) => handleColumnDragStart(e, key)}
                           onDragOver={(e) => handleColumnDragOver(e, key)}
                           onDrop={(e) => handleColumnDrop(e, key)}
                           onDragEnd={handleColumnDragEnd}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`mc-th mc-th-draggable ${rowPad} text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${isDragging ? 'opacity-40' : ''}`}
-                          style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
+                          className={`mc-th mc-th-draggable ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${isDragging ? 'opacity-40' : ''}`}
+                          style={{ ...widthStyle(key, col.minWidth), backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
                         >
                           <div className="flex items-start gap-1 min-w-0">
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
                             <span className="mc-th-label">{col.label}</span>
+                            <FilterTrigger colKey={key} />
+                            <HeaderInfoTooltip text={col.tooltip} />
                           </div>
+                          <ColumnResizer colKey={key} />
                         </th>
                       )
                     })}
                     <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                      Action
+                      <div className="flex items-start gap-1 justify-center">
+                        <span>Action</span>
+                        <HeaderInfoTooltip text="Deep dive into the business's growth data, or open the More menu for notes, status changes and the BIG Score page." />
+                      </div>
                     </th>
                   </tr>
                 </thead>
@@ -1135,20 +1432,23 @@ function AdvisorCohorts() {
                           onMouseEnter={() => setHoveredRowKey(cohort.id)}
                           onMouseLeave={() => setHoveredRowKey(null)}
                         >
-                          <td className={`${rowPad} border-r border-[#e6d7c3]`}>
-                            <button onClick={() => toggleRowSelected(cohort.id)} className="flex items-center justify-center">
+                          <td
+                            className="py-3 px-2 text-center sticky left-0 z-10 border-r border-[#e6d7c3] transition-colors"
+                            style={{ width: SELECT_COL_WIDTH, minWidth: SELECT_COL_WIDTH, maxWidth: SELECT_COL_WIDTH, backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
+                          >
+                            <button onClick={() => toggleRowSelected(cohort.id)} className="flex items-center justify-center mx-auto">
                               {selectedRows.has(cohort.id) ? <CheckSquare size={16} className="text-[#7d5a50]" /> : <Square size={16} className="text-[#c8b6a6]" />}
                             </button>
                           </td>
                           <td
-                            className={`${rowPad} sticky left-0 z-10 border-r border-[#e6d7c3] transition-colors`}
-                            style={{ minWidth: '200px', maxWidth: '240px', backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
+                            className={`${rowPad} sticky z-10 border-r border-[#e6d7c3] transition-colors`}
+                            style={{ left: SELECT_COL_WIDTH, ...nameWidth, backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
                           >
                             <div className="flex items-start gap-1.5">
-                              <button onClick={() => toggleExpandRow(cohort)} className="mt-0.5 text-[#a89482] hover:text-[#4a352f] flex-shrink-0">
+                              <button onClick={() => toggleExpandRow(cohort)} className="mt-0.5 text-[#a89482] hover:text-[#4a352f] flex-shrink-0" title={isExpanded ? "Hide notes" : "Show notes"}>
                                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
-                              <div>
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-semibold text-[#4a352f]">
                                     {cohort.smeName}
@@ -1251,65 +1551,123 @@ function AdvisorCohorts() {
             </h3>
             <p className="text-[#7d5a50] text-base max-w-[500px] mx-auto">
               {visibleCohorts.length === 0
-                ? "Your successful advisory engagements will appear here once you complete matches with SMEs."
-                : "No engagements match the selected filter."}
+                ? "Engagements appear here once an application reaches a successful stage in your pipeline."
+                : "No engagements match the current filters."}
             </p>
+            {visibleCohorts.length > 0 && activeFilterCount > 0 && (
+              <button onClick={clearAllFilters} className="mt-4 px-4 py-2 rounded-lg text-sm font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1]">
+                Clear all filters
+              </button>
+            )}
           </div>
         )}
       </div>
 
       {/* ─── Drag-to-reorder hint tooltip ──────────────────────────────────── */}
-      {dragHintRect && !draggedColumn && (
-        <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5" style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200), width: '190px' }}>
-          <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
-        </div>
+      {dragHintRect && !draggedColumn && !resizingColumn && (
+        <PopupPortal>
+          <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5" style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 220), width: '205px' }}>
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
+          </div>
+        </PopupPortal>
       )}
+
+      {/* ─── Column header filter popover ──────────────────────────────────
+          Chip lists only: every option is a value that actually appears in
+          that column, so there's nothing to type and nothing to search. */}
+      {headerFilterOpen && (() => {
+        const key = headerFilterOpen.key
+        const col = key === NAME_COLUMN_KEY ? NAME_COLUMN : COLUMN_DEFS[key]
+        if (!col) return null
+        const options = filterOptions[key] || []
+        const selected = columnFilters[key] || []
+        return (
+          <PopupPortal>
+            <div className="fixed inset-0 z-[1090]" onClick={() => setHeaderFilterOpen(null)} />
+            <div
+              className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
+              style={{
+                top: headerFilterOpen.rect.bottom + 8,
+                left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292),
+                width: '280px',
+                maxHeight: '60vh',
+                overflowY: 'auto',
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-[#4a352f]">Filter by {col.label.toLowerCase()}</label>
+                {selected.length > 0 && (
+                  <button onClick={() => clearFilter(key)} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {options.length === 0 && <span className="text-xs text-[#a89482]">No values in this column yet</span>}
+                {options.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => toggleFilterValue(key, opt)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium ${selected.includes(opt) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </PopupPortal>
+        )
+      })()}
 
       {/* ─── Row secondary-action menu ────────────────────────────────────── */}
       {rowMenu && (
-        <div className="fixed inset-0 z-[1090]" onClick={() => { setRowMenu(null) }} />
-      )}
-      {rowMenu && (
-        <div
-          className="fixed z-[1100] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-visible"
-          style={{ top: rowMenu.position.y, left: rowMenu.position.x, width: '220px' }}
-        >
-          <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
-            <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
-            <button onClick={() => setRowMenu(null)} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={() => { setRowMenu(null) }} />
+          <div
+            className="fixed z-[1100] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-visible"
+            style={{ top: rowMenu.position.y, left: rowMenu.position.x, width: '230px' }}
+          >
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
+              <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
+              <button onClick={() => setRowMenu(null)} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
+            </div>
+            <button
+              onClick={() => { handleViewGrowthSuite(rowMenu.cohort); setRowMenu(null) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <TrendingUp size={12} /> Deep Dive
+            </button>
+            <button
+              onClick={() => { handleViewBigScorePage(rowMenu.cohort); setRowMenu(null) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <ExternalLink size={12} /> Open BIG Score Page
+            </button>
+            <button
+              onClick={() => { setNoteModal({ cohort: rowMenu.cohort, text: "" }); setRowMenu(null) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <StickyNote size={12} /> Add Note
+            </button>
+            <button
+              onClick={() => openStatusModal(rowMenu.cohort)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <ArrowUpDown size={12} /> Change Status
+            </button>
+            <button
+              onClick={() => handleViewDetails(rowMenu.cohort)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Eye size={12} /> View Details
+            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
+            <button
+              onClick={() => handleArchive(rowMenu.cohort)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 text-left"
+            >
+              <Archive size={12} /> Archive Record
+            </button>
           </div>
-          <button
-            onClick={() => { handleViewGrowthSuite(rowMenu.cohort); setRowMenu(null) }}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
-          >
-            <TrendingUp size={12} /> Deep Dive
-          </button>
-          <button
-            onClick={() => { setNoteModal({ cohort: rowMenu.cohort, text: "" }); setRowMenu(null) }}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
-          >
-            <StickyNote size={12} /> Add Note
-          </button>
-          <button
-            onClick={() => openStatusModal(rowMenu.cohort)}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
-          >
-            <ArrowUpDown size={12} /> Change Status
-          </button>
-          <button
-            onClick={() => handleViewDetails(rowMenu.cohort)}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
-          >
-            <Eye size={12} /> View Details
-          </button>
-          <div className="border-t border-[#e6d7c3] my-1" />
-          <button
-            onClick={() => handleArchive(rowMenu.cohort)}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 text-left"
-          >
-            <Archive size={12} /> Archive Record
-          </button>
-        </div>
+        </PopupPortal>
       )}
 
       {/* ─── Add Note Modal ────────────────────────────────────────────────── */}
@@ -1411,7 +1769,7 @@ function AdvisorCohorts() {
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-8 pb-6 border-b-[3px] border-[#8d6e63]">
               <h2 className="text-[28px] font-bold text-[#3e2723] m-0 flex items-center gap-3">
-                <Briefcase size={32} className="text-[#ffd700]" />
+                <Briefcase size={32} className="text-[#a67c52]" />
                 Advisory Details: {selectedCohort.smeName}
               </h2>
               <button onClick={() => setSelectedCohort(null)} className="bg-none border-none text-2xl cursor-pointer text-gray-600 p-2">
@@ -1452,7 +1810,7 @@ function AdvisorCohorts() {
 
               <div className="bg-[#f8f9fa] p-6 rounded-xl border border-gray-200">
                 <h3 className="text-[#3e2723] mb-4 flex items-center gap-2">
-                  <Building size={20} /> SME Details
+                  <Building size={20} /> Business Details
                 </h3>
                 <div className="grid gap-3">
                   <div><strong>Sector:</strong> {selectedCohort.sector}</div>
@@ -1507,7 +1865,15 @@ function AdvisorCohorts() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 flex-wrap">
+              <button
+                onClick={() => handleViewBigScorePage(selectedCohort)}
+                className="bg-white text-[#7d5a50] border-2 border-[#c8b6a6] rounded-xl px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#f5f0e1]"
+              >
+                <span className="flex items-center gap-2">
+                  <ExternalLink size={18} /> BIG Score Page
+                </span>
+              </button>
               <button
                 onClick={() => handleViewGrowthSuite(selectedCohort)}
                 className="bg-[#a67c52] text-white border-none rounded-xl px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#8d6e63]"

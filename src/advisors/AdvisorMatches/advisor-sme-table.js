@@ -6,7 +6,8 @@ import {
   Info, Calendar, X, Eye, ChevronDown, MoreVertical, CheckCircle,
   Clock, Users, Download, MessageSquare, ArrowRight, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase, Video, LayoutGrid, Trash2, Plus,
-  GripVertical, AlertTriangle, XCircle
+  GripVertical, AlertTriangle, XCircle, ArrowUp, ArrowDown, ArrowUpDown, Search,
+  ExternalLink
 } from "lucide-react";
 import {
   collection, getDocs, query, where, serverTimestamp, doc, updateDoc, getDoc, addDoc
@@ -18,6 +19,7 @@ import "react-day-picker/dist/style.css";
 import * as XLSX from "xlsx";
 import { API_KEYS } from "../../API";
 import emailjs from "@emailjs/browser";
+import BusinessDetailsModal from "./BusinessDetailsModal";
 import {
   DEFAULT_STAGES, PROGRAMME_TEMPLATES, mapStatusToStageId, getStageColors,
   getNextStageId, getStageActionConfig, loadPipelineSettings, getActiveStages,
@@ -144,6 +146,7 @@ const PopupPortal = ({ children }) => {
 // ─── Column header info tooltip ───────────────────────────────────────────────
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
     <span
       onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
@@ -178,19 +181,22 @@ const DEFAULT_COLUMN_ORDER = [
   "daysInStage", "lastActivity", "location", "sector", "revenueBand", "compensationModel"
 ];
 
+// `sortKey` is the field on the mapped row that the arrows sort by — it isn't
+// always the column key (match sorts on matchPercentage, Date Applied on the
+// raw Date rather than the formatted label).
 const COLUMN_DEFS = {
-  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", tooltip: "BIG Score measures business credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
-  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", tooltip: "Match Score measures fit between the business's needs and your advisory expertise." },
-  fundingStage: { label: "Funding Stage", align: "left", minWidth: "94px", filterType: "fundingStage" },
-  supportRequired: { label: "Support Required", align: "left", minWidth: "120px", filterType: "supportRequired" },
-  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status" },
-  applied: { label: "Applied", align: "left", minWidth: "92px", filterType: "applied" },
-  daysInStage: { label: "Days in Stage", align: "left", minWidth: "134px", filterType: "daysInStage" },
-  lastActivity: { label: "Last Activity", align: "left", minWidth: "108px", filterType: "lastActivity" },
-  location: { label: "Location", align: "left", minWidth: "92px", filterType: "location" },
-  sector: { label: "Sector", align: "left", minWidth: "100px", filterType: "sector" },
-  revenueBand: { label: "Revenue Band", align: "left", minWidth: "104px", filterType: "revenueBand" },
-  compensationModel: { label: "Compensation", align: "left", minWidth: "110px", filterType: "compensationModel" }
+  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", sortKey: "bigScore", tooltip: "A standardized score that validates your business's readiness and trustworthiness — across compliance, governance, and legitimacy." },
+  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", sortKey: "matchPercentage", tooltip: "Match Score measures fit between the business's needs and your advisory expertise." },
+  fundingStage: { label: "Funding Stage", align: "left", minWidth: "94px", filterType: "fundingStage", sortKey: "fundingStage", tooltip: "How far along the business is in raising capital — pre-seed, seed, Series A and so on." },
+  supportRequired: { label: "Support Required", align: "left", minWidth: "120px", filterType: "supportRequired", sortKey: "supportRequired", tooltip: "The kind of advisory help this business has asked for." },
+  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status", sortKey: "statusLabel", tooltip: "Where this application sits in your pipeline, from New Match through to a final outcome." },
+  applied: { label: "Date Applied", align: "left", minWidth: "108px", filterType: "applied", sortKey: "applicationDateRaw", tooltip: "The date this business applied to work with you." },
+  daysInStage: { label: "Days in Stage", align: "left", minWidth: "134px", filterType: "daysInStage", sortKey: "daysInStage", tooltip: "How long the application has sat at its current stage. High numbers usually mean it needs attention." },
+  lastActivity: { label: "Last Activity", align: "left", minWidth: "108px", filterType: "lastActivity", sortKey: "lastActivityLabel", tooltip: "When this application was last updated by either side." },
+  location: { label: "Location", align: "left", minWidth: "92px", filterType: "location", sortKey: "location", tooltip: "Where the business operates from." },
+  sector: { label: "Sector", align: "left", minWidth: "100px", filterType: "sector", sortKey: "sector", tooltip: "The industry the business trades in." },
+  revenueBand: { label: "Revenue Band", align: "left", minWidth: "104px", filterType: "revenueBand", sortKey: "revenueBand", tooltip: "The business's annual revenue range." },
+  compensationModel: { label: "Compensation", align: "left", minWidth: "110px", filterType: "compensationModel", sortKey: "compensationModel", tooltip: "How this business expects to compensate an advisor." }
 };
 
 // Maps a column key to the field on the mapped row object — these don't always
@@ -207,7 +213,7 @@ const EXPORT_FIELD_MAP = {
 const EXPORT_HEADERS = {
   sme: "Business Name", bigScore: "BIG Score", match: "Match %",
   fundingStage: "Funding Stage", supportRequired: "Support Required",
-  status: "Status", applied: "Applied Date", daysInStage: "Days in Stage",
+  status: "Status", applied: "Date Applied", daysInStage: "Days in Stage",
   lastActivity: "Last Activity", location: "Location", sector: "Sector",
   revenueBand: "Revenue Band", compensationModel: "Compensation Model"
 };
@@ -337,11 +343,14 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const [editingViewMeta, setEditingViewMeta] = useState(null);
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
+  // Every filter that used to be a free-text box is now a list of selected
+  // values, so the header popovers can offer what's actually in the table.
   const [localFilters, setLocalFilters] = useState({
-    name: "", fundingStage: [], bigScoreRange: [0, 100], matchRange: [0, 100], status: [],
+    name: [], fundingStage: [], bigScoreRange: [0, 100], matchRange: [0, 100], status: [],
     sector: [], daysInStageRange: [null, null], appliedRange: [null, null],
-    location: "", lastActivity: "", supportRequired: "", revenueBand: "", compensationModel: ""
+    location: [], lastActivity: [], supportRequired: [], revenueBand: [], compensationModel: []
   });
+  const [chipSearch, setChipSearch] = useState("");
 
   const [hoveredRowKey, setHoveredRowKey] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -546,6 +555,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
         id: a.id,
         docId: a.docId,
         smeId: a.smeId,
+        // The business's own auth/profile user id, used when opening their
+        // dashboard. Falls back to smeId, which is what the platform uses as
+        // the universalProfiles document id.
+        userId: a.userId || a.smeUserId || a.smeId || a.id,
         name: a.smeName || "Unnamed Business",
         location: formatLabel(a.smeLocation) || "N/A",
         sector: formatLabel(a.smeSector) || "N/A",
@@ -583,6 +596,8 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const filteredAndSortedSMEs = useMemo(() => {
     let result = [...smes];
 
+    const matchesAny = (selected, value) =>
+      !selected?.length || selected.some((v) => (value || "").toString().toLowerCase().includes(v.toLowerCase()));
 
     // External filters panel (owned by the parent).
     if (filters?.location) {
@@ -599,10 +614,8 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     }
 
     // Per-column header filters.
-    if (localFilters.name?.trim()) {
-      const q = localFilters.name.toLowerCase().trim();
-      result = result.filter((s) => s.name.toLowerCase().includes(q));
-    }
+    result = result.filter((s) => matchesAny(localFilters.name, s.name));
+
     if (localFilters.fundingStage?.length > 0) {
       result = result.filter((s) => localFilters.fundingStage.some((st) => s.fundingStage.toLowerCase().includes(st.toLowerCase())));
     }
@@ -624,17 +637,13 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     if (appliedFrom) result = result.filter((s) => s.applicationDateRaw && s.applicationDateRaw >= new Date(appliedFrom));
     if (appliedTo) result = result.filter((s) => s.applicationDateRaw && s.applicationDateRaw <= new Date(new Date(appliedTo).setHours(23, 59, 59, 999)));
 
-    const textFilter = (key, field) => {
-      if (localFilters[key]?.trim()) {
-        const q = localFilters[key].toLowerCase().trim();
-        result = result.filter((s) => (s[field] || "").toString().toLowerCase().includes(q));
-      }
-    };
-    textFilter("location", "location");
-    textFilter("lastActivity", "lastActivityLabel");
-    textFilter("supportRequired", "supportRequired");
-    textFilter("revenueBand", "revenueBand");
-    textFilter("compensationModel", "compensationModel");
+    result = result.filter((s) =>
+      matchesAny(localFilters.location, s.location)
+      && matchesAny(localFilters.lastActivity, s.lastActivityLabel)
+      && matchesAny(localFilters.supportRequired, s.supportRequired)
+      && matchesAny(localFilters.revenueBand, s.revenueBand)
+      && matchesAny(localFilters.compensationModel, s.compensationModel)
+    );
 
     if (sortConfig.key === "attentionThenScore") {
       result.sort((a, b) => {
@@ -661,23 +670,27 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const sectorOptions = useMemo(
-    () => [...new Set(smes.map((s) => s.sector).filter((s) => s && s !== "N/A"))].sort(),
-    [smes]
-  );
-  const fundingStageOptions = useMemo(
-    () => [...new Set(smes.map((s) => s.fundingStage).filter((s) => s && s !== "N/A"))].sort(),
-    [smes]
-  );
+  // ─── Filter options, taken from the rows themselves ───────────────────────
+  const uniqueOf = (accessor) =>
+    [...new Set(smes.map(accessor).filter((v) => v && v !== "N/A" && v !== "-"))].sort();
 
-  const activeFilterCount = (localFilters.name?.trim() ? 1 : 0)
+  const sectorOptions = useMemo(() => uniqueOf((s) => s.sector), [smes]);
+  const fundingStageOptions = useMemo(() => uniqueOf((s) => s.fundingStage), [smes]);
+  const nameOptions = useMemo(() => uniqueOf((s) => s.name), [smes]);
+  const locationOptions = useMemo(() => uniqueOf((s) => s.location), [smes]);
+  const lastActivityOptions = useMemo(() => uniqueOf((s) => s.lastActivityLabel), [smes]);
+  const supportRequiredOptions = useMemo(() => uniqueOf((s) => s.supportRequired), [smes]);
+  const revenueBandOptions = useMemo(() => uniqueOf((s) => s.revenueBand), [smes]);
+  const compensationModelOptions = useMemo(() => uniqueOf((s) => s.compensationModel), [smes]);
+
+  const activeFilterCount = localFilters.name.length
     + localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length
     + (localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100 ? 1 : 0)
     + (localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100 ? 1 : 0)
     + (localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null ? 1 : 0)
     + (localFilters.appliedRange[0] || localFilters.appliedRange[1] ? 1 : 0)
     + ["location", "lastActivity", "supportRequired", "revenueBand", "compensationModel"]
-      .filter((k) => localFilters[k]?.trim()).length;
+      .reduce((sum, k) => sum + localFilters[k].length, 0);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -686,13 +699,26 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     switch (filterType) {
       case "bigScore": return localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100;
       case "match": return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100;
-      case "fundingStage": return localFilters.fundingStage.length > 0;
-      case "status": return localFilters.status.length > 0;
       case "applied": return !!(localFilters.appliedRange[0] || localFilters.appliedRange[1]);
       case "daysInStage": return localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null;
-      case "sector": return localFilters.sector.length > 0;
-      default: return !!localFilters[filterType]?.toString().trim();
+      default: return Array.isArray(localFilters[filterType]) && localFilters[filterType].length > 0;
     }
+  };
+
+  // Sends the advisor to this business's own /dashboard, restricted to just the
+  // BIG Score tab (no "Improve My BIG Score" tools tab, no ability to switch),
+  // with a visible "Back" control to return. Same session-storage "investor
+  // view" pattern the catalyst table and the Growth Suite / Documents
+  // navigation already rely on (viewingSMEId / viewingSMEName /
+  // investorViewMode / viewOrigin), plus the viewOnlyBigScore flag that
+  // Dashboard.jsx checks to lock the view down to that one tab.
+  const handleViewBigScorePage = (sme) => {
+    sessionStorage.setItem("viewingSMEId", sme.userId || sme.smeId || sme.id);
+    sessionStorage.setItem("viewingSMEName", sme.name);
+    sessionStorage.setItem("investorViewMode", "true");
+    sessionStorage.setItem("viewOrigin", "advisor");
+    sessionStorage.setItem("viewOnlyBigScore", "true");
+    window.location.href = "/dashboard";
   };
 
   // ─── Column drag-to-reorder ───────────────────────────────────────────────
@@ -741,9 +767,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const openHeaderFilter = (type, event) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
+    setChipSearch("");
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }));
   };
-  const closeHeaderFilter = () => setHeaderFilterOpen(null);
+  const closeHeaderFilter = () => { setHeaderFilterOpen(null); setChipSearch(""); };
 
   const FilterTrigger = ({ type, active }) => (
     <button
@@ -756,6 +783,36 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     </button>
   );
 
+  // ─── Sort arrows ──────────────────────────────────────────────────────────
+  // The table already sorted, but only through the saved view — there was no
+  // way to change it from the header. Third press returns to the table's
+  // default (attention first, then BIG Score) rather than to no order at all,
+  // so rows never fall back to fetch order.
+  const toggleSort = (key, event) => {
+    event.stopPropagation();
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { ...DEFAULT_SORT_CONFIG };
+    });
+  };
+
+  const SortTrigger = ({ sortKey }) => {
+    const isActive = sortConfig?.key === sortKey;
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(sortKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Reset sorting") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    );
+  };
+
   // ─── Popups ───────────────────────────────────────────────────────────────
   const openPopup = (type, sme, rect, options = {}) => {
     let popupWidth, popupHeight;
@@ -763,7 +820,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
       case "bigScore": popupWidth = 380; popupHeight = 450; break;
       case "match": popupWidth = 380; popupHeight = 420; break;
       case "stage": popupWidth = 450; popupHeight = 520; break;
-      case "quickActions": popupWidth = 210; popupHeight = 240; break;
+      // Grew by one row when "Open BIG Score Page" was added, so the
+      // flip-upward calculation below still has an accurate height.
+      case "quickActions": popupWidth = 230; popupHeight = 290; break;
       default: popupWidth = 300; popupHeight = 300;
     }
 
@@ -1170,6 +1229,16 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     return () => clearTimeout(t);
   }, [notification]);
 
+  // Every chip-list filter is driven by this one array.
+  const FILTER_OPTION_SETS = [
+    { type: "name", label: "Business name", options: nameOptions },
+    { type: "location", label: "Location", options: locationOptions },
+    { type: "lastActivity", label: "Last activity", options: lastActivityOptions },
+    { type: "supportRequired", label: "Support required", options: supportRequiredOptions },
+    { type: "revenueBand", label: "Revenue band", options: revenueBandOptions },
+    { type: "compensationModel", label: "Compensation model", options: compensationModelOptions },
+  ];
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="w-full space-y-4 p-6">
@@ -1348,7 +1417,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                       <div className="border-t border-[#e6d7c3] my-2" />
                       {[
                         { key: "fundingStage", label: "Funding Stage" }, { key: "supportRequired", label: "Support Required" },
-                        { key: "applied", label: "Applied Date" }, { key: "daysInStage", label: "Days in Stage" },
+                        { key: "applied", label: "Date Applied" }, { key: "daysInStage", label: "Days in Stage" },
                         { key: "lastActivity", label: "Last Activity" }, { key: "location", label: "Location" },
                         { key: "sector", label: "Sector" }, { key: "revenueBand", label: "Revenue Band" },
                         { key: "compensationModel", label: "Compensation Model" },
@@ -1419,7 +1488,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                     <th className="adt-th py-3 px-3 relative text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30" style={{ backgroundColor: "#4a352f", ...widthStyle("__name__", "170px", "190px") }}>
                       <div className="flex items-start gap-1 min-w-0">
                         <span className="adt-th-label">Business Name</span>
-                        <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                        <SortTrigger sortKey="name" />
+                        <FilterTrigger type="name" active={localFilters.name.length > 0} />
+                        <HeaderInfoTooltip text="The business that applied to work with you. Click the eye to open its full profile." />
                       </div>
                       <ColumnResizer colKey="__name__" />
                     </th>
@@ -1446,8 +1517,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                           <div className={`flex items-start gap-1 min-w-0 ${col.align === "center" ? "justify-center" : ""}`}>
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
                             <span className="adt-th-label">{col.label}</span>
+                            {col.sortKey && <SortTrigger sortKey={col.sortKey} />}
                             <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
-                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                            <HeaderInfoTooltip text={col.tooltip} />
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
@@ -1455,7 +1527,12 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                     })}
 
                     {columnVisibility.action && (
-                      <th className="adt-th py-3 px-3 relative text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "190px", backgroundColor: "#4a352f" }}>Actions</th>
+                      <th className="adt-th py-3 px-3 relative text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "190px", backgroundColor: "#4a352f" }}>
+                        <div className="flex items-start gap-1 justify-center">
+                          <span>Actions</span>
+                          <HeaderInfoTooltip text="Move the application to its next stage, or open quick actions for more options — including opening the business's BIG Score page." />
+                        </div>
+                      </th>
                     )}
                   </tr>
                 </thead>
@@ -1627,12 +1704,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* Pagination — the "Showing X–Y of N Businesses" readout was
+                removed; rows-per-page and the page buttons remain. */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
               <div className="flex items-center gap-4">
-                <span className="text-sm text-[#4a352f]">
-                  Showing {Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedSMEs.length)}-{Math.min(currentPage * pageSize, filteredAndSortedSMEs.length)} of {filteredAndSortedSMEs.length} Businesses
-                </span>
                 <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f]">
                   <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
                 </select>
@@ -1682,25 +1757,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
               top: headerFilterOpen.rect.bottom + 8,
               left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292),
               width: "280px",
+              maxHeight: "70vh",
+              overflowY: "auto",
             }}
           >
-            {headerFilterOpen.type === "name" && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Filter by business name</label>
-                  {localFilters.name && (
-                    <button onClick={() => setLocalFilters((p) => ({ ...p, name: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <input
-                  autoFocus type="text" value={localFilters.name}
-                  onChange={(e) => { setLocalFilters((p) => ({ ...p, name: e.target.value })); setCurrentPage(1); }}
-                  placeholder="Search business name..."
-                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
-                />
-              </>
-            )}
-
             {(headerFilterOpen.type === "bigScore" || headerFilterOpen.type === "match") && (() => {
               const isBig = headerFilterOpen.type === "bigScore";
               const rangeKey = isBig ? "bigScoreRange" : "matchRange";
@@ -1800,7 +1860,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
             {headerFilterOpen.type === "applied" && (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Applied Date</label>
+                  <label className="text-xs font-semibold text-[#4a352f]">Date Applied</label>
                   {(localFilters.appliedRange[0] || localFilters.appliedRange[1]) && (
                     <button onClick={() => setLocalFilters((p) => ({ ...p, appliedRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
                   )}
@@ -1816,27 +1876,58 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
               </>
             )}
 
-            {["location", "lastActivity", "supportRequired", "revenueBand", "compensationModel"].includes(headerFilterOpen.type) && (() => {
-              const key = headerFilterOpen.type;
-              const labels = {
-                location: "location", lastActivity: "last activity", supportRequired: "support required",
-                revenueBand: "revenue band", compensationModel: "compensation model",
-              };
+            {/* Chip-list filters: the values actually present in the table,
+                with a search box only once the list is long enough to need
+                one. */}
+            {FILTER_OPTION_SETS.map(({ type, label, options }) => {
+              if (headerFilterOpen.type !== type) return null;
+              const shown = options.filter((o) => o.toString().toLowerCase().includes(chipSearch.toLowerCase()));
               return (
-                <>
+                <div key={type}>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-[#4a352f]">Filter by {labels[key]}</label>
-                    {localFilters[key] && (
-                      <button onClick={() => setLocalFilters((p) => ({ ...p, [key]: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                    {localFilters[type].length > 0 && (
+                      <button onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
                     )}
                   </div>
-                  <input autoFocus type="text" value={localFilters[key]}
-                    onChange={(e) => setLocalFilters((p) => ({ ...p, [key]: e.target.value }))}
-                    placeholder={`Search ${labels[key]}...`}
-                    className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
-                </>
+
+                  {options.length > 8 && (
+                    <div className="relative mb-2">
+                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
+                      <input
+                        autoFocus
+                        value={chipSearch}
+                        onChange={(e) => setChipSearch(e.target.value)}
+                        placeholder={`Search ${label.toLowerCase()}...`}
+                        className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 max-h-[200px] overflow-y-auto">
+                    {shown.length === 0 && (
+                      <span className="text-xs text-[#a89482]">
+                        {options.length === 0 ? "No data available" : "Nothing matches that search."}
+                      </span>
+                    )}
+                    {shown.map((value) => (
+                      <button
+                        key={value}
+                        onClick={() =>
+                          setLocalFilters((p) => ({
+                            ...p,
+                            [type]: p[type].includes(value) ? p[type].filter((x) => x !== value) : [...p[type], value],
+                          }))
+                        }
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters[type].includes(value) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               );
-            })()}
+            })}
           </div>
         </PopupPortal>
       )}
@@ -1886,6 +1977,16 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                   </div>
                 );
               })}
+            </div>
+            {/* Same jump-off as the catalyst table: opens the business's own
+                dashboard, locked to the BIG Score tab. */}
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => handleViewBigScorePage(selectedSMEForPopup)}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#7d5a50] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
+              >
+                <ExternalLink size={12} /> Open full BIG Score page
+              </button>
             </div>
           </div>
         </PopupPortal>
@@ -2106,13 +2207,16 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
           <PopupPortal>
             <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
             <div className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
-              style={{ top: activePopup.position.y, left: activePopup.position.x, width: "210px" }}>
+              style={{ top: activePopup.position.y, left: activePopup.position.x, width: "230px" }}>
               <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
                 <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
                 <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
               </div>
               <button onClick={() => { setShowDetails(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
               <button onClick={() => openPopup("bigScore", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> BIG Score Breakdown</button>
+              {/* Opens the business's own dashboard, locked to the BIG Score
+                  tab — same behaviour as the catalyst table's action. */}
+              <button onClick={() => { handleViewBigScorePage(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
               <button onClick={() => openPopup("match", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
               <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
               {!stage.terminal && declinedStage && (
@@ -2128,54 +2232,20 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
         );
       })()}
 
-      {/* ─── Business Details Drawer ──────────────────────────────────────── */}
+      {/* ─── Business Profile pop-up ───────────────────────────────────────
+          Same component shape as the Advisor table's name pop-up, so both
+          tables open an identical-looking profile. smeId is the
+          universalProfiles document id; sme.id is only the row key. */}
       {showDetails && (
-        <PopupPortal>
-          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans p-4" onClick={() => setShowDetails(null)}>
-            <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[640px] max-w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-5 text-white sticky top-0 z-10 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Business Profile</p>
-                  <h3 className="text-lg font-bold mt-0.5">{showDetails.name}</h3>
-                </div>
-                <button onClick={() => setShowDetails(null)} className="text-white/70 hover:text-white p-1"><X size={20} /></button>
-              </div>
-              <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-4">
-                {[
-                  ["Status", showDetails.statusLabel],
-                  ["Days in stage", `${showDetails.daysInStage} days`],
-                  ["Location", showDetails.location],
-                  ["Sector", showDetails.sector],
-                  ["Funding stage", showDetails.fundingStage],
-                  ["Revenue band", showDetails.revenueBand],
-                  ["Support required", showDetails.supportRequired],
-                  ["Compensation model", showDetails.compensationModel],
-                  ["Applied", showDetails.applicationDateLabel],
-                  ["Last activity", showDetails.lastActivityLabel],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</p>
-                    <p className="text-sm text-[#4a352f]">{value}</p>
-                  </div>
-                ))}
-                <div className="col-span-2 grid grid-cols-2 gap-4 pt-2 border-t border-[#e6d7c3]">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">BIG Score</p>
-                    <p className="text-2xl font-bold" style={{ color: getBigScoreLabel(showDetails.bigScore).color }}>
-                      {showDetails.bigScore}% <span className="text-sm font-medium">{getBigScoreLabel(showDetails.bigScore).label}</span>
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Match</p>
-                    <p className="text-2xl font-bold" style={{ color: getMatchLabel(showDetails.matchPercentage).color }}>
-                      {showDetails.matchPercentage}% <span className="text-sm font-medium">{getMatchLabel(showDetails.matchPercentage).label}</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </PopupPortal>
+        <BusinessDetailsModal
+          business={{
+            businessId: showDetails.smeId || showDetails.id,
+            businessName: showDetails.name,
+            finalScore: showDetails.matchPercentage,
+          }}
+          isOpen
+          onClose={() => setShowDetails(null)}
+        />
       )}
     </div>
   );

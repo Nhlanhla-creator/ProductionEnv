@@ -28,6 +28,10 @@ import {
   MoreVertical,
   EyeOff,
   Users,
+  Info,
+  Hash,
+  ShieldCheck,
+  Clock,
 } from "lucide-react"
 import {
   collection,
@@ -44,6 +48,11 @@ import {
 import { onAuthStateChanged } from "firebase/auth"
 import { auth, db } from "../../firebaseConfig"
 import AdvisorDetailsModal from "./AdvisorDetailsModal"
+import {
+  deriveAdvisorVerification,
+  getVerificationStyle,
+  VERIFICATION_CATEGORY_LABELS,
+} from "./advisorVerification"
 
 /* ════════════════════════════════════════════════════════════════════════════
    This file no longer imports ./matchTableKit.
@@ -62,35 +71,34 @@ import AdvisorDetailsModal from "./AdvisorDetailsModal"
 
    There were four names for one relationship: this table wrote AdvisoryMatches,
    AdvisorApplications and SmeAdvisorApplications, while the tabbed shell read
-   and updated smseAdvisoryMatches — which nothing ever wrote. Two documents is
-   enough: one keyed for the SME's view, one for the advisor's. AdvisoryMatches
-   was a third identical copy and is no longer written.
+   and updated smseAdvisoryMatches. Two documents is enough for the pipeline:
+   one keyed for the SME's view, one for the advisor's.
+
+   smseAdvisoryMatches is a third thing and is *not* dead — the AI matching
+   backend (analyzeAdvisorMatches) writes it, and the Applications page counts
+   from it. This table reads it below purely to learn which application each
+   advisor was matched under; it never writes it.
    ════════════════════════════════════════════════════════════════════════ */
 export const SME_ADVISOR_COLLECTION = "SmeAdvisorApplications"
 export const ADVISOR_SME_COLLECTION = "AdvisorApplications"
+export const AI_MATCHES_COLLECTION = "smseAdvisoryMatches"
 export const smeAdvisorId = (smeId, advisorId) => `${smeId}_${advisorId}`
 export const advisorSmeId = (advisorId, smeId) => `${advisorId}_${smeId}`
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Events the pipeline uses to talk to this table.
+   Events the pipeline and the Applications page use to talk to this table.
 
-   They're declared here, not in advisor-flow-pipeline.jsx, because that file
-   already imports SME_ADVISOR_COLLECTION and normalizeAdvisorStatus from this
-   one — pointing the imports both ways would make a circular module
-   dependency.
-
-     ADVISOR_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
-                                  status name, or null to clear.
-     ADVISOR_ROWS_EVENT           table → pipeline. Detail is every advisor
-                                  that passes the table's other filters, each
-                                  with its resolved status. This is what makes
-                                  the cards and the table body agree —
-                                  including New Match, which has no stored
-                                  record for the pipeline to query on its own.
-     ADVISOR_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast,
-                                  for whichever component mounted second.
+     ADVISOR_STAGE_FILTER_EVENT        pipeline → table. Detail is the pressed
+                                       status name, or null to clear.
+     ADVISOR_APPLICATION_FILTER_EVENT  Applications page → table. Detail is an
+                                       application id to scope to, or null for
+                                       "View All Matches".
+     ADVISOR_ROWS_EVENT                table → pipeline. Every advisor that
+                                       passes the table's other filters.
+     ADVISOR_ROWS_REQUEST_EVENT        pipeline → table. Asks for a re-broadcast.
    ════════════════════════════════════════════════════════════════════════ */
 export const ADVISOR_STAGE_FILTER_EVENT = "advisor-pipeline-stage-filter"
+export const ADVISOR_APPLICATION_FILTER_EVENT = "advisor-application-filter"
 export const ADVISOR_ROWS_EVENT = "advisor-pipeline-rows"
 export const ADVISOR_ROWS_REQUEST_EVENT = "advisor-pipeline-rows-request"
 
@@ -132,32 +140,30 @@ const STATUS_TYPES = {
 }
 const getStatusStyle = (status) => STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
 
-/* Spec: primary action changes with status. Everything else now lives in the
-   three-dot quick actions popup, so the row never shows more than one primary
-   button — same layout as the SME and intern tables. */
-const getRowActions = (status) => {
-  switch (status) {
-    case "New Match":
-    case "Viewed":
-    case "Shortlisted":
-      return { primary: "Request Connection", kind: "connect" }
-    case "Contacted":
-      return { primary: "View Status", kind: "view" }
-    case "Under Review":
-      return { primary: "View Status", kind: "view" }
-    case "Interviewing":
-      return { primary: "Schedule Interview", kind: "view" }
-    case "Accepted":
-      return { primary: "View Next Steps", kind: "view" }
-    case "Engaged/Placed":
-      return { primary: "View Engagement", kind: "view" }
-    case "Declined":
-    case "Closed":
-      return { primary: "View Outcome", kind: "view" }
-    default:
-      return { primary: "View Profile", kind: "view" }
-  }
+/* ─── Row action ──────────────────────────────────────────────────────────
+   Applying is the only move the business makes. Once the application is in,
+   the advisor owns the pipeline — so every later stage is shown, not offered:
+   the button becomes a read-only marker naming the stage the advisor would
+   move this row to next, and it re-labels itself as they progress.
+
+     kind: "connect"  the one actionable state — sends the application
+     kind: "await"    read-only; `next` is what the advisor can move it to
+     kind: "terminal" nothing follows this stage
+*/
+const NEXT_STAGE = {
+  "New Match": { label: "Apply", next: "Contacted", kind: "connect" },
+  Viewed: { label: "Apply", next: "Contacted", kind: "connect" },
+  Shortlisted: { label: "Apply", next: "Contacted", kind: "connect" },
+  Contacted: { label: "Under Review", next: "Under Review", kind: "await" },
+  "Under Review": { label: "Interviewing", next: "Interviewing", kind: "await" },
+  Interviewing: { label: "Accepted", next: "Accepted", kind: "await" },
+  Accepted: { label: "Engaged/Placed", next: "Engaged/Placed", kind: "await" },
+  "Engaged/Placed": { label: "Engaged/Placed", next: null, kind: "terminal" },
+  Declined: { label: "Declined", next: null, kind: "terminal" },
+  Closed: { label: "Closed", next: null, kind: "terminal" },
 }
+
+const getRowActions = (status) => NEXT_STAGE[status] || NEXT_STAGE["New Match"]
 
 /* ─── Reference data ────────────────────────────────────────────────────── */
 const COMPENSATION_MODELS = [
@@ -242,45 +248,87 @@ const TruncatedText = ({ text, maxLength = 30 }) => {
   )
 }
 
+/* The Applications page links here as /find-advisors?applicationId=<id>, so
+   the scope survives the route change. */
+const readApplicationIdFromUrl = () => {
+  if (typeof window === "undefined") return null
+  try {
+    return new URLSearchParams(window.location.search).get("applicationId") || null
+  } catch {
+    return null
+  }
+}
+
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
 }
 
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Same component the Business table uses, so both tables explain their
+   columns identically. Portaled to <body> because the header cell is sticky
+   and would otherwise clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
-   Section E column configuration.
+   Column configuration.
 
-   Advisor is the pinned first column and Action the last, so neither appears
-   here. The five above the divider plus Status are the spec default view;
-   everything below is a spec "hidden by default" column.
-
-   Widths match the intern table's pass: each header carries a grip, sort and
-   filter control (~60px of chrome), so the old 120–132px columns left too
-   little room and the browser broke labels mid-word ("MAT CH..", "STA TUS").
+   Application ID, Advisor and Action are not here: the first two are pinned
+   left and the last is pinned to the end of the row, so none of them can be
+   reordered or hidden. Everything below is draggable, resizable, hideable and
+   pinnable, and the key order here is the default column order.
 
    priority drives responsive collapse: 1 survives mobile, <=3 survives tablet,
    everything shows on laptop and up.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
-  roleExpertise: { label: "Role / Expertise", width: 198, filterType: "roleExpertise", visible: true, priority: 2, sortable: true },
-  sectorExperience: { label: "Sector Experience", width: 176, filterType: "sectorExperience", visible: true, priority: 3, sortable: true },
-  engagementModel: { label: "Engagement Model", width: 168, filterType: "engagementModel", visible: true, priority: 2, sortable: true },
-  availability: { label: "Availability", width: 142, filterType: "availability", visible: true, priority: 3, sortable: true },
-  status: { label: "Status", width: 140, filterType: "status", visible: true, priority: 1, sortable: true },
+  requestedService: { label: "Requested Service", width: 180, filterType: "requestedService", visible: true, priority: 2, sortable: true, tooltip: "The advisory role or expertise you asked for on the application this match belongs to." },
+  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true, tooltip: "How well this advisor fits your stated needs across stage, sector, expertise, location and compensation. Open the ? for the full breakdown." },
+  verification: { label: "Verification Status", align: "center", width: 132, filterType: "verification", visible: true, priority: 2, sortable: true, tooltip: "How complete and verified the advisor's profile is, Tier 1 (fully verified) down to Tier 4. Click the tier for the full breakdown." },
+  roleExpertise: { label: "Role / Expertise", width: 198, filterType: "roleExpertise", visible: true, priority: 2, sortable: true, tooltip: "The advisor's professional headline, preferred advisory role and functional expertise." },
+  engagementModel: { label: "Compensation Model", width: 176, filterType: "engagementModel", visible: true, priority: 2, sortable: true, tooltip: "How the advisor expects to be compensated — pro-bono, retainer, equity, project-based and so on." },
 
-  yearsExperience: { label: "Years of Experience", width: 158, filterType: "yearsExperience", visible: false, priority: 4, sortable: true },
-  qualifications: { label: "Qualifications", width: 164, filterType: "qualifications", visible: false, priority: 4, sortable: false },
-  previousRoles: { label: "Previous Roles", width: 168, filterType: "previousRoles", visible: false, priority: 4, sortable: false },
-  location: { label: "Geographic Location", width: 160, filterType: "location", visible: false, priority: 4, sortable: true },
-  workPreference: { label: "Virtual / In-Person", width: 156, filterType: "workPreference", visible: false, priority: 4, sortable: true },
-  languages: { label: "Languages", width: 140, filterType: "languages", visible: false, priority: 4, sortable: false },
-  feeRange: { label: "Fee Range", width: 138, filterType: "feeRange", visible: false, priority: 4, sortable: true },
-  boardExperience: { label: "Board Experience", width: 156, filterType: "boardExperience", visible: false, priority: 4, sortable: true },
-  references: { label: "References", width: 138, filterType: "references", visible: false, priority: 4, sortable: false },
-  verification: { label: "Verification Status", width: 156, filterType: "verification", visible: false, priority: 4, sortable: true },
-  smeStageFit: { label: "SME Stage Fit", width: 148, filterType: "smeStageFit", visible: false, priority: 4, sortable: true },
-  dateMatched: { label: "Date Matched", width: 142, filterType: "dateMatched", visible: false, priority: 4, sortable: true },
+  sectorExperience: { label: "Sector Experience", width: 176, filterType: "sectorExperience", visible: true, priority: 3, sortable: true, tooltip: "Industries the advisor has worked in." },
+  availability: { label: "Availability", width: 142, filterType: "availability", visible: true, priority: 3, sortable: true, tooltip: "Hours per month the advisor has said they can commit." },
+  status: { label: "Status", width: 140, filterType: "status", visible: true, priority: 1, sortable: true, tooltip: "Where this advisor sits in your pipeline, from New Match through to Engaged or Declined." },
+
+  yearsExperience: { label: "Years of Experience", width: 158, filterType: "yearsExperience", visible: false, priority: 4, sortable: true, tooltip: "Total years the advisor has been working in their field." },
+  qualifications: { label: "Qualifications", width: 164, filterType: "qualifications", visible: false, priority: 4, sortable: false, tooltip: "Degrees, certifications and professional designations the advisor holds." },
+  previousRoles: { label: "Previous Roles", width: 168, filterType: "previousRoles", visible: false, priority: 4, sortable: false, tooltip: "Positions the advisor has held before." },
+  location: { label: "Geographic Location", width: 160, filterType: "location", visible: false, priority: 4, sortable: true, tooltip: "Where the advisor is based." },
+  workPreference: { label: "Virtual / In-Person", width: 156, filterType: "workPreference", visible: false, priority: 4, sortable: true, tooltip: "Whether the advisor works remotely, on site, or both." },
+  languages: { label: "Languages", width: 140, filterType: "languages", visible: false, priority: 4, sortable: false, tooltip: "Languages the advisor can work in." },
+  feeRange: { label: "Fee Range", width: 138, filterType: "feeRange", visible: false, priority: 4, sortable: true, tooltip: "The advisor's stated rate or fee band, where they've published one." },
+  boardExperience: { label: "Board Experience", width: 156, filterType: "boardExperience", visible: false, priority: 4, sortable: true, tooltip: "Whether the advisor has served on boards." },
+  references: { label: "References", width: 138, filterType: "references", visible: false, priority: 4, sortable: false, tooltip: "References the advisor has supplied." },
+  smeStageFit: { label: "SME Stage Fit", width: 148, filterType: "smeStageFit", visible: false, priority: 4, sortable: true, tooltip: "Business stages the advisor prefers to work with — pre-seed, growth and so on." },
+  dateMatched: { label: "Date Matched", width: 142, filterType: "dateMatched", visible: false, priority: 4, sortable: true, tooltip: "When this advisor first entered your pipeline." },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -291,16 +339,24 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const ADVISOR_WIDTH = 220
-const ACTION_WIDTH = 208
+/* Application ID, Advisor Name and Action can't be hidden or reordered, so
+   they aren't in COLUMN_DEFS — but they are resizable like everything else,
+   and their widths live under these reserved keys inside columnWidths. */
+const APPID_KEY = "__appId__"
+const ADVISOR_KEY = "__advisor__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [APPID_KEY]: 132, [ADVISOR_KEY]: 210, [ACTION_KEY]: 208 }
 const MIN_COLUMN_WIDTH = 84
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v3: the stored widths from earlier versions are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "advisor-matches-views-v3"
-const FILTERS_STORAGE_KEY = "advisor-matches-filters-v1"
+// v4: the column set changed (Requested Service, Verification Status, Status
+// Summary added; Engagement Model relabelled), so older saved orders would
+// omit the new columns entirely.
+const VIEWS_STORAGE_KEY = "advisor-matches-views-v5"
+// v2: every text filter became a multi-select array, so a stored string would
+// blow up .includes on load.
+const FILTERS_STORAGE_KEY = "advisor-matches-filters-v3"
 const SAVED_STORAGE_KEY = "advisor-matches-saved-v1"
 
 /* Saved matches were previously component state only, so the bookmark
@@ -325,24 +381,29 @@ const persistSavedMatches = (saved) => {
   }
 }
 
+/* Every filter except the match range is now a list of selected values, so the
+   header popovers can offer what is actually in the table instead of a blank
+   search box. */
 const EMPTY_FILTERS = {
-  name: "",
+  name: [],
+  applicationId: [],
+  requestedService: [],
   matchRange: [0, 100],
-  roleExpertise: "",
+  verification: [],
+  roleExpertise: [],
   sectorExperience: [],
   engagementModel: [],
-  availability: "",
+  availability: [],
   status: [],
-  yearsExperience: "",
-  qualifications: "",
-  previousRoles: "",
+  yearsExperience: [],
+  qualifications: [],
+  previousRoles: [],
   location: [],
   workPreference: [],
-  languages: "",
-  feeRange: "",
+  languages: [],
+  feeRange: [],
   boardExperience: [],
-  references: "",
-  verification: [],
+  references: [],
   smeStageFit: [],
 }
 
@@ -357,7 +418,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -377,7 +438,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -414,14 +475,19 @@ const persistViewsState = (state) => {
   }
 }
 
+/* Filters are merged over EMPTY_FILTERS and then coerced to arrays, so a
+   value saved by an older build as a string can't reach the filter functions. */
 const loadFilterState = () => {
   if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
   try {
     const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
-    return {
-      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
-      sort: saved?.sort?.key ? saved.sort : null,
-    }
+    const merged = { ...EMPTY_FILTERS, ...(saved?.filters || {}) }
+    Object.keys(EMPTY_FILTERS).forEach((key) => {
+      if (Array.isArray(EMPTY_FILTERS[key]) && !Array.isArray(merged[key])) {
+        merged[key] = merged[key] ? [merged[key].toString()] : []
+      }
+    })
+    return { filters: merged, sort: saved?.sort?.key ? saved.sort : null }
   } catch {
     return { filters: { ...EMPTY_FILTERS }, sort: null }
   }
@@ -449,7 +515,7 @@ const CATEGORY_LABEL = {
   skillAlignment: "Support Type Alignment",
   location: "Location",
   sector: "Sector Experience",
-  compensation: "Engagement Model Fit",
+  compensation: "Compensation Model Fit",
   functionalExpertise: "Functional Expertise",
   legalEntityFit: "Legal Entity Fit",
   revenueThreshold: "Revenue Threshold",
@@ -556,6 +622,11 @@ export const calculateAdvisorMatch = (smeProfile, advisorProfile) => {
 
 /* ─── Row mapping ───────────────────────────────────────────────────────── */
 const mapAdvisor = (data, id) => {
+  // Verification is derived from the profile itself. The old check read
+  // `declaration.verified`, which almost no advisor sets, so every row came
+  // back "Unverified" and the column told you nothing.
+  const verificationResult = deriveAdvisorVerification(data)
+
   const formData = data.formData || {}
   const contact = formData.contactDetails || {}
   const overview = formData.personalProfessionalOverview || {}
@@ -590,7 +661,21 @@ const mapAdvisor = (data, id) => {
     feeRange: selection.feeRange || selection.rateRange || "-",
     boardExperience: formatLabel(overview.boardExperience || selection.boardExperience || "-"),
     references: formatLabel(declaration.references || overview.references || "-"),
-    verification: declaration.verified === true ? "Verified" : declaration.verificationStatus || "Unverified",
+
+    // Short value for the column; everything else feeds the popup.
+    verification: verificationResult.tier,
+    verificationBadge: verificationResult.badge,
+    verificationLabel: verificationResult.label,
+    verificationScore: verificationResult.score,
+    verificationSummary: verificationResult.summary,
+    verificationBreakdown: verificationResult.breakdown,
+
+    // Filled in by the application join below; an advisor with no AI match
+    // record keeps these dashes and is still listed.
+    applicationId: "-",
+    applicationFullId: null,
+    requestedService: "-",
+
     email: contact.email || data.userEmail || null,
     matchPercentage: 0,
     matchBreakdown: null,
@@ -620,7 +705,13 @@ const hasTooManyMissingFields = (a) => {
 /* ════════════════════════════════════════════════════════════════════════════
    Component
    ════════════════════════════════════════════════════════════════════════ */
-export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCountChange }) {
+export function AdvisorTable({
+  filters,
+  stageFilter,
+  applicationFilter,
+  onConnectionRequested,
+  onCountChange,
+}) {
   const [advisors, setAdvisors] = useState([])
   const [statuses, setStatuses] = useState({})
   const [loading, setLoading] = useState(true)
@@ -633,6 +724,9 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [userRole, setUserRole] = useState(null)
 
+  /* advisorId -> { applicationFullId, applicationId, requestedService }. */
+  const [applicationsByAdvisor, setApplicationsByAdvisor] = useState({})
+
   /* A stage pressed in the pipeline arrives here. The `stageFilter` prop still
      wins when the page passes one, so wiring props stays optional — drop
      <AdvisorFlowPipeline /> anywhere on the page and the two find each
@@ -644,6 +738,32 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     return () => window.removeEventListener(ADVISOR_STAGE_FILTER_EVENT, onFilter)
   }, [])
   const activeStageFilter = stageFilter ?? eventStageFilter
+
+  /* Same pattern for application scoping: the Applications page dispatches an
+     id when the user picks "View Match Table", and null to clear it. */
+  /* Seeded from ?applicationId= so arriving from the Applications page works:
+     that navigation remounts this component, and an event dispatched before
+     the mount would have had nobody listening. The event is still handled for
+     the case where the table is already on screen. */
+  const [eventApplicationFilter, setEventApplicationFilter] = useState(readApplicationIdFromUrl)
+  useEffect(() => {
+    const onFilter = (e) => setEventApplicationFilter(e.detail ?? null)
+    window.addEventListener(ADVISOR_APPLICATION_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(ADVISOR_APPLICATION_FILTER_EVENT, onFilter)
+  }, [])
+  const activeApplicationFilter = applicationFilter ?? eventApplicationFilter
+
+  const clearApplicationFilter = () => {
+    setEventApplicationFilter(null)
+    window.dispatchEvent(new CustomEvent(ADVISOR_APPLICATION_FILTER_EVENT, { detail: null }))
+    // Drop the param too, otherwise a refresh would put the filter straight
+    // back and "View All Matches" would look broken.
+    if (typeof window !== "undefined" && window.history?.replaceState) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete("applicationId")
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`)
+    }
+  }
 
   const [detailsAdvisor, setDetailsAdvisor] = useState(null)
   const [savedMatches, setSavedMatches] = useState(() => loadSavedMatches())
@@ -666,6 +786,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
   const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+  const [chipSearch, setChipSearch] = useState("")
 
   // Views
   const [viewsState, setViewsState] = useState(() => loadViewsState())
@@ -689,6 +810,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -786,6 +908,65 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     return () => unsubscribe()
   }, [effectiveUserId])
 
+  /* ─── Application join ────────────────────────────────────────────────
+     This table scores every advisor profile itself and has no application in
+     scope. smseAdvisoryMatches is what the AI matching backend writes and
+     what the Applications page counts from, and each of its records carries
+     an applicationId — so the two are stitched together here by advisorId.
+     Advisors with no record still appear, with a dash. */
+  useEffect(() => {
+    if (!effectiveUserId) return undefined
+
+    let cancelled = false
+
+    const loadApplicationLinks = async () => {
+      try {
+        const [matchSnap, appSnap] = await Promise.all([
+          getDocs(query(collection(db, AI_MATCHES_COLLECTION), where("smeId", "==", effectiveUserId))),
+          getDocs(query(collection(db, "advisoryApplicationsV2"), where("userId", "==", effectiveUserId))),
+        ])
+
+        // Requested Service is the same value the Applications list shows in
+        // its "Application" column.
+        const serviceByAppId = {}
+        appSnap.forEach((d) => {
+          const data = d.data()
+          const roleOrExpertise =
+            (data.advisoryRole || []).length > 0 ? data.advisoryRole[0] : (data.functionalExpertise || [])[0]
+          serviceByAppId[d.id] = formatLabel(roleOrExpertise?.trim() || "") || "Advisory Request"
+        })
+
+        const links = {}
+        matchSnap.forEach((d) => {
+          const data = d.data()
+          const advisorId = data.advisorId
+          const appFullId = data.applicationId
+          if (!advisorId || !appFullId) return
+          // An advisor matched under more than one application keeps the most
+          // recent link; the others stay reachable through the filter.
+          const stamp = data.createdAt?.toMillis?.() || 0
+          const existing = links[advisorId]
+          if (existing && existing.stamp > stamp) return
+          links[advisorId] = {
+            stamp,
+            applicationFullId: appFullId,
+            applicationId: appFullId.slice(-8).toUpperCase(),
+            requestedService: serviceByAppId[appFullId] || "-",
+          }
+        })
+
+        if (!cancelled) setApplicationsByAdvisor(links)
+      } catch (error) {
+        console.error("Failed to load application links:", error)
+      }
+    }
+
+    loadApplicationLinks()
+    return () => {
+      cancelled = true
+    }
+  }, [effectiveUserId])
+
   /* ─── Advisors ──────────────────────────────────────────────────────── */
   useEffect(() => {
     if (!authResolved) return
@@ -817,6 +998,17 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
             const result = calculateAdvisorMatch(profileData, data)
             return { ...mapAdvisor(data, docSnap.id), matchPercentage: result.score, matchBreakdown: result.breakdown }
           })
+          .map((row) => {
+            const link = applicationsByAdvisor[row.id]
+            return link
+              ? {
+                  ...row,
+                  applicationId: link.applicationId,
+                  applicationFullId: link.applicationFullId,
+                  requestedService: link.requestedService,
+                }
+              : row
+          })
 
         mapped.sort((a, b) => b.matchPercentage - a.matchPercentage)
         if (!cancelled) setAdvisors(mapped)
@@ -833,7 +1025,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     }
     // onCountChange deliberately not a dependency — an inline arrow from the
     // parent would re-trigger the whole fetch on every render.
-  }, [authResolved, effectiveUserId])
+  }, [authResolved, effectiveUserId, applicationsByAdvisor])
 
   /* ─── View + filter persistence ─────────────────────────────────────── */
   useEffect(() => {
@@ -997,8 +1189,9 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -1006,6 +1199,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -1018,13 +1212,42 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     window.addEventListener("mouseup", onUp)
   }
 
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="at-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
+
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
+    setChipSearch("")
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
   }
-  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+  const closeHeaderFilter = () => {
+    setHeaderFilterOpen(null)
+    setChipSearch("")
+  }
 
   const toggleSort = (key, event) => {
     event.stopPropagation()
@@ -1070,6 +1293,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     let popupHeight
     switch (type) {
       case "match":
+      case "verification":
         popupWidth = 380
         popupHeight = 460
         break
@@ -1144,6 +1368,9 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
         // Responsiveness measurement needs both ends of the gap.
         smeActedAt: serverTimestamp(),
         firstRespondedAt: null,
+        // Carry the application through so the advisor's side can show which
+        // request they were approached for.
+        ...(advisor.applicationFullId ? { applicationId: advisor.applicationFullId } : {}),
       }
 
       await Promise.all([
@@ -1193,7 +1420,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
             content:
               `Dear ${smeName},\n\nYour connection request to ${advisor.name} has been sent.\n\n` +
               `- Advisor: ${advisor.name}\n- Sector: ${advisor.sectorExperience || "Not specified"}\n` +
-              `- Engagement model: ${advisor.engagementModel || "Not specified"}\n\n` +
+              `- Compensation model: ${advisor.engagementModel || "Not specified"}\n\n` +
               `You'll be notified when ${advisor.name} responds.\n\nBest regards,\nBIG Marketplace Africa`,
             date: new Date().toISOString(),
             read: false,
@@ -1238,6 +1465,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
       return
     }
     const id = smeAdvisorId(effectiveUserId, advisor.id)
+    setConnectingId(advisor.id)
     try {
       await setDoc(
         doc(db, SME_ADVISOR_COLLECTION, id),
@@ -1249,6 +1477,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
           status: nextStatus,
           viewType: "sme",
           updatedAt: serverTimestamp(),
+          ...(advisor.applicationFullId ? { applicationId: advisor.applicationFullId } : {}),
         },
         { merge: true },
       )
@@ -1257,20 +1486,51 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     } catch (error) {
       console.error("Failed to update advisor status:", error)
       toast("error", "Could not update status.", 4000)
+    } finally {
+      setConnectingId(null)
     }
+  }
+
+  // Applying is the only stage change this side can make. "await" and
+  // "terminal" rows render as markers rather than buttons, so nothing else
+  // reaches here.
+  const runRowAction = (advisor, action) => {
+    if (action.kind !== "connect") return
+    handleConnect(advisor)
   }
 
   const statusOf = useCallback((advisor) => normalizeAdvisorStatus(statuses[advisor.id]?.status), [statuses])
 
-  /* ─── Derived options ───────────────────────────────────────────────── */
+  /* ─── Derived filter options ────────────────────────────────────────────
+     Every header filter offers the values actually present in the table, so
+     the user picks from what exists instead of guessing at a search box. */
   const uniqueOf = useCallback(
-    (accessor) => [...new Set(advisors.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
+    (accessor) =>
+      [...new Set(advisors.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
+    [advisors],
+  )
+  const nameOptions = useMemo(() => uniqueOf((a) => a.name), [uniqueOf])
+  const applicationIdOptions = useMemo(() => uniqueOf((a) => a.applicationId), [uniqueOf])
+  const requestedServiceOptions = useMemo(() => uniqueOf((a) => a.requestedService), [uniqueOf])
+  const verificationOptions = useMemo(() => uniqueOf((a) => a.verification), [uniqueOf])
+  const roleExpertiseOptions = useMemo(
+    () =>
+      [...new Set(advisors.flatMap((a) => [a.headline, a.advisorRole, a.functionalExpertise]))]
+        .filter((v) => v && v !== "-" && v !== "Not specified")
+        .sort(),
     [advisors],
   )
   const sectorOptions = useMemo(() => uniqueOf((a) => a.sectorExperience), [uniqueOf])
+  const availabilityOptions = useMemo(() => uniqueOf((a) => a.availability), [uniqueOf])
+  const yearsExperienceOptions = useMemo(() => uniqueOf((a) => a.yearsExperience?.toString()), [uniqueOf])
+  const qualificationOptions = useMemo(() => uniqueOf((a) => a.qualifications), [uniqueOf])
+  const previousRoleOptions = useMemo(() => uniqueOf((a) => a.previousRoles), [uniqueOf])
+  const locationOptions = useMemo(() => uniqueOf((a) => a.location), [uniqueOf])
   const workPreferenceOptions = useMemo(() => uniqueOf((a) => a.workPreference), [uniqueOf])
+  const languageOptions = useMemo(() => uniqueOf((a) => a.languages), [uniqueOf])
+  const feeRangeOptions = useMemo(() => uniqueOf((a) => a.feeRange), [uniqueOf])
   const boardExperienceOptions = useMemo(() => uniqueOf((a) => a.boardExperience), [uniqueOf])
-  const verificationOptions = useMemo(() => uniqueOf((a) => a.verification), [uniqueOf])
+  const referenceOptions = useMemo(() => uniqueOf((a) => a.references), [uniqueOf])
   const stageFitOptions = useMemo(() => uniqueOf((a) => a.smeStageFit), [uniqueOf])
 
   /* ─── Filtering + sorting ───────────────────────────────────────────────
@@ -1282,11 +1542,12 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   const preStageAdvisors = useMemo(() => {
     const f = localFilters
     const matchesAny = (selected, value) =>
-      selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
-    const includesText = (needle, value) =>
-      !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
+      !selected?.length || selected.some((v) => (value || "").toString().toLowerCase().includes(v.toLowerCase()))
 
     return advisors.filter((a) => {
+      // Arriving from an application's "View Match Table" narrows to that one
+      // request; "View All Matches" clears it.
+      if (activeApplicationFilter && a.applicationFullId !== activeApplicationFilter) return false
       if (hiddenMatches[a.id]) return false
       if (hasTooManyMissingFields(a)) return false
       if (showSavedOnly && !savedMatches[a.id]) return false
@@ -1294,28 +1555,39 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
       const status = statusOf(a)
       if (filters?.search && !a.name.toLowerCase().includes(filters.search.toLowerCase())) return false
 
-      if (!includesText(f.name, a.name)) return false
+      if (!matchesAny(f.name, a.name)) return false
+      if (!matchesAny(f.applicationId, a.applicationId)) return false
+      if (!matchesAny(f.requestedService, a.requestedService)) return false
       if (a.matchPercentage < f.matchRange[0] || a.matchPercentage > f.matchRange[1]) return false
-      if (!includesText(f.roleExpertise, `${a.headline} ${a.advisorRole} ${a.functionalExpertise}`)) return false
+      if (!matchesAny(f.verification, a.verification)) return false
+      if (!matchesAny(f.roleExpertise, `${a.headline} ${a.advisorRole} ${a.functionalExpertise}`)) return false
       if (!matchesAny(f.sectorExperience, a.sectorExperience)) return false
       if (!matchesAny(f.engagementModel, a.engagementModel)) return false
-      if (!includesText(f.availability, a.availability)) return false
+      if (!matchesAny(f.availability, a.availability)) return false
       if (f.status.length > 0 && !f.status.includes(status)) return false
-      if (!includesText(f.yearsExperience, a.yearsExperience)) return false
-      if (!includesText(f.qualifications, a.qualifications)) return false
-      if (!includesText(f.previousRoles, a.previousRoles)) return false
+      if (!matchesAny(f.yearsExperience, a.yearsExperience?.toString())) return false
+      if (!matchesAny(f.qualifications, a.qualifications)) return false
+      if (!matchesAny(f.previousRoles, a.previousRoles)) return false
       if (!matchesAny(f.location, a.location)) return false
       if (!matchesAny(f.workPreference, a.workPreference)) return false
-      if (!includesText(f.languages, a.languages)) return false
-      if (!includesText(f.feeRange, a.feeRange)) return false
+      if (!matchesAny(f.languages, a.languages)) return false
+      if (!matchesAny(f.feeRange, a.feeRange)) return false
       if (!matchesAny(f.boardExperience, a.boardExperience)) return false
-      if (!includesText(f.references, a.references)) return false
-      if (!matchesAny(f.verification, a.verification)) return false
+      if (!matchesAny(f.references, a.references)) return false
       if (!matchesAny(f.smeStageFit, a.smeStageFit)) return false
 
       return true
     })
-  }, [advisors, localFilters, statusOf, hiddenMatches, filters, showSavedOnly, savedMatches])
+  }, [
+    advisors,
+    localFilters,
+    statusOf,
+    hiddenMatches,
+    filters,
+    showSavedOnly,
+    savedMatches,
+    activeApplicationFilter,
+  ])
 
   /* Every advisor the pipeline should count, each with its resolved status.
      New Match has no stored record, so the pipeline cannot work this out on
@@ -1337,7 +1609,12 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     if (sortConfig?.key) {
       const accessors = {
         name: (r) => r.name,
+        applicationId: (r) => r.applicationId,
+        requestedService: (r) => r.requestedService,
         match: (r) => r.matchPercentage || 0,
+        // Sorted by the underlying score, so Tier 1 groups above Tier 2
+        // rather than sorting alphabetically by badge.
+        verification: (r) => r.verificationScore || 0,
         roleExpertise: (r) => r.headline,
         sectorExperience: (r) => r.sectorExperience,
         engagementModel: (r) => r.engagementModel,
@@ -1348,7 +1625,6 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
         workPreference: (r) => r.workPreference,
         feeRange: (r) => r.feeRange,
         boardExperience: (r) => r.boardExperience,
-        verification: (r) => r.verification,
         smeStageFit: (r) => r.smeStageFit,
         dateMatched: (r) =>
           new Date(statuses[r.id]?.dateMatched?.toDate?.() || statuses[r.id]?.dateMatched || 0).getTime(),
@@ -1375,24 +1651,10 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   }, [filteredAdvisors, onCountChange])
 
   const activeFilterCount =
-    (localFilters.name.trim() ? 1 : 0) +
     (localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100 ? 1 : 0) +
-    (localFilters.roleExpertise.trim() ? 1 : 0) +
-    localFilters.sectorExperience.length +
-    localFilters.engagementModel.length +
-    (localFilters.availability.trim() ? 1 : 0) +
-    localFilters.status.length +
-    (localFilters.yearsExperience.trim() ? 1 : 0) +
-    (localFilters.qualifications.trim() ? 1 : 0) +
-    (localFilters.previousRoles.trim() ? 1 : 0) +
-    localFilters.location.length +
-    localFilters.workPreference.length +
-    (localFilters.languages.trim() ? 1 : 0) +
-    (localFilters.feeRange.trim() ? 1 : 0) +
-    localFilters.boardExperience.length +
-    (localFilters.references.trim() ? 1 : 0) +
-    localFilters.verification.length +
-    localFilters.smeStageFit.length
+    Object.entries(localFilters)
+      .filter(([key]) => key !== "matchRange")
+      .reduce((sum, [, value]) => sum + (Array.isArray(value) ? value.length : 0), 0)
 
   const clearAllFilters = () => {
     setLocalFilters({ ...EMPTY_FILTERS })
@@ -1400,30 +1662,8 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
   }
 
   const getFilterActive = (type) => {
-    switch (type) {
-      case "match":
-        return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100
-      case "sectorExperience":
-      case "engagementModel":
-      case "status":
-      case "location":
-      case "workPreference":
-      case "boardExperience":
-      case "verification":
-      case "smeStageFit":
-        return localFilters[type].length > 0
-      case "roleExpertise":
-      case "availability":
-      case "yearsExperience":
-      case "qualifications":
-      case "previousRoles":
-      case "languages":
-      case "feeRange":
-      case "references":
-        return !!localFilters[type].trim()
-      default:
-        return false
-    }
+    if (type === "match") return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100
+    return Array.isArray(localFilters[type]) && localFilters[type].length > 0
   }
 
   const toggleChip = (field, value) =>
@@ -1452,12 +1692,23 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  /* Covers the reorderable columns *and* the three fixed ones, so every
+     column in the table can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
+  const appIdWidth = widthOf(APPID_KEY)
+  const advisorWidth = widthOf(ADVISOR_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
+  const pinnedLeadWidth = appIdWidth + advisorWidth
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    // Left-pinned columns stack to the right of the frozen Advisor column.
-    let leftAcc = ADVISOR_WIDTH
+    // Left-pinned columns stack to the right of the frozen Application ID +
+    // Advisor pair.
+    let leftAcc = pinnedLeadWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1473,9 +1724,10 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, pinnedLeadWidth])
 
-  const totalWidth = ADVISOR_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth =
+    pinnedLeadWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -1511,6 +1763,13 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     const status = statusOf(a)
 
     switch (key) {
+      case "requestedService":
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={a.requestedService} maxLength={28} />
+          </td>
+        )
+
       case "match":
         return (
           <td key={key} style={{ ...style, textAlign: "center" }}>
@@ -1544,6 +1803,27 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
             </div>
           </td>
         )
+
+      /* Just the tier. The sentence that used to fill its own Status Summary
+         column is identical for every advisor at a given tier, so it lives in
+         the popup instead — same interaction as Match %. */
+      case "verification": {
+        const v = getVerificationStyle(a.verification)
+        return (
+          <td key={key} style={{ ...style, textAlign: "center" }}>
+            <button
+              onClick={(e) => openPopupFromEvent("verification", a, e)}
+              title={`${a.verificationLabel} — click for the full breakdown`}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap hover:brightness-95"
+              style={{ backgroundColor: v.bg, color: v.color }}
+            >
+              <span>{a.verificationBadge}</span>
+              {a.verification}
+              <Info size={11} className="opacity-60" />
+            </button>
+          </td>
+        )
+      }
 
       case "roleExpertise":
         return (
@@ -1631,6 +1911,30 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
     return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading advisors...</div>
   }
 
+  /* Every filter popover is driven by this one list, so adding a column means
+     adding one row here rather than a new JSX block. */
+  const FILTER_OPTION_SETS = [
+    { type: "name", label: "Advisor name", options: nameOptions },
+    { type: "applicationId", label: "Application ID", options: applicationIdOptions },
+    { type: "requestedService", label: "Requested Service", options: requestedServiceOptions },
+    { type: "verification", label: "Verification Status", options: verificationOptions },
+    { type: "roleExpertise", label: "Role / Expertise", options: roleExpertiseOptions },
+    { type: "sectorExperience", label: "Sector Experience", options: sectorOptions },
+    { type: "engagementModel", label: "Compensation Model", options: COMPENSATION_MODELS },
+    { type: "availability", label: "Availability", options: availabilityOptions },
+    { type: "status", label: "Status", options: ADVISOR_STATUSES },
+    { type: "yearsExperience", label: "Years of Experience", options: yearsExperienceOptions },
+    { type: "qualifications", label: "Qualifications", options: qualificationOptions },
+    { type: "previousRoles", label: "Previous Roles", options: previousRoleOptions },
+    { type: "location", label: "Geographic Location", options: locationOptions.length ? locationOptions : AFRICAN_COUNTRIES },
+    { type: "workPreference", label: "Virtual / In-Person", options: workPreferenceOptions },
+    { type: "languages", label: "Languages", options: languageOptions },
+    { type: "feeRange", label: "Fee Range", options: feeRangeOptions },
+    { type: "boardExperience", label: "Board Experience", options: boardExperienceOptions },
+    { type: "references", label: "References", options: referenceOptions },
+    { type: "smeStageFit", label: "SME Stage Fit", options: stageFitOptions },
+  ]
+
   /* ═══════════════════════════════════════════════════════════════════════
      Render
      ═══════════════════════════════════════════════════════════════════════ */
@@ -1692,6 +1996,22 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               Viewing: {activeView.name}
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
+
+            {/* Which application the table is scoped to, with the way back out. */}
+            {activeApplicationFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#5d4037]/10 text-[#4a352f] border border-[#5d4037]/40">
+                <Hash size={12} className="text-[#7d5a50]" />
+                Application: {activeApplicationFilter.slice(-8).toUpperCase()}
+                <span className="font-normal text-[#a89482]">({filteredAdvisors.length})</span>
+                <button
+                  onClick={clearApplicationFilter}
+                  className="ml-1 px-2 py-0.5 rounded-lg bg-white border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] font-semibold"
+                >
+                  View All Matches
+                </button>
+              </span>
+            )}
+
             {/* Which pipeline stage the table is narrowed to. Press the same
                 card again in the pipeline to clear it. */}
             {activeStageFilter && (
@@ -1701,6 +2021,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                 <span className="font-normal text-[#a89482]">({filteredAdvisors.length})</span>
               </span>
             )}
+
             {/* Saved matches. The bookmark on each row writes here; this is
                 where you get them back. */}
             {(showSavedOnly || savedCount > 0) && (
@@ -1938,12 +2259,17 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
                         <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
-                        resize.
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                        <span className="text-sm text-[#4a352f] flex-1">Advisor</span>
+                        <span className="text-sm text-[#4a352f] flex-1">Application ID</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Advisor Name</span>
                         <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
                       </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -2048,7 +2374,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                buying every header ~14px more room for its label. */
             .at-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .at-th:hover .at-th-grip { opacity: .45; }
-            .at-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .at-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .at-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -2069,25 +2395,53 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
           >
             <thead>
               <tr>
+                {/* Application ID — first pinned column */}
                 <th
                   className="at-th font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ADVISOR_WIDTH,
+                    width: appIdWidth,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                    borderRight: "1px solid #e6d7c3",
+                  }}
+                >
+                  <div className="at-th-row">
+                    <span className="at-th-label" title="Application ID">
+                      Application ID
+                    </span>
+                    <span className="at-th-tools">
+                      <SortTrigger columnKey="applicationId" />
+                      <FilterTrigger type="applicationId" active={localFilters.applicationId.length > 0} />
+                      <HeaderInfoTooltip text="The advisory request this match belongs to. Matches made before an application was submitted show a dash." />
+                    </span>
+                  </div>
+                  <ColumnResizer colKey={APPID_KEY} />
+                </th>
+
+                {/* Advisor — second pinned column */}
+                <th
+                  className="at-th font-semibold uppercase tracking-wider text-xs sticky top-0 z-30 text-left"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    left: appIdWidth,
+                    width: advisorWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
                   }}
                 >
                   <div className="at-th-row">
-                    <span className="at-th-label" title="Advisor">
-                      Advisor
+                    <span className="at-th-label" title="Advisor Name">
+                      Advisor Name
                     </span>
                     <span className="at-th-tools">
                       <SortTrigger columnKey="name" />
-                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <FilterTrigger type="name" active={localFilters.name.length > 0} />
+                      <HeaderInfoTooltip text="The advisor's name. Click the eye to open their full profile." />
                     </span>
                   </div>
+                  <ColumnResizer colKey={ADVISOR_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -2099,7 +2453,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -2133,9 +2487,10 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
                           <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="at-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -2146,12 +2501,16 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                   className="at-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="at-th-row justify-center">
+                    <span className="at-th-label">Action</span>
+                    <HeaderInfoTooltip text="Apply is the only move you make. After that the advisor drives the pipeline, and this shows the stage they can move you to next." />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -2160,7 +2519,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               {filteredAdvisors.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={orderedColumns.length + 2}
+                    colSpan={orderedColumns.length + 3}
                     style={{ ...tableCellStyle, textAlign: "center", padding: "3rem 1rem", borderRight: "none" }}
                   >
                     <div className="flex flex-col items-center gap-3">
@@ -2172,19 +2531,31 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                           ? "No advisor matches yet"
                           : showSavedOnly
                             ? "No saved advisors"
-                            : activeStageFilter
-                              ? `No advisors at ${activeStageFilter}`
-                              : "No advisors match these filters"}
+                            : activeApplicationFilter
+                              ? "No advisors matched to this application"
+                              : activeStageFilter
+                                ? `No advisors at ${activeStageFilter}`
+                                : "No advisors match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
                         {advisors.length === 0
                           ? "Complete your advisory needs assessment to start seeing matches."
                           : showSavedOnly
                             ? "Bookmark a row to keep it here."
-                            : activeStageFilter
-                              ? "Press that stage card again to clear the filter."
-                              : "Clear a filter to widen the results."}
+                            : activeApplicationFilter
+                              ? "Show every advisor instead, or run AI matching on this application."
+                              : activeStageFilter
+                                ? "Press that stage card again to clear the filter."
+                                : "Clear a filter to widen the results."}
                       </p>
+                      {activeApplicationFilter && (
+                        <button
+                          onClick={clearApplicationFilter}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          View All Matches
+                        </button>
+                      )}
                       {showSavedOnly && (
                         <button
                           onClick={() => setShowSavedOnly(false)}
@@ -2207,9 +2578,10 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               ) : (
                 filteredAdvisors.map((a) => {
                   const status = statusOf(a)
-                  const actions = getRowActions(status)
+                  const action = getRowActions(status)
                   const isSaved = !!savedMatches[a.id]
-                  const isTerminal = status === "Declined" || status === "Closed"
+                  const canApply = action.kind === "connect"
+                  const isAwaiting = action.kind === "await"
                   const rowBg = hoveredRow === a.id ? "#fdf8f4" : "#ffffff"
                   const busy = connectingId === a.id
 
@@ -2220,12 +2592,35 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                       onMouseLeave={() => setHoveredRow(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* Advisor — pinned left. Name only; location has its own column. */}
+                      {/* Application ID — pinned left */}
                       <td
                         className="sticky left-0 z-10"
                         style={{
                           ...tableCellStyle,
-                          width: ADVISOR_WIDTH,
+                          width: appIdWidth,
+                          backgroundColor: rowBg,
+                        }}
+                      >
+                        {a.applicationId && a.applicationId !== "-" ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide text-[#FAF7F2]"
+                            style={{ background: "linear-gradient(135deg,#5d4037,#4a332a)", fontFamily: "monospace" }}
+                            title={`Full application id: ${a.applicationFullId}`}
+                          >
+                            <Hash size={10} /> {a.applicationId}
+                          </span>
+                        ) : (
+                          <span className="text-[#a89482] text-xs">-</span>
+                        )}
+                      </td>
+
+                      {/* Advisor — pinned left. Name only; location has its own column. */}
+                      <td
+                        className="sticky z-10"
+                        style={{
+                          ...tableCellStyle,
+                          left: appIdWidth,
+                          width: advisorWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -2250,25 +2645,54 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
                         }}
                       >
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => (actions.kind === "connect" ? handleConnect(a) : handleViewDetails(a))}
-                            disabled={busy}
-                            title={actions.primary}
-                            className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 disabled:opacity-60 ${
-                              isTerminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
-                            }`}
-                            style={{ width: "126px", height: "34px", backgroundColor: isTerminal ? undefined : "#7d5a50" }}
-                          >
-                            {!isTerminal && !busy && <ArrowRight size={13} className="flex-shrink-0" />}
-                            <span className="truncate">{busy ? "Sending..." : actions.primary}</span>
-                          </button>
+                          {canApply ? (
+                            <button
+                              onClick={() => runRowAction(a, action)}
+                              disabled={busy}
+                              title={`Apply to ${a.name}`}
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 text-white hover:shadow-md hover:brightness-105 disabled:opacity-60"
+                              style={{
+                                width: `${Math.max(96, actionWidth - 82)}px`,
+                                height: "34px",
+                                backgroundColor: "#7d5a50",
+                              }}
+                            >
+                              {!busy && <ArrowRight size={13} className="flex-shrink-0" />}
+                              <span className="truncate">{busy ? "Sending..." : action.label}</span>
+                            </button>
+                          ) : (
+                            /* Read-only from here on. The advisor drives the
+                               pipeline, so this names the stage they can move
+                               the row to next and re-labels as they do. */
+                            <div
+                              title={
+                                isAwaiting
+                                  ? `Waiting on ${a.name} to move you to ${action.next}`
+                                  : `${action.label} — no further stage`
+                              }
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap flex-shrink-0 border border-dashed"
+                              style={{
+                                width: `${Math.max(96, actionWidth - 82)}px`,
+                                height: "34px",
+                                backgroundColor: "#faf7f2",
+                                borderColor: "#e6d7c3",
+                                color: "#a89482",
+                                cursor: "default",
+                              }}
+                            >
+                              {isAwaiting && <Clock size={12} className="flex-shrink-0" />}
+                              <span className="truncate">
+                                {isAwaiting ? `Next: ${action.label}` : action.label}
+                              </span>
+                            </div>
+                          )}
 
                           <button
                             onClick={() => toggleSaved(a)}
@@ -2388,89 +2812,142 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               </>
             )}
 
-            {[
-              { type: "name", label: "Advisor name", placeholder: "Search name..." },
-              { type: "roleExpertise", label: "Role / Expertise", placeholder: "e.g. CFO, Strategy" },
-              { type: "availability", label: "Availability", placeholder: "e.g. 10 hrs" },
-              { type: "yearsExperience", label: "Years of Experience", placeholder: "e.g. 10" },
-              { type: "qualifications", label: "Qualifications", placeholder: "Search qualifications..." },
-              { type: "previousRoles", label: "Previous Roles", placeholder: "Search roles..." },
-              { type: "languages", label: "Languages", placeholder: "Search languages..." },
-              { type: "feeRange", label: "Fee Range", placeholder: "Search fee range..." },
-              { type: "references", label: "References", placeholder: "Search references..." },
-            ].map(
-              ({ type, label, placeholder }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type] && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: "" }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={localFilters[type]}
-                      onChange={(e) => setLocalFilters((p) => ({ ...p, [type]: e.target.value }))}
-                      placeholder={placeholder}
-                      className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
-                    />
+            {/* Every other filter is a chip list of the values actually in the
+                table, with a search box appearing only once the list is long
+                enough to need one. */}
+            {FILTER_OPTION_SETS.map(({ type, label, options }) => {
+              if (headerFilterOpen.type !== type) return null
+              const shown = options.filter((o) => o.toString().toLowerCase().includes(chipSearch.toLowerCase()))
+              return (
+                <div key={type}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                    {localFilters[type].length > 0 && (
+                      <button
+                        onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
+                        className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                ),
-            )}
 
-            {[
-              { type: "sectorExperience", label: "Sector Experience", options: sectorOptions },
-              { type: "engagementModel", label: "Engagement Model", options: COMPENSATION_MODELS },
-              { type: "status", label: "Status", options: ADVISOR_STATUSES },
-              { type: "location", label: "Geographic Location", options: AFRICAN_COUNTRIES },
-              { type: "workPreference", label: "Virtual / In-Person", options: workPreferenceOptions },
-              { type: "boardExperience", label: "Board Experience", options: boardExperienceOptions },
-              { type: "verification", label: "Verification Status", options: verificationOptions },
-              { type: "smeStageFit", label: "SME Stage Fit", options: stageFitOptions },
-            ].map(
-              ({ type, label, options }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type].length > 0 && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
+                  {options.length > 8 && (
+                    <div className="relative mb-2">
+                      <Search
+                        size={12}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none"
+                      />
+                      <input
+                        autoFocus
+                        value={chipSearch}
+                        onChange={(e) => setChipSearch(e.target.value)}
+                        placeholder={`Search ${label.toLowerCase()}...`}
+                        className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                      />
                     </div>
-                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
-                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
-                      {options.map((value) => (
-                        <button
-                          key={value}
-                          onClick={() => toggleChip(type, value)}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            localFilters[type].includes(value)
-                              ? "bg-[#7d5a50] text-white"
-                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
-                          }`}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                    {shown.length === 0 && (
+                      <span className="text-xs text-[#a89482]">
+                        {options.length === 0 ? "No data available" : "Nothing matches that search."}
+                      </span>
+                    )}
+                    {shown.map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => toggleChip(type, value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                          localFilters[type].includes(value)
+                            ? "bg-[#7d5a50] text-white"
+                            : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
                   </div>
-                ),
-            )}
+                </div>
+              )
+            })}
           </div>
         </PopupPortal>
       )}
+
+      {/* ─── Verification popup ─────────────────────────────────────────────
+          Replaces the Status Summary column: what the tier means, plus the
+          five weighted categories it was scored on. */}
+      {activePopup?.type === "verification" && (() => {
+        const a = activePopup.advisor
+        const v = getVerificationStyle(a.verification)
+        return (
+          <PopupPortal>
+            <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+            <div
+              className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+              style={{
+                top: activePopup.position.y,
+                left: activePopup.position.x,
+                width: "380px",
+                maxHeight: "460px",
+                overflowY: "auto",
+              }}
+            >
+              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck size={12} /> Verification
+                    </p>
+                    <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{a.name}</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xl font-bold">{a.verificationScore}%</div>
+                    <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1">
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-3">
+                <div className="rounded-xl p-3" style={{ backgroundColor: v.bg }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>{a.verificationBadge}</span>
+                    <span className="text-sm font-bold" style={{ color: v.color }}>
+                      {a.verification} — {a.verificationLabel}
+                    </span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed m-0" style={{ color: v.color }}>
+                    {a.verificationSummary}
+                  </p>
+                </div>
+
+                {Object.entries(a.verificationBreakdown || {}).map(([category, data]) => (
+                  <div key={category} className="bg-[#faf7f2] rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-[#4a352f]">
+                        {VERIFICATION_CATEGORY_LABELS[category] || category}
+                      </span>
+                      <span className="text-xs font-semibold text-[#7d5a50]">
+                        {data.score} / {data.max}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${(data.score / data.max) * 100}%`, backgroundColor: v.color }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-[#a89482] mt-1">Weight: {Math.round(data.weight * 100)}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </PopupPortal>
+        )
+      })()}
 
       {/* ─── Quick Actions popup ───────────────────────────────────────── */}
       {activePopup?.type === "quickActions" && (
@@ -2497,6 +2974,12 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
               <Target size={12} /> Why This Match?
+            </button>
+            <button
+              onClick={() => openPopup("verification", activePopup.advisor, activePopup.rect)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <ShieldCheck size={12} /> Verification Breakdown
             </button>
             <button
               onClick={() => {
@@ -2526,16 +3009,8 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               <LayoutGrid size={12} /> View Saved Advisors ({savedCount})
             </button>
             <div className="border-t border-[#e6d7c3] my-1" />
-            <button
-              onClick={() => {
-                const target = activePopup.advisor
-                closePopup()
-                handleSetStatus(target, "Shortlisted")
-              }}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
-            >
-              <CheckCircle size={12} /> Move to Shortlisted
-            </button>
+            {/* Hiding is a view preference, not a stage change — the advisor
+                owns the pipeline, so no status actions live here. */}
             <button
               onClick={() => {
                 const target = activePopup.advisor
@@ -2555,7 +3030,7 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#D32F2F] hover:bg-[#faf7f2] text-left"
             >
-              <XCircle size={12} /> Decline
+              <XCircle size={12} /> Withdraw Interest
             </button>
           </div>
         </PopupPortal>
@@ -2630,8 +3105,24 @@ export function AdvisorTable({ filters, stageFilter, onConnectionRequested, onCo
         </PopupPortal>
       )}
 
+      {/* ─── Advisor profile pop-up ─────────────────────────────────────────
+          AdvisorDetailsModal keys off advisorId / advisorName / finalScore —
+          the shape AdvisorMatchesTable passes from smseAdvisoryMatches. This
+          table's rows are { id, name, matchPercentage }, so passing the row
+          straight through left advisor.advisorId undefined, the profile fetch
+          never ran, and every field fell back to undefined. Mapped here rather
+          than inside the modal so the Applications page keeps working. */}
       {mounted && detailsAdvisor && (
-        <AdvisorDetailsModal advisor={detailsAdvisor} isOpen onClose={() => setDetailsAdvisor(null)} />
+        <AdvisorDetailsModal
+          advisor={{
+            ...detailsAdvisor,
+            advisorId: detailsAdvisor.id,
+            advisorName: detailsAdvisor.name,
+            finalScore: detailsAdvisor.matchPercentage,
+          }}
+          isOpen
+          onClose={() => setDetailsAdvisor(null)}
+        />
       )}
     </div>
   )

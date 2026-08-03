@@ -1,34 +1,50 @@
 "use client"
 
-import { Fragment, useState, useEffect } from "react"
+import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Eye, FileText, Brain, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Zap, Hash, ChevronDown, ChevronUp, UserCheck } from "lucide-react"
-import InternMatchesTable from "../MyInternMatch/InternMatchesTable"
+import { Eye, FileText, Brain, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Hash, Table2 } from "lucide-react"
 
 /**
  * InternApplicationsList Component
- * 
+ *
  * Displays all user's internship applications in a data table with:
  * - Application details (name, purpose, match count)
  * - Status indicators (Draft, Ready, Submitted)
- * - Actions: View (summary), Edit, View Matches, Delete
- * 
+ * - Actions: View Match Table, Edit, Delete
+ *
+ * The inline matches panel is gone — matches are read on the Intern Matches
+ * page instead, so there's one place to look rather than two.
+ *
  * Props:
  * - onViewSummary: (applicationId, applicationData) => void
  * - onEditApplication: (applicationId) => void
  * - onCreateNew: () => void
+ * - onNavigateToMatches: (applicationId) => void   optional; wins over the route
  * - embedded: boolean
  */
-const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embedded = false, refreshTrigger }) => {
+
+// Where the Intern Matches table lives.
+const MATCHES_ROUTE = "/intern-matches-page"
+
+const InternApplicationsList = ({
+  onViewSummary,
+  onEditApplication,
+  onCreateNew,
+  onNavigateToMatches,
+  embedded = false,
+  refreshTrigger,
+}) => {
   const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const [expandedAppId, setExpandedAppId] = useState(null)
 
   const [matchCounts, setMatchCounts] = useState({})
+
+  const navigate = useNavigate()
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -45,7 +61,7 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger])
 
-  const fetchMatchCounts = async (userId, appIds) => {
+  const fetchMatchCounts = async (userId) => {
     try {
       const q = query(
         collection(db, "internMatchResults"),
@@ -79,7 +95,7 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
         apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
       }
       setApplications(apps)
-      await fetchMatchCounts(userId, apps.map(a => a.id))
+      await fetchMatchCounts(userId)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -97,21 +113,21 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
     const completedSections = data.completedSections || {}
     const sectionsArr = Object.values(completedSections)
     const isComplete = sectionsArr.length > 0 && sectionsArr.every((v) => v === true)
-    
+
     // Use internshipTitle for the name, default to "Internship Application"
     let name = "Internship Application"
     const jobOverview = data.jobOverview || {}
     if (jobOverview.internshipTitle?.trim()) name = jobOverview.internshipTitle.trim()
-    
-    return { 
-      id: docId, 
-      appId: docId?.slice(-8) || docId, 
-      name: name, 
+
+    return {
+      id: docId,
+      appId: docId?.slice(-8) || docId,
+      name: name,
       purpose: data.briefDescription || (jobOverview.briefDescription || ""),
-      lastUpdatedFormatted, 
-      lastUpdatedTimestamp, 
-      isComplete, 
-      status: data.status || (isComplete ? "complete" : "draft") 
+      lastUpdatedFormatted,
+      lastUpdatedTimestamp,
+      isComplete,
+      status: data.status || (isComplete ? "complete" : "draft")
     }
   }
 
@@ -119,6 +135,17 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
     try { setDeleting(true); await deleteDoc(doc(db,"internApplicationsV2",appId)); setApplications((p) => p.filter((a) => a.id !== appId)); setShowDeleteConfirm(null) }
     catch { alert("Failed to delete. Please try again.") }
     finally { setDeleting(false) }
+  }
+
+  /* Open the Intern Matches table. A shell-provided handler wins when there is
+     one, so a tabbed layout can switch panes without a route change. The id
+     rides along in the query string so it survives the navigation. */
+  const openMatchTable = (appId) => {
+    if (typeof onNavigateToMatches === "function") {
+      onNavigateToMatches(appId)
+      return
+    }
+    navigate(`${MATCHES_ROUTE}?applicationId=${encodeURIComponent(appId)}`)
   }
 
   const getStatusBadge = (app) => {
@@ -161,24 +188,20 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
           animation:al-fadein 0.35s ease-out;
         }
 
-        .al-tbl { width:100%; min-width:860px; border-collapse:collapse; table-layout:fixed; }
-
-        .al-expand-row > td { padding:0 !important; background:rgba(250,247,242,0.6); border-bottom:1px solid rgba(200,182,166,0.2); }
-        .al-expand-wrap { padding:14px 18px 20px; animation:al-fadein 0.25s ease-out; }
-        .al-expand-title { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; font-weight:700; color:#4a352f; text-transform:uppercase; letter-spacing:0.5px; }
+        .al-tbl { width:100%; min-width:880px; border-collapse:collapse; table-layout:fixed; }
 
         .al-appid { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; background:linear-gradient(135deg,#5d4037,#4a332a); color:#FAF7F2; border-radius:999px; font-size:10.5px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; font-family:'SF Mono','Monaco','Consolas',monospace; }
 
         .al-tbl col.c0 { width:9%;  }
-        .al-tbl col.c1 { width:24%; }
-        .al-tbl col.c2 { width:13%; }
-        .al-tbl col.c3 { width:13%; }
+        .al-tbl col.c1 { width:23%; }
+        .al-tbl col.c2 { width:12%; }
+        .al-tbl col.c3 { width:12%; }
         .al-tbl col.c4 { width:10%; }
-        .al-tbl col.c5 { width:19%; }
+        .al-tbl col.c5 { width:24%; }
 
         .al-tbl th {
           padding:13px 15px; text-align:left;
-          font-size:11px; font-weight:700; color:#4a352f;
+          font-size:11px; font-weight:700;
           text-transform:uppercase; letter-spacing:0.55px; white-space:nowrap;
           border-bottom:2px solid rgba(166,124,82,0.2);
           color: rgba(250,247,242,0.9);
@@ -193,7 +216,7 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
 
         .al-acts { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:nowrap; }
         .al-btn {
-          display:inline-flex; align-items:center; gap:4px;
+          display:inline-flex; align-items:center; gap:5px;
           padding:6px 11px; border-radius:7px;
           font-size:12px; font-weight:500; cursor:pointer;
           white-space:nowrap; flex-shrink:0;
@@ -202,7 +225,7 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
         }
         .al-btn:hover { transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,0.12); }
         .ab-view    { background:rgba(250,247,242,0.9); color:#4a352f; border-color:rgba(200,182,166,0.4); }
-        .ab-matches { background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2; box-shadow:0 2px 6px rgba(166,124,82,0.3); }
+        .ab-matches { background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2; box-shadow:0 2px 6px rgba(166,124,82,0.3); font-weight:600; }
         .ab-matches:hover { box-shadow:0 4px 12px rgba(166,124,82,0.45) !important; }
         .ab-del     { background:rgba(250,247,242,0.9); color:#dc2626; border-color:rgba(220,38,38,0.2); padding:6px 8px; }
       `}</style>
@@ -217,32 +240,12 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
               Internship Applications &bull; {applications.length} {applications.length === 1 ? "Application" : "Applications"}
             </p>
           </div>
-          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-            <button onClick={onCreateNew} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#faf7f2", border:"none", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(166,124,82,0.3)", transition:"all 0.22s" }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 7px 20px rgba(166,124,82,0.4)" }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 14px rgba(166,124,82,0.3)" }}
-            >
-              <Plus size={16} /> Create New Internship
-            </button>
-            {/* <button
-              onClick={async () => {
-                if (!window.confirm("⚠️ Clear ALL match results? This cannot be undone.")) return
-                try {
-                  const res = await fetch("http://localhost:8000/api/interns/clear-matches", { method: "DELETE" })
-                  const data = await res.json()
-                  alert(`Cleared ${data.deletedCount || 0} match result(s)`)
-                  const user = auth.currentUser
-                  if (user) fetchApplications(user.uid)
-                } catch (err) {
-                  alert("Failed to clear: " + err.message)
-                }
-              }}
-              style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"#dc2626", color:"#fff", border:"none", borderRadius:8, fontSize:11, fontWeight:600, cursor:"pointer", opacity:0.85 }}
-              title="TEMP: Clear all match results"
-            >
-              🗑 Clear Matches
-            </button> */}
-          </div>
+          <button onClick={onCreateNew} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#faf7f2", border:"none", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(166,124,82,0.3)", transition:"all 0.22s" }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 7px 20px rgba(166,124,82,0.4)" }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 14px rgba(166,124,82,0.3)" }}
+          >
+            <Plus size={16} /> Create New Internship
+          </button>
         </div>
 
         {/* EMPTY */}
@@ -275,96 +278,74 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
               <tbody>
                 {applications.map((app) => {
                   const { label, color, bg, Icon } = getStatusBadge(app)
-                  const isExpanded = expandedAppId === app.id
-                  
+
                   return (
-                    <Fragment key={app.id}>
-                      <tr>
-                        {/* AppID */}
-                        <td>
-                          <span className="al-appid uppercase" title={`Full application id: ${app.id}`}>
-                            <Hash size={10} /> {app.appId}
+                    <tr key={app.id}>
+                      {/* AppID */}
+                      <td>
+                        <span className="al-appid uppercase" title={`Full application id: ${app.id}`}>
+                          <Hash size={10} /> {app.appId}
+                        </span>
+                      </td>
+
+                      {/* Application */}
+                      <td>
+                        <div style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
+                          <div style={{ width:32, height:32, flexShrink:0, background:"rgba(166,124,82,0.1)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                            <Brain size={15} color="#a67c52" />
+                          </div>
+                          <div style={{ minWidth:0, flex:1 }}>
+                            <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:13, marginBottom:2 }} title={app.name}>{app.name}</span>
+                            <span className="ell" style={{ fontSize:11, color:"#6b7280" }} title={app.purpose}>{app.purpose}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Matches */}
+                      <td>
+                        {matchCounts[app.id] > 0 ? (
+                          <span className="ell" style={{ display:"inline-block", maxWidth:"100%", padding:"3px 9px", background:"rgba(166,124,82,0.1)", borderRadius:20, fontSize:11, fontWeight:500, color:"#7d5a50" }}>
+                            {matchCounts[app.id]} {matchCounts[app.id] === 1 ? "match" : "matches"}
                           </span>
-                        </td>
+                        ) : (
+                          <span style={{ fontSize:11, color:"#9ca3af" }}>—</span>
+                        )}
+                      </td>
 
-                        {/* Application */}
-                        <td>
-                          <div style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
-                            <div style={{ width:32, height:32, flexShrink:0, background:"rgba(166,124,82,0.1)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                              <Brain size={15} color="#a67c52" />
-                            </div>
-                            <div style={{ minWidth:0, flex:1 }}>
-                              <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:13, marginBottom:2 }} title={app.name}>{app.name}</span>
-                              <span className="ell" style={{ fontSize:11, color:"#6b7280" }} title={app.purpose}>{app.purpose}</span>
-                            </div>
-                          </div>
-                        </td>
+                      {/* Last Updated */}
+                      <td>
+                        <div style={{ display:"flex", alignItems:"center", gap:5, color:"#6b7280", fontSize:11, whiteSpace:"nowrap" }}>
+                          <Calendar size={12} style={{ flexShrink:0 }} /> {app.lastUpdatedFormatted}
+                        </div>
+                      </td>
 
-                        {/* Matches */}
-                        <td>
-                          {matchCounts[app.id] > 0 ? (
-                            <span className="ell" style={{ display:"inline-block", maxWidth:"100%", padding:"3px 9px", background:"rgba(166,124,82,0.1)", borderRadius:20, fontSize:11, fontWeight:500, color:"#7d5a50" }}>
-                              {matchCounts[app.id]} {matchCounts[app.id] === 1 ? "match" : "matches"}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize:11, color:"#9ca3af" }}>—</span>
-                          )}
-                        </td>
+                      {/* Status */}
+                      <td>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", background:bg, color, borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
+                          <Icon size={10} /> {label}
+                        </span>
+                      </td>
 
-                        {/* Last Updated */}
-                        <td>
-                          <div style={{ display:"flex", alignItems:"center", gap:5, color:"#6b7280", fontSize:11, whiteSpace:"nowrap" }}>
-                            <Calendar size={12} style={{ flexShrink:0 }} /> {app.lastUpdatedFormatted}
-                          </div>
-                        </td>
-
-                        {/* Status */}
-                        <td>
-                          <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", background:bg, color, borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
-                            <Icon size={10} /> {label}
-                          </span>
-                        </td>
-
-                        {/* Actions */}
-                        <td>
-                          <div className="al-acts">
-                            <button
-                              className="al-btn ab-matches"
-                              onClick={() => setExpandedAppId((prev) => (prev === app.id ? null : app.id))}
-                              aria-expanded={isExpanded}
-                              title={isExpanded ? "Hide matches" : "Show matches for this application"}
-                            >
-                              <UserCheck size={12} />
-                              {matchCounts[app.id] > 0 ? ` (${matchCounts[app.id]})` : ""}
-                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                            </button>
-                            <button className="al-btn ab-view" onClick={() => onEditApplication(app.id, app)} title="Edit application">
-                              <Eye size={12} />
-                            </button>
-                            <button className="al-btn ab-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {isExpanded && (
-                        <tr className="al-expand-row">
-                          <td colSpan={6}>
-                            <div className="al-expand-wrap">
-                              <div className="al-expand-title">
-                                <Brain size={13} color="#a67c52" />
-                                <span>Intern Matches for</span>
-                                <span className="al-appid"><Hash size={10} /> {app.appId}</span>
-                              </div>
-                              <InternMatchesTable 
-                                applicationId={app.id} 
-                                embedded={true} />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
+                      {/* Actions — one route to the matches, plus edit and
+                          delete. The inline matches panel is gone. */}
+                      <td>
+                        <div className="al-acts">
+                          <button
+                            className="al-btn ab-matches"
+                            onClick={() => openMatchTable(app.id)}
+                            title="Open the Intern Matches table"
+                          >
+                            <Table2 size={12} /> View Match Table
+                          </button>
+                          <button className="al-btn ab-view" onClick={() => onEditApplication(app.id, app)} title="Edit application">
+                            <Eye size={12} />
+                          </button>
+                          <button className="al-btn ab-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   )
                 })}
               </tbody>

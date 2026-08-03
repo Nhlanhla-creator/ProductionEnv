@@ -6,8 +6,6 @@ import {
   FileText,
   MessageCircle,
   Send,
-  FileIcon,
-  User,
   Check,
   X,
   Eye,
@@ -27,12 +25,17 @@ import {
   ArrowUpDown,
   Pin,
   PinOff,
+  Info,
 } from "lucide-react"
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
 import { getFunctions, httpsCallable } from "firebase/functions"
+/* Same business pop-up the advisor-side match table uses. Place the file
+   beside this one, or adjust the path — it reads universalProfiles itself and
+   imports "../../firebaseConfig", so it needs to sit at the same depth. */
+import BusinessDetailsModal from "./BusinessDetailsModal"
 
 /* ════════════════════════════════════════════════════════════════════════════
    intern-table.jsx
@@ -81,11 +84,51 @@ const STATUS_TYPES = {
 
 const getStatusStyle = (status) => STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#616161" }
 
+/* Match % and any other score bar is coloured by value, not by brand — the
+   same thresholds the advisor and SME match tables use, so a 42% reads red
+   everywhere in the product. */
+const getScoreColor = (score) => {
+  if (score > 75) return "#48BB78"
+  if (score > 50) return "#D69E2E"
+  return "#E53E3E"
+}
+
 /* ─── Shared primitives ─────────────────────────────────────────────────── */
 
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
+}
+
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
 }
 
 const TruncatedText = ({ text, maxLength = 25 }) => {
@@ -417,21 +460,22 @@ const formatLabel = (value) => {
 /* ════════════════════════════════════════════════════════════════════════════
    Column configuration.
 
-   SMSE Name is the pinned first column and Action the last, so neither appears
-   here. Widths are generous: each header carries a grip, a sort control and a
-   filter control (~60px of chrome), and narrow columns break labels mid-word.
+   Business Name is the pinned first column and Action the last, so neither
+   appears here — but both resize like everything else, via the reserved width
+   keys below. Widths are generous: each header carries a grip, a sort control,
+   a filter control and an info icon (~75px of chrome).
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  location: { label: "Location", width: 152, filterType: "location", visible: true, priority: 2, sortable: true },
-  sector: { label: "Sector", width: 158, filterType: "sector", visible: true, priority: 3, sortable: true },
-  operationStage: { label: "Stage", width: 150, filterType: "operationStage", visible: true, priority: 3, sortable: true },
-  internshipRole: { label: "Role", width: 210, filterType: "internshipRole", visible: true, priority: 2, sortable: true },
-  stipend: { label: "Stipend", width: 150, filterType: "stipend", visible: true, priority: 3, sortable: true },
-  startDate: { label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 3, sortable: true },
-  matchPercentage: { label: "Match %", align: "center", width: 150, filterType: "matchPercentage", visible: true, priority: 1, sortable: true },
-  status: { label: "Status", width: 158, filterType: "status", visible: true, priority: 1, sortable: true },
+  location: { label: "Location", width: 152, filterType: "location", visible: true, priority: 2, sortable: true, tooltip: "Where the business is based." },
+  sector: { label: "Sector", width: 158, filterType: "sector", visible: true, priority: 3, sortable: true, tooltip: "The industry the business trades in." },
+  operationStage: { label: "Stage", width: 150, filterType: "operationStage", visible: true, priority: 3, sortable: true, tooltip: "How established the business is — startup, growth, established and so on." },
+  internshipRole: { label: "Role", width: 210, filterType: "internshipRole", visible: true, priority: 2, sortable: true, tooltip: "The internship role on offer. Press Brief to read the full description." },
+  stipend: { label: "Stipend", width: 150, filterType: "stipend", visible: true, priority: 3, sortable: true, tooltip: "What the internship pays, where the business has published it." },
+  startDate: { label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 3, sortable: true, tooltip: "When the internship begins. TBD means the business hasn't set a date yet." },
+  matchPercentage: { label: "Match %", align: "center", width: 150, filterType: "matchPercentage", visible: true, priority: 1, sortable: true, tooltip: "How well this internship fits your profile — skills, work mode, location and availability. Click the score for the full breakdown." },
+  status: { label: "Status", width: 158, filterType: "status", visible: true, priority: 1, sortable: true, tooltip: "Where you stand with this business, from New Match through to Accepted or Declined." },
 
-  ratingRecommendation: { label: "Rating", width: 152, filterType: "ratingRecommendation", visible: false, priority: 4, sortable: true },
+  ratingRecommendation: { label: "Rating", width: 152, filterType: "ratingRecommendation", visible: false, priority: 4, sortable: true, tooltip: "Any rating or recommendation recorded for this placement." },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -442,28 +486,37 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const SMSE_WIDTH = 230
-const ACTION_WIDTH = 190
+/* Business Name and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const SMSE_KEY = "__smse__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [SMSE_KEY]: 230, [ACTION_KEY]: 190 }
 const MIN_COLUMN_WIDTH = 84
 
+/* Every filter is a list of selected values, so the header popovers can offer
+   what is actually in the table rather than a blank search box. */
 const EMPTY_FILTERS = {
-  name: "",
+  name: [],
   location: [],
   sector: [],
   operationStage: [],
-  internshipRole: "",
+  internshipRole: [],
   stipend: [],
   startFrom: "",
   startTo: "",
   matchRange: [0, 100],
   status: [],
-  ratingRecommendation: "",
+  ratingRecommendation: [],
 }
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-const VIEWS_STORAGE_KEY = "intern-matches-views-v1"
-const FILTERS_STORAGE_KEY = "intern-matches-filters-v1"
+// v2: the fixed columns now store their widths in this map too, so a v1 view
+// would leave them undefined.
+const VIEWS_STORAGE_KEY = "intern-matches-views-v2"
+// v2: every text filter became a multi-select array.
+const FILTERS_STORAGE_KEY = "intern-matches-filters-v2"
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
@@ -476,7 +529,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -496,7 +549,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -537,10 +590,14 @@ const loadFilterState = () => {
   if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
   try {
     const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
-    return {
-      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
-      sort: saved?.sort?.key ? saved.sort : null,
-    }
+    const merged = { ...EMPTY_FILTERS, ...(saved?.filters || {}) }
+    // A value stored by an older build as a string would blow up .includes.
+    Object.keys(EMPTY_FILTERS).forEach((key) => {
+      if (Array.isArray(EMPTY_FILTERS[key]) && !Array.isArray(merged[key])) {
+        merged[key] = merged[key] ? [merged[key].toString()] : []
+      }
+    })
+    return { filters: merged, sort: saved?.sort?.key ? saved.sort : null }
   } catch {
     return { filters: { ...EMPTY_FILTERS }, sort: null }
   }
@@ -592,6 +649,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
   const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
   const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+  const [chipSearch, setChipSearch] = useState("")
 
   // Views
   const [viewsState, setViewsState] = useState(() => loadViewsState())
@@ -615,6 +673,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -818,13 +877,23 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -832,6 +901,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -844,13 +914,42 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     window.addEventListener("mouseup", onUp)
   }
 
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="it-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
+
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
+    setChipSearch("")
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
   }
-  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+  const closeHeaderFilter = () => {
+    setHeaderFilterOpen(null)
+    setChipSearch("")
+  }
 
   const toggleSort = (key, event) => {
     event.stopPropagation()
@@ -1133,22 +1232,20 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
   const filteredInterns = useMemo(() => {
     const f = localFilters
     const matchesAny = (selected, value) =>
-      selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
-    const includesText = (needle, value) =>
-      !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
+      !selected?.length || selected.some((v) => (value || "").toString().toLowerCase().includes(v.toLowerCase()))
 
     const rows = displayData.filter((intern) => {
       const status = statusOf(intern)
 
       if (stageFilter && status !== stageFilter) return false
-      if (!includesText(f.name, intern.smseName)) return false
+      if (!matchesAny(f.name, intern.smseName)) return false
       if (!matchesAny(f.location, intern.location)) return false
       if (!matchesAny(f.sector, intern.sector)) return false
       if (!matchesAny(f.operationStage, intern.operationStage)) return false
-      if (!includesText(f.internshipRole, intern.internshipRole)) return false
+      if (!matchesAny(f.internshipRole, intern.internshipRole)) return false
       if (!matchesAny(f.stipend, intern.stipend)) return false
       if (f.status.length > 0 && !f.status.includes(status)) return false
-      if (!includesText(f.ratingRecommendation, intern.ratingRecommendation)) return false
+      if (!matchesAny(f.ratingRecommendation, intern.ratingRecommendation)) return false
 
       const iso = toISODateOnly(intern.startDate)
       if (f.startFrom && (!iso || iso < f.startFrom)) return false
@@ -1205,15 +1302,20 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     return () => window.removeEventListener(INTERN_ROWS_REQUEST_EVENT, broadcast)
   }, [displayData, statusOf])
 
-  /* ─── Filter options + chrome ───────────────────────────────────────── */
+  /* ─── Filter options + chrome ─────────────────────────────────────────
+     Every filter offers the values actually present in the table, so you pick
+     from what exists rather than guessing at a search box. */
   const uniqueOf = useCallback(
     (accessor) => [...new Set(displayData.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
     [displayData],
   )
+  const nameOptions = useMemo(() => uniqueOf((d) => d.smseName), [uniqueOf])
   const locationOptions = useMemo(() => uniqueOf((d) => d.location), [uniqueOf])
   const sectorOptions = useMemo(() => uniqueOf((d) => d.sector), [uniqueOf])
   const stageOptions = useMemo(() => uniqueOf((d) => d.operationStage), [uniqueOf])
+  const roleOptions = useMemo(() => uniqueOf((d) => d.internshipRole), [uniqueOf])
   const stipendOptions = useMemo(() => uniqueOf((d) => d.stipend), [uniqueOf])
+  const ratingOptions = useMemo(() => uniqueOf((d) => d.ratingRecommendation), [uniqueOf])
   const statusOptions = useMemo(() => {
     const found = [...new Set(displayData.map((d) => statusOf(d)).filter(Boolean))].sort()
     return found.length > 0 ? found : Object.keys(STATUS_TYPES)
@@ -1221,16 +1323,16 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
 
   const f = localFilters
   const activeFilterCount =
-    (f.name.trim() ? 1 : 0) +
+    f.name.length +
     f.location.length +
     f.sector.length +
     f.operationStage.length +
-    (f.internshipRole.trim() ? 1 : 0) +
+    f.internshipRole.length +
     f.stipend.length +
     (f.startFrom || f.startTo ? 1 : 0) +
     (f.matchRange[0] > 0 || f.matchRange[1] < 100 ? 1 : 0) +
     f.status.length +
-    (f.ratingRecommendation.trim() ? 1 : 0)
+    f.ratingRecommendation.length
 
   const clearAllFilters = () => {
     setLocalFilters({ ...EMPTY_FILTERS })
@@ -1243,11 +1345,8 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
         return !!f.startFrom || !!f.startTo
       case "matchPercentage":
         return f.matchRange[0] > 0 || f.matchRange[1] < 100
-      default: {
-        const v = f[type]
-        if (Array.isArray(v)) return v.length > 0
-        return typeof v === "string" ? !!v.trim() : false
-      }
+      default:
+        return Array.isArray(f[type]) && f[type].length > 0
     }
   }
 
@@ -1277,12 +1376,13 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const smseWidth = widthOf(SMSE_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    // Left-pinned columns stack to the right of the frozen SMSE column.
-    let leftAcc = SMSE_WIDTH
+    // Left-pinned columns stack to the right of the frozen Business Name column.
+    let leftAcc = smseWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1298,11 +1398,11 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, smseWidth])
 
-  const totalWidth = SMSE_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = smseWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
-  const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
+  const cellPadding = density === "compact" ? "0.4rem 0.3rem" : "0.6rem 0.4rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
 
   const tableCellStyle = {
@@ -1315,6 +1415,13 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     lineHeight: "1.3",
     overflow: "hidden",
   }
+
+  /* Copied from the other match tables so the score column reads identically
+     across the product. */
+  const matchContainerStyle = { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%" }
+  const progressBarStyle = { width: "60%", height: "6px", background: "#e6d7c3", borderRadius: "3px", overflow: "hidden" }
+  const progressFillStyle = { height: "100%", borderRadius: "3px", transition: "width 0.3s ease" }
+  const matchScoreStyle = { fontWeight: "600", color: "#4a352f", fontSize: "0.75rem" }
 
   const searchedColumns = DEFAULT_COLUMN_ORDER.filter((key) =>
     COLUMN_DEFS[key].label.toLowerCase().includes(columnSearch.toLowerCase()),
@@ -2319,31 +2426,36 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
           </td>
         )
 
-      case "matchPercentage":
+      case "matchPercentage": {
+        const pct = intern.matchPercentage || 0
+        const scoreColor = getScoreColor(pct)
         return (
-          <td key={key} style={{ ...style, textAlign: "center" }}>
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-full h-1.5 rounded-full overflow-hidden bg-[#e6d7c3]">
+          <td key={key} style={style}>
+            <div style={matchContainerStyle}>
+              <div style={progressBarStyle}>
                 <div
-                  className="h-full rounded-full"
                   style={{
-                    width: `${intern.matchPercentage || 0}%`,
-                    background: "linear-gradient(90deg, #7d5a50, #a67c52)",
-                    transition: "width .3s ease",
+                    ...progressFillStyle,
+                    width: `${pct}%`,
+                    background: `linear-gradient(90deg, ${scoreColor}, ${scoreColor}aa)`,
                   }}
                 />
               </div>
-              <button
-                onClick={() => handleViewMatchBreakdown(intern)}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#7d5a50] hover:text-[#4a352f]"
-                title="View match breakdown"
-              >
-                {intern.matchPercentage || 0}%
-                <Eye size={12} className="text-[#a67c52]" />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ ...matchScoreStyle, color: scoreColor }}>{pct}%</span>
+                <button
+                  onClick={() => handleViewMatchBreakdown(intern)}
+                  title="View match breakdown"
+                  aria-label="View match breakdown"
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", color: "#a67c52" }}
+                >
+                  <Eye size={14} />
+                </button>
+              </div>
             </div>
           </td>
         )
+      }
 
       case "status": {
         const status = statusOf(intern)
@@ -2351,10 +2463,9 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
         return (
           <td key={key} style={style}>
             <span
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+              className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap capitalize"
               style={{ backgroundColor: s.color, color: s.textColor }}
             >
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.textColor }} />
               {status}
             </span>
           </td>
@@ -2415,7 +2526,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
       <td
         style={{
           ...tableCellStyle,
-          width: ACTION_WIDTH,
+          width: actionWidth,
           borderRight: "none",
           backgroundColor: rowBg,
           textAlign: "center",
@@ -2438,11 +2549,29 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading program sponsors...</div>
   }
 
+  /* Every chip-list filter is driven by this one array. */
+  const FILTER_OPTION_SETS = [
+    { type: "name", label: "Business name", options: nameOptions },
+    { type: "location", label: "Location", options: locationOptions },
+    { type: "sector", label: "Sector", options: sectorOptions },
+    { type: "operationStage", label: "Stage", options: stageOptions },
+    { type: "internshipRole", label: "Role", options: roleOptions },
+    { type: "stipend", label: "Stipend", options: stipendOptions },
+    { type: "status", label: "Status", options: statusOptions },
+    { type: "ratingRecommendation", label: "Rating", options: ratingOptions },
+  ]
+
   /* ═══════════════════════════════════════════════════════════════════════
      Render
+
+     The root carries no font class on purpose. It used to be `font-sans`,
+     which pinned this table to Tailwind's own stack while every other match
+     table inherited the app font — that is what made this one look different.
+     maxWidth/overflowX match the other tables so a wide table scrolls inside
+     its own container instead of stretching the page.
      ═══════════════════════════════════════════════════════════════════════ */
   return (
-    <div style={{ width: "100%" }} className="font-sans">
+    <div style={{ width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
       {/* Inline banner */}
       {notification && (
         <div
@@ -2698,7 +2827,8 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                       </div>
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -2805,7 +2935,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                buying every header ~14px more room for its label. */
             .it-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .it-th:hover .it-th-grip { opacity: .45; }
-            .it-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .it-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .it-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -2829,21 +2959,23 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                   className="it-th font-semibold uppercase tracking-wider text-xs top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: SMSE_WIDTH,
+                    width: smseWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
                   }}
                 >
                   <div className="it-th-row">
-                    <span className="it-th-label" title="SMSE Name">
+                    <span className="it-th-label" title="Business Name">
                       Business Name
                     </span>
                     <span className="it-th-tools">
                       <SortTrigger columnKey="name" />
-                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <FilterTrigger type="name" active={localFilters.name.length > 0} />
+                      <HeaderInfoTooltip text="The business offering the internship. Click the name to open its full details." />
                     </span>
                   </div>
+                  <ColumnResizer colKey={SMSE_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -2855,7 +2987,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -2889,9 +3021,10 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
                           {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="it-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -2902,12 +3035,16 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                   className="it-th text-center font-semibold uppercase tracking-wider text-xs top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="it-th-row justify-center">
+                    <span className="it-th-label">Action</span>
+                    <HeaderInfoTooltip text="Apply to this internship, accept a request the business sent you, or message them a question." />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -2953,12 +3090,12 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                       onMouseLeave={() => setHoveredRow(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* SMSE — pinned left, sector underneath. */}
+                      {/* Business Name — pinned left, location underneath. */}
                       <td
                         className="sticky left-0 z-10"
                         style={{
                           ...tableCellStyle,
-                          width: SMSE_WIDTH,
+                          width: smseWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -3116,77 +3253,65 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
               </>
             )}
 
-            {[
-              { type: "name", label: "SMSE name", placeholder: "Search name..." },
-              { type: "internshipRole", label: "Role", placeholder: "Search role..." },
-              { type: "ratingRecommendation", label: "Rating", placeholder: "Search rating..." },
-            ].map(
-              ({ type, label, placeholder }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type] && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: "" }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={localFilters[type]}
-                      onChange={(e) => setLocalFilters((p) => ({ ...p, [type]: e.target.value }))}
-                      placeholder={placeholder}
-                      className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
-                    />
+            {/* Every other filter is a chip list of the values actually in the
+                table, with a search box appearing only once the list is long
+                enough to need one. */}
+            {FILTER_OPTION_SETS.map(({ type, label, options }) => {
+              if (headerFilterOpen.type !== type) return null
+              const shown = options.filter((o) => o.toString().toLowerCase().includes(chipSearch.toLowerCase()))
+              return (
+                <div key={type}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                    {localFilters[type].length > 0 && (
+                      <button
+                        onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
+                        className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                ),
-            )}
 
-            {[
-              { type: "location", label: "Location", options: locationOptions },
-              { type: "sector", label: "Sector", options: sectorOptions },
-              { type: "operationStage", label: "Stage", options: stageOptions },
-              { type: "stipend", label: "Stipend", options: stipendOptions },
-              { type: "status", label: "Status", options: statusOptions },
-            ].map(
-              ({ type, label, options }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type].length > 0 && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
+                  {options.length > 8 && (
+                    <div className="relative mb-2">
+                      <Search
+                        size={12}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none"
+                      />
+                      <input
+                        autoFocus
+                        value={chipSearch}
+                        onChange={(e) => setChipSearch(e.target.value)}
+                        placeholder={`Search ${label.toLowerCase()}...`}
+                        className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                      />
                     </div>
-                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
-                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
-                      {options.map((value) => (
-                        <button
-                          key={value}
-                          onClick={() => toggleChip(type, value)}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            localFilters[type].includes(value)
-                              ? "bg-[#7d5a50] text-white"
-                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
-                          }`}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                    {shown.length === 0 && (
+                      <span className="text-xs text-[#a89482]">
+                        {options.length === 0 ? "No data available" : "Nothing matches that search."}
+                      </span>
+                    )}
+                    {shown.map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => toggleChip(type, value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                          localFilters[type].includes(value)
+                            ? "bg-[#7d5a50] text-white"
+                            : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
                   </div>
-                ),
-            )}
+                </div>
+              )
+            })}
           </div>
         </PopupPortal>
       )}
@@ -3373,14 +3498,16 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
 
               <div className="p-6">
                 <div className="text-center pb-5 border-b border-[#e6d7c3]">
-                  <div className="text-4xl font-extrabold text-[#7d5a50]">{selectedIntern.matchPercentage}%</div>
+                  <div className="text-4xl font-extrabold" style={{ color: getScoreColor(selectedIntern.matchPercentage) }}>
+                    {selectedIntern.matchPercentage}%
+                  </div>
                   <p className="text-xs text-[#a89482] mt-1 m-0">Overall match score</p>
                   <div className="h-2 rounded-full overflow-hidden bg-[#e6d7c3] mt-3">
                     <div
                       className="h-full rounded-full"
                       style={{
                         width: `${selectedIntern.matchPercentage}%`,
-                        background: "linear-gradient(90deg, #7d5a50, #a67c52)",
+                        background: `linear-gradient(90deg, ${getScoreColor(selectedIntern.matchPercentage)}, ${getScoreColor(selectedIntern.matchPercentage)}aa)`,
                       }}
                     />
                   </div>
@@ -3455,91 +3582,21 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
           document.body,
         )}
 
-      {/* Detail Modal */}
-      {mounted &&
-        showModal &&
-        selectedIntern &&
-        createPortal(
-          <div
-            className="fixed inset-0 flex items-center justify-center z-[1000] p-4"
-            style={{ backgroundColor: "rgba(62,39,35,0.85)", backdropFilter: "blur(4px)" }}
-            onClick={closeAllModals}
-          >
-            <div
-              className="bg-white rounded-2xl max-w-[820px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex items-center gap-2">
-                    <User size={20} className="text-[#f5f0e1] flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">SMSE details</p>
-                      <h3 className="text-sm font-bold mt-0.5 truncate">{selectedIntern.smseName}</h3>
-                    </div>
-                  </div>
-                  <button onClick={closeAllModals} className="text-white/70 hover:text-white p-1 flex-shrink-0">
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6">
-                <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-                  {[
-                    ["SMSE name", selectedIntern.smseName],
-                    ["Location", selectedIntern.location],
-                    ["Sector", selectedIntern.sector],
-                    ["Operation stage", selectedIntern.operationStage],
-                    ["Role", selectedIntern.internshipRole],
-                    ["Stipend", selectedIntern.stipend],
-                    ["Start date", formatDateValue(selectedIntern.startDate) || selectedIntern.startDate || "-"],
-                    ["Match score", `${selectedIntern.matchPercentage}%`],
-                    ["Status", statusOf(selectedIntern)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-3 text-sm text-[#4a352f]">
-                      <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</div>
-                      {value || "-"}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-[#faf7f2] border border-[#e6d7c3] rounded-lg p-4 mt-4">
-                  <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">
-                    <FileIcon size={11} className="inline mr-1" /> Internship brief
-                  </div>
-                  <p className="text-sm text-[#7d5a50] m-0 leading-relaxed">
-                    {selectedIntern.briefDescription?.title} — {selectedIntern.briefDescription?.duration}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
-                <button
-                  onClick={() => {
-                    const intern = selectedIntern
-                    closeAllModals()
-                    handleViewBrief(intern)
-                  }}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] inline-flex items-center gap-1.5"
-                >
-                  <FileText size={14} /> Read the brief
-                </button>
-                <button
-                  onClick={() => {
-                    const intern = selectedIntern
-                    closeAllModals()
-                    handleMessage(intern)
-                  }}
-                  className="px-5 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold inline-flex items-center gap-1.5"
-                >
-                  <MessageCircle size={14} /> Send a message
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {/* Business details — the same pop-up the advisor-side match table uses,
+          so a business reads identically wherever you open it. It fetches the
+          full universalProfiles record itself; smseName and the match score
+          are passed so the header has something to show while it loads. */}
+      {showModal && selectedIntern && (
+        <BusinessDetailsModal
+          business={{
+            businessId: selectedIntern.originalSponsorId,
+            businessName: selectedIntern.smseName,
+            finalScore: selectedIntern.matchPercentage,
+          }}
+          isOpen={showModal}
+          onClose={closeAllModals}
+        />
+      )}
 
       {/* Message Modal */}
       {mounted &&
