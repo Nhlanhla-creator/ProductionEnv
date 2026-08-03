@@ -491,73 +491,83 @@ export const usePortfolioData = () => {
   const [error, setError] = useState(null);
 
   const fetchAll = useCallback(async (uid) => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      // ── 1. Catalyst profile (programme preferences) ───────────────────────
-      const catalystDoc = await getDoc(doc(db, "catalystProfiles", uid));
-      const formData = catalystDoc.exists()
-        ? catalystDoc.data().formData || {}
-        : {};
-      setCatalystFormData(formData);
+    // 1. Catalyst profile
+    const catalystDoc = await getDoc(doc(db, "catalystProfiles", uid));
+    const formData = catalystDoc.exists() ? catalystDoc.data().formData || {} : {};
+    setCatalystFormData(formData);
 
-      // ── 2. Fetch user-scoped apps + ALL apps + bigEvaluations in parallel ─
-      // allAppSnap is unfiltered — every application across all catalysts.
-      const [appSnap, bigSnap, allAppSnap] = await Promise.all([
-        getDocs(
-          query(
-            collection(db, "catalystApplications"),
-            where("catalystId", "==", uid),
-          ),
-        ),
-        getDocs(collection(db, "bigEvaluations")),
-        getDocs(collection(db, "catalystApplications")),
-      ]);
+    // 2. Fetch apps + bigEvaluations
+    const [appSnap, bigSnap, allAppSnap] = await Promise.all([
+      getDocs(query(collection(db, "catalystApplications"), where("catalystId", "==", uid))),
+      getDocs(collection(db, "bigEvaluations")),
+      getDocs(collection(db, "catalystApplications")),
+    ]);
 
-      // ── 3. Build scores lookup: smeId → scores object ─────────────────────
-      const scoresById = {};
-      bigSnap.forEach((d) => {
-        const { scores } = d.data();
-        if (scores) scoresById[d.id] = scores;
+    // 3. Build scores lookup
+    const scoresById = {};
+    bigSnap.forEach((d) => {
+      const { scores } = d.data();
+      if (scores) scoresById[d.id] = scores;
+    });
+
+    // 4. Parse apps
+    const parseAppDocs = (snap) =>
+      snap.docs.map((d) => {
+        const parts = d.id.split("_");
+        return { docId: d.id, smeId: parts[1] || "", programIndex: parts[2] || "0", ...d.data() };
       });
 
-      // ── 4. Parse both application doc sets ───────────────────────────────
-      const parseAppDocs = (snap) =>
-        snap.docs.map((d) => {
-          const parts = d.id.split("_");
-          return {
-            docId: d.id,
-            smeId: parts[1] || "",
-            programIndex: parts[2] || "0",
-            ...d.data(),
-          };
-        });
+    const rawApps = parseAppDocs(appSnap);
+    const rawAllApps = parseAppDocs(allAppSnap);
 
-      const rawApps = parseAppDocs(appSnap);
-      // console.log("[usePortfolioData] rawApps:", rawApps);
-      const rawAllApps = parseAppDocs(allAppSnap);
+    // 5. Collect all unique smeIds (user IDs)
+    const allSmeIds = new Set([...rawApps.map(a => a.smeId), ...rawAllApps.map(a => a.smeId)].filter(Boolean));
 
-      // ── 5. Batch-fetch unique universalProfiles across BOTH sets ──────────
-      // Union ensures one round-trip covers profiles needed by all three batches.
-      const userSmeIds = new Set(rawApps.map((a) => a.smeId).filter(Boolean));
-      const universalSmeIds = new Set(
-        rawAllApps.map((a) => a.smeId).filter(Boolean),
-      );
-      const allUniqueIds = [...new Set([...userSmeIds, ...universalSmeIds])];
+    // 6. Fetch universalProfiles and users in parallel
+    const [profiles, userDocs] = await Promise.all([
+      Promise.all([...allSmeIds].map(async (id) => {
+        try {
+          const pd = await getDoc(doc(db, "universalProfiles", id));
+          return pd.exists() ? [id, pd.data()] : null;
+        } catch { return null; }
+      })).then(results => {
+        const map = {};
+        results.forEach(r => { if (r) map[r[0]] = r[1]; });
+        return map;
+      }),
+      Promise.all([...allSmeIds].map(async (id) => {
+        try {
+          const ud = await getDoc(doc(db, "users", id));
+          return ud.exists() ? [id, ud.data()] : null;
+        } catch { return null; }
+      })).then(results => {
+        const map = {};
+        results.forEach(r => { if (r) map[r[0]] = r[1]; });
+        return map;
+      })
+    ]);
 
-      const profiles = {};
-      await Promise.all(
-        allUniqueIds.map(async (id) => {
-          try {
-            const pd = await getDoc(doc(db, "universalProfiles", id));
-            if (pd.exists()) profiles[id] = pd.data();
-          } catch {}
-        }),
-      );
+    // 7. Enrich function now includes userDocs
+    const enrichApps = (rawApps, profiles, scoresById, userDocs) =>
+      rawApps.map((a) => {
+        const evalScores = scoresById[a.smeId] || {};
+        const user = userDocs[a.smeId] || {};
+        return {
+          ...a,
+          profile: profiles[a.smeId] || {},
+          ...evalScores,
+          // user fields
+          lastActiveDate: user.lastActiveDate || null,
+          lastActiveAt: user.lastActiveAt || null,
+        };
+      });
 
-      // ── 6. Enrich all three sets using the shared profiles + scores maps ──
-      const enrichedApps = enrichApps(rawApps, profiles, scoresById);
-      const enrichedAllApps = enrichApps(rawAllApps, profiles, scoresById);
+    const enrichedApps = enrichApps(rawApps, profiles, scoresById, userDocs);
+    const enrichedAllApps = enrichApps(rawAllApps, profiles, scoresById, userDocs);
+
 
       // ── 7. Write scores back to catalystApplications (fire-and-forget) ────
       // Only writeback for the current user's own applications.

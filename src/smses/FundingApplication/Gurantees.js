@@ -2,6 +2,7 @@ import "./FundingApplication.css";
 import { useState } from "react";
 import FormField from "./FormField";
 import FileUpload from "./FileUpload";
+import GuaranteesAI from "./GuaranteesAI"; // ← add this
 
 // Level 1: Security Category options
 const SECURITY_CATEGORIES = [
@@ -141,8 +142,8 @@ const createEmptyInstrument = () => ({
   notes: "",
 });
 
-export const renderGuarantees = (data = {}, updateFormData) => {
-  const instruments = (data && data.securityInstruments) || [];
+export const renderGuarantees = (data = {}, updateFormData, guaranteesAiRef = null) => {
+   const instruments = (data && data.securityInstruments) || [];
 
   const saveInstruments = (updated) => {
     updateFormData("guarantees", { securityInstruments: updated });
@@ -419,9 +420,29 @@ export const renderGuarantees = (data = {}, updateFormData) => {
         {instruments.map((instrument, index) => renderInstrumentCard(instrument, index))}
       </div>
 
-      <button type="button" className="add-instrument-btn" onClick={addInstrument}>
+       <button type="button" className="add-instrument-btn" onClick={addInstrument}>
         + Add Security Instrument
       </button>
+
+     {instruments.length > 0 && (
+         <GuaranteesAI
+           ref={guaranteesAiRef}
+           instruments={instruments}
+           onEvaluationComplete={(evaluation) => {
+             // Keep the score on the section so it lands in the saved
+             // application payload alongside the instruments themselves.
+             updateFormData("guarantees", {
+               securityInstruments: instruments,
+               aiEvaluation: {
+                 score: evaluation.score,
+                 label: evaluation.label,
+                 instrumentScores: evaluation.instrumentScores,
+                 evaluatedAt: new Date().toISOString(),
+               },
+             });
+           }}
+         />
+       )}
 
       {/* Information Box */}
       <div style={{
@@ -641,8 +662,8 @@ export const renderGuarantees = (data = {}, updateFormData) => {
   );
 };
 
-const Guarantees = ({ data = {}, updateData }) => {
-  return renderGuarantees(data, updateData);
+const Guarantees = ({ data = {}, updateData, aiRef = null }) => {
+  return renderGuarantees(data, updateData, aiRef);
 };
 
 export default Guarantees;

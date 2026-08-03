@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import "./FundingApplication.css"
 import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight, Eye } from "lucide-react"
 import { renderApplicationOverview } from "./ApplicationOverview"
@@ -150,6 +150,9 @@ const FundingApplication = ({
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
+const guaranteesAiRef = useRef(null)
+const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
+
 
   // Use custom hook for form state & actions
   const {
@@ -182,6 +185,23 @@ const FundingApplication = ({
     }
   }
 
+
+  const runGuaranteesAnalysisIfNeeded = async () => {
+  if (activeSection !== "guarantees") return
+  const api = guaranteesAiRef.current
+  if (!api || !api.hasPendingChanges()) return
+
+  try {
+    setIsAnalyzingGuarantees(true)
+    await api.runAnalysis()
+  } catch (err) {
+    // Never block the save on a scoring failure — the component surfaces
+    // the error inline.
+    console.error("Guarantees analysis failed:", err)
+  } finally {
+    setIsAnalyzingGuarantees(false)
+  }
+}
   // Warn user before leaving page if there are unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -600,7 +620,7 @@ const FundingApplication = ({
           existingUniversalDocs
         )
       case "guarantees":
-        return renderGuarantees(formData.guarantees, updateFormData)
+      return renderGuarantees(formData.guarantees, updateFormData, guaranteesAiRef)
       case "growthPotential":
         return renderGrowthPotential(formData.growthPotential, updateFormData)
       case "socialImpact":
@@ -616,6 +636,7 @@ const FundingApplication = ({
 
   const handleSaveSection = async () => {
     try {
+       await runGuaranteesAnalysisIfNeeded()
       const ok = await saveSectionToFirebase(activeSection, false)
       if (ok) {
         alert("Section saved successfully!")
@@ -639,6 +660,8 @@ const FundingApplication = ({
       })
       return
     }
+
+     await runGuaranteesAnalysisIfNeeded()
 
     const ok = await saveSectionToFirebase(activeSection, true)
     if (ok && nextSection) {
@@ -1326,6 +1349,7 @@ The BIG Fundability Team
           <button
             type="button"
             onClick={handleSaveSection}
+            disabled={isAnalyzingGuarantees}
             style={{
               display: "flex",
               alignItems: "center",
@@ -1337,13 +1361,15 @@ The BIG Fundability Team
             }}
             className="btn btn-secondary"
           >
-            <Save size={16} /> Save
+           
+             <Save size={16} /> {isAnalyzingGuarantees ? "Analyzing…" : "Save"}
           </button>
 
           {activeSection !== "declarationCommitment" ? (
             <button
               type="button"
               onClick={handleSaveAndContinue}
+              disabled={isAnalyzingGuarantees}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1355,7 +1381,8 @@ The BIG Fundability Team
               }}
               className="btn btn-primary"
             >
-              Save & Continue <ChevronRight size={16} />
+             {isAnalyzingGuarantees ? "Analyzing guarantees…" : "Save & Continue"}
++              <ChevronRight size={16} />
             </button>
           ) : (
             <button
