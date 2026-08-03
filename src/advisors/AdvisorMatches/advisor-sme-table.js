@@ -7,7 +7,7 @@ import {
   Clock, Users, Download, MessageSquare, ArrowRight, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase, Video, LayoutGrid, Trash2, Plus,
   GripVertical, AlertTriangle, XCircle, ArrowUp, ArrowDown, ArrowUpDown, Search,
-  ExternalLink
+  ExternalLink, Bookmark
 } from "lucide-react";
 import {
   collection, getDocs, query, where, serverTimestamp, doc, updateDoc, getDoc, addDoc
@@ -325,6 +325,12 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [updatedStages, setUpdatedStages] = useState({});
+  // Rows with an in-flight save/unsave write, so the bookmark can't be
+  // double-fired.
+  const [savingRows, setSavingRows] = useState({});
+  // "Saved" toolbar toggle, same behaviour as the SME-side advisor table:
+  // narrows the table to bookmarked rows and is how you get them back.
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
 
   // ─── Views ────────────────────────────────────────────────────────────────
   const [viewsState, setViewsState] = useState(() => loadViewsState());
@@ -579,6 +585,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
         statusLabel: getStatusStyle(currentStatus, activeStages).stage.name,
         nextStage: getNextStage(currentStatus, activeStages),
         availableDates: a.availableDates || [],
+        // Bookmark flag, stored on the application document itself so it
+        // follows the advisor across devices rather than living in this
+        // browser's localStorage.
+        saved: !!a.saved,
         raw: a,
       };
     });
@@ -598,6 +608,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
 
     const matchesAny = (selected, value) =>
       !selected?.length || selected.some((v) => (value || "").toString().toLowerCase().includes(v.toLowerCase()));
+
+    // Saved-only view. Kept out of activeFilterCount deliberately — it's a
+    // view toggle with its own visible chip, not a column filter.
+    if (showSavedOnly) result = result.filter((s) => s.saved);
 
     // External filters panel (owned by the parent).
     if (filters?.location) {
@@ -665,7 +679,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     }
 
     return result;
-  }, [smes, filters, localFilters, sortConfig, activeStages]);
+  }, [smes, filters, localFilters, sortConfig, activeStages, showSavedOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -682,6 +696,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const supportRequiredOptions = useMemo(() => uniqueOf((s) => s.supportRequired), [smes]);
   const revenueBandOptions = useMemo(() => uniqueOf((s) => s.revenueBand), [smes]);
   const compensationModelOptions = useMemo(() => uniqueOf((s) => s.compensationModel), [smes]);
+
+  // Counted off every mapped row, not the filtered list, so the chip still
+  // reads the true total while a filter is narrowing the table.
+  const savedCount = useMemo(() => smes.filter((s) => s.saved).length, [smes]);
 
   const activeFilterCount = localFilters.name.length
     + localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length
@@ -702,6 +720,43 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
       case "applied": return !!(localFilters.appliedRange[0] || localFilters.appliedRange[1]);
       case "daysInStage": return localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null;
       default: return Array.isArray(localFilters[filterType]) && localFilters[filterType].length > 0;
+    }
+  };
+
+  // ─── Save / bookmark ──────────────────────────────────────────────────────
+  // Writes `saved` onto the application document. The UI flips first and rolls
+  // back if the write fails, so the star never lags behind the click. Note this
+  // deliberately does NOT touch `updatedAt`: that field drives "Days in Stage"
+  // and "Last Activity", and bookmarking is not pipeline activity — stamping it
+  // here would silently reset every stalled-row indicator.
+  const toggleSaved = async (sme) => {
+    const key = sme.docId;
+    if (!key || savingRows[key]) return;
+
+    const nextSaved = !sme.saved;
+    setSavingRows((prev) => ({ ...prev, [key]: true }));
+    setRawApps((prev) => prev.map((a) => (a.docId === key ? { ...a, saved: nextSaved } : a)));
+
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+      await updateDoc(doc(db, "AdvisorApplications", key), {
+        saved: nextSaved,
+        savedAt: nextSaved ? serverTimestamp() : null,
+      });
+      setNotification({
+        type: "success",
+        message: nextSaved ? `${sme.name} saved` : `${sme.name} removed from saved`,
+      });
+    } catch (error) {
+      console.error("Save toggle error:", error);
+      setRawApps((prev) => prev.map((a) => (a.docId === key ? { ...a, saved: !nextSaved } : a)));
+      setNotification({
+        type: "error",
+        message: `Couldn't ${nextSaved ? "save" : "remove"} ${sme.name}: ${error.message}`,
+      });
+    } finally {
+      setSavingRows((prev) => { const { [key]: _done, ...rest } = prev; return rest; });
     }
   };
 
@@ -820,9 +875,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
       case "bigScore": popupWidth = 380; popupHeight = 450; break;
       case "match": popupWidth = 380; popupHeight = 420; break;
       case "stage": popupWidth = 450; popupHeight = 520; break;
-      // Grew by one row when "Open BIG Score Page" was added, so the
-      // flip-upward calculation below still has an accurate height.
-      case "quickActions": popupWidth = 230; popupHeight = 290; break;
+      // Grew as rows were added (BIG Score page, Save Match, View Saved), so
+      // the flip-upward calculation below still has an accurate height.
+      case "quickActions": popupWidth = 230; popupHeight = 380; break;
       default: popupWidth = 300; popupHeight = 300;
     }
 
@@ -1267,6 +1322,22 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                 <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
               )}
             </span>
+            {/* Saved matches. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => { setShowSavedOnly((v) => !v); setCurrentPage(1); }}
+                title={showSavedOnly ? "Show all businesses" : "Show only saved businesses"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
                 <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
@@ -1527,10 +1598,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                     })}
 
                     {columnVisibility.action && (
-                      <th className="adt-th py-3 px-3 relative text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "190px", backgroundColor: "#4a352f" }}>
+                      <th className="adt-th py-3 px-3 relative text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "230px", backgroundColor: "#4a352f" }}>
                         <div className="flex items-start gap-1 justify-center">
                           <span>Actions</span>
-                          <HeaderInfoTooltip text="Move the application to its next stage, or open quick actions for more options — including opening the business's BIG Score page." />
+                          <HeaderInfoTooltip text="Move the application to its next stage, save it for later with the star, or open quick actions for more options — including the business's BIG Score page." />
                         </div>
                       </th>
                     )}
@@ -1556,6 +1627,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                       const statusStyle = getStatusStyle(sme.currentStatus, activeStages);
                       const isTerminal = !!statusStyle.stage.terminal;
                       const nextStageLabel = sme.nextStage || "—";
+                      const isSaving = !!savingRows[sme.docId];
 
                       const renderCell = (key) => {
                         switch (key) {
@@ -1669,7 +1741,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                           {columnOrder.filter((key) => columnVisibility[key]).map((key) => renderCell(key))}
 
                           {columnVisibility.action && (
-                            <td className={`${ds.cell} text-center`} style={{ minWidth: "190px" }}>
+                            <td className={`${ds.cell} text-center`} style={{ minWidth: "230px" }}>
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   onClick={(e) => { if (!isTerminal) openPopupFromEvent("stage", sme, e); }}
@@ -1685,6 +1757,23 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                                   {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
                                   <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
                                 </button>
+
+                                {/* Save match — same bookmark, colours and
+                                    borderless treatment as the SME-side
+                                    advisor table. Dims while the write is in
+                                    flight. */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleSaved(sme); }}
+                                  disabled={isSaving}
+                                  aria-pressed={sme.saved}
+                                  aria-label={sme.saved ? "Remove from saved" : "Save match"}
+                                  title={sme.saved ? "Remove from saved" : "Save match"}
+                                  className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0 ${isSaving ? "opacity-50 cursor-wait" : ""}`}
+                                  style={{ color: sme.saved ? "#a67c52" : "#c8b6a6" }}
+                                >
+                                  <Bookmark size={14} fill={sme.saved ? "#a67c52" : "none"} />
+                                </button>
+
                                 <button
                                   onClick={(e) => openPopupFromEvent("quickActions", sme, e)}
                                   className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
@@ -2219,6 +2308,31 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
               <button onClick={() => { handleViewBigScorePage(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
               <button onClick={() => openPopup("match", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
               <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
+              {/* Both entry points call the same toggleSaved, so the row
+                  bookmark and this item can't drift apart. */}
+              <button
+                onClick={() => { closePopup(); toggleSaved(sme); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+              >
+                <Bookmark size={12} fill={sme.saved ? "#a67c52" : "none"} />
+                {sme.saved ? "Remove from Saved" : "Save Match"}
+              </button>
+              <button
+                onClick={() => {
+                  closePopup();
+                  setShowSavedOnly(true);
+                  setCurrentPage(1);
+                  setNotification({
+                    type: "success",
+                    message: savedCount > 0
+                      ? `Showing your ${savedCount} saved business${savedCount === 1 ? "" : "es"}.`
+                      : "You haven't saved any businesses yet — use the bookmark on a row.",
+                  });
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+              >
+                <LayoutGrid size={12} /> View Saved ({savedCount})
+              </button>
               {!stage.terminal && declinedStage && (
                 <button
                   onClick={(e) => openPopupFromEvent("stage", sme, e, { presetStage: declinedStage.name })}
