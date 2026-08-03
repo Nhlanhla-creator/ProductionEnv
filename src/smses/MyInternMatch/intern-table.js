@@ -29,6 +29,8 @@ import {
   Target,
   MessageSquare,
   XCircle,
+  Info,
+  Hash,
 } from "lucide-react"
 import {
   doc,
@@ -54,23 +56,14 @@ import InternDetailsModal from "./InternDetailsModal"
 
 /* ════════════════════════════════════════════════════════════════════════════
    Events the pipeline uses to talk to this table.
-
-   They're declared here, not in intern-dealflow-page.jsx, because that file
-   already imports calculateMatchScoreForSponsor from this one — pointing the
-   imports both ways would make a circular module dependency.
-
-     INTERN_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed status
-                                 name, or null to clear.
-     INTERN_ROWS_EVENT           table → pipeline. Detail is every candidate
-                                 that passes the table's other filters, each
-                                 with its resolved status. This is what makes
-                                 the cards and the table body agree.
-     INTERN_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast, for
-                                 whichever component mounted second.
    ════════════════════════════════════════════════════════════════════════ */
 export const INTERN_STAGE_FILTER_EVENT = "intern-pipeline-stage-filter"
 export const INTERN_ROWS_EVENT = "intern-pipeline-rows"
 export const INTERN_ROWS_REQUEST_EVENT = "intern-pipeline-rows-request"
+
+/* Applications page → table. Detail is an internApplicationsV2 id to scope to,
+   or null for "View All Matches". */
+export const INTERN_APPLICATION_FILTER_EVENT = "intern-application-filter"
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Reference data
@@ -354,9 +347,52 @@ const formatAvailability = (value) => {
   return d.toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })
 }
 
+/* The Applications page links here as
+   /intern-matches-page?applicationId=<id>, so the scope survives the route
+   change — an event fired before this component mounts has nobody listening. */
+const readApplicationIdFromUrl = () => {
+  if (typeof window === "undefined") return null
+  try {
+    return new URLSearchParams(window.location.search).get("applicationId") || null
+  } catch {
+    return null
+  }
+}
+
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
+}
+
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -822,9 +858,6 @@ const NextStageIndicator = ({ currentStage }) => {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Row actions.
-   The primary action changes with status and never stays "Apply" once the
-   SME has acted. Everything else now lives in the three-dot quick actions
-   popup, matching the SME table's single-primary-button layout.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const INTERN_ROW_ACTIONS = {
@@ -848,33 +881,27 @@ const getRowActions = (status) => INTERN_ROW_ACTIONS[status] || { primary: { lab
    Column configuration.
 
    Candidate is the pinned first column and Action the pinned last column, so
-   neither appears here. The six above the divider are the spec default view;
-   everything below is a spec "hidden by default" column.
-
-   Widths were raised slightly so the uppercase header labels have room to sit
-   next to their sort/filter controls — the old widths were what forced
-   "Match %" to break into "MAT CH.." and "Status" into "STA TUS".
-
-   priority drives responsive collapse: 1 survives mobile, <=3 survives
-   tablet, everything shows on laptop and up.
+   neither appears here — but both are resizable, via the reserved width keys
+   below.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const COLUMN_DEFS = {
-  matchPercentage: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
-  bigScore: { label: "Readiness / BIG Score", align: "center", width: 156, filterType: "bigScore", visible: true, priority: 2, sortable: true },
-  qualification: { label: "Qualification / Field", width: 178, filterType: "qualification", visible: true, priority: 3, sortable: true },
-  keySkills: { label: "Key Skills", width: 186, filterType: "keySkills", visible: true, priority: 3, sortable: false },
-  availability: { label: "Availability", width: 140, filterType: "availability", visible: true, priority: 2, sortable: true },
-  status: { label: "Status", width: 132, filterType: "status", visible: true, priority: 1, sortable: true },
+  applicationRequest: { label: "Application Request", width: 186, filterType: "applicationRequest", visible: true, priority: 2, sortable: true, tooltip: "The internship you advertised that this candidate was matched to. Candidates matched before an application existed show a dash." },
+  matchPercentage: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true, tooltip: "How well this candidate fits the internship — skills, work mode, location, availability and profile completeness. Click the ? for the breakdown." },
+  bigScore: { label: "Readiness / BIG Score", align: "center", width: 156, filterType: "bigScore", visible: true, priority: 2, sortable: true, tooltip: "The candidate's overall readiness: academic record, professional presentation, skills and work experience. Click the eye for the breakdown." },
+  qualification: { label: "Qualification / Field", width: 178, filterType: "qualification", visible: true, priority: 3, sortable: true, tooltip: "The degree or certificate the candidate is studying for, and their field of study." },
+  keySkills: { label: "Key Skills", width: 186, filterType: "keySkills", visible: true, priority: 3, sortable: false, tooltip: "Technical skills the candidate listed on their profile." },
+  availability: { label: "Availability", width: 140, filterType: "availability", visible: true, priority: 2, sortable: true, tooltip: "The earliest date the candidate can start, and the hours they can commit." },
+  status: { label: "Status", width: 132, filterType: "status", visible: true, priority: 1, sortable: true, tooltip: "Where this candidate sits in your pipeline, from Matched through to Completed or Declined." },
 
-  institution: { label: "Institution", width: 158, filterType: "institution", visible: false, priority: 4, sortable: true },
-  degree: { label: "Degree", width: 138, filterType: "degree", visible: false, priority: 4, sortable: true },
-  field: { label: "Field", width: 138, filterType: "field", visible: false, priority: 4, sortable: true },
-  location: { label: "Location", width: 132, filterType: "location", visible: false, priority: 4, sortable: true },
-  locationFlexibility: { label: "Work Preference", width: 144, filterType: "locationFlexibility", visible: false, priority: 4, sortable: true },
-  languages: { label: "Languages", width: 138, filterType: "languages", visible: false, priority: 4, sortable: false },
-  fundingProgramType: { label: "Funding Program", width: 150, filterType: "fundingProgramType", visible: false, priority: 4, sortable: true },
-  nextStage: { label: "Next Stage", width: 132, filterType: "nextStage", visible: false, priority: 4, sortable: false },
+  institution: { label: "Institution", width: 158, filterType: "institution", visible: false, priority: 4, sortable: true, tooltip: "The university, university of technology or TVET college the candidate attends." },
+  degree: { label: "Degree", width: 138, filterType: "degree", visible: false, priority: 4, sortable: true, tooltip: "The qualification the candidate is working towards." },
+  field: { label: "Field", width: 138, filterType: "field", visible: false, priority: 4, sortable: true, tooltip: "The candidate's field of study." },
+  location: { label: "Location", width: 132, filterType: "location", visible: false, priority: 4, sortable: true, tooltip: "Where the candidate is based." },
+  locationFlexibility: { label: "Work Preference", width: 144, filterType: "locationFlexibility", visible: false, priority: 4, sortable: true, tooltip: "Whether the candidate can work remotely, in person, hybrid, or any of these." },
+  languages: { label: "Languages", width: 138, filterType: "languages", visible: false, priority: 4, sortable: false, tooltip: "Languages the candidate speaks." },
+  fundingProgramType: { label: "Funding Program", width: 150, filterType: "fundingProgramType", visible: false, priority: 4, sortable: true, tooltip: "Any bursary or funding programme sponsoring this candidate." },
+  nextStage: { label: "Next Stage", width: 132, filterType: "nextStage", visible: false, priority: 4, sortable: false, tooltip: "The stage this application moves to next if you advance it." },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -885,23 +912,24 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const CANDIDATE_WIDTH = 214
-const ACTION_WIDTH = 196
+/* Candidate and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const APPID_KEY = "__appId__"
+const CANDIDATE_KEY = "__candidate__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [APPID_KEY]: 132, [CANDIDATE_KEY]: 206, [ACTION_KEY]: 196 }
 const MIN_COLUMN_WIDTH = 84
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 
 const BUILTIN_VIEW_ID = "__default__"
-// Bumped to v3: the stored widths from v2 are the narrow ones that caused the
-// header labels to break mid-word, so old saved views need to fall back to the
-// new defaults rather than resurrect the cramped layout.
-const VIEWS_STORAGE_KEY = "intern-table-views-v3"
-const FILTERS_STORAGE_KEY = "intern-table-filters-v1"
+// v4: the fixed columns now store their widths in this map too, so a v3 view
+// would leave them undefined.
+const VIEWS_STORAGE_KEY = "intern-table-views-v5"
+const FILTERS_STORAGE_KEY = "intern-table-filters-v2"
 const SAVED_STORAGE_KEY = "intern-table-saved-v1"
 
-/* Saved matches were previously component state only, so the bookmark
-   survived until the next render of a parent and no further — pressing it
-   looked like nothing happened. */
 const loadSavedMatches = () => {
   if (typeof window === "undefined") return {}
   try {
@@ -922,10 +950,12 @@ const persistSavedMatches = (saved) => {
 }
 
 const EMPTY_FILTERS = {
-  name: "",
+  name: [],
+  applicationId: [],
+  applicationRequest: [],
   matchRange: [0, 100],
   bigScoreRange: [0, 100],
-  qualification: "",
+  qualification: [],
   keySkills: [],
   availableFrom: "",
   availableTo: "",
@@ -951,7 +981,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -971,7 +1001,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -1012,10 +1042,14 @@ const loadFilterState = () => {
   if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
   try {
     const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
-    return {
-      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
-      sort: saved?.sort?.key ? saved.sort : null,
-    }
+    const merged = { ...EMPTY_FILTERS, ...(saved?.filters || {}) }
+    // A value stored by an older build as a string would blow up .includes.
+    Object.keys(EMPTY_FILTERS).forEach((key) => {
+      if (Array.isArray(EMPTY_FILTERS[key]) && !Array.isArray(merged[key])) {
+        merged[key] = merged[key] ? [merged[key].toString()] : []
+      }
+    })
+    return { filters: merged, sort: saved?.sort?.key ? saved.sort : null }
   } catch {
     return { filters: { ...EMPTY_FILTERS }, sort: null }
   }
@@ -1084,16 +1118,11 @@ const hasTooManyMissingFields = (intern) => {
    Component
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export function InternTablePage({ filters, stageFilter, profileMatchesCount, onMatchesCountChange }) {
+export function InternTablePage({ filters, stageFilter, applicationFilter, profileMatchesCount, onMatchesCountChange }) {
   const [interns, setInterns] = useState([])
   const [showInternDetails, setShowInternDetails] = useState(false)
   const [selectedInternDetails, setSelectedInternDetails] = useState(null)
 
-  // ─── Popups (same pattern as SupportSMETable) ───────────────────────────
-  // activePopup = { type, internKey, position:{x,y}, rect }. All four popup
-  // kinds (bigScore / match / stage / quickActions) are anchored popovers
-  // portaled to <body>, so they never get clipped by the table's scroll
-  // container the way the old centred modals did.
   const [activePopup, setActivePopup] = useState(null)
   const [selectedInternForPopup, setSelectedInternForPopup] = useState(null)
 
@@ -1134,9 +1163,6 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
 
   const savedCount = useMemo(() => Object.values(savedMatches).filter(Boolean).length, [savedMatches])
 
-  /* A stage pressed in the pipeline arrives here. The `stageFilter` prop still
-     wins when the page passes one, so wiring props stays optional — drop
-     <InternDealflowPage /> anywhere on the page and the two find each other. */
   const [eventStageFilter, setEventStageFilter] = useState(null)
   useEffect(() => {
     const onFilter = (e) => setEventStageFilter(e.detail ?? null)
@@ -1144,6 +1170,32 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
     return () => window.removeEventListener(INTERN_STAGE_FILTER_EVENT, onFilter)
   }, [])
   const activeStageFilter = stageFilter ?? eventStageFilter
+
+  /* internId -> { applicationFullId, applicationId, applicationRequest }.
+     Built from internMatchResults, which is the only collection that ties a
+     candidate back to an internApplicationsV2 document. */
+  const [applicationsByIntern, setApplicationsByIntern] = useState({})
+
+  /* Seeded from ?applicationId= so arriving from the Applications page works;
+     the event covers the case where this table is already on screen. */
+  const [eventApplicationFilter, setEventApplicationFilter] = useState(readApplicationIdFromUrl)
+  useEffect(() => {
+    const onFilter = (e) => setEventApplicationFilter(e.detail ?? null)
+    window.addEventListener(INTERN_APPLICATION_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(INTERN_APPLICATION_FILTER_EVENT, onFilter)
+  }, [])
+  const activeApplicationFilter = applicationFilter ?? eventApplicationFilter
+
+  const clearApplicationFilter = () => {
+    setEventApplicationFilter(null)
+    window.dispatchEvent(new CustomEvent(INTERN_APPLICATION_FILTER_EVENT, { detail: null }))
+    // Drop the param too, or a refresh would put the filter straight back.
+    if (typeof window !== "undefined" && window.history?.replaceState) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete("applicationId")
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`)
+    }
+  }
 
   // Filters + sort, restored from the last visit
   const initialFilterState = useMemo(() => loadFilterState(), [])
@@ -1172,8 +1224,10 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+  const [chipSearch, setChipSearch] = useState("")
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -1185,16 +1239,11 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
 
-  /* Every notification in this file used to be a setNotification plus its own
-     setTimeout, with timings that had drifted apart. One helper. */
   const toast = useCallback((type, message, ms = 3000) => {
     setNotification({ type, message })
     setTimeout(() => setNotification(null), ms)
   }, [])
 
-  /* One place that both the row bookmark and the quick-actions entry call, so
-     the two can't drift apart. Declared after `toast` because it uses it — a
-     const referenced before its initializer throws at render. */
   const toggleSaved = useCallback(
     (intern) => {
       const nowSaved = !savedMatches[intern.id]
@@ -1252,6 +1301,64 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
 
     checkCompanyMembership()
   }, [])
+
+  /* ─── Application join ────────────────────────────────────────────────
+     This table lists every candidate profile plus everyone who applied, so it
+     has no application in scope of its own. internMatchResults is what the
+     matching backend writes and what the Applications page counts from, and
+     each record carries an applicationId — so the two are stitched together
+     here by intern id. Candidates with no record still appear, with a dash. */
+  useEffect(() => {
+    if (!effectiveUserId) return undefined
+
+    let cancelled = false
+
+    const loadApplicationLinks = async () => {
+      try {
+        const [matchSnap, appSnap] = await Promise.all([
+          getDocs(query(collection(db, "internMatchResults"), where("smeId", "==", effectiveUserId))),
+          getDocs(query(collection(db, "internApplicationsV2"), where("userId", "==", effectiveUserId))),
+        ])
+
+        // Application Request is the same label the Applications list shows in
+        // its "Application" column.
+        const titleByAppId = {}
+        appSnap.forEach((d) => {
+          const data = d.data()
+          const jobOverview = data.jobOverview || {}
+          titleByAppId[d.id] = jobOverview.internshipTitle?.trim() || "Internship Application"
+        })
+
+        const links = {}
+        matchSnap.forEach((d) => {
+          const data = d.data()
+          // Field name varies by writer, so try the ones in use rather than
+          // assuming one and silently linking nothing.
+          const internId = data.internId || data.applicantId || data.internProfileId || data.candidateId
+          const appFullId = data.applicationId
+          if (!internId || !appFullId) return
+          const stamp = data.createdAt?.toMillis?.() || 0
+          const existing = links[internId]
+          if (existing && existing.stamp > stamp) return
+          links[internId] = {
+            stamp,
+            applicationFullId: appFullId,
+            applicationId: appFullId.slice(-8).toUpperCase(),
+            applicationRequest: titleByAppId[appFullId] || "-",
+          }
+        })
+
+        if (!cancelled) setApplicationsByIntern(links)
+      } catch (error) {
+        console.error("Failed to load application links:", error)
+      }
+    }
+
+    loadApplicationLinks()
+    return () => {
+      cancelled = true
+    }
+  }, [effectiveUserId])
 
   /* ─── Data ────────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -1555,13 +1662,19 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
           }),
         )
 
-        const allInterns = [...applicationInterns, ...profileInterns].filter(Boolean)
+        const allInterns = [...applicationInterns, ...profileInterns].filter(Boolean).map((row) => {
+          const link = applicationsByIntern[row.internId]
+          return {
+            ...row,
+            applicationRefId: link ? link.applicationId : "-",
+            applicationFullId: link ? link.applicationFullId : null,
+            applicationRequest: link ? link.applicationRequest : "-",
+          }
+        })
         allInterns.sort((a, b) => (b.matchPercentage || 0) - (a.matchPercentage || 0))
 
         setInterns(allInterns)
 
-        // Report the unapplied-profile count upward — this was previously
-        // wired but never called, so the parent always received 0.
         if (typeof profileMatchesCount === "function") {
           profileMatchesCount(profileInterns.filter(Boolean).length)
         }
@@ -1574,7 +1687,7 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
 
     fetchInternApplications()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveUserId])
+  }, [effectiveUserId, applicationsByIntern])
 
   /* ─── View + filter persistence ───────────────────────────────────────── */
   useEffect(() => {
@@ -1733,13 +1846,23 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ──────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -1747,6 +1870,7 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -1759,13 +1883,42 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
     window.addEventListener("mouseup", onUp)
   }
 
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="it-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
+
   /* ─── Header filter + sort ────────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
+    setChipSearch("")
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
   }
-  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+  const closeHeaderFilter = () => {
+    setHeaderFilterOpen(null)
+    setChipSearch("")
+  }
 
   const toggleSort = (key, event) => {
     event.stopPropagation()
@@ -1813,7 +1966,7 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
     )
   }
 
-  /* ─── Popup plumbing (mirrors SupportSMETable.openPopup) ──────────────── */
+  /* ─── Popup plumbing ──────────────────────────────────────────────────── */
   const handleViewDetails = (intern) => {
     setSelectedInternDetails(intern)
     setShowInternDetails(true)
@@ -1900,7 +2053,6 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
 
   const handleStageAction = (intern, event) => {
     if (event) return openPopupFromEvent("stage", intern, event)
-    // Fallback when invoked without an event (e.g. from the quick actions menu).
     const fallbackRect = activePopup?.rect || {
       left: window.innerWidth / 2 - 100,
       right: window.innerWidth / 2 + 100,
@@ -2552,8 +2704,6 @@ export function InternTablePage({ filters, stageFilter, profileMatchesCount, onM
 
       await setDoc(doc(db, "internshipApplications", requestDocId), requestData, { merge: true })
 
-      // Reflect the new status in the row immediately. The old `statuses`
-      // state was written here and never read, so the button never changed.
       setInterns((prev) =>
         prev.map((row) =>
           row.id === intern.id
@@ -2684,34 +2834,56 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     [interns],
   )
   const statusFilterOptions = APPLICATION_STAGES.map((s) => s.name)
+  const uniqueApplicationIds = useMemo(
+    () => [...new Set(interns.map((i) => i.applicationRefId).filter((v) => v && v !== "-"))].sort(),
+    [interns],
+  )
+  const uniqueNames = useMemo(
+    () => [...new Set(interns.map((i) => i.internName).filter((v) => v && v !== "Unnamed Intern"))].sort(),
+    [interns],
+  )
+  const uniqueQualifications = useMemo(
+    () =>
+      [...new Set(interns.map((i) => i.degree).filter((v) => v && v !== "Not specified" && v !== "Not Provided"))].sort(),
+    [interns],
+  )
+  const uniqueInstitutions = useMemo(
+    () =>
+      [...new Set(interns.map((i) => i.institution).filter((v) => v && v !== "Not specified" && v !== "Not Provided"))].sort(),
+    [interns],
+  )
+  const uniqueLocations = useMemo(
+    () => [...new Set(interns.map((i) => i.location).filter((v) => v && v !== "Not specified"))].sort(),
+    [interns],
+  )
+  const uniqueApplicationRequests = useMemo(
+    () => [...new Set(interns.map((i) => i.applicationRequest).filter((v) => v && v !== "-"))].sort(),
+    [interns],
+  )
 
   const statusOf = useCallback(
     (intern) => updatedStages[intern.id] || intern.pipelineStage || intern.status,
     [updatedStages],
   )
 
-  /* ─── Filtering + sorting ───────────────────────────────────────────────
-     Split in two on purpose. `preStageInterns` applies every filter except the
-     pipeline stage; that list is what gets broadcast, so a card reading 8 and
-     the table showing 8 are the same 8 rows. Applying the stage filter before
-     broadcasting would collapse every other card to zero the moment you
-     pressed one. ──────────────────────────────────────────────────────── */
+  /* ─── Filtering + sorting ───────────────────────────────────────────── */
   const preStageInterns = useMemo(() => {
     const user = auth.currentUser
     const matchesAny = (selected, value) =>
       selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
 
     return interns.filter((intern) => {
+      // Arriving from an application's "View Match Table" narrows to that one
+      // internship; "View All Matches" clears it.
+      if (activeApplicationFilter && intern.applicationFullId !== activeApplicationFilter) return false
       if ((user && intern.internId === user.uid) || (effectiveUserId && intern.internId === effectiveUserId))
         return false
       if (hasTooManyMissingFields(intern)) return false
       if (showSavedOnly && !savedMatches[intern.id]) return false
 
-      // Optional external filters passed down from the page shell.
       if (filters?.search && !intern.internName.toLowerCase().includes(filters.search.toLowerCase())) return false
 
-      if (localFilters.name.trim() && !intern.internName.toLowerCase().includes(localFilters.name.toLowerCase().trim()))
-        return false
+      if (!matchesAny(localFilters.name, intern.internName)) return false
 
       if (
         (intern.matchPercentage || 0) < localFilters.matchRange[0] ||
@@ -2721,10 +2893,8 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
       if ((intern.bigScore || 0) < localFilters.bigScoreRange[0] || (intern.bigScore || 0) > localFilters.bigScoreRange[1])
         return false
 
-      if (localFilters.qualification.trim()) {
-        const haystack = `${intern.degree || ""} ${formatLabel(intern.field) || ""}`.toLowerCase()
-        if (!haystack.includes(localFilters.qualification.toLowerCase().trim())) return false
-      }
+      if (!matchesAny(localFilters.qualification, `${intern.degree || ""} ${formatLabel(intern.field) || ""}`))
+        return false
 
       if (localFilters.keySkills.length > 0) {
         const skills = Array.isArray(intern.technicalSkills) ? intern.technicalSkills : []
@@ -2735,6 +2905,8 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
       if (localFilters.availableFrom && (!availabilityISO || availabilityISO < localFilters.availableFrom)) return false
       if (localFilters.availableTo && (!availabilityISO || availabilityISO > localFilters.availableTo)) return false
 
+      if (!matchesAny(localFilters.applicationId, intern.applicationRefId)) return false
+      if (!matchesAny(localFilters.applicationRequest, intern.applicationRequest)) return false
       if (!matchesAny(localFilters.institution, intern.institution)) return false
       if (!matchesAny(localFilters.degree, intern.degree)) return false
       if (!matchesAny(localFilters.field, formatLabel(intern.field))) return false
@@ -2758,9 +2930,17 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
       return true
     })
-  }, [interns, localFilters, effectiveUserId, filters, showSavedOnly, savedMatches, statusOf])
+  }, [
+    interns,
+    localFilters,
+    effectiveUserId,
+    filters,
+    showSavedOnly,
+    savedMatches,
+    statusOf,
+    activeApplicationFilter,
+  ])
 
-  /* Every candidate the pipeline should count, each with its resolved status. */
   useEffect(() => {
     if (typeof window === "undefined") return
     const payload = preStageInterns.map((i) => ({ id: i.id, name: i.internName, status: statusOf(i) }))
@@ -2778,6 +2958,8 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     if (sortConfig?.key) {
       const accessors = {
         internName: (r) => r.internName,
+        applicationId: (r) => r.applicationRefId,
+        applicationRequest: (r) => r.applicationRequest,
         matchPercentage: (r) => r.matchPercentage || 0,
         bigScore: (r) => r.bigScore || 0,
         qualification: (r) => `${r.degree || ""} ${r.field || ""}`,
@@ -2813,10 +2995,12 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
   /* ─── Filter chrome ───────────────────────────────────────────────────── */
   const activeFilterCount =
-    (localFilters.name.trim() ? 1 : 0) +
+    localFilters.name.length +
+    localFilters.applicationId.length +
+    localFilters.applicationRequest.length +
     (localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100 ? 1 : 0) +
     (localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100 ? 1 : 0) +
-    (localFilters.qualification.trim() ? 1 : 0) +
+    localFilters.qualification.length +
     localFilters.keySkills.length +
     (localFilters.availableFrom || localFilters.availableTo ? 1 : 0) +
     localFilters.status.length +
@@ -2836,12 +3020,18 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
   const getFilterActive = (filterType) => {
     switch (filterType) {
+      case "applicationId":
+        return localFilters.applicationId.length > 0
+      case "applicationRequest":
+        return localFilters.applicationRequest.length > 0
       case "match":
         return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100
       case "bigScore":
         return localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100
+      case "name":
+        return localFilters.name.length > 0
       case "qualification":
-        return !!localFilters.qualification.trim()
+        return localFilters.qualification.length > 0
       case "keySkills":
         return localFilters.keySkills.length > 0
       case "availability":
@@ -2895,11 +3085,16 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const appIdWidth = widthOf(APPID_KEY)
+  const candidateWidth = widthOf(CANDIDATE_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
+  // Application ID and Candidate are both frozen to the left, in that order,
+  // so every other sticky offset starts after the pair.
+  const pinnedLeadWidth = appIdWidth + candidateWidth
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    let leftAcc = CANDIDATE_WIDTH
+    let leftAcc = pinnedLeadWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -2916,9 +3111,9 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, pinnedLeadWidth])
 
-  const totalWidth = CANDIDATE_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = pinnedLeadWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.3rem" : "0.6rem 0.4rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -2972,6 +3167,13 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     const base = { ...tableCellStyle, ...stickyStyle }
 
     switch (key) {
+      case "applicationRequest":
+        return (
+          <td key={key} style={base}>
+            <TruncatedText text={intern.applicationRequest} maxLength={26} />
+          </td>
+        )
+
       case "matchPercentage":
         return (
           <td key={key} style={base}>
@@ -3201,7 +3403,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         </div>
       )}
 
-      {/* Notification — same treatment as the SME table */}
+      {/* Notification */}
       {notification && (
         <div
           className={`px-4 py-3 rounded-xl text-sm font-medium border mb-3 ${
@@ -3235,8 +3437,19 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
               )}
             </span>
-            {/* Which pipeline stage the table is narrowed to. Press the same
-                card again in the pipeline to clear it. */}
+            {activeApplicationFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#5d4037]/10 text-[#4a352f] border border-[#5d4037]/40">
+                <Hash size={12} className="text-[#7d5a50]" />
+                Application: {activeApplicationFilter.slice(-8).toUpperCase()}
+                <span className="font-normal text-[#a89482]">({filteredInterns.length})</span>
+                <button
+                  onClick={clearApplicationFilter}
+                  className="ml-1 px-2 py-0.5 rounded-lg bg-white border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] font-semibold"
+                >
+                  View All Matches
+                </button>
+              </span>
+            )}
             {activeStageFilter && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
                 <Target size={12} className="text-[#7d5a50]" />
@@ -3244,8 +3457,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 <span className="font-normal text-[#a89482]">({filteredInterns.length})</span>
               </span>
             )}
-            {/* Saved matches. The bookmark on each row writes here; this is
-                where you get them back. */}
             {(showSavedOnly || savedCount > 0) && (
               <button
                 onClick={() => setShowSavedOnly((v) => !v)}
@@ -3488,9 +3699,14 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
                         <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right
-                        edge to resize.
+                        edge to resize. Every column resizes, including the pinned ones.
                       </p>
 
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Application ID</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
                         <span className="text-sm text-[#4a352f] flex-1">Candidate</span>
@@ -3598,7 +3814,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                hover, buying every header ~14px more room for its label. */
             .it-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .it-th:hover .it-th-grip { opacity: .45; }
-            .it-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .it-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .it-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -3619,11 +3835,34 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
           >
             <thead>
               <tr>
+                {/* Application ID — first pinned column */}
                 <th
                   className="it-th font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: CANDIDATE_WIDTH,
+                    width: appIdWidth,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                    borderRight: "1px solid #e6d7c3",
+                  }}
+                >
+                  <div className="it-th-row">
+                    <span className="it-th-label" title="Application ID">Application ID</span>
+                    <span className="it-th-tools">
+                      <SortTrigger columnKey="applicationId" />
+                      <FilterTrigger type="applicationId" active={localFilters.applicationId.length > 0} />
+                      <HeaderInfoTooltip text="The internship advert this candidate was matched to. Candidates matched before an application existed show a dash." />
+                    </span>
+                  </div>
+                  <ColumnResizer colKey={APPID_KEY} />
+                </th>
+
+                <th
+                  className="it-th font-semibold uppercase tracking-wider text-xs sticky top-0 z-30 text-left"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    left: appIdWidth,
+                    width: candidateWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
@@ -3633,9 +3872,11 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                     <span className="it-th-label" title="Candidate">Candidate</span>
                     <span className="it-th-tools">
                       <SortTrigger columnKey="internName" />
-                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <FilterTrigger type="name" active={localFilters.name.length > 0} />
+                      <HeaderInfoTooltip text="The candidate who applied or matched. Click the eye to open their full profile." />
                     </span>
                   </div>
+                  <ColumnResizer colKey={CANDIDATE_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -3647,7 +3888,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -3681,9 +3922,10 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
                           <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="it-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -3695,12 +3937,16 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                   className="it-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="it-th-row justify-center">
+                    <span className="it-th-label">Action</span>
+                    <HeaderInfoTooltip text="Move the candidate to their next stage, or open quick actions for more options." />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -3709,16 +3955,28 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
               {filteredInterns.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={orderedColumns.length + 2}
+                    colSpan={orderedColumns.length + 3}
                     style={{ ...tableCellStyle, textAlign: "center", color: "#a89482", padding: "2.5rem 1rem", borderRight: "none" }}
                   >
                     {interns.length === 0
                       ? "No intern matches yet."
+                      : activeApplicationFilter
+                        ? "No candidates matched to this internship yet."
                       : showSavedOnly
                         ? "No saved candidates. Bookmark a row to keep it here."
                         : activeStageFilter
                           ? `No candidates at ${activeStageFilter}. Press that stage card again to clear the filter.`
                           : "No candidates match these filters."}
+                    {activeApplicationFilter && (
+                      <div style={{ marginTop: "0.75rem" }}>
+                        <button
+                          onClick={clearApplicationFilter}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          View All Matches
+                        </button>
+                      </div>
+                    )}
                     {showSavedOnly && (
                       <div style={{ marginTop: "0.75rem" }}>
                         <button
@@ -3768,9 +4026,27 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                           preference have their own columns. */}
                       <td
                         className="sticky left-0 z-10"
+                        style={{ ...tableCellStyle, width: appIdWidth, backgroundColor: rowBg }}
+                      >
+                        {intern.applicationRefId && intern.applicationRefId !== "-" ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide text-[#FAF7F2]"
+                            style={{ background: "linear-gradient(135deg,#5d4037,#4a332a)", fontFamily: "monospace" }}
+                            title={`Full application id: ${intern.applicationFullId}`}
+                          >
+                            <Hash size={10} /> {intern.applicationRefId}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#a89482", fontSize: "0.75rem" }}>-</span>
+                        )}
+                      </td>
+
+                      <td
+                        className="sticky z-10"
                         style={{
                           ...tableCellStyle,
-                          width: CANDIDATE_WIDTH,
+                          left: appIdWidth,
+                          width: candidateWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -3791,11 +4067,11 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
                       {orderedColumns.map((key) => renderCell(key, intern, currentStatus, statusStyle, rowBg))}
 
-                      {/* Action — scrolls with the table, laid out like the SME table */}
+                      {/* Action — scrolls with the table */}
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -3811,7 +4087,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                                 : "text-white hover:shadow-md hover:brightness-105"
                             }`}
                             style={{
-                              width: "118px",
+                              width: `${Math.max(96, actionWidth - 78)}px`,
                               height: "34px",
                               backgroundColor: isTerminalNegative ? undefined : "#7d5a50",
                             }}
@@ -3881,54 +4157,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
               overflowY: "auto",
             }}
           >
-            {headerFilterOpen.type === "name" && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Candidate name</label>
-                  {localFilters.name && (
-                    <button
-                      onClick={() => setLocalFilters((p) => ({ ...p, name: "" }))}
-                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                <input
-                  autoFocus
-                  type="text"
-                  value={localFilters.name}
-                  onChange={(e) => setLocalFilters((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="Search candidate name..."
-                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
-                />
-              </>
-            )}
-
-            {headerFilterOpen.type === "qualification" && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Qualification / Field</label>
-                  {localFilters.qualification && (
-                    <button
-                      onClick={() => setLocalFilters((p) => ({ ...p, qualification: "" }))}
-                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                <input
-                  autoFocus
-                  type="text"
-                  value={localFilters.qualification}
-                  onChange={(e) => setLocalFilters((p) => ({ ...p, qualification: e.target.value }))}
-                  placeholder="e.g. BCom, Computer Science..."
-                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
-                />
-              </>
-            )}
-
             {headerFilterOpen.type === "availability" && (
               <>
                 <div className="flex items-center justify-between mb-3">
@@ -4023,51 +4251,81 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 )
               })()}
 
+            {/* Every filter offers the values actually present in the table,
+                so you pick from what exists instead of guessing at a search
+                box. The search input only appears once a list is long enough
+                to need one. */}
             {[
+              { type: "name", field: "name", label: "Candidate name", options: uniqueNames },
+              { type: "applicationId", field: "applicationId", label: "Application ID", options: uniqueApplicationIds },
+              { type: "applicationRequest", field: "applicationRequest", label: "Application Request", options: uniqueApplicationRequests },
+              { type: "qualification", field: "qualification", label: "Qualification / Field", options: uniqueQualifications },
               { type: "keySkills", field: "keySkills", label: "Key Skills", options: uniqueSkills },
               { type: "status", field: "status", label: "Status", options: statusFilterOptions },
               { type: "nextStage", field: "nextStage", label: "Next Stage", options: statusFilterOptions },
-              { type: "institution", field: "institution", label: "Institution", options: institutionFilterOptions },
-              { type: "degree", field: "degree", label: "Degree", options: degreeFilterOptions },
+              { type: "institution", field: "institution", label: "Institution", options: uniqueInstitutions.length ? uniqueInstitutions : institutionFilterOptions },
+              { type: "degree", field: "degree", label: "Degree", options: uniqueQualifications.length ? uniqueQualifications : degreeFilterOptions },
               { type: "field", field: "field", label: "Field", options: uniqueFields },
-              { type: "location", field: "location", label: "Location (Province)", options: southAfricanProvinces },
+              { type: "location", field: "location", label: "Location", options: uniqueLocations.length ? uniqueLocations : southAfricanProvinces },
               { type: "locationFlexibility", field: "locationFlexibility", label: "Work Preference", options: uniqueLocationFlex },
               { type: "languages", field: "languages", label: "Languages", options: uniqueLanguages },
               { type: "fundingProgramType", field: "fundingProgramType", label: "Funding Program", options: uniqueFundingPrograms },
-            ].map(
-              ({ type, field, label, options }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[field].length > 0 && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [field]: [] }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
-                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
-                      {options.map((value) => (
-                        <button
-                          key={value}
-                          onClick={() => toggleChip(field, value)}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            localFilters[field].includes(value)
-                              ? "bg-[#7d5a50] text-white"
-                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
-                          }`}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
+            ].map(({ type, field, label, options }) => {
+              if (headerFilterOpen.type !== type) return null
+              const shown = options.filter((o) => o.toString().toLowerCase().includes(chipSearch.toLowerCase()))
+              return (
+                <div key={type}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                    {localFilters[field].length > 0 && (
+                      <button
+                        onClick={() => setLocalFilters((p) => ({ ...p, [field]: [] }))}
+                        className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                ),
-            )}
+
+                  {options.length > 8 && (
+                    <div className="relative mb-2">
+                      <Search
+                        size={12}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none"
+                      />
+                      <input
+                        autoFocus
+                        value={chipSearch}
+                        onChange={(e) => setChipSearch(e.target.value)}
+                        placeholder={`Search ${label.toLowerCase()}...`}
+                        className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                    {shown.length === 0 && (
+                      <span className="text-xs text-[#a89482]">
+                        {options.length === 0 ? "No data available" : "Nothing matches that search."}
+                      </span>
+                    )}
+                    {shown.map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => toggleChip(field, value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                          localFilters[field].includes(value)
+                            ? "bg-[#7d5a50] text-white"
+                            : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </PopupPortal>
       )}
@@ -4277,7 +4535,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         </PopupPortal>
       )}
 
-      {/* ─── Stage Update popup (same layout as the SME table) ───────────── */}
+      {/* ─── Stage Update popup ──────────────────────────────────────────── */}
       {activePopup?.type === "stage" && selectedInternForStage && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
@@ -4530,7 +4788,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
             </div>
           </div>
 
-          {/* Availability calendar — centred card, same as the SME table */}
+          {/* Availability calendar */}
           {showCalendarPopup && (
             <>
               <div className="fixed inset-0 z-[1100]" onClick={() => setShowCalendarPopup(false)} />

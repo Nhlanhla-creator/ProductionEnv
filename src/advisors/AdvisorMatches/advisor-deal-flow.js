@@ -35,6 +35,13 @@ const getIcon = (name, size = 16, color = "#4a352f") => {
   return <Cmp size={size} className="text-current" style={{ color }} />;
 };
 
+// Cards are wider than they were and stage names wrap onto a second line
+// rather than being cut off — names here are user-editable, so a renamed or
+// custom stage can be long and still has to be readable. Cards stretch to the
+// height of the tallest one in the row (`items-stretch` on the row, `h-full`
+// on the card body) so wrapping never leaves one card sitting short.
+const CARD_WIDTH = 124;
+
 // ─── Skeleton Loader ──────────────────────────────────────────────────────────
 const PipelineSkeleton = () => (
   <div className="flex gap-3 overflow-x-auto pb-4 px-1">
@@ -42,7 +49,7 @@ const PipelineSkeleton = () => (
       <div
         key={i}
         className="bg-gradient-to-br from-[#f5f0e1]/60 to-[#e6d7c3]/30 rounded-2xl flex-shrink-0 animate-pulse"
-        style={{ width: "130px", height: "96px" }}
+        style={{ width: `${CARD_WIDTH}px`, height: "98px" }}
       >
         <div className="p-4 flex flex-col h-full justify-between">
           <div className="h-3 w-20 rounded-full bg-[#c8b6a6]/40" />
@@ -410,6 +417,10 @@ export function AdvisorDealFlowPipeline({
   // Cards use a dark brown theme with white text; Declined/Withdrawn use dark
   // grey instead, as the one deliberate signal that those two are a different
   // kind of outcome.
+  //
+  // The body is a flex column at `h-full`: the name sits at the top and is free
+  // to run to a second line, while `mt-auto` pins the count and progress bar to
+  // the bottom edge, keeping the numbers on one baseline across the row.
   const renderStageCard = (stage) => {
     const isHovered = hoveredStage?.id === stage.id;
     const isSelected = selectedStage === stage.id;
@@ -426,13 +437,13 @@ export function AdvisorDealFlowPipeline({
         className={`relative flex-shrink-0 cursor-pointer group transition-all duration-300 ${
           isSelected ? "scale-105" : "hover:scale-[1.02]"
         }`}
-        style={{ width: "104px" }}
+        style={{ width: `${CARD_WIDTH}px` }}
         onMouseEnter={(e) => setHoveredStage({ id: stage.id, rect: e.currentTarget.getBoundingClientRect() })}
         onMouseLeave={() => setHoveredStage(null)}
         onClick={() => handleStageClick(stage.id)}
       >
         <div
-          className={`rounded-xl p-2.5 transition-all duration-300 ${
+          className={`rounded-xl p-2.5 h-full flex flex-col transition-all duration-300 ${
             isHovered || isSelected ? "shadow-xl -translate-y-1" : "shadow-md hover:shadow-lg"
           }`}
           style={{
@@ -440,13 +451,16 @@ export function AdvisorDealFlowPipeline({
             border: `1.5px solid ${borderColor}`,
           }}
         >
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex items-start gap-1.5 mb-1.5">
             <div className="w-5 h-5 rounded-lg flex items-center justify-center bg-white/10 flex-shrink-0">
               {getIcon(stage.icon, 11, "#ffffff")}
             </div>
-            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-tight truncate flex-1">{stage.name}</h3>
+            {/* Full stage name, wrapped rather than truncated. */}
+            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-[11px] break-words flex-1 min-w-0 pt-[3px]">
+              {stage.name}
+            </h3>
           </div>
-          <div className="flex items-baseline justify-center">
+          <div className="flex items-baseline justify-center mt-auto pt-1">
             <span className="text-lg font-extrabold leading-none text-white">{count}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-2">
@@ -530,10 +544,12 @@ export function AdvisorDealFlowPipeline({
         <EmptyState />
       ) : (
         <>
-          {/* Stage Cards */}
+          {/* Stage Cards — `items-stretch` here plus `h-full` on each card body
+              is what keeps a two-line name from making one card shorter than
+              its neighbours. */}
           <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent gap-1">
             {liveStages.map((stage, idx) => (
-              <div key={stage.id} className="flex items-center">
+              <div key={stage.id} className="flex items-stretch">
                 {renderStageCard(stage)}
 
                 {/* Connector — conversion rate to the next stage, shown above
@@ -544,7 +560,7 @@ export function AdvisorDealFlowPipeline({
                   const toCount = cumulativeCounts[nextStage.id] || 0;
                   const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0";
                   return (
-                    <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "30px" }}>
+                    <div className="flex flex-col items-center justify-center px-0.5 flex-shrink-0" style={{ minWidth: "34px" }}>
                       <span className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap" title="Share of this stage that reaches the next">
                         {rate}%
                       </span>
@@ -566,20 +582,20 @@ export function AdvisorDealFlowPipeline({
               const negativeStages = terminalStages.filter((s) => /declined|withdrawn/i.test(s.name || ""));
               const otherStages = terminalStages.filter((s) => !/declined|withdrawn/i.test(s.name || ""));
               return (
-                <div className="flex items-center flex-shrink-0">
+                <div className="flex items-stretch flex-shrink-0">
                   <div className="flex flex-col items-center px-2 flex-shrink-0 self-stretch justify-center">
                     <div className="w-px h-10 bg-[#e6d7c3]" />
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-stretch gap-2 flex-shrink-0">
                     {otherStages.map((stage) => (
-                      <div key={stage.id} className="flex-shrink-0">
+                      <div key={stage.id} className="flex flex-shrink-0">
                         {renderStageCard(stage)}
                       </div>
                     ))}
                     {negativeStages.length > 0 && (
-                      <div className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl" style={{ border: "2px solid #dc2626" }}>
+                      <div className="flex items-stretch gap-1.5 flex-shrink-0 p-1.5 rounded-2xl" style={{ border: "2px solid #dc2626" }}>
                         {negativeStages.map((stage) => (
-                          <div key={stage.id} className="flex-shrink-0">
+                          <div key={stage.id} className="flex flex-shrink-0">
                             {renderStageCard(stage)}
                           </div>
                         ))}
