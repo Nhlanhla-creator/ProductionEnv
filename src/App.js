@@ -48,6 +48,7 @@ import PartnersEcosystem from "./admin/pages/PartnersEcosystem"
 import ProductPlatform from "./admin/pages/ProductPlatform"
 import TechArchitecture from "./admin/pages/TechArchitecture"
 import QATesting from "./admin/pages/qatesting"
+import Team from "./admin/pages/Team"
 import OperationsInternal from "./admin/pages/OperationsInternal"
 import UsersMarketplace from "./admin/pages/UsersMarketplace"
 import PilotsCaseStudies from "./admin/pages/PilotsCaseStudies"
@@ -966,6 +967,7 @@ function App() {
         {/* Admin Dashboard Routes */}
         <Route path="/admin" element={<Navigate to="/Auth" replace />} />
         <Route path="/admin/dashboard" element={withAdminProtection(AdminDashboard)} />
+        <Route path="/admin/team" element={withAdminProtection(Team)} />
         <Route path="/admin/smes" element={withAdminProtection(AllSMEs)} />
         <Route path="/admin/investors" element={withAdminProtection(AllInvestors)} />
         <Route path="/admin/catalysts" element={withAdminProtection(AllCatalysts)} />

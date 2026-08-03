@@ -48,6 +48,7 @@ import { MoveCopyModal } from './shared/MoveCopyModal';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle, ClipboardList, CheckCircle, X } from 'lucide-react';
 import AddTaskModal from './structure/AddTaskModal';
+import { loadTeamMembers, getFirstName } from './services/team';
 
 function debounce(fn, ms) {
   let t;
@@ -84,6 +85,7 @@ const ProductPlatform = () => {
   const [isSavingQA, setIsSavingQA] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
+  const [teamMembers, setTeamMembers] = useState([]);
 
   const debouncedChecklistRef = useRef(null);
   const debouncedQARef = useRef(null);
@@ -234,6 +236,15 @@ const ProductPlatform = () => {
 
   // Current content for active section
   const currentContent = isTechSection ? techContent : isQAFileSection ? qaFileContent : productContent;
+
+  // Fetch team members list for QA dropdown options
+  useEffect(() => {
+    if (user) {
+      loadTeamMembers(user)
+        .then(setTeamMembers)
+        .catch(err => console.error('Failed to load team members in ProductPlatform:', err));
+    }
+  }, [user]);
 
   // ── Boot ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -770,6 +781,7 @@ const ProductPlatform = () => {
                   onAddTask={handleOpenModal}
                   onDeleteTask={handleDeleteTask}
                   isSaving={isSavingQA}
+                  teamMemberNames={teamMembers.map(m => getFirstName(m.name))}
                 />
               </div>
             )}
@@ -800,6 +812,7 @@ const ProductPlatform = () => {
         onClose={handleCloseModal}
         onAddTask={handleAddTask}
         existingTasks={qaTasks}
+        teamMemberNames={teamMembers.map(m => getFirstName(m.name))}
       />
 
       {/* Toast Notification */}

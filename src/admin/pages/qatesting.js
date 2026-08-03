@@ -15,6 +15,7 @@ import { QAMasterTable } from './structure/qaMasterTable';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
 import { addNotification } from './services/notifications';
 import AddTaskModal from './structure/AddTaskModal';
+import { loadTeamMembers, getFirstName } from './services/team';
 
 function debounce(fn, ms) {
   let t;
@@ -33,17 +34,29 @@ const QATesting = () => {
   const [isLoading, setIsLoading]             = useState(true);
 
   const [qaTasks, setQaTasks]   = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const debouncedSaveRef = useRef(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
+    if (user) {
+      loadTeamMembers(user)
+        .then(setTeamMembers)
+        .catch(err => console.error('Failed to load team members in QA:', err));
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (!user) { setIsLoading(false); return; }
     const boot = async () => {
       try {
         setIsLoading(true);
-        const [allContent, tasks] = await Promise.all([loadAllContent(), loadQATable()]);
+        const [allContent, tasks] = await Promise.all([
+          loadAllContent(),
+          loadQATable()
+        ]);
         const status = {};
         Object.keys(allContent).forEach(k => { status[k] = true; });
         setContentStatus(status);
@@ -318,6 +331,7 @@ const QATesting = () => {
             onAddTask={handleOpenModal}
             onDeleteTask={handleDeleteTask}
             isSaving={isSaving}
+            teamMemberNames={teamMembers.map(m => getFirstName(m.name))}
           />
         </div>
 
@@ -326,6 +340,7 @@ const QATesting = () => {
           onClose={handleCloseModal}
           onAddTask={handleAddTask}
           existingTasks={qaTasks}
+          teamMemberNames={teamMembers.map(m => getFirstName(m.name))}
         />
 
         <div style={{ marginBottom: 12 }}>

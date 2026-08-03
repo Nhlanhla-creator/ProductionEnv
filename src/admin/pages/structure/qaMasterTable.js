@@ -42,7 +42,7 @@ const Badge = ({ label, bg, text = '#fff' }) => (
 );
 
 // ─── Editable Cell ────────────────────────────────────────────────────────────
-const QACell = memo(({ col, value, isEditing, onSave, onCancel }) => {
+const QACell = memo(({ col, value, isEditing, onSave, onCancel, teamMemberNames }) => {
   const [draft, setDraft] = useState(value);
   useEffect(() => { setDraft(value); }, [value, isEditing]);
 
@@ -76,13 +76,17 @@ const QACell = memo(({ col, value, isEditing, onSave, onCancel }) => {
   }
 
   // ── Editing mode ──
-  const opts = col.id === 'status'       ? STATUS_OPTIONS
+  let opts = col.id === 'status'       ? STATUS_OPTIONS
               : col.id === 'actionStatus' ? ACTION_STATUS_OPTIONS
               : col.id === 'testType'     ? TEST_TYPE_OPTIONS
               : col.id === 'dashboard'    ? DASHBOARD_OPTIONS
               : col.id === 'category'     ? CATEGORY_OPTIONS
-              : col.id === 'assignedTo'   ? ASSIGNEE_OPTIONS
+              : col.id === 'assignedTo'   ? (teamMemberNames && teamMemberNames.length > 0 ? teamMemberNames : ASSIGNEE_OPTIONS)
               : null;
+
+  if (opts && col.id === 'assignedTo' && draft && !opts.includes(draft)) {
+    opts = [...opts, draft];
+  }
 
   const cellInputStyle = {
     padding: '4px 6px',
@@ -165,7 +169,7 @@ const QACell = memo(({ col, value, isEditing, onSave, onCancel }) => {
 });
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, isSaving }) => {
+export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, isSaving, teamMemberNames }) => {
   const [editingCell, setEditingCell]         = useState(null);
   const [filterStatus, setFilterStatus]       = useState('All');
   const [filterDashboard, setFilterDashboard] = useState('All');
@@ -330,6 +334,7 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
                           isEditing={isEditing}
                           onSave={(val) => handleSave(trueIdx, col.id, val)}
                           onCancel={handleCancel}
+                          teamMemberNames={teamMemberNames}
                         />
                       </td>
                     );

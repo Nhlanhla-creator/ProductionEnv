@@ -64,7 +64,8 @@ export const EditableCell = memo(({
       }
       return [];
     };
-    const options = columnOptions || getFallbackOptions();
+    const baseOptions = columnOptions || getFallbackOptions();
+    const options = (editValue && !baseOptions.includes(editValue)) ? [...baseOptions, editValue] : baseOptions;
     
     return (
       <div style={styles.editControls} className="edit-controls-wrapper" onClick={(e) => e.stopPropagation()}>

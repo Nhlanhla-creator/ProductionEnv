@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Sidebar } from './delivery-components/Sidebar';
 import { EmptyState, ComingSoon } from './delivery-components/Placeholders';
 import { SprintsView } from './delivery-components/SprintsView';
@@ -11,6 +11,7 @@ import { useSprintSync } from '../../hooks/useSprintSync';
 import { syncSprintToFirebase, deleteSprint } from './services/sprints';
 import { appendSprintTask } from './services/qaMasterTable';
 import { addNotification } from './services/notifications';
+import { loadTeamMembers, getFirstName } from './services/team';
 
 // ============================================================================
 // MAIN DELIVERY COMPONENT
@@ -36,6 +37,35 @@ const Delivery = () => {
     syncAllSprints,
     refreshFromFirebase
   } = useSprintSync(INITIAL_SPRINTS_DATA, user);
+
+  const [teamMembers, setTeamMembers] = useState([]);
+
+  useEffect(() => {
+    if (user) {
+      loadTeamMembers(user)
+        .then(setTeamMembers)
+        .catch(err => console.error('Failed to load team members:', err));
+    }
+  }, [user]);
+
+  const processedSprintsData = useMemo(() => {
+    if (!sprintsData || teamMembers.length === 0) return sprintsData;
+    const updated = {};
+    const teamNames = teamMembers.map(m => getFirstName(m.name));
+    Object.entries(sprintsData).forEach(([key, sprint]) => {
+      let columns = sprint.columns || [];
+      if (columns.some(col => col.id === 'assignee')) {
+        columns = columns.map(col => 
+          col.id === 'assignee' ? { ...col, options: teamNames } : col
+        );
+      }
+      updated[key] = {
+        ...sprint,
+        columns
+      };
+    });
+    return updated;
+  }, [sprintsData, teamMembers]);
 
   // Auto-hide sync status after 3 seconds
   useEffect(() => {
@@ -557,7 +587,7 @@ const Delivery = () => {
 
             {activeCategory === 'sprints' && (
               <SprintsView
-                sprintsData={sprintsData}
+                sprintsData={processedSprintsData}
                 expandedSprints={expandedSprints}
                 toggleSprint={toggleSprint}
                 handleUpdateTask={handleUpdateTask}

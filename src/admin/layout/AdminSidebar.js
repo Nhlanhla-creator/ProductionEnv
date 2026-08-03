@@ -300,6 +300,12 @@ function AdminSidebar() {
       route: "/admin/documents",
     },
     {
+      id: "team",
+      label: "Team",
+      icon: <Users size={18} />,
+      route: "/admin/team",
+    },
+    {
       id: "settings",
       label: "Settings",
       icon: <Settings size={18} />,
