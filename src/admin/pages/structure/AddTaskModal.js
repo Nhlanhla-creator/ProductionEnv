@@ -6,7 +6,7 @@ import {
   DASHBOARD_CODE_MAP, CATEGORY_CODE_MAP
 } from './qaTableData';
 
-const AddTaskModal = ({ isOpen, onClose, onAddTask, existingTasks }) => {
+const AddTaskModal = ({ isOpen, onClose, onAddTask, existingTasks, teamMemberNames }) => {
   const [formData, setFormData] = useState({
     taskId: '',
     category: '',
@@ -368,9 +368,15 @@ const AddTaskModal = ({ isOpen, onClose, onAddTask, existingTasks }) => {
                   }}
                 >
                   <option value="">Select assignee</option>
-                  {ASSIGNEE_OPTIONS.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
+                  {(() => {
+                    const baseOpts = (teamMemberNames && teamMemberNames.length > 0 ? teamMemberNames : ASSIGNEE_OPTIONS);
+                    const finalOpts = (formData.assignedTo && !baseOpts.includes(formData.assignedTo))
+                      ? [...baseOpts, formData.assignedTo]
+                      : baseOpts;
+                    return finalOpts.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ));
+                  })()}
                 </select>
               </div>
 
