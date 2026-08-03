@@ -360,7 +360,8 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
 
   const [hoveredRowKey, setHoveredRowKey] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  // Fixed page size — the rows-per-page dropdown was removed from the footer.
+  const [pageSize] = useState(25);
 
   // Column drag-to-reorder state
   const [draggedColumn, setDraggedColumn] = useState(null);
@@ -371,6 +372,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const [activePopup, setActivePopup] = useState(null);
   const [selectedSMEForPopup, setSelectedSMEForPopup] = useState(null);
   const [showDetails, setShowDetails] = useState(null);
+  // Match breakdown shown in the "Why this match?" popup. Held separately
+  // from the row because it often has to be fetched — see loadMatchBreakdown.
+  const [matchBreakdownData, setMatchBreakdownData] = useState(null);
+  const [matchLoading, setMatchLoading] = useState(false);
 
   // Stage update form
   const [stageUpdateData, setStageUpdateData] = useState({
@@ -575,7 +580,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
         bigScore: a.bigScore || 0,
         bigScoreBreakdown: a.bigScoreBreakdown,
         matchPercentage: a.matchPercentage || 0,
-        matchBreakdown: a.breakdown || {},
+        // The breakdown has been written under three different names by three
+        // different writers over time; the popup falls back to fetching it
+        // from the mirror collections when none of these are present.
+        matchBreakdown: a.matchBreakdown || a.breakdown || a.matchDetails || {},
         applicationDateLabel: formatDate(a.createdAt),
         applicationDateRaw: toDate(a.createdAt),
         lastActivityLabel: formatDate(a.updatedAt),
@@ -868,6 +876,60 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     );
   };
 
+  // ─── Match breakdown ──────────────────────────────────────────────────────
+  // AdvisorApplications documents are written by handleConnect on the SME side
+  // and by handleStageUpdate here, and neither of them stores a breakdown —
+  // only matchPercentage. The scoring detail lives on the SME-facing mirror
+  // docs and on the AI matcher's own collection, so the popup looks there
+  // rather than showing "no breakdown available" on every row.
+  const loadMatchBreakdown = async (sme) => {
+    const local = sme.matchBreakdown && Object.keys(sme.matchBreakdown).length ? sme.matchBreakdown : null;
+    if (local) { setMatchBreakdownData(local); return; }
+
+    setMatchBreakdownData(null);
+    setMatchLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) { setMatchBreakdownData({}); return; }
+      const advisorId = user.uid;
+      const smeId = sme.id;
+      const pick = (d) => {
+        const found = d?.matchBreakdown || d?.breakdown || d?.matchDetails || null;
+        return found && Object.keys(found).length ? found : null;
+      };
+
+      // Same pair-keyed ids handleStageUpdate mirrors onto.
+      const candidateRefs = [
+        doc(db, "AdvisoryMatches", `${smeId}_${advisorId}`),
+        doc(db, "SmeAdvisorApplications", `${smeId}_${advisorId}`),
+      ];
+      for (const candidateRef of candidateRefs) {
+        const snap = await getDoc(candidateRef);
+        if (!snap.exists()) continue;
+        const found = pick(snap.data());
+        if (found) { setMatchBreakdownData(found); return; }
+      }
+
+      // The AI matcher keys its records by field, not by composite id.
+      const aiSnap = await getDocs(query(
+        collection(db, "smseAdvisoryMatches"),
+        where("advisorId", "==", advisorId),
+        where("smeId", "==", smeId),
+      ));
+      for (const d of aiSnap.docs) {
+        const found = pick(d.data());
+        if (found) { setMatchBreakdownData(found); return; }
+      }
+
+      setMatchBreakdownData({});
+    } catch (error) {
+      console.error("Match breakdown fetch failed:", error);
+      setMatchBreakdownData({});
+    } finally {
+      setMatchLoading(false);
+    }
+  };
+
   // ─── Popups ───────────────────────────────────────────────────────────────
   const openPopup = (type, sme, rect, options = {}) => {
     let popupWidth, popupHeight;
@@ -891,6 +953,8 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     setSelectedSMEForPopup(sme);
     setActivePopup({ type, smeKey: sme.id, position: { x, y }, rect });
 
+    if (type === "match") loadMatchBreakdown(sme);
+
     if (type === "stage") {
       const presetStage = options.presetStage || sme.nextStage || getNextStage(sme.currentStatus, activeStages);
       const presetId = mapStatusToStageId(presetStage, activeStages);
@@ -913,6 +977,8 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     setActivePopup(null);
     setSelectedSMEForPopup(null);
     setShowCalendarPopup(false);
+    setMatchBreakdownData(null);
+    setMatchLoading(false);
   };
 
   // Forward-only through the live stages, with terminal outcomes always
@@ -1612,12 +1678,24 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                     <tr><td colSpan={Object.values(columnVisibility).filter(Boolean).length + 1} className="text-center py-20">
                       <div className="flex flex-col items-center gap-4">
                         <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
-                        <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
-                        <p className="text-sm text-[#7d5a50] max-w-xs">
-                          {activeFilterCount > 0
-                            ? "Clear a filter to widen the list."
-                            : "Apply to businesses that match your expertise — your applications appear here."}
+                        <p className="text-lg font-semibold text-[#4a352f]">
+                          {showSavedOnly ? "No Saved Businesses" : "No Businesses Found"}
                         </p>
+                        <p className="text-sm text-[#7d5a50] max-w-xs">
+                          {showSavedOnly
+                            ? "Bookmark a row to keep it here."
+                            : activeFilterCount > 0
+                              ? "Clear a filter to widen the list."
+                              : "Apply to businesses that match your expertise — your applications appear here."}
+                        </p>
+                        {showSavedOnly && (
+                          <button
+                            onClick={() => setShowSavedOnly(false)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                          >
+                            Show all businesses
+                          </button>
+                        )}
                       </div>
                     </td></tr>
                   ) : (
@@ -1793,14 +1871,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
               </table>
             </div>
 
-            {/* Pagination — the "Showing X–Y of N Businesses" readout was
-                removed; rows-per-page and the page buttons remain. */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
-              <div className="flex items-center gap-4">
-                <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f]">
-                  <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
-                </select>
-              </div>
+            {/* Pagination — the "Showing X–Y of N Businesses" readout and the
+                rows-per-page dropdown were both removed; page size is fixed at
+                25 and only the page buttons remain. */}
+            <div className="flex items-center justify-end px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
               <div className="flex items-center gap-1">
                 <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">First</button>
                 <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">Prev</button>
@@ -2100,19 +2174,36 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
               </div>
             </div>
             <div className="p-4 space-y-2">
-              {Object.keys(selectedSMEForPopup.matchBreakdown || {}).length > 0
-                ? Object.entries(selectedSMEForPopup.matchBreakdown).map(([key, criteria]) => {
-                    const matched = !!criteria?.matched;
-                    return (
-                      <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
-                        <span className="font-semibold text-[#4a352f]">{formatLabel(key)}</span>
-                        <span className="font-semibold" style={{ color: matched ? "#22c55e" : "#ef4444" }}>
-                          {matched ? "Matched" : "Not matched"}
-                        </span>
+              {matchLoading ? (
+                <div className="space-y-2">
+                  {[...Array(4)].map((_, i) => (<div key={i} className="h-12 bg-[#f5f0e1] rounded-lg animate-pulse" />))}
+                </div>
+              ) : Object.keys(matchBreakdownData || {}).length > 0 ? (
+                Object.entries(matchBreakdownData).map(([key, criteria]) => {
+                  // The breakdown has been stored two ways: a plain boolean per
+                  // criterion, and an object with matched/score. Read both, or
+                  // half the rows silently render as "Not matched".
+                  const matched =
+                    typeof criteria === "boolean"
+                      ? criteria
+                      : !!(criteria?.matched ?? (Number(criteria?.score) > 0));
+                  return (
+                    <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
+                      <span className="font-semibold text-[#4a352f]">{formatLabel(key)}</span>
+                      <span className="font-semibold" style={{ color: matched ? "#22c55e" : "#ef4444" }}>
+                        {matched ? "Matched" : "Not matched"}
+                      </span>
                       </div>
-                    );
-                  })
-                : <p className="text-xs text-[#a89482] text-center py-4">No breakdown available for this application.</p>}
+                  );
+                })
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-xs text-[#a89482] m-0">No scoring breakdown was saved for this match.</p>
+                  <p className="text-[11px] text-[#a89482] mt-1 m-0">
+                    The overall score is {selectedSMEForPopup.matchPercentage}%.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </PopupPortal>
