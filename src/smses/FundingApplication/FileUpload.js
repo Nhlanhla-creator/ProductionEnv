@@ -61,6 +61,8 @@ export default function FileUpload({
     setIsDragging(false)
   }
 
+
+  
   const handleDrop = async (e) => {
     e.preventDefault()
     setIsDragging(false)

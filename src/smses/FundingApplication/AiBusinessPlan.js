@@ -860,3 +860,5 @@ export default function GPT({ files = [], onEvaluationComplete }) {
     </div>
   );
 }
+
+export { extractTextFromFile };
