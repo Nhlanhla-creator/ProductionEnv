@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Info, Calendar, X, Eye, ChevronDown, MoreVertical, CheckCircle,
@@ -73,6 +73,104 @@ const formatLabel = (value) => {
         .join(" ");
     })
     .join(", ");
+};
+
+// ─── Match scoring ────────────────────────────────────────────────────────────
+// Ported verbatim from the SME-side advisor table so both sides produce the
+// same eight criteria and the same verdicts. That table never reads a stored
+// breakdown — it recomputes on every render — which is why its popup always
+// has content and a fetch-based approach here always came back empty.
+const CATEGORY_LABEL = {
+  stageFit: "Stage Fit",
+  skillAlignment: "Support Type Alignment",
+  location: "Location",
+  sector: "Sector Experience",
+  compensation: "Compensation Model Fit",
+  functionalExpertise: "Functional Expertise",
+  legalEntityFit: "Legal Entity Fit",
+  revenueThreshold: "Revenue Threshold",
+};
+
+const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+const canon = (s) => s.toString().toLowerCase().replace(/[^a-z]/g, "");
+
+const FE_ALIASES = {
+  hr: "hr", humanresources: "hr",
+  tech: "tech", technology: "tech", it: "tech", ict: "tech",
+  legal: "legal", law: "legal",
+  strategy: "strategy", finance: "finance", esg: "esg", governance: "governance",
+};
+
+const normFE = (list) => {
+  const out = new Set();
+  for (const item of toArr(list)) {
+    const key = FE_ALIASES[canon(item)] || canon(item);
+    if (key) out.add(key);
+  }
+  return [...out];
+};
+
+const overlapFE = (a, b) => {
+  const A = new Set(normFE(a));
+  return normFE(b).some((t) => A.has(t));
+};
+
+const parseCurrency = (value) => {
+  if (value === null || value === undefined) return 0;
+  const n = Number.parseFloat(value.toString().replace(/[^0-9.]/g, ""));
+  return Number.isNaN(n) ? 0 : n;
+};
+
+const calculateAdvisorMatch = (smeProfile, advisorProfile) => {
+  const supportFocus = toArr(smeProfile?.advisoryNeedsAssessment?.supportFocus);
+  const fundingStage = (smeProfile?.entityOverview?.operationStage || "").toLowerCase();
+  const smeSectors = toArr(smeProfile?.entityOverview?.economicSectors).map((s) => (s || "").toLowerCase());
+  const smeLocation = (smeProfile?.entityOverview?.location || "").toLowerCase();
+  const smeLegal = (smeProfile?.entityOverview?.legalStructure || "").toLowerCase();
+  const smeRevenue = parseCurrency(smeProfile?.financialOverview?.annualRevenue);
+  const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
+
+  const advForm = advisorProfile?.formData || {};
+  const contact = advForm.contactDetails || {};
+  const overview = advForm.personalProfessionalOverview || {};
+  const selection = advForm.selectionCriteria || {};
+
+  const advisorFE = [...new Set([...toArr(overview.functionalExpertise), ...toArr(selection.functionalExpertise)])];
+
+  const breakdown = {
+    stageFit: { matched: false, smeValue: fundingStage, advisorValue: toArr(selection.smeStageFit) },
+    skillAlignment: { matched: false, smeValue: supportFocus, advisorValue: toArr(selection.advisorySupportType) },
+    location: { matched: false, smeValue: smeLocation, advisorValue: contact.country || "" },
+    sector: { matched: false, smeValue: smeSectors, advisorValue: toArr(overview.industryExperience) },
+    compensation: { matched: false, smeValue: toArr(smeProfile?.advisoryNeedsAssessment?.compensationModel), advisorValue: selection.compensationModel || "Not specified" },
+    functionalExpertise: { matched: false, smeValue: smeFE, advisorValue: advisorFE },
+    legalEntityFit: { matched: false, smeValue: smeLegal, advisorValue: selection.legalEntityFit || "" },
+    revenueThreshold: { matched: false, smeValue: smeRevenue, advisorValue: selection.revenueThreshold || "Not specified" },
+  };
+
+  breakdown.stageFit.matched = breakdown.stageFit.advisorValue.map((s) => (s || "").toLowerCase()).includes(fundingStage);
+  breakdown.skillAlignment.matched = breakdown.skillAlignment.advisorValue.some((t) => supportFocus.includes(t));
+  breakdown.location.matched = (contact.country || "").toLowerCase() === smeLocation && !!smeLocation;
+  breakdown.sector.matched = breakdown.sector.advisorValue.some((s) => smeSectors.includes((s || "").toLowerCase()));
+  breakdown.functionalExpertise.matched = overlapFE(smeFE, advisorFE);
+  breakdown.legalEntityFit.matched = !!smeLegal && (selection.legalEntityFit || "").toLowerCase() === smeLegal;
+
+  const smePref = breakdown.compensation.smeValue.map(canon);
+  breakdown.compensation.matched = smePref.length > 0 && smePref.includes(canon(selection.compensationModel || ""));
+
+  const revenueBands = {
+    less_than_500k: [0, 500000],
+    "500k_to_1m": [500000, 1000000],
+    less_than_1m: [0, 1000000],
+    "1m_to_5m": [1000000, 5000000],
+    "5m_to_10m": [5000000, 10000000],
+    "10m_plus": [10000000, Number.POSITIVE_INFINITY],
+  };
+  const band = revenueBands[(selection.revenueThreshold || "").toLowerCase()];
+  breakdown.revenueThreshold.matched = band ? smeRevenue >= band[0] && smeRevenue <= band[1] : false;
+
+  const matchedCount = Object.values(breakdown).filter((b) => b.matched).length;
+  return { score: Math.round((matchedCount / Object.keys(breakdown).length) * 100), breakdown };
 };
 
 // Stage lookups take the currently *active* stage list as a parameter (BIG
@@ -376,6 +474,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   // from the row because it often has to be fetched — see loadMatchBreakdown.
   const [matchBreakdownData, setMatchBreakdownData] = useState(null);
   const [matchLoading, setMatchLoading] = useState(false);
+  const [matchComputedScore, setMatchComputedScore] = useState(null);
+  // The advisor's own profile is the same for every row, so it's fetched once
+  // and reused rather than re-read each time a popup opens.
+  const advisorProfileRef = useRef(null);
 
   // Stage update form
   const [stageUpdateData, setStageUpdateData] = useState({
@@ -877,53 +979,48 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   };
 
   // ─── Match breakdown ──────────────────────────────────────────────────────
-  // AdvisorApplications documents are written by handleConnect on the SME side
-  // and by handleStageUpdate here, and neither of them stores a breakdown —
-  // only matchPercentage. The scoring detail lives on the SME-facing mirror
-  // docs and on the AI matcher's own collection, so the popup looks there
-  // rather than showing "no breakdown available" on every row.
+  // Computed here, not fetched. Nothing writes a breakdown to Firestore: the
+  // SME-side table runs calculateAdvisorMatch on every render and throws the
+  // result away, and handleConnect only persists the headline percentage. So
+  // this popup recomputes from the same two profiles the SME side uses —
+  // universalProfiles + advisoryApplications for the business's needs, and the
+  // signed-in advisor's own advisorProfiles document — and gets identical
+  // verdicts.
   const loadMatchBreakdown = async (sme) => {
-    const local = sme.matchBreakdown && Object.keys(sme.matchBreakdown).length ? sme.matchBreakdown : null;
-    if (local) { setMatchBreakdownData(local); return; }
-
     setMatchBreakdownData(null);
+    setMatchComputedScore(null);
     setMatchLoading(true);
     try {
       const user = auth.currentUser;
       if (!user) { setMatchBreakdownData({}); return; }
-      const advisorId = user.uid;
-      const smeId = sme.id;
-      const pick = (d) => {
-        const found = d?.matchBreakdown || d?.breakdown || d?.matchDetails || null;
-        return found && Object.keys(found).length ? found : null;
+
+      // The business's own id, not the AdvisorApplications row key.
+      const smeId = sme.smeId || sme.id;
+
+      const [advisorSnap, smeSnap, needsSnap] = await Promise.all([
+        advisorProfileRef.current
+          ? Promise.resolve(null)
+          : getDoc(doc(db, "advisorProfiles", user.uid)),
+        getDoc(doc(db, "universalProfiles", smeId)),
+        getDoc(doc(db, "advisoryApplications", smeId)),
+      ]);
+
+      if (advisorSnap) {
+        advisorProfileRef.current = advisorSnap.exists() ? advisorSnap.data() : {};
+      }
+
+      const smeProfile = {
+        ...(smeSnap.exists() ? smeSnap.data() : {}),
+        advisoryNeedsAssessment: needsSnap.exists()
+          ? needsSnap.data().advisoryNeedsAssessment || {}
+          : {},
       };
 
-      // Same pair-keyed ids handleStageUpdate mirrors onto.
-      const candidateRefs = [
-        doc(db, "AdvisoryMatches", `${smeId}_${advisorId}`),
-        doc(db, "SmeAdvisorApplications", `${smeId}_${advisorId}`),
-      ];
-      for (const candidateRef of candidateRefs) {
-        const snap = await getDoc(candidateRef);
-        if (!snap.exists()) continue;
-        const found = pick(snap.data());
-        if (found) { setMatchBreakdownData(found); return; }
-      }
-
-      // The AI matcher keys its records by field, not by composite id.
-      const aiSnap = await getDocs(query(
-        collection(db, "smseAdvisoryMatches"),
-        where("advisorId", "==", advisorId),
-        where("smeId", "==", smeId),
-      ));
-      for (const d of aiSnap.docs) {
-        const found = pick(d.data());
-        if (found) { setMatchBreakdownData(found); return; }
-      }
-
-      setMatchBreakdownData({});
+      const { score, breakdown } = calculateAdvisorMatch(smeProfile, advisorProfileRef.current || {});
+      setMatchBreakdownData(breakdown);
+      setMatchComputedScore(score);
     } catch (error) {
-      console.error("Match breakdown fetch failed:", error);
+      console.error("Match breakdown computation failed:", error);
       setMatchBreakdownData({});
     } finally {
       setMatchLoading(false);
@@ -978,6 +1075,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     setSelectedSMEForPopup(null);
     setShowCalendarPopup(false);
     setMatchBreakdownData(null);
+    setMatchComputedScore(null);
     setMatchLoading(false);
   };
 
@@ -2168,7 +2266,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
                   <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-xl font-bold">{selectedSMEForPopup.matchPercentage}%</div>
+                  <div className="text-xl font-bold">{matchComputedScore ?? selectedSMEForPopup.matchPercentage}%</div>
                   <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1"><X size={18} /></button>
                 </div>
               </div>
@@ -2176,31 +2274,43 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
             <div className="p-4 space-y-2">
               {matchLoading ? (
                 <div className="space-y-2">
-                  {[...Array(4)].map((_, i) => (<div key={i} className="h-12 bg-[#f5f0e1] rounded-lg animate-pulse" />))}
+                  {[...Array(4)].map((_, i) => (<div key={i} className="h-16 bg-[#f5f0e1] rounded-lg animate-pulse" />))}
                 </div>
               ) : Object.keys(matchBreakdownData || {}).length > 0 ? (
-                Object.entries(matchBreakdownData).map(([key, criteria]) => {
-                  // The breakdown has been stored two ways: a plain boolean per
-                  // criterion, and an object with matched/score. Read both, or
-                  // half the rows silently render as "Not matched".
-                  const matched =
-                    typeof criteria === "boolean"
-                      ? criteria
-                      : !!(criteria?.matched ?? (Number(criteria?.score) > 0));
+                Object.entries(matchBreakdownData).map(([key, c]) => {
+                  const matched = !!c?.matched;
+                  const color = matched ? "#22c55e" : "#ef4444";
+                  const smeValue = Array.isArray(c.smeValue)
+                    ? c.smeValue.join(", ") || "Not specified"
+                    : String(c.smeValue || "Not specified");
+                  const advisorValue = Array.isArray(c.advisorValue)
+                    ? c.advisorValue.join(", ") || "Not specified"
+                    : String(c.advisorValue || "Not specified");
                   return (
-                    <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
-                      <span className="font-semibold text-[#4a352f]">{formatLabel(key)}</span>
-                      <span className="font-semibold" style={{ color: matched ? "#22c55e" : "#ef4444" }}>
-                        {matched ? "Matched" : "Not matched"}
-                      </span>
+                    <div key={key} className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
+                      <div className="flex items-center justify-between mb-1.5 gap-2">
+                        <span className="font-semibold text-[#4a352f]">{CATEGORY_LABEL[key] || formatLabel(key)}</span>
+                        <span className="font-bold flex-shrink-0" style={{ color }}>
+                          {matched ? "Match" : "No match"}
+                        </span>
                       </div>
+                      <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden mb-2">
+                        <div className="h-full rounded-full" style={{ width: matched ? "100%" : "0%", backgroundColor: color }} />
+                      </div>
+                      {/* Mirror of the SME-side wording, flipped to this side's
+                          point of view: the business states a need, you offer. */}
+                      <div className="text-[11px] text-[#7d5a50] leading-relaxed">
+                        <div><span className="font-semibold">Business needs:</span> {smeValue}</div>
+                        <div className="mt-0.5"><span className="font-semibold">You offer:</span> {advisorValue}</div>
+                      </div>
+                    </div>
                   );
                 })
               ) : (
                 <div className="text-center py-6">
-                  <p className="text-xs text-[#a89482] m-0">No scoring breakdown was saved for this match.</p>
+                  <p className="text-xs text-[#a89482] m-0">Couldn't score this match.</p>
                   <p className="text-[11px] text-[#a89482] mt-1 m-0">
-                    The overall score is {selectedSMEForPopup.matchPercentage}%.
+                    Either this business has no advisory needs assessment on file, or your own advisor profile is incomplete.
                   </p>
                 </div>
               )}
