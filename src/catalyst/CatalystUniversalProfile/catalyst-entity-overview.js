@@ -98,6 +98,91 @@ const industryAssociations = [
   { value: "Other", label: "Other" },
 ]
 
+// ── Sponsor types ──────────────────────────────────────────────────────────
+// "Catalyst" is intentionally omitted here: this is the catalyst-side profile.
+const sponsorTypes = [
+  { value: "CMF", label: "CMF" },
+  { value: "Investor", label: "Investor" },
+  { value: "Advisor", label: "Advisor" },
+]
+
+// ⚠️ PLACEHOLDER DATA — TO BE REPLACED WITH A FIRESTORE QUERY.
+// Load registered sponsors from the database (e.g. a `sponsors` collection
+// filtered by `type`) and keep the { value, label } shape so the <select>
+// below continues to work without changes. `value` should be the sponsor's
+// document ID, `label` their display name.
+const sponsorDirectory = {
+  CMF: [
+    { value: "cmf_001", label: "Ubuntu Capital Markets Fund" },
+    { value: "cmf_002", label: "Kagiso Enterprise Fund" },
+  ],
+  Investor: [
+    { value: "inv_001", label: "Sanlam Investment Holdings" },
+    { value: "inv_002", label: "Mineworkers Investment Company" },
+  ],
+  Advisor: [
+    { value: "adv_001", label: "Thabo Mokoena Advisory" },
+    { value: "adv_002", label: "Nkosi & Associates" },
+  ],
+}
+
+// Shared 3-column grid so every section reads side by side
+const threeColGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr 1fr",
+  gap: "1.25rem",
+}
+
+// Yes / No pill radio — shared by the association and sponsor permission questions
+function YesNoPillRadio({ name, value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: "16px" }}>
+      {["yes", "no"].map((opt) => (
+        <label
+          key={opt}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 20px",
+            borderRadius: "6px",
+            border: `2px solid ${value === opt ? "#8B4513" : "#ccc"}`,
+            backgroundColor: value === opt ? "#fdf6ee" : "white",
+            cursor: "pointer",
+            fontWeight: value === opt ? "600" : "400",
+            color: value === opt ? "#6B3410" : "#555",
+            fontSize: "14px",
+            transition: "all 0.2s ease",
+            userSelect: "none",
+          }}
+        >
+          <input
+            type="radio"
+            name={name}
+            value={opt}
+            checked={value === opt}
+            onChange={(e) => onChange(e.target.value)}
+            style={{ display: "none" }}
+          />
+          <span
+            style={{
+              width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0,
+              border: `2px solid ${value === opt ? "#8B4513" : "#ccc"}`,
+              backgroundColor: value === opt ? "#8B4513" : "transparent",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            {value === opt && (
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "white" }} />
+            )}
+          </span>
+          {opt === "yes" ? "Yes" : "No"}
+        </label>
+      ))}
+    </div>
+  )
+}
+
 // Reusable MultiSelect Dropdown
 function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "Select options..." }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -257,6 +342,22 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
 
   const memberOfAssociation = data.memberOfAssociation
 
+  // ── Sponsor handlers ──
+  const sponsorType = data.sponsorType || ""
+  const sponsorOptions = sponsorDirectory[sponsorType] || []
+  const selectedSponsorLabel = sponsorOptions.find((s) => s.value === data.sponsorName)?.label || ""
+
+  // Changing the sponsor type clears the sponsor and permission below it,
+  // so a stale sponsor ID can never be saved.
+  const handleSponsorTypeChange = (e) => {
+    updateData({ sponsorType: e.target.value, sponsorName: "", sponsorViewPermission: "" })
+  }
+
+  // Changing the sponsor resets the permission answer — consent is per sponsor.
+  const handleSponsorNameChange = (e) => {
+    updateData({ sponsorName: e.target.value, sponsorViewPermission: "" })
+  }
+
   // Inline styles to match the existing brown/earth tone aesthetic
   const sectionHeadingStyle = {
     borderBottom: "2px solid #C19A6B",
@@ -277,7 +378,15 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
     <div className={styles.productApplicationContainer}>
       <h2 className={styles.productApplicationHeading}>Entity Overview</h2>
       <div className={styles.formContent}>
-        <div className={styles.gridContainer}>
+
+        {/* ============================================================ */}
+        {/* SECTION 1: Company Information - 3 per row */}
+        {/* ============================================================ */}
+        <div style={sectionHeadingStyle}>
+          <h3 style={sectionHeadingTextStyle}>Company Information</h3>
+        </div>
+
+        <div className={styles.gridContainer} style={threeColGrid}>
           <FormField label="Registered Name" required>
             <input
               type="text"
@@ -288,6 +397,7 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               required
             />
           </FormField>
+
           <FormField label="Trading Name (if different)">
             <input
               type="text"
@@ -297,9 +407,18 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               className={styles.formInput}
             />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
+          <FormField label="Registration Number" required>
+            <input
+              type="text"
+              name="registrationNumber"
+              value={data.registrationNumber || ""}
+              onChange={handleChange}
+              className={styles.formInput}
+              required
+            />
+          </FormField>
+
           <FormField label="Legal Entity of Firm" required>
             <select
               name="legalEntityType"
@@ -316,19 +435,7 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
-          <FormField label="Registration Number" required>
-            <input
-              type="text"
-              name="registrationNumber"
-              value={data.registrationNumber || ""}
-              onChange={handleChange}
-              className={styles.formInput}
-              required
-            />
-          </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
           <FormField label="Industry Sector" required>
             <select
               name="industrySector"
@@ -345,6 +452,7 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
+
           <FormField label="Company Size" required>
             <select
               name="companySize"
@@ -361,9 +469,7 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
           <FormField label="Year Established" required>
             <input
               type="number"
@@ -377,6 +483,7 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               placeholder="e.g. 2010"
             />
           </FormField>
+
           <FormField label="Website (URL)">
             <input
               type="url"
@@ -387,20 +494,7 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               placeholder="https://www.example.com"
             />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
-          <FormField label="Brief Description" required>
-            <textarea
-              name="briefDescription"
-              value={data.briefDescription || ""}
-              onChange={handleChange}
-              className={`${styles.formTextarea} ${styles.small}`}
-              rows={3}
-              placeholder="Brief description of your business..."
-              required
-            />
-          </FormField>
           <FormField label="How did you hear about us?" required>
             <select
               name="referralSource"
@@ -430,59 +524,34 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               </div>
             )}
           </FormField>
+
+          <FormField label="Brief Description" required>
+            <textarea
+              name="briefDescription"
+              value={data.briefDescription || ""}
+              onChange={handleChange}
+              className={`${styles.formTextarea} ${styles.small}`}
+              rows={3}
+              placeholder="Brief description of your business..."
+              required
+            />
+          </FormField>
         </div>
 
-        {/* ── INDUSTRY ASSOCIATIONS ── */}
+        {/* ============================================================ */}
+        {/* SECTION 2: Industry Associations & Sponsor - 3 per row */}
+        {/* ============================================================ */}
         <div style={sectionHeadingStyle}>
           <h3 style={sectionHeadingTextStyle}>Industry Associations</h3>
         </div>
 
-        <div className={styles.gridContainer}>
+        <div className={styles.gridContainer} style={threeColGrid}>
           <FormField label="Are you a member of any industry association?">
-            <div style={{ display: "flex", gap: "16px" }}>
-              {["yes", "no"].map((opt) => (
-                <label
-                  key={opt}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "8px 20px",
-                    borderRadius: "6px",
-                    border: `2px solid ${memberOfAssociation === opt ? "#8B4513" : "#ccc"}`,
-                    backgroundColor: memberOfAssociation === opt ? "#fdf6ee" : "white",
-                    cursor: "pointer",
-                    fontWeight: memberOfAssociation === opt ? "600" : "400",
-                    color: memberOfAssociation === opt ? "#6B3410" : "#555",
-                    fontSize: "14px",
-                    transition: "all 0.2s ease",
-                    userSelect: "none",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="memberOfAssociation"
-                    value={opt}
-                    checked={memberOfAssociation === opt}
-                    onChange={handleChange}
-                    style={{ display: "none" }}
-                  />
-                  <span
-                    style={{
-                      width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0,
-                      border: `2px solid ${memberOfAssociation === opt ? "#8B4513" : "#ccc"}`,
-                      backgroundColor: memberOfAssociation === opt ? "#8B4513" : "transparent",
-                      display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    }}
-                  >
-                    {memberOfAssociation === opt && (
-                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "white" }} />
-                    )}
-                  </span>
-                  {opt === "yes" ? "Yes" : "No"}
-                </label>
-              ))}
-            </div>
+            <YesNoPillRadio
+              name="memberOfAssociation"
+              value={memberOfAssociation}
+              onChange={(value) => updateData({ memberOfAssociation: value })}
+            />
           </FormField>
 
           {memberOfAssociation === "yes" && (
@@ -493,21 +562,123 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
                 onChange={(value) => handleMultiSelectChange("industryAssociations", value)}
                 placeholder="Select associations..."
               />
-              {Array.isArray(data.industryAssociations) && data.industryAssociations.includes("Other") && (
-                <div style={{ marginTop: "10px" }}>
-                  <input
-                    type="text"
-                    name="industryAssociationsOther"
-                    value={data.industryAssociationsOther || ""}
-                    onChange={handleChange}
-                    className={styles.formInput}
-                    placeholder="Please specify your association..."
-                  />
-                </div>
-              )}
+            </FormField>
+          )}
+
+          {memberOfAssociation === "yes" &&
+            Array.isArray(data.industryAssociations) &&
+            data.industryAssociations.includes("Other") && (
+              <FormField label="Specify other association">
+                <input
+                  type="text"
+                  name="industryAssociationsOther"
+                  value={data.industryAssociationsOther || ""}
+                  onChange={handleChange}
+                  className={styles.formInput}
+                  placeholder="Please specify your association..."
+                />
+              </FormField>
+            )}
+
+          {/* ── Sponsor ── */}
+          <FormField label="Are you working with a specific sponsor?">
+            <select
+              name="sponsorType"
+              value={sponsorType}
+              onChange={handleSponsorTypeChange}
+              className={styles.formSelect}
+            >
+              <option value="">Select sponsor type</option>
+              {sponsorTypes.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </FormField>
+
+          {sponsorType && (
+            <FormField label={`Which ${sponsorType}?`}>
+              <select
+                name="sponsorName"
+                value={data.sponsorName || ""}
+                onChange={handleSponsorNameChange}
+                className={styles.formSelect}
+              >
+                <option value="">{`Select ${sponsorType}...`}</option>
+                {sponsorOptions.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
+
+          {sponsorType && data.sponsorName && (
+            <FormField label="Do you give them permission to view your profile?">
+              <YesNoPillRadio
+                name="sponsorViewPermission"
+                value={data.sponsorViewPermission}
+                onChange={(value) => updateData({ sponsorViewPermission: value })}
+              />
             </FormField>
           )}
         </div>
+
+        {/* Notes */}
+        {memberOfAssociation === "yes" && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f0f7f0",
+            borderLeft: "4px solid #4CAF50",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#2e7d32",
+          }}>
+            <strong>📌 Note:</strong> The associations you select here will be able to see your organisation in their member ecosystem.
+            Make sure to select all associations you are a member of.
+          </div>
+        )}
+
+        {memberOfAssociation === "no" && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f5f5f5",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#666",
+          }}>
+            <strong>ℹ️ Note:</strong> You indicated that you are not a member of any industry association.
+            You can update this later if needed.
+          </div>
+        )}
+
+        {data.sponsorViewPermission === "yes" && selectedSponsorLabel && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f0f7f0",
+            borderLeft: "4px solid #4CAF50",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#2e7d32",
+          }}>
+            <strong>📌 Note:</strong> {selectedSponsorLabel} will be able to view your full profile.
+            You can withdraw this at any time by changing your answer above.
+          </div>
+        )}
+
+        {data.sponsorViewPermission === "no" && selectedSponsorLabel && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f5f5f5",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#666",
+          }}>
+            <strong>ℹ️ Note:</strong> {selectedSponsorLabel} is recorded as your sponsor, but will not be able to view your profile.
+          </div>
+        )}
 
       </div>
     </div>

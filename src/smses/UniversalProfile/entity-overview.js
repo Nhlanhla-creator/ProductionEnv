@@ -178,6 +178,38 @@ const industryAssociations = [
   { value: "Other", label: "Other" },
 ]
 
+// ── Sponsor types ──
+const sponsorTypes = [
+  { value: "CMF", label: "CMF" },
+  { value: "Investor", label: "Investor" },
+  { value: "Catalyst", label: "Catalyst" },
+  { value: "Advisor", label: "Advisor" },
+]
+
+// ⚠️ PLACEHOLDER DATA — TO BE REPLACED WITH A FIRESTORE QUERY.
+// Load registered sponsors from the database (e.g. a `sponsors` collection
+// filtered by `type`) and keep the { value, label } shape so the <select>
+// below continues to work without changes. `value` should be the sponsor's
+// document ID, `label` their display name.
+const sponsorDirectory = {
+  CMF: [
+    { value: "cmf_001", label: "Ubuntu Capital Markets Fund" },
+    { value: "cmf_002", label: "Kagiso Enterprise Fund" },
+  ],
+  Investor: [
+    { value: "inv_001", label: "Sanlam Investment Holdings" },
+    { value: "inv_002", label: "Mineworkers Investment Company" },
+  ],
+  Catalyst: [
+    { value: "cat_001", label: "Catalyst Growth Partners" },
+    { value: "cat_002", label: "Impact Catalyst SA" },
+  ],
+  Advisor: [
+    { value: "adv_001", label: "Thabo Mokoena Advisory" },
+    { value: "adv_002", label: "Nkosi & Associates" },
+  ],
+}
+
 // ── Currencies ──
 const currencies = [
   { value: "ZAR", label: "ZAR - South African Rand" },
@@ -576,6 +608,9 @@ export default function EntityOverview({ data = {}, updateData }) {
             brandsRepresented: "",
             holdsFranchises: "",
             holdsAgencies: "",
+            sponsorType: "",
+            sponsorName: "",
+            sponsorViewPermission: "",
           };
 
           Object.keys(defaultFields).forEach(key => {
@@ -606,6 +641,9 @@ export default function EntityOverview({ data = {}, updateData }) {
             brandsRepresented: "",
             holdsFranchises: "",
             holdsAgencies: "",
+            sponsorType: "",
+            sponsorName: "",
+            sponsorViewPermission: "",
           });
         }
       } catch (error) {
@@ -632,6 +670,26 @@ export default function EntityOverview({ data = {}, updateData }) {
 
   const handleMultiSelectChange = (field, value) => {
     updateFormData({ ...formData, [field]: value })
+  }
+
+  // Changing the sponsor type clears the previously selected sponsor and
+  // permission answer, so a stale sponsor ID can never be saved.
+  const handleSponsorTypeChange = (e) => {
+    updateFormData({
+      ...formData,
+      sponsorType: e.target.value,
+      sponsorName: "",
+      sponsorViewPermission: "",
+    })
+  }
+
+  // Changing the sponsor resets the permission answer — consent is per sponsor.
+  const handleSponsorNameChange = (e) => {
+    updateFormData({
+      ...formData,
+      sponsorName: e.target.value,
+      sponsorViewPermission: "",
+    })
   }
 
   const handleLetterheadUpload = async (e) => {
@@ -782,6 +840,10 @@ export default function EntityOverview({ data = {}, updateData }) {
   const selectedCountries = Array.isArray(formData.operatingCountries) ? formData.operatingCountries : []
   const showProvinces = selectedCountries.includes("South Africa")
   const memberOfAssociation = formData.memberOfAssociation
+
+  const sponsorType = formData.sponsorType || ""
+  const sponsorOptions = sponsorDirectory[sponsorType] || []
+  const selectedSponsorLabel = sponsorOptions.find((s) => s.value === formData.sponsorName)?.label || ""
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -961,6 +1023,47 @@ export default function EntityOverview({ data = {}, updateData }) {
             You indicated that you are not a member of any industry association.
           </div>
         )}
+
+        {/* ── Sponsor ── */}
+        <FormField label="Are you working with a specific sponsor?">
+          <select
+            name="sponsorType"
+            value={sponsorType}
+            onChange={handleSponsorTypeChange}
+            style={inputStyle}
+          >
+            <option value="">Select sponsor type</option>
+            {sponsorTypes.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </FormField>
+
+        {sponsorType && (
+          <FormField label={`Which ${sponsorType}?`}>
+            <select
+              name="sponsorName"
+              value={formData.sponsorName || ""}
+              onChange={handleSponsorNameChange}
+              style={inputStyle}
+            >
+              <option value="">{`Select ${sponsorType}...`}</option>
+              {sponsorOptions.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </FormField>
+        )}
+
+        {sponsorType && formData.sponsorName && (
+          <FormField label="Do you give them permission to view your profile?">
+            <RadioGroup
+              name="sponsorViewPermission"
+              value={formData.sponsorViewPermission}
+              onChange={(value) => handleRadioChange("sponsorViewPermission", value)}
+            />
+          </FormField>
+        )}
       </div>
 
       {memberOfAssociation === "yes" && (
@@ -975,6 +1078,33 @@ export default function EntityOverview({ data = {}, updateData }) {
         }}>
           <strong>📌 Note:</strong> The associations you select here will be able to see your business in their member ecosystem.
           Make sure to select all associations you are a member of.
+        </div>
+      )}
+
+      {formData.sponsorViewPermission === "yes" && selectedSponsorLabel && (
+        <div style={{
+          marginTop: '12px',
+          padding: '10px 12px',
+          backgroundColor: '#f0f7f0',
+          borderLeft: '3px solid #4CAF50',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#2e7d32',
+        }}>
+          <strong>📌 Note:</strong> {selectedSponsorLabel} will be able to view your full profile. You can withdraw this at any time by changing your answer above.
+        </div>
+      )}
+
+      {formData.sponsorViewPermission === "no" && selectedSponsorLabel && (
+        <div style={{
+          marginTop: '12px',
+          padding: '10px 12px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#666',
+        }}>
+          {selectedSponsorLabel} is recorded as your sponsor, but will not be able to view your profile.
         </div>
       )}
 

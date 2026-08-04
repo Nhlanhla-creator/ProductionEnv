@@ -138,48 +138,156 @@ const industryAssociations = [
   { value: "Other", label: "Other" },
 ]
 
-// MultiSelectDropdown for associations (earth-tone pill style)
-function AssociationsMultiSelect({ options, selected = [], onChange, placeholder = "Select associations..." }) {
+// ── Sponsor types ──────────────────────────────────────────────────────────
+// "Investor" is intentionally omitted here: this is the investor-side profile.
+const sponsorTypes = [
+  { value: "CMF", label: "CMF" },
+  { value: "Catalyst", label: "Catalyst" },
+  { value: "Advisor", label: "Advisor" },
+]
+
+// ⚠️ PLACEHOLDER DATA — TO BE REPLACED WITH A FIRESTORE QUERY.
+// Load registered sponsors from the database (e.g. a `sponsors` collection
+// filtered by `type`) and keep the { value, label } shape so the <select>
+// below continues to work without changes. `value` should be the sponsor's
+// document ID, `label` their display name.
+const sponsorDirectory = {
+  CMF: [
+    { value: "cmf_001", label: "Ubuntu Capital Markets Fund" },
+    { value: "cmf_002", label: "Kagiso Enterprise Fund" },
+  ],
+  Catalyst: [
+    { value: "cat_001", label: "Catalyst Growth Partners" },
+    { value: "cat_002", label: "Impact Catalyst SA" },
+  ],
+  Advisor: [
+    { value: "adv_001", label: "Thabo Mokoena Advisory" },
+    { value: "adv_002", label: "Nkosi & Associates" },
+  ],
+}
+
+// Shared 3-column grid so every section reads side by side
+const threeColGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr 1fr",
+  gap: "1.25rem",
+}
+
+// Section heading
+function SectionHeading({ title, description }) {
+  return (
+    <div style={{ margin: "2rem 0 1.25rem 0", paddingBottom: "6px", borderBottom: "2px solid #C19A6B" }}>
+      <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#6B3410", margin: 0, letterSpacing: "0.3px" }}>
+        {title}
+      </h3>
+      {description && (
+        <p style={{ fontSize: "0.8125rem", color: "#6b7280", margin: "6px 0 0 0" }}>{description}</p>
+      )}
+    </div>
+  )
+}
+
+// Yes / No pill radio — shared by the association and sponsor permission questions
+function YesNoPillRadio({ name, value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: "16px" }}>
+      {["yes", "no"].map((opt) => (
+        <label
+          key={opt}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "8px",
+            padding: "8px 20px", borderRadius: "6px",
+            border: `2px solid ${value === opt ? "#8B4513" : "#ccc"}`,
+            backgroundColor: value === opt ? "#fdf6ee" : "white",
+            cursor: "pointer",
+            fontWeight: value === opt ? "600" : "400",
+            color: value === opt ? "#6B3410" : "#555",
+            fontSize: "14px", transition: "all 0.2s ease", userSelect: "none",
+          }}
+        >
+          <input
+            type="radio"
+            name={name}
+            value={opt}
+            checked={value === opt}
+            onChange={(e) => onChange(e.target.value)}
+            style={{ display: "none" }}
+          />
+          <span style={{
+            width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0,
+            border: `2px solid ${value === opt ? "#8B4513" : "#ccc"}`,
+            backgroundColor: value === opt ? "#8B4513" : "transparent",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}>
+            {value === opt && (
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "white" }} />
+            )}
+          </span>
+          {opt === "yes" ? "Yes" : "No"}
+        </label>
+      ))}
+    </div>
+  )
+}
+
+// ── MultiSelectDropdown ────────────────────────────────────────────────────
+// One dropdown used by every multi-select on this page (firm subtype,
+// additional support, additional services, associations). Styled inline with
+// the same earth-tone pills as the SME and catalyst profiles, so it no longer
+// depends on the CSS module. Each instance tracks its own outside-click via a
+// ref, so opening one dropdown closes any other left open.
+function MultiSelectDropdown({
+  options,
+  value = [],
+  onChange,
+  placeholder = "Select options...",
+  name,
+  disabled = false,
+}) {
   const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef(null)
+  const selected = Array.isArray(value) ? value : []
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest("[data-assoc-multiselect]")) setIsOpen(false)
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false)
+      }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const toggle = (value) => {
-    if (selected.includes(value)) {
-      onChange(selected.filter((v) => v !== value))
+  const toggle = (val) => {
+    if (selected.includes(val)) {
+      onChange(selected.filter((v) => v !== val))
     } else {
-      onChange([...selected, value])
+      onChange([...selected, val])
     }
   }
 
-  const removeTag = (e, value) => {
+  const removeTag = (e, val) => {
     e.stopPropagation()
-    onChange(selected.filter((v) => v !== value))
+    onChange(selected.filter((v) => v !== val))
   }
 
-  const getLabel = (value) => options.find((o) => o.value === value)?.label || value
+  const getLabel = (val) => options.find((o) => o.value === val)?.label || val
 
   return (
-    <div style={{ position: "relative" }} data-assoc-multiselect="true">
+    <div style={{ position: "relative" }} ref={containerRef}>
       <div
-        onClick={() => setIsOpen((p) => !p)}
+        onClick={() => { if (!disabled) setIsOpen((p) => !p) }}
         style={{
           border: "1px solid #ccc",
           borderRadius: "4px",
           padding: "6px 10px",
-          cursor: "pointer",
+          cursor: disabled ? "not-allowed" : "pointer",
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
           gap: "4px",
           minHeight: "40px",
-          backgroundColor: "white",
+          backgroundColor: disabled ? "#f5f5f5" : "white",
           fontSize: "14px",
         }}
       >
@@ -197,47 +305,61 @@ function AssociationsMultiSelect({ options, selected = [], onChange, placeholder
               }}
             >
               {getLabel(val)}
-              <span onClick={(e) => removeTag(e, val)} style={{ cursor: "pointer", lineHeight: 1, opacity: 0.7, fontSize: "12px" }}>✕</span>
+              <span
+                onClick={(e) => removeTag(e, val)}
+                style={{ cursor: "pointer", lineHeight: 1, opacity: 0.7, fontSize: "12px" }}
+              >
+                ✕
+              </span>
             </span>
           ))
         )}
-        <span style={{ marginLeft: "auto", color: "#999", fontSize: "12px" }}>{isOpen ? "▲" : "▼"}</span>
+        <span style={{ marginLeft: "auto", color: "#999", display: "inline-flex", alignItems: "center" }}>
+          <ChevronDown
+            size={16}
+            style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}
+          />
+        </span>
       </div>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0,
           backgroundColor: "white", border: "1px solid #ccc", borderRadius: "4px",
           marginTop: "4px", zIndex: 1000, maxHeight: "260px", overflowY: "auto",
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
         }}>
-          {options.map((option) => {
-            const isSel = selected.includes(option.value)
-            return (
-              <div
-                key={option.value}
-                onClick={() => toggle(option.value)}
-                style={{
-                  padding: "9px 12px", cursor: "pointer", display: "flex",
-                  alignItems: "center", gap: "10px",
-                  backgroundColor: isSel ? "#fdf6ee" : "white",
-                  fontSize: "14px", color: "#3d2b1f",
-                }}
-                onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.backgroundColor = "#faf5ef" }}
-                onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.backgroundColor = "white" }}
-              >
-                <div style={{
-                  width: "16px", height: "16px", borderRadius: "3px", flexShrink: 0,
-                  border: `1px solid ${isSel ? "#8b5e3c" : "#ccc"}`,
-                  backgroundColor: isSel ? "#8b5e3c" : "transparent",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  {isSel && <span style={{ color: "white", fontSize: "10px", fontWeight: "bold" }}>✓</span>}
+          {options.length === 0 ? (
+            <div style={{ padding: "12px", fontSize: "13px", color: "#999" }}>No options available</div>
+          ) : (
+            options.map((option) => {
+              const isSel = selected.includes(option.value)
+              return (
+                <div
+                  key={option.value}
+                  onClick={() => toggle(option.value)}
+                  style={{
+                    padding: "9px 12px", cursor: "pointer", display: "flex",
+                    alignItems: "center", gap: "10px",
+                    backgroundColor: isSel ? "#fdf6ee" : "white",
+                    fontSize: "14px", color: "#3d2b1f",
+                  }}
+                  onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.backgroundColor = "#faf5ef" }}
+                  onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.backgroundColor = "white" }}
+                >
+                  <div style={{
+                    width: "16px", height: "16px", borderRadius: "3px", flexShrink: 0,
+                    border: `1px solid ${isSel ? "#8b5e3c" : "#ccc"}`,
+                    backgroundColor: isSel ? "#8b5e3c" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {isSel && <span style={{ color: "white", fontSize: "10px", fontWeight: "bold" }}>✓</span>}
+                  </div>
+                  <span>{option.label}</span>
                 </div>
-                <span>{option.label}</span>
-              </div>
-            )
-          })}
+              )
+            })
+          )}
           <div style={{ padding: "8px", borderTop: "1px solid #eee", position: "sticky", bottom: 0, backgroundColor: "white" }}>
             <button
               type="button"
@@ -253,99 +375,11 @@ function AssociationsMultiSelect({ options, selected = [], onChange, placeholder
           </div>
         </div>
       )}
-    </div>
-  )
-}
 
-// Original MultiSelectDropdown (for other fields)
-function MultiSelectDropdown({
-  options,
-  value = [],
-  onChange,
-  placeholder = "Select options",
-  name,
-  required = false,
-}) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [selectedOptions, setSelectedOptions] = useState(value)
-  const dropdownRef = useRef(null)
-
-  useEffect(() => {
-    setSelectedOptions(value)
-  }, [value])
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  const toggleOption = (optionValue) => {
-    let newSelectedOptions
-    if (selectedOptions.includes(optionValue)) {
-      newSelectedOptions = selectedOptions.filter((value) => value !== optionValue)
-    } else {
-      newSelectedOptions = [...selectedOptions, optionValue]
-    }
-    setSelectedOptions(newSelectedOptions)
-    onChange(newSelectedOptions)
-  }
-
-  const toggleDropdown = () => setIsOpen(!isOpen)
-
-  const getSelectedLabels = () =>
-    options.filter((option) => selectedOptions.includes(option.value)).map((option) => option.label)
-
-  return (
-    <div className={styles.multiSelectContainer} ref={dropdownRef}>
-      <div className={styles.multiSelectHeader} onClick={toggleDropdown} aria-haspopup="listbox" aria-expanded={isOpen}>
-        {selectedOptions.length > 0 ? (
-          <div className={styles.selectedItems}>
-            {getSelectedLabels().map((label) => (
-              <span key={label} className={styles.selectedItem}>{label}</span>
-            ))}
-          </div>
-        ) : (
-          <span className={styles.placeholder}>{placeholder}</span>
-        )}
-        <ChevronDown size={16} />
-      </div>
-
-      {isOpen && (
-        <div className={styles.multiSelectDropdown}>
-          <div className={styles.multiSelectOptions} role="listbox">
-            {options.map((option) => (
-              <div
-                key={option.value}
-                className={`${styles.multiSelectOption} ${selectedOptions.includes(option.value) ? styles.selected : ""}`}
-                onClick={() => toggleOption(option.value)}
-                role="option"
-                aria-selected={selectedOptions.includes(option.value)}
-              >
-                <input
-                  type="checkbox"
-                  className={styles.multiSelectCheckbox}
-                  checked={selectedOptions.includes(option.value)}
-                  onChange={() => {}}
-                  id={`${name}-${option.value}`}
-                />
-                <label htmlFor={`${name}-${option.value}`}>{option.label}</label>
-              </div>
-            ))}
-          </div>
-          <div className={styles.multiSelectActions}>
-            <button type="button" className={styles.multiSelectButton} onClick={() => setIsOpen(false)}>
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      <select name={name} multiple value={selectedOptions} onChange={() => {}} required={required} style={{ display: "none" }}>
+      {/* Mirrors the selection for form serialisation. Deliberately not marked
+          required: a hidden control with `required` blocks submit with an
+          unfocusable validation error. Validate these in the submit handler. */}
+      <select name={name} multiple value={selected} onChange={() => {}} style={{ display: "none" }}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
         ))}
@@ -389,25 +423,45 @@ export default function EntityOverview({ data = {}, updateData }) {
     updateData({ industryAssociations: selectedValues })
   }
 
+  // ── Sponsor handlers ──
+  const sponsorType = data.sponsorType || ""
+  const sponsorOptions = sponsorDirectory[sponsorType] || []
+  const selectedSponsorLabel = sponsorOptions.find((s) => s.value === data.sponsorName)?.label || ""
+
+  // Changing the sponsor type clears the sponsor and permission below it,
+  // so a stale sponsor ID can never be saved.
+  const handleSponsorTypeChange = (e) => {
+    updateData({ sponsorType: e.target.value, sponsorName: "", sponsorViewPermission: "" })
+  }
+
+  // Changing the sponsor resets the permission answer — consent is per sponsor.
+  const handleSponsorNameChange = (e) => {
+    updateData({ sponsorName: e.target.value, sponsorViewPermission: "" })
+  }
+
   return (
     <div className={styles.productApplicationContainer}>
       <h2 className={styles.productApplicationHeading}>Fund Manager Overview​</h2>
 
       <div className={styles.formContent}>
-        {/* Basic Information */}
-        <div className={styles.gridContainer}>
+        {/* ============================================================ */}
+        {/* SECTION 1: Firm Information - 3 per row */}
+        {/* ============================================================ */}
+        <SectionHeading title="Firm Information" />
+
+        <div className={styles.gridContainer} style={threeColGrid}>
           <FormField label="Registered Name" required>
             <input type="text" name="registeredName" value={data.registeredName || ""} onChange={handleChange} className={styles.formInput} required />
           </FormField>
+
           <FormField label="Trading Name (if different)">
             <input type="text" name="tradingName" value={data.tradingName || ""} onChange={handleChange} className={styles.formInput} />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
           <FormField label="Registration Number" required>
             <input type="text" name="registrationNumber" value={data.registrationNumber || ""} onChange={handleChange} className={styles.formInput} required />
           </FormField>
+
           <FormField label="Financial Year Start Month" required>
             <select name="financialYearStart" value={data.financialYearStart || ""} onChange={handleChange} className={styles.formSelect} required>
               <option value="">Select Financial Year Start Month</option>
@@ -416,12 +470,11 @@ export default function EntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
+
           <FormField label="Regulatory License Number">
             <input type="text" name="regulatoryLicenseNumber" value={data.regulatoryLicenseNumber || ""} onChange={handleChange} className={styles.formInput} />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
           <FormField label="Legal Entity of Firm" required>
             <select name="legalEntityType" value={data.legalEntityType || ""} onChange={handleChange} className={styles.formSelect} required>
               <option value="">Select Legal Entity Type</option>
@@ -430,6 +483,7 @@ export default function EntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
+
           <FormField label="Firm Type" required>
             <select name="firmType" value={data.firmType || ""} onChange={handleFirmTypeChange} className={styles.formSelect} required>
               <option value="">Select Firm Type</option>
@@ -438,19 +492,18 @@ export default function EntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
+
           <FormField label="Firm Subtype" required={!!data.firmType}>
             <MultiSelectDropdown
               name="firmSubtype"
               options={getSubtypeOptions()}
               value={data.firmSubtype || []}
               onChange={(selectedOptions) => updateData({ firmSubtype: selectedOptions })}
-              placeholder={data.firmType ? "Select Firm Subtypes" : "Select Firm Type first"}
-              required={!!data.firmType}
+              placeholder={data.firmType ? "Select firm subtypes..." : "Select firm type first"}
+              disabled={!data.firmType}
             />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
           <FormField label="Investor Role" required>
             <select name="investorRole" value={data.investorRole || ""} onChange={handleChange} className={styles.formSelect} required>
               <option value="">Select Investor Role</option>
@@ -459,79 +512,76 @@ export default function EntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
+
           <FormField label="Years in Operation" required>
             <input type="number" name="yearsInOperation" value={data.yearsInOperation || ""} onChange={handleChange} className={styles.formInput} required min="0" />
           </FormField>
+
           <FormField label="Number of Investment Executives" required>
             <input type="number" name="numberOfInvestmentExecutives" value={data.numberOfInvestmentExecutives || ""} onChange={handleChange} className={styles.formInput} required min="0" />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
           <FormField label="Tax Number">
             <input type="text" name="taxNumber" value={data.taxNumber || ""} onChange={handleChange} className={styles.formInput} />
           </FormField>
+
           <FormField label="VAT Registration Numbers">
             <input type="text" name="vatRegistrationNumbers" value={data.vatRegistrationNumbers || ""} onChange={handleChange} className={styles.formInput} />
           </FormField>
         </div>
 
-        {/* Investment Information Section */}
-        <div style={{ margin: '2rem 0 1rem 0', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1f2937', marginBottom: '1rem' }}>Investment Information</h3>
-        </div>
+        {/* ============================================================ */}
+        {/* SECTION 2: Investment Information - 3 per row */}
+        {/* ============================================================ */}
+        <SectionHeading title="Investment Information" />
 
-        <div className={styles.gridContainer}>
+        <div className={styles.gridContainer} style={threeColGrid}>
           <FormField label="Brief Description" required>
             <textarea name="briefDescription" value={data.briefDescription || ""} onChange={handleChange} className={`${styles.formTextarea} ${styles.small}`} rows={2} placeholder="Brief description of your firm..." required />
           </FormField>
+
           <FormField label="Portfolio Companies" required>
             <textarea name="portfolioCompanies" value={data.portfolioCompanies || ""} onChange={handleChange} className={`${styles.formTextarea} ${styles.small}`} rows={2} placeholder="List your portfolio companies..." required />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
           <FormField label="Number of Investments to Date" required>
             <input type="number" name="numberOfInvestments" value={data.numberOfInvestments || ""} onChange={handleChange} className={styles.formInput} required min="0" />
           </FormField>
+
           <FormField label="Value Deployed" required>
             <input type="text" name="valueDeployed" value={data.valueDeployed || ""} onChange={handleValueDeployedChange} className={styles.formInput} placeholder="e.g., 10,000,000" required />
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer}>
           <FormField label="Additional Support Offered" required>
             <MultiSelectDropdown
               name="additionalSupport"
               options={additionalSupportOptions}
               value={data.additionalSupport || []}
               onChange={(selectedOptions) => updateData({ additionalSupport: selectedOptions })}
-              placeholder="Select Additional Support"
-              required
+              placeholder="Select additional support..."
             />
-            {data.additionalSupport && data.additionalSupport.includes("Other") && (
+            {Array.isArray(data.additionalSupport) && data.additionalSupport.includes("Other") && (
               <div style={{ marginTop: "8px" }}>
                 <input type="text" name="additionalSupportOther" value={data.additionalSupportOther || ""} onChange={handleChange} className={styles.formInput} placeholder="Please specify other additional support..." required />
               </div>
             )}
           </FormField>
+
           <FormField label="Additional Services Offered">
             <MultiSelectDropdown
               name="additionalServices"
               options={additionalServicesOptions}
               value={data.additionalServices || []}
               onChange={(selectedOptions) => updateData({ additionalServices: selectedOptions })}
-              placeholder="Select Additional Services"
+              placeholder="Select additional services..."
             />
-            {data.additionalServices && data.additionalServices.includes("Other") && (
+            {Array.isArray(data.additionalServices) && data.additionalServices.includes("Other") && (
               <div style={{ marginTop: "8px" }}>
                 <input type="text" name="additionalServicesOther" value={data.additionalServicesOther || ""} onChange={handleChange} className={styles.formInput} placeholder="Please specify other additional services..." />
               </div>
             )}
           </FormField>
-        </div>
 
-        <div className={styles.gridContainer} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <FormField label="How did you hear about us?" required>
             <select name="howDidYouHear" value={data.howDidYouHear || ""} onChange={handleChange} className={styles.formSelect} required>
               <option value="">Select how you heard about us</option>
@@ -547,75 +597,88 @@ export default function EntityOverview({ data = {}, updateData }) {
           </FormField>
         </div>
 
-        {/* ── INDUSTRY ASSOCIATIONS ── */}
-        <div style={{ margin: '2rem 0 1rem 0', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1f2937', marginBottom: '1rem' }}>Industry Associations</h3>
-          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>
-            Select the industry associations you belong to. This helps match you with relevant opportunities and allows associations to see your firm in their ecosystem.
-          </p>
-        </div>
+        {/* ============================================================ */}
+        {/* SECTION 3: Industry Associations & Sponsor - 3 per row */}
+        {/* ============================================================ */}
+        <SectionHeading
+          title="Industry Associations"
+          description="Select the industry associations you belong to. This helps match you with relevant opportunities and allows associations to see your firm in their ecosystem."
+        />
 
-        <div className={styles.gridContainer}>
+        <div className={styles.gridContainer} style={threeColGrid}>
           <FormField label="Are you a member of any industry association?">
-            <div style={{ display: "flex", gap: "16px", marginBottom: memberOfAssociation === "yes" ? "1rem" : 0 }}>
-              {["yes", "no"].map((opt) => (
-                <label
-                  key={opt}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: "8px",
-                    padding: "8px 20px", borderRadius: "6px",
-                    border: `2px solid ${memberOfAssociation === opt ? "#8B4513" : "#ccc"}`,
-                    backgroundColor: memberOfAssociation === opt ? "#fdf6ee" : "white",
-                    cursor: "pointer",
-                    fontWeight: memberOfAssociation === opt ? "600" : "400",
-                    color: memberOfAssociation === opt ? "#6B3410" : "#555",
-                    fontSize: "14px", transition: "all 0.2s ease", userSelect: "none",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="memberOfAssociation"
-                    value={opt}
-                    checked={memberOfAssociation === opt}
-                    onChange={handleChange}
-                    style={{ display: "none" }}
-                  />
-                  <span style={{
-                    width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0,
-                    border: `2px solid ${memberOfAssociation === opt ? "#8B4513" : "#ccc"}`,
-                    backgroundColor: memberOfAssociation === opt ? "#8B4513" : "transparent",
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    {memberOfAssociation === opt && (
-                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "white" }} />
-                    )}
-                  </span>
-                  {opt === "yes" ? "Yes" : "No"}
-                </label>
-              ))}
-            </div>
+            <YesNoPillRadio
+              name="memberOfAssociation"
+              value={memberOfAssociation}
+              onChange={(value) => updateData({ memberOfAssociation: value })}
+            />
           </FormField>
 
           {memberOfAssociation === "yes" && (
             <FormField label="Select your association(s)">
-              <AssociationsMultiSelect
+              <MultiSelectDropdown
+                name="industryAssociations"
                 options={industryAssociations}
-                selected={Array.isArray(data.industryAssociations) ? data.industryAssociations : []}
+                value={Array.isArray(data.industryAssociations) ? data.industryAssociations : []}
                 onChange={handleAssociationChange}
                 placeholder="Select associations..."
               />
-              {Array.isArray(data.industryAssociations) && data.industryAssociations.includes("Other") && (
-                <div style={{ marginTop: "10px" }}>
-                  <input
-                    type="text"
-                    name="industryAssociationsOther"
-                    value={data.industryAssociationsOther || ""}
-                    onChange={handleChange}
-                    className={styles.formInput}
-                    placeholder="Please specify your association..."
-                  />
-                </div>
-              )}
+            </FormField>
+          )}
+
+          {memberOfAssociation === "yes" &&
+            Array.isArray(data.industryAssociations) &&
+            data.industryAssociations.includes("Other") && (
+              <FormField label="Specify other association">
+                <input
+                  type="text"
+                  name="industryAssociationsOther"
+                  value={data.industryAssociationsOther || ""}
+                  onChange={handleChange}
+                  className={styles.formInput}
+                  placeholder="Please specify your association..."
+                />
+              </FormField>
+            )}
+
+          {/* ── Sponsor ── */}
+          <FormField label="Are you working with a specific sponsor?">
+            <select
+              name="sponsorType"
+              value={sponsorType}
+              onChange={handleSponsorTypeChange}
+              className={styles.formSelect}
+            >
+              <option value="">Select sponsor type</option>
+              {sponsorTypes.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </FormField>
+
+          {sponsorType && (
+            <FormField label={`Which ${sponsorType}?`}>
+              <select
+                name="sponsorName"
+                value={data.sponsorName || ""}
+                onChange={handleSponsorNameChange}
+                className={styles.formSelect}
+              >
+                <option value="">{`Select ${sponsorType}...`}</option>
+                {sponsorOptions.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
+
+          {sponsorType && data.sponsorName && (
+            <FormField label="Do you give them permission to view your profile?">
+              <YesNoPillRadio
+                name="sponsorViewPermission"
+                value={data.sponsorViewPermission}
+                onChange={(value) => updateData({ sponsorViewPermission: value })}
+              />
             </FormField>
           )}
         </div>
@@ -647,6 +710,34 @@ export default function EntityOverview({ data = {}, updateData }) {
           }}>
             <strong>ℹ️ Note:</strong> You indicated that you are not a member of any industry association. 
             You can update this later if needed. Selecting associations helps with visibility in the ecosystem.
+          </div>
+        )}
+
+        {data.sponsorViewPermission === "yes" && selectedSponsorLabel && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f0f7f0",
+            borderLeft: "4px solid #4CAF50",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#2e7d32",
+          }}>
+            <strong>📌 Note:</strong> {selectedSponsorLabel} will be able to view your full firm profile. 
+            You can withdraw this at any time by changing your answer above.
+          </div>
+        )}
+
+        {data.sponsorViewPermission === "no" && selectedSponsorLabel && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f5f5f5",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#666",
+          }}>
+            <strong>ℹ️ Note:</strong> {selectedSponsorLabel} is recorded as your sponsor, but will not be able to view your profile.
           </div>
         )}
       </div>
