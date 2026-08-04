@@ -82,6 +82,18 @@ const normalizeStatus = (status) => LEGACY_STATUS_ALIASES[status] || status
 
 const ENTRY_STAGE_ID = "matched"
 
+/* Cards are wider than they were and stage names wrap onto another line rather
+   than being cut off with an ellipsis — a stage nobody can read isn't a stage.
+   Names here come from stageConfig.js and can be long ("Due Diligence"), so
+   every card in the row stretches to the height of the tallest one (see
+   `items-stretch` on the row plus `h-full` on the card body). */
+const CARD_WIDTH = 124
+
+/* A slash with no space around it is one unbreakable token to the line-breaker,
+   so it would split mid-word. A zero-width space after each slash gives it a
+   clean place to break. Display only — stage ids and statuses are untouched. */
+const softBreak = (name = "") => name.replace(/\//g, "/\u200B")
+
 const ICONS = { Target, FileText, Search, Shield, AlertCircle, FileCheck, CheckCircle, XCircle, LogOut }
 const getIcon = (name, size = 16, color = "#4a352f") => {
   const Cmp = ICONS[name] || Target
@@ -99,10 +111,10 @@ const PipelineSkeleton = () => (
       <div key={i} className="flex items-center flex-shrink-0">
         <div
           className="bg-gradient-to-br from-[#f5f0e1]/60 to-[#e6d7c3]/30 rounded-xl flex-shrink-0 animate-pulse"
-          style={{ width: "112px", height: "88px" }}
+          style={{ width: `${CARD_WIDTH}px`, height: "98px" }}
         >
           <div className="p-2.5 flex flex-col h-full justify-between">
-            <div className="h-2.5 w-16 rounded-full bg-[#c8b6a6]/40" />
+            <div className="h-2.5 w-20 rounded-full bg-[#c8b6a6]/40" />
             <div className="h-5 w-10 rounded bg-[#c8b6a6]/30 mx-auto" />
             <div className="h-1.5 w-full rounded-full bg-[#c8b6a6]/30" />
           </div>
@@ -314,6 +326,10 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
     [onStageClick],
   )
 
+  /* The card body is a flex column at `h-full`: the name sits at the top and
+     is free to run to a second line, while `mt-auto` pins the count and the
+     progress bar to the bottom edge. That keeps the numbers on one baseline
+     across the row no matter how many lines each name takes. */
   const renderStageCard = (stage) => {
     const isHovered = hoveredStage?.id === stage.id
     const isSelected = selectedStage === stage.id
@@ -326,7 +342,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
     const hideTip = () => setHoveredStage(null)
 
     return (
-      <div className="relative flex-shrink-0" style={{ width: "112px" }}>
+      <div className="relative flex-shrink-0 h-full" style={{ width: `${CARD_WIDTH}px` }}>
         <button
           type="button"
           onClick={() => handleStageClick(stage.id)}
@@ -336,7 +352,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
           onBlur={hideTip}
           aria-pressed={!!isSelected}
           aria-label={`${stage.name}: ${count} catalyst${count === 1 ? "" : "s"}`}
-          className={`w-full text-left rounded-xl p-2.5 transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a67c52] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf7f2] ${
+          className={`w-full h-full flex flex-col text-left rounded-xl p-2.5 transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a67c52] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf7f2] ${
             isSelected ? "scale-105" : "hover:scale-[1.02]"
           } ${isHovered || isSelected ? "shadow-xl -translate-y-1" : "shadow-md"}`}
           style={{
@@ -344,15 +360,16 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
             border: `1.5px solid ${isSelected ? "#d9b98a" : "rgba(255,255,255,0.1)"}`,
           }}
         >
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex items-start gap-1.5 mb-1.5">
             <div className="w-5 h-5 rounded-lg flex items-center justify-center bg-white/10 flex-shrink-0">
               {getIcon(stage.icon, 11, "#ffffff")}
             </div>
-            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-tight truncate flex-1">
-              {stage.name}
+            {/* Full stage name, wrapped rather than truncated. */}
+            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-[11px] break-words flex-1 min-w-0 pt-[3px]">
+              {softBreak(stage.name)}
             </h3>
           </div>
-          <div className="flex items-baseline justify-center">
+          <div className="flex items-baseline justify-center mt-auto pt-1">
             <span className="text-lg font-extrabold leading-none text-white">{count}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-2">
@@ -408,7 +425,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
     const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0"
 
     return (
-      <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "38px" }}>
+      <div className="flex flex-col items-center justify-center px-0.5 flex-shrink-0" style={{ minWidth: "38px" }}>
         <span
           className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap"
           title="Share of catalysts at this step or beyond that reach the next step"
@@ -458,10 +475,12 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
         <PipelineSkeleton />
       ) : (
         <>
+          {/* `items-stretch` here and `h-full` on each card body are what keep a
+              two-line name from making one card shorter than its neighbours. */}
           <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent">
             {/* Live funnel — one card per stage, an arrow in every gap */}
             {liveStages.map((stage, idx) => (
-              <div key={stage.id} className="flex items-center flex-shrink-0">
+              <div key={stage.id} className="flex items-stretch flex-shrink-0">
                 {renderStageCard(stage)}
                 {idx < liveStages.length - 1 && renderArrow(idx)}
               </div>
@@ -475,23 +494,23 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
                 const negativeStages = terminalStages.filter((s) => /declined|withdrawn/i.test(s.name || ""))
                 const otherStages = terminalStages.filter((s) => !/declined|withdrawn/i.test(s.name || ""))
                 return (
-                  <div className="flex items-center flex-shrink-0">
+                  <div className="flex items-stretch flex-shrink-0">
                     <div className="flex flex-col items-center px-2 flex-shrink-0 self-stretch justify-center">
                       <div className="w-px h-10 bg-[#e6d7c3]" />
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-stretch gap-2 flex-shrink-0">
                       {otherStages.map((stage) => (
-                        <div key={stage.id} className="flex-shrink-0">
+                        <div key={stage.id} className="flex flex-shrink-0">
                           {renderStageCard(stage)}
                         </div>
                       ))}
                       {negativeStages.length > 0 && (
                         <div
-                          className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl"
+                          className="flex items-stretch gap-1.5 flex-shrink-0 p-1.5 rounded-2xl"
                           style={{ border: "2px solid #D32F2F" }}
                         >
                           {negativeStages.map((stage) => (
-                            <div key={stage.id} className="flex-shrink-0">
+                            <div key={stage.id} className="flex flex-shrink-0">
                               {renderStageCard(stage)}
                             </div>
                           ))}

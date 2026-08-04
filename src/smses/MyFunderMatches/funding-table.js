@@ -31,6 +31,8 @@ import {
   EyeOff,
   StickyNote,
   Wallet,
+  Info,
+  Hash,
 } from "lucide-react"
 import {
   collection,
@@ -110,18 +112,6 @@ export {
 
 /* ════════════════════════════════════════════════════════════════════════════
    Collections.
-
-   smeApplications and investorApplications stay — they hold live data and the
-   funder dashboard reads the second one. Two things change:
-
-   1. Both are now written with a deterministic id, `smeId__funderId__fundName`.
-      The old addDoc plus a "does one already exist" query raced with itself:
-      two quick clicks produced two applications, which is why the duplicate
-      guard kept failing.
-   2. SmeFunderMatches is new. Viewed, Shortlisted, saved and notes are all
-      states that exist BEFORE an application, and there was nowhere to put
-      them, so the pipeline could never show anything between Match and
-      Application Sent.
    ════════════════════════════════════════════════════════════════════════ */
 export const SME_APPLICATIONS = "smeApplications"
 export const INVESTOR_APPLICATIONS = "investorApplications"
@@ -135,36 +125,16 @@ export const BIG_SCORE_MINIMUM = 85
 
 /* ════════════════════════════════════════════════════════════════════════════
    Events the pipeline uses to talk to this table.
-
-   They're declared here, not in deal-flow-pipeline.jsx, because that file
-   already imports the collection names and normalizeFunderStatus from this
-   one — pointing the imports both ways would make a circular module
-   dependency.
-
-     FUNDING_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
-                                  status name, or null to clear.
-     FUNDING_ROWS_EVENT           table → pipeline. Detail is every fund that
-                                  passes the table's other filters, each with
-                                  its resolved status. This is what makes the
-                                  cards and the table body agree — including
-                                  New Match, which has no stored record for
-                                  the pipeline to query on its own.
-     FUNDING_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast,
-                                  for whichever component mounted second.
    ════════════════════════════════════════════════════════════════════════ */
 export const FUNDING_STAGE_FILTER_EVENT = "funding-pipeline-stage-filter"
 export const FUNDING_ROWS_EVENT = "funding-pipeline-rows"
 export const FUNDING_ROWS_REQUEST_EVENT = "funding-pipeline-rows-request"
 
-/* ─── Status vocabulary ─────────────────────────────────────────────────────
-   Spec section 3, plus Termsheet and Funded. The spec allows per-category
-   additions (it does the same for advisors with Interviewing and
-   Engaged/Placed), and collapsing a signed termsheet into "Accepted" would
-   lose the step SMEs care most about.
+/* Applications page → table. Detail is a fundingApplicationsV2 id to scope to,
+   or null for "View All Matches". */
+export const FUNDING_APPLICATION_FILTER_EVENT = "funding-application-filter"
 
-   The funder's own finer-grained pipelineStage is kept verbatim in a hidden
-   "Funder Stage" column, so nothing is lost.
-   ──────────────────────────────────────────────────────────────────────── */
+/* ─── Status vocabulary ─────────────────────────────────────────────────── */
 export const FUNDER_STATUSES = [
   "New Match",
   "Viewed",
@@ -238,10 +208,53 @@ const getRowActions = (status) => {
   }
 }
 
+/* The Applications page links here as /funding-matches?applicationId=<id>, so
+   the scope survives the route change — an event fired before this component
+   mounts has nobody listening. */
+const readApplicationIdFromUrl = () => {
+  if (typeof window === "undefined") return null
+  try {
+    return new URLSearchParams(window.location.search).get("applicationId") || null
+  } catch {
+    return null
+  }
+}
+
 /* ─── Shared helpers (previously imported from the kit) ──────────────────── */
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
+}
+
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
 }
 
 const TruncatedText = ({ text, maxLength = 30 }) => {
@@ -306,41 +319,36 @@ export const toISODateOnly = (value) => {
    Section C column configuration.
 
    Funder is the pinned first column and Action the last, so neither appears
-   here. Responsiveness is visible by default: the general note calls it an
-   optional column, but section C lists it at position 9 of the funder default
-   order, and the more specific instruction wins.
-
-   Widths raised in line with the intern and advisor tables — each header
-   carries a grip, sort and filter control (~60px of chrome), so the old
-   120–150px columns left too little room and the browser broke labels
-   mid-word ("MAT CH..", "STA TUS").
+   here — but both resize like everything else, via the reserved width keys
+   further down.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
-  adjustedBigScore: { label: "Adjusted BIG Score", align: "center", width: 162, filterType: "adjustedBigScore", visible: true, priority: 2, sortable: true },
-  fundingInstrument: { label: "Funding Instrument", width: 176, filterType: "fundingInstrument", visible: true, priority: 2, sortable: true },
-  fundingRange: { label: "Funding Range", width: 184, filterType: "fundingRange", visible: true, priority: 3, sortable: true },
-  businessStage: { label: "Business Stage", width: 158, filterType: "businessStage", visible: true, priority: 3, sortable: true },
-  deadline: { label: "Application Deadline", width: 168, filterType: "deadline", visible: true, priority: 3, sortable: true },
-  status: { label: "Status", width: 148, filterType: "status", visible: true, priority: 1, sortable: true },
-  responsiveness: { label: "Responsiveness", width: 160, filterType: "responsiveness", visible: true, priority: 3, sortable: true },
+  applicationRequest: { label: "Application Request", width: 186, filterType: "applicationRequest", visible: true, priority: 2, sortable: true, tooltip: "The funding application this fund was matched to. Funds surfaced before you created an application show a dash." },
+  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true, tooltip: "How well this fund's mandate fits your business — sector, stage, ticket size and instrument. Click the ? for the breakdown." },
+  adjustedBigScore: { label: "Adjusted BIG Score", align: "center", width: 162, filterType: "adjustedBigScore", visible: true, priority: 2, sortable: true, tooltip: "Your BIG Score re-weighted the way this particular funder scores businesses, so it can differ from your platform score." },
+  fundingInstrument: { label: "Funding Instrument", width: 176, filterType: "fundingInstrument", visible: true, priority: 2, sortable: true, tooltip: "What form the money takes — debt, equity, grant, blended and so on." },
+  fundingRange: { label: "Funding Range", width: 184, filterType: "fundingRange", visible: true, priority: 3, sortable: true, tooltip: "The smallest and largest cheque this fund writes. Ask outside that band and you'll usually be declined on size alone." },
+  businessStage: { label: "Business Stage", width: 158, filterType: "businessStage", visible: true, priority: 3, sortable: true, tooltip: "The stages of business this fund backs, from idea through to established." },
+  deadline: { label: "Application Deadline", width: 168, filterType: "deadline", visible: true, priority: 3, sortable: true, tooltip: "The closing date for this round. Funds with no date accept applications on a rolling basis." },
+  status: { label: "Status", width: 148, filterType: "status", visible: true, priority: 1, sortable: true, tooltip: "Where you stand with this fund, from New Match through to Funded, Declined or Closed." },
+  responsiveness: { label: "Responsiveness", width: 160, filterType: "responsiveness", visible: true, priority: 3, sortable: true, tooltip: "Median business days from an enquiry to this funder's first reply, across every SME who approached them. It measures the first reply, not the final decision." },
 
-  interestRate: { label: "Interest Rate", width: 140, filterType: "interestRate", visible: false, priority: 4, sortable: true },
-  investmentTerm: { label: "Investment Term", width: 152, filterType: "investmentTerm", visible: false, priority: 4, sortable: true },
-  equityExpectation: { label: "Equity Expectation", width: 162, filterType: "equityExpectation", visible: false, priority: 4, sortable: true },
-  securityRequirements: { label: "Security Requirements", width: 180, filterType: "securityRequirements", visible: false, priority: 4, sortable: false },
-  geographicMandate: { label: "Geographic Mandate", width: 176, filterType: "geographicMandate", visible: false, priority: 4, sortable: true },
-  sectorMandate: { label: "Sector Mandate", width: 176, filterType: "sectorMandate", visible: false, priority: 4, sortable: true },
-  turnoverRequirements: { label: "Turnover Requirements", width: 180, filterType: "turnoverRequirements", visible: false, priority: 4, sortable: true },
-  funderType: { label: "Funder Type", width: 148, filterType: "funderType", visible: false, priority: 4, sortable: true },
-  useOfFundsRestrictions: { label: "Use-of-Funds Restrictions", width: 198, filterType: "useOfFundsRestrictions", visible: false, priority: 4, sortable: false },
-  coFundingRequirement: { label: "Co-Funding Requirement", width: 188, filterType: "coFundingRequirement", visible: false, priority: 4, sortable: true },
-  supportOffered: { label: "Support Offered", width: 168, filterType: "supportOffered", visible: false, priority: 4, sortable: false },
-  reviewTime: { label: "Estimated Review Time", width: 176, filterType: "reviewTime", visible: false, priority: 4, sortable: false },
-  funderStage: { label: "Funder Stage", width: 158, filterType: "funderStage", visible: false, priority: 4, sortable: true },
-  documents: { label: "Documents", align: "center", width: 128, filterType: null, visible: false, priority: 4, sortable: true },
-  dateMatched: { label: "Date Matched", width: 144, filterType: "dateMatched", visible: false, priority: 4, sortable: true },
-  notes: { label: "Notes", width: 198, filterType: "notes", visible: false, priority: 4, sortable: false },
+  interestRate: { label: "Interest Rate", width: 140, filterType: "interestRate", visible: false, priority: 4, sortable: true, tooltip: "What the fund charges on debt, where it has published a rate." },
+  investmentTerm: { label: "Investment Term", width: 152, filterType: "investmentTerm", visible: false, priority: 4, sortable: true, tooltip: "How long the funding runs before repayment or exit." },
+  equityExpectation: { label: "Equity Expectation", width: 162, filterType: "equityExpectation", visible: false, priority: 4, sortable: true, tooltip: "The share of your business the fund typically takes." },
+  securityRequirements: { label: "Security Requirements", width: 180, filterType: "securityRequirements", visible: false, priority: 4, sortable: false, tooltip: "Collateral or guarantees the fund asks for before releasing money." },
+  geographicMandate: { label: "Geographic Mandate", width: 176, filterType: "geographicMandate", visible: false, priority: 4, sortable: true, tooltip: "Where the fund is allowed to deploy capital. Outside it, they cannot invest even if everything else fits." },
+  sectorMandate: { label: "Sector Mandate", width: 176, filterType: "sectorMandate", visible: false, priority: 4, sortable: true, tooltip: "The industries this fund backs. Generalist means no sector restriction." },
+  turnoverRequirements: { label: "Turnover Requirements", width: 180, filterType: "turnoverRequirements", visible: false, priority: 4, sortable: true, tooltip: "The minimum annual revenue the fund expects before it will consider you." },
+  funderType: { label: "Funder Type", width: 148, filterType: "funderType", visible: false, priority: 4, sortable: true, tooltip: "What kind of institution this is — bank, DFI, VC, foundation and so on." },
+  useOfFundsRestrictions: { label: "Use-of-Funds Restrictions", width: 198, filterType: "useOfFundsRestrictions", visible: false, priority: 4, sortable: false, tooltip: "What the money may not be spent on." },
+  coFundingRequirement: { label: "Co-Funding Requirement", width: 188, filterType: "coFundingRequirement", visible: false, priority: 4, sortable: true, tooltip: "How much you're expected to raise elsewhere or contribute yourself alongside this fund." },
+  supportOffered: { label: "Support Offered", width: 168, filterType: "supportOffered", visible: false, priority: 4, sortable: false, tooltip: "Non-financial help that comes with the money — mentorship, market access, technical assistance." },
+  reviewTime: { label: "Estimated Review Time", width: 176, filterType: "reviewTime", visible: false, priority: 4, sortable: false, tooltip: "How long the funder says it takes to assess an application." },
+  funderStage: { label: "Funder Stage", width: 158, filterType: "funderStage", visible: false, priority: 4, sortable: true, tooltip: "The funder's own internal pipeline label, kept verbatim. Finer-grained than Status." },
+  documents: { label: "Documents", align: "center", width: 128, filterType: null, visible: false, priority: 4, sortable: true, tooltip: "How many documents this fund requires with an application." },
+  dateMatched: { label: "Date Matched", width: 144, filterType: "dateMatched", visible: false, priority: 4, sortable: true, tooltip: "When this fund first appeared in your matches, or the date you applied." },
+  notes: { label: "Notes", width: 198, filterType: "notes", visible: false, priority: 4, sortable: false, tooltip: "Your own private notes on this fund. Nobody at the funder can see them." },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -351,33 +359,43 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const FUNDER_COL_WIDTH = 236
-const ACTION_WIDTH = 220
+/* Funder and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const APPID_KEY = "__appId__"
+const FUNDER_KEY = "__funder__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [APPID_KEY]: 132, [FUNDER_KEY]: 222, [ACTION_KEY]: 220 }
 const MIN_COLUMN_WIDTH = 84
 
+/* Every filter is a list of selected values, so the header popovers can offer
+   what is actually in the table rather than a blank search box. Notes stays a
+   text search — chips of whole notes would be unusable. */
 const EMPTY_FILTERS = {
-  name: "",
+  name: [],
+  applicationId: [],
+  applicationRequest: [],
   matchRange: [0, 100],
   bigScoreRange: [0, 100],
   fundingInstrument: [],
-  fundingRange: "",
+  fundingRange: [],
   businessStage: [],
   deadlineFrom: "",
   deadlineTo: "",
   status: [],
   responsiveness: [],
-  interestRate: "",
-  investmentTerm: "",
-  equityExpectation: "",
-  securityRequirements: "",
+  interestRate: [],
+  investmentTerm: [],
+  equityExpectation: [],
+  securityRequirements: [],
   geographicMandate: [],
   sectorMandate: [],
-  turnoverRequirements: "",
+  turnoverRequirements: [],
   funderType: [],
-  useOfFundsRestrictions: "",
-  coFundingRequirement: "",
-  supportOffered: "",
-  reviewTime: "",
+  useOfFundsRestrictions: [],
+  coFundingRequirement: [],
+  supportOffered: [],
+  reviewTime: [],
   funderStage: [],
   matchedFrom: "",
   matchedTo: "",
@@ -386,10 +404,11 @@ const EMPTY_FILTERS = {
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v2: the stored widths from the kit version are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "funder-matches-views-v2"
-const FILTERS_STORAGE_KEY = "funder-matches-filters-v1"
+// v3: the fixed columns now store their widths in this map too, so a v2 view
+// would leave them undefined.
+const VIEWS_STORAGE_KEY = "funder-matches-views-v4"
+// v2: every text filter became a multi-select array.
+const FILTERS_STORAGE_KEY = "funder-matches-filters-v3"
 const SAVED_STORAGE_KEY = "funder-matches-saved-v1"
 
 /* Saved matches were previously component state only, so the bookmark
@@ -425,7 +444,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -445,7 +464,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -486,10 +505,14 @@ const loadFilterState = () => {
   if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
   try {
     const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
-    return {
-      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
-      sort: saved?.sort?.key ? saved.sort : null,
-    }
+    const merged = { ...EMPTY_FILTERS, ...(saved?.filters || {}) }
+    // A value stored by an older build as a string would blow up .includes.
+    Object.keys(EMPTY_FILTERS).forEach((key) => {
+      if (Array.isArray(EMPTY_FILTERS[key]) && !Array.isArray(merged[key])) {
+        merged[key] = merged[key] ? [merged[key].toString()] : []
+      }
+    })
+    return { filters: merged, sort: saved?.sort?.key ? saved.sort : null }
   } catch {
     return { filters: { ...EMPTY_FILTERS }, sort: null }
   }
@@ -620,6 +643,7 @@ const mapFund = (investor, funderId, fund, index) => {
 export function FundingTable({
   filters,
   stageFilter,
+  applicationFilter,
   onInsightsData,
   onPrimaryMatchCount,
   onCountChange,
@@ -656,6 +680,32 @@ export function FundingTable({
   }, [])
   const activeStageFilter = stageFilter ?? eventStageFilter
 
+  /* Built from smseFundingMatches, which is the only collection tying a fund
+     back to a fundingApplicationsV2 document. Two indexes because the record's
+     shape varies by writer: fundKey when it has one, funderId otherwise. */
+  const [applicationLinks, setApplicationLinks] = useState({ byFundKey: {}, byFunderId: {} })
+
+  /* Seeded from ?applicationId= so arriving from the Applications page works;
+     the event covers the case where this table is already on screen. */
+  const [eventApplicationFilter, setEventApplicationFilter] = useState(readApplicationIdFromUrl)
+  useEffect(() => {
+    const onFilter = (e) => setEventApplicationFilter(e.detail ?? null)
+    window.addEventListener(FUNDING_APPLICATION_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(FUNDING_APPLICATION_FILTER_EVENT, onFilter)
+  }, [])
+  const activeApplicationFilter = applicationFilter ?? eventApplicationFilter
+
+  const clearApplicationFilter = () => {
+    setEventApplicationFilter(null)
+    window.dispatchEvent(new CustomEvent(FUNDING_APPLICATION_FILTER_EVENT, { detail: null }))
+    // Drop the param too, or a refresh would put the filter straight back.
+    if (typeof window !== "undefined" && window.history?.replaceState) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete("applicationId")
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`)
+    }
+  }
+
   const [detailsFund, setDetailsFund] = useState(null)
   const [applyingFund, setApplyingFund] = useState(null)
   const [profileData, setProfileData] = useState({})
@@ -686,6 +736,7 @@ export function FundingTable({
   const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
   const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+  const [chipSearch, setChipSearch] = useState("")
 
   // Views
   const [viewsState, setViewsState] = useState(() => loadViewsState())
@@ -709,6 +760,7 @@ export function FundingTable({
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -834,6 +886,65 @@ export function FundingTable({
       (err) => console.error("Funder match record listener failed:", err),
     )
     return () => unsubscribe()
+  }, [effectiveUserId])
+
+  /* ─── Application join ────────────────────────────────────────────────
+     This table lists every fund on the platform, so it has no application in
+     scope of its own. smseFundingMatches is what the matching backend writes
+     and what the Applications page counts from, and each record carries an
+     applicationId — so the two are stitched together here. Funds with no
+     record still appear, with a dash. */
+  useEffect(() => {
+    if (!effectiveUserId) return undefined
+
+    let cancelled = false
+
+    const loadApplicationLinks = async () => {
+      try {
+        const [matchSnap, appSnap] = await Promise.all([
+          getDocs(query(collection(db, "smseFundingMatches"), where("smeId", "==", effectiveUserId))),
+          getDocs(query(collection(db, "fundingApplicationsV2"), where("userId", "==", effectiveUserId))),
+        ])
+
+        // Application Request is the same label the Applications list shows in
+        // its "Application" column.
+        const titleByAppId = {}
+        appSnap.forEach((d) => {
+          const data = d.data()
+          const stage = data.applicationOverview?.fundingStage || ""
+          titleByAppId[d.id] = `Funding${stage ? ` - ${stage}` : ""}`
+        })
+
+        const byFundKey = {}
+        const byFunderId = {}
+        matchSnap.forEach((d) => {
+          const data = d.data()
+          const appFullId = data.applicationId
+          if (!appFullId) return
+          const link = {
+            applicationFullId: appFullId,
+            applicationId: appFullId.slice(-8).toUpperCase(),
+            applicationRequest: titleByAppId[appFullId] || "-",
+          }
+          // Field names vary by writer, so index every identifier the record
+          // actually carries rather than assuming one and linking nothing.
+          const funderId = data.funderId || data.investorId || data.funderProfileId
+          const fundName = data.fundName || data.fundTitle
+          if (data.fundKey) byFundKey[data.fundKey] = link
+          if (funderId && fundName) byFundKey[fundKeyOf(funderId, fundName)] = link
+          if (funderId && !byFunderId[funderId]) byFunderId[funderId] = link
+        })
+
+        if (!cancelled) setApplicationLinks({ byFundKey, byFunderId })
+      } catch (error) {
+        console.error("Failed to load application links:", error)
+      }
+    }
+
+    loadApplicationLinks()
+    return () => {
+      cancelled = true
+    }
   }, [effectiveUserId])
 
   /* ─── Everything else, in one pass ──────────────────────────────────── */
@@ -1072,13 +1183,23 @@ export function FundingTable({
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -1086,6 +1207,7 @@ export function FundingTable({
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -1098,13 +1220,42 @@ export function FundingTable({
     window.addEventListener("mouseup", onUp)
   }
 
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="ft-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
+
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
+    setChipSearch("")
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
   }
-  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+  const closeHeaderFilter = () => {
+    setHeaderFilterOpen(null)
+    setChipSearch("")
+  }
 
   const toggleSort = (key, event) => {
     event.stopPropagation()
@@ -1548,16 +1699,48 @@ export function FundingTable({
     [savedMatches, applications, writeRecord, toast],
   )
 
-  /* ─── Derived options ───────────────────────────────────────────────── */
-  const uniqueOf = useCallback(
-    (accessor) => [...new Set(funds.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
-    [funds],
+  /* Every row with its application attached. Kept separate from `funds` so a
+     late-arriving join re-decorates without refetching the funds themselves. */
+  const decoratedFunds = useMemo(
+    () =>
+      funds.map((r) => {
+        const link = applicationLinks.byFundKey[r.id] || applicationLinks.byFunderId[r.funderId] || null
+        return {
+          ...r,
+          applicationRefId: link ? link.applicationId : "-",
+          applicationFullId: link ? link.applicationFullId : null,
+          applicationRequest: link ? link.applicationRequest : "-",
+        }
+      }),
+    [funds, applicationLinks],
   )
+
+  /* ─── Derived options ───────────────────────────────────────────────────
+     Every filter offers the values actually present in the table, so you pick
+     from what exists rather than guessing at a search box. */
+  const uniqueOf = useCallback(
+    (accessor) =>
+      [...new Set(decoratedFunds.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
+    [decoratedFunds],
+  )
+  const applicationIdOptions = useMemo(() => uniqueOf((r) => r.applicationRefId), [uniqueOf])
+  const applicationRequestOptions = useMemo(() => uniqueOf((r) => r.applicationRequest), [uniqueOf])
+  const nameOptions = useMemo(() => uniqueOf((r) => r.fundName), [uniqueOf])
   const instrumentOptions = useMemo(() => uniqueOf((r) => r.fundingInstrument), [uniqueOf])
+  const fundingRangeOptions = useMemo(() => uniqueOf((r) => r.fundingRange), [uniqueOf])
   const stageOptions = useMemo(() => uniqueOf((r) => r.businessStage), [uniqueOf])
   const geographyOptions = useMemo(() => uniqueOf((r) => r.geographicMandate), [uniqueOf])
   const sectorOptions = useMemo(() => uniqueOf((r) => r.sectorMandate), [uniqueOf])
   const funderTypeOptions = useMemo(() => uniqueOf((r) => r.funderType), [uniqueOf])
+  const interestRateOptions = useMemo(() => uniqueOf((r) => r.interestRate), [uniqueOf])
+  const investmentTermOptions = useMemo(() => uniqueOf((r) => r.investmentTerm), [uniqueOf])
+  const equityOptions = useMemo(() => uniqueOf((r) => r.equityExpectation), [uniqueOf])
+  const securityOptions = useMemo(() => uniqueOf((r) => r.securityRequirements), [uniqueOf])
+  const turnoverOptions = useMemo(() => uniqueOf((r) => r.turnoverRequirements), [uniqueOf])
+  const useOfFundsOptions = useMemo(() => uniqueOf((r) => r.useOfFundsRestrictions), [uniqueOf])
+  const coFundingOptions = useMemo(() => uniqueOf((r) => r.coFundingRequirement), [uniqueOf])
+  const supportOptions = useMemo(() => uniqueOf((r) => r.supportOffered), [uniqueOf])
+  const reviewTimeOptions = useMemo(() => uniqueOf((r) => r.reviewTime), [uniqueOf])
   const funderStageOptions = useMemo(
     () => [...new Set(Object.values(applications).map((a) => a.pipelineStage).filter(Boolean))].sort(),
     [applications],
@@ -1572,42 +1755,47 @@ export function FundingTable({
   const preStageFunds = useMemo(() => {
     const f = localFilters
     const matchesAny = (selected, value) =>
-      selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
+      !selected?.length || selected.some((v) => (value || "").toString().toLowerCase().includes(v.toLowerCase()))
     const includesText = (needle, value) =>
-      !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
+      !needle?.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
 
-    return funds.filter((r) => {
+    return decoratedFunds.filter((r) => {
       const status = statusOf(r)
+      // Arriving from an application's "View Match Table" narrows to that one
+      // application; "View All Matches" clears it.
+      if (activeApplicationFilter && r.applicationFullId !== activeApplicationFilter) return false
       if (showSavedOnly && !savedMatches[r.id]) return false
       if (filters?.search && !`${r.fundName} ${r.funderName}`.toLowerCase().includes(filters.search.toLowerCase()))
         return false
       if (filters?.showOnly === "matches" && applications[r.id]) return false
       if (filters?.showOnly === "applications" && !applications[r.id]) return false
 
-      if (!includesText(f.name, `${r.fundName} ${r.funderName}`)) return false
+      if (!matchesAny(f.name, `${r.fundName} ${r.funderName}`)) return false
+      if (!matchesAny(f.applicationId, r.applicationRefId)) return false
+      if (!matchesAny(f.applicationRequest, r.applicationRequest)) return false
       if (r.matchPercentage < f.matchRange[0] || r.matchPercentage > f.matchRange[1]) return false
 
       const big = r.adjustedBigScore?.score
       if (big !== null && big !== undefined && (big < f.bigScoreRange[0] || big > f.bigScoreRange[1])) return false
 
       if (!matchesAny(f.fundingInstrument, r.fundingInstrument)) return false
-      if (!includesText(f.fundingRange, r.fundingRange)) return false
+      if (!matchesAny(f.fundingRange, r.fundingRange)) return false
       if (!matchesAny(f.businessStage, r.businessStage)) return false
       if (f.status.length > 0 && !f.status.includes(status)) return false
       if (f.responsiveness.length > 0 && !f.responsiveness.includes(responsivenessBand(responsiveness[r.funderId])))
         return false
-      if (!includesText(f.interestRate, r.interestRate)) return false
-      if (!includesText(f.investmentTerm, r.investmentTerm)) return false
-      if (!includesText(f.equityExpectation, r.equityExpectation)) return false
-      if (!includesText(f.securityRequirements, r.securityRequirements)) return false
+      if (!matchesAny(f.interestRate, r.interestRate)) return false
+      if (!matchesAny(f.investmentTerm, r.investmentTerm)) return false
+      if (!matchesAny(f.equityExpectation, r.equityExpectation)) return false
+      if (!matchesAny(f.securityRequirements, r.securityRequirements)) return false
       if (!matchesAny(f.geographicMandate, r.geographicMandate)) return false
       if (!matchesAny(f.sectorMandate, r.sectorMandate)) return false
-      if (!includesText(f.turnoverRequirements, r.turnoverRequirements)) return false
+      if (!matchesAny(f.turnoverRequirements, r.turnoverRequirements)) return false
       if (!matchesAny(f.funderType, r.funderType)) return false
-      if (!includesText(f.useOfFundsRestrictions, r.useOfFundsRestrictions)) return false
-      if (!includesText(f.coFundingRequirement, r.coFundingRequirement)) return false
-      if (!includesText(f.supportOffered, r.supportOffered)) return false
-      if (!includesText(f.reviewTime, r.reviewTime)) return false
+      if (!matchesAny(f.useOfFundsRestrictions, r.useOfFundsRestrictions)) return false
+      if (!matchesAny(f.coFundingRequirement, r.coFundingRequirement)) return false
+      if (!matchesAny(f.supportOffered, r.supportOffered)) return false
+      if (!matchesAny(f.reviewTime, r.reviewTime)) return false
       if (!matchesAny(f.funderStage, funderStageOf(r))) return false
       if (!includesText(f.notes, (records[r.id]?.notes || []).join(" "))) return false
 
@@ -1622,7 +1810,7 @@ export function FundingTable({
       return true
     })
   }, [
-    funds,
+    decoratedFunds,
     applications,
     records,
     responsiveness,
@@ -1632,6 +1820,7 @@ export function FundingTable({
     filters,
     showSavedOnly,
     savedMatches,
+    activeApplicationFilter,
   ])
 
   /* Every fund the pipeline should count, each with its resolved status. New
@@ -1652,6 +1841,8 @@ export function FundingTable({
     if (sortConfig?.key) {
       const accessors = {
         name: (r) => r.fundName,
+        applicationId: (r) => r.applicationRefId,
+        applicationRequest: (r) => r.applicationRequest,
         match: (r) => r.matchPercentage || 0,
         adjustedBigScore: (r) => r.adjustedBigScore?.score ?? -1,
         fundingInstrument: (r) => r.fundingInstrument,
@@ -1744,27 +1935,29 @@ export function FundingTable({
   /* ─── Filter chrome ─────────────────────────────────────────────────── */
   const f = localFilters
   const activeFilterCount =
-    (f.name.trim() ? 1 : 0) +
+    f.name.length +
+    f.applicationId.length +
+    f.applicationRequest.length +
     (f.matchRange[0] > 0 || f.matchRange[1] < 100 ? 1 : 0) +
     (f.bigScoreRange[0] > 0 || f.bigScoreRange[1] < 100 ? 1 : 0) +
     f.fundingInstrument.length +
-    (f.fundingRange.trim() ? 1 : 0) +
+    f.fundingRange.length +
     f.businessStage.length +
     (f.deadlineFrom || f.deadlineTo ? 1 : 0) +
     f.status.length +
     f.responsiveness.length +
-    (f.interestRate.trim() ? 1 : 0) +
-    (f.investmentTerm.trim() ? 1 : 0) +
-    (f.equityExpectation.trim() ? 1 : 0) +
-    (f.securityRequirements.trim() ? 1 : 0) +
+    f.interestRate.length +
+    f.investmentTerm.length +
+    f.equityExpectation.length +
+    f.securityRequirements.length +
     f.geographicMandate.length +
     f.sectorMandate.length +
-    (f.turnoverRequirements.trim() ? 1 : 0) +
+    f.turnoverRequirements.length +
     f.funderType.length +
-    (f.useOfFundsRestrictions.trim() ? 1 : 0) +
-    (f.coFundingRequirement.trim() ? 1 : 0) +
-    (f.supportOffered.trim() ? 1 : 0) +
-    (f.reviewTime.trim() ? 1 : 0) +
+    f.useOfFundsRestrictions.length +
+    f.coFundingRequirement.length +
+    f.supportOffered.length +
+    f.reviewTime.length +
     f.funderStage.length +
     (f.matchedFrom || f.matchedTo ? 1 : 0) +
     (f.notes.trim() ? 1 : 0)
@@ -1818,12 +2011,17 @@ export function FundingTable({
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const appIdWidth = widthOf(APPID_KEY)
+  const funderWidth = widthOf(FUNDER_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
+  // Application ID and Funder are both frozen to the left, in that order, so
+  // every other sticky offset starts after the pair.
+  const pinnedLeadWidth = appIdWidth + funderWidth
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
     // Left-pinned columns stack to the right of the frozen Funder column.
-    let leftAcc = FUNDER_COL_WIDTH
+    let leftAcc = pinnedLeadWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1839,9 +2037,9 @@ export function FundingTable({
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, pinnedLeadWidth])
 
-  const totalWidth = FUNDER_COL_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = pinnedLeadWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -1882,6 +2080,13 @@ export function FundingTable({
     const application = applications[r.id]
 
     switch (key) {
+      case "applicationRequest":
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={r.applicationRequest} maxLength={26} />
+          </td>
+        )
+
       case "match":
         return (
           <td key={key} style={{ ...style, textAlign: "center" }}>
@@ -2047,6 +2252,31 @@ export function FundingTable({
 
   const eligible = bigScore !== null && bigScore >= BIG_SCORE_MINIMUM
 
+  /* Every chip-list filter is driven by this one array. */
+  const FILTER_OPTION_SETS = [
+    { type: "name", label: "Fund or funder", options: nameOptions },
+    { type: "applicationId", label: "Application ID", options: applicationIdOptions },
+    { type: "applicationRequest", label: "Application Request", options: applicationRequestOptions },
+    { type: "fundingInstrument", label: "Funding Instrument", options: instrumentOptions },
+    { type: "fundingRange", label: "Funding Range", options: fundingRangeOptions },
+    { type: "businessStage", label: "Business Stage", options: stageOptions },
+    { type: "status", label: "Status", options: FUNDER_STATUSES },
+    { type: "responsiveness", label: "Responsiveness", options: RESPONSIVENESS_BANDS },
+    { type: "interestRate", label: "Interest Rate", options: interestRateOptions },
+    { type: "investmentTerm", label: "Investment Term", options: investmentTermOptions },
+    { type: "equityExpectation", label: "Equity Expectation", options: equityOptions },
+    { type: "securityRequirements", label: "Security Requirements", options: securityOptions },
+    { type: "geographicMandate", label: "Geographic Mandate", options: geographyOptions },
+    { type: "sectorMandate", label: "Sector Mandate", options: sectorOptions },
+    { type: "turnoverRequirements", label: "Turnover Requirements", options: turnoverOptions },
+    { type: "funderType", label: "Funder Type", options: funderTypeOptions },
+    { type: "useOfFundsRestrictions", label: "Use-of-Funds Restrictions", options: useOfFundsOptions },
+    { type: "coFundingRequirement", label: "Co-Funding Requirement", options: coFundingOptions },
+    { type: "supportOffered", label: "Support Offered", options: supportOptions },
+    { type: "reviewTime", label: "Estimated Review Time", options: reviewTimeOptions },
+    { type: "funderStage", label: "Funder Stage", options: funderStageOptions },
+  ]
+
   return (
     <div style={{ width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
       {isCompanyMember && (
@@ -2132,6 +2362,19 @@ export function FundingTable({
             </span>
             {/* Which pipeline stage the table is narrowed to. Press the same
                 card again in the pipeline to clear it. */}
+            {activeApplicationFilter && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#5d4037]/10 text-[#4a352f] border border-[#5d4037]/40">
+                <Hash size={12} className="text-[#7d5a50]" />
+                Application: {activeApplicationFilter.slice(-8).toUpperCase()}
+                <span className="font-normal text-[#a89482]">({filteredFunds.length})</span>
+                <button
+                  onClick={clearApplicationFilter}
+                  className="ml-1 px-2 py-0.5 rounded-lg bg-white border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] font-semibold"
+                >
+                  View All Matches
+                </button>
+              </span>
+            )}
             {activeStageFilter && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
                 <Target size={12} className="text-[#7d5a50]" />
@@ -2384,9 +2627,14 @@ export function FundingTable({
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
                         <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
-                        resize.
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Application ID</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
                         <span className="text-sm text-[#4a352f] flex-1">Funder</span>
@@ -2511,7 +2759,7 @@ export function FundingTable({
                buying every header ~14px more room for its label. */
             .ft-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .ft-th:hover .ft-th-grip { opacity: .45; }
-            .ft-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .ft-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .ft-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -2532,11 +2780,36 @@ export function FundingTable({
           >
             <thead>
               <tr>
+                {/* Application ID — first pinned column */}
                 <th
                   className="ft-th font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: FUNDER_COL_WIDTH,
+                    width: appIdWidth,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                    borderRight: "1px solid #e6d7c3",
+                  }}
+                >
+                  <div className="ft-th-row">
+                    <span className="ft-th-label" title="Application ID">
+                      Application ID
+                    </span>
+                    <span className="ft-th-tools">
+                      <SortTrigger columnKey="applicationId" />
+                      <FilterTrigger type="applicationId" active={localFilters.applicationId.length > 0} />
+                      <HeaderInfoTooltip text="The funding application this fund was matched to. Funds surfaced before you created an application show a dash." />
+                    </span>
+                  </div>
+                  <ColumnResizer colKey={APPID_KEY} />
+                </th>
+
+                <th
+                  className="ft-th font-semibold uppercase tracking-wider text-xs sticky top-0 z-30 text-left"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    left: appIdWidth,
+                    width: funderWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
@@ -2548,9 +2821,11 @@ export function FundingTable({
                     </span>
                     <span className="ft-th-tools">
                       <SortTrigger columnKey="name" />
-                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <FilterTrigger type="name" active={localFilters.name.length > 0} />
+                      <HeaderInfoTooltip text="The fund you'd be applying to. One row per fund, so a manager running several appears more than once. Click the eye for its full profile." />
                     </span>
                   </div>
+                  <ColumnResizer colKey={FUNDER_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -2562,7 +2837,7 @@ export function FundingTable({
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -2598,9 +2873,10 @@ export function FundingTable({
                           {col.filterType && (
                             <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
                           )}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="ft-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -2611,12 +2887,16 @@ export function FundingTable({
                   className="ft-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="ft-th-row justify-center">
+                    <span className="ft-th-label">Action</span>
+                    <HeaderInfoTooltip text="Apply to the fund or open what you've already sent, bookmark it to come back to, or open quick actions for notes and hiding." />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -2625,7 +2905,7 @@ export function FundingTable({
               {filteredFunds.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={orderedColumns.length + 2}
+                    colSpan={orderedColumns.length + 3}
                     style={{ ...tableCellStyle, textAlign: "center", padding: "3rem 1rem", borderRight: "none" }}
                   >
                     <div className="flex flex-col items-center gap-3">
@@ -2635,6 +2915,8 @@ export function FundingTable({
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
                         {funds.length === 0
                           ? "No funding matches yet"
+                          : activeApplicationFilter
+                            ? "No funds matched to this application yet"
                           : showSavedOnly
                             ? "No saved funds"
                             : activeStageFilter
@@ -2650,6 +2932,14 @@ export function FundingTable({
                               ? "Press that stage card again to clear the filter."
                               : "Clear a filter to widen the results."}
                       </p>
+                      {activeApplicationFilter && (
+                        <button
+                          onClick={clearApplicationFilter}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          View All Matches
+                        </button>
+                      )}
                       {showSavedOnly && (
                         <button
                           onClick={() => setShowSavedOnly(false)}
@@ -2689,9 +2979,27 @@ export function FundingTable({
                           searchable by name and shown in the match popover. */}
                       <td
                         className="sticky left-0 z-10"
+                        style={{ ...tableCellStyle, width: appIdWidth, backgroundColor: rowBg }}
+                      >
+                        {r.applicationRefId && r.applicationRefId !== "-" ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide text-[#FAF7F2]"
+                            style={{ background: "linear-gradient(135deg,#5d4037,#4a332a)", fontFamily: "monospace" }}
+                            title={`Full application id: ${r.applicationFullId}`}
+                          >
+                            <Hash size={10} /> {r.applicationRefId}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#a89482", fontSize: "0.75rem" }}>-</span>
+                        )}
+                      </td>
+
+                      <td
+                        className="sticky z-10"
                         style={{
                           ...tableCellStyle,
-                          width: FUNDER_COL_WIDTH,
+                          left: appIdWidth,
+                          width: funderWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -2716,7 +3024,7 @@ export function FundingTable({
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -2730,7 +3038,11 @@ export function FundingTable({
                             className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 disabled:opacity-60 ${
                               isTerminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
                             }`}
-                            style={{ width: "138px", height: "34px", backgroundColor: isTerminal ? undefined : "#7d5a50" }}
+                            style={{
+                              width: `${Math.max(110, actionWidth - 82)}px`,
+                              height: "34px",
+                              backgroundColor: isTerminal ? undefined : "#7d5a50",
+                            }}
                           >
                             {!isTerminal && !busy && <ArrowRight size={13} className="flex-shrink-0" />}
                             <span className="truncate">{busy ? "Working..." : actions.primary}</span>
@@ -2904,89 +3216,91 @@ export function FundingTable({
                 )
               })()}
 
-            {[
-              { type: "name", label: "Fund or funder", placeholder: "Search name..." },
-              { type: "fundingRange", label: "Funding Range", placeholder: "e.g. 500,000" },
-              { type: "interestRate", label: "Interest Rate", placeholder: "e.g. prime" },
-              { type: "investmentTerm", label: "Investment Term", placeholder: "e.g. 5 years" },
-              { type: "equityExpectation", label: "Equity Expectation", placeholder: "e.g. 20%" },
-              { type: "securityRequirements", label: "Security Requirements", placeholder: "Search security..." },
-              { type: "turnoverRequirements", label: "Turnover Requirements", placeholder: "e.g. 1,000,000" },
-              { type: "useOfFundsRestrictions", label: "Use-of-Funds Restrictions", placeholder: "Search restrictions..." },
-              { type: "coFundingRequirement", label: "Co-Funding Requirement", placeholder: "Search requirement..." },
-              { type: "supportOffered", label: "Support Offered", placeholder: "e.g. mentorship" },
-              { type: "reviewTime", label: "Estimated Review Time", placeholder: "e.g. 3 weeks" },
-              { type: "notes", label: "Notes", placeholder: "Search your notes..." },
-            ].map(
-              ({ type, label, placeholder }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type] && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: "" }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={localFilters[type]}
-                      onChange={(e) => setLocalFilters((p) => ({ ...p, [type]: e.target.value }))}
-                      placeholder={placeholder}
-                      className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
-                    />
-                  </div>
-                ),
+            {/* Notes stays a text search — chips of whole notes would be
+                unusable, since every note is a different sentence. */}
+            {headerFilterOpen.type === "notes" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Notes</label>
+                  {localFilters.notes && (
+                    <button
+                      onClick={() => setLocalFilters((p) => ({ ...p, notes: "" }))}
+                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={localFilters.notes}
+                  onChange={(e) => setLocalFilters((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Search your notes..."
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                />
+              </>
             )}
 
-            {[
-              { type: "fundingInstrument", label: "Funding Instrument", options: instrumentOptions },
-              { type: "businessStage", label: "Business Stage", options: stageOptions },
-              { type: "status", label: "Status", options: FUNDER_STATUSES },
-              { type: "responsiveness", label: "Responsiveness", options: RESPONSIVENESS_BANDS },
-              { type: "geographicMandate", label: "Geographic Mandate", options: geographyOptions },
-              { type: "sectorMandate", label: "Sector Mandate", options: sectorOptions },
-              { type: "funderType", label: "Funder Type", options: funderTypeOptions },
-              { type: "funderStage", label: "Funder Stage", options: funderStageOptions },
-            ].map(
-              ({ type, label, options }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type].length > 0 && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
-                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
-                      {options.map((value) => (
-                        <button
-                          key={value}
-                          onClick={() => toggleChip(type, value)}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            localFilters[type].includes(value)
-                              ? "bg-[#7d5a50] text-white"
-                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
-                          }`}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
+            {/* Every other filter is a chip list of the values actually in the
+                table, with a search box appearing only once the list is long
+                enough to need one. */}
+            {FILTER_OPTION_SETS.map(({ type, label, options }) => {
+              if (headerFilterOpen.type !== type) return null
+              const shown = options.filter((o) => o.toString().toLowerCase().includes(chipSearch.toLowerCase()))
+              return (
+                <div key={type}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                    {localFilters[type].length > 0 && (
+                      <button
+                        onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
+                        className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                ),
-            )}
+
+                  {options.length > 8 && (
+                    <div className="relative mb-2">
+                      <Search
+                        size={12}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none"
+                      />
+                      <input
+                        autoFocus
+                        value={chipSearch}
+                        onChange={(e) => setChipSearch(e.target.value)}
+                        placeholder={`Search ${label.toLowerCase()}...`}
+                        className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                    {shown.length === 0 && (
+                      <span className="text-xs text-[#a89482]">
+                        {options.length === 0 ? "No data available" : "Nothing matches that search."}
+                      </span>
+                    )}
+                    {shown.map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => toggleChip(type, value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                          localFilters[type].includes(value)
+                            ? "bg-[#7d5a50] text-white"
+                            : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </PopupPortal>
       )}

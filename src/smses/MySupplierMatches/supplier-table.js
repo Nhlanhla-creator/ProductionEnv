@@ -35,6 +35,8 @@ import {
   Bookmark,
   MoreVertical,
   Package,
+  Info,
+  Hash,
 } from "lucide-react"
 import {
   collection,
@@ -54,6 +56,7 @@ import { auth, db } from "../../firebaseConfig"
 import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
 import SupplierDetailsModal from "./SupplierDetailsModal"
+import { deriveAppId } from "../hooks/useMatches"
 import {
   calculateEnhancedMatchScore,
   calculateOwnershipPercentages,
@@ -125,9 +128,6 @@ export {
    swapped, which is why the supplier-side dashboard showed the buyer as the
    vendor. There is now one document per side, keyed deterministically, so a
    second Request Quote updates the same record instead of creating a duplicate.
-
-   SUPPLIER_SME_COLLECTION keeps the existing lowercase name so historic rows
-   stay readable; the field names below are a superset of the old shape.
    ════════════════════════════════════════════════════════════════════════ */
 export const SME_SUPPLIER_COLLECTION = "SmeSupplierApplications"
 export const SUPPLIER_SME_COLLECTION = "supplierApplications"
@@ -136,31 +136,28 @@ export const supplierSmeId = (supplierId, smeId) => `${supplierId}_${smeId}`
 
 /* ════════════════════════════════════════════════════════════════════════════
    Events the pipeline uses to talk to this table.
-
-   They're declared here, not in supplier-flow-pipeline.jsx, because that file
-   already imports SME_SUPPLIER_COLLECTION and normalizeSupplierStatus from
-   this one — pointing the imports both ways would make a circular module
-   dependency.
-
-     SUPPLIER_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
-                                   status name, or null to clear.
-     SUPPLIER_ROWS_EVENT           table → pipeline. Detail is every row that
-                                   passes the table's other filters, each with
-                                   its resolved status. This is what makes the
-                                   cards and the table body agree — including
-                                   New Match, which has no stored record for
-                                   the pipeline to query on its own.
-     SUPPLIER_ROWS_REQUEST_EVENT   pipeline → table. Asks for a re-broadcast,
-                                   for whichever component mounted second.
    ════════════════════════════════════════════════════════════════════════ */
 export const SUPPLIER_STAGE_FILTER_EVENT = "supplier-pipeline-stage-filter"
 export const SUPPLIER_ROWS_EVENT = "supplier-pipeline-rows"
 export const SUPPLIER_ROWS_REQUEST_EVENT = "supplier-pipeline-rows-request"
 
-/* ─── Status vocabulary ─────────────────────────────────────────────────────
-   Spec section 3, with the two application steps worded for a quote flow:
-   "Application Started" → Quote Requested, "Applied" → Quote Received.
-   ──────────────────────────────────────────────────────────────────────── */
+/* Applications page → table. Detail is a productApplications id to scope to,
+   or null to fall back to the user's default request. */
+export const SUPPLIER_APPLICATION_FILTER_EVENT = "supplier-application-filter"
+
+/* The Applications page links here as /supplier-matches?applicationId=<id>, so
+   the scope survives the route change — an event fired before this component
+   mounts has nobody listening. */
+const readApplicationIdFromUrl = () => {
+  if (typeof window === "undefined") return null
+  try {
+    return new URLSearchParams(window.location.search).get("applicationId") || null
+  } catch {
+    return null
+  }
+}
+
+/* ─── Status vocabulary ───────────────────────────────────────────────────── */
 export const SUPPLIER_STATUSES = [
   "New Match",
   "Viewed",
@@ -289,6 +286,37 @@ const PopupPortal = ({ children }) => {
   return createPortal(children, document.body)
 }
 
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
+}
+
 const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -348,40 +376,49 @@ export const toISODateOnly = (value) => {
   return d.toISOString().slice(0, 10)
 }
 
+/* The same label the Applications list puts in its "Application" column, so a
+   request reads identically in both places. */
+const describeApplication = (application) => {
+  if (!application) return "-"
+  const ro = application.requestOverview || {}
+  const purpose = ro.purpose || application.purpose || ""
+  const categories = ro.categories || application.categories || []
+  const primaryCategory = categories[0] || ""
+  if (purpose?.trim()) return purpose.trim().split(/\s+/).slice(0, 5).join(" ")
+  if (primaryCategory) return `${primaryCategory} Request`
+  return "Product Request"
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    Section B column configuration.
 
-   Supplier is the pinned first column and Action the last, so neither appears
-   here. The five above the divider plus Status are the spec default view;
-   everything below is a spec "hidden by default" column.
-
-   Widths raised in line with the other match tables — each header carries a
-   grip, sort and filter control (~60px of chrome), so the old 116–150px
-   columns left too little room and the browser broke labels mid-word
-   ("MAT CH..", "STA TUS").
+   Application ID and Supplier are the pinned first columns and Action the
+   last, so none of them appear here — but all three resize like everything
+   else, via the reserved width keys further down.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
-  productService: { label: "Product / Service Offered", width: 204, filterType: "productService", visible: true, priority: 2, sortable: true },
-  location: { label: "Location / Service Area", width: 178, filterType: "location", visible: true, priority: 3, sortable: true },
-  capacity: { label: "Capacity / Lead Time", width: 170, filterType: "capacity", visible: true, priority: 3, sortable: true },
-  status: { label: "Status", width: 148, filterType: "status", visible: true, priority: 1, sortable: true },
+  applicationRequest: { label: "Application Request", width: 190, filterType: "applicationRequest", visible: true, priority: 2, sortable: true, tooltip: "The product or service request every supplier below is being scored against. Open a different request from My Applications to change it." },
+  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true, tooltip: "How well this supplier fits your request. Once AI analysis has run it is 60% AI reading of their descriptions plus 40% structured profile fields; before that, structured only. Click the ? for the breakdown." },
+  productService: { label: "Product / Service Offered", width: 204, filterType: "productService", visible: true, priority: 2, sortable: true, tooltip: "The supplier's primary category, with a count of any others they list." },
+  location: { label: "Location / Service Area", width: 178, filterType: "location", visible: true, priority: 3, sortable: true, tooltip: "Where the supplier is based, and the areas they deliver or travel to." },
+  capacity: { label: "Capacity / Lead Time", width: 170, filterType: "capacity", visible: true, priority: 3, sortable: true, tooltip: "How much they can take on and how long they need before delivery." },
+  status: { label: "Status", width: 148, filterType: "status", visible: true, priority: 1, sortable: true, tooltip: "Where this supplier sits in your pipeline, from New Match through to Accepted, Declined or Closed." },
 
-  businessSize: { label: "Business Size", width: 148, filterType: "businessSize", visible: false, priority: 4, sortable: true },
-  yearsOperating: { label: "Years Operating", width: 146, filterType: "yearsOperating", visible: false, priority: 4, sortable: true },
-  bbbeeLevel: { label: "B-BBEE Level", width: 142, filterType: "bbbeeLevel", visible: false, priority: 4, sortable: true },
-  ownershipProfile: { label: "Ownership Profile", width: 182, filterType: "ownershipProfile", visible: false, priority: 4, sortable: false },
-  certifications: { label: "Certifications", width: 170, filterType: "certifications", visible: false, priority: 4, sortable: false },
-  pricingRange: { label: "Pricing Range", width: 152, filterType: "pricingRange", visible: false, priority: 4, sortable: true },
-  minimumOrder: { label: "Minimum Order", width: 152, filterType: "minimumOrder", visible: false, priority: 4, sortable: true },
-  deliveryCapability: { label: "Delivery Capability", width: 166, filterType: "deliveryCapability", visible: false, priority: 4, sortable: false },
-  complianceStatus: { label: "Compliance Status", width: 164, filterType: "complianceStatus", visible: false, priority: 4, sortable: true },
-  sector: { label: "Sector", width: 158, filterType: "sector", visible: false, priority: 4, sortable: true },
-  primaryMatch: { label: "Structured Match %", align: "center", width: 156, filterType: "primaryMatch", visible: false, priority: 4, sortable: true },
-  aiMatch: { label: "AI Match %", align: "center", width: 140, filterType: "aiMatch", visible: false, priority: 4, sortable: true },
-  documents: { label: "Documents", align: "center", width: 132, filterType: null, visible: false, priority: 4, sortable: true },
-  dateMatched: { label: "Date Matched", width: 148, filterType: "dateMatched", visible: false, priority: 4, sortable: true },
-  notes: { label: "Notes", width: 198, filterType: "notes", visible: false, priority: 4, sortable: false },
+  businessSize: { label: "Business Size", width: 148, filterType: "businessSize", visible: false, priority: 4, sortable: true, tooltip: "Micro, small, medium or large, as the supplier declared it." },
+  yearsOperating: { label: "Years Operating", width: 146, filterType: "yearsOperating", visible: false, priority: 4, sortable: true, tooltip: "How long the business has been trading." },
+  bbbeeLevel: { label: "B-BBEE Level", width: 142, filterType: "bbbeeLevel", visible: false, priority: 4, sortable: true, tooltip: "The supplier's B-BBEE contributor level, which drives your own procurement recognition." },
+  ownershipProfile: { label: "Ownership Profile", width: 182, filterType: "ownershipProfile", visible: false, priority: 4, sortable: false, tooltip: "Black, women, youth and disability ownership, shown only where it passes the recognition threshold." },
+  certifications: { label: "Certifications", width: 170, filterType: "certifications", visible: false, priority: 4, sortable: false, tooltip: "Industry accreditations and standards the supplier holds." },
+  pricingRange: { label: "Pricing Range", width: 152, filterType: "pricingRange", visible: false, priority: 4, sortable: true, tooltip: "The supplier's typical price band, where they have published one." },
+  minimumOrder: { label: "Minimum Order", width: 152, filterType: "minimumOrder", visible: false, priority: 4, sortable: true, tooltip: "The smallest order the supplier will accept." },
+  deliveryCapability: { label: "Delivery Capability", width: 166, filterType: "deliveryCapability", visible: false, priority: 4, sortable: false, tooltip: "How they fulfil — on-site, remote, hybrid, delivery or collection." },
+  complianceStatus: { label: "Compliance Status", width: 164, filterType: "complianceStatus", visible: false, priority: 4, sortable: true, tooltip: "Whether the supplier has both tax clearance and CIPC registration on file. Partially compliant means one of the two." },
+  sector: { label: "Sector", width: 158, filterType: "sector", visible: false, priority: 4, sortable: true, tooltip: "The industry the supplier trades in." },
+  primaryMatch: { label: "Structured Match %", align: "center", width: 156, filterType: "primaryMatch", visible: false, priority: 4, sortable: true, tooltip: "Score from the profile fields alone — category, location, budget, B-BBEE, ownership, rating, experience and lead time." },
+  aiMatch: { label: "AI Match %", align: "center", width: 140, filterType: "aiMatch", visible: false, priority: 4, sortable: true, tooltip: "Score from the AI reading the supplier's written descriptions against your request. Shows Not run until you press Run AI analysis." },
+  documents: { label: "Documents", align: "center", width: 132, filterType: null, visible: false, priority: 4, sortable: true, tooltip: "How many documents the supplier has uploaded to their profile." },
+  dateMatched: { label: "Date Matched", width: 148, filterType: "dateMatched", visible: false, priority: 4, sortable: true, tooltip: "When this supplier first entered your pipeline. Blank until you view or contact them." },
+  notes: { label: "Notes", width: 198, filterType: "notes", visible: false, priority: 4, sortable: false, tooltip: "Your own private notes on this supplier. The supplier cannot see them." },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -392,24 +429,34 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const SUPPLIER_WIDTH = 226
-const ACTION_WIDTH = 214
+/* Application ID, Supplier and Action can't be hidden or reordered, so they
+   aren't in COLUMN_DEFS — but they resize like everything else, and their
+   widths live under these reserved keys inside the same columnWidths map. */
+const APPID_KEY = "__appId__"
+const SUPPLIER_KEY = "__supplier__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [APPID_KEY]: 132, [SUPPLIER_KEY]: 214, [ACTION_KEY]: 214 }
 const MIN_COLUMN_WIDTH = 84
 
+/* Every filter is a list of selected values, so the header popovers can offer
+   what is actually in the table rather than a blank search box. Notes stays a
+   text search — chips of whole notes would be unusable. */
 const EMPTY_FILTERS = {
-  name: "",
+  name: [],
+  applicationId: [],
+  applicationRequest: [],
   matchRange: [0, 100],
-  productService: "",
+  productService: [],
   location: [],
-  capacity: "",
+  capacity: [],
   status: [],
   businessSize: [],
-  yearsOperating: "",
+  yearsOperating: [],
   bbbeeLevel: [],
   ownershipProfile: [],
-  certifications: "",
-  pricingRange: "",
-  minimumOrder: "",
+  certifications: [],
+  pricingRange: [],
+  minimumOrder: [],
   deliveryCapability: [],
   complianceStatus: [],
   sector: [],
@@ -422,10 +469,11 @@ const EMPTY_FILTERS = {
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v2: the stored widths from the kit version are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "supplier-matches-views-v2"
-const FILTERS_STORAGE_KEY = "supplier-matches-filters-v1"
+// v3: the fixed columns now store their widths in this map too, so a v2 view
+// would leave them undefined.
+const VIEWS_STORAGE_KEY = "supplier-matches-views-v3"
+// v2: every text filter became a multi-select array.
+const FILTERS_STORAGE_KEY = "supplier-matches-filters-v2"
 const SAVED_STORAGE_KEY = "supplier-matches-saved-v1"
 
 /* Saved matches were previously component state only, so the bookmark
@@ -461,7 +509,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -481,7 +529,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -522,10 +570,14 @@ const loadFilterState = () => {
   if (typeof window === "undefined") return { filters: { ...EMPTY_FILTERS }, sort: null }
   try {
     const saved = JSON.parse(window.localStorage.getItem(FILTERS_STORAGE_KEY) || "null")
-    return {
-      filters: { ...EMPTY_FILTERS, ...(saved?.filters || {}) },
-      sort: saved?.sort?.key ? saved.sort : null,
-    }
+    const merged = { ...EMPTY_FILTERS, ...(saved?.filters || {}) }
+    // A value stored by an older build as a string would blow up .includes.
+    Object.keys(EMPTY_FILTERS).forEach((key) => {
+      if (Array.isArray(EMPTY_FILTERS[key]) && !Array.isArray(merged[key])) {
+        merged[key] = merged[key] ? [merged[key].toString()] : []
+      }
+    })
+    return { filters: merged, sort: saved?.sort?.key ? saved.sort : null }
   } catch {
     return { filters: { ...EMPTY_FILTERS }, sort: null }
   }
@@ -655,6 +707,7 @@ const hasTooManyMissingFields = (s) => {
 export function SupplierTable({
   filters,
   stageFilter,
+  applicationFilter,
   onSupplierContacted,
   onSuppliersUpdate,
   onCountChange,
@@ -687,6 +740,28 @@ export function SupplierTable({
   }, [])
   const activeStageFilter = stageFilter ?? eventStageFilter
 
+  /* Which product request the whole table is scored against. Seeded from
+     ?applicationId= so arriving from the Applications page works; the event
+     covers the case where this table is already on screen. */
+  const [eventApplicationFilter, setEventApplicationFilter] = useState(readApplicationIdFromUrl)
+  useEffect(() => {
+    const onFilter = (e) => setEventApplicationFilter(e.detail ?? null)
+    window.addEventListener(SUPPLIER_APPLICATION_FILTER_EVENT, onFilter)
+    return () => window.removeEventListener(SUPPLIER_APPLICATION_FILTER_EVENT, onFilter)
+  }, [])
+  const activeApplicationFilter = applicationFilter ?? eventApplicationFilter
+
+  const clearApplicationFilter = () => {
+    setEventApplicationFilter(null)
+    window.dispatchEvent(new CustomEvent(SUPPLIER_APPLICATION_FILTER_EVENT, { detail: null }))
+    // Drop the param too, or a refresh would put the scope straight back.
+    if (typeof window !== "undefined" && window.history?.replaceState) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete("applicationId")
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`)
+    }
+  }
+
   const [detailsSupplier, setDetailsSupplier] = useState(null)
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState("")
@@ -714,6 +789,7 @@ export function SupplierTable({
   const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
   const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+  const [chipSearch, setChipSearch] = useState("")
 
   // Views
   const [viewsState, setViewsState] = useState(() => loadViewsState())
@@ -737,6 +813,7 @@ export function SupplierTable({
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -844,8 +921,19 @@ export function SupplierTable({
     setLoading(true)
     setError(null)
     try {
-      const appSnap = await getDoc(doc(db, "productApplications", effectiveUserId))
-      if (!appSnap.exists()) {
+      /* Which request are we scoring against? The id from the Applications
+         page wins. Falling back to a document keyed on the user id keeps the
+         old single-request behaviour working for anyone arriving directly. */
+      let appSnap = null
+      if (activeApplicationFilter) {
+        const scoped = await getDoc(doc(db, "productApplications", activeApplicationFilter))
+        if (scoped.exists()) appSnap = scoped
+      }
+      if (!appSnap) {
+        const fallback = await getDoc(doc(db, "productApplications", effectiveUserId))
+        if (fallback.exists()) appSnap = fallback
+      }
+      if (!appSnap) {
         setSuppliers([])
         setApplication(null)
         setError("Complete a product or service request first and your supplier matches will appear here.")
@@ -915,7 +1003,7 @@ export function SupplierTable({
     } finally {
       setLoading(false)
     }
-  }, [effectiveUserId])
+  }, [effectiveUserId, activeApplicationFilter])
 
   useEffect(() => {
     if (!authResolved) return
@@ -925,6 +1013,18 @@ export function SupplierTable({
     }
     loadEverything()
   }, [authResolved, effectiveUserId, loadEverything])
+
+  /* The request in scope, as the Application ID and Application Request
+     columns show it. Every row is scored against this one request, so both
+     read the same down the whole table. */
+  const applicationMeta = useMemo(() => {
+    if (!application) return { refId: "-", request: "-", fullId: null }
+    return {
+      refId: deriveAppId(application.id),
+      request: describeApplication(application),
+      fullId: application.id,
+    }
+  }, [application])
 
   const statusOf = useCallback((supplier) => normalizeSupplierStatus(records[supplier.id]?.status), [records])
 
@@ -1085,13 +1185,23 @@ export function SupplierTable({
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the three fixed ones, so every column in the
+     table can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -1099,6 +1209,7 @@ export function SupplierTable({
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -1111,13 +1222,42 @@ export function SupplierTable({
     window.addEventListener("mouseup", onUp)
   }
 
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="st-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
+
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
+    setChipSearch("")
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
   }
-  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+  const closeHeaderFilter = () => {
+    setHeaderFilterOpen(null)
+    setChipSearch("")
+  }
 
   const toggleSort = (key, event) => {
     event.stopPropagation()
@@ -1497,72 +1637,91 @@ export function SupplierTable({
     }
   }
 
-  /* ─── Derived filter options ────────────────────────────────────────── */
+  /* ─── Derived options ───────────────────────────────────────────────────
+     Every filter offers the values actually present in the table, so you pick
+     from what exists rather than guessing at a search box. */
   const uniqueOf = useCallback(
-    (accessor) => [...new Set(suppliers.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
+    (accessor) =>
+      [...new Set(suppliers.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
     [suppliers],
   )
+  const nameOptions = useMemo(() => uniqueOf((s) => s.name), [uniqueOf])
+  const productServiceOptions = useMemo(() => uniqueOf((s) => s.productService), [uniqueOf])
   const locationOptions = useMemo(() => uniqueOf((s) => s.locationOnly), [uniqueOf])
-  const sectorOptions = useMemo(() => uniqueOf((s) => s.sector), [uniqueOf])
+  const capacityOptions = useMemo(() => uniqueOf((s) => s.capacity), [uniqueOf])
   const businessSizeOptions = useMemo(() => uniqueOf((s) => s.businessSize), [uniqueOf])
+  const yearsOperatingOptions = useMemo(() => uniqueOf((s) => s.yearsOperating), [uniqueOf])
+  const certificationOptions = useMemo(() => uniqueOf((s) => s.certifications), [uniqueOf])
+  const pricingRangeOptions = useMemo(() => uniqueOf((s) => s.pricingRange), [uniqueOf])
+  const minimumOrderOptions = useMemo(() => uniqueOf((s) => s.minimumOrder), [uniqueOf])
+  const sectorOptions = useMemo(() => uniqueOf((s) => s.sector), [uniqueOf])
   const complianceOptions = useMemo(() => uniqueOf((s) => s.complianceStatus), [uniqueOf])
+  const bbbeeOptions = useMemo(() => {
+    const found = uniqueOf((s) => s.bbbeeLevel)
+    return found.length ? found : BBBEE_LEVELS
+  }, [uniqueOf])
 
   /* ─── Filtering + sorting ───────────────────────────────────────────────
      Split in two on purpose. `preStageSuppliers` applies every filter except
      the pipeline stage; that list is what gets broadcast, so a card reading 8
-     and the table showing 8 are the same 8 rows. Applying the stage filter
-     before broadcasting would collapse every other card to zero the moment
-     you pressed one. ──────────────────────────────────────────────────── */
+     and the table showing 8 are the same 8 rows. ──────────────────────── */
   const preStageSuppliers = useMemo(() => {
     const f = localFilters
     const matchesAny = (selected, value) =>
-      selected.length === 0 || selected.some((v) => (value || "").toLowerCase().includes(v.toLowerCase()))
+      !selected?.length || selected.some((v) => (value || "").toString().toLowerCase().includes(v.toLowerCase()))
     const includesText = (needle, value) =>
-      !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
+      !needle?.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
 
     return suppliers.filter((s) => {
-      if (records[s.id]?.hidden) return false
+      const record = records[s.id]
+      if (record?.hidden) return false
       if (hasTooManyMissingFields(s)) return false
-      if (!showIneligible && !s.aiEligibility?.eligible) return false
       if (showSavedOnly && !savedMatches[s.id]) return false
 
       const status = statusOf(s)
+
       if (filters?.search && !s.name.toLowerCase().includes(filters.search.toLowerCase())) return false
 
-      if (!includesText(f.name, s.name)) return false
-      if (s.matchPercentage < f.matchRange[0] || s.matchPercentage > f.matchRange[1]) return false
+      if (!matchesAny(f.name, s.name)) return false
+      if (!matchesAny(f.applicationId, applicationMeta.refId)) return false
+      if (!matchesAny(f.applicationRequest, applicationMeta.request)) return false
 
+      if (s.matchPercentage < f.matchRange[0] || s.matchPercentage > f.matchRange[1]) return false
       if (s.primaryMatchPercentage < f.primaryRange[0] || s.primaryMatchPercentage > f.primaryRange[1]) return false
-      if (s.aiMatchPercentage !== null && (s.aiMatchPercentage < f.aiRange[0] || s.aiMatchPercentage > f.aiRange[1]))
+
+      const ai = s.aiMatchPercentage
+      if ((f.aiRange[0] > 0 || f.aiRange[1] < 100) && (ai === null || ai < f.aiRange[0] || ai > f.aiRange[1]))
         return false
 
-      if (!includesText(f.productService, `${s.productService} ${s.sector}`)) return false
+      if (!matchesAny(f.productService, s.productService)) return false
       if (!matchesAny(f.location, s.location)) return false
-      if (!includesText(f.capacity, s.capacity)) return false
+      if (!matchesAny(f.capacity, s.capacity)) return false
       if (f.status.length > 0 && !f.status.includes(status)) return false
       if (!matchesAny(f.businessSize, s.businessSize)) return false
-      if (!includesText(f.yearsOperating, s.yearsOperating)) return false
-      if (!matchesAny(f.bbbeeLevel, s.bbbeeLevel)) return false
-      if (!matchesAny(f.ownershipProfile, s.ownershipProfile)) return false
-      if (!includesText(f.certifications, s.certifications)) return false
-      if (!includesText(f.pricingRange, s.pricingRange)) return false
-      if (!includesText(f.minimumOrder, s.minimumOrder)) return false
-      if (!matchesAny(f.deliveryCapability, s.deliveryCapability)) return false
-      if (!matchesAny(f.complianceStatus, s.complianceStatus)) return false
+      if (!matchesAny(f.yearsOperating, s.yearsOperating)) return false
+      if (f.bbbeeLevel.length > 0 && !f.bbbeeLevel.includes(s.bbbeeLevel)) return false
+      if (f.ownershipProfile.length > 0 && !f.ownershipProfile.some((tag) => s.ownershipProfile.includes(tag.split("-")[0])))
+        return false
+      if (!matchesAny(f.certifications, s.certifications)) return false
+      if (!matchesAny(f.pricingRange, s.pricingRange)) return false
+      if (!matchesAny(f.minimumOrder, s.minimumOrder)) return false
+      if (f.deliveryCapability.length > 0 && !f.deliveryCapability.some((m) => s.deliveryCapability.includes(m)))
+        return false
+      if (f.complianceStatus.length > 0 && !f.complianceStatus.includes(s.complianceStatus)) return false
       if (!matchesAny(f.sector, s.sector)) return false
-      if (!includesText(f.notes, (records[s.id]?.notes || []).join(" "))) return false
+      if (!includesText(f.notes, (record?.notes || []).join(" "))) return false
 
-      const iso = toISODateOnly(records[s.id]?.dateMatched)
-      if (f.matchedFrom && (!iso || iso < f.matchedFrom)) return false
-      if (f.matchedTo && (!iso || iso > f.matchedTo)) return false
+      const matchedIso = toISODateOnly(record?.dateMatched)
+      if (f.matchedFrom && (!matchedIso || matchedIso < f.matchedFrom)) return false
+      if (f.matchedTo && (!matchedIso || matchedIso > f.matchedTo)) return false
 
       return true
     })
-  }, [suppliers, records, localFilters, statusOf, filters, showIneligible, showSavedOnly, savedMatches])
+  }, [suppliers, records, localFilters, filters, statusOf, showSavedOnly, savedMatches, applicationMeta])
 
-  /* Every row the pipeline should count, each with its resolved status. New
-     Match has no stored record, so the pipeline cannot work this out on its
-     own — it would have to guess from a total. */
+  /* Every supplier the pipeline should count, each with its resolved status.
+     New Match has no stored record, so the pipeline cannot work this out on
+     its own — it would have to infer it from a total. */
   useEffect(() => {
     if (typeof window === "undefined") return
     const payload = preStageSuppliers.map((s) => ({ id: s.id, name: s.name, status: statusOf(s) }))
@@ -1579,23 +1738,25 @@ export function SupplierTable({
 
     if (sortConfig?.key) {
       const accessors = {
-        name: (r) => r.name,
-        match: (r) => r.matchPercentage || 0,
-        productService: (r) => r.productService,
-        location: (r) => r.location,
-        capacity: (r) => r.capacity,
-        status: (r) => statusOf(r),
-        businessSize: (r) => r.businessSize,
-        yearsOperating: (r) => Number.parseFloat(r.yearsOperating) || 0,
-        bbbeeLevel: (r) => r.bbbeeLevel,
-        pricingRange: (r) => r.pricingRange,
-        minimumOrder: (r) => r.minimumOrder,
-        complianceStatus: (r) => r.complianceStatus,
-        sector: (r) => r.sector,
-        primaryMatch: (r) => r.primaryMatchPercentage || 0,
-        aiMatch: (r) => (r.aiMatchPercentage === null ? -1 : r.aiMatchPercentage),
-        documents: (r) => r.documentCount || 0,
-        dateMatched: (r) => toDateSafe(records[r.id]?.dateMatched)?.getTime() ?? 0,
+        name: (s) => s.name,
+        applicationId: () => applicationMeta.refId,
+        applicationRequest: () => applicationMeta.request,
+        match: (s) => s.matchPercentage || 0,
+        primaryMatch: (s) => s.primaryMatchPercentage || 0,
+        aiMatch: (s) => (s.aiMatchPercentage === null ? -1 : s.aiMatchPercentage),
+        productService: (s) => s.productService,
+        location: (s) => s.location,
+        capacity: (s) => s.capacity,
+        status: (s) => statusOf(s),
+        businessSize: (s) => s.businessSize,
+        yearsOperating: (s) => Number.parseInt(s.yearsOperating, 10) || 0,
+        bbbeeLevel: (s) => s.bbbeeLevel,
+        pricingRange: (s) => s.pricingRange,
+        minimumOrder: (s) => s.minimumOrder,
+        complianceStatus: (s) => s.complianceStatus,
+        sector: (s) => s.sector,
+        documents: (s) => s.documentCount || 0,
+        dateMatched: (s) => toDateSafe(records[s.id]?.dateMatched)?.getTime() ?? 0,
       }
       const accessor = accessors[sortConfig.key]
       if (accessor) {
@@ -1612,40 +1773,36 @@ export function SupplierTable({
     }
 
     return rows
-  }, [preStageSuppliers, activeStageFilter, sortConfig, statusOf, records])
+  }, [preStageSuppliers, activeStageFilter, sortConfig, statusOf, records, applicationMeta])
 
-  /* Parent callbacks go through a ref so an inline arrow in the parent can't
-     retrigger this effect on every render. */
-  const notifyRef = useRef({ onCountChange, onSuppliersUpdate })
   useEffect(() => {
-    notifyRef.current = { onCountChange, onSuppliersUpdate }
-  })
-  useEffect(() => {
-    notifyRef.current.onCountChange?.(filteredSuppliers.length)
-    notifyRef.current.onSuppliersUpdate?.(suppliers, filteredSuppliers)
-  }, [suppliers, filteredSuppliers])
+    if (onCountChange) onCountChange(filteredSuppliers.length)
+    if (onSuppliersUpdate) onSuppliersUpdate(filteredSuppliers)
+  }, [filteredSuppliers, onCountChange, onSuppliersUpdate])
 
   /* ─── Filter chrome ─────────────────────────────────────────────────── */
   const f = localFilters
   const activeFilterCount =
-    (f.name.trim() ? 1 : 0) +
+    f.name.length +
+    f.applicationId.length +
+    f.applicationRequest.length +
     (f.matchRange[0] > 0 || f.matchRange[1] < 100 ? 1 : 0) +
-    (f.productService.trim() ? 1 : 0) +
+    (f.primaryRange[0] > 0 || f.primaryRange[1] < 100 ? 1 : 0) +
+    (f.aiRange[0] > 0 || f.aiRange[1] < 100 ? 1 : 0) +
+    f.productService.length +
     f.location.length +
-    (f.capacity.trim() ? 1 : 0) +
+    f.capacity.length +
     f.status.length +
     f.businessSize.length +
-    (f.yearsOperating.trim() ? 1 : 0) +
+    f.yearsOperating.length +
     f.bbbeeLevel.length +
     f.ownershipProfile.length +
-    (f.certifications.trim() ? 1 : 0) +
-    (f.pricingRange.trim() ? 1 : 0) +
-    (f.minimumOrder.trim() ? 1 : 0) +
+    f.certifications.length +
+    f.pricingRange.length +
+    f.minimumOrder.length +
     f.deliveryCapability.length +
     f.complianceStatus.length +
     f.sector.length +
-    (f.primaryRange[0] > 0 || f.primaryRange[1] < 100 ? 1 : 0) +
-    (f.aiRange[0] > 0 || f.aiRange[1] < 100 ? 1 : 0) +
     (f.matchedFrom || f.matchedTo ? 1 : 0) +
     (f.notes.trim() ? 1 : 0)
 
@@ -1698,12 +1855,16 @@ export function SupplierTable({
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const appIdWidth = widthOf(APPID_KEY)
+  const supplierWidth = widthOf(SUPPLIER_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
+  // Application ID and Supplier are both frozen to the left, in that order, so
+  // every other sticky offset starts after the pair.
+  const pinnedLeadWidth = appIdWidth + supplierWidth
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    // Left-pinned columns stack to the right of the frozen Supplier column.
-    let leftAcc = SUPPLIER_WIDTH
+    let leftAcc = pinnedLeadWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1719,9 +1880,9 @@ export function SupplierTable({
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, pinnedLeadWidth])
 
-  const totalWidth = SUPPLIER_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = pinnedLeadWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -1741,9 +1902,11 @@ export function SupplierTable({
     COLUMN_DEFS[key].label.toLowerCase().includes(columnSearch.toLowerCase()),
   )
 
+  const aiEligibleCount = useMemo(() => suppliers.filter((s) => s.aiEligibility?.eligible).length, [suppliers])
+  const ineligibleSuppliers = useMemo(() => suppliers.filter((s) => !s.aiEligibility?.eligible), [suppliers])
+
   /* ─── Cells ─────────────────────────────────────────────────────────── */
   const scoreColor = (n) => (n > 75 ? "#48BB78" : n > 50 ? "#D69E2E" : "#E53E3E")
-  const barColor = (n) => (n > 75 ? "#48BB78" : n > 50 ? "#F6AD55" : "#F56565")
 
   const renderCell = (key, s, rowBg) => {
     const offset = stickyOffsets[key]
@@ -1757,10 +1920,16 @@ export function SupplierTable({
         }
       : {}
     const style = { ...tableCellStyle, ...stickyStyle }
-    const status = statusOf(s)
     const record = records[s.id]
 
     switch (key) {
+      case "applicationRequest":
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={applicationMeta.request} maxLength={28} />
+          </td>
+        )
+
       case "match":
         return (
           <td key={key} style={{ ...style, textAlign: "center" }}>
@@ -1769,7 +1938,6 @@ export function SupplierTable({
                 <span className="text-xs font-semibold" style={{ color: scoreColor(s.matchPercentage) }}>
                   {s.matchPercentage}%
                 </span>
-                {/* Spec: "Why this match?" sits beside Match %, not in Action */}
                 <button
                   onClick={(e) => openPopupFromEvent("match", s, e)}
                   title="Why this match?"
@@ -1784,79 +1952,23 @@ export function SupplierTable({
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${Math.max(0, Math.min(100, s.matchPercentage))}%`,
-                    backgroundColor: barColor(s.matchPercentage),
+                    backgroundColor: scoreColor(s.matchPercentage),
                   }}
                 />
               </div>
-              {s.aiMatchPercentage === null && <span className="text-[9px] text-[#a89482]">structured only</span>}
-            </div>
-          </td>
-        )
-
-      case "productService":
-        return (
-          <td key={key} style={style}>
-            <div className="leading-snug">
-              <TruncatedText text={s.productService} maxLength={26} />
-              {s.categoryCount > 1 && (
-                <div className="text-[10px] text-[#a89482] mt-0.5">
-                  +{s.categoryCount - 1} more categor{s.categoryCount - 1 === 1 ? "y" : "ies"}
-                </div>
+              {s.aiMatchPercentage !== null && (
+                <span className="text-[9px] text-[#a89482] uppercase tracking-wide">AI blended</span>
               )}
             </div>
-          </td>
-        )
-
-      case "capacity":
-        return (
-          <td key={key} style={style}>
-            <span className="text-xs">{s.capacity}</span>
-          </td>
-        )
-
-      case "status": {
-        const st = getStatusStyle(status)
-        return (
-          <td key={key} style={style}>
-            <span
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
-              style={{ backgroundColor: st.color, color: st.textColor }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: st.textColor }} />
-              {status}
-            </span>
-          </td>
-        )
-      }
-
-      case "ownershipProfile":
-        return (
-          <td key={key} style={style}>
-            {s.ownershipTags.length === 0 ? (
-              <span className="text-[#a89482] text-xs">Not specified</span>
-            ) : (
-              <div className="flex flex-wrap gap-1">
-                {s.ownershipTags.map((tag) => (
-                  <span key={tag} className="px-1.5 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </td>
-        )
-
-      case "deliveryCapability":
-        return (
-          <td key={key} style={style}>
-            <TruncatedText text={s.deliveryCapability} maxLength={24} />
           </td>
         )
 
       case "primaryMatch":
         return (
           <td key={key} style={{ ...style, textAlign: "center" }}>
-            {s.primaryMatchPercentage}%
+            <span className="text-xs font-semibold" style={{ color: scoreColor(s.primaryMatchPercentage) }}>
+              {s.primaryMatchPercentage}%
+            </span>
           </td>
         )
 
@@ -1866,10 +1978,91 @@ export function SupplierTable({
             {s.aiMatchPercentage === null ? (
               <span className="text-[#a89482] text-xs">Not run</span>
             ) : (
-              <span style={{ color: scoreColor(s.aiMatchPercentage), fontWeight: 600 }}>{s.aiMatchPercentage}%</span>
+              <span className="text-xs font-semibold" style={{ color: scoreColor(s.aiMatchPercentage) }}>
+                {s.aiMatchPercentage}%
+              </span>
             )}
           </td>
         )
+
+      case "productService":
+        return (
+          <td key={key} style={style}>
+            <TruncatedText text={s.productService} maxLength={26} />
+            {s.categoryCount > 1 && (
+              <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#7d5a50] text-[10px] font-medium">
+                +{s.categoryCount - 1} more
+              </span>
+            )}
+          </td>
+        )
+
+      case "status": {
+        const st = getStatusStyle(statusOf(s))
+        return (
+          <td key={key} style={style}>
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+              style={{ backgroundColor: st.color, color: st.textColor }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: st.textColor }} />
+              {statusOf(s)}
+            </span>
+          </td>
+        )
+      }
+
+      case "bbbeeLevel":
+        return (
+          <td key={key} style={style}>
+            {s.bbbeeLevel && s.bbbeeLevel !== "-" ? (
+              <span className="inline-block px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium">
+                {s.bbbeeLevel}
+              </span>
+            ) : (
+              <span className="text-[#a89482] text-xs">-</span>
+            )}
+          </td>
+        )
+
+      case "ownershipProfile":
+        return (
+          <td key={key} style={style}>
+            {s.ownershipTags.length === 0 ? (
+              <span className="text-[#a89482] text-xs">Not specified</span>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {s.ownershipTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium whitespace-nowrap"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </td>
+        )
+
+      case "complianceStatus": {
+        const tone =
+          s.complianceStatus === "Fully compliant"
+            ? { bg: "#E8F5E8", fg: "#388E3C" }
+            : s.complianceStatus === "Partially compliant"
+              ? { bg: "#FFF3E0", fg: "#F57C00" }
+              : { bg: "#FFEBEE", fg: "#D32F2F" }
+        return (
+          <td key={key} style={style}>
+            <span
+              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+              style={{ backgroundColor: tone.bg, color: tone.fg }}
+            >
+              {s.complianceStatus}
+            </span>
+          </td>
+        )
+      }
 
       case "documents":
         return (
@@ -1915,18 +2108,36 @@ export function SupplierTable({
   if (error) {
     return (
       <div className="p-10 text-center">
-        <p className="text-sm font-semibold text-[#4a352f] m-0">{error}</p>
+        <p className="text-sm font-semibold text-[#4a352f] m-0 mb-3">{error}</p>
         {onNewRequest && (
-          <button
-            onClick={onNewRequest}
-            className="mt-4 px-4 py-2 rounded-lg bg-[#7d5a50] text-white text-sm font-semibold"
-          >
-            Start a request
+          <button onClick={onNewRequest} className="px-4 py-2 rounded-xl bg-[#7d5a50] text-white text-sm font-semibold">
+            Create a request
           </button>
         )}
       </div>
     )
   }
+
+  /* Every chip-list filter is driven by this one array. */
+  const FILTER_OPTION_SETS = [
+    { type: "name", label: "Supplier name", options: nameOptions },
+    { type: "applicationId", label: "Application ID", options: applicationMeta.refId !== "-" ? [applicationMeta.refId] : [] },
+    { type: "applicationRequest", label: "Application Request", options: applicationMeta.request !== "-" ? [applicationMeta.request] : [] },
+    { type: "productService", label: "Product / Service", options: productServiceOptions },
+    { type: "location", label: "Location", options: locationOptions },
+    { type: "capacity", label: "Capacity / Lead Time", options: capacityOptions },
+    { type: "status", label: "Status", options: SUPPLIER_STATUSES },
+    { type: "businessSize", label: "Business Size", options: businessSizeOptions },
+    { type: "yearsOperating", label: "Years Operating", options: yearsOperatingOptions },
+    { type: "bbbeeLevel", label: "B-BBEE Level", options: bbbeeOptions },
+    { type: "ownershipProfile", label: "Ownership Profile", options: OWNERSHIP_TAGS },
+    { type: "certifications", label: "Certifications", options: certificationOptions },
+    { type: "pricingRange", label: "Pricing Range", options: pricingRangeOptions },
+    { type: "minimumOrder", label: "Minimum Order", options: minimumOrderOptions },
+    { type: "deliveryCapability", label: "Delivery Capability", options: DELIVERY_MODES },
+    { type: "complianceStatus", label: "Compliance Status", options: complianceOptions },
+    { type: "sector", label: "Sector", options: sectorOptions },
+  ]
 
   return (
     <div style={{ width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
@@ -1949,7 +2160,6 @@ export function SupplierTable({
         </div>
       )}
 
-      {/* Inline banner, same as the other match tables */}
       {notification && (
         <div
           className={`px-4 py-3 rounded-xl text-sm font-medium border mb-3 ${
@@ -1971,10 +2181,62 @@ export function SupplierTable({
         </div>
       )}
 
-      {aiError && (
-        <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-[#fff3e0] border border-[#e65100]/30 text-xs text-[#e65100] flex items-center gap-2">
-          <AlertCircle size={14} className="flex-shrink-0" />
-          {aiError}
+      {/* AI analysis strip */}
+      <div className="bg-[#faf7f2] border border-[#e6d7c3] rounded-2xl p-4 mb-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-[#4a352f] m-0 flex items-center gap-2">
+            <Brain size={15} className="text-[#7d5a50]" /> AI supplier analysis
+          </h3>
+          <p className="text-xs text-[#7d5a50] m-0 mt-1">
+            Reads each supplier's written descriptions against your request. {aiEligibleCount} of {suppliers.length}{" "}
+            supplier{suppliers.length === 1 ? "" : "s"} have enough profile text to analyse.
+          </p>
+          {aiError && (
+            <p className="text-xs text-[#D32F2F] m-0 mt-1 flex items-center gap-1">
+              <AlertCircle size={12} /> {aiError}
+            </p>
+          )}
+          {aiRunning && aiProgress.total > 0 && (
+            <p className="text-xs text-[#7d5a50] m-0 mt-1">
+              Analysing {aiProgress.current} of {aiProgress.total}...
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {ineligibleSuppliers.length > 0 && (
+            <button
+              onClick={() => setShowIneligible((v) => !v)}
+              className="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-[#c8b6a6] text-[#4a352f] hover:bg-[#f5f0e1]"
+            >
+              {showIneligible ? "Hide" : "Show"} skipped ({ineligibleSuppliers.length})
+            </button>
+          )}
+          <button
+            onClick={runAiAnalysis}
+            disabled={aiRunning || aiEligibleCount === 0}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#7d5a50] text-white disabled:opacity-40"
+          >
+            {aiRunning ? "Analysing..." : "Run AI analysis"}
+          </button>
+        </div>
+      </div>
+
+      {showIneligible && ineligibleSuppliers.length > 0 && (
+        <div className="bg-white border border-[#e6d7c3] rounded-2xl p-4 mb-4">
+          <p className="text-xs font-semibold text-[#4a352f] m-0 mb-2">
+            Skipped by AI analysis — not enough profile text
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ineligibleSuppliers.map((s) => (
+              <span
+                key={s.id}
+                className="px-2.5 py-1 rounded-full text-xs bg-[#f5f0e1] text-[#4a352f]"
+                title={s.aiEligibility?.reason || "No reason recorded"}
+              >
+                {s.name}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1988,8 +2250,25 @@ export function SupplierTable({
               Viewing: {activeView.name}
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
-            {/* Which pipeline stage the table is narrowed to. Press the same
-                card again in the pipeline to clear it. */}
+
+            {/* Which request the scores belong to. Everything in the table is
+                scored against this one, so it is worth stating plainly. */}
+            {applicationMeta.fullId && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#5d4037]/10 text-[#4a352f] border border-[#5d4037]/40">
+                <Hash size={12} className="text-[#7d5a50]" />
+                {applicationMeta.refId} · {applicationMeta.request}
+                {activeApplicationFilter && (
+                  <button
+                    onClick={clearApplicationFilter}
+                    title="Go back to your default request"
+                    className="ml-1 px-2 py-0.5 rounded-lg bg-white border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] font-semibold"
+                  >
+                    Clear
+                  </button>
+                )}
+              </span>
+            )}
+
             {activeStageFilter && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
                 <Target size={12} className="text-[#7d5a50]" />
@@ -1997,8 +2276,6 @@ export function SupplierTable({
                 <span className="font-normal text-[#a89482]">({filteredSuppliers.length})</span>
               </span>
             )}
-            {/* Saved matches. The bookmark on each row writes here; this is
-                where you get them back. */}
             {(showSavedOnly || savedCount > 0) && (
               <button
                 onClick={() => setShowSavedOnly((v) => !v)}
@@ -2033,292 +2310,290 @@ export function SupplierTable({
             )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
             <button
-              onClick={runAiAnalysis}
-              disabled={aiRunning || !application || suppliers.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold bg-[#4a352f] text-[#faf7f2] disabled:opacity-40"
+              onClick={(e) => {
+                if (showCustomizeMenu) {
+                  setShowCustomizeMenu(false)
+                  setCustomizeMenuRect(null)
+                } else {
+                  setCustomizeMenuRect(e.currentTarget.getBoundingClientRect())
+                  setShowCustomizeMenu(true)
+                  setShowNewViewForm(false)
+                  setEditingViewMeta(null)
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
             >
-              <Brain size={13} />
-              {aiRunning ? "Analysing..." : "Run AI analysis"}
+              <SlidersHorizontal size={16} /> Customize Table{" "}
+              <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? "rotate-180" : ""}`} />
             </button>
 
-            <label className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-medium text-[#7d5a50] bg-white border border-[#c8b6a6] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showIneligible}
-                onChange={() => setShowIneligible((p) => !p)}
-                className="rounded border-[#c8b6a6]"
-              />
-              Show incomplete profiles
-            </label>
+            {showCustomizeMenu &&
+              customizeMenuRect &&
+              (() => {
+                const panelWidth = 340
+                const margin = 12
+                let left = customizeMenuRect.right - panelWidth
+                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
+                const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
+                const spaceAbove = customizeMenuRect.top - margin - 8
+                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
+                const maxHeight = Math.max(200, Math.min(640, openUpward ? spaceAbove : spaceBelow))
+                const top = openUpward ? undefined : customizeMenuRect.bottom + 8
+                const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
+                const allViews = Object.values(viewsState.views).sort((a, b) =>
+                  a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name),
+                )
 
-            {onNewRequest && (
-              <button
-                onClick={onNewRequest}
-                className="px-3 py-2.5 rounded-xl text-xs font-semibold text-[#4a352f] bg-white border border-[#c8b6a6] hover:bg-[#f5f0e1]"
-              >
-                New request
-              </button>
-            )}
-
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  if (showCustomizeMenu) {
-                    setShowCustomizeMenu(false)
-                    setCustomizeMenuRect(null)
-                  } else {
-                    setCustomizeMenuRect(e.currentTarget.getBoundingClientRect())
-                    setShowCustomizeMenu(true)
-                    setShowNewViewForm(false)
-                    setEditingViewMeta(null)
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
-              >
-                <SlidersHorizontal size={16} /> Customize Table{" "}
-                <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? "rotate-180" : ""}`} />
-              </button>
-
-              {showCustomizeMenu &&
-                customizeMenuRect &&
-                (() => {
-                  const panelWidth = 340
-                  const margin = 12
-                  let left = customizeMenuRect.right - panelWidth
-                  left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
-                  const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
-                  const spaceAbove = customizeMenuRect.top - margin - 8
-                  const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
-                  const maxHeight = Math.max(200, Math.min(640, openUpward ? spaceAbove : spaceBelow))
-                  const top = openUpward ? undefined : customizeMenuRect.bottom + 8
-                  const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
-                  const allViews = Object.values(viewsState.views).sort((a, b) =>
-                    a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name),
-                  )
-
-                  return (
-                    <PopupPortal>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => {
-                          setShowCustomizeMenu(false)
-                          setCustomizeMenuRect(null)
-                          setShowNewViewForm(false)
-                          setEditingViewMeta(null)
-                        }}
-                      />
-                      <div
-                        className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
-                        style={{ left, width: panelWidth, top, bottom, maxHeight }}
-                      >
-                        <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
-                        <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
-                        <div className="space-y-1 mb-3">
-                          {allViews.map((view) => {
-                            const isActive = view.id === viewsState.activeViewId
-                            const isEditing = editingViewMeta?.id === view.id
-                            if (isEditing) {
-                              return (
-                                <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
-                                  {!view.builtin ? (
-                                    <input
-                                      autoFocus
-                                      value={editingViewMeta.name}
-                                      onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))}
-                                      placeholder="View name"
-                                      className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
-                                    />
-                                  ) : (
-                                    <p className="text-sm font-semibold text-[#4a352f]">
-                                      Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span>
-                                    </p>
-                                  )}
-                                  <textarea
-                                    value={editingViewMeta.description}
-                                    onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))}
-                                    placeholder="Description (optional) — what is this view for?"
-                                    rows={2}
-                                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
-                                  />
-                                  <div className="flex justify-end gap-2">
-                                    <button onClick={() => setEditingViewMeta(null)} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">
-                                      Cancel
-                                    </button>
-                                    <button onClick={saveViewMeta} className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold">
-                                      Save
-                                    </button>
-                                  </div>
-                                </div>
-                              )
-                            }
+                return (
+                  <PopupPortal>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => {
+                        setShowCustomizeMenu(false)
+                        setCustomizeMenuRect(null)
+                        setShowNewViewForm(false)
+                        setEditingViewMeta(null)
+                      }}
+                    />
+                    <div
+                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
+                      style={{ left, width: panelWidth, top, bottom, maxHeight }}
+                    >
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                      <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
+                      <div className="space-y-1 mb-3">
+                        {allViews.map((view) => {
+                          const isActive = view.id === viewsState.activeViewId
+                          const isEditing = editingViewMeta?.id === view.id
+                          if (isEditing) {
                             return (
-                              <div
-                                key={view.id}
-                                className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"}`}
-                              >
-                                <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
-                                    <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>{view.name}</span>
-                                    {view.builtin && (
-                                      <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Built-in</span>
-                                    )}
-                                  </div>
-                                  {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
-                                </button>
-                                <div className="flex items-center gap-0.5 flex-shrink-0">
-                                  <button onClick={() => startEditingViewMeta(view)} title="Rename / edit description" className="text-[#a89482] hover:text-[#7d5a50] p-1">
-                                    <Settings size={13} />
+                              <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                {!view.builtin ? (
+                                  <input
+                                    autoFocus
+                                    value={editingViewMeta.name}
+                                    onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))}
+                                    placeholder="View name"
+                                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-[#4a352f]">
+                                    Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span>
+                                  </p>
+                                )}
+                                <textarea
+                                  value={editingViewMeta.description}
+                                  onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Description (optional) — what is this view for?"
+                                  rows={2}
+                                  className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => setEditingViewMeta(null)}
+                                    className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
+                                  >
+                                    Cancel
                                   </button>
-                                  {!view.builtin && (
-                                    <button onClick={() => removeView(view.id)} title="Delete view" className="text-[#a89482] hover:text-red-500 p-1">
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
+                                  <button
+                                    onClick={saveViewMeta}
+                                    className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold"
+                                  >
+                                    Save
+                                  </button>
                                 </div>
                               </div>
                             )
-                          })}
-                        </div>
-
-                        {showNewViewForm ? (
-                          <div className="space-y-2 mb-1">
-                            <input
-                              autoFocus
-                              value={newViewName}
-                              onChange={(e) => setNewViewName(e.target.value)}
-                              placeholder="New view name..."
-                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
-                            />
-                            <textarea
-                              value={newViewDescription}
-                              onChange={(e) => setNewViewDescription(e.target.value)}
-                              placeholder="Description (optional) — what is this view for?"
-                              rows={2}
-                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
-                            />
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => {
-                                  setShowNewViewForm(false)
-                                  setNewViewName("")
-                                  setNewViewDescription("")
-                                }}
-                                className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={createNewView}
-                                disabled={!newViewName.trim()}
-                                className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40"
-                              >
-                                Create view
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setShowNewViewForm(true)}
-                            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]"
-                          >
-                            <Plus size={13} /> New view from current layout
-                          </button>
-                        )}
-
-                        <div className="border-t border-[#e6d7c3] my-4" />
-                        <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Columns</h4>
-
-                        <div className="relative mb-3">
-                          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
-                          <input
-                            value={columnSearch}
-                            onChange={(e) => setColumnSearch(e.target.value)}
-                            placeholder="Search columns..."
-                            className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
-                          />
-                        </div>
-
-                        <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                          <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
-                        </p>
-
-                        <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
-                          <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f] flex-1">Supplier</span>
-                          <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
-                        </div>
-                        <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
-                          <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f] flex-1">Action</span>
-                          <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Always last</span>
-                        </div>
-                        <div className="border-t border-[#e6d7c3] my-2" />
-
-                        {searchedColumns.length === 0 && <p className="text-xs text-[#a89482] px-2 py-1.5">No columns match that search.</p>}
-                        {searchedColumns.map((key) => (
-                          <div key={key} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2]">
-                            <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={columnVisibility[key] || false}
-                                onChange={() => toggleColumn(key)}
-                                className="rounded border-[#c8b6a6] text-[#7d5a50]"
-                              />
-                              <span className="text-sm text-[#4a352f] truncate">{COLUMN_DEFS[key].label}</span>
-                            </label>
-                            <button
-                              onClick={() => cyclePin(key)}
-                              title={
-                                pinned[key] === "left"
-                                  ? "Pinned left — click to pin right"
-                                  : pinned[key] === "right"
-                                    ? "Pinned right — click to unpin"
-                                    : "Pin left"
-                              }
-                              className={`p-1 rounded flex-shrink-0 ${pinned[key] ? "text-[#7d5a50]" : "text-[#c8b6a6] hover:text-[#7d5a50]"}`}
-                            >
-                              {pinned[key] ? <Pin size={13} /> : <PinOff size={13} />}
-                            </button>
-                            <span className="text-[10px] text-[#a89482] w-7 text-right flex-shrink-0">
-                              {pinned[key] === "left" ? "L" : pinned[key] === "right" ? "R" : ""}
-                            </span>
-                          </div>
-                        ))}
-
-                        <div className="border-t border-[#e6d7c3] my-4" />
-                        <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
-                        <div className="flex gap-1.5">
-                          {[
-                            { key: "comfortable", label: "Comfortable" },
-                            { key: "compact", label: "Compact" },
-                          ].map((d) => (
-                            <button
-                              key={d.key}
-                              onClick={() => setDensity(d.key)}
-                              className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                                density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                          }
+                          return (
+                            <div
+                              key={view.id}
+                              className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${
+                                isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"
                               }`}
                             >
-                              {d.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="border-t border-[#e6d7c3] my-4" />
-                        <button
-                          onClick={resetActiveViewToDefault}
-                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
-                        >
-                          <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
-                        </button>
+                              <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                  <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>
+                                    {view.name}
+                                  </span>
+                                  {view.builtin && (
+                                    <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">
+                                      Built-in
+                                    </span>
+                                  )}
+                                </div>
+                                {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                              </button>
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button
+                                  onClick={() => startEditingViewMeta(view)}
+                                  title="Rename / edit description"
+                                  className="text-[#a89482] hover:text-[#7d5a50] p-1"
+                                >
+                                  <Settings size={13} />
+                                </button>
+                                {!view.builtin && (
+                                  <button
+                                    onClick={() => removeView(view.id)}
+                                    title="Delete view"
+                                    className="text-[#a89482] hover:text-red-500 p-1"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                    </PopupPortal>
-                  )
-                })()}
-            </div>
+
+                      {showNewViewForm ? (
+                        <div className="space-y-2 mb-1">
+                          <input
+                            autoFocus
+                            value={newViewName}
+                            onChange={(e) => setNewViewName(e.target.value)}
+                            placeholder="New view name..."
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                          />
+                          <textarea
+                            value={newViewDescription}
+                            onChange={(e) => setNewViewDescription(e.target.value)}
+                            placeholder="Description (optional) — what is this view for?"
+                            rows={2}
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setShowNewViewForm(false)
+                                setNewViewName("")
+                                setNewViewDescription("")
+                              }}
+                              className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={createNewView}
+                              disabled={!newViewName.trim()}
+                              className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40"
+                            >
+                              Create view
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowNewViewForm(true)}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]"
+                        >
+                          <Plus size={13} /> New view from current layout
+                        </button>
+                      )}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Columns</h4>
+
+                      <div className="relative mb-3">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
+                        <input
+                          value={columnSearch}
+                          onChange={(e) => setColumnSearch(e.target.value)}
+                          placeholder="Search columns..."
+                          className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                        />
+                      </div>
+
+                      <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                        resize. Every column resizes, including the pinned ones.
+                      </p>
+
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Application ID</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Supplier</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Action</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Always last</span>
+                      </div>
+                      <div className="border-t border-[#e6d7c3] my-2" />
+
+                      {searchedColumns.length === 0 && (
+                        <p className="text-xs text-[#a89482] px-2 py-1.5">No columns match that search.</p>
+                      )}
+                      {searchedColumns.map((key) => (
+                        <div key={key} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2]">
+                          <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={columnVisibility[key] || false}
+                              onChange={() => toggleColumn(key)}
+                              className="rounded border-[#c8b6a6] text-[#7d5a50]"
+                            />
+                            <span className="text-sm text-[#4a352f] truncate">{COLUMN_DEFS[key].label}</span>
+                          </label>
+                          <button
+                            onClick={() => cyclePin(key)}
+                            title={
+                              pinned[key] === "left"
+                                ? "Pinned left — click to pin right"
+                                : pinned[key] === "right"
+                                  ? "Pinned right — click to unpin"
+                                  : "Pin left"
+                            }
+                            className={`p-1 rounded flex-shrink-0 ${pinned[key] ? "text-[#7d5a50]" : "text-[#c8b6a6] hover:text-[#7d5a50]"}`}
+                          >
+                            {pinned[key] ? <Pin size={13} /> : <PinOff size={13} />}
+                          </button>
+                          <span className="text-[10px] text-[#a89482] w-7 text-right flex-shrink-0">
+                            {pinned[key] === "left" ? "L" : pinned[key] === "right" ? "R" : ""}
+                          </span>
+                        </div>
+                      ))}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                      <div className="flex gap-1.5">
+                        {[
+                          { key: "comfortable", label: "Comfortable" },
+                          { key: "compact", label: "Compact" },
+                        ].map((d) => (
+                          <button
+                            key={d.key}
+                            onClick={() => setDensity(d.key)}
+                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                              density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                            }`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <button
+                        onClick={resetActiveViewToDefault}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
+                      >
+                        <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                      </button>
+                    </div>
+                  </PopupPortal>
+                )
+              })()}
           </div>
         </div>
       </div>
@@ -2337,8 +2612,8 @@ export function SupplierTable({
             .st-th-draggable:active { cursor: grabbing; }
             .st-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
             /* overflow-wrap: normal stops the browser splitting inside a word,
-               which is what turned "Match %" into "MAT CH.." and "Status" into
-               "STA TUS" in narrow columns. */
+               which is what turned "Match %" into "MAT CH.." in narrow
+               columns. */
             .st-th-label {
               flex: 1 1 auto; min-width: 0;
               display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -2351,7 +2626,7 @@ export function SupplierTable({
                buying every header ~14px more room for its label. */
             .st-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .st-th:hover .st-th-grip { opacity: .45; }
-            .st-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .st-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .st-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -2372,11 +2647,37 @@ export function SupplierTable({
           >
             <thead>
               <tr>
+                {/* Application ID — first pinned column */}
                 <th
                   className="st-th font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: SUPPLIER_WIDTH,
+                    width: appIdWidth,
+                    padding: headerPadding,
+                    borderBottom: "1px solid #e6d7c3",
+                    borderRight: "1px solid #e6d7c3",
+                  }}
+                >
+                  <div className="st-th-row">
+                    <span className="st-th-label" title="Application ID">
+                      Application ID
+                    </span>
+                    <span className="st-th-tools">
+                      <SortTrigger columnKey="applicationId" />
+                      <FilterTrigger type="applicationId" active={localFilters.applicationId.length > 0} />
+                      <HeaderInfoTooltip text="The product or service request these scores belong to. Every supplier in the table is scored against this one request." />
+                    </span>
+                  </div>
+                  <ColumnResizer colKey={APPID_KEY} />
+                </th>
+
+                {/* Supplier — second pinned column */}
+                <th
+                  className="st-th font-semibold uppercase tracking-wider text-xs sticky top-0 z-30 text-left"
+                  style={{
+                    backgroundColor: "#4a352f",
+                    left: appIdWidth,
+                    width: supplierWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
@@ -2388,9 +2689,11 @@ export function SupplierTable({
                     </span>
                     <span className="st-th-tools">
                       <SortTrigger columnKey="name" />
-                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <FilterTrigger type="name" active={localFilters.name.length > 0} />
+                      <HeaderInfoTooltip text="The supplier's trading name. A tick means their profile is verified; a warning triangle means key fields are still missing. Click the eye for the full profile." />
                     </span>
                   </div>
+                  <ColumnResizer colKey={SUPPLIER_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -2402,7 +2705,7 @@ export function SupplierTable({
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -2435,10 +2738,13 @@ export function SupplierTable({
                         <span className="st-th-tools">
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
-                          {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                          {col.filterType && (
+                            <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                          )}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="st-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -2449,12 +2755,16 @@ export function SupplierTable({
                   className="st-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="st-th-row justify-center">
+                    <span className="st-th-label">Action</span>
+                    <HeaderInfoTooltip text="Request a quote or open what you've already sent, bookmark the supplier to come back to, or open quick actions for notes and sharing." />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -2463,7 +2773,7 @@ export function SupplierTable({
               {filteredSuppliers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={orderedColumns.length + 2}
+                    colSpan={orderedColumns.length + 3}
                     style={{ ...tableCellStyle, textAlign: "center", padding: "3rem 1rem", borderRight: "none" }}
                   >
                     <div className="flex flex-col items-center gap-3">
@@ -2481,7 +2791,7 @@ export function SupplierTable({
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
                         {suppliers.length === 0
-                          ? "Update your request with more categories or a wider location and the matches will follow."
+                          ? "Add the categories, budget and location to your request and matches will follow."
                           : showSavedOnly
                             ? "Bookmark a row to keep it here."
                             : activeStageFilter
@@ -2497,7 +2807,10 @@ export function SupplierTable({
                         </button>
                       )}
                       {activeFilterCount > 0 && suppliers.length > 0 && (
-                        <button onClick={clearAllFilters} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white">
+                        <button
+                          onClick={clearAllFilters}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
                           Clear all filters
                         </button>
                       )}
@@ -2509,8 +2822,10 @@ export function SupplierTable({
                   const status = statusOf(s)
                   const actions = getRowActions(status)
                   const isSaved = !!savedMatches[s.id]
+                  const isTerminal = !!actions.terminal
                   const rowBg = hoveredRow === s.id ? "#fdf8f4" : "#ffffff"
                   const busy = busyId === s.id
+                  const incomplete = !s.verified && (s.productService === "-" || s.location === "-")
 
                   return (
                     <tr
@@ -2519,14 +2834,32 @@ export function SupplierTable({
                       onMouseLeave={() => setHoveredRow(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* Supplier — pinned left. Name only; sector has its own
-                          column. The two icons are status marks on the name,
-                          not a description line. */}
+                      {/* Application ID — pinned left. Constant down the table,
+                          because every score belongs to the same request. */}
                       <td
                         className="sticky left-0 z-10"
+                        style={{ ...tableCellStyle, width: appIdWidth, backgroundColor: rowBg }}
+                      >
+                        {applicationMeta.refId !== "-" ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide text-[#FAF7F2]"
+                            style={{ background: "linear-gradient(135deg,#5d4037,#4a332a)", fontFamily: "monospace" }}
+                            title={`Full application id: ${applicationMeta.fullId}`}
+                          >
+                            <Hash size={10} /> {applicationMeta.refId}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#a89482", fontSize: "0.75rem" }}>-</span>
+                        )}
+                      </td>
+
+                      {/* Supplier — pinned left */}
+                      <td
+                        className="sticky z-10"
                         style={{
                           ...tableCellStyle,
-                          width: SUPPLIER_WIDTH,
+                          left: appIdWidth,
+                          width: supplierWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -2534,23 +2867,21 @@ export function SupplierTable({
                       >
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium text-[#4a352f] break-words text-sm">{s.name}</span>
-                          {/* Spec section B: a small Verified indicator on the name */}
                           {s.verified && (
-                            <BadgeCheck size={13} className="text-[#388E3C] flex-shrink-0" aria-label="Verified supplier" />
+                            <BadgeCheck size={13} className="text-[#388E3C] flex-shrink-0" title="Verified supplier" />
                           )}
-                          {!s.aiEligibility?.eligible && (
+                          {incomplete && (
                             <AlertCircle
-                              size={12}
-                              className="text-[#B45309] flex-shrink-0"
-                              aria-label="Profile incomplete"
-                              title="Profile incomplete — not eligible for AI analysis"
+                              size={13}
+                              className="text-[#F57C00] flex-shrink-0"
+                              title="This profile is missing key details"
                             />
                           )}
                           <button
                             onClick={() => openDetails(s)}
                             className="text-[#a89482] hover:text-[#7d5a50] flex-shrink-0"
-                            aria-label={`View profile for ${s.name}`}
-                            title="View profile"
+                            aria-label={`View ${s.name}`}
+                            title="View supplier profile"
                           >
                             <Eye size={13} />
                           </button>
@@ -2563,7 +2894,7 @@ export function SupplierTable({
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -2575,12 +2906,16 @@ export function SupplierTable({
                             disabled={busy}
                             title={actions.primary}
                             className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 disabled:opacity-60 ${
-                              actions.terminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
+                              isTerminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
                             }`}
-                            style={{ width: "132px", height: "34px", backgroundColor: actions.terminal ? undefined : "#7d5a50" }}
+                            style={{
+                              width: `${Math.max(104, actionWidth - 82)}px`,
+                              height: "34px",
+                              backgroundColor: isTerminal ? undefined : "#7d5a50",
+                            }}
                           >
-                            {!actions.terminal && !busy && <ArrowRight size={13} className="flex-shrink-0" />}
-                            <span className="truncate">{busy ? "Sending..." : actions.primary}</span>
+                            {!isTerminal && !busy && <ArrowRight size={13} className="flex-shrink-0" />}
+                            <span className="truncate">{busy ? "Working..." : actions.primary}</span>
                           </button>
 
                           <button
@@ -2646,21 +2981,28 @@ export function SupplierTable({
           >
             {["match", "primaryMatch", "aiMatch"].includes(headerFilterOpen.type) &&
               (() => {
-                const config = {
-                  match: { field: "matchRange", label: "Match %" },
-                  primaryMatch: { field: "primaryRange", label: "Structured Match %" },
-                  aiMatch: { field: "aiRange", label: "AI Match %" },
-                }[headerFilterOpen.type]
-                const range = localFilters[config.field]
+                const field =
+                  headerFilterOpen.type === "match"
+                    ? "matchRange"
+                    : headerFilterOpen.type === "primaryMatch"
+                      ? "primaryRange"
+                      : "aiRange"
+                const label =
+                  headerFilterOpen.type === "match"
+                    ? "Match %"
+                    : headerFilterOpen.type === "primaryMatch"
+                      ? "Structured Match %"
+                      : "AI Match %"
+                const range = localFilters[field]
                 return (
                   <>
                     <div className="flex items-center justify-between mb-3">
                       <label className="text-xs font-semibold text-[#4a352f]">
-                        {config.label}: {range[0]} - {range[1]}
+                        {label}: {range[0]} - {range[1]}
                       </label>
                       {(range[0] > 0 || range[1] < 100) && (
                         <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [config.field]: [0, 100] }))}
+                          onClick={() => setLocalFilters((p) => ({ ...p, [field]: [0, 100] }))}
                           className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
                         >
                           Clear
@@ -2676,10 +3018,7 @@ export function SupplierTable({
                         onChange={(e) =>
                           setLocalFilters((p) => ({
                             ...p,
-                            [config.field]: [
-                              Math.min(Number.parseInt(e.target.value) || 0, p[config.field][1]),
-                              p[config.field][1],
-                            ],
+                            [field]: [Math.min(Number.parseInt(e.target.value) || 0, p[field][1]), p[field][1]],
                           }))
                         }
                         className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
@@ -2693,10 +3032,7 @@ export function SupplierTable({
                         onChange={(e) =>
                           setLocalFilters((p) => ({
                             ...p,
-                            [config.field]: [
-                              p[config.field][0],
-                              Math.max(Number.parseInt(e.target.value) || 0, p[config.field][0]),
-                            ],
+                            [field]: [p[field][0], Math.max(Number.parseInt(e.target.value) || 0, p[field][0])],
                           }))
                         }
                         className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center"
@@ -2708,13 +3044,15 @@ export function SupplierTable({
                       max="100"
                       value={range[0]}
                       onChange={(e) =>
-                        setLocalFilters((p) => ({
-                          ...p,
-                          [config.field]: [Number.parseInt(e.target.value), p[config.field][1]],
-                        }))
+                        setLocalFilters((p) => ({ ...p, [field]: [Number.parseInt(e.target.value), p[field][1]] }))
                       }
                       className="w-full accent-[#7d5a50]"
                     />
+                    {headerFilterOpen.type === "aiMatch" && (
+                      <p className="text-[11px] text-[#a89482] mt-2 mb-0">
+                        Suppliers the AI hasn't scored yet are excluded while this filter is set.
+                      </p>
+                    )}
                   </>
                 )
               })()}
@@ -2747,88 +3085,97 @@ export function SupplierTable({
                     className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
                   />
                 </div>
+                <p className="text-[11px] text-[#a89482] mt-2 mb-0">
+                  A supplier has no date until you view or contact them, so untouched matches are excluded here.
+                </p>
               </>
             )}
 
-            {[
-              { type: "name", label: "Supplier name", placeholder: "Search name..." },
-              { type: "productService", label: "Product / Service Offered", placeholder: "e.g. logistics" },
-              { type: "capacity", label: "Capacity / Lead Time", placeholder: "e.g. 2 weeks" },
-              { type: "yearsOperating", label: "Years Operating", placeholder: "e.g. 5" },
-              { type: "certifications", label: "Certifications", placeholder: "e.g. ISO" },
-              { type: "pricingRange", label: "Pricing Range", placeholder: "Search pricing..." },
-              { type: "minimumOrder", label: "Minimum Order", placeholder: "Search minimum..." },
-              { type: "notes", label: "Notes", placeholder: "Search your notes..." },
-            ].map(
-              ({ type, label, placeholder }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type] && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: "" }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={localFilters[type]}
-                      onChange={(e) => setLocalFilters((p) => ({ ...p, [type]: e.target.value }))}
-                      placeholder={placeholder}
-                      className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
-                    />
-                  </div>
-                ),
+            {/* Notes stays a text search — chips of whole notes would be
+                unusable, since every note is a different sentence. */}
+            {headerFilterOpen.type === "notes" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Notes</label>
+                  {localFilters.notes && (
+                    <button
+                      onClick={() => setLocalFilters((p) => ({ ...p, notes: "" }))}
+                      className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={localFilters.notes}
+                  onChange={(e) => setLocalFilters((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Search your notes..."
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                />
+              </>
             )}
 
-            {[
-              { type: "location", label: "Location / Service Area", options: locationOptions },
-              { type: "status", label: "Status", options: SUPPLIER_STATUSES },
-              { type: "sector", label: "Sector", options: sectorOptions },
-              { type: "businessSize", label: "Business Size", options: businessSizeOptions },
-              { type: "bbbeeLevel", label: "B-BBEE Level", options: BBBEE_LEVELS },
-              { type: "ownershipProfile", label: "Ownership Profile", options: OWNERSHIP_TAGS },
-              { type: "deliveryCapability", label: "Delivery Capability", options: DELIVERY_MODES },
-              { type: "complianceStatus", label: "Compliance Status", options: complianceOptions },
-            ].map(
-              ({ type, label, options }) =>
-                headerFilterOpen.type === type && (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
-                      {localFilters[type].length > 0 && (
-                        <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
-                          className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
-                      {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
-                      {options.map((value) => (
-                        <button
-                          key={value}
-                          onClick={() => toggleChip(type, value)}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            localFilters[type].includes(value)
-                              ? "bg-[#7d5a50] text-white"
-                              : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
-                          }`}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
+            {/* Every other filter is a chip list of the values actually in the
+                table, with a search box appearing only once the list is long
+                enough to need one. */}
+            {FILTER_OPTION_SETS.map(({ type, label, options }) => {
+              if (headerFilterOpen.type !== type) return null
+              const shown = options.filter((o) => o.toString().toLowerCase().includes(chipSearch.toLowerCase()))
+              return (
+                <div key={type}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">{label}</label>
+                    {localFilters[type].length > 0 && (
+                      <button
+                        onClick={() => setLocalFilters((p) => ({ ...p, [type]: [] }))}
+                        className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                ),
-            )}
+
+                  {options.length > 8 && (
+                    <div className="relative mb-2">
+                      <Search
+                        size={12}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none"
+                      />
+                      <input
+                        autoFocus
+                        value={chipSearch}
+                        onChange={(e) => setChipSearch(e.target.value)}
+                        placeholder={`Search ${label.toLowerCase()}...`}
+                        className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                    {shown.length === 0 && (
+                      <span className="text-xs text-[#a89482]">
+                        {options.length === 0 ? "No data available" : "Nothing matches that search."}
+                      </span>
+                    )}
+                    {shown.map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => toggleChip(type, value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                          localFilters[type].includes(value)
+                            ? "bg-[#7d5a50] text-white"
+                            : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </PopupPortal>
       )}
@@ -2872,26 +3219,24 @@ export function SupplierTable({
             </button>
             <button
               onClick={() => {
+                const target = activePopup.row
                 closePopup()
-                setShowSavedOnly(true)
-                toast(
-                  "info",
-                  savedCount > 0
-                    ? `Showing your ${savedCount} saved supplier${savedCount === 1 ? "" : "s"}.`
-                    : "You haven't saved any suppliers yet — use the bookmark on a row.",
-                  3000,
-                )
+                handleSetStatus(target, "Shortlisted")
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
-              <LayoutGrid size={12} /> View Saved Suppliers ({savedCount})
+              <Layers size={12} /> Add to Shortlist
             </button>
             <div className="border-t border-[#e6d7c3] my-1" />
             <button
-              onClick={() => handleRequestQuote(activePopup.row)}
+              onClick={() => {
+                const target = activePopup.row
+                closePopup()
+                handleRequestQuote(target)
+              }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
-              <Send size={12} /> Connect
+              <Send size={12} /> Request Quote
             </button>
             <button
               onClick={() => {
@@ -2906,48 +3251,52 @@ export function SupplierTable({
             </button>
             <button
               onClick={() => {
+                const target = activePopup.row
                 closePopup()
-                toast("info", '"Compare" is not wired up yet.', 2500)
+                const url = `${window.location.origin}/supplier/${target.id}`
+                if (navigator.clipboard) {
+                  navigator.clipboard
+                    .writeText(url)
+                    .then(() => toast("success", "Supplier link copied.", 2000))
+                    .catch(() => toast("error", "Could not copy the link.", 3000))
+                }
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
-              <Layers size={12} /> Compare
+              <Share2 size={12} /> Copy Share Link
             </button>
-            <button
-              onClick={() => {
-                closePopup()
-                toast("info", '"Share" is not wired up yet.', 2500)
-              }}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
-            >
-              <Share2 size={12} /> Share
-            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
             <button
               onClick={() => {
                 const target = activePopup.row
                 closePopup()
-                writeRecord(target, { hidden: true })
-                  .then(() => toast("info", `${target.name} hidden from your matches.`, 2500))
-                  .catch(() => toast("error", "Could not hide that match.", 3000))
-              }}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
-            >
-              <EyeOff size={12} /> Hide Match
-            </button>
-            <button
-              onClick={() => {
-                closePopup()
-                toast("info", '"Report" is not wired up yet.', 2500)
+                handleSetStatus(target, "Declined")
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#D32F2F] hover:bg-[#faf7f2] text-left"
             >
-              <Flag size={12} /> Report
+              <Flag size={12} /> Decline Supplier
+            </button>
+            <button
+              onClick={async () => {
+                const target = activePopup.row
+                closePopup()
+                try {
+                  await writeRecord(target, { hidden: true })
+                  toast("info", `${target.name} hidden from your matches.`)
+                } catch (err) {
+                  console.error("Could not hide the supplier:", err)
+                  toast("error", "Could not hide that supplier.", 4000)
+                }
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#D32F2F] hover:bg-[#faf7f2] text-left"
+            >
+              <EyeOff size={12} /> Hide Match
             </button>
           </div>
         </PopupPortal>
       )}
 
-      {/* ─── Why this match? — anchored popover ─────────────────────────── */}
+      {/* ─── Why this match? ───────────────────────────────────────────── */}
       {activePopup?.type === "match" && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
@@ -2965,7 +3314,7 @@ export function SupplierTable({
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Why this match?</p>
-                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[240px]">{activePopup.row.name}</h3>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[260px]">{activePopup.row.name}</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-xl font-bold">{activePopup.row.matchPercentage}%</div>
@@ -2977,111 +3326,56 @@ export function SupplierTable({
             </div>
 
             <div className="p-4 space-y-2">
-              {/* How the headline number is made up */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-[#e6d7c3] bg-[#faf7f2] p-3 text-center">
-                  <div className="text-lg font-bold" style={{ color: scoreColor(activePopup.row.primaryMatchPercentage) }}>
-                    {activePopup.row.primaryMatchPercentage}%
-                  </div>
-                  <p className="text-[11px] font-semibold text-[#4a352f] m-0 mt-0.5">Structured</p>
-                  <p className="text-[10px] text-[#a89482] m-0">Profile fields vs your request</p>
+              {activePopup.row.aiMatchPercentage !== null ? (
+                <div className="p-3 rounded-lg border border-[#e6d7c3] bg-[#f5f0e1] text-[11px] text-[#4a352f]">
+                  Blended score: {activePopup.row.aiMatchPercentage}% from the AI reading their descriptions and{" "}
+                  {activePopup.row.primaryMatchPercentage}% from the structured profile fields, weighted 60/40.
                 </div>
-                <div className="rounded-lg border border-[#e6d7c3] bg-[#faf7f2] p-3 text-center">
-                  <div
-                    className="text-lg font-bold"
-                    style={{
-                      color:
-                        activePopup.row.aiMatchPercentage === null
-                          ? "#a89482"
-                          : scoreColor(activePopup.row.aiMatchPercentage),
-                    }}
-                  >
-                    {activePopup.row.aiMatchPercentage === null ? "—" : `${activePopup.row.aiMatchPercentage}%`}
-                  </div>
-                  <p className="text-[11px] font-semibold text-[#4a352f] m-0 mt-0.5">AI semantic</p>
-                  <p className="text-[10px] text-[#a89482] m-0">
-                    {activePopup.row.aiMatchPercentage === null ? "Not run yet" : "Reads the descriptions"}
+              ) : (
+                <div className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-[11px] text-[#7d5a50]">
+                  Structured fields only — run AI analysis to add a reading of their written descriptions.
+                </div>
+              )}
+
+              {activePopup.row.aiReasoning && (
+                <div className="p-3 rounded-lg border border-[#e6d7c3] bg-white text-[11px] text-[#4a352f]">
+                  <p className="font-semibold m-0 mb-1 flex items-center gap-1.5">
+                    <Brain size={12} /> AI reasoning
                   </p>
+                  <p className="m-0 text-[#7d5a50] leading-relaxed">{activePopup.row.aiReasoning}</p>
+                  {activePopup.row.aiCapabilities?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {activePopup.row.aiCapabilities.map((c) => (
+                        <span key={c} className="px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[10px]">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-              <p className="text-[10px] text-[#a89482] text-center m-0 pb-1">
-                {activePopup.row.aiMatchPercentage === null
-                  ? "Match % is structured only until AI analysis runs."
-                  : "Match % is 60% AI + 40% structured."}
-              </p>
+              )}
 
               {activePopup.row.matchBreakdown &&
                 Object.entries(activePopup.row.matchBreakdown).map(([key, c]) => {
-                  const color = c.score >= 75 ? "#22c55e" : c.score >= 50 ? "#f59e0b" : "#ef4444"
+                  const value = Math.round(typeof c === "object" ? c.score : c)
+                  const color = value >= 75 ? "#22c55e" : value >= 50 ? "#f59e0b" : "#ef4444"
                   return (
                     <div key={key} className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
                       <div className="flex items-center justify-between mb-1.5 gap-2">
                         <span className="font-semibold text-[#4a352f]">{CATEGORY_LABEL[key] || formatLabel(key)}</span>
                         <span className="font-bold flex-shrink-0" style={{ color }}>
-                          {c.score}%
+                          {value}%
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden mb-1.5">
-                        <div className="h-full rounded-full" style={{ width: `${c.score}%`, backgroundColor: color }} />
+                      <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${value}%`, backgroundColor: color }} />
                       </div>
-                      <p className="text-[10px] text-[#a89482] m-0">
-                        Weight {c.weight}% · contributes {c.contribution} points
-                      </p>
-                      {key === "categoryMatch" && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {(c.matches || []).map((m) => (
-                            <span key={m} className="px-2 py-0.5 rounded-full bg-[#E8F5E8] text-[#388E3C] text-[10px] border border-[#C8E6C9]">
-                              {m}
-                            </span>
-                          ))}
-                          {(c.unmatched || []).map((m) => (
-                            <span key={`u-${m}`} className="px-2 py-0.5 rounded-full bg-[#FFEBEE] text-[#D32F2F] text-[10px] border border-[#FFCDD2]">
-                              {m}
-                            </span>
-                          ))}
-                        </div>
+                      {typeof c === "object" && c.detail && (
+                        <p className="text-[11px] text-[#7d5a50] m-0 mt-1.5">{c.detail}</p>
                       )}
                     </div>
                   )
                 })}
-
-              <div className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2]">
-                <h4 className="text-xs font-semibold text-[#4a352f] m-0 mb-2 flex items-center gap-1.5">
-                  <Brain size={13} /> AI reading of this profile
-                </h4>
-                {activePopup.row.aiMatchPercentage === null ? (
-                  <>
-                    <p className="text-[11px] text-[#7d5a50] m-0 mb-2.5 leading-relaxed">
-                      The AI score compares the supplier's written product and service descriptions against your request,
-                      rather than the category tags alone. It has not run for this request yet.
-                    </p>
-                    <button
-                      onClick={() => {
-                        closePopup()
-                        runAiAnalysis()
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-[#7d5a50] text-white text-xs font-semibold"
-                    >
-                      Run AI analysis
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[11px] text-[#4a352f] leading-relaxed m-0 whitespace-pre-wrap">
-                      {activePopup.row.aiReasoning}
-                    </p>
-                    {activePopup.row.aiCapabilities.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2.5">
-                        {activePopup.row.aiCapabilities.map((cap, i) => (
-                          <span key={i} className="px-2.5 py-1 rounded-full bg-[#DCFCE7] text-[#166534] text-[10px] border border-[#BBF7D0]">
-                            {cap}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
             </div>
           </div>
         </PopupPortal>
@@ -3091,10 +3385,7 @@ export function SupplierTable({
       {mounted &&
         noteTarget &&
         createPortal(
-          <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4"
-            onClick={() => setNoteTarget(null)}
-          >
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={() => setNoteTarget(null)}>
             <div className="bg-white rounded-2xl max-w-[420px] w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-base font-semibold text-[#4a352f] m-0 mb-3">Add a note on {noteTarget.name}</h3>
               <textarea
@@ -3122,41 +3413,16 @@ export function SupplierTable({
           document.body,
         )}
 
-      {/* AI analysis overlay */}
-      {mounted &&
-        aiRunning &&
-        createPortal(
-          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/70 p-4">
-            <div className="bg-white rounded-2xl p-8 max-w-[420px] w-full text-center shadow-2xl">
-              <div className="w-16 h-16 rounded-full mx-auto mb-5 flex items-center justify-center bg-gradient-to-br from-[#7d5a50] to-[#4a352f]">
-                <Brain size={30} className="text-[#faf7f2]" />
-              </div>
-              <h3 className="text-base font-bold text-[#4a352f] m-0">Reading supplier profiles</h3>
-              <p className="text-xs text-[#7d5a50] mt-1 mb-5">
-                Comparing each profile against your request and writing an explanation for every score.
-              </p>
-              <div className="w-full h-2 rounded-full bg-[#e6d7c3] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[#7d5a50] transition-all duration-500"
-                  style={{
-                    width: aiProgress.total > 0 ? `${Math.max(6, (aiProgress.current / aiProgress.total) * 100)}%` : "20%",
-                  }}
-                />
-              </div>
-              <p className="text-xs font-semibold text-[#4a352f] mt-3 mb-0">
-                {aiProgress.total > 0 ? `${aiProgress.total} profiles in this batch` : "Preparing the batch"}
-              </p>
-              <p className="text-[10px] text-[#a89482] mt-2 mb-0">This takes 30 to 60 seconds on a large list.</p>
-            </div>
-          </div>,
-          document.body,
-        )}
-
       {mounted && detailsSupplier && (
-        <SupplierDetailsModal supplier={detailsSupplier.raw || detailsSupplier} isOpen onClose={() => setDetailsSupplier(null)} />
+        <SupplierDetailsModal
+          supplier={detailsSupplier}
+          isOpen
+          onClose={() => setDetailsSupplier(null)}
+          onRequestQuote={() => handleRequestQuote(detailsSupplier)}
+        />
       )}
     </div>
   )
 }
 
-export default SupplierTable
+export default SupplierTables

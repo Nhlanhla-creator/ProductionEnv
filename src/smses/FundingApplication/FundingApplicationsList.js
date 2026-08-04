@@ -1,19 +1,45 @@
 "use client"
 
-import { Fragment, useState, useEffect } from "react"
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc, getDoc, addDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, addDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Eye, FileText, Brain, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Hash, ChevronDown, ChevronUp, DollarSign, UserCheck } from "lucide-react"
-import FundingMatchesTable from "./FundingMatchesTable"
+import { Eye, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Hash, DollarSign, Table2 } from "lucide-react"
 
-const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embedded = false }) => {
+/**
+ * FundingApplicationsList
+ *
+ * The inline "show matches" panel is gone — funder matches are read on the
+ * Funding Matches table instead, so there's one place to look rather than two.
+ *
+ * Props:
+ * - onViewSummary: (applicationId, applicationData) => void
+ * - onEditApplication: (applicationId) => void
+ * - onCreateNew: () => void
+ * - onNavigateToMatches: (applicationId) => void   optional; wins over the route
+ * - embedded: boolean
+ */
+
+/* ⚠️ CONFIRM THIS PATH — set it to whatever route renders <FundingTable />.
+   The advisor list uses /find-advisors and the intern list
+   /intern-matches-page; this is the funding equivalent. */
+const MATCHES_ROUTE = "/funding-matches"
+
+const FundingApplicationsList = ({
+  onViewSummary,
+  onEditApplication,
+  onCreateNew,
+  onNavigateToMatches,
+  embedded = false,
+}) => {
   const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const [expandedAppId, setExpandedAppId] = useState(null)
   const [matchCounts, setMatchCounts] = useState({})
+
+  const navigate = useNavigate()
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -50,11 +76,11 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
     try {
       setLoading(true); setError(null)
       let apps = []
-      
+
       // Check if any apps exist in fundingApplicationsV2
       const qNew = query(collection(db, "fundingApplicationsV2"), where("userId", "==", userId))
       const snapshot = await getDocs(qNew)
-      
+
       if (snapshot.empty) {
         // If no apps exist in fundingApplicationsV2, check universalProfiles for legacy app
         const upDocRef = doc(db, "universalProfiles", userId)
@@ -71,7 +97,7 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
               lastUpdated: serverTimestamp(),
               completedSections: upData.completedSections || {},
             }
-            
+
             const possibleFields = [
               "applicationOverview", "useOfFunds", "enterpriseReadiness",
               "financialOverview", "guarantees", "growthPotential",
@@ -82,12 +108,12 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
                 newAppPayload[field] = upData[field]
               }
             })
-            
+
             await addDoc(collection(db, "fundingApplicationsV2"), newAppPayload)
-            
+
             // Mark universalProfile as seeded so we don't try again
             await setDoc(upDocRef, { legacyFundingSeeded: true }, { merge: true })
-            
+
             // Re-fetch now that it's seeded
             const snapshotRefreshed = await getDocs(qNew)
             snapshotRefreshed.forEach((d) => apps.push(formatAppData(d.id, d.data())))
@@ -97,7 +123,7 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
         snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
         apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
       }
-      
+
       setApplications(apps)
       await fetchMatchCounts(userId)
     } catch (err) { setError(err.message) }
@@ -149,6 +175,17 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
     finally { setDeleting(false) }
   }
 
+  /* Open the Funding Matches table. A shell-provided handler wins when there
+     is one, so a tabbed layout can switch panes without a route change. The id
+     rides along in the query string so it survives the navigation. */
+  const openMatchTable = (appId) => {
+    if (typeof onNavigateToMatches === "function") {
+      onNavigateToMatches(appId)
+      return
+    }
+    navigate(`${MATCHES_ROUTE}?applicationId=${encodeURIComponent(appId)}`)
+  }
+
   const getStatusBadge = (app) => {
     if (app.status === "submitted") return { label: "Submitted", color: "#10b981", bg: "#d1fae5", Icon: CheckCircle }
     if (app.isComplete) return { label: "Ready", color: "#f59e0b", bg: "#fef3c7", Icon: AlertCircle }
@@ -186,14 +223,14 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
           background:linear-gradient(135deg,rgba(250,247,242,0.97),rgba(245,240,225,0.97));
           animation:fl-fadein 0.35s ease-out;
         }
-        .fl-tbl { width:100%; min-width:860px; border-collapse:collapse; table-layout:fixed; }
+        .fl-tbl { width:100%; min-width:900px; border-collapse:collapse; table-layout:fixed; }
         .fl-tbl col.c0 { width:9%;  }
-        .fl-tbl col.c1 { width:24%; }
-        .fl-tbl col.c2 { width:12%; }
-        .fl-tbl col.c3 { width:12%; }
-        .fl-tbl col.c4 { width:13%; }
+        .fl-tbl col.c1 { width:22%; }
+        .fl-tbl col.c2 { width:11%; }
+        .fl-tbl col.c3 { width:11%; }
+        .fl-tbl col.c4 { width:12%; }
         .fl-tbl col.c5 { width:10%; }
-        .fl-tbl col.c6 { width:20%; }
+        .fl-tbl col.c6 { width:25%; }
         .fl-tbl th {
           padding:13px 15px; text-align:left;
           font-size:11px; font-weight:700; color:#4a352f;
@@ -205,13 +242,10 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
         .fl-tbl tbody tr { border-bottom:1px solid rgba(200,182,166,0.15); transition:background 0.15s; }
         .fl-tbl tbody tr:last-child { border-bottom:none; }
         .fl-tbl tbody tr:hover { background:rgba(166,124,82,0.04); }
-        .fl-expand-row > td { padding:0 !important; background:rgba(250,247,242,0.6); border-bottom:1px solid rgba(200,182,166,0.2); }
-        .fl-expand-wrap { padding:14px 18px 20px; animation:fl-fadein 0.25s ease-out; }
-        .fl-expand-title { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; font-weight:700; color:#4a352f; text-transform:uppercase; letter-spacing:0.5px; }
         .ell { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
         .fl-acts { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:nowrap; }
         .fl-btn {
-          display:inline-flex; align-items:center; gap:4px;
+          display:inline-flex; align-items:center; gap:5px;
           padding:6px 11px; border-radius:7px;
           font-size:12px; font-weight:500; cursor:pointer;
           white-space:nowrap; flex-shrink:0;
@@ -221,7 +255,7 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
         .fl-btn:hover { transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,0.12); }
         .fl-view    { background:rgba(250,247,242,0.9); color:#4a352f; border-color:rgba(200,182,166,0.4); }
         .fl-del     { background:rgba(250,247,242,0.9); color:#dc2626; border-color:rgba(220,38,38,0.2); padding:6px 8px; }
-        .fb-matches { background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2; box-shadow:0 2px 6px rgba(166,124,82,0.3); }
+        .fb-matches { background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2; box-shadow:0 2px 6px rgba(166,124,82,0.3); font-weight:600; }
         .fb-matches:hover { box-shadow:0 4px 12px rgba(166,124,82,0.45) !important; }
         .fl-appid { display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:linear-gradient(135deg,#5d4037,#4a332a);color:#FAF7F2;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.5px;white-space:nowrap;font-family:'SF Mono','Monaco','Consolas',monospace; }
       `}</style>
@@ -276,87 +310,67 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
               <tbody>
                 {applications.map((app) => {
                   const { label, color, bg, Icon } = getStatusBadge(app)
-                  const isExpanded = expandedAppId === app.id
                   return (
-                    <Fragment key={app.id}>
-                      <tr>
-                        <td>
-                          <span className="fl-appid uppercase" title={`Full application id: ${app.id}`}>
-                            <Hash size={10} /> {app.appId}
+                    <tr key={app.id}>
+                      <td>
+                        <span className="fl-appid uppercase" title={`Full application id: ${app.id}`}>
+                          <Hash size={10} /> {app.appId}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                          <div style={{ width: 32, height: 32, flexShrink: 0, background: "rgba(166,124,82,0.1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <DollarSign size={15} color="#a67c52" />
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <span className="ell" style={{ fontWeight: 600, color: "#4a352f", fontSize: 13, marginBottom: 2 }} title={app.name}>{app.name}</span>
+                            <span className="ell" style={{ fontSize: 11, color: "#6b7280" }} title={app.purpose}>{app.purpose}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: 12, color: "#4a352f", fontWeight: 500 }}>{app.fundingType || "—"}</span>
+                      </td>
+                      <td>
+                        {matchCounts[app.id] > 0 ? (
+                          <span className="ell" style={{ display: "inline-block", maxWidth: "100%", padding: "3px 9px", background: "rgba(166,124,82,0.1)", borderRadius: 20, fontSize: 11, fontWeight: 500, color: "#7d5a50" }}>
+                            {matchCounts[app.id]} {matchCounts[app.id] === 1 ? "match" : "matches"}
                           </span>
-                        </td>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                            <div style={{ width: 32, height: 32, flexShrink: 0, background: "rgba(166,124,82,0.1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <DollarSign size={15} color="#a67c52" />
-                            </div>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <span className="ell" style={{ fontWeight: 600, color: "#4a352f", fontSize: 13, marginBottom: 2 }} title={app.name}>{app.name}</span>
-                              <span className="ell" style={{ fontSize: 11, color: "#6b7280" }} title={app.purpose}>{app.purpose}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <span style={{ fontSize: 12, color: "#4a352f", fontWeight: 500 }}>{app.fundingType || "—"}</span>
-                        </td>
-                        <td>
-                          {matchCounts[app.id] > 0 ? (
-                            <span className="ell" style={{ display: "inline-block", maxWidth: "100%", padding: "3px 9px", background: "rgba(166,124,82,0.1)", borderRadius: 20, fontSize: 11, fontWeight: 500, color: "#7d5a50" }}>
-                              {matchCounts[app.id]} {matchCounts[app.id] === 1 ? "match" : "matches"}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: 11, color: "#9ca3af" }}>—</span>
-                          )}
-                        </td>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#6b7280", fontSize: 11, whiteSpace: "nowrap" }}>
-                            <Calendar size={12} style={{ flexShrink: 0 }} /> {app.lastUpdatedFormatted}
-                          </div>
-                        </td>
-                        <td>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", background: bg, color, borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
-                            <Icon size={10} /> {label}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="fl-acts">
-                            <button
-                              className="fl-btn fb-matches"
-                              onClick={() => setExpandedAppId((prev) => (prev === app.id ? null : app.id))}
-                              aria-expanded={isExpanded}
-                              title={isExpanded ? "Hide matches" : "Show matches for this application"}
-                            >
-                              <UserCheck size={12} />
-                              {matchCounts[app.id] > 0 ? ` (${matchCounts[app.id]})` : ""}
-                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                            </button>
-                            <button className="fl-btn fl-view" onClick={() => onViewSummary(app.id, app)} title="View application summary">
-                              <Eye size={12} />
-                            </button>
-                            <button className="fl-btn fl-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                        ) : (
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>—</span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#6b7280", fontSize: 11, whiteSpace: "nowrap" }}>
+                          <Calendar size={12} style={{ flexShrink: 0 }} /> {app.lastUpdatedFormatted}
+                        </div>
+                      </td>
+                      <td>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", background: bg, color, borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          <Icon size={10} /> {label}
+                        </span>
+                      </td>
 
-                      {isExpanded && (
-                        <tr className="fl-expand-row">
-                          <td colSpan={7}>
-                            <div className="fl-expand-wrap">
-                              <div className="fl-expand-title">
-                                <Brain size={13} color="#a67c52" />
-                                <span>Funder Matches for</span>
-                                <span className="fl-appid"><Hash size={10} /> {app.appId}</span>
-                              </div>
-                              <FundingMatchesTable 
-                                applicationId={app.id} 
-                                embedded={true} />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
+                      {/* Actions — one route to the matches, plus summary and
+                          delete. The inline matches panel is gone. */}
+                      <td>
+                        <div className="fl-acts">
+                          <button
+                            className="fl-btn fb-matches"
+                            onClick={() => openMatchTable(app.id)}
+                            title="Open the Funding Matches table"
+                          >
+                            <Table2 size={12} /> View Match Table
+                          </button>
+                          <button className="fl-btn fl-view" onClick={() => onViewSummary(app.id, app)} title="View application summary">
+                            <Eye size={12} />
+                          </button>
+                          <button className="fl-btn fl-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   )
                 })}
               </tbody>
