@@ -63,6 +63,14 @@ function AdminSidebar() {
   const handleLogout = async () => {
     try {
       await auth.signOut();
+      // Background sign-out from production database if authenticated
+      try {
+        const { productionAuth } = await import("../../productionConfig");
+        const { signOut: signOutProd } = await import("firebase/auth");
+        await signOutProd(productionAuth);
+      } catch (prodErr) {
+        console.warn("Background sign-out from Production Firebase failed:", prodErr);
+      }
       // Clear any session storage
       sessionStorage.clear();
       // Clear any local storage related to auth

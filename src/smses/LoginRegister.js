@@ -627,6 +627,46 @@ export default function LoginRegister() {
     }
 
     const allRoles = [...activeRoles, ...deletedRoles];
+    
+    // Background sign-in or auto-creation in Production Firebase for Admin users
+    const isAdmin = activeRoles.some(r => r.name.toLowerCase() === "admin");
+    if (isAdmin) {
+      try {
+        const { productionAuth } = await import("../productionConfig");
+        const { signInWithEmailAndPassword: signInProd, createUserWithEmailAndPassword: signUpProd } = await import("firebase/auth");
+        const { getFirestore, doc, setDoc } = await import("firebase/firestore");
+        const { productionApp } = await import("../productionConfig");
+
+        try {
+          await signInProd(productionAuth, user.email || email, password);
+          console.log("Successfully authenticated with Production Firebase in the background");
+        } catch (signInErr) {
+          // If user doesn't exist, create it
+          if (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential') {
+            console.log("Admin user not found in Production Auth. Auto-creating production admin account...");
+            const prodUserCredential = await signUpProd(productionAuth, user.email || email, password);
+            const prodUser = prodUserCredential.user;
+            
+            // Create user document in production Firestore
+            const prodDb = getFirestore(productionApp);
+            const userDocRef = doc(prodDb, "users", prodUser.uid);
+            await setDoc(userDocRef, {
+              email: user.email || email,
+              role: "admin",
+              roleArray: ["admin"],
+              status: "active",
+              createdAt: new Date(),
+            });
+            console.log("Successfully created Admin account and Firestore document in Production project!");
+          } else {
+            throw signInErr;
+          }
+        }
+      } catch (prodErr) {
+        console.warn("Background authentication/registration with Production Firebase failed:", prodErr);
+      }
+    }
+
     setRoleSelectionModal({ show: true, roles: allRoles });
 
     if (activeRoles.length === 1) {
