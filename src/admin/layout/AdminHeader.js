@@ -5,6 +5,7 @@ import { Bell, Mail, Calendar, Settings, LogOut, User, HelpCircle, Upload, Users
 import styles from "./admin-header.module.css"
 import { auth } from "../../firebaseConfig"
 import { db, storage } from "../../firebaseConfig"
+import databaseService from "../../services/databaseService"
 import { collection, query, where, onSnapshot } from "firebase/firestore"
 import { getDoc, updateDoc } from "firebase/firestore"
 import { getAuth } from "firebase/auth"
@@ -22,6 +23,37 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   // Real-time Firestore notifications via hook
   const { notifications, unreadCount, markAsRead, markAllAsRead, isRead } = useNotifications()
+  
+  const [currentDatabase, setCurrentDatabase] = useState(
+    databaseService.getCurrentDatabase()
+  )
+
+  const toggleDatabase = () => {
+    const newDatabase = databaseService.toggleDatabase();
+    setCurrentDatabase(newDatabase);
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
+
+  useEffect(() => {
+    const handleDatabaseChange = () => {
+      setCurrentDatabase(databaseService.getCurrentDatabase());
+    };
+
+    window.addEventListener('storage', handleDatabaseChange);
+    window.addEventListener('databaseChanged', handleDatabaseChange);
+
+    return () => {
+      window.removeEventListener('storage', handleDatabaseChange);
+      window.removeEventListener('databaseChanged', handleDatabaseChange);
+    };
+  }, []);
+
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState(user ? user.displayName || user.email.split("@")[0] : "Admin")
@@ -278,7 +310,14 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
   const handleLogout = () => {
     auth
       .signOut()
-      .then(() => {
+      .then(async () => {
+        try {
+          const { productionAuth } = await import("../../productionConfig");
+          const { signOut: signOutProd } = await import("firebase/auth");
+          await signOutProd(productionAuth);
+        } catch (prodErr) {
+          console.warn("Background sign-out from Production Firebase failed:", prodErr);
+        }
         navigate("/login")
       })
       .catch((error) => {
@@ -351,6 +390,15 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
 
       <div className={styles["header-right"]}>
         <div className={styles["header-icons"]}>
+          <div
+            className={`${styles["db-toggle-button"]} ${currentDatabase === 'testing' ? styles["db-toggle-testing"] : styles["db-toggle-production"]}`}
+            onClick={toggleDatabase}
+            title={currentDatabase === 'testing' ? "Switch to Production Database" : "Switch to Testing Database"}
+          >
+            <span className={`${styles["db-dot"]} ${currentDatabase === 'testing' ? styles["db-dot-testing"] : styles["db-dot-production"]}`} />
+            <span>{currentDatabase === 'testing' ? 'TESTING' : 'PRODUCTION'}</span>
+          </div>
+
           <div className={styles["icon-wrapper"]} ref={notificationRef}>
             <button
               className={`${styles["icon-button"]} ${notificationsOpen ? styles.active : ""}`}

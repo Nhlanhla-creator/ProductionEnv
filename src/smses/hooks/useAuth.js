@@ -178,6 +178,14 @@ export const useAuth = () => {
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
+      // Background sign-out from production database if authenticated
+      try {
+        const { productionAuth } = await import("../../productionConfig");
+        const { signOut: signOutProd } = await import("firebase/auth");
+        await signOutProd(productionAuth);
+      } catch (prodErr) {
+        console.warn("Background sign-out from Production Firebase failed:", prodErr);
+      }
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;

@@ -37,8 +37,8 @@ class DatabaseService {
   }
 
   getDatabaseName() {
-    return this.currentDatabase === 'testing' 
-      ? 'Testing Database' 
+    return this.currentDatabase === 'testing'
+      ? 'Testing Database'
       : 'Production Database';
   }
 }

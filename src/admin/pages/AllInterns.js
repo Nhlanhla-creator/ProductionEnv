@@ -1006,21 +1006,6 @@ const handleBlock = async (intern) => {
       </div>
 
       <div className={styles.tableContainer}>
-         <div style={{
-                    position: 'fixed',
-                    top: '20px',
-                    right: '80px',
-                    backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
-                    color: 'white',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    zIndex: 1000,
-                    cursor: 'pointer'
-                  }} onClick={toggleDatabase}>
-                    {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
-                  </div>
         <table className={styles.table}>
           <thead>
             <tr>

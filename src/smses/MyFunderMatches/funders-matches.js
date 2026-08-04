@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth } from "../../firebaseConfig"
@@ -59,6 +59,7 @@ export default function FundingMatchesPage() {
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
 
   const navigate = useNavigate()
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -125,6 +126,12 @@ export default function FundingMatchesPage() {
         return {} // Show all when no stage selected
     }
   }
+
+  // Memoize filters to prevent recreating the object reference on every render, avoiding infinite update loops
+  const combinedFilters = useMemo(() => {
+    return { ...filters, ...getTableFilterForStage(selectedPipelineStage) }
+  }, [filters, selectedPipelineStage])
+
 
   // Responsive container styles
   const getContainerStyles = () => ({
@@ -456,7 +463,7 @@ export default function FundingMatchesPage() {
           className={`${styles.sectionCard} ${styles.tableSection} ${styles.tableCard}`}
         >
           <TabbedFundingTables
-            filters={{ ...filters, ...getTableFilterForStage(selectedPipelineStage) }}
+            filters={combinedFilters}
             onInsightsData={handleInsightsData}
             onPrimaryMatchCount={setPrimaryMatchCount}
             activeTab={activeTab}
