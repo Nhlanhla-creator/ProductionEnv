@@ -3425,4 +3425,4 @@ export function SupplierTable({
   )
 }
 
-export default SupplierTables
+export default SupplierTable
