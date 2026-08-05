@@ -39,7 +39,7 @@ export const advisorMenuItems = [
     id: "home",
     label: "Home",
     icon: <Home size={18} />,
-    route: "/HomePageAdvisor",
+    route: "/",
   },
   {
     id: "profile",
@@ -97,7 +97,7 @@ export const catalystMenuItems = [
     id: "home",
     label: "Home",
     icon: <Home size={18} />,
-    route: "/HomePageCatalysts",
+    route: "/",
   },
   {
     id: "profile",
@@ -187,7 +187,7 @@ export const internMenuItems = [
     id: "home",
     label: "Home",
     icon: <Home size={18} />,
-    route: "/HomePageInterns",
+    route: "/",
   },
   {
     id: "dashboard",
@@ -244,7 +244,7 @@ export const investorMenuItems = [
     id: "home",
     label: "Home",
     icon: <Home size={18} />,
-    route: "/HomePageInvestor",
+    route: "/",
   },
   {
     id: "profile",
@@ -334,7 +334,7 @@ export const programSponsorMenuItems = [
     id: "home",
     label: "Home",
     icon: <Home size={18} />,
-    route: "/HomePageProgram",
+    route: "/",
   },
   {
     id: "profile",
@@ -409,6 +409,12 @@ export const programSponsorMenuItems = [
 
 // ─── Associator Menu Items ────────────────────────────────────────────────────
 export const associatorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
   {
     id: "profile",
     label: "My Profile",
@@ -565,7 +571,7 @@ export const associatorMenuItems = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const smeMenuItems = [
-  { id: "home", label: "Home", icon: <Home size={18} />, route: "/HomePage" },
+  { id: "home", label: "Home", icon: <Home size={18} />, route: "/" },
   {
     id: "profile",
     label: "My Profile",
@@ -790,6 +796,12 @@ export const smeMenuItems = [
 
 // ─── Capital and Market Facilitator Menu Items ────────────────────────────────
 export const capitalMarketFacilitatorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
   {
     id: "profile",
     label: "My Profile",

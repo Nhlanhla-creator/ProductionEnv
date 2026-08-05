@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/useAuth';
+import { getDashboardRoute, getPortalLabel } from '../utils/roleRoutes';
 
 const Header = ({ onLoginClick }) => {
   const navigate = useNavigate();
@@ -13,6 +15,18 @@ const Header = ({ onLoginClick }) => {
   const solutionsRef = useRef(null);
   const infrastructureRef = useRef(null);
   const timeoutRef = useRef(null);
+
+  // ── AUTH AWARENESS ─────────────────────────────────────────────────────────
+  // Firebase persists the session itself, so no localStorage fallback is needed.
+  // `loading` is true until onAuthStateChanged fires — we render a neutral
+  // button during that window to avoid flashing "Login/Register" at a user
+  // who is in fact already signed in.
+  const { user, userRoles, loading: authLoading } = useAuth();
+
+  const isLoggedIn = Boolean(user);
+  const dashboardRoute = getDashboardRoute(userRoles);
+  const portalLabel = getPortalLabel(userRoles);
+  // ───────────────────────────────────────────────────────────────────────────
 
   // Check if device is mobile on mount and resize
   useEffect(() => {
@@ -68,14 +82,22 @@ const Header = ({ onLoginClick }) => {
     };
   }, [isMobileMenuOpen]);
 
+  // Logged in  -> go back to the correct portal.
+  // Logged out -> normal login behaviour.
   const handleLoginClick = () => {
     setIsMobileMenuOpen(false);
     setOpenDropdown(null);
+
+    if (isLoggedIn) {
+      navigate(dashboardRoute);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     if (onLoginClick) {
       onLoginClick();
     } else {
       navigate('/loginRegister');
-      // Scroll to top after navigation
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -89,13 +111,14 @@ const Header = ({ onLoginClick }) => {
       const element = document.getElementById(path.substring(1));
       if (element) element.scrollIntoView({ behavior: 'smooth' });
     } else {
+      // IMPORTANT: navigate(), never window.location.href — a hard reload is
+      // what makes people feel like they've been logged out.
       navigate(path);
-      // Scroll to top after navigation
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  // BIG Infrastructure dropdown items - Updated: removed Market Intelligence, added Infrastructure landing page
+  // BIG Infrastructure dropdown items
   const bigInfrastructureItems = [
     { label: 'Our Infrastructure', path: '/infrastructure' },
     { label: 'BIG Score', path: '/BigScorePage' },
@@ -222,7 +245,7 @@ const Header = ({ onLoginClick }) => {
       padding: '6px 0',
       minWidth: '260px',
       zIndex: 200,
-      display: 'none',  // FIXED: Hide completely when closed to prevent click interception
+      display: 'none',  // Hide completely when closed to prevent click interception
       opacity: 0,
       visibility: 'hidden',
       transition: 'opacity 0.25s ease, visibility 0.25s ease',
@@ -230,7 +253,7 @@ const Header = ({ onLoginClick }) => {
       pointerEvents: 'none',
     },
     dropdownMenuOpen: {
-      display: 'block',  // FIXED: Show when open
+      display: 'block',
       opacity: 1,
       visibility: 'visible',
       pointerEvents: 'auto',
@@ -255,6 +278,7 @@ const Header = ({ onLoginClick }) => {
       display: isMobile ? 'none' : 'flex',
       flex: '0 0 auto',
       alignItems: 'center',
+      gap: '8px',
     },
     loginButton: {
       minWidth: '100px',
@@ -270,6 +294,34 @@ const Header = ({ onLoginClick }) => {
       transition: 'all 0.3s',
       whiteSpace: 'nowrap',
       letterSpacing: '0.2px',
+    },
+    // Shown instead of Login/Register when a session exists
+    dashboardButton: {
+      minWidth: '130px',
+      padding: '0.45rem 1.2rem',
+      textAlign: 'center',
+      fontSize: '0.82rem',
+      backgroundColor: '#1E7A47',
+      color: 'white',
+      border: 'none',
+      borderRadius: '6px',
+      fontWeight: '700',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      whiteSpace: 'nowrap',
+      letterSpacing: '0.2px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '6px',
+    },
+    sessionDot: {
+      width: '7px',
+      height: '7px',
+      borderRadius: '50%',
+      backgroundColor: '#8FE3B4',
+      display: 'inline-block',
+      flexShrink: 0,
     },
     mobileMenuButton: {
       display: isMobile ? 'flex' : 'none',
@@ -384,7 +436,7 @@ const Header = ({ onLoginClick }) => {
       marginTop: '0.6rem',
       textAlign: 'center',
       fontSize: '0.9rem',
-      backgroundColor: '#A78B71',
+      backgroundColor: isLoggedIn ? '#1E7A47' : '#A78B71',
       color: 'white',
       border: 'none',
       borderRadius: '6px',
@@ -419,8 +471,6 @@ const Header = ({ onLoginClick }) => {
   };
 
   // Handle mouse enter with delay to prevent accidental closing.
-  // Opening a dropdown always closes whichever one was open before it,
-  // because openDropdown can only hold a single value at a time.
   const handleMouseEnter = (name) => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -566,7 +616,7 @@ const Header = ({ onLoginClick }) => {
                 }}>▼</span>
               </button>
 
-              {/* FIXED: Solutions dropdown aligned to the right to prevent overlapping login button */}
+              {/* Aligned right to prevent overlapping login button */}
               <div style={{
                 ...styles.dropdownMenu,
                 ...(openDropdown === 'solutions' ? styles.dropdownMenuOpen : {}),
@@ -627,7 +677,7 @@ const Header = ({ onLoginClick }) => {
                 }}>▼</span>
               </button>
 
-              {/* FIXED: How It Works dropdown aligned to the right to prevent overlapping login button */}
+              {/* Aligned right to prevent overlapping login button */}
               <div style={{
                 ...styles.dropdownMenu,
                 ...(openDropdown === 'howItWorks' ? styles.dropdownMenuOpen : {}),
@@ -714,24 +764,39 @@ const Header = ({ onLoginClick }) => {
           </nav>
         </div>
 
-        {/* Desktop Login Button */}
+        {/* Desktop right-hand button: session-aware */}
         <div style={styles.desktopLoginContainer}>
           <button
             className="login-btn"
             onClick={handleLoginClick}
-            style={styles.loginButton}
+            disabled={authLoading}
+            style={{
+              ...(isLoggedIn ? styles.dashboardButton : styles.loginButton),
+              ...(authLoading ? { opacity: 0.55, cursor: 'default' } : {}),
+            }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#8a6d52';
+              if (authLoading) return;
+              e.currentTarget.style.backgroundColor = isLoggedIn ? '#155A34' : '#8a6d52';
               e.currentTarget.style.transform = 'translateY(-1px)';
               e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#A78B71';
+              if (authLoading) return;
+              e.currentTarget.style.backgroundColor = isLoggedIn ? '#1E7A47' : '#A78B71';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = 'none';
             }}
           >
-            Login/Register
+            {authLoading ? (
+              '...'
+            ) : isLoggedIn ? (
+              <>
+                <span style={styles.sessionDot} />
+                {portalLabel}
+              </>
+            ) : (
+              'Login/Register'
+            )}
           </button>
         </div>
 
@@ -775,6 +840,19 @@ const Header = ({ onLoginClick }) => {
         >
           ✕
         </button>
+
+        {/* Logged-in shortcut, pinned at the top of the mobile drawer */}
+        {isLoggedIn && !authLoading && (
+          <>
+            <button
+              style={{ ...styles.mobileNavButton, backgroundColor: '#1E7A47' }}
+              onClick={handleLoginClick}
+            >
+              ← {portalLabel}
+            </button>
+            <div style={styles.divider} />
+          </>
+        )}
 
         {/* Home - First in mobile */}
         <button
@@ -955,13 +1033,13 @@ const Header = ({ onLoginClick }) => {
           style={styles.mobileLoginButton}
           onClick={handleLoginClick}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#8a6d52';
+            e.currentTarget.style.backgroundColor = isLoggedIn ? '#155A34' : '#8a6d52';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#A78B71';
+            e.currentTarget.style.backgroundColor = isLoggedIn ? '#1E7A47' : '#A78B71';
           }}
         >
-          Login/Register
+          {isLoggedIn ? portalLabel : 'Login/Register'}
         </button>
       </div>
 

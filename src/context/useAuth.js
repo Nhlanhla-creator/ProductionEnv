@@ -1,10 +1,17 @@
-// hooks/useAuth.js
-import { useState, useEffect } from 'react';
-import { auth, db } from '../firebaseConfig';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+// src/context/AuthContext.jsx
+import { createContext, useContext, useState, useEffect } from "react";
+import { auth, db } from "../firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
-export function useAuth() {
+const AuthContext = createContext({
+  user: null,
+  userData: null,
+  userRoles: [],
+  loading: true,
+});
+
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
@@ -13,37 +20,26 @@ export function useAuth() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      
+
       if (currentUser) {
         try {
-          // Fetch user document from Firestore
           const userDocRef = doc(db, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
-          
+
           if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            setUserData(userData);
-            
-            // Extract roles from user data
+            const data = userDocSnap.data();
+            setUserData(data);
+
             let roles = [];
-            
-            // Check roleArray first (array)
-            if (Array.isArray(userData.roleArray)) {
-              roles = [...roles, ...userData.roleArray];
+            if (Array.isArray(data.roleArray)) {
+              roles = [...roles, ...data.roleArray];
             }
-            
-            // Check role field (string)
-            if (userData.role && typeof userData.role === 'string') {
-              const roleString = userData.role.replace(/\s/g, ''); // Remove spaces
-              const rolesFromString = roleString.split(',').filter(r => r);
-              roles = [...roles, ...rolesFromString];
+            if (data.role && typeof data.role === "string") {
+              const roleString = data.role.replace(/\s/g, "");
+              roles = [...roles, ...roleString.split(",").filter(Boolean)];
             }
-            
-            // Remove duplicates and set roles
             setUserRoles([...new Set(roles)]);
-            
           } else {
-            // User authenticated but no document in Firestore
             setUserData(null);
             setUserRoles([]);
           }
@@ -56,12 +52,21 @@ export function useAuth() {
         setUserData(null);
         setUserRoles([]);
       }
-      
+
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  return { user, userData, userRoles, loading };
+  return (
+    <AuthContext.Provider value={{ user, userData, userRoles, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Same shape your components already expect.
+export function useAuth() {
+  return useContext(AuthContext);
 }
