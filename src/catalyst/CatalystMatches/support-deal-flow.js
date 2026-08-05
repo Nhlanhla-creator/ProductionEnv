@@ -57,15 +57,21 @@ const PipelineSkeleton = () => (
   </div>
 );
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
-const EmptyState = () => (
-  <div className="flex flex-col items-center justify-center py-16 px-4">
-    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#f5f0e1] to-[#e6d7c3] flex items-center justify-center mb-5 shadow-inner">
-      <Users size={36} className="text-[#a89482]" />
+// ─── Empty Pipeline Notice ────────────────────────────────────────────────────
+// FIX: this replaces the old full-width `EmptyState` block. That component was
+// rendered *instead of* the stage row whenever `totalBusinesses === 0`, which
+// meant a brand-new programme showed no pipeline at all — the stages only
+// appeared once the first business landed in them. The stages are the structure
+// of the programme, not a by-product of its data, so they now always render
+// (at zero) and this slim banner sits above them as context.
+const EmptyPipelineNotice = () => (
+  <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/60 border border-[#e6d7c3]">
+    <div className="w-8 h-8 rounded-xl bg-[#f5f0e1] flex items-center justify-center flex-shrink-0">
+      <Users size={16} className="text-[#a89482]" />
     </div>
-    <h3 className="text-xl font-bold text-[#4a352f] mb-2">No Businesses in Pipeline</h3>
-    <p className="text-sm text-[#7d5a50] text-center max-w-sm leading-relaxed">
-      Start matching businesses to your programme criteria to build your deal flow pipeline.
+    <p className="text-xs text-[#7d5a50] leading-relaxed">
+      No businesses in the pipeline yet. Match businesses to your programme
+      criteria and these stages will start filling up.
     </p>
   </div>
 );
@@ -507,12 +513,18 @@ export function SupportDealFlowPipeline({
         </div>
       </div>
 
+      {/* FIX: the empty case no longer short-circuits the whole pipeline.
+          Previously this was `loading ? <Skeleton/> : totalBusinesses === 0
+          ? <EmptyState/> : <>...cards...</>`, so a programme with no
+          businesses yet rendered *no stages at all*. Now only the loading
+          state replaces the row; once loaded, the cards always render — at
+          zero if there's no data — with a notice above them for context. */}
       {loading ? (
         <PipelineSkeleton />
-      ) : totalBusinesses === 0 ? (
-        <EmptyState />
       ) : (
         <>
+          {totalBusinesses === 0 && <EmptyPipelineNotice />}
+
           {/* Stage Cards */}
           <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent gap-1">
             {liveStages.map((stage, idx) => (
