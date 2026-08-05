@@ -21,7 +21,7 @@ export const DASHBOARD_ROUTES = {
   associator: "/associator-dashboard",
   cmf: "/cmf-profile",
   investor: "/investor-profile",
-  catalyst: "/support-matches",
+ catalyst: "/support-profile",
   programsponsor: "/program-sponsor-profile",
   advisor: "/advisor-dashboard",
   intern: "/intern-dashboard",
