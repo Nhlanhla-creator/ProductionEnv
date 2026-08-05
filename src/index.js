@@ -5,12 +5,15 @@ import App from './App';
 import IdleTimeoutModal from './smses/components/IdleTimeoutModal';
 import reportWebVitals from './reportWebVitals';
 import { PortfolioProvider } from 'context/PortfolioContext';
+import { AuthProvider } from "./context/useAuth"; // <-- ADD
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <PortfolioProvider>
+      <AuthProvider>  
       <App />
+       </AuthProvider>  
       <IdleTimeoutModal />
     </PortfolioProvider>
   </React.StrictMode>,

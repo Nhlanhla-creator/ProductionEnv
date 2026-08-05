@@ -9,6 +9,7 @@ import ProtectedRoute from "./context/ProtectedRoute"
 import EmailVerification from "./EmailVerification"
 
 // Admin Components
+import PortalMemory from "./components/PortalMemory"
 import AdminSidebar from "./admin/layout/AdminSidebar"
 import AdminHeader from "./admin/layout/AdminHeader"
 import AdminDashboard from "./admin/pages/AdminDashboard"
@@ -864,6 +865,7 @@ function App() {
 
   return (
     <Router>
+         <PortalMemory />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
