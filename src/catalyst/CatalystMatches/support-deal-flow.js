@@ -39,6 +39,19 @@ const getIcon = (name, size = 16, color = "#4a352f") => {
   return <Cmp size={size} className="text-current" style={{ color }} />;
 };
 
+// Cards are wider than they were and stage names wrap onto a second line
+// rather than being cut off with an ellipsis — a stage nobody can read isn't a
+// stage. Names here are user-editable (rename in the Customize panel, plus
+// custom stages), so they can be long. Every card in the row stretches to the
+// height of the tallest one — see `items-stretch` on the row plus `h-full` on
+// the card body — so wrapping never leaves one card sitting short.
+const CARD_WIDTH = 124;
+
+// A slash with no space around it is one unbreakable token to the line-breaker,
+// so it would split mid-word. A zero-width space after each slash gives it a
+// clean place to break. Display only — stage ids and statuses are untouched.
+const softBreak = (name = "") => name.replace(/\//g, "/\u200B");
+
 // ─── Skeleton Loader ──────────────────────────────────────────────────────────
 const PipelineSkeleton = () => (
   <div className="flex gap-3 overflow-x-auto pb-4 px-1">
@@ -46,7 +59,7 @@ const PipelineSkeleton = () => (
       <div
         key={i}
         className="bg-gradient-to-br from-[#f5f0e1]/60 to-[#e6d7c3]/30 rounded-2xl flex-shrink-0 animate-pulse"
-        style={{ width: "130px", height: "96px" }}
+        style={{ width: `${CARD_WIDTH}px`, height: "98px" }}
       >
         <div className="p-4 flex flex-col h-full justify-between">
           <div className="h-3 w-20 rounded-full bg-[#c8b6a6]/40" />
@@ -57,24 +70,11 @@ const PipelineSkeleton = () => (
   </div>
 );
 
-// ─── Empty Pipeline Notice ────────────────────────────────────────────────────
-// FIX: this replaces the old full-width `EmptyState` block. That component was
-// rendered *instead of* the stage row whenever `totalBusinesses === 0`, which
-// meant a brand-new programme showed no pipeline at all — the stages only
-// appeared once the first business landed in them. The stages are the structure
-// of the programme, not a by-product of its data, so they now always render
-// (at zero) and this slim banner sits above them as context.
-const EmptyPipelineNotice = () => (
-  <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/60 border border-[#e6d7c3]">
-    <div className="w-8 h-8 rounded-xl bg-[#f5f0e1] flex items-center justify-center flex-shrink-0">
-      <Users size={16} className="text-[#a89482]" />
-    </div>
-    <p className="text-xs text-[#7d5a50] leading-relaxed">
-      No businesses in the pipeline yet. Match businesses to your programme
-      criteria and these stages will start filling up.
-    </p>
-  </div>
-);
+/* There is deliberately no empty state. An empty pipeline is still a pipeline:
+   the stages, their order, and a row of zeros tell a catalyst what this view
+   tracks and that nothing has arrived yet. Replacing all of that with a
+   placeholder card hid the stage names from exactly the people who hadn't
+   seen them yet, and made a working component look broken. */
 
 // ─── Stage Customization Panel (feedback #4) ───────────────────────────────
 const STAGE_ACTION_FIELDS = [
@@ -347,24 +347,61 @@ export function SupportDealFlowPipeline({
   const liveStages = useMemo(() => STAGES.filter((s) => !s.terminal), [STAGES]);
   const terminalStages = useMemo(() => STAGES.filter((s) => s.terminal), [STAGES]);
 
+  // Whatever stage sits first in the live funnel is the entry point. Used as
+  // the fallback bucket for unmapped statuses and by the "New Businesses"
+  // button — both of which used to hardcode the id "matched", which doesn't
+  // exist in every programme template.
+  const entryStageId = useMemo(
+    () => STAGES.find((s) => s.id === "matched")?.id || liveStages[0]?.id || STAGES[0]?.id,
+    [STAGES, liveStages]
+  );
+
   const mergedEnriched = useMemo(() => {
     if (!smeOverrides || !smeOverrides.length) return enriched;
     const overrideMap = new Map(smeOverrides.map(o => [`${o.smeId}_${o.programIndex}`, o]));
     return enriched.map(e => overrideMap.get(`${e.smeId}_${e.programIndex}`) || e);
   }, [enriched, smeOverrides]);
 
+  // FIX: the fallback used to be a hardcoded `result.matched`. When the active
+  // programme template (or a saved customization that renames/hides/reorders
+  // stages) produced no stage with the id "matched", a business whose status
+  // didn't map to a visible stage fell through *both* branches and was
+  // silently dropped. With every business dropped, totalBusinesses came out 0
+  // and the component rendered "No Businesses in Pipeline" over a portfolio
+  // that was actually full. Falling back to the entry stage means a business
+  // can never vanish, and the warning names the statuses that need mapping.
   const counts = useMemo(() => {
     const result = {};
     for (const stage of STAGES) result[stage.id] = 0;
+    const unmapped = [];
+
     for (const sme of mergedEnriched) {
-      const stageId = mapStatusToStageId(sme.pipelineStage || sme.status, STAGES);
-      if (result[stageId] !== undefined) result[stageId] += 1;
-      else if (result.matched !== undefined) result.matched += 1;
+      const raw = sme.pipelineStage || sme.status;
+      const stageId = mapStatusToStageId(raw, STAGES);
+      if (result[stageId] !== undefined) {
+        result[stageId] += 1;
+      } else if (entryStageId && result[entryStageId] !== undefined) {
+        result[entryStageId] += 1;
+        unmapped.push(raw);
+      }
     }
+
+    if (unmapped.length > 0) {
+      console.warn(
+        "[SupportDealFlowPipeline] counted under the entry stage — no visible stage covers these statuses:",
+        [...new Set(unmapped)]
+      );
+    }
+
     return result;
-  }, [mergedEnriched, STAGES]);
+  }, [mergedEnriched, STAGES, entryStageId]);
 
   const totalBusinesses = useMemo(() => Object.values(counts).reduce((sum, c) => sum + c, 0), [counts]);
+
+  // The empty state now asks the only question it should: are there any
+  // businesses at all? Keying it off the derived total meant a counting bug
+  // could hide a full pipeline behind "start matching businesses".
+  const hasBusinesses = mergedEnriched.length > 0;
 
   const getStagePercentage = useCallback((count) => {
     if (totalBusinesses === 0) return 0;
@@ -395,14 +432,18 @@ export function SupportDealFlowPipeline({
   // as the one deliberate signal that those two are a different kind of
   // outcome — everything else about the card (size, layout, type scale) is
   // identical.
+  //
+  // The body is a flex column at `h-full`: the name sits at the top and is
+  // free to run to a second line, while `mt-auto` pins the count and progress
+  // bar to the bottom edge, keeping the numbers on one baseline across the row.
   const renderStageCard = (stage) => {
     const isHovered = hoveredStage?.id === stage.id;
     const isSelected = selectedStage === stage.id;
-    // Matched is the entry point every SME passes through, so "Matched"
-    // should read as a running total — everyone who has ever been matched,
-    // not just whoever hasn't moved on yet. That's the same number as the
-    // total across every stage (live and terminal).
-    const count = stage.id === "matched" ? totalBusinesses : (counts[stage.id] || 0);
+    // The entry stage is the point every SME passes through, so it should read
+    // as a running total — everyone who has ever been matched, not just
+    // whoever hasn't moved on yet. That's the same number as the total across
+    // every stage (live and terminal).
+    const count = stage.id === entryStageId ? totalBusinesses : (counts[stage.id] || 0);
     const percentage = getStagePercentage(count);
     const isNegativeOutcome = stage.terminal && /declined|withdrawn/i.test(stage.name || "");
     const theme = isNegativeOutcome
@@ -415,13 +456,13 @@ export function SupportDealFlowPipeline({
         className={`relative flex-shrink-0 cursor-pointer group transition-all duration-300 ${
           isSelected ? "scale-105" : "hover:scale-[1.02]"
         }`}
-        style={{ width: "104px" }}
+        style={{ width: `${CARD_WIDTH}px` }}
         onMouseEnter={(e) => setHoveredStage({ id: stage.id, rect: e.currentTarget.getBoundingClientRect() })}
         onMouseLeave={() => setHoveredStage(null)}
         onClick={() => handleStageClick(stage.id)}
       >
         <div
-          className={`rounded-xl p-2.5 transition-all duration-300 ${
+          className={`rounded-xl p-2.5 h-full flex flex-col transition-all duration-300 ${
             isHovered || isSelected ? "shadow-xl -translate-y-1" : "shadow-md hover:shadow-lg"
           }`}
           style={{
@@ -429,13 +470,16 @@ export function SupportDealFlowPipeline({
             border: `1.5px solid ${borderColor}`,
           }}
         >
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex items-start gap-1.5 mb-1.5">
             <div className="w-5 h-5 rounded-lg flex items-center justify-center bg-white/10 flex-shrink-0">
               {getIcon(stage.icon, 11, "#ffffff")}
             </div>
-            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-tight truncate flex-1">{stage.name}</h3>
+            {/* Full stage name, wrapped rather than truncated. */}
+            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-[11px] break-words flex-1 min-w-0 pt-[3px]">
+              {softBreak(stage.name)}
+            </h3>
           </div>
-          <div className="flex items-baseline justify-center">
+          <div className="flex items-baseline justify-center mt-auto pt-1">
             <span className="text-lg font-extrabold leading-none text-white">{count}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-2">
@@ -492,12 +536,12 @@ export function SupportDealFlowPipeline({
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => handleStageClick("matched")}
+            onClick={() => handleStageClick(entryStageId)}
             className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-5 py-2.5 rounded-2xl border transition-all hover:bg-[#f5f0e1]"
-            style={{ borderColor: selectedStage === "matched" ? "#d9b98a" : "#e6d7c3" }}
+            style={{ borderColor: selectedStage === entryStageId ? "#d9b98a" : "#e6d7c3" }}
             title="Show newly matched businesses"
           >
-            <span className="text-3xl font-extrabold text-[#4a352f] leading-none">{counts["matched"] || 0}</span>
+            <span className="text-3xl font-extrabold text-[#4a352f] leading-none">{counts[entryStageId] || 0}</span>
             <span className="text-[10px] text-[#7d5a50] font-semibold uppercase tracking-wide">New Businesses</span>
           </button>
           {showFilter && (
@@ -513,22 +557,15 @@ export function SupportDealFlowPipeline({
         </div>
       </div>
 
-      {/* FIX: the empty case no longer short-circuits the whole pipeline.
-          Previously this was `loading ? <Skeleton/> : totalBusinesses === 0
-          ? <EmptyState/> : <>...cards...</>`, so a programme with no
-          businesses yet rendered *no stages at all*. Now only the loading
-          state replaces the row; once loaded, the cards always render — at
-          zero if there's no data — with a notice above them for context. */}
       {loading ? (
         <PipelineSkeleton />
       ) : (
         <>
-          {totalBusinesses === 0 && <EmptyPipelineNotice />}
-
-          {/* Stage Cards */}
+          {/* Stage Cards — `items-stretch` here plus `h-full` on each card body
+              keeps a two-line name from making one card shorter than the rest. */}
           <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent gap-1">
             {liveStages.map((stage, idx) => (
-              <div key={stage.id} className="flex items-center">
+              <div key={stage.id} className="flex items-stretch">
                 {renderStageCard(stage)}
 
                 {/* Connector — conversion rate to the next stage, shown
@@ -541,7 +578,7 @@ export function SupportDealFlowPipeline({
                   const toCount = cumulativeCounts[nextStage.id] || 0;
                   const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0";
                   return (
-                    <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "30px" }}>
+                    <div className="flex flex-col items-center justify-center px-0.5 flex-shrink-0" style={{ minWidth: "34px" }}>
                       <span className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap" title="Share of this stage that reaches the next">
                         {rate}%
                       </span>
@@ -565,20 +602,20 @@ export function SupportDealFlowPipeline({
               const negativeStages = terminalStages.filter((s) => /declined|withdrawn/i.test(s.name || ""));
               const otherStages = terminalStages.filter((s) => !/declined|withdrawn/i.test(s.name || ""));
               return (
-                <div className="flex items-center flex-shrink-0">
+                <div className="flex items-stretch flex-shrink-0">
                   <div className="flex flex-col items-center px-2 flex-shrink-0 self-stretch justify-center">
                     <div className="w-px h-10 bg-[#e6d7c3]" />
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-stretch gap-2 flex-shrink-0">
                     {otherStages.map((stage) => (
-                      <div key={stage.id} className="flex-shrink-0">
+                      <div key={stage.id} className="flex flex-shrink-0">
                         {renderStageCard(stage)}
                       </div>
                     ))}
                     {negativeStages.length > 0 && (
-                      <div className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl" style={{ border: "2px solid #dc2626" }}>
+                      <div className="flex items-stretch gap-1.5 flex-shrink-0 p-1.5 rounded-2xl" style={{ border: "2px solid #dc2626" }}>
                         {negativeStages.map((stage) => (
-                          <div key={stage.id} className="flex-shrink-0">
+                          <div key={stage.id} className="flex flex-shrink-0">
                             {renderStageCard(stage)}
                           </div>
                         ))}
@@ -603,8 +640,14 @@ export function SupportDealFlowPipeline({
                   <X size={12} />
                 </button>
               </div>
-            ) : (
+            ) : hasBusinesses ? (
               <p className="text-xs text-[#a89482] font-medium">Click a stage to filter the list below</p>
+            ) : (
+              /* The zeros above already say "nothing here yet"; this line says
+                 what to do about it, in the space the filter hint would use. */
+              <p className="text-xs text-[#a89482] font-medium">
+                No businesses matched yet — stages fill as businesses move through your programme
+              </p>
             )}
           </div>
         </>
