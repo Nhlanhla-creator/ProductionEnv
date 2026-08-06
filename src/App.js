@@ -190,6 +190,7 @@ import CMFMatches from "./cmf/CMFMatches/CMFMatches"
 import { CMFMatchesProvider } from "./cmf/CMFMatches/CMFMatchesContext"
 import CMFCohorts from "./cmf/CMFCohorts/CMFCohorts"
 import CMFDocuments from "./cmf/CMFDocuments/CMFDocuments"
+import CMFOnboardProfile from "./cmf/CMFOnboardProfile/CMFOnboardProfile"
 
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
@@ -1236,6 +1237,7 @@ function App() {
         <Route path="/cmf-profile" element={withProtection(CMFUniversalProfile, {}, renderCMFRoute)} />
         <Route path="/cmf-matches" element={withProtection(CMFMatches, {}, renderCMFRoute)} />
         <Route path="/cmf-cohorts" element={withProtection(CMFCohorts, {}, renderCMFRoute)} />
+        <Route path="/cmf-cohorts/new" element={withProtection(CMFOnboardProfile, {}, (Comp, props) => <Comp {...props} />)} />
         <Route path="/cmf-documents" element={withProtection(CMFDocuments, {}, renderCMFRoute)} />
         <Route path="/cmf-insights" element={withProtection(CatalystInsights, { isCatalystProfile: true }, renderCMFRoute)} />
         <Route path="/cmf-messages" element={withProtection(CatalystMessages, {}, renderCMFRoute)} />
