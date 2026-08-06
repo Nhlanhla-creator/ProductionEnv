@@ -12,10 +12,12 @@ import {
 } from "lucide-react"
 import {
   collection, addDoc, updateDoc, arrayUnion, serverTimestamp,
-  doc, getDoc, getDocs, query, where
+  doc, getDoc, getDocs, query, where, deleteDoc
 } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 import { useCMFMatches } from "../CMFMatches/CMFMatchesContext"
+import { useNavigate } from "react-router-dom"
+import { onAuthStateChanged } from "firebase/auth"
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -353,7 +355,78 @@ const LoadingSkeleton = () => (
 )
 
 export default function CMFCohorts() {
-  const { smeMatches, loading: contextLoading, reloadMatches } = useCMFMatches()
+  const { smeMatches, funderMatches, catalystMatches, loading: contextLoading, reloadMatches } = useCMFMatches()
+  const navigate = useNavigate()
+  const [drafts, setDrafts] = useState([])
+  const [showBridgePopup, setShowBridgePopup] = useState(false)
+  const [showDraftsPopup, setShowDraftsPopup] = useState(false)
+
+  const [activeCohortTab, setActiveCohortTab] = useState("businesses")
+  const [cmfCohorts, setCmfCohorts] = useState([])
+  const [onboardedUserIds, setOnboardedUserIds] = useState(new Set())
+
+  const fetchDrafts = async () => {
+    const user = auth.currentUser
+    if (!user) return
+    try {
+      const q = query(
+        collection(db, "cmfOnboardingDrafts"),
+        where("facilitatorId", "==", user.uid)
+      )
+      const snap = await getDocs(q)
+      const loadedDrafts = []
+      snap.forEach((docSnap) => {
+        loadedDrafts.push({ id: docSnap.id, ...docSnap.data() })
+      })
+      setDrafts(loadedDrafts)
+    } catch (e) {
+      console.error("Error loading onboarding drafts:", e)
+    }
+  }
+
+  const fetchOnboardedUserIds = async () => {
+    const user = auth.currentUser
+    if (!user) return
+    try {
+      const q = query(
+        collection(db, "users"),
+        where("onboardedBy", "==", user.uid)
+      )
+      const snap = await getDocs(q)
+      const ids = new Set()
+      const cmfIds = []
+      snap.forEach((docSnap) => {
+        const data = docSnap.data()
+        ids.add(docSnap.id)
+        if (data.role === "CMF") {
+          cmfIds.push(docSnap.id)
+        }
+      })
+      setOnboardedUserIds(ids)
+
+      const loadedCmfs = []
+      for (const cmfId of cmfIds) {
+        const profileDoc = await getDoc(doc(db, "cmfProfiles", cmfId))
+        if (profileDoc.exists()) {
+          loadedCmfs.push({ id: cmfId, ...profileDoc.data() })
+        }
+      }
+      setCmfCohorts(loadedCmfs)
+    } catch (e) {
+      console.error("Error loading CMF cohorts:", e)
+    }
+  }
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchDrafts()
+        fetchOnboardedUserIds()
+      }
+    })
+    return () => unsubscribe()
+  }, [])
+
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedCohort, setSelectedCohort] = useState(null)
@@ -425,11 +498,11 @@ export default function CMFCohorts() {
   }, [activeFilter])
 
   // ─── Build cohorts from context ──────────────────────────────────────────
-  const cohortsFromContext = useMemo(() => {
+  const businessesCohorts = useMemo(() => {
     if (!smeMatches || smeMatches.length === 0) return []
-
     return smeMatches
       .filter((sme) => {
+        if (!onboardedUserIds.has(sme.id)) return false
         const status = (sme.currentStatus || sme.pipelineStage || "").toLowerCase()
         return status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
       })
@@ -451,9 +524,6 @@ export default function CMFCohorts() {
         dealStructure: "Support Program",
         dealDuration: "Ongoing",
         supportProvided: sme.supportRequired || "Advisory and growth support",
-        // These have no backing field on the record yet. They used to be
-        // hard-coded to "65%" / "+20%" / a fixed team size, which put the same
-        // invented figures on every row — shown as Pending instead.
         roi: sme.roi || "Pending",
         revenueGrowth: sme.revenueGrowth || "Pending",
         exitStrategy: sme.exitStrategy || "To be determined",
@@ -464,7 +534,87 @@ export default function CMFCohorts() {
         archived: sme.archived || false,
         statusHistory: sme.statusHistory || [],
       }))
-  }, [smeMatches])
+  }, [smeMatches, onboardedUserIds])
+
+  const fundersCohorts = useMemo(() => {
+    if (!funderMatches || funderMatches.length === 0) return []
+    return funderMatches
+      .filter((funder) => onboardedUserIds.has(funder.id))
+      .map((funder) => ({
+        id: funder.id,
+        docId: funder.id,
+        smeName: funder.name || "Unnamed Funder",
+        dealAmount: funder.fundingRange || "Not specified",
+        dealAmountRaw: toAmount(funder.fundingRange),
+        dealType: funder.type || "Funder",
+        completionDate: funder.createdAt || null,
+        sector: Array.isArray(funder.sectors) ? funder.sectors.join(", ") : funder.sectors || "Not specified",
+        location: funder.location || "Not specified",
+        teamSize: "N/A",
+        description: funder.description || "No description available",
+        currentStatus: funder.status || "Active",
+        lastUpdated: funder.lastActivity || null,
+        supportProvided: funder.contactPerson ? `${funder.contactPerson} (${funder.email})` : funder.email || "Not specified",
+        archived: funder.archived || false,
+      }))
+  }, [funderMatches, onboardedUserIds])
+
+  const catalystsCohorts = useMemo(() => {
+    if (!catalystMatches || catalystMatches.length === 0) return []
+    return catalystMatches
+      .filter((cat) => onboardedUserIds.has(cat.id))
+      .map((cat) => ({
+        id: cat.id,
+        docId: cat.id,
+        smeName: cat.name || "Unnamed Catalyst",
+        dealAmount: cat.focus || "Not specified",
+        dealAmountRaw: 0,
+        dealType: cat.type || "Catalyst",
+        completionDate: cat.createdAt || null,
+        sector: Array.isArray(cat.sectors) ? cat.sectors.join(", ") : cat.sectors || "Not specified",
+        location: cat.location || "Not specified",
+        teamSize: "N/A",
+        description: cat.description || "No description available",
+        currentStatus: cat.status || "Active",
+        lastUpdated: cat.lastActivity || null,
+        supportProvided: cat.contactPerson ? `${cat.contactPerson} (${cat.email})` : cat.email || "Not specified",
+        archived: cat.archived || false,
+      }))
+  }, [catalystMatches, onboardedUserIds])
+
+  const cmfCohortsMapped = useMemo(() => {
+    if (!cmfCohorts || cmfCohorts.length === 0) return []
+    return cmfCohorts.map((cmf) => {
+      const minT = cmf.generalInvestmentPreference?.minimumSupportTicket
+      const maxT = cmf.generalInvestmentPreference?.maximumSupportTicket
+      const range = minT || maxT ? `${formatCurrency(minT)} - ${formatCurrency(maxT)}` : "Not specified"
+      return {
+        id: cmf.id,
+        docId: cmf.id,
+        smeName: cmf.entityOverview?.registeredName || cmf.entityOverview?.tradingName || "Unnamed CMF",
+        dealAmount: range,
+        dealAmountRaw: toAmount(maxT),
+        dealType: cmf.entityOverview?.entitySize || "CMF",
+        completionDate: cmf.createdAt || null,
+        sector: Array.isArray(cmf.generalInvestmentPreference?.sectorFocus) ? cmf.generalInvestmentPreference.sectorFocus.join(", ") : "Not specified",
+        location: cmf.contactDetails?.physicalAddress || "Not specified",
+        teamSize: "N/A",
+        description: cmf.entityOverview?.businessDescription || "No description available",
+        currentStatus: "Active",
+        lastUpdated: null,
+        supportProvided: cmf.contactDetails?.contactName ? `${cmf.contactDetails.contactName} (${cmf.contactDetails.email || cmf.email})` : cmf.email || "Not specified",
+        archived: cmf.archived || false,
+      }
+    })
+  }, [cmfCohorts])
+
+  const cohortsFromContext = useMemo(() => {
+    if (activeCohortTab === "businesses") return businessesCohorts
+    if (activeCohortTab === "funders") return fundersCohorts
+    if (activeCohortTab === "catalysts") return catalystsCohorts
+    if (activeCohortTab === "cmfs") return cmfCohortsMapped
+    return []
+  }, [activeCohortTab, businessesCohorts, fundersCohorts, catalystsCohorts, cmfCohortsMapped])
 
   const [cohorts, setCohorts] = useState([])
 
@@ -942,6 +1092,9 @@ export default function CMFCohorts() {
   }
 
   const getPrimaryAction = (cohort) => {
+    if (activeCohortTab !== "businesses") {
+      return { label: "View Profile", handler: handleViewDetails }
+    }
     const meta = getStatusMeta(cohort.currentStatus)
     if (meta.group === "exited") return { label: "View Record", handler: handleViewGrowthSuite }
     if (needsAttention(cohort)) return { label: "Review Business", handler: handleViewGrowthSuite }
@@ -1014,10 +1167,11 @@ export default function CMFCohorts() {
     }
 
     return result
-  }, [visibleCohorts, activeFilter, localFilters])
+  }, [visibleCohorts, activeFilter, localFilters, activeCohortTab])
 
   const handleRefresh = () => {
     setRefreshing(true)
+    fetchOnboardedUserIds()
     if (reloadMatches) reloadMatches().then(() => setRefreshing(false))
     else setTimeout(() => setRefreshing(false), 800)
   }
@@ -1070,7 +1224,83 @@ export default function CMFCohorts() {
 
   if (contextLoading || loading) return <LoadingSkeleton />
 
-  const visibleColumnKeys = columnOrder.filter((key) => columnVisibility[key])
+  const getColumnLabel = (key) => {
+    if (activeCohortTab === "businesses") return COLUMN_DEFS[key].label;
+    
+    const labels = {
+      funders: {
+        supportValue: "Ticket Size Focus",
+        startDate: "Onboarded Date",
+        sector: "Sector Focus",
+        location: "Location Focus",
+        status: "Status",
+        dealType: "Funder Type",
+        supportProvided: "Contact Person"
+      },
+      catalysts: {
+        supportValue: "Support Focus",
+        startDate: "Onboarded Date",
+        sector: "Sector Focus",
+        location: "Location Focus",
+        status: "Status",
+        dealType: "Catalyst Type",
+        supportProvided: "Contact Person"
+      },
+      cmfs: {
+        supportValue: "Transaction Limit",
+        startDate: "Onboarded Date",
+        sector: "Sector Focus",
+        location: "Location Focus",
+        status: "Status",
+        dealType: "Entity Size",
+        supportProvided: "Contact Person"
+      }
+    };
+    return labels[activeCohortTab]?.[key] || COLUMN_DEFS[key].label;
+  }
+
+  const nameLabel = activeCohortTab === "businesses"
+    ? "Company Name"
+    : activeCohortTab === "funders"
+    ? "Funder Name"
+    : activeCohortTab === "catalysts"
+    ? "Organization"
+    : "CMF Name"
+
+  const getEmptyStateContent = () => {
+    const icon = {
+      businesses: <Trophy size={60} className="text-[#c8b6a6] mx-auto mb-5" />,
+      funders: <Building size={60} className="text-[#c8b6a6] mx-auto mb-5" />,
+      catalysts: <Award size={60} className="text-[#c8b6a6] mx-auto mb-5" />,
+      cmfs: <Users size={60} className="text-[#c8b6a6] mx-auto mb-5" />,
+    }[activeCohortTab];
+
+    const title = visibleCohorts.length === 0
+      ? {
+          businesses: "No Businesses Yet",
+          funders: "No Funders Yet",
+          catalysts: "No Catalysts Yet",
+          cmfs: "No Capital and Market Facilitators Yet",
+        }[activeCohortTab]
+      : "No results after filtering";
+
+    const desc = visibleCohorts.length === 0
+      ? {
+          businesses: "Your onboarded businesses will appear here.",
+          funders: "Your onboarded funders will appear here.",
+          catalysts: "Your onboarded catalysts will appear here.",
+          cmfs: "Ecosystem capital and market facilitators you onboarded will appear here.",
+        }[activeCohortTab]
+      : <>No records match the current filters. <button onClick={() => { setActiveFilter("all"); setLocalFilters({ ...EMPTY_FILTERS }) }} className="underline hover:text-[#4a352f]">Clear filters</button></>;
+
+    return { icon, title, desc };
+  }
+
+  const emptyState = getEmptyStateContent();
+
+  const visibleColumnKeys = columnOrder
+    .filter((key) => columnVisibility[key])
+    .filter((key) => activeCohortTab === "businesses" || key !== "teamSize")
   const allVisibleSelected = filteredCohorts.length > 0 && filteredCohorts.every((c) => selectedRows.has(c.id))
 
   return (
@@ -1085,20 +1315,36 @@ export default function CMFCohorts() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-8">
+            {drafts.length > 0 && (
+              <button
+                onClick={() => setShowDraftsPopup(true)}
+                className="bg-white text-[#7d5a50] border-2 border-[#c8b6a6] hover:bg-[#f5f0e1] rounded-lg px-3.5 py-2.5 text-xs font-semibold flex items-center gap-1.5 transition-all duration-300 shadow-sm"
+              >
+                <FileText size={14} />
+                Drafts ({drafts.length})
+              </button>
+            )}
             <button
               onClick={() => setShowArchived((v) => !v)}
               className={`flex items-center gap-1.5 border-2 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${showArchived ? "bg-[#7d5a50] text-white border-[#7d5a50]" : "bg-white text-[#7d5a50] border-[#c8b6a6] hover:bg-[#f5f0e1]"}`}
             >
               <Archive size={14} /> {showArchived ? "Hiding archived: off" : "Show archived"}
             </button>
-            <button
+            {/* <button
               onClick={handleRefresh}
               disabled={refreshing}
               className={`bg-white text-[#a67c52] border-2 border-[#a67c52] rounded-lg px-4 py-2.5 text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-all duration-300 hover:bg-[#f5f0e1] ${refreshing ? 'opacity-60' : ''}`}
             >
               <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
               {refreshing ? "Refreshing..." : "Refresh Data"}
+            </button> */}
+            <button
+              onClick={() => setShowBridgePopup(true)}
+              className="bg-[#7d5a50] hover:bg-[#6b4c43] text-white rounded-lg px-4 py-2.5 text-xs font-semibold flex items-center gap-1.5 transition-all duration-300 shadow-md border-2 border-[#7d5a50]"
+            >
+              <Plus size={14} />
+              Onboard Partners
             </button>
           </div>
         </div>
@@ -1209,15 +1455,17 @@ export default function CMFCohorts() {
                         </p>
                         <label className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                           <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f]">Company Name</span>
+                          <span className="text-sm text-[#4a352f]">{nameLabel}</span>
                         </label>
                         <div className="border-t border-[#e6d7c3] my-2" />
-                        {DEFAULT_COLUMN_ORDER.map((key) => (
-                          <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
-                            <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
-                            <span className="text-sm text-[#4a352f]">{COLUMN_DEFS[key].label}</span>
-                          </label>
-                        ))}
+                        {DEFAULT_COLUMN_ORDER
+                          .filter((key) => activeCohortTab === "businesses" || key !== "teamSize")
+                          .map((key) => (
+                            <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
+                              <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                              <span className="text-sm text-[#4a352f]">{getColumnLabel(key)}</span>
+                            </label>
+                          ))}
 
                         <div className="border-t border-[#e6d7c3] my-4" />
                         <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
@@ -1258,12 +1506,62 @@ export default function CMFCohorts() {
           </div>
         )}
 
+        {/* Tabs for Cohort Ecosystem Profiles */}
+        <div className="flex gap-2 p-2 bg-gradient-to-r from-[#f5f0e1] to-[#faf7f2] rounded-t-2xl border border-[#e6d7c3] border-b-0 shadow-sm overflow-x-auto">
+          {[
+            { id: "businesses", label: "Businesses", icon: <Building size={16} />, count: businessesCohorts.length },
+            { id: "funders", label: "Funders", icon: <DollarSign size={16} />, count: fundersCohorts.length },
+            { id: "catalysts", label: "Catalysts", icon: <Trophy size={16} />, count: catalystsCohorts.length },
+            { id: "cmfs", label: "Capital & Market Facilitators", icon: <Users size={16} />, count: cmfCohorts.length },
+          ].map(({ id, label, icon, count }) => {
+            const isActive = activeCohortTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => {
+                  setActiveCohortTab(id);
+                  setSelectedRows(new Set()); // clear row selection on tab switch
+                }}
+                className={`flex-1 min-w-[150px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-semibold transition-all duration-300 whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? "bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white shadow-md"
+                    : "text-[#7d5a50] hover:bg-white/70 hover:text-[#4a352f]"
+                }`}
+              >
+                {icon}
+                <span>{label}</span>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                  isActive ? "bg-white/20 text-white" : "bg-[#7d5a50]/10 text-[#4a352f]"
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {filteredCohorts.length > 0 ? (
-          <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]" style={selectedRows.size > 0 ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : undefined}>
+          <div className="bg-white rounded-b-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3] border-t-0" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
             <div className="p-4 border-b-2 border-[#e6d7c3] bg-[#f5f0e1] flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-[#4a352f] m-0">Cohort Businesses</h2>
+              <h2 className="text-lg font-semibold text-[#4a352f] m-0">
+                {activeCohortTab === "businesses"
+                  ? "Cohort Businesses"
+                  : activeCohortTab === "funders"
+                  ? "Cohort Funders"
+                  : activeCohortTab === "catalysts"
+                  ? "Cohort Catalysts"
+                  : "Cohort CMFs"}
+              </h2>
               <span className="text-xs text-[#7d5a50] bg-[#a67c52]/15 px-3 py-1.5 rounded-md font-semibold">
-                {filteredCohorts.length} {filteredCohorts.length === 1 ? 'business' : 'businesses'}
+                {filteredCohorts.length} {
+                  activeCohortTab === "businesses"
+                    ? (filteredCohorts.length === 1 ? 'business' : 'businesses')
+                    : activeCohortTab === "funders"
+                    ? (filteredCohorts.length === 1 ? 'funder' : 'funders')
+                    : activeCohortTab === "catalysts"
+                    ? (filteredCohorts.length === 1 ? 'catalyst' : 'catalysts')
+                    : (filteredCohorts.length === 1 ? 'CMF' : 'CMFs')
+                }
               </span>
             </div>
 
@@ -1289,7 +1587,7 @@ export default function CMFCohorts() {
                     </th>
                     <th className={`cmc-th ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', ...widthStyle('__name__', '200px', '240px') }}>
                       <div className="flex items-start gap-1 min-w-0">
-                        <span className="cmc-th-label">Company Name</span>
+                        <span className="cmc-th-label">{nameLabel}</span>
                         <FilterTrigger type="name" active={!!localFilters.name.trim()} />
                       </div>
                       <ColumnResizer colKey="__name__" />
@@ -1314,7 +1612,7 @@ export default function CMFCohorts() {
                         >
                           <div className="flex items-start gap-1 min-w-0">
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <span className="cmc-th-label">{col.label}</span>
+                            <span className="cmc-th-label">{getColumnLabel(key)}</span>
                             <FilterTrigger type={col.filterType} active={filterActiveFor(col.filterType)} />
                           </div>
                           <ColumnResizer colKey={key} />
@@ -1429,16 +1727,38 @@ export default function CMFCohorts() {
             </div>
           </div>
         ) : (
-          <div className="text-center p-[60px_20px] bg-white rounded-2xl shadow-md border border-[#e6d7c3] w-full">
-            <Trophy size={60} className="text-[#c8b6a6] mx-auto mb-5" />
+          <div className="text-center p-[60px_20px] bg-white rounded-b-2xl shadow-md border border-[#e6d7c3] border-t-0 w-full flex flex-col items-center">
+            {emptyState.icon}
             <h3 className="text-2xl font-semibold text-[#4a352f] mb-3">
-              {visibleCohorts.length === 0 ? "No Businesses Yet" : "No results after filtering"}
+              {emptyState.title}
             </h3>
-            <p className="text-[#7d5a50] text-base max-w-[500px] mx-auto">
-              {visibleCohorts.length === 0
-                ? "Your active engagements will appear here once businesses reach the active support stage."
-                : <>No engagements match the current filters. <button onClick={() => { setActiveFilter("all"); setLocalFilters({ ...EMPTY_FILTERS }) }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
-            </p>
+            <div className="text-[#7d5a50] text-base max-w-[500px] mx-auto mb-6">
+              {emptyState.desc}
+            </div>
+            {visibleCohorts.length === 0 && (
+              <button
+                onClick={() => {
+                  const type = {
+                    businesses: "Business",
+                    funders: "Funder",
+                    catalysts: "Catalyst",
+                    cmfs: "CMF",
+                  }[activeCohortTab];
+                  navigate(`/cmf-cohorts/new?type=${type}`);
+                }}
+                className="bg-[#7d5a50] hover:bg-[#6b4c43] text-white rounded-lg px-4 py-2.5 text-xs font-semibold flex items-center gap-1.5 transition-all duration-300 shadow-md border-2 border-[#7d5a50] cursor-pointer"
+              >
+                <Plus size={14} />
+                {
+                  {
+                    businesses: "Onboard Business",
+                    funders: "Onboard Funder",
+                    catalysts: "Onboard Catalyst",
+                    cmfs: "Onboard CMF",
+                  }[activeCohortTab]
+                }
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1612,43 +1932,74 @@ export default function CMFCohorts() {
             </div>
 
             <div className="p-6 space-y-6">
-              {[
-                { label: "Support", fields: [
-                  ["Support value", formatCurrency(selectedCohort.dealAmount)],
-                  ["Deal type", selectedCohort.dealType],
-                  ["Deal structure", selectedCohort.dealStructure],
-                  ["Guarantees", selectedCohort.guarantees],
-                ]},
-                { label: "Timeline & status", fields: [
-                  ["Start date", formatDate(selectedCohort.completionDate)],
-                  ["Duration", selectedCohort.dealDuration],
-                  ["Status", getStatusMeta(selectedCohort.currentStatus).label],
-                  ["ROI", selectedCohort.roi],
-                ]},
-                { label: "Company", fields: [
-                  ["Sector", selectedCohort.sector],
-                  ["Location", selectedCohort.location],
-                  ["Team size", selectedCohort.teamSize],
-                  ["Services required", selectedCohort.servicesRequired],
-                ]},
-              ].map((section) => (
-                <div key={section.label}>
-                  <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-3">{section.label}</p>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                    {section.fields.map(([label, value]) => (
-                      <div key={label}>
-                        <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</p>
-                        <p className="text-sm text-[#4a352f]">{value ?? "N/A"}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              {(() => {
+                const sections = activeCohortTab === "businesses"
+                  ? [
+                      { label: "Support", fields: [
+                        ["Support value", formatCurrency(selectedCohort.dealAmount)],
+                        ["Deal type", selectedCohort.dealType],
+                        ["Deal structure", selectedCohort.dealStructure],
+                        ["Guarantees", selectedCohort.guarantees],
+                      ]},
+                      { label: "Timeline & status", fields: [
+                        ["Start date", formatDate(selectedCohort.completionDate)],
+                        ["Duration", selectedCohort.dealDuration],
+                        ["Status", getStatusMeta(selectedCohort.currentStatus).label],
+                        ["ROI", selectedCohort.roi],
+                      ]},
+                      { label: "Company", fields: [
+                        ["Sector", selectedCohort.sector],
+                        ["Location", selectedCohort.location],
+                        ["Team size", selectedCohort.teamSize],
+                        ["Services required", selectedCohort.servicesRequired],
+                      ]},
+                    ]
+                  : [
+                      {
+                        label: activeCohortTab === "funders" ? "Funder Details" : activeCohortTab === "catalysts" ? "Catalyst Details" : "CMF Details",
+                        fields: [
+                          ["Type", selectedCohort.dealType],
+                          [activeCohortTab === "funders" ? "Ticket Size Focus" : activeCohortTab === "catalysts" ? "Support Focus" : "Transaction Limit", selectedCohort.dealAmount],
+                          ["Onboarded Date", formatDate(selectedCohort.completionDate)],
+                          ["Status", selectedCohort.currentStatus || "Active"],
+                        ]
+                      },
+                      {
+                        label: "Domain Focus",
+                        fields: [
+                          ["Sectors", selectedCohort.sector],
+                          ["Location Focus", selectedCohort.location],
+                        ]
+                      },
+                      {
+                        label: "Contact Information",
+                        fields: [
+                          ["Primary Contact", selectedCohort.supportProvided],
+                        ]
+                      }
+                    ];
 
-              <div className="px-4 py-3 rounded-xl bg-[#faf7f2] border border-[#e6d7c3]">
-                <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Support provided</p>
-                <p className="text-sm text-[#4a352f] leading-relaxed">{selectedCohort.supportProvided}</p>
-              </div>
+                return sections.map((section) => (
+                  <div key={section.label}>
+                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-3">{section.label}</p>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                      {section.fields.map(([label, value]) => (
+                        <div key={label}>
+                          <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</p>
+                          <p className="text-sm text-[#4a352f]">{value ?? "N/A"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+
+              {activeCohortTab === "businesses" && (
+                <div className="px-4 py-3 rounded-xl bg-[#faf7f2] border border-[#e6d7c3]">
+                  <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Support provided</p>
+                  <p className="text-sm text-[#4a352f] leading-relaxed">{selectedCohort.supportProvided}</p>
+                </div>
+              )}
 
               {selectedCohort.statusHistory?.length > 0 && (
                 <div>
@@ -1887,6 +2238,112 @@ export default function CMFCohorts() {
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── BRIDGE POPUP ─── */}
+      {showBridgePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" style={{ animation: "fadeIn 0.2s ease-out" }}>
+          <div className="bg-white rounded-3xl p-8 max-w-lg w-full border border-[#e6d7c3] shadow-2xl mx-4 space-y-6 animate-slideUp" style={{ animation: "slideUp 0.3s ease-out" }}>
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-bold text-[#4a352f] m-0">Onboard New Ecosystem Partner</h3>
+                <p className="text-xs text-[#7d5a50] mt-1">Select the type of partner to bring onboard.</p>
+              </div>
+              <button onClick={() => setShowBridgePopup(false)} className="p-1.5 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-600 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { type: "Business", title: "Business", desc: "Small, medium or micro enterprises seeking funding, advisory or support.", icon: Building },
+                { type: "Funder", title: "Funder", desc: "Investment firms, VC funds, angel networks or debt providers.", icon: DollarSign },
+                { type: "Catalyst", title: "Catalyst", desc: "Incubators, business development hubs or training programs.", icon: Trophy },
+                { type: "CMF", title: "Capital & Market Facilitator", desc: "Capital and market facilitators directing growth transactions.", icon: Users },
+              ].map(({ type, title, desc, icon: Icon }) => (
+                <button
+                  key={type}
+                  onClick={() => {
+                    setShowBridgePopup(false)
+                    navigate(`/cmf-cohorts/new?type=${type}`)
+                  }}
+                  className="text-left p-4 rounded-2xl border-2 border-[#e6d7c3] hover:border-[#7d5a50] hover:bg-[#faf7f2] transition-all flex flex-col justify-between group cursor-pointer animate-fadeIn"
+                >
+                  <div className="w-10 h-10 flex items-center justify-center text-[#7d5a50] mb-3">
+                    <Icon size={40} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-[#4a352f] m-0 group-hover:text-[#7d5a50]">{title}</h4>
+                    <p className="text-[11px] text-[#7d5a50] mt-1 leading-relaxed">{desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── DRAFTS POPUP ─── */}
+      {showDraftsPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" style={{ animation: "fadeIn 0.2s ease-out" }}>
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-[#e6d7c3] shadow-2xl mx-4 space-y-4 animate-slideUp" style={{ animation: "slideUp 0.3s ease-out" }}>
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-bold text-[#4a352f] m-0">Saved Onboarding Drafts</h3>
+                <p className="text-xs text-[#7d5a50] mt-1">Pick up where you left off with incomplete partner profiles.</p>
+              </div>
+              <button onClick={() => setShowDraftsPopup(false)} className="p-1.5 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-600 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+              {drafts.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-xs">
+                  No saved drafts found.
+                </div>
+              ) : (
+                drafts.map((draft) => {
+                  const title = draft.formData?.registeredName || draft.formData?.contactName || "Unnamed Draft"
+                  return (
+                    <div key={draft.id} className="flex items-center justify-between p-3.5 rounded-xl border border-[#e6d7c3]/80 hover:bg-[#faf7f2]/50 transition-all">
+                      <button
+                        onClick={() => {
+                          setShowDraftsPopup(false)
+                          navigate(`/cmf-cohorts/new?draftId=${draft.id}`)
+                        }}
+                        className="text-left flex-1 cursor-pointer"
+                      >
+                        <h4 className="text-xs font-bold text-[#4a352f] m-0">{title}</h4>
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-[#7d5a50]">
+                          <span className="bg-[#f5f0e1] px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase">{draft.profileType}</span>
+                          <span>Updated: {new Date(draft.updatedAt).toLocaleDateString()}</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          if (window.confirm("Are you sure you want to delete this draft?")) {
+                            try {
+                              await deleteDoc(doc(db, "cmfOnboardingDrafts", draft.id))
+                              setDrafts(prev => prev.filter(d => d.id !== draft.id))
+                            } catch (err) {
+                              console.error("Error deleting draft:", err)
+                            }
+                          }
+                        }}
+                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                        title="Delete draft"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         </div>
       )}

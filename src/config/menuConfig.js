@@ -820,12 +820,12 @@ export const capitalMarketFacilitatorMenuItems = [
     icon: <Users size={18} />,
     route: "/cmf-cohorts",
   },
-  {
-    id: "insights",
-    label: "BIG Insights",
-    icon: <Lightbulb size={18} />,
-    route: "/cmf-insights",
-  },
+  // {
+  //   id: "insights",
+  //   label: "BIG Insights",
+  //   icon: <Lightbulb size={18} />,
+  //   route: "/cmf-insights",
+  // },
   {
     id: "documents",
     label: "My Documents",
