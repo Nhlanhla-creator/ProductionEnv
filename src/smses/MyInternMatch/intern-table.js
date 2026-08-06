@@ -65,6 +65,10 @@ export const INTERN_ROWS_REQUEST_EVENT = "intern-pipeline-rows-request"
    or null for "View All Matches". */
 export const INTERN_APPLICATION_FILTER_EVENT = "intern-application-filter"
 
+/* Applications page → table. Detail is a [min, max] score band, from the band
+   picker on the row the user opened. */
+export const INTERN_MATCH_RANGE_EVENT = "intern-match-range-filter"
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Reference data
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -348,8 +352,9 @@ const formatAvailability = (value) => {
 }
 
 /* The Applications page links here as
-   /intern-matches-page?applicationId=<id>, so the scope survives the route
-   change — an event fired before this component mounts has nobody listening. */
+   /intern-matches-page?applicationId=<id>&matchMin=<n>&matchMax=<n>, so both
+   the application scope and the score band survive the route change — an event
+   fired before this component mounts has nobody listening. */
 const readApplicationIdFromUrl = () => {
   if (typeof window === "undefined") return null
   try {
@@ -357,6 +362,51 @@ const readApplicationIdFromUrl = () => {
   } catch {
     return null
   }
+}
+
+/* Returns [min, max] when the link carried a band, otherwise null so the
+   stored filter state is left alone. */
+const readMatchRangeFromUrl = () => {
+  if (typeof window === "undefined") return null
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const rawMin = params.get("matchMin")
+    const rawMax = params.get("matchMax")
+    if (rawMin === null && rawMax === null) return null
+    const clamp = (n, fallback) => {
+      const parsed = Number.parseInt(n, 10)
+      return Number.isNaN(parsed) ? fallback : Math.max(0, Math.min(100, parsed))
+    }
+    const min = clamp(rawMin, 0)
+    const max = clamp(rawMax, 100)
+    return min <= max ? [min, max] : [max, min]
+  } catch {
+    return null
+  }
+}
+
+/* Dropping the band params keeps a refresh from re-applying a filter the user
+   has just cleared. */
+const stripMatchRangeParams = () => {
+  if (typeof window === "undefined" || !window.history?.replaceState) return
+  const url = new URL(window.location.href)
+  url.searchParams.delete("matchMin")
+  url.searchParams.delete("matchMax")
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`)
+}
+
+/* Reads back as the label the Applications page used, so the chip in the
+   toolbar names the same band the user picked over there. Tolerates a
+   malformed stored range — destructuring undefined here would throw during
+   render and take the whole page down with it. */
+const describeMatchRange = (range) => {
+  const pair = Array.isArray(range) ? range : []
+  const min = Number.isFinite(Number(pair[0])) ? Number(pair[0]) : 0
+  const max = Number.isFinite(Number(pair[1])) ? Number(pair[1]) : 100
+  if (min <= 0 && max >= 100) return null
+  if (max >= 100) return `Above ${min}%`
+  if (min <= 0) return `Below ${max + 1}%`
+  return `${min}–${max}%`
 }
 
 const PopupPortal = ({ children }) => {
@@ -1049,6 +1099,15 @@ const loadFilterState = () => {
         merged[key] = merged[key] ? [merged[key].toString()] : []
       }
     })
+    /* matchRange and bigScoreRange hold numbers, not selected values, so the
+       coercion above can leave either as a one-element array of a string. Put
+       them back to numeric pairs — every filter comparison depends on it. */
+    const fixRange = (range) =>
+      Array.isArray(range) && range.length === 2 && range.every((n) => Number.isFinite(Number(n)))
+        ? [Number(range[0]), Number(range[1])]
+        : [0, 100]
+    merged.matchRange = fixRange(merged.matchRange)
+    merged.bigScoreRange = fixRange(merged.bigScoreRange)
     return { filters: merged, sort: saved?.sort?.key ? saved.sort : null }
   } catch {
     return { filters: { ...EMPTY_FILTERS }, sort: null }
@@ -1186,21 +1245,55 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
   }, [])
   const activeApplicationFilter = applicationFilter ?? eventApplicationFilter
 
+  /* "View All Matches" drops the score band too — it arrived with the
+     application, so leaving it behind would make the button look broken.
+     setLocalFilters is declared just below; that's fine, this only runs on
+     click, long after render has finished. */
   const clearApplicationFilter = () => {
     setEventApplicationFilter(null)
     window.dispatchEvent(new CustomEvent(INTERN_APPLICATION_FILTER_EVENT, { detail: null }))
-    // Drop the param too, or a refresh would put the filter straight back.
+    setLocalFilters((prev) => ({ ...prev, matchRange: [0, 100] }))
+    // Drop the params too, or a refresh would put the filter straight back.
     if (typeof window !== "undefined" && window.history?.replaceState) {
       const url = new URL(window.location.href)
       url.searchParams.delete("applicationId")
+      url.searchParams.delete("matchMin")
+      url.searchParams.delete("matchMax")
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`)
     }
   }
 
-  // Filters + sort, restored from the last visit
-  const initialFilterState = useMemo(() => loadFilterState(), [])
+  /* Filters + sort, restored from the last visit — but a band carried in the
+     link wins over the stored match range, so the eye on the Applications page
+     lands on exactly the rows it counted. Seeded in the initializer rather than
+     an effect so the table never paints the old range first. */
+  const initialFilterState = useMemo(() => {
+    const state = loadFilterState()
+    const seededRange = readMatchRangeFromUrl()
+    return seededRange ? { ...state, filters: { ...state.filters, matchRange: seededRange } } : state
+  }, [])
   const [localFilters, setLocalFilters] = useState(initialFilterState.filters)
   const [sortConfig, setSortConfig] = useState(initialFilterState.sort)
+
+  /* The table may already be mounted when the Applications page fires — a
+     tabbed shell switching panes never remounts it, so the URL seed above
+     never runs. */
+  useEffect(() => {
+    const onRange = (e) => {
+      const range = e.detail
+      if (!Array.isArray(range) || range.length !== 2) return
+      const min = Math.max(0, Math.min(100, Number(range[0]) || 0))
+      const max = Math.max(0, Math.min(100, Number(range[1]) ?? 100))
+      setLocalFilters((prev) => ({ ...prev, matchRange: min <= max ? [min, max] : [max, min] }))
+    }
+    window.addEventListener(INTERN_MATCH_RANGE_EVENT, onRange)
+    return () => window.removeEventListener(INTERN_MATCH_RANGE_EVENT, onRange)
+  }, [])
+
+  const clearMatchRange = () => {
+    setLocalFilters((prev) => ({ ...prev, matchRange: [0, 100] }))
+    stripMatchRangeParams()
+  }
 
   // Views
   const [viewsState, setViewsState] = useState(() => loadViewsState())
@@ -3013,9 +3106,12 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     localFilters.fundingProgramType.length +
     localFilters.nextStage.length
 
+  const matchRangeLabel = describeMatchRange(localFilters.matchRange)
+
   const clearAllFilters = () => {
     setLocalFilters({ ...EMPTY_FILTERS })
     setSortConfig(null)
+    stripMatchRangeParams()
   }
 
   const getFilterActive = (filterType) => {
@@ -3450,6 +3546,23 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 </button>
               </span>
             )}
+
+            {/* The score band the Applications page sent, or one set here in the
+                Match % filter. Named the same way it was picked over there. */}
+            {matchRangeLabel && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#e8f5e8]/70 text-[#4a352f] border border-[#48BB78]/40">
+                <Target size={12} className="text-[#7d5a50]" />
+                Match: {matchRangeLabel}
+                <span className="font-normal text-[#a89482]">({filteredInterns.length})</span>
+                <button
+                  onClick={clearMatchRange}
+                  className="ml-1 px-2 py-0.5 rounded-lg bg-white border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] font-semibold"
+                >
+                  Show all scores
+                </button>
+              </span>
+            )}
+
             {activeStageFilter && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
                 <Target size={12} className="text-[#7d5a50]" />
@@ -3961,12 +4074,24 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                     {interns.length === 0
                       ? "No intern matches yet."
                       : activeApplicationFilter
-                        ? "No candidates matched to this internship yet."
-                      : showSavedOnly
-                        ? "No saved candidates. Bookmark a row to keep it here."
-                        : activeStageFilter
-                          ? `No candidates at ${activeStageFilter}. Press that stage card again to clear the filter.`
-                          : "No candidates match these filters."}
+                        ? matchRangeLabel
+                          ? `No candidates ${matchRangeLabel.toLowerCase()} on this internship.`
+                          : "No candidates matched to this internship yet."
+                        : showSavedOnly
+                          ? "No saved candidates. Bookmark a row to keep it here."
+                          : activeStageFilter
+                            ? `No candidates at ${activeStageFilter}. Press that stage card again to clear the filter.`
+                            : "No candidates match these filters."}
+                    {matchRangeLabel && (
+                      <div style={{ marginTop: "0.75rem" }}>
+                        <button
+                          onClick={clearMatchRange}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                        >
+                          Show all scores
+                        </button>
+                      </div>
+                    )}
                     {activeApplicationFilter && (
                       <div style={{ marginTop: "0.75rem" }}>
                         <button
@@ -4022,8 +4147,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                       onMouseLeave={() => setHoveredRowKey(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* Candidate — pinned left. Name only; location and work
-                          preference have their own columns. */}
+                      {/* Application ID — pinned left */}
                       <td
                         className="sticky left-0 z-10"
                         style={{ ...tableCellStyle, width: appIdWidth, backgroundColor: rowBg }}
@@ -4041,6 +4165,8 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                         )}
                       </td>
 
+                      {/* Candidate — pinned left. Name only; location and work
+                          preference have their own columns. */}
                       <td
                         className="sticky z-10"
                         style={{
@@ -4201,13 +4327,48 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                       </label>
                       {(range[0] > 0 || range[1] < 100) && (
                         <button
-                          onClick={() => setLocalFilters((p) => ({ ...p, [field]: [0, 100] }))}
+                          onClick={() => {
+                            setLocalFilters((p) => ({ ...p, [field]: [0, 100] }))
+                            if (field === "matchRange") stripMatchRangeParams()
+                          }}
                           className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium"
                         >
                           Clear
                         </button>
                       )}
                     </div>
+
+                    {/* The same bands the Applications page offers, so a range
+                        set here and one arrived at from there are the same
+                        thing. Match % only — a readiness band means something
+                        different. */}
+                    {field === "matchRange" && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {[
+                          { label: "All", value: [0, 100] },
+                          { label: "Above 75%", value: [75, 100] },
+                          { label: "Above 50%", value: [50, 100] },
+                          { label: "Below 50%", value: [0, 49] },
+                        ].map((preset) => {
+                          const isActive = range[0] === preset.value[0] && range[1] === preset.value[1]
+                          return (
+                            <button
+                              key={preset.label}
+                              onClick={() => {
+                                setLocalFilters((p) => ({ ...p, matchRange: preset.value }))
+                                stripMatchRangeParams()
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                                isActive ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3 mb-3">
                       <input
                         type="number"
