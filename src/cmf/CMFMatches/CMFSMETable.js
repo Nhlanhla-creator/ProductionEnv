@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   Info, Calendar, X, Eye, ChevronDown, MoreVertical, CheckCircle,
   Clock, Users, Download, MessageSquare, ArrowRight, SlidersHorizontal,
-  RotateCcw, Settings, Target, Briefcase, Video, LayoutGrid, Trash2, Plus,
-  GripVertical, AlertTriangle, XCircle
+  RotateCcw, Settings, Briefcase, Video, LayoutGrid, Trash2, Plus,
+  GripVertical, AlertTriangle, XCircle, Search, Pin, PinOff,
+  ArrowUp, ArrowDown, ArrowUpDown
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import CMFSMEDetailsModal from "./CMFSMEDetailsModal";
@@ -51,8 +52,6 @@ const getMatchLabel = (score) => {
 // Stage lookups take the currently *active* stage list as a parameter (BIG
 // Default, or whichever PROGRAMME_TEMPLATES entry is selected, with any
 // customization applied) — rather than resolving against a hard-coded list.
-// Without this, switching to e.g. the Procurement template (which introduces a
-// "Prequalification" stage) would leave that stage invisible in this table.
 const getStageById = (id, stages = DEFAULT_STAGES) =>
   stages.find((s) => s.id === id) || stages[0];
 
@@ -98,8 +97,8 @@ const formatDate = (value) => {
   return d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "N/A";
 };
 
-// Days in stage was previously hard-coded to 0. It now derives from whichever
-// timestamp the row actually carries, falling back through the likely fields.
+// Days in stage derives from whichever timestamp the row actually carries,
+// falling back through the likely fields.
 const calculateDaysInStage = (row) => {
   if (row.daysInStage != null && !isNaN(Number(row.daysInStage))) return Number(row.daysInStage);
   const d = toDate(row.stageUpdatedAt || row.updatedAt || row.lastActivity || row.applicationDate);
@@ -126,8 +125,11 @@ const PopupPortal = ({ children }) => {
 };
 
 // ─── Column header info tooltip ───────────────────────────────────────────────
+// Portaled to <body> because the header cell is sticky and would otherwise clip
+// the bubble.
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
     <span
       onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
@@ -156,38 +158,129 @@ const HeaderInfoTooltip = ({ text }) => {
 // ─── Reorderable column definitions ───────────────────────────────────────────
 // These are the columns that live *between* the pinned "Business Name" (always
 // first) and "Actions" (always last) columns. Users can drag these to reorder
-// them; the array below is only the default/fallback order.
-const DEFAULT_COLUMN_ORDER = [
-  "bigScore", "match", "fundingStage", "fundingRequired", "status", "applied",
-  "daysInStage", "lastActivity", "sector", "location", "province",
-  "supportRequired", "servicesRequired"
-];
-
+// them, drag their right edge to resize, pin them left/right, sort them and
+// filter them. Business Name and Actions can't be hidden or reordered, but they
+// resize like everything else via the reserved width keys further down.
+//
+// Widths are numeric px and act as the factory default a double-click on the
+// divider snaps back to. They're set high enough that each header's chrome
+// (grip, sort, filter, info — roughly 72px) doesn't force the label to break
+// mid-word.
+//
+// priority drives responsive collapse: 1 survives mobile, <=3 survives tablet,
+// everything shows on laptop and up.
 const COLUMN_DEFS = {
-  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", tooltip: "BIG Score measures business credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
-  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", tooltip: "Match Score measures programme fit — alignment with this programme's mandate and criteria." },
-  fundingStage: { label: "Funding Stage", align: "left", minWidth: "94px", filterType: "fundingStage" },
-  fundingRequired: { label: "Funding", align: "left", minWidth: "92px", filterType: "fundingRequired" },
-  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status" },
-  applied: { label: "Applied", align: "left", minWidth: "92px", filterType: "applied" },
-  daysInStage: { label: "Days in Stage", align: "left", minWidth: "134px", filterType: "daysInStage" },
-  lastActivity: { label: "Last Activity", align: "left", minWidth: "108px", filterType: "lastActivity" },
-  sector: { label: "Sector", align: "left", minWidth: "100px", filterType: "sector" },
-  location: { label: "Location", align: "left", minWidth: "92px", filterType: "location" },
-  province: { label: "Province", align: "left", minWidth: "92px", filterType: "province" },
-  supportRequired: { label: "Support", align: "left", minWidth: "92px", filterType: "supportRequired" },
-  servicesRequired: { label: "Services", align: "left", minWidth: "92px", filterType: "servicesRequired" }
+  bigScore: {
+    label: "BIG Score", align: "center", width: 152, filterType: "bigScore",
+    visible: true, priority: 1, sortable: true,
+    tooltip: "Business credibility and readiness — compliance, legitimacy, fundability, PIS and leadership, rolled into one score out of 100.",
+  },
+  match: {
+    label: "Match %", align: "center", width: 152, filterType: "match",
+    visible: true, priority: 1, sortable: true,
+    tooltip: "Programme fit — how closely this business aligns with your programme's mandate and criteria. Separate from BIG Score, which measures the business itself.",
+  },
+  fundingStage: {
+    label: "Funding Stage", width: 150, filterType: "fundingStage",
+    visible: true, priority: 3, sortable: true,
+    tooltip: "Where the business sits in its funding journey — startup, growth, scale or established.",
+  },
+  fundingRequired: {
+    label: "Funding Required", width: 156, filterType: "fundingRequired",
+    visible: true, priority: 2, sortable: true,
+    tooltip: "The amount of support the business has asked for. Sorting and filtering use the underlying number, not the formatted label.",
+  },
+  status: {
+    label: "Status", width: 156, filterType: "status",
+    visible: true, priority: 1, sortable: true,
+    tooltip: "The stage this application currently sits at in your pipeline. Stage names follow whichever programme template is selected.",
+  },
+  applied: {
+    label: "Applied", width: 150, filterType: "applied",
+    visible: true, priority: 3, sortable: true,
+    tooltip: "The date the business submitted its application to this programme.",
+  },
+  daysInStage: {
+    label: "Days in Stage", width: 150, filterType: "daysInStage",
+    visible: true, priority: 2, sortable: true,
+    tooltip: "How long this application has sat at its current stage. Anything past 14 days is treated as stalled and floats to the top of the default sort.",
+  },
+  lastActivity: {
+    label: "Last Activity", width: 150, filterType: "lastActivity",
+    visible: true, priority: 3, sortable: true,
+    tooltip: "The most recent recorded movement on this application — a stage change, a message or a document.",
+  },
+  sector: {
+    label: "Sector", width: 148, filterType: "sector",
+    visible: false, priority: 4, sortable: true,
+    tooltip: "The industry the business operates in.",
+  },
+  location: {
+    label: "Location", width: 138, filterType: "location",
+    visible: false, priority: 4, sortable: true,
+    tooltip: "The city or town the business is based in.",
+  },
+  province: {
+    label: "Province", width: 138, filterType: "province",
+    visible: false, priority: 4, sortable: true,
+    tooltip: "The province the business is registered or operating in.",
+  },
+  supportRequired: {
+    label: "Support Required", width: 168, filterType: "supportRequired",
+    visible: false, priority: 4, sortable: false,
+    tooltip: "The kind of help the business says it needs — funding, market access, mentoring, technical support and so on.",
+  },
+  servicesRequired: {
+    label: "Services Required", width: 172, filterType: "servicesRequired",
+    visible: false, priority: 4, sortable: false,
+    tooltip: "The specific services the business has asked for, in its own words.",
+  },
 };
 
-// Maps a column key to the field on the mapped row object — these don't always
-// match (e.g. "sme" shows `name`, "match" shows `matchPercentage`).
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS);
+const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
+  DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].visible !== false])
+);
+const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(
+  DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])
+);
+const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]));
+
+// Business Name and Actions can't be hidden or reordered, so they aren't in
+// COLUMN_DEFS — but they resize like everything else, and their widths live
+// under these reserved keys inside the same columnWidths map.
+const NAME_KEY = "__name__";
+const ACTION_KEY = "__action__";
+const FIXED_WIDTHS = { [NAME_KEY]: 210, [ACTION_KEY]: 200 };
+const MIN_COLUMN_WIDTH = 84;
+
+// Sorting reads the mapped row field, which doesn't always match the column key
+// (e.g. "match" lives on matchPercentage, "applied" on applicationDateRaw).
+const SORT_ACCESSORS = {
+  [NAME_KEY]: (r) => (r.name || "").toLowerCase(),
+  bigScore: (r) => r.bigScore || 0,
+  match: (r) => r.matchPercentage || 0,
+  fundingStage: (r) => (r.fundingStage || "").toLowerCase(),
+  fundingRequired: (r) => Number(r.fundingAmount) || 0,
+  status: (r) => (r.statusLabel || "").toLowerCase(),
+  applied: (r) => r.applicationDateRaw?.getTime?.() || 0,
+  daysInStage: (r) => Number(r.daysInStage) || 0,
+  lastActivity: (r) => toDate(r.lastActivity)?.getTime?.() || 0,
+  sector: (r) => (r.sector || "").toLowerCase(),
+  location: (r) => (r.location || "").toLowerCase(),
+  province: (r) => (r.province || "").toLowerCase(),
+  supportRequired: (r) => (r.supportRequired || "").toLowerCase(),
+  servicesRequired: (r) => (r.servicesRequired || "").toLowerCase(),
+};
+
+// Maps a column key to the field on the mapped row object.
 const EXPORT_FIELD_MAP = {
   sme: "name", bigScore: "bigScore", match: "matchPercentage",
   fundingStage: "fundingStage", fundingRequired: "fundingRequired",
   status: "statusLabel", applied: "applicationDateLabel", daysInStage: "daysInStage",
   lastActivity: "lastActivityLabel", sector: "sector", location: "location",
   province: "province", supportRequired: "supportRequired", servicesRequired: "servicesRequired"
-  // Note: "action" is intentionally omitted — it's a UI-only column.
+  // Note: the Actions column is intentionally omitted — it's UI only.
 };
 
 const EXPORT_HEADERS = {
@@ -199,22 +292,16 @@ const EXPORT_HEADERS = {
 };
 
 // ─── Custom Views ─────────────────────────────────────────────────────────────
-// A "view" bundles every layout preference — column visibility, column order,
-// sort, and density — into one named, describable object, with exactly one view
-// active at a time. Editing the table always edits the active view; there's no
-// separate hidden "current layout" that can silently drift out of sync.
-const DEFAULT_COLUMN_VISIBILITY = {
-  sme: true, bigScore: true, match: true, fundingStage: true,
-  fundingRequired: true, status: true, applied: true, action: true,
-  daysInStage: true, lastActivity: true,
-  sector: false, location: false, province: false,
-  supportRequired: false, servicesRequired: false
-};
+// A "view" bundles every layout preference — column visibility, order, widths,
+// pinning, sort and density — into one named, describable object, with exactly
+// one view active at a time. Editing the table always edits the active view.
 const DEFAULT_SORT_CONFIG = { key: "attentionThenScore", direction: "desc" };
 const DEFAULT_DENSITY = "comfortable";
 
 const BUILTIN_VIEW_ID = "__default__";
-const VIEWS_STORAGE_KEY = "cmf-sme-table-views-v2";
+// v3: the two fixed columns now store their widths in the same map, and views
+// carry a pinned map, so a v2 view would leave both undefined.
+const VIEWS_STORAGE_KEY = "cmf-sme-table-views-v3";
 
 // Keeps a stored column order valid against the columns this build actually
 // knows about: drops keys that no longer exist, appends newly-introduced ones.
@@ -229,9 +316,10 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
+  pinned: { ...DEFAULT_PINNED },
   sortConfig: { ...DEFAULT_SORT_CONFIG },
   density: DEFAULT_DENSITY,
-  columnWidths: {},
 });
 
 const createBuiltinDefaultView = () => ({
@@ -246,9 +334,10 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
+  pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
   density: view?.density || DEFAULT_DENSITY,
-  columnWidths: view?.columnWidths || {},
 });
 
 const loadViewsState = () => {
@@ -318,9 +407,10 @@ export function CMFSMETable({
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
   const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility);
   const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder);
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths);
+  const [pinned, setPinned] = useState(() => initialActiveView.pinned);
   const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig);
   const [density, setDensity] = useState(() => initialActiveView.density);
-  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths || {});
 
   const [showColumnChooser, setShowColumnChooser] = useState(false);
   const [columnChooserRect, setColumnChooserRect] = useState(null);
@@ -328,6 +418,7 @@ export function CMFSMETable({
   const [newViewName, setNewViewName] = useState("");
   const [newViewDescription, setNewViewDescription] = useState("");
   const [editingViewMeta, setEditingViewMeta] = useState(null);
+  const [columnSearch, setColumnSearch] = useState("");
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
@@ -341,10 +432,14 @@ export function CMFSMETable({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Column drag-to-reorder state
+  // Column drag-to-reorder + resize state
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [dragHintRect, setDragHintRect] = useState(null);
+  const resizingRef = useRef(null);
+  const [resizingColumn, setResizingColumn] = useState(null);
+
+  const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth);
 
   // Popups
   const [activePopup, setActivePopup] = useState(null);
@@ -361,9 +456,6 @@ export function CMFSMETable({
   const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   // ─── Programme-aware pipeline stages ──────────────────────────────────────
-  // Pipeline settings live in the shared localStorage key
-  // CMFDealFlowPipeline.jsx writes to, so the table's stage list always matches
-  // whatever programme is actually selected.
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
 
   useEffect(() => {
@@ -378,24 +470,30 @@ export function CMFSMETable({
     };
   }, []);
 
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const activeProgrammeLabel = (PROGRAMME_TEMPLATES[pipelineSettings.programmeType] || PROGRAMME_TEMPLATES.default).label;
   const activeStages = useMemo(() => getActiveStages(pipelineSettings), [pipelineSettings]);
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
 
-  // Auto-save: any edit to columns/order/sort/density writes straight back into
-  // the active view (and persists immediately).
+  // Auto-save: any edit to columns/order/widths/pinning/sort/density writes
+  // straight back into the active view (and persists immediately).
   useEffect(() => {
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId];
       if (!current) return prev;
-      const updated = { ...current, columnVisibility, columnOrder, sortConfig, density, columnWidths };
+      const updated = { ...current, columnVisibility, columnOrder, columnWidths, pinned, sortConfig, density };
       const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } };
       persistViewsState(next);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columnVisibility, columnOrder, sortConfig, density, columnWidths]);
+  }, [columnVisibility, columnOrder, columnWidths, pinned, sortConfig, density]);
 
   const switchToView = (viewId) => {
     const target = viewsState.views[viewId];
@@ -407,9 +505,10 @@ export function CMFSMETable({
     });
     setColumnVisibility(target.columnVisibility);
     setColumnOrder(target.columnOrder);
+    setColumnWidths(target.columnWidths);
+    setPinned(target.pinned);
     setSortConfig(target.sortConfig);
     setDensity(target.density);
-    setColumnWidths(target.columnWidths || {});
   };
 
   const createNewView = () => {
@@ -419,7 +518,8 @@ export function CMFSMETable({
     const newView = {
       id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
       columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
-      sortConfig: { ...sortConfig }, density, columnWidths: { ...columnWidths },
+      columnWidths: { ...columnWidths }, pinned: { ...pinned },
+      sortConfig: { ...sortConfig }, density,
     };
     setViewsState((prev) => {
       const next = { activeViewId: id, views: { ...prev.views, [id]: newView } };
@@ -468,9 +568,10 @@ export function CMFSMETable({
       const def = viewsState.views[BUILTIN_VIEW_ID];
       setColumnVisibility(def.columnVisibility);
       setColumnOrder(def.columnOrder);
+      setColumnWidths(def.columnWidths);
+      setPinned(def.pinned);
       setSortConfig(def.sortConfig);
       setDensity(def.density);
-      setColumnWidths(def.columnWidths || {});
     }
     setNotification({ type: "success", message: "View deleted" });
   };
@@ -479,11 +580,19 @@ export function CMFSMETable({
     const layout = createDefaultViewLayout();
     setColumnVisibility(layout.columnVisibility);
     setColumnOrder(layout.columnOrder);
+    setColumnWidths(layout.columnWidths);
+    setPinned(layout.pinned);
     setSortConfig(layout.sortConfig);
     setDensity(layout.density);
-    setColumnWidths(layout.columnWidths || {});
     setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` });
   };
+
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+  const cyclePin = (key) =>
+    setPinned((prev) => ({
+      ...prev,
+      [key]: prev[key] === "left" ? "right" : prev[key] === "right" ? null : "left",
+    }));
 
   // ─── Row mapping ──────────────────────────────────────────────────────────
   const smes = useMemo(() => {
@@ -525,7 +634,6 @@ export function CMFSMETable({
     if (stageFilter) {
       result = result.filter((s) => mapStatusToStageId(s.pipelineStage, activeStages) === stageFilter);
     }
-
 
     // External filters panel (owned by the parent).
     if (filters.location) {
@@ -591,22 +699,23 @@ export function CMFSMETable({
     textFilter("supportRequired", "supportRequired");
     textFilter("servicesRequired", "servicesRequired");
 
-    if (sortConfig.key === "attentionThenScore") {
+    if (sortConfig?.key === "attentionThenScore") {
       result.sort((a, b) => {
         const aFlag = getAttentionReasons(a, activeStages).length > 0 ? 1 : 0;
         const bFlag = getAttentionReasons(b, activeStages).length > 0 ? 1 : 0;
         if (aFlag !== bFlag) return bFlag - aFlag;
         return b.bigScore - a.bigScore;
       });
-    } else if (sortConfig.key) {
+    } else if (sortConfig?.key) {
+      const accessor = SORT_ACCESSORS[sortConfig.key] || ((r) => (r[sortConfig.key] ?? "").toString().toLowerCase());
       result.sort((a, b) => {
-        let aVal = a[sortConfig.key], bVal = b[sortConfig.key];
-        if (typeof aVal === "string") aVal = aVal.toLowerCase();
-        if (typeof bVal === "string") bVal = bVal.toLowerCase();
-        if (aVal == null) aVal = ""; if (bVal == null) bVal = "";
-        if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-        return 0;
+        const av = accessor(a);
+        const bv = accessor(b);
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av;
+        }
+        const cmp = (av ?? "").toString().localeCompare((bv ?? "").toString());
+        return sortConfig.direction === "asc" ? cmp : -cmp;
       });
     }
 
@@ -615,6 +724,8 @@ export function CMFSMETable({
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => { setCurrentPage(1); }, [localFilters, pageSize, stageFilter]);
 
   const sectorOptions = useMemo(
     () => [...new Set(smes.map((s) => s.sector).filter((s) => s && s !== "N/A"))].sort(),
@@ -635,8 +746,14 @@ export function CMFSMETable({
     + ["location", "province", "lastActivity", "supportRequired", "servicesRequired"]
       .filter((k) => localFilters[k]?.trim()).length;
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
-  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+  const clearAllFilters = () => {
+    setLocalFilters({
+      name: "", fundingStage: [], bigScoreRange: [0, 100], matchRange: [0, 100], status: [],
+      sector: [], fundingRequiredRange: [null, null], daysInStageRange: [null, null],
+      appliedRange: [null, null], location: "", province: "", lastActivity: "",
+      supportRequired: "", servicesRequired: ""
+    });
+  };
 
   const getFilterActive = (filterType) => {
     switch (filterType) {
@@ -695,12 +812,81 @@ export function CMFSMETable({
     setDragOverColumn(null);
   };
 
+  // ─── Widths + resize ──────────────────────────────────────────────────────
+  // widthOf is declared above startResize because startResize calls it — a
+  // const referenced before its initializer throws at render. It covers the
+  // reorderable columns *and* the two fixed ones, so every column in the table
+  // can be dragged wider.
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths]
+  );
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = widthOf(key);
+    resizingRef.current = key;
+    setResizingColumn(key);
+
+    const onMove = (ev) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX));
+      setColumnWidths((prev) => ({ ...prev, [key]: next }));
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      setResizingColumn(null);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+
+    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
+    // the 6px handle mid-drag, and so text can't be selected while resizing.
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }));
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="cmt-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => { e.stopPropagation(); resetColumnWidth(colKey); }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  );
+
+  // ─── Header filter + sort ─────────────────────────────────────────────────
   const openHeaderFilter = (type, event) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }));
   };
   const closeHeaderFilter = () => setHeaderFilterOpen(null);
+
+  // asc → desc → back to the default "needs attention first" sort.
+  const toggleSort = (key, event) => {
+    event.stopPropagation();
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { ...DEFAULT_SORT_CONFIG };
+    });
+  };
 
   const FilterTrigger = ({ type, active }) => (
     <button
@@ -712,6 +898,22 @@ export function CMFSMETable({
       <SlidersHorizontal size={11} />
     </button>
   );
+
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey;
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    );
+  };
 
   // ─── Popups ───────────────────────────────────────────────────────────────
   const openPopup = (type, sme, rect, options = {}) => {
@@ -834,18 +1036,13 @@ export function CMFSMETable({
   // ─── Export ───────────────────────────────────────────────────────────────
   const handleExport = () => {
     try {
-      // Respect the table's current visual order: pinned "Business Name"
-      // first, then the reorderable columns in whatever order they've been
-      // dragged into, skipping the UI-only "Action" column and hidden columns.
-      const visibleCols = [
-        "sme",
-        ...columnOrder.filter((key) => key !== "sme" && key !== "action" && columnVisibility[key])
-      ].filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key]);
+      // Respect the table's current visual order: pinned "Business Name" first,
+      // then the reorderable columns in whatever order they've been dragged
+      // into, skipping hidden ones. Columns collapsed purely by viewport size
+      // are still exported — they're visible in the view, just not on this
+      // screen.
+      const visibleCols = ["sme", ...columnOrder.filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key])];
 
-      if (visibleCols.length === 0) {
-        setNotification({ type: "error", message: "No visible columns to export" });
-        return;
-      }
       if (filteredAndSortedSMEs.length === 0) {
         setNotification({ type: "error", message: "No businesses to export" });
         return;
@@ -899,74 +1096,161 @@ export function CMFSMETable({
     setShowCalendarPopup(false);
   };
 
-  const densityStyles = {
-    comfortable: { cell: "py-3 px-3", fontSize: "text-sm", avatarSize: "w-8 h-8" },
-    compact: { cell: "py-2 px-2", fontSize: "text-xs", avatarSize: "w-7 h-7" },
-    "ultra-compact": { cell: "py-1.5 px-1.5", fontSize: "text-xs", avatarSize: "w-6 h-6" },
-  };
-  const ds = densityStyles[density] || densityStyles.comfortable;
-
-  // ─── Column resizing ──────────────────────────────────────────────────────
-  // Drag the divider on a header's right edge to resize the column; double-click
-  // it to snap that column back to auto width. Widths are stored per view
-  // alongside visibility/order/sort/density, so they persist and travel with
-  // whichever view is active.
-  const [resizingColumn, setResizingColumn] = useState(null);
-
-  const widthStyle = (key, fallbackMin, fallbackMax) => {
-    const w = columnWidths[key];
-    if (w) return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    return fallbackMax ? { minWidth: fallbackMin, maxWidth: fallbackMax } : { minWidth: fallbackMin };
-  };
-
-  const startResize = (event, key) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const th = event.currentTarget.closest("th");
-    const startX = event.clientX;
-    const startWidth = th ? th.getBoundingClientRect().width : 120;
-    setResizingColumn(key);
-
-    const onMove = (moveEvent) => {
-      const next = Math.max(64, Math.round(startWidth + (moveEvent.clientX - startX)));
-      setColumnWidths((prev) => ({ ...prev, [key]: next }));
-    };
-    const onUp = () => {
-      setResizingColumn(null);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
-    // the 6px handle mid-drag, and so text can't be selected while resizing.
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  };
-
-  const autoFitColumn = (key) =>
-    setColumnWidths((prev) => { const { [key]: _dropped, ...rest } = prev; return rest; });
-
-  const ColumnResizer = ({ colKey }) => (
-    <span
-      onMouseDown={(e) => startResize(e, colKey)}
-      onDoubleClick={(e) => { e.stopPropagation(); autoFitColumn(colKey); }}
-      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-      onClick={(e) => e.stopPropagation()}
-      title="Drag to resize · double-click to auto-fit"
-      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none z-10"
-      style={{ backgroundColor: resizingColumn === colKey ? "#a67c52" : "transparent" }}
-    />
-  );
-
   useEffect(() => {
     if (!notification) return;
     const t = setTimeout(() => setNotification(null), 4000);
     return () => clearTimeout(t);
   }, [notification]);
+
+  // ─── Layout ───────────────────────────────────────────────────────────────
+  const maxPriority = viewportWidth < 640 ? 1 : viewportWidth < 1024 ? 3 : 99;
+
+  const visibleColumnKeys = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key] && COLUMN_DEFS[key].priority <= maxPriority),
+    [columnOrder, columnVisibility, maxPriority]
+  );
+
+  const collapsedByViewport = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key] && COLUMN_DEFS[key].priority > maxPriority).length,
+    [columnOrder, columnVisibility, maxPriority]
+  );
+
+  const orderedColumns = useMemo(() => {
+    const left = visibleColumnKeys.filter((k) => pinned[k] === "left");
+    const right = visibleColumnKeys.filter((k) => pinned[k] === "right");
+    const middle = visibleColumnKeys.filter((k) => !pinned[k]);
+    return [...left, ...middle, ...right];
+  }, [visibleColumnKeys, pinned]);
+
+  const nameWidth = widthOf(NAME_KEY);
+  const actionWidth = widthOf(ACTION_KEY);
+
+  const stickyOffsets = useMemo(() => {
+    const offsets = {};
+    // Left-pinned columns stack to the right of the frozen name column.
+    let leftAcc = nameWidth;
+    orderedColumns.forEach((key) => {
+      if (pinned[key] === "left") {
+        offsets[key] = { side: "left", value: leftAcc };
+        leftAcc += widthOf(key);
+      }
+    });
+    // Actions is not pinned, so right-pinned columns stick to the table edge.
+    let rightAcc = 0;
+    [...orderedColumns].reverse().forEach((key) => {
+      if (pinned[key] === "right") {
+        offsets[key] = { side: "right", value: rightAcc };
+        rightAcc += widthOf(key);
+      }
+    });
+    return offsets;
+  }, [orderedColumns, pinned, widthOf, nameWidth]);
+
+  const totalWidth = nameWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0);
+
+  const cellPad = density === "compact" ? "py-2 px-2" : density === "ultra-compact" ? "py-1.5 px-1.5" : "py-3 px-3";
+  const cellFont = density === "comfortable" ? "text-sm" : "text-xs";
+  const avatarSize = density === "comfortable" ? "w-8 h-8" : density === "compact" ? "w-7 h-7" : "w-6 h-6";
+  const headerPadding = density === "comfortable" ? "0.7rem 0.6rem" : "0.5rem 0.6rem";
+
+  const searchedColumns = DEFAULT_COLUMN_ORDER.filter((key) =>
+    COLUMN_DEFS[key].label.toLowerCase().includes(columnSearch.toLowerCase())
+  );
+
+  // ─── Cell renderer ────────────────────────────────────────────────────────
+  const renderCell = (key, sme, rowBg) => {
+    const offset = stickyOffsets[key];
+    const stickyStyle = offset
+      ? {
+          position: "sticky",
+          [offset.side]: `${offset.value}px`,
+          zIndex: 9,
+          backgroundColor: rowBg,
+          boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+        }
+      : {};
+    const cls = `${cellPad} ${cellFont} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top`;
+
+    switch (key) {
+      case "bigScore": {
+        const label = getBigScoreLabel(sme.bigScore);
+        return (
+          <td key={key} className={`${cellPad} text-center border-r border-b border-[#e6d7c3] align-top`} style={stickyStyle}>
+            <div className="flex flex-col items-center gap-1">
+              <div className="relative w-11 h-11">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="14" fill="none" stroke={label.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center ${cellFont} font-semibold`} style={{ color: label.color }}>{sme.bigScore}</span>
+              </div>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${label.color}20`, color: label.color }}>{label.label}</span>
+            </div>
+          </td>
+        );
+      }
+      case "match": {
+        const label = getMatchLabel(sme.matchPercentage);
+        return (
+          <td key={key} className={`${cellPad} text-center border-r border-b border-[#e6d7c3] align-top`} style={stickyStyle}>
+            <div className="flex flex-col items-center gap-1 w-full">
+              <span className={`${cellFont} font-semibold text-[#4a352f]`}>{sme.matchPercentage}%</span>
+              <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: label.color }}>{label.label}</span>
+              <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: label.color }} />
+              </div>
+            </div>
+          </td>
+        );
+      }
+      case "fundingStage":
+        return (
+          <td key={key} className={cls} style={stickyStyle}>
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span>
+          </td>
+        );
+      case "fundingRequired":
+        return <td key={key} className={cls} style={stickyStyle}><span className="font-medium">{sme.fundingRequired}</span></td>;
+      case "status": {
+        const statusStyle = getStatusStyle(sme.currentStatus, activeStages);
+        return (
+          <td key={key} className={`${cellPad} border-r border-b border-[#e6d7c3] align-top`} style={stickyStyle}>
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap"
+              style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
+              title={statusStyle.stage.tooltip}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusStyle.dot }} />
+              {statusStyle.stage.name}
+            </span>
+          </td>
+        );
+      }
+      case "applied":
+        return (
+          <td key={key} className={cls} style={stickyStyle}>
+            <div className="flex items-center gap-1.5"><Calendar size={13} className="text-[#7d5a50] flex-shrink-0" />{sme.applicationDateLabel}</div>
+          </td>
+        );
+      case "daysInStage":
+        return (
+          <td key={key} className={cls} style={stickyStyle}>
+            <div className="flex items-center gap-1.5"><Clock size={13} className="text-[#7d5a50] flex-shrink-0" />{sme.daysInStage} days</div>
+          </td>
+        );
+      case "lastActivity":
+        return <td key={key} className={cls} style={stickyStyle}>{sme.lastActivityLabel}</td>;
+      case "sector":
+      case "location":
+      case "province":
+        return <td key={key} className={cls} style={stickyStyle}><span className="break-words">{sme[key]}</span></td>;
+      case "supportRequired":
+      case "servicesRequired":
+        return <td key={key} className={cls} style={stickyStyle}><span className="line-clamp-2 break-words">{sme[key]}</span></td>;
+      default:
+        return null;
+    }
+  };
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -987,25 +1271,33 @@ export function CMFSMETable({
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]" title="Determined by the pipeline's programme type setting">
               <Briefcase size={12} /> {activeProgrammeLabel} pipeline
             </span>
-            {/* Always-visible active view name (+ description, if any) — no
-                hover required, so it's never ambiguous which view is live. */}
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
               Viewing: {activeView.name}
-              {activeView.description && (
-                <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
-              )}
+              {activeView.description && (<span className="font-normal text-[#a89482]"> — {activeView.description}</span>)}
             </span>
             {activeFilterCount > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
-                <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+              <>
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+                </span>
+                <button
+                  onClick={clearAllFilters}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-white border border-[#e6d7c3] transition-colors"
+                >
+                  Clear all filters
+                </button>
+              </>
+            )}
+            {collapsedByViewport > 0 && (
+              <span className="px-3 py-1.5 rounded-xl text-xs font-medium text-[#a89482] border border-[#e6d7c3]">
+                {collapsedByViewport} column{collapsedByViewport > 1 ? "s" : ""} hidden on this screen size
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-
-            {/* ─── Customize Table (Views + Hide/Unhide + Density + Reset) ── */}
+            {/* ─── Customize Table (Views + Columns + Density + Reset) ──── */}
             <div className="relative">
               <button
                 onClick={(e) => {
@@ -1023,15 +1315,16 @@ export function CMFSMETable({
               >
                 <SlidersHorizontal size={16} /> Customize Table <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? "rotate-180" : ""}`} />
               </button>
+
               {showColumnChooser && columnChooserRect && (() => {
-                const panelWidth = 320;
+                const panelWidth = 340;
                 const margin = 12;
                 let left = columnChooserRect.right - panelWidth;
                 left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
                 const spaceBelow = window.innerHeight - columnChooserRect.bottom - margin - 8;
                 const spaceAbove = columnChooserRect.top - margin - 8;
                 const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
-                const maxHeight = Math.max(200, Math.min(620, openUpward ? spaceAbove : spaceBelow));
+                const maxHeight = Math.max(200, Math.min(640, openUpward ? spaceAbove : spaceBelow));
                 const top = openUpward ? undefined : columnChooserRect.bottom + 8;
                 const bottom = openUpward ? window.innerHeight - columnChooserRect.top + 8 : undefined;
                 const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)));
@@ -1131,36 +1424,63 @@ export function CMFSMETable({
                       )}
 
                       <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Columns</h4>
 
-                      {/* ─── Hide/Unhide ─────────────────────────────── */}
-                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
+                      <div className="relative mb-3">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
+                        <input
+                          value={columnSearch}
+                          onChange={(e) => setColumnSearch(e.target.value)}
+                          placeholder="Search columns..."
+                          className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+                        />
+                      </div>
+
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize. Every column resizes, including the pinned ones.
                       </p>
-                      {[{ key: "sme", label: "Business Name" }, { key: "bigScore", label: "BIG Score" }, { key: "match", label: "Match %" }, { key: "status", label: "Status" }, { key: "action", label: "Action" }].map(({ key, label }) => (
-                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
-                          <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f]">{label}</span>
-                        </label>
-                      ))}
+
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Business Name</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">Actions</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Always last</span>
+                      </div>
                       <div className="border-t border-[#e6d7c3] my-2" />
-                      {[
-                        { key: "fundingStage", label: "Funding Stage" }, { key: "fundingRequired", label: "Funding Required" },
-                        { key: "applied", label: "Applied Date" }, { key: "daysInStage", label: "Days in Stage" },
-                        { key: "lastActivity", label: "Last Activity" }, { key: "sector", label: "Sector" },
-                        { key: "location", label: "Location" }, { key: "province", label: "Province" },
-                        { key: "supportRequired", label: "Support Required" }, { key: "servicesRequired", label: "Services Required" },
-                      ].map(({ key, label }) => (
-                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
-                          <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
-                          <span className="text-sm text-[#4a352f]">{label}</span>
-                        </label>
+
+                      {searchedColumns.length === 0 && <p className="text-xs text-[#a89482] px-2 py-1.5">No columns match that search.</p>}
+                      {searchedColumns.map((key) => (
+                        <div key={key} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2]">
+                          <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={columnVisibility[key] || false}
+                              onChange={() => toggleColumn(key)}
+                              className="rounded border-[#c8b6a6] text-[#7d5a50]"
+                            />
+                            <span className="text-sm text-[#4a352f] truncate">{COLUMN_DEFS[key].label}</span>
+                          </label>
+                          <button
+                            onClick={() => cyclePin(key)}
+                            title={pinned[key] === "left" ? "Pinned left — click to pin right" : pinned[key] === "right" ? "Pinned right — click to unpin" : "Pin left"}
+                            className={`p-1 rounded flex-shrink-0 ${pinned[key] ? "text-[#7d5a50]" : "text-[#c8b6a6] hover:text-[#7d5a50]"}`}
+                          >
+                            {pinned[key] ? <Pin size={13} /> : <PinOff size={13} />}
+                          </button>
+                          <span className="text-[10px] text-[#a89482] w-7 text-right flex-shrink-0">
+                            {pinned[key] === "left" ? "L" : pinned[key] === "right" ? "R" : ""}
+                          </span>
+                        </div>
                       ))}
 
                       <div className="border-t border-[#e6d7c3] my-4" />
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
                       <div className="flex gap-1.5 mb-1">
-                        {[{ key: "comfortable", label: "Comfortable" }, { key: "compact", label: "Compact" }, { key: "ultra-compact", label: "Ultra Compact" }].map((d) => (
+                        {[{ key: "comfortable", label: "Comfortable" }, { key: "compact", label: "Compact" }, { key: "ultra-compact", label: "Ultra" }].map((d) => (
                           <button
                             key={d.key}
                             onClick={() => setDensity(d.key)}
@@ -1189,45 +1509,84 @@ export function CMFSMETable({
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+      <div className="bg-white rounded-b-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
         {loading ? (
           <div className="p-8"><div className="space-y-4">{[...Array(8)].map((_, i) => (<div key={i} className="h-10 bg-[#f5f0e1] rounded-lg animate-pulse" />))}</div></div>
         ) : (
           <>
             <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
               <style>{`
-                .cmt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
+                /* No 'position: relative' here — it silently overrides the
+                   sticky positioning on every <th>, so the header would scroll
+                   away while the pinned body cells stayed. Sticky is itself a
+                   positioned ancestor, so the grip and resize handle still
+                   anchor. */
+                .cmt-th { color: #faf7f2 !important; vertical-align: top !important; }
                 .cmt-th-draggable { cursor: grab; }
                 .cmt-th-draggable:active { cursor: grabbing; }
-                /* Wrap header labels onto at most 2 lines instead of forcing
-                   the column wider than needed. This only lays out cleanly
-                   because each column also has a real min-width in
-                   COLUMN_DEFS — without that floor, the browser sizes
-                   wrapped-text columns to their smallest possible content. */
-                .cmt-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
-                /* Column resizing: an explicit header width only holds if the
-                   cells below can shrink, so long values wrap rather than
-                   forcing the column wider than the width that was dragged. */
-                .bigt-fit th, .bigt-fit td { overflow: hidden; }
-                .bigt-fit td { word-break: break-word; }
+                .cmt-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+                /* overflow-wrap: normal stops the browser splitting inside a
+                   word, which is what turns "Match %" into "MAT CH.." and
+                   "Status" into "STA TUS" in narrow columns. */
+                .cmt-th-label {
+                  flex: 1 1 auto; min-width: 0;
+                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                  overflow: hidden; white-space: normal;
+                  overflow-wrap: normal; word-break: normal; hyphens: none;
+                  line-height: 1.2; letter-spacing: 0.02em;
+                }
+                .cmt-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+                /* The drag grip leaves the flex flow and only appears on hover,
+                   buying every header ~14px more room for its label. */
+                .cmt-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+                .cmt-th:hover .cmt-th-grip { opacity: .45; }
+                .cmt-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+                .cmt-resize:hover { background: rgba(255,255,255,0.25); }
               `}</style>
-              <table className="border-collapse bigt-fit" style={{ tableLayout: "auto" }}>
+
+              <table
+                className="text-sm"
+                style={{
+                  /* separate (not collapse) — collapsed borders are dropped by
+                     sticky cells, which makes the pinned column lose its edge
+                     and mispaint over its neighbour while scrolling. */
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  tableLayout: "fixed",
+                  width: totalWidth,
+                  minWidth: "100%",
+                }}
+              >
                 <thead>
-                  <tr className="bg-[#4a352f]">
-                    <th className="cmt-th py-3 px-3 relative text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30" style={{ backgroundColor: "#4a352f", ...widthStyle("__name__", "170px", "190px") }}>
-                      <div className="flex items-start gap-1 min-w-0">
-                        <span className="cmt-th-label">Business Name</span>
-                        <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                  <tr>
+                    {/* Business Name — pinned first column, resizable like the rest */}
+                    <th
+                      className="cmt-th text-left font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30"
+                      style={{
+                        backgroundColor: "#4a352f",
+                        width: nameWidth,
+                        padding: headerPadding,
+                        borderBottom: "1px solid #e6d7c3",
+                        boxShadow: "2px 0 0 #e6d7c3",
+                      }}
+                    >
+                      <div className="cmt-th-row">
+                        <span className="cmt-th-label" title="Business Name">Business Name</span>
+                        <span className="cmt-th-tools">
+                          <SortTrigger columnKey={NAME_KEY} />
+                          <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                          <HeaderInfoTooltip text="The registered name of the business. Click the eye to open its full profile." />
+                        </span>
                       </div>
-                      <ColumnResizer colKey="__name__" />
+                      <ColumnResizer colKey={NAME_KEY} />
                     </th>
 
                     {/* ─── Reorderable columns ──────────────────────── */}
-                    {columnOrder.filter((key) => columnVisibility[key]).map((key) => {
+                    {orderedColumns.map((key) => {
                       const col = COLUMN_DEFS[key];
-                      if (!col) return null;
                       const isDragging = draggedColumn === key;
                       const isDragOver = dragOverColumn === key && draggedColumn !== key;
+                      const offset = stickyOffsets[key];
                       return (
                         <th
                           key={key}
@@ -1238,189 +1597,147 @@ export function CMFSMETable({
                           onDragEnd={handleColumnDragEnd}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`cmt-th cmt-th-draggable py-3 px-3 relative font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
-                          style={{ ...widthStyle(key, col.minWidth), backgroundColor: isDragOver ? "#5a423b" : "#4a352f" }}
+                          className={`cmt-th cmt-th-draggable font-semibold uppercase tracking-wider text-xs sticky top-0 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
+                          style={{
+                            width: widthOf(key),
+                            padding: headerPadding,
+                            backgroundColor: isDragOver ? "#5a423b" : "#4a352f",
+                            zIndex: offset ? 25 : 20,
+                            borderBottom: "1px solid #e6d7c3",
+                            borderRight: "1px solid #e6d7c3",
+                            ...(offset
+                              ? {
+                                  [offset.side]: `${offset.value}px`,
+                                  boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+                                }
+                              : {}),
+                          }}
                         >
-                          <div className={`flex items-start gap-1 min-w-0 ${col.align === "center" ? "justify-center" : ""}`}>
-                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <span className="cmt-th-label">{col.label}</span>
-                            <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
-                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                          <GripVertical size={11} className="cmt-th-grip" />
+                          <div className={`cmt-th-row ${col.align === "center" ? "justify-center" : ""}`}>
+                            <span className="cmt-th-label" title={col.label}>{col.label}</span>
+                            <span className="cmt-th-tools">
+                              {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
+                              {col.sortable && <SortTrigger columnKey={key} />}
+                              {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                              <HeaderInfoTooltip text={col.tooltip} />
+                            </span>
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
                       );
                     })}
 
-                    {columnVisibility.action && (
-                      <th className="cmt-th py-3 px-3 relative text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "190px", backgroundColor: "#4a352f" }}>Actions</th>
-                    )}
+                    {/* Actions scrolls horizontally with the table — only top-0,
+                        so it still holds position on vertical scroll. */}
+                    <th
+                      className="cmt-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
+                      style={{
+                        backgroundColor: "#4a352f",
+                        width: actionWidth,
+                        padding: headerPadding,
+                        borderBottom: "1px solid #e6d7c3",
+                      }}
+                    >
+                      <div className="cmt-th-row justify-center">
+                        <span className="cmt-th-label">Actions</span>
+                        <HeaderInfoTooltip text="Move the application to its next stage, or open quick actions to view the profile, message the business or decline it." />
+                      </div>
+                      <ColumnResizer colKey={ACTION_KEY} />
+                    </th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {paginatedSMEs.length === 0 ? (
-                    <tr><td colSpan={Object.values(columnVisibility).filter(Boolean).length + 1} className="text-center py-20">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
-                        <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
-                        <p className="text-sm text-[#7d5a50] max-w-xs">
-                          {activeFilterCount > 0 ? "Clear a filter to widen the list." : "Matched businesses will appear here as your programme criteria are applied."}
-                        </p>
-                      </div>
-                    </td></tr>
+                    <tr>
+                      <td colSpan={orderedColumns.length + 2} className="text-center py-20 border-b border-[#e6d7c3]">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
+                          <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
+                          <p className="text-sm text-[#7d5a50] max-w-xs">
+                            {activeFilterCount > 0 ? "Clear a filter to widen the list." : "Matched businesses will appear here as your programme criteria are applied."}
+                          </p>
+                          {activeFilterCount > 0 && (
+                            <button onClick={clearAllFilters} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white">Clear all filters</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   ) : (
                     paginatedSMEs.map((sme) => {
-                      const bigScoreLabel = getBigScoreLabel(sme.bigScore);
-                      const matchLabel = getMatchLabel(sme.matchPercentage);
                       const statusStyle = getStatusStyle(sme.currentStatus, activeStages);
                       const isTerminal = !!statusStyle.stage.terminal;
                       const nextStageLabel = sme.nextStage || "—";
-
-                      const renderCell = (key) => {
-                        switch (key) {
-                          case "bigScore":
-                            return (
-                              <td key={key} className={`${ds.cell} text-center border-r border-[#e6d7c3]`}>
-                                <div className="flex flex-col items-center gap-1">
-                                  <div className="relative w-11 h-11">
-                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                                      <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
-                                      <circle cx="18" cy="18" r="14" fill="none" stroke={bigScoreLabel.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
-                                    </svg>
-                                    <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-normal`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
-                                  </div>
-                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
-                                </div>
-                              </td>
-                            );
-                          case "match":
-                            return (
-                              <td key={key} className={`${ds.cell} text-center border-r border-[#e6d7c3]`}>
-                                <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
-                                  <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
-                                  <span className="text-xs font-medium" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
-                                  <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
-                                    <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: matchLabel.color }} />
-                                  </div>
-                                </div>
-                              </td>
-                            );
-                          case "fundingStage":
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span>
-                              </td>
-                            );
-                          case "fundingRequired":
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="font-normal">{sme.fundingRequired}</span>
-                              </td>
-                            );
-                          case "status":
-                            return (
-                              <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}>
-                                <span
-                                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
-                                  style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
-                                  title={statusStyle.stage.tooltip}
-                                >
-                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
-                                </span>
-                              </td>
-                            );
-                          case "applied":
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{sme.applicationDateLabel}</div>
-                              </td>
-                            );
-                          case "daysInStage":
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <div className="flex items-center gap-1.5"><Clock size={14} className="text-[#7d5a50]" />{sme.daysInStage} days</div>
-                              </td>
-                            );
-                          case "lastActivity":
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.lastActivityLabel}</td>;
-                          case "sector":
-                          case "location":
-                          case "province":
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme[key]}</td>;
-                          case "supportRequired":
-                          case "servicesRequired":
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="line-clamp-1">{sme[key]}</span>
-                              </td>
-                            );
-                          default:
-                            return null;
-                        }
-                      };
+                      const rowBg = hoveredRowKey === sme.id ? "#fdf8f4" : "#ffffff";
 
                       return (
                         <tr
                           key={sme.id}
-                          className="border-b border-[#f0e6d9] transition-all"
-                          style={{ backgroundColor: hoveredRowKey === sme.id ? "#fdf8f4" : undefined }}
                           onMouseEnter={() => setHoveredRowKey(sme.id)}
                           onMouseLeave={() => setHoveredRowKey(null)}
+                          style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                         >
-                          {columnVisibility.sme && (
-                            <td
-                              className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 border-r border-b border-[#e6d7c3] z-10 transition-colors`}
-                              style={{ ...widthStyle("__name__", "170px", "190px"), backgroundColor: hoveredRowKey === sme.id ? "#fdf8f4" : "#ffffff" }}
-                            >
-                              <div className="flex items-start gap-2">
-                                <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{(sme.name || "B").charAt(0)}</div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start gap-1.5 flex-wrap">
-                                    <span className={`${ds.fontSize} font-normal leading-snug text-[#4a352f]`}>{sme.name}</span>
-                                    <button
-                                      onClick={() => setSelectedSME(sme)}
-                                      className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
-                                      aria-label={`View profile for ${sme.name}`}
-                                      title="View profile"
-                                    >
-                                      <Eye size={13} />
-                                    </button>
-                                  </div>
+                          {/* Business Name — pinned left */}
+                          <td
+                            className={`${cellPad} ${cellFont} text-[#4a352f] sticky left-0 z-10 align-top border-b border-[#e6d7c3]`}
+                            style={{ width: nameWidth, backgroundColor: rowBg, boxShadow: "2px 0 0 #e6d7c3" }}
+                          >
+                            <div className="flex items-start gap-2 min-w-0">
+                              <div className={`${avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>
+                                {(sme.name || "B").charAt(0)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start gap-1.5 flex-wrap">
+                                  <span className="font-medium leading-snug text-[#4a352f] break-words">{sme.name}</span>
+                                  <button
+                                    onClick={() => setSelectedSME(sme)}
+                                    className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
+                                    aria-label={`View profile for ${sme.name}`}
+                                    title="View profile"
+                                  >
+                                    <Eye size={13} />
+                                  </button>
                                 </div>
                               </div>
-                            </td>
-                          )}
+                            </div>
+                          </td>
 
-                          {columnOrder.filter((key) => columnVisibility[key]).map((key) => renderCell(key))}
+                          {orderedColumns.map((key) => renderCell(key, sme, rowBg))}
 
-                          {columnVisibility.action && (
-                            <td className={`${ds.cell} text-center`} style={{ minWidth: "190px" }}>
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  onClick={(e) => { if (!isTerminal) openPopupFromEvent("stage", sme, e); }}
-                                  disabled={isTerminal}
-                                  title={isTerminal ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
-                                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
-                                    isTerminal
-                                      ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
-                                      : "text-white hover:shadow-md hover:brightness-105"
-                                  }`}
-                                  style={{ width: "128px", height: "34px", backgroundColor: isTerminal ? undefined : "#7d5a50" }}
-                                >
-                                  {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
-                                  <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
-                                </button>
-                                <button
-                                  onClick={(e) => openPopupFromEvent("quickActions", sme, e)}
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
-                                  style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
-                                  title="More actions"
-                                >
-                                  <MoreVertical size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          )}
+                          {/* Actions — scrolls with the table */}
+                          <td
+                            className={`${cellPad} align-top border-b border-[#e6d7c3] text-center`}
+                            style={{ width: actionWidth, backgroundColor: rowBg }}
+                          >
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={(e) => { if (!isTerminal) openPopupFromEvent("stage", sme, e); }}
+                                disabled={isTerminal}
+                                title={isTerminal ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
+                                className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                                  isTerminal ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed" : "text-white hover:shadow-md hover:brightness-105"
+                                }`}
+                                style={{
+                                  width: `${Math.max(100, actionWidth - 62)}px`,
+                                  height: "34px",
+                                  backgroundColor: isTerminal ? undefined : "#7d5a50",
+                                }}
+                              >
+                                {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
+                                <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
+                              </button>
+                              <button
+                                onClick={(e) => openPopupFromEvent("quickActions", sme, e)}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                                style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
+                                title="More actions"
+                                aria-label="More actions"
+                              >
+                                <MoreVertical size={14} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
@@ -1430,7 +1747,7 @@ export function CMFSMETable({
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl flex-wrap gap-3">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-[#4a352f]">
                   Showing {Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedSMEs.length)}-{Math.min(currentPage * pageSize, filteredAndSortedSMEs.length)} of {filteredAndSortedSMEs.length} Businesses
@@ -1465,11 +1782,11 @@ export function CMFSMETable({
             className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
             style={{
               top: dragHintRect.bottom + 8,
-              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200),
-              width: "190px",
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 210),
+              width: "200px",
             }}
           >
-            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
           </div>
         </PopupPortal>
       )}
@@ -1482,8 +1799,10 @@ export function CMFSMETable({
             className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
             style={{
               top: headerFilterOpen.rect.bottom + 8,
-              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292),
-              width: "280px",
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312),
+              width: "300px",
+              maxHeight: "70vh",
+              overflowY: "auto",
             }}
           >
             {headerFilterOpen.type === "name" && (
@@ -1565,7 +1884,7 @@ export function CMFSMETable({
                       <button onClick={() => setLocalFilters((p) => ({ ...p, [key]: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  <div className="flex flex-wrap gap-1.5 max-h-[200px] overflow-y-auto">
                     {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
                     {options.map((s) => (
                       <button key={s}

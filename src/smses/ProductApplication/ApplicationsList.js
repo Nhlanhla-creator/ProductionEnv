@@ -1,10 +1,39 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore"
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  deleteDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Eye, FileText, Package, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Hash, Table2 } from "lucide-react"
+import {
+  Eye,
+  FileText,
+  Package,
+  Calendar,
+  Plus,
+  RefreshCw,
+  Trash2,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Hash,
+  Table2,
+  X,
+  Info,
+  MoreVertical,
+  Send,
+  ChevronDown,
+} from "lucide-react"
 import { deriveAppId } from "../hooks/useMatches"
 
 /**
@@ -18,7 +47,9 @@ import { deriveAppId } from "../hooks/useMatches"
  * - onViewSummary: (applicationId, applicationData) => void
  * - onEditApplication: (applicationId) => void
  * - onCreateNew: () => void
- * - onNavigateToMatches: (applicationId) => void   optional; wins over the route
+ * - onNavigateToMatches: (applicationId, matchRange) => void   optional; wins over the route
+ * - onSubmitApplication: (applicationId, applicationData) => void  optional; without
+ *   it this component writes status: "submitted" itself
  * - embedded: boolean
  */
 
@@ -27,12 +58,109 @@ import { deriveAppId } from "../hooks/useMatches"
    this is the supplier equivalent. */
 const MATCHES_ROUTE = "/supplier-matches"
 
-const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNavigateToMatches, embedded = false }) => {
+/* Both events are string literals rather than imports from the supplier table,
+   so the two files can't form an import cycle. They must match the constants
+   exported there: SUPPLIER_APPLICATION_FILTER_EVENT and
+   SUPPLIER_MATCH_RANGE_EVENT. */
+const SUPPLIER_APPLICATION_FILTER_EVENT = "supplier-application-filter"
+const SUPPLIER_MATCH_RANGE_EVENT = "supplier-match-range-filter"
+
+/* The bands offered on each row's Matches cell.
+
+   No counts here, unlike the advisor, funding and intern lists. Those read a
+   stored match collection; suppliers are scored in the browser when the match
+   table opens, against whichever request is in scope — there is no per-request
+   score sitting in Firestore to count. So the picker chooses which band to
+   open, and the count appears on the table itself. */
+const MATCH_BANDS = [
+  { key: "all", label: "All matches", short: "All", range: [0, 100] },
+  { key: "above75", label: "Above 75%", short: ">75%", range: [75, 100] },
+  { key: "above50", label: "Above 50%", short: ">50%", range: [50, 100] },
+  { key: "below50", label: "Below 50%", short: "<50%", range: [0, 49] },
+]
+const bandOf = (key) => MATCH_BANDS.find((b) => b.key === key) || MATCH_BANDS[0]
+
+/* Column explanations, same idea as the Supplier Matches table: an i beside
+   each header, portaled to <body> so nothing clips it. */
+const COLUMN_TOOLTIPS = {
+  appId: "The short id for this request. Hover it in the row to see the full document id.",
+  application: "What you're asking for, taken from the purpose you wrote, with the full text underneath.",
+  category: "The primary category this request falls under.",
+  budget: "The budget band you set for this request. Suppliers are scored partly on whether they fit inside it.",
+  matches:
+    "Pick a score band, then press the eye to open the Supplier Matches table with that band applied. Suppliers are scored when the table opens, so the counts appear there.",
+  lastUpdated: "When you last saved a change to this request.",
+  status: "Draft while sections are still incomplete, Ready once every section is done, Submitted after you send it.",
+  actions: "Open the quick actions menu to view matches, view the application, submit it, or delete it.",
+}
+
+const Portal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
+
+/* ─── Column header info tooltip ─────────────────────────────────────────── */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      style={{ display: "inline-flex", alignItems: "center", cursor: "help" }}
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} />
+      {rect && (
+        <Portal>
+          <div
+            style={{
+              position: "fixed",
+              zIndex: 1200,
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 100, 12), window.innerWidth - 244),
+              width: 232,
+              background: "#4a352f",
+              color: "#faf7f2",
+              fontSize: 11.5,
+              lineHeight: 1.5,
+              fontWeight: 400,
+              textTransform: "none",
+              letterSpacing: 0,
+              borderRadius: 10,
+              padding: "9px 12px",
+              boxShadow: "0 12px 28px rgba(0,0,0,0.25)",
+              pointerEvents: "none",
+            }}
+          >
+            {text}
+          </div>
+        </Portal>
+      )}
+    </span>
+  )
+}
+
+const ApplicationsList = ({
+  onViewSummary,
+  onEditApplication,
+  onCreateNew,
+  onNavigateToMatches,
+  onSubmitApplication,
+  embedded = false,
+}) => {
   const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [submittingId, setSubmittingId] = useState(null)
+  const [navNotice, setNavNotice] = useState(null)
+
+  /* applicationId -> band key. Defaults to "all". */
+  const [rowBand, setRowBand] = useState({})
+
+  /* { app, rect } for the quick actions popover. */
+  const [quickActions, setQuickActions] = useState(null)
 
   const navigate = useNavigate()
 
@@ -91,22 +219,88 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
     return { id:docId, appId: deriveAppId(docId), name, primaryCategory, purposePreview: purpose, budgetDisplay, lastUpdatedFormatted, lastUpdatedTimestamp, isComplete, status: data.status || (isComplete ? "complete" : "draft") }
   }
 
+  /* ─── Actions ───────────────────────────────────────────────────────── */
   const handleDelete = async (appId) => {
-    try { setDeleting(true); await deleteDoc(doc(db,"productApplications",appId)); setApplications((p) => p.filter((a) => a.id !== appId)); setShowDeleteConfirm(null) }
-    catch { alert("Failed to delete. Please try again.") }
-    finally { setDeleting(false) }
+    try {
+      setDeleting(true)
+      await deleteDoc(doc(db, "productApplications", appId))
+      setApplications((p) => p.filter((a) => a.id !== appId))
+      setShowDeleteConfirm(null)
+      setNavNotice("Application deleted.")
+    } catch {
+      alert("Failed to delete. Please try again.")
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  /* Open the Supplier Matches table. A shell-provided handler wins when there
-     is one, so a tabbed layout can switch panes without a route change. The id
-     rides along in the query string so it survives the navigation — and the
-     table scores every supplier against that one request. */
-  const openMatchTable = (appId) => {
-    if (typeof onNavigateToMatches === "function") {
-      onNavigateToMatches(appId)
+  /* Submit hands off to the shell when it wants to run its own validation or
+     flow; otherwise the status is written here so the badge updates. */
+  const handleSubmit = async (app) => {
+    if (typeof onSubmitApplication === "function") {
+      onSubmitApplication(app.id, app)
       return
     }
-    navigate(`${MATCHES_ROUTE}?applicationId=${encodeURIComponent(appId)}`)
+    if (!app.isComplete) {
+      setNavNotice("Finish every section before submitting this request.")
+      return
+    }
+    try {
+      setSubmittingId(app.id)
+      await updateDoc(doc(db, "productApplications", app.id), {
+        status: "submitted",
+        submittedAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      })
+      setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, status: "submitted" } : a)))
+      setNavNotice(`${app.name} submitted.`)
+    } catch (err) {
+      console.error("Failed to submit application:", err)
+      setNavNotice("Could not submit the request. Please try again.")
+    } finally {
+      setSubmittingId(null)
+    }
+  }
+
+  /* Open the Supplier Matches table scoped to this request, narrowed to the
+     score band picked on the row.
+
+     Both channels are used on purpose. The query params are what survive the
+     route change and are read on mount; the events cover the case where the
+     table is already mounted and only needs re-scoping. A shell-provided
+     handler wins when there is one, so a tabbed layout can switch panes
+     without a route change. */
+  const openMatchTable = (appId, bandKey = "all") => {
+    const band = bandOf(bandKey)
+
+    window.dispatchEvent(new CustomEvent(SUPPLIER_APPLICATION_FILTER_EVENT, { detail: appId }))
+    window.dispatchEvent(new CustomEvent(SUPPLIER_MATCH_RANGE_EVENT, { detail: band.range }))
+
+    if (typeof onNavigateToMatches === "function") {
+      onNavigateToMatches(appId, band.range)
+      return
+    }
+
+    const params = new URLSearchParams({
+      applicationId: appId,
+      matchMin: String(band.range[0]),
+      matchMax: String(band.range[1]),
+    })
+    navigate(`${MATCHES_ROUTE}?${params.toString()}`)
+  }
+
+  const openQuickActions = (app, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setQuickActions((prev) => (prev?.app?.id === app.id ? null : { app, rect }))
+  }
+  const closeQuickActions = () => setQuickActions(null)
+
+  /* The list is used with either callback depending on the shell, so fall
+     back rather than crashing on whichever one wasn't passed. */
+  const openApplication = (app) => {
+    if (typeof onViewSummary === "function") onViewSummary(app.id, app)
+    else if (typeof onEditApplication === "function") onEditApplication(app.id, app)
   }
 
   const getStatusBadge = (app) => {
@@ -150,26 +344,32 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
         }
 
         /* min-width prevents columns from crushing when sidebar is open */
-        .al-tbl { width:100%; min-width:900px; border-collapse:collapse; table-layout:fixed; }
+        .al-tbl { width:100%; min-width:1020px; border-collapse:collapse; table-layout:fixed; }
 
         .al-appid { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; background:linear-gradient(135deg,#5d4037,#4a332a); color:#FAF7F2; border-radius:999px; font-size:10.5px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; font-family:'SF Mono','Monaco','Consolas',monospace; }
 
-        /* 7 columns: AppID + Application + Category + Budget + Updated + Status + Actions */
+        /* 8 columns: AppID + Application + Category + Budget + Matches + Updated + Status + Actions */
         .al-tbl col.c0 { width:9%;  }   /* AppID        */
         .al-tbl col.c1 { width:22%; }   /* Application  */
-        .al-tbl col.c2 { width:12%; }   /* Category     */
-        .al-tbl col.c3 { width:12%; }   /* Budget       */
-        .al-tbl col.c4 { width:11%; }   /* Last updated */
-        .al-tbl col.c5 { width:10%; }   /* Status       */
-        .al-tbl col.c6 { width:24%; }   /* Actions      */
+        .al-tbl col.c2 { width:11%; }   /* Category     */
+        .al-tbl col.c3 { width:11%; }   /* Budget       */
+        .al-tbl col.c4 { width:19%; }   /* Matches      */
+        .al-tbl col.c5 { width:11%; }   /* Last updated */
+        .al-tbl col.c6 { width:9%;  }   /* Status       */
+        .al-tbl col.c7 { width:8%;  }   /* Actions      */
 
-        .al-tbl th {
+        /* Same header treatment as the Supplier Matches table: white label on
+           the dark bar, so the two tables read as one product. */
+        .al-tbl thead th {
           padding:13px 15px; text-align:left;
-          font-size:11px; font-weight:700; color:#4a352f;
+          font-size:11px; font-weight:700; color:#faf7f2;
+          background:#4a352f;
           text-transform:uppercase; letter-spacing:0.55px; white-space:nowrap;
-          border-bottom:2px solid rgba(166,124,82,0.2);
+          border-bottom:1px solid rgba(230,215,195,0.35);
         }
+        .al-th-row { display:inline-flex; align-items:center; gap:6px; }
         .al-tbl th.r { text-align:center; }
+        .al-tbl th.r .al-th-row { justify-content:center; }
         .al-tbl td { padding:12px 15px; vertical-align:middle; overflow:hidden; }
         .al-tbl tbody tr { border-bottom:1px solid rgba(200,182,166,0.15); transition:background 0.15s; }
         .al-tbl tbody tr:last-child { border-bottom:none; }
@@ -177,20 +377,50 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
 
         .ell { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
-        .al-acts { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:nowrap; }
-        .al-btn {
-          display:inline-flex; align-items:center; gap:5px;
-          padding:6px 11px; border-radius:7px;
-          font-size:12px; font-weight:500; cursor:pointer;
-          white-space:nowrap; flex-shrink:0;
-          border:1px solid transparent;
-          transition:transform 0.15s, box-shadow 0.15s; line-height:1;
+        /* Matches cell: band picker + the eye that opens those matches */
+        .al-match { display:flex; align-items:center; gap:7px; min-width:0; }
+        .al-sel-wrap { position:relative; flex:1 1 auto; min-width:0; }
+        .al-sel {
+          width:100%; appearance:none; -webkit-appearance:none;
+          padding:5px 24px 5px 10px; border-radius:999px;
+          border:1px solid rgba(200,182,166,0.55);
+          background:rgba(255,255,255,0.85); color:#4a352f;
+          font-size:11.5px; font-weight:600; font-family:inherit;
+          cursor:pointer; line-height:1.4;
+          text-overflow:ellipsis;
         }
-        .al-btn:hover { transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,0.12); }
-        .ab-view    { background:rgba(250,247,242,0.9); color:#4a352f; border-color:rgba(200,182,166,0.4); }
-        .ab-matches { background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2; box-shadow:0 2px 6px rgba(166,124,82,0.3); font-weight:600; }
-        .ab-matches:hover { box-shadow:0 4px 12px rgba(166,124,82,0.45) !important; }
-        .ab-del     { background:rgba(250,247,242,0.9); color:#dc2626; border-color:rgba(220,38,38,0.2); padding:6px 8px; }
+        .al-sel:focus-visible { outline:2px solid #a67c52; outline-offset:1px; }
+        .al-sel-chev { position:absolute; right:8px; top:50%; transform:translateY(-50%); pointer-events:none; color:#7d5a50; }
+        .al-eye {
+          display:inline-flex; align-items:center; justify-content:center;
+          width:28px; height:28px; flex-shrink:0;
+          border-radius:8px; cursor:pointer;
+          border:1px solid transparent;
+          background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2;
+          box-shadow:0 2px 6px rgba(166,124,82,0.3);
+          transition:transform 0.15s, box-shadow 0.15s;
+        }
+        .al-eye:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(166,124,82,0.45); }
+
+        .al-kebab {
+          display:inline-flex; align-items:center; justify-content:center;
+          width:32px; height:32px; margin:0 auto;
+          border-radius:9px; cursor:pointer;
+          border:1px solid rgba(200,182,166,0.5);
+          background:rgba(250,247,242,0.9); color:#4a352f;
+          transition:transform 0.15s, box-shadow 0.15s, background 0.15s;
+        }
+        .al-kebab:hover { transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,0.12); background:#fff; }
+
+        .al-menu-item {
+          width:100%; display:flex; align-items:center; gap:9px;
+          padding:10px 14px; background:none; border:none;
+          font-size:12.5px; font-family:inherit; color:#4a352f;
+          text-align:left; cursor:pointer;
+        }
+        .al-menu-item:hover:not(:disabled) { background:#faf7f2; }
+        .al-menu-item:disabled { color:#b9aa9c; cursor:not-allowed; }
+        .al-menu-item.danger { color:#dc2626; }
       `}</style>
 
       <div style={{ width:"100%", boxSizing:"border-box", padding: embedded ? "14px" : "22px", fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
@@ -211,6 +441,15 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
           </button>
         </div>
 
+        {navNotice && (
+          <div style={{ marginBottom:14, padding:"12px 16px", borderRadius:12, background:"#faf7f2", border:"1px solid #e6d7c3", color:"#4a352f", fontSize:13, display:"flex", justifyContent:"space-between", gap:12 }}>
+            <span>{navNotice}</span>
+            <button onClick={() => setNavNotice(null)} style={{ background:"none", border:"none", cursor:"pointer", color:"#7d5a50" }}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* EMPTY */}
         {applications.length === 0 ? (
           <div style={{ background:"linear-gradient(135deg,rgba(250,247,242,0.97),rgba(245,240,225,0.97))", borderRadius:14, padding:"64px 32px", textAlign:"center", border:"1px solid rgba(200,182,166,0.3)", boxShadow:"0 10px 24px rgba(74,53,47,0.07)" }}>
@@ -227,22 +466,57 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
               <colgroup>
                 <col className="c0"/><col className="c1"/><col className="c2"/>
                 <col className="c3"/><col className="c4"/><col className="c5"/>
-                <col className="c6"/>
+                <col className="c6"/><col className="c7"/>
               </colgroup>
               <thead>
                 <tr>
-                  <th>AppID</th>
-                  <th>Application</th>
-                  <th>Category</th>
-                  <th>Budget</th>
-                  <th>Last Updated</th>
-                  <th>Status</th>
-                  <th className="r">Actions</th>
+                  <th>
+                    <span className="al-th-row">
+                      AppID <HeaderInfoTooltip text={COLUMN_TOOLTIPS.appId} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="al-th-row">
+                      Application <HeaderInfoTooltip text={COLUMN_TOOLTIPS.application} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="al-th-row">
+                      Category <HeaderInfoTooltip text={COLUMN_TOOLTIPS.category} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="al-th-row">
+                      Budget <HeaderInfoTooltip text={COLUMN_TOOLTIPS.budget} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="al-th-row">
+                      Matches <HeaderInfoTooltip text={COLUMN_TOOLTIPS.matches} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="al-th-row">
+                      Last Updated <HeaderInfoTooltip text={COLUMN_TOOLTIPS.lastUpdated} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="al-th-row">
+                      Status <HeaderInfoTooltip text={COLUMN_TOOLTIPS.status} />
+                    </span>
+                  </th>
+                  <th className="r">
+                    <span className="al-th-row">
+                      Actions <HeaderInfoTooltip text={COLUMN_TOOLTIPS.actions} />
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {applications.map((app) => {
                   const { label, color, bg, Icon } = getStatusBadge(app)
+                  const bandKey = rowBand[app.id] || "all"
+
                   return (
                     <tr key={app.id}>
                       {/* AppID */}
@@ -277,6 +551,37 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
                         <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:12 }} title={app.budgetDisplay}>{app.budgetDisplay}</span>
                       </td>
 
+                      {/* Matches — pick a score band, then press the eye to open
+                          the Supplier Matches table with that band applied. */}
+                      <td>
+                        <div className="al-match">
+                          <span className="al-sel-wrap">
+                            <select
+                              className="al-sel"
+                              value={bandKey}
+                              onChange={(e) => setRowBand((prev) => ({ ...prev, [app.id]: e.target.value }))}
+                              aria-label={`Match score band for ${app.name}`}
+                              title="Choose which matches to open"
+                            >
+                              {MATCH_BANDS.map((b) => (
+                                <option key={b.key} value={b.key}>
+                                  {b.label}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown size={12} className="al-sel-chev" />
+                          </span>
+                          <button
+                            className="al-eye"
+                            onClick={() => openMatchTable(app.id, bandKey)}
+                            aria-label={`Open ${bandOf(bandKey).label.toLowerCase()} for ${app.name}`}
+                            title={`Open the Supplier Matches table — suppliers ${bandOf(bandKey).short} for this request`}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </div>
+                      </td>
+
                       {/* Last Updated */}
                       <td>
                         <div style={{ display:"flex", alignItems:"center", gap:5, color:"#6b7280", fontSize:11, whiteSpace:"nowrap" }}>
@@ -284,31 +589,25 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
                         </div>
                       </td>
 
-                      {/* Status */}
+                      {/* Status — unchanged */}
                       <td>
                         <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", background:bg, color, borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
                           <Icon size={10} /> {label}
                         </span>
                       </td>
 
-                      {/* Actions — one route to the matches, plus summary and
-                          delete. The inline supplier panel is gone. */}
-                      <td>
-                        <div className="al-acts">
-                          <button
-                            className="al-btn ab-matches"
-                            onClick={() => openMatchTable(app.id)}
-                            title="Open the Supplier Matches table for this request"
-                          >
-                            <Table2 size={12} /> View Match Table
-                          </button>
-                          <button className="al-btn ab-view" onClick={() => onViewSummary(app.id, app)} title="View application summary">
-                            <Eye size={12} />
-                          </button>
-                          <button className="al-btn ab-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
+                      {/* Actions — one quick actions menu, nothing else. */}
+                      <td style={{ textAlign:"center" }}>
+                        <button
+                          className="al-kebab"
+                          onClick={(e) => openQuickActions(app, e)}
+                          aria-label={`Quick actions for ${app.name}`}
+                          aria-haspopup="menu"
+                          aria-expanded={quickActions?.app?.id === app.id}
+                          title="Quick actions"
+                        >
+                          <MoreVertical size={15} />
+                        </button>
                       </td>
                     </tr>
                   )
@@ -318,6 +617,120 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, onNav
           </div>
         )}
       </div>
+
+      {/* QUICK ACTIONS MENU */}
+      {quickActions &&
+        (() => {
+          const app = quickActions.app
+          const rect = quickActions.rect
+          const menuWidth = 232
+          const menuHeight = 208
+          let left = rect.right - menuWidth
+          left = Math.min(Math.max(left, 12), window.innerWidth - menuWidth - 12)
+          const openUpward = rect.bottom + menuHeight > window.innerHeight - 12
+          const top = openUpward ? undefined : rect.bottom + 8
+          const bottom = openUpward ? window.innerHeight - rect.top + 8 : undefined
+          const bandKey = rowBand[app.id] || "all"
+          const alreadySubmitted = app.status === "submitted"
+
+          return (
+            <Portal>
+              <div style={{ position: "fixed", inset: 0, zIndex: 1100 }} onClick={closeQuickActions} />
+              <div
+                role="menu"
+                style={{
+                  position: "fixed",
+                  left,
+                  top,
+                  bottom,
+                  width: menuWidth,
+                  zIndex: 1101,
+                  background: "#fff",
+                  borderRadius: 14,
+                  border: "1px solid #e6d7c3",
+                  boxShadow: "0 20px 44px rgba(74,53,47,0.22)",
+                  overflow: "hidden",
+                  paddingBottom: 4,
+                  fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    borderBottom: "1px solid #e6d7c3",
+                  }}
+                >
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "#4a352f" }}>Quick actions</span>
+                  <button
+                    onClick={closeQuickActions}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#7d5a50", display: "flex" }}
+                    aria-label="Close quick actions"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <button
+                  className="al-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    closeQuickActions()
+                    openMatchTable(app.id, bandKey)
+                  }}
+                >
+                  <Table2 size={14} /> View matches
+                </button>
+
+                <button
+                  className="al-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    closeQuickActions()
+                    openApplication(app)
+                  }}
+                >
+                  <Eye size={14} /> View application
+                </button>
+
+                <button
+                  className="al-menu-item"
+                  role="menuitem"
+                  disabled={alreadySubmitted || submittingId === app.id}
+                  title={
+                    alreadySubmitted
+                      ? "This request has already been submitted"
+                      : app.isComplete
+                        ? "Send this request"
+                        : "Finish every section first"
+                  }
+                  onClick={() => {
+                    closeQuickActions()
+                    handleSubmit(app)
+                  }}
+                >
+                  <Send size={14} />{" "}
+                  {alreadySubmitted ? "Already submitted" : submittingId === app.id ? "Submitting…" : "Submit application"}
+                </button>
+
+                <div style={{ borderTop: "1px solid #e6d7c3", margin: "4px 0" }} />
+
+                <button
+                  className="al-menu-item danger"
+                  role="menuitem"
+                  onClick={() => {
+                    closeQuickActions()
+                    setShowDeleteConfirm(app.id)
+                  }}
+                >
+                  <Trash2 size={14} /> Delete application
+                </button>
+              </div>
+            </Portal>
+          )
+        })()}
 
       {/* DELETE MODAL */}
       {showDeleteConfirm && (
