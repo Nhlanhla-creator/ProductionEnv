@@ -1,0 +1,482 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { createPortal } from "react-dom"
+import {
+    Building, Users, Mail, MapPin,
+    Package, FileText, Award, Calendar, DollarSign, Globe, X, ExternalLink
+} from "lucide-react"
+
+/* Same modal as the SME-side CatalystDetailsModal — identical tabs, cards and
+   styling — but it reads from whatever the CMF catalyst row carries instead of
+   fetching from Firestore. Documents come off the row (`documents`, or
+   `rawFormData.documentUpload`), so this file has no firebase import and no
+   path to get wrong. Pass `loadDocuments(catalystId)` if you want them fetched
+   lazily when the Documents tab opens. */
+const CMFCatalystDetailsModal = ({ catalyst, isOpen, onClose, loadDocuments }) => {
+    const [activeTab, setActiveTab] = useState("overview")
+    const [mounted, setMounted] = useState(false)
+    const [fetchedDocuments, setFetchedDocuments] = useState(null)
+    const [docsLoading, setDocsLoading] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    useEffect(() => {
+        if (activeTab !== "documents" || !catalyst || !loadDocuments) return
+        const catalystId = catalyst.originalCatalystId || catalyst.catalystId || catalyst.id
+        if (!catalystId) return
+        let cancelled = false
+        setDocsLoading(true)
+        Promise.resolve(loadDocuments(catalystId))
+            .then((docs) => { if (!cancelled) setFetchedDocuments(docs || {}) })
+            .catch((err) => { console.error("Error fetching catalyst documents:", err); if (!cancelled) setFetchedDocuments({}) })
+            .finally(() => { if (!cancelled) setDocsLoading(false) })
+        return () => { cancelled = true }
+    }, [activeTab, catalyst, loadDocuments])
+
+    if (!isOpen || !catalyst || !mounted) return null
+
+    /* The CMF catalyst row is flatter than the SME-side one, so every field
+       falls back through: full profile → flat row field → "Not specified". */
+    const formData = catalyst.rawFormData || catalyst.fullProfile || catalyst.formData || {}
+    const overview = formData.entityOverview || {}
+    const contact = formData.contactDetails || {}
+    const matchPrefs = formData.generalMatchingPreference || {}
+    const appBrief = formData.applicationBrief || {}
+    const programs = formData.programmeDetails?.programs || catalyst.programmes || catalyst.programs || []
+    const catalystDocuments = fetchedDocuments || catalyst.documents || formData.documentUpload || {}
+
+    const formatLabel = (value) => {
+        if (!value) return "Not specified"
+        if (Array.isArray(value)) return value.join(" • ")
+        return value.toString().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    }
+
+    const formatDocLabel = (key) => {
+        return key
+            .replace(/([A-Z])/g, " $1")
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase())
+            .trim()
+    }
+
+    const getDocUrl = (docEntry) => {
+        if (!docEntry) return null
+        if (typeof docEntry === "string" && docEntry.startsWith("http")) return docEntry
+        if (Array.isArray(docEntry) && docEntry.length > 0) {
+            const first = docEntry[0]
+            if (typeof first === "string") return first
+            if (first && first.url) return first.url
+        }
+        return null
+    }
+
+    const KNOWN_DOCS = {
+        standardNda: "Standard NDA",
+        standardContract: "Standard Contract / Term Sheet",
+        programBrochures: "Program Brochures",
+    }
+
+    const sectorFocus = catalyst.sectorFocus || catalyst.sectors || matchPrefs.sectorFocus
+    const geographicFocus = catalyst.geographicFocus || catalyst.location || matchPrefs.geographicFocus
+    const supportOffered = catalyst.supportOffered || catalyst.focus || matchPrefs.supportFocus
+    const servicesOffered = catalyst.servicesOffered || matchPrefs.supportFocusSubtype
+
+    const tabs = [
+        { id: "overview",  label: "Overview",         icon: Building  },
+        { id: "programs",  label: "Programs",          icon: Package   },
+        { id: "matching",  label: "Matching Criteria", icon: Award     },
+        { id: "documents", label: "Documents",         icon: FileText  },
+        { id: "contact",   label: "Contact",           icon: Mail      },
+    ]
+
+    return createPortal(
+        <div style={modalOverlayStyle} onClick={onClose}>
+            <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+
+                <div style={modalHeaderStyle}>
+                    <div style={headerContentStyle}>
+                        <div style={supplierHeaderStyle}>
+                            <h2 style={supplierNameStyle}>{catalyst.name}</h2>
+                            <div style={supplierMetaStyle}>
+                                {catalyst.location && (
+                                    <span style={locationStyle}>
+                                        <MapPin size={14} />
+                                        {catalyst.location}
+                                    </span>
+                                )}
+                                {catalyst.matchPercentage !== undefined && (
+                                    <span style={entityTypeStyle}>
+                                        {catalyst.matchPercentage}% Match
+                                    </span>
+                                )}
+                                {catalyst.type && (
+                                    <span style={entityTypeStyle}>{catalyst.type}</span>
+                                )}
+                            </div>
+                        </div>
+                        <button onClick={onClose} style={closeButtonStyle}>
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div style={tabsContainerStyle}>
+                        {tabs.map((tab) => {
+                            const Icon = tab.icon
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    style={activeTab === tab.id ? activeTabStyle : tabStyle}
+                                >
+                                    <Icon size={16} />
+                                    {tab.label}
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                <div style={modalBodyStyle}>
+
+                    {activeTab === "overview" && (
+                        <div style={tabContentStyle}>
+                            <div style={gridStyle}>
+                                <div style={infoCardStyle}>
+                                    <h3 style={cardTitleStyle}>
+                                        <Building size={18} />
+                                        Organisation Information
+                                    </h3>
+                                    <div style={infoGridStyle}>
+                                        <InfoItem label="Registered Name"     value={overview.registeredName || catalyst.name} />
+                                        <InfoItem label="Catalyst Type"       value={formatLabel(catalyst.type)} />
+                                        <InfoItem label="Province / Location" value={overview.province || catalyst.location} />
+                                        <InfoItem label="Geographic Focus"    value={formatLabel(geographicFocus)} />
+                                        <InfoItem label="Sector Focus"        value={formatLabel(sectorFocus)} />
+                                    </div>
+                                </div>
+
+                                <div style={infoCardStyle}>
+                                    <h3 style={cardTitleStyle}>
+                                        <Calendar size={18} />
+                                        Application Details
+                                    </h3>
+                                    <div style={infoGridStyle}>
+                                        <InfoItem label="Application Window" value={appBrief.applicationWindow || catalyst.deadline} />
+                                        <InfoItem label="Estimated Review"   value={appBrief.estimatedReviewTime || catalyst.speed} />
+                                        <InfoItem label="Funding Stage"      value={formatLabel(catalyst.fundingStage || matchPrefs.programStage)} />
+                                        <InfoItem label="Funding Type"       value={formatLabel(catalyst.fundingType)} />
+                                        <InfoItem label="Ticket Size"        value={catalyst.ticketSize || catalyst.fundingRange} />
+                                    </div>
+                                </div>
+
+                                <div style={infoCardStyle}>
+                                    <h3 style={cardTitleStyle}>
+                                        <DollarSign size={18} />
+                                        Support Overview
+                                    </h3>
+                                    <div style={infoGridStyle}>
+                                        <InfoItem label="Support Offered"  value={formatLabel(supportOffered)} />
+                                        <InfoItem label="Services Offered" value={formatLabel(servicesOffered)} />
+                                    </div>
+                                    {catalyst.description && (
+                                        <p style={aboutTextStyle}>{catalyst.description}</p>
+                                    )}
+                                </div>
+
+                                <div style={infoCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <h3 style={cardTitleStyle}><FileText size={18} />NDA Document</h3>
+                                        <button
+                                            onClick={() => {
+                                                if (catalyst?.ndaUrl) {
+                                                    window.open(catalyst.ndaUrl, '_blank')
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '6px 12px',
+                                                backgroundColor: catalyst?.ndaUrl ? '#5d4037' : '#cccccc',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: catalyst?.ndaUrl ? 'pointer' : 'not-allowed',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '500',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                            }}
+                                            disabled={!catalyst?.ndaUrl}
+                                        >
+                                            <FileText size={14} />
+                                            {catalyst?.ndaUrl ? 'View Document' : 'No NDA'}
+                                        </button>
+                                    </div>
+                                    <div style={infoGridStyle}>
+                                        <InfoItem label="Status" value={catalyst?.ndaStatus || 'Not shared'} />
+                                        {catalyst?.ndaSharedDate && (
+                                            <InfoItem label="Shared Date" value={new Date(catalyst.ndaSharedDate).toLocaleDateString()} />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "programs" && (
+                        <div style={tabContentStyle}>
+                            {programs.length > 0 ? (
+                                <div style={categoriesGridStyle}>
+                                    {programs.map((program, i) => (
+                                        <div key={i} style={categoryCardStyle}>
+                                            <h4 style={categoryTitleStyle}>
+                                                Program {i + 1}: {program.name || program.programmeName || "Unnamed"}
+                                            </h4>
+                                            <div style={infoGridStyle}>
+                                                <InfoItem label="Support Type"     value={formatLabel(program.supportType)} />
+                                                <InfoItem label="Min Support"      value={program.minimumSupport} />
+                                                <InfoItem label="Max Support"      value={program.maximumSupport} />
+                                                <InfoItem label="Budget"           value={program.budget} />
+                                                <InfoItem label="Support Offered"  value={formatLabel(program.supportOffered)} />
+                                                <InfoItem label="Services Offered" value={formatLabel(program.servicesOffered)} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div style={emptyStateStyle}>No program details available</div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === "matching" && (
+                        <div style={tabContentStyle}>
+                            <div style={gridStyle}>
+                                <div style={infoCardStyle}>
+                                    <h3 style={cardTitleStyle}>
+                                        <Award size={18} />
+                                        General Matching Preferences
+                                    </h3>
+                                    <div style={infoGridStyle}>
+                                        <InfoItem label="Geographic Focus"      value={formatLabel(matchPrefs.geographicFocus || geographicFocus)} />
+                                        <InfoItem label="Sector Focus"          value={formatLabel(matchPrefs.sectorFocus || sectorFocus)} />
+                                        <InfoItem label="Program Stage"         value={formatLabel(matchPrefs.programStage)} />
+                                        <InfoItem label="Support Focus"         value={formatLabel(matchPrefs.supportFocus || supportOffered)} />
+                                        <InfoItem label="Support Focus Subtype" value={formatLabel(matchPrefs.supportFocusSubtype)} />
+                                        <InfoItem label="Legal Entity Fit"      value={formatLabel(matchPrefs.legalEntityFit)} />
+                                        <InfoItem label="Selected Countries"    value={formatLabel(matchPrefs.selectedCountries)} />
+                                        <InfoItem label="Selected Provinces"    value={formatLabel(matchPrefs.selectedProvinces)} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "documents" && (
+                        <div style={tabContentStyle}>
+                            {docsLoading ? (
+                                <div style={emptyStateStyle}>Loading documents...</div>
+                            ) : Object.keys(catalystDocuments).length === 0 ? (
+                                <div style={emptyStateStyle}>
+                                    No documents have been uploaded by this catalyst yet.
+                                </div>
+                            ) : (
+                                <div style={gridStyle}>
+                                    <div style={infoCardStyle}>
+                                        <h3 style={cardTitleStyle}>
+                                            <FileText size={18} />
+                                            Catalyst Documents
+                                        </h3>
+                                        <div style={docsGridStyle}>
+                                            {Object.entries(catalystDocuments).map(([key, value]) => {
+                                                const url = getDocUrl(value)
+                                                const label = KNOWN_DOCS[key] || formatDocLabel(key)
+                                                return (
+                                                    <div key={key} style={docCardStyle}>
+                                                        <div style={docCardHeaderStyle}>
+                                                            <FileText size={16} style={{ color: "#5D2A0A", flexShrink: 0 }} />
+                                                            <span style={docLabelStyle}>{label}</span>
+                                                        </div>
+                                                        {url ? (
+                                                            <a
+                                                                href={url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                style={viewDocButtonStyle}
+                                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#4e2106" }}
+                                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#5D2A0A" }}
+                                                            >
+                                                                <ExternalLink size={13} />
+                                                                View Document
+                                                            </a>
+                                                        ) : (
+                                                            <span style={notUploadedStyle}>Not uploaded</span>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === "contact" && (
+                        <div style={tabContentStyle}>
+                            <div style={gridStyle}>
+                                <div style={infoCardStyle}>
+                                    <h3 style={cardTitleStyle}>
+                                        <Users size={18} />
+                                        Primary Contact
+                                    </h3>
+                                    <div style={infoGridStyle}>
+                                        <InfoItem label="Contact Name"   value={contact.contactName || catalyst.contactPerson} />
+                                        <InfoItem label="Business Email" value={contact.businessEmail || catalyst.email} />
+                                        <InfoItem label="Phone"          value={contact.businessPhone || contact.phone || catalyst.phone} />
+                                    </div>
+                                </div>
+                                <div style={infoCardStyle}>
+                                    <h3 style={cardTitleStyle}>
+                                        <Globe size={18} />
+                                        Online Presence
+                                    </h3>
+                                    <div style={infoGridStyle}>
+                                        <InfoItem label="Website" value={contact.website || catalyst.website} />
+                                        {(contact.linkedin || catalyst.linkedin) && (
+                                            <div style={linkItemStyle}>
+                                                <strong>LinkedIn:</strong>
+                                                <a
+                                                    href={contact.linkedin || catalyst.linkedin}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={linkStyle}
+                                                >
+                                                    View Profile <ExternalLink size={12} />
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            </div>
+        </div>,
+        document.body
+    )
+}
+
+const InfoItem = ({ label, value }) => (
+    <div style={infoItemStyle}>
+        <strong>{label}:</strong>
+        <span>{value || "Not specified"}</span>
+    </div>
+)
+
+const modalOverlayStyle = {
+    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.7)", display: "flex",
+    alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px"
+}
+const modalContentStyle = {
+    background: "white", borderRadius: "12px", width: "100%",
+    maxWidth: "900px", maxHeight: "90vh", overflow: "hidden",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+}
+const modalHeaderStyle = {
+    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+    color: "white", padding: "0"
+}
+const headerContentStyle = {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "flex-start", padding: "24px"
+}
+const supplierHeaderStyle = { flex: 1 }
+const supplierNameStyle = { margin: "0 0 8px 0", fontSize: "24px", fontWeight: "700" }
+const supplierMetaStyle = { display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }
+const entityTypeStyle = {
+    background: "rgba(255,255,255,0.2)", padding: "4px 12px",
+    borderRadius: "20px", fontSize: "14px", fontWeight: "500"
+}
+const locationStyle = { display: "flex", alignItems: "center", gap: "4px", fontSize: "14px" }
+const closeButtonStyle = {
+    background: "rgba(255,255,255,0.2)", border: "none", borderRadius: "8px",
+    padding: "8px", color: "white", cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center"
+}
+const tabsContainerStyle = {
+    display: "flex", background: "rgba(255,255,255,0.1)",
+    padding: "0 24px", overflowX: "auto"
+}
+const tabStyle = {
+    display: "flex", alignItems: "center", gap: "8px",
+    padding: "12px 16px", background: "none", border: "none",
+    color: "rgba(255,255,255,0.8)", cursor: "pointer", fontSize: "14px",
+    fontWeight: "500", borderBottom: "3px solid transparent",
+    transition: "all 0.2s ease", whiteSpace: "nowrap"
+}
+const activeTabStyle = {
+    display: "flex", alignItems: "center", gap: "8px",
+    padding: "12px 16px", background: "rgba(255,255,255,0.1)", border: "none",
+    color: "white", cursor: "pointer", fontSize: "14px",
+    fontWeight: "500", borderBottom: "3px solid white",
+    transition: "all 0.2s ease", whiteSpace: "nowrap"
+}
+const modalBodyStyle = { padding: "0", maxHeight: "calc(90vh - 140px)", overflowY: "auto" }
+const tabContentStyle = { padding: "24px" }
+const gridStyle = { display: "grid", gap: "20px" }
+const infoCardStyle = {
+    background: "#FEFCFA", border: "1px solid #E8D5C4",
+    borderRadius: "8px", padding: "20px"
+}
+const cardTitleStyle = {
+    display: "flex", alignItems: "center", gap: "8px",
+    margin: "0 0 16px 0", fontSize: "18px", fontWeight: "600", color: "#5D2A0A"
+}
+const infoGridStyle = { display: "flex", flexDirection: "column", gap: "12px" }
+const infoItemStyle = {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "flex-start", gap: "16px"
+}
+const aboutTextStyle = { margin: "14px 0 0 0", fontSize: "0.85rem", color: "#5D2A0A", lineHeight: "1.6" }
+const categoriesGridStyle = { display: "grid", gap: "16px" }
+const categoryCardStyle = {
+    background: "#FEFCFA", border: "1px solid #E8D5C4",
+    borderRadius: "8px", padding: "16px"
+}
+const categoryTitleStyle = { margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600", color: "#5D2A0A" }
+const emptyStateStyle = {
+    textAlign: "center", color: "#999", fontStyle: "italic",
+    padding: "40px", background: "#F9F9F9", borderRadius: "8px",
+    border: "1px dashed #E8D5C4"
+}
+const linkItemStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }
+const linkStyle = {
+    color: "#5D2A0A", textDecoration: "none",
+    display: "flex", alignItems: "center", gap: "4px", fontWeight: "500"
+}
+const docsGridStyle = {
+    display: "grid", gridTemplateColumns: "1fr 1fr",
+    gap: "12px", marginTop: "8px"
+}
+const docCardStyle = {
+    background: "#F8F5F3", border: "1px solid #E8D5C4",
+    borderRadius: "8px", padding: "16px",
+    display: "flex", flexDirection: "column", gap: "10px"
+}
+const docCardHeaderStyle = { display: "flex", alignItems: "center", gap: "8px" }
+const docLabelStyle = { fontSize: "0.85rem", fontWeight: "600", color: "#5D2A0A", lineHeight: "1.3" }
+const viewDocButtonStyle = {
+    display: "inline-flex", alignItems: "center", gap: "6px",
+    padding: "7px 14px", backgroundColor: "#5D2A0A", color: "white",
+    borderRadius: "6px", textDecoration: "none", fontSize: "0.78rem",
+    fontWeight: "600", transition: "background-color 0.2s", alignSelf: "flex-start"
+}
+const notUploadedStyle = { fontSize: "0.78rem", color: "#999", fontStyle: "italic" }
+
+export default CMFCatalystDetailsModal
