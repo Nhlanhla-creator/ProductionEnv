@@ -3,15 +3,18 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  Users, Trophy, Eye, X, Info, Calendar, ChevronDown, Download, Plus,
+  Users, XCircle, Eye, X, Info, Calendar, ChevronDown, Download, Plus,
   Trash2, Settings, RotateCcw, SlidersHorizontal, LayoutGrid, GripVertical,
-  CheckCircle, ArrowUp, ArrowDown
+  CheckCircle, ArrowUp, ArrowDown, ArrowUpDown
 } from "lucide-react";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../../firebaseConfig";
 import * as XLSX from "xlsx";
 import { InvestorSMETable } from "./investor-sme-table";
-import { mapStatusToStageId, getActiveStages, PIPELINE_REFRESH_EVENT } from "./investorStageConfig";
+import InvestorSMEDetailsModal from "./InvestorSMEDetailsModal";
+import {
+  mapStatusToStageId, getActiveStages, loadPipelineSettings, PIPELINE_REFRESH_EVENT
+} from "./investorStageConfig";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatLabel = (value) => {
@@ -54,6 +57,11 @@ const formatDate = (value) => {
   return d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Not specified";
 };
 
+// Any wording a negative terminal stage might carry, across every programme
+// template. Used twice: to pick the terminal stage ids out of the active stage
+// list, and as a fallback against the row's raw status string.
+const NEGATIVE_STATUS_RE = /declin|withdraw|unsuccess|reject|not proceed|pass/i;
+
 // Renders straight to <body> so `position: fixed` popups can't be trapped by an
 // ancestor that establishes a containing block.
 const PopupPortal = ({ children }) => {
@@ -63,6 +71,7 @@ const PopupPortal = ({ children }) => {
 
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
     <span onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setRect(null)} className="inline-flex">
       <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
@@ -79,35 +88,72 @@ const HeaderInfoTooltip = ({ text }) => {
 };
 
 // ─── Column definitions ───────────────────────────────────────────────────────
+// Outcome-shaped columns replace the deal-shaped ones this table used to carry.
+// ROI, revenue growth, deal structure and completion date all describe money
+// that moved; on an application that was declined none of them hold a value.
+// What matters is what was asked for, when it came in, when it closed, and why.
 const DEFAULT_COLUMN_ORDER = [
-  "dealAmount", "dealType", "completionDate", "currentStatus", "sector",
-  "location", "roi", "revenueGrowth", "teamSize", "dealStructure"
+  "fundingRequested", "dealType", "appliedDate", "declinedDate", "currentStatus",
+  "reason", "sector", "location", "smeStage", "teamSize"
 ];
 
 const COLUMN_DEFS = {
-  dealAmount: { label: "Deal Amount", minWidth: "108px", filter: "range", sortKey: "dealAmountRaw", tooltip: "Amount approved at close, falling back to the amount requested where no approval figure was captured." },
-  dealType: { label: "Instrument", minWidth: "104px", filter: "select" },
-  completionDate: { label: "Completion Date", minWidth: "118px", filter: "date", type: "date" },
-  currentStatus: { label: "Status", minWidth: "120px", filter: "select" },
-  sector: { label: "Sector", minWidth: "110px", filter: "select" },
-  location: { label: "Location", minWidth: "104px", filter: "text" },
-  roi: { label: "ROI", minWidth: "84px", filter: "text" },
-  revenueGrowth: { label: "Revenue Growth", minWidth: "112px", filter: "text" },
-  teamSize: { label: "Team Size", minWidth: "92px", filter: "text" },
-  dealStructure: { label: "Deal Structure", minWidth: "134px", filter: "text" },
+  fundingRequested: {
+    label: "Funding Requested", minWidth: "132px", filter: "range", sortKey: "fundingRequestedRaw",
+    tooltip: "The amount the business asked for. Filtering and sorting use the underlying number, not the formatted label.",
+  },
+  dealType: {
+    label: "Instrument", minWidth: "112px", filter: "select", type: "badge",
+    tooltip: "The funding instrument under discussion when the application was declined — equity, debt, grant and so on.",
+  },
+  appliedDate: {
+    label: "Date Applied", minWidth: "116px", filter: "date", type: "date",
+    tooltip: "When the business submitted its application to your fund.",
+  },
+  declinedDate: {
+    label: "Date Declined", minWidth: "120px", filter: "date", type: "date",
+    tooltip: "When the application was last updated — for these rows, when it was declined or withdrawn.",
+  },
+  currentStatus: {
+    label: "Outcome", minWidth: "128px", filter: "select", type: "status",
+    tooltip: "The final stage this application ended on: declined, withdrawn, or not proceeding.",
+  },
+  reason: {
+    label: "Reason Given", minWidth: "184px", filter: "text",
+    tooltip: "The reason recorded at decline. Falls back to the last message sent when no reason was captured.",
+  },
+  sector: {
+    label: "Sector", minWidth: "116px", filter: "select",
+    tooltip: "The industry the business trades in, as captured on its profile.",
+  },
+  location: {
+    label: "Location", minWidth: "110px", filter: "text",
+    tooltip: "Where the business is based.",
+  },
+  smeStage: {
+    label: "Funding Stage", minWidth: "122px", filter: "select",
+    tooltip: "The round the business was raising when it applied — pre-seed, seed, Series A onwards, or growth.",
+  },
+  teamSize: {
+    label: "Team Size", minWidth: "98px", filter: "text",
+    tooltip: "Headcount as declared on the business profile.",
+  },
 };
 
+const NAME_TOOLTIP = "The business whose application ended here. Click the eye to open the full record.";
+const ACTIONS_TOOLTIP = "Open the full record for this declined application, including the reason and what was requested.";
+
 const DEFAULT_COLUMN_VISIBILITY = {
-  dealAmount: true, dealType: true, completionDate: true, currentStatus: true,
-  sector: true, location: true, roi: true,
-  revenueGrowth: false, teamSize: false, dealStructure: false,
+  fundingRequested: true, dealType: true, appliedDate: true, declinedDate: true,
+  currentStatus: true, reason: true, sector: true, location: true,
+  smeStage: false, teamSize: false,
 };
 
 const EXPORT_HEADERS = {
-  sme: "Business Name", dealAmount: "Deal Amount", dealType: "Instrument",
-  completionDate: "Completion Date", currentStatus: "Status", sector: "Sector",
-  location: "Location", roi: "ROI", revenueGrowth: "Revenue Growth",
-  teamSize: "Team Size", dealStructure: "Deal Structure",
+  sme: "Business Name", fundingRequested: "Funding Requested", dealType: "Instrument",
+  appliedDate: "Date Applied", declinedDate: "Date Declined", currentStatus: "Outcome",
+  reason: "Reason Given", sector: "Sector", location: "Location",
+  smeStage: "Funding Stage", teamSize: "Team Size",
 };
 
 // ─── Views ────────────────────────────────────────────────────────────────────
@@ -115,8 +161,11 @@ const EXPORT_HEADERS = {
 // object, with exactly one active at a time. Editing the table edits the active
 // view, so there's no hidden layout that can drift out of sync.
 const BUILTIN_VIEW_ID = "__default__";
-const VIEWS_STORAGE_KEY = "investor-successful-deals-views-v1";
-const DEFAULT_SORT = { key: "completionDate", direction: "desc" };
+// New key: the old "successful deals" views stored a column set (ROI, deal
+// structure, completion date) that no longer exists here, so they're
+// deliberately not carried over.
+const VIEWS_STORAGE_KEY = "investor-declined-deals-views-v1";
+const DEFAULT_SORT = { key: "declinedDate", direction: "desc" };
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
@@ -142,7 +191,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  sortConfig: view?.sortConfig || { ...DEFAULT_SORT },
+  sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT },
   density: view?.density || "comfortable",
   columnWidths: view?.columnWidths || {},
 });
@@ -180,8 +229,8 @@ const DENSITY = {
   "ultra-compact": { cell: "py-1.5 px-1.5", fontSize: "text-xs", avatar: "w-6 h-6" },
 };
 
-// ─── Successful Deals Table ───────────────────────────────────────────────────
-const SuccessfulDealsTable = ({ onCountChange }) => {
+// ─── Declined Deals Table ─────────────────────────────────────────────────────
+const DeclinedInvestorDealsTable = ({ onCountChange }) => {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDeal, setSelectedDeal] = useState(null);
@@ -217,9 +266,10 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
 
   // ─── Column resizing ──────────────────────────────────────────────────────
   // Drag the divider on a header's right edge to resize the column; double-click
-  // it to snap that column back to auto width. Widths are stored per view
-  // alongside visibility/order/sort/density, so they persist and travel with
-  // whichever view is active.
+  // it to snap that column back to auto width. Every header carries one —
+  // including the pinned Business Name and the Actions column. Widths are stored
+  // per view alongside visibility/order/sort/density, so they persist and travel
+  // with whichever view is active.
   const [resizingColumn, setResizingColumn] = useState(null);
 
   const widthStyle = (key, fallbackMin, fallbackMax) => {
@@ -284,36 +334,55 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
 
     try {
       setLoading(true);
-      // This previously queried `pipelineStage in ["Deal Complete", ...]` — a
-      // fixed list of strings that stops matching the moment a stage is renamed
-      // or a different programme template is selected. Rows now resolve through
-      // the shared stage config, so "Deal Closed", "Disbursed" and "Awarded"
-      // all land here correctly.
-      const stages = getActiveStages();
-      const successIds = new Set(stages.filter((s) => s.terminal && s.group === "success").map((s) => s.id));
+      // Rows resolve through the shared stage config rather than a fixed list of
+      // status strings, so a renamed stage or a different programme template
+      // can't quietly empty this table. getActiveStages needs the current
+      // pipeline settings passed in; calling it bare returns the fallback stage
+      // list, whose terminal ids may not match the template actually in use.
+      const stages = getActiveStages(loadPipelineSettings());
+      const declinedIds = new Set(
+        stages
+          .filter((s) => s.terminal && (s.group === "negative" || NEGATIVE_STATUS_RE.test(s.name || "")))
+          .map((s) => s.id)
+      );
 
       const snapshot = await getDocs(query(collection(db, "investorApplications"), where("funderId", "==", user.uid)));
 
       const rows = [];
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
-        const stageId = mapStatusToStageId(data.pipelineStage || data.stage || data.status, stages);
-        if (!successIds.has(stageId)) continue;
+        const rawStatus = (data.pipelineStage || data.stage || data.status || "").toString();
+        const stageId = mapStatusToStageId(rawStatus, stages);
+        const stage = stages.find((s) => s.id === stageId);
+
+        // Two ways in. mapStatusToStageId falls back to the first stage for
+        // anything it doesn't recognise, so a row declined under a different
+        // template would otherwise be misread as an early stage and vanish. The
+        // raw-status check catches those.
+        const matchedStage = declinedIds.has(stageId);
+        if (!matchedStage && !NEGATIVE_STATUS_RE.test(rawStatus)) continue;
 
         let smeName = data.companyName || data.smeName || "Unnamed Business";
         let location = "Not specified";
         let sector = "Not specified";
         let teamSize = "Not specified";
+        let smeStage = "Not specified";
+        // Held whole, not just the four fields the columns use — the shared
+        // details modal renders the full profile and needs the original
+        // document.
+        let profile = null;
 
         if (data.smeId) {
           try {
             const profileSnap = await getDoc(doc(db, "universalProfiles", data.smeId));
             if (profileSnap.exists()) {
               const p = profileSnap.data();
+              profile = p;
               smeName = p.entityOverview?.tradingName || p.entityOverview?.registeredName || smeName;
               location = formatLabel(p.entityOverview?.location) || location;
               sector = formatLabel(p.entityOverview?.economicSectors?.[0]) || sector;
               teamSize = p.entityOverview?.employeeCount || teamSize;
+              smeStage = formatLabel(p.applicationOverview?.fundingStage || p.entityOverview?.operationStage) || smeStage;
             }
           } catch (error) {
             console.error("Error fetching profile for", data.smeId, error);
@@ -322,27 +391,36 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
 
         rows.push({
           id: docSnap.id,
+          smeId: data.smeId,
           smeName,
-          dealAmount: formatCurrency(data.fundingDetails?.amountApproved || data.fundingRequired),
-          dealAmountRaw: parseFloat((data.fundingDetails?.amountApproved || data.fundingRequired || "0").toString().replace(/[^0-9.]/g, "")) || 0,
-          amountRequested: formatCurrency(data.fundingRequired),
-          dealType: formatLabel(data.fundingDetails?.investmentType || data.investmentType) || "Equity",
-          completionDate: data.updatedAt || data.createdAt,
-          sector, location, teamSize,
-          dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
-          currentStatus: "Active Investment",
-          roi: data.roi || "Pending",
-          revenueGrowth: data.revenueGrowth || "Pending",
-          exitStrategy: data.exitStrategy || "To be determined",
-          supportProvided: data.supportProvided || "Funding and strategic support",
+          fundingRequested: formatCurrency(data.fundingRequired),
+          fundingRequestedRaw: parseFloat((data.fundingRequired || "0").toString().replace(/[^0-9.]/g, "")) || 0,
+          dealType: formatLabel(data.fundingDetails?.investmentType || data.investmentType) || "Not specified",
+          appliedDate: data.createdAt || null,
+          // `updatedAt` is written on every stage change, so for a terminal row
+          // it is the moment the decline was recorded.
+          declinedDate: data.updatedAt || data.createdAt || null,
+          reason: data.declineReason || data.lastMessage || "No reason recorded",
+          sector, location, teamSize, smeStage,
+          // Prefer the configured stage name, but keep whatever the document
+          // actually says when the stage list doesn't know it — showing the real
+          // outcome beats showing a guess.
+          currentStatus: (matchedStage && stage?.name) || rawStatus || "Declined",
+          matchPercentage: data.matchPercentage ?? null,
+          // Feed the shared details modal the same three things the pipeline
+          // table gives it: the application document, the profile, and the
+          // documents the business uploaded for this fund.
+          raw: data,
+          profile,
+          documents: data.documentURLs || {},
         });
       }
 
       setDeals(rows);
       onCountChange?.(rows.length);
     } catch (error) {
-      console.error("Error fetching successful deals:", error);
-      setNotification({ type: "error", message: "Failed to load deals" });
+      console.error("Error fetching declined applications:", error);
+      setNotification({ type: "error", message: "Failed to load declined applications" });
       onCountChange?.(0);
     } finally {
       setLoading(false);
@@ -351,8 +429,10 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
 
   useEffect(() => { fetchDeals(); }, [fetchDeals]);
 
-  // Closing a deal in the pipeline table lands it here — refresh on that signal
-  // rather than making the investor reload the page.
+  // Declining an application in the pipeline table lands it here — refresh on
+  // that signal rather than making the investor reload the page. This only works
+  // because the wrapper keeps both tables mounted; an unmounted table has no
+  // listener to fire.
   useEffect(() => {
     const refresh = () => fetchDeals();
     window.addEventListener(PIPELINE_REFRESH_EVENT, refresh);
@@ -439,7 +519,6 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
   const processed = useMemo(() => {
     let result = [...deals];
 
-
     if (filters.__name__?.trim()) {
       const q = filters.__name__.toLowerCase().trim();
       result = result.filter((d) => d.smeName.toLowerCase().includes(q));
@@ -469,8 +548,9 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
     });
 
     if (sortConfig?.key) {
-      const col = COLUMN_DEFS[sortConfig.key];
-      const field = sortConfig.key === "__name__" ? "smeName" : (col?.sortKey || sortConfig.key);
+      const isName = sortConfig.key === "__name__";
+      const col = isName ? null : COLUMN_DEFS[sortConfig.key];
+      const field = isName ? "smeName" : (col?.sortKey || sortConfig.key);
       const isDate = col?.type === "date";
       const isNumber = col?.filter === "range";
       result.sort((a, b) => {
@@ -506,12 +586,30 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
     [...new Set(deals.map((d) => (d[key] || "").toString()).filter((v) => v && v !== "Not specified"))].sort();
 
   // ─── Column interaction ─────────────────────────────────────────────────
-  const toggleSort = (key) => {
+  // Three-state, same as the pipeline table: ascending, descending, then back to
+  // this table's default (most recently declined first) rather than to no order
+  // at all — otherwise rows fall back to fetch order, which reads as random.
+  const toggleSort = (key, event) => {
+    event?.stopPropagation();
     setSortConfig((prev) => {
       if (prev?.key !== key) return { key, direction: "asc" };
       if (prev.direction === "asc") return { key, direction: "desc" };
-      return { key: null, direction: "desc" };
+      return { ...DEFAULT_SORT };
     });
+  };
+
+  const SortTrigger = ({ colKey }) => {
+    const isActive = sortConfig?.key === colKey;
+    return (
+      <button type="button"
+        onClick={(e) => toggleSort(colKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Reset sorting") : "Sort ascending"}>
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    );
   };
 
   const handleDrop = (e, key) => {
@@ -526,12 +624,6 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
     });
     setDraggedColumn(null); setDragOverColumn(null);
   };
-
-  const SortIndicator = ({ colKey }) =>
-    sortConfig?.key !== colKey ? null :
-      sortConfig.direction === "asc"
-        ? <ArrowUp size={10} className="flex-shrink-0 text-[#e6d7c3]" />
-        : <ArrowDown size={10} className="flex-shrink-0 text-[#e6d7c3]" />;
 
   const FilterTrigger = ({ colKey }) => {
     const v = filters[colKey];
@@ -550,7 +642,7 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
   const handleExport = () => {
     try {
       const visible = columnOrder.filter((k) => columnVisibility[k] && COLUMN_DEFS[k]);
-      if (processed.length === 0) { setNotification({ type: "error", message: "No deals to export" }); return; }
+      if (processed.length === 0) { setNotification({ type: "error", message: "No declined applications to export" }); return; }
 
       const header = [EXPORT_HEADERS.sme, ...visible.map((k) => EXPORT_HEADERS[k])];
       const rows = processed.map((d) => {
@@ -567,8 +659,8 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
         return { wch: Math.min(Math.max(label.length, ...lengths, 8) + 2, 45) };
       });
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Successful Deals");
-      XLSX.writeFile(workbook, `successful-deals-${new Date().toISOString().split("T")[0]}.xlsx`);
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Declined Applications");
+      XLSX.writeFile(workbook, `declined-applications-${new Date().toISOString().split("T")[0]}.xlsx`);
       setNotification({ type: "success", message: "Export downloaded" });
     } catch (error) {
       console.error("Export error:", error);
@@ -579,21 +671,22 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
   const visibleColumns = columnOrder.filter((k) => columnVisibility[k] && COLUMN_DEFS[k]);
 
   const renderCell = (deal, key) => {
-    switch (key) {
-      case "dealAmount":
-        return <span className="font-semibold">{deal.dealAmount}</span>;
-      case "dealType":
-        return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#f5f0e1] text-[#4a352f]">{deal.dealType}</span>;
-      case "completionDate":
-        return <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{formatDate(deal.completionDate)}</div>;
-      case "currentStatus":
+    const col = COLUMN_DEFS[key];
+    switch (col.type) {
+      case "badge":
+        return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#f5f0e1] text-[#4a352f]">{deal[key] || "—"}</span>;
+      case "status":
+        // Red rather than green — these are negative outcomes.
         return (
           <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
-            style={{ backgroundColor: "#dcfce7", color: "#166534", borderColor: "#bbf7d0" }}>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#166534" }} />{deal.currentStatus}
+            style={{ backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fecaca" }}>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#991b1b" }} />{deal[key]}
           </span>
         );
+      case "date":
+        return <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{formatDate(deal[key])}</div>;
       default:
+        if (key === "fundingRequested") return <span className="font-semibold">{deal.fundingRequested}</span>;
         return <span className="line-clamp-2">{deal[key] ?? "—"}</span>;
     }
   };
@@ -614,7 +707,7 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]">
-              <Trophy size={12} /> {deals.length} closed deal{deals.length === 1 ? "" : "s"}
+              <XCircle size={12} /> {deals.length} declined application{deals.length === 1 ? "" : "s"}
             </span>
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
@@ -719,7 +812,7 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
                       <div className="border-t border-[#e6d7c3] my-4" />
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag a column header to reorder it, or click its label to sort.
+                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header to reorder it, or drag its right edge to resize.
                       </p>
                       <label className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
@@ -756,7 +849,7 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
             </div>
 
             <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all shadow-sm"
-              title="Export the current filtered/sorted deals to Excel (.xlsx)">
+              title="Export the current filtered/sorted declined applications to Excel (.xlsx)">
               <Download size={16} /> Export to Excel
             </button>
           </div>
@@ -771,13 +864,13 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
           <>
             <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
               <style>{`
-                .isd-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
-                .isd-th-draggable { cursor: grab; }
-                .isd-th-draggable:active { cursor: grabbing; }
+                .idd-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
+                .idd-th-draggable { cursor: grab; }
+                .idd-th-draggable:active { cursor: grabbing; }
                 /* Wrap header labels onto at most 2 lines rather than forcing
                    the column wider. Only lays out cleanly because every column
                    carries a real min-width. */
-                .isd-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; text-align: left; }
+                .idd-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; text-align: left; }
                 /* Column resizing: an explicit header width only holds if the
                    cells below can shrink, so long values wrap rather than
                    forcing the column wider than the width that was dragged. */
@@ -787,12 +880,13 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
               <table className="border-collapse bigt-fit" style={{ tableLayout: "auto" }}>
                 <thead>
                   <tr className="bg-[#4a352f]">
-                    <th className="isd-th py-3 px-3 relative border-r border-[#e6d7c3] sticky top-0 left-0 z-30"
+                    <th className="idd-th py-3 px-3 relative border-r border-[#e6d7c3] sticky top-0 left-0 z-30"
                       style={{ backgroundColor: "#4a352f", ...widthStyle("__name__", "180px", "200px") }}>
                       <div className="flex items-start gap-1 min-w-0">
-                        <button onClick={() => toggleSort("__name__")} className="isd-th-label hover:text-white transition-colors">Business Name</button>
-                        <SortIndicator colKey="__name__" />
+                        <span className="idd-th-label">Business Name</span>
+                        <SortTrigger colKey="__name__" />
                         <FilterTrigger colKey="__name__" />
+                        <HeaderInfoTooltip text={NAME_TOOLTIP} />
                       </div>
                       <ColumnResizer colKey="__name__" />
                     </th>
@@ -807,21 +901,31 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
                           onDragEnd={() => { setDraggedColumn(null); setDragOverColumn(null); }}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`isd-th isd-th-draggable py-3 px-3 relative border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${draggedColumn === key ? "opacity-40" : ""}`}
+                          className={`idd-th idd-th-draggable py-3 px-3 relative border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${draggedColumn === key ? "opacity-40" : ""}`}
                           style={{ ...widthStyle(key, col.minWidth), backgroundColor: dragOverColumn === key && draggedColumn !== key ? "#5a423b" : "#4a352f" }}>
                           <div className="flex items-start gap-1 min-w-0">
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <button onClick={() => toggleSort(key)} className="isd-th-label hover:text-white transition-colors">{col.label}</button>
-                            <SortIndicator colKey={key} />
+                            <span className="idd-th-label">{col.label}</span>
+                            <SortTrigger colKey={key} />
                             <FilterTrigger colKey={key} />
-                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                            <HeaderInfoTooltip text={col.tooltip} />
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
                       );
                     })}
 
-                    <th className="isd-th py-3 px-3 relative text-center whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "110px", backgroundColor: "#4a352f" }}>Actions</th>
+                    {/* Actions resizes too — it's the only column whose width
+                        isn't driven by its content, so it's the one most likely
+                        to need tightening on a narrow screen. */}
+                    <th className="idd-th py-3 px-3 relative text-center whitespace-nowrap sticky top-0 z-20"
+                      style={{ backgroundColor: "#4a352f", ...widthStyle("__actions__", "110px") }}>
+                      <div className="flex items-start gap-1 justify-center">
+                        <span>Actions</span>
+                        <HeaderInfoTooltip text={ACTIONS_TOOLTIP} />
+                      </div>
+                      <ColumnResizer colKey="__actions__" />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -829,13 +933,13 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
                     <tr><td colSpan={visibleColumns.length + 2} className="text-center py-20">
                       <div className="flex flex-col items-center gap-4">
                         <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center">
-                          <Trophy size={32} className="text-[#7d5a50] opacity-50" />
+                          <XCircle size={32} className="text-[#7d5a50] opacity-50" />
                         </div>
-                        <p className="text-lg font-semibold text-[#4a352f]">No Successful Deals Yet</p>
+                        <p className="text-lg font-semibold text-[#4a352f]">No Declined Applications</p>
                         <p className="text-sm text-[#7d5a50] max-w-sm">
                           {activeFilterCount > 0
                             ? "Clear a filter to widen the list."
-                            : "Deals appear here once they reach the closed stage in your pipeline."}
+                            : "Applications appear here once you decline them in your pipeline."}
                         </p>
                       </div>
                     </td></tr>
@@ -854,7 +958,7 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
                               <div className="flex items-start gap-1.5 flex-wrap">
                                 <span className={`${ds.fontSize} leading-snug text-[#4a352f]`}>{deal.smeName}</span>
                                 <button onClick={() => setSelectedDeal(deal)} className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
-                                  aria-label={`View investment details for ${deal.smeName}`} title="View details">
+                                  aria-label={`View declined application for ${deal.smeName}`} title="View details">
                                   <Eye size={13} />
                                 </button>
                               </div>
@@ -863,12 +967,13 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
                         </td>
 
                         {visibleColumns.map((key) => (
-                          <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                          <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}
+                            style={widthStyle(key, COLUMN_DEFS[key].minWidth)}>
                             {renderCell(deal, key)}
                           </td>
                         ))}
 
-                        <td className={`${ds.cell} text-center`} style={{ minWidth: "110px" }}>
+                        <td className={`${ds.cell} text-center`} style={widthStyle("__actions__", "110px")}>
                           <button onClick={() => setSelectedDeal(deal)}
                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white hover:shadow-md hover:brightness-105 transition-all"
                             style={{ backgroundColor: "#7d5a50" }}>
@@ -886,7 +991,7 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl flex-wrap gap-3">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-[#4a352f]">
-                  Showing {Math.min((currentPage - 1) * pageSize + 1, processed.length)}-{Math.min(currentPage * pageSize, processed.length)} of {processed.length} Deals
+                  Showing {Math.min((currentPage - 1) * pageSize + 1, processed.length)}-{Math.min(currentPage * pageSize, processed.length)} of {processed.length} Applications
                 </span>
                 <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f]">
                   <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
@@ -917,7 +1022,7 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
         <PopupPortal>
           <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
             style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 220), width: "205px" }}>
-            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · click to sort
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
           </div>
         </PopupPortal>
       )}
@@ -988,14 +1093,14 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
         );
       })()}
 
-      {/* Deal details */}
+      {/* Declined application details */}
       {selectedDeal && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans p-4" onClick={() => setSelectedDeal(null)}>
             <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[660px] max-w-full max-h-[86vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-5 text-white sticky top-0 z-10 flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Investment</p>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Declined application</p>
                   <h3 className="text-lg font-bold mt-0.5 truncate">{selectedDeal.smeName}</h3>
                   <p className="text-xs text-[#e6d7c3] mt-0.5">{selectedDeal.sector} · {selectedDeal.location}</p>
                 </div>
@@ -1004,23 +1109,21 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
 
               <div className="p-6 space-y-6">
                 {[
-                  { label: "Investment", fields: [
-                    ["Amount requested", selectedDeal.amountRequested],
-                    ["Amount approved", selectedDeal.dealAmount],
+                  { label: "What was requested", fields: [
+                    ["Funding requested", selectedDeal.fundingRequested],
                     ["Instrument", selectedDeal.dealType],
-                    ["Deal structure", selectedDeal.dealStructure],
+                    ["Funding stage", selectedDeal.smeStage],
+                    ["Match score", selectedDeal.matchPercentage != null ? `${selectedDeal.matchPercentage}%` : "Not recorded"],
                   ]},
-                  { label: "Timeline & performance", fields: [
-                    ["Completion date", formatDate(selectedDeal.completionDate)],
-                    ["Current status", selectedDeal.currentStatus],
-                    ["ROI", selectedDeal.roi],
-                    ["Revenue growth", selectedDeal.revenueGrowth],
+                  { label: "Timeline", fields: [
+                    ["Date applied", formatDate(selectedDeal.appliedDate)],
+                    ["Date declined", formatDate(selectedDeal.declinedDate)],
+                    ["Outcome", selectedDeal.currentStatus],
                   ]},
                   { label: "Company", fields: [
                     ["Sector", selectedDeal.sector],
                     ["Location", selectedDeal.location],
                     ["Team size", selectedDeal.teamSize],
-                    ["Exit strategy", selectedDeal.exitStrategy],
                   ]},
                 ].map((section) => (
                   <div key={section.label}>
@@ -1037,8 +1140,8 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
                 ))}
 
                 <div className="px-4 py-3 rounded-xl bg-[#faf7f2] border border-[#e6d7c3]">
-                  <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Value-add support provided</p>
-                  <p className="text-sm text-[#4a352f] leading-relaxed">{selectedDeal.supportProvided}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">Reason given</p>
+                  <p className="text-sm text-[#4a352f] leading-relaxed whitespace-pre-line">{selectedDeal.reason}</p>
                 </div>
               </div>
             </div>
@@ -1051,21 +1154,25 @@ const SuccessfulDealsTable = ({ onCountChange }) => {
 
 // ─── Wrapper ──────────────────────────────────────────────────────────────────
 const InvestorTabbedTables = ({ filters, stageFilter, activeTab, setActiveTab, onDealComplete }) => {
-  const [dealsCount, setDealsCount] = useState(0);
+  const [declinedCount, setDeclinedCount] = useState(0);
   const [matchesCount, setMatchesCount] = useState(0);
 
   // Controlled by the parent when activeTab/setActiveTab are passed, with a
   // local fallback so this component also works standalone.
   const [localTab, setLocalTab] = useState("sme-opportunities");
-  const tab = activeTab ?? localTab;
+  // "portfolio" was this tab's id while it held successful deals. A parent that
+  // still passes it keeps working rather than landing on an unknown tab and
+  // rendering nothing.
+  const rawTab = activeTab ?? localTab;
+  const tab = rawTab === "portfolio" ? "declined-deals" : rawTab;
   const setTab = setActiveTab ?? setLocalTab;
 
-  const handleDealsCount = useCallback((n) => setDealsCount(n), []);
+  const handleDeclinedCount = useCallback((n) => setDeclinedCount(n), []);
   const handleMatchesLoaded = useCallback((rows) => setMatchesCount(rows.length), []);
 
   const TABS = [
     { id: "sme-opportunities", label: "My Matches", icon: <Users size={16} />, count: matchesCount },
-    { id: "portfolio", label: "Successful Deals", icon: <Trophy size={16} />, count: dealsCount },
+    { id: "declined-deals", label: "Declined Deals", icon: <XCircle size={16} />, count: declinedCount },
   ];
 
   return (
@@ -1092,20 +1199,24 @@ const InvestorTabbedTables = ({ filters, stageFilter, activeTab, setActiveTab, o
         })}
       </div>
 
+      {/* Both tables stay mounted and the inactive one is hidden, rather than
+          unmounted. Two things depend on this: the tab count badges are fed by
+          the tables themselves, which never report from a table that hasn't
+          rendered; and the declined table's PIPELINE_REFRESH_EVENT listener has
+          to exist at the moment an application is declined over on the matches
+          tab. */}
       <div className="bg-white rounded-b-2xl border border-[#e6d7c3] border-t-0 shadow-lg min-h-[500px]">
-        {tab === "sme-opportunities" && (
+        <div style={{ display: tab === "sme-opportunities" ? "block" : "none" }}>
           <InvestorSMETable
             filters={filters}
             stageFilter={stageFilter}
             onDealComplete={onDealComplete}
             onSMEsLoaded={handleMatchesLoaded}
           />
-        )}
-        {tab === "portfolio" && (
-          <div className="p-6">
-            <SuccessfulDealsTable onCountChange={handleDealsCount} />
-          </div>
-        )}
+        </div>
+        <div className="p-6" style={{ display: tab === "declined-deals" ? "block" : "none" }}>
+          <DeclinedInvestorDealsTable onCountChange={handleDeclinedCount} />
+        </div>
       </div>
     </div>
   );
