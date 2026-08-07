@@ -2751,7 +2751,7 @@ export function FundingTable({
                       </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                        <span className="text-sm text-[#4a352f] flex-1">Funder</span>
+                        <span className="text-sm text-[#4a352f] flex-1">Funder Name</span>
                         <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
                       </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">

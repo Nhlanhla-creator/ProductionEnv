@@ -1,14 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   Users, Trophy, Eye, X, Info, Calendar, ChevronDown, Download, Plus,
   Trash2, Settings, RotateCcw, SlidersHorizontal, LayoutGrid, GripVertical,
-  CheckCircle, ArrowUp, ArrowDown, Building, Award
+  CheckCircle, ArrowUp, ArrowDown, ArrowUpDown, Building, Award, Search,
+  Pin, PinOff
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import CMFSMETable from "./CMFSMETable";
+import CMFCatalystDetailsModal from "./CMFCatalystDetailsModal";
+import CMFFunderDetailsModal from "./CMFFunderDetailsModal";
+import CMFSMEDetailsModal from "./CMFSMEDetailsModal";
 import { mapStatusToStageId, getActiveStages, getStageColors } from "./cmfStageConfig";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -42,8 +46,12 @@ const PopupPortal = ({ children }) => {
   return createPortal(children, document.body);
 };
 
+// ─── Column header info tooltip ───────────────────────────────────────────────
+// Portaled to <body> because the header cell is sticky and would otherwise clip
+// the bubble.
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
     <span onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setRect(null)} className="inline-flex">
       <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
@@ -60,9 +68,9 @@ const HeaderInfoTooltip = ({ text }) => {
 };
 
 const DENSITY = {
-  comfortable: { cell: "py-3 px-3", fontSize: "text-sm", avatar: "w-8 h-8" },
-  compact: { cell: "py-2 px-2", fontSize: "text-xs", avatar: "w-7 h-7" },
-  "ultra-compact": { cell: "py-1.5 px-1.5", fontSize: "text-xs", avatar: "w-6 h-6" },
+  comfortable: { cell: "py-3 px-3", fontSize: "text-sm", avatar: "w-8 h-8", header: "0.7rem 0.6rem" },
+  compact: { cell: "py-2 px-2", fontSize: "text-xs", avatar: "w-7 h-7", header: "0.5rem 0.6rem" },
+  "ultra-compact": { cell: "py-1.5 px-1.5", fontSize: "text-xs", avatar: "w-6 h-6", header: "0.5rem 0.6rem" },
 };
 
 const generateViewId = () => {
@@ -70,15 +78,37 @@ const generateViewId = () => {
   catch { return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; }
 };
 
+// The primary (name) column and the Actions column can't be hidden or
+// reordered, so they aren't in the caller's column list — but they resize like
+// everything else, and their widths live under these reserved keys inside the
+// same columnWidths map.
+const NAME_KEY = "__name__";
+const ACTION_KEY = "__action__";
+const MIN_COLUMN_WIDTH = 84;
+
+// Accepts either a numeric width or a legacy "120px" string.
+const toWidth = (value, fallback) => {
+  if (typeof value === "number" && !isNaN(value)) return value;
+  if (typeof value === "string") {
+    const parsed = parseInt(value, 10);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return fallback;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CMFDataTable — the standard table, used by all three lists in this file
-// (Active Deals, Funders, Catalysts). Same behaviour as the pipeline table:
-// saved Views, column chooser, drag-to-reorder headers, click-to-sort,
-// per-column filters, density, Excel export, pagination, sticky name column.
+// (Active Deals, Funders, Catalysts). Same behaviour as the catalyst matches
+// table: saved Views, column chooser with search + pinning, drag-to-reorder
+// headers, drag-to-resize on every column (including the two fixed ones),
+// per-column sort arrows, per-column filters, an info tooltip on every header,
+// density, Excel export, pagination and a sticky name column.
 //
-// Columns: { key, label, minWidth, filter: text|select|range|date|none,
-//            type: text|date|badge|status|match, sortKey, tooltip,
-//            defaultVisible, render(row), badgeColor(v), statusColor(v) }
+// Columns: { key, label, width, minWidth, tooltip, align,
+//            filter: text|select|range|date|none,
+//            type: text|date|badge|status|match,
+//            sortable, priority, defaultVisible,
+//            render(row, value), getValue(row), exportValue(row), options }
 // ─────────────────────────────────────────────────────────────────────────────
 const CMFDataTable = ({
   storageKey, rows = [], loading = false, columns = [],
@@ -87,11 +117,27 @@ const CMFDataTable = ({
   toolbarBadge, defaultSort = { key: null, direction: "desc" },
 }) => {
   const BUILTIN_VIEW_ID = "__default__";
-  const VIEWS_KEY = `${storageKey}-views-v1`;
+  // v2: the two fixed columns now store their widths in the same map, and views
+  // carry a pinned map, so a v1 view would leave both undefined.
+  const VIEWS_KEY = `${storageKey}-views-v2`;
+
   const COLUMN_DEFS = useMemo(() => Object.fromEntries(columns.map((c) => [c.key, c])), [columns]);
   const DEFAULT_ORDER = useMemo(() => columns.map((c) => c.key), [columns]);
   const DEFAULT_VISIBILITY = useMemo(
     () => columns.reduce((acc, c) => ({ ...acc, [c.key]: c.defaultVisible !== false }), {}),
+    [columns]
+  );
+  const DEFAULT_WIDTHS = useMemo(
+    () => ({
+      ...columns.reduce((acc, c) => ({ ...acc, [c.key]: toWidth(c.width ?? c.minWidth, 148) }), {}),
+      [NAME_KEY]: toWidth(primary?.width, 210),
+      [ACTION_KEY]: toWidth(actions ? 132 : 0, 132),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [columns, primary?.width, !!actions]
+  );
+  const DEFAULT_PINNED = useMemo(
+    () => columns.reduce((acc, c) => ({ ...acc, [c.key]: null }), {}),
     [columns]
   );
 
@@ -105,9 +151,10 @@ const CMFDataTable = ({
   const defaultLayout = () => ({
     columnVisibility: { ...DEFAULT_VISIBILITY },
     columnOrder: [...DEFAULT_ORDER],
+    columnWidths: { ...DEFAULT_WIDTHS },
+    pinned: { ...DEFAULT_PINNED },
     sortConfig: { ...defaultSort },
     density: "comfortable",
-    columnWidths: {},
   });
 
   const builtinView = () => ({ id: BUILTIN_VIEW_ID, name: "Default", description: "", builtin: true, ...defaultLayout() });
@@ -127,9 +174,10 @@ const CMFDataTable = ({
           builtin: !!v?.builtin,
           columnVisibility: { ...DEFAULT_VISIBILITY, ...(v?.columnVisibility || {}) },
           columnOrder: sanitizeOrder(v?.columnOrder),
+          columnWidths: { ...DEFAULT_WIDTHS, ...(v?.columnWidths || {}) },
+          pinned: { ...DEFAULT_PINNED, ...(v?.pinned || {}) },
           sortConfig: v?.sortConfig || { ...defaultSort },
           density: v?.density || "comfortable",
-          columnWidths: v?.columnWidths || {},
         };
       });
       views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
@@ -150,9 +198,10 @@ const CMFDataTable = ({
   const initial = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
   const [columnVisibility, setColumnVisibility] = useState(initial.columnVisibility);
   const [columnOrder, setColumnOrder] = useState(initial.columnOrder);
+  const [columnWidths, setColumnWidths] = useState(initial.columnWidths || DEFAULT_WIDTHS);
+  const [pinned, setPinned] = useState(initial.pinned || DEFAULT_PINNED);
   const [sortConfig, setSortConfig] = useState(initial.sortConfig);
   const [density, setDensity] = useState(initial.density);
-  const [columnWidths, setColumnWidths] = useState(initial.columnWidths || {});
 
   const [showColumnChooser, setShowColumnChooser] = useState(false);
   const [chooserRect, setChooserRect] = useState(null);
@@ -160,6 +209,7 @@ const CMFDataTable = ({
   const [newViewName, setNewViewName] = useState("");
   const [newViewDescription, setNewViewDescription] = useState("");
   const [editingViewMeta, setEditingViewMeta] = useState(null);
+  const [columnSearch, setColumnSearch] = useState("");
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [filters, setFilters] = useState({});
@@ -171,65 +221,19 @@ const CMFDataTable = ({
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [dragHintRect, setDragHintRect] = useState(null);
+  const resizingRef = useRef(null);
+  const [resizingColumn, setResizingColumn] = useState(null);
+
+  const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth);
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
   const ds = DENSITY[density] || DENSITY.comfortable;
 
-  // ─── Column resizing ──────────────────────────────────────────────────────
-  // Drag the divider on a header's right edge to resize the column; double-click
-  // it to snap that column back to auto width. Widths are stored per view
-  // alongside visibility/order/sort/density, so they persist and travel with
-  // whichever view is active.
-  const [resizingColumn, setResizingColumn] = useState(null);
-
-  const widthStyle = (key, fallbackMin, fallbackMax) => {
-    const w = columnWidths[key];
-    if (w) return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    return fallbackMax ? { minWidth: fallbackMin, maxWidth: fallbackMax } : { minWidth: fallbackMin };
-  };
-
-  const startResize = (event, key) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const th = event.currentTarget.closest("th");
-    const startX = event.clientX;
-    const startWidth = th ? th.getBoundingClientRect().width : 120;
-    setResizingColumn(key);
-
-    const onMove = (moveEvent) => {
-      const next = Math.max(64, Math.round(startWidth + (moveEvent.clientX - startX)));
-      setColumnWidths((prev) => ({ ...prev, [key]: next }));
-    };
-    const onUp = () => {
-      setResizingColumn(null);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
-    // the 6px handle mid-drag, and so text can't be selected while resizing.
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  };
-
-  const autoFitColumn = (key) =>
-    setColumnWidths((prev) => { const { [key]: _dropped, ...rest } = prev; return rest; });
-
-  const ColumnResizer = ({ colKey }) => (
-    <span
-      onMouseDown={(e) => startResize(e, colKey)}
-      onDoubleClick={(e) => { e.stopPropagation(); autoFitColumn(colKey); }}
-      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-      onClick={(e) => e.stopPropagation()}
-      title="Drag to resize · double-click to auto-fit"
-      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none z-10"
-      style={{ backgroundColor: resizingColumn === colKey ? "#a67c52" : "transparent" }}
-    />
-  );
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     if (!notification) return;
@@ -242,12 +246,15 @@ const CMFDataTable = ({
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId];
       if (!current) return prev;
-      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: { ...current, columnVisibility, columnOrder, sortConfig, density, columnWidths } } };
+      const next = {
+        ...prev,
+        views: { ...prev.views, [prev.activeViewId]: { ...current, columnVisibility, columnOrder, columnWidths, pinned, sortConfig, density } },
+      };
       persist(next);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columnVisibility, columnOrder, sortConfig, density, columnWidths]);
+  }, [columnVisibility, columnOrder, columnWidths, pinned, sortConfig, density]);
 
   const switchToView = (id) => {
     const target = viewsState.views[id];
@@ -255,16 +262,22 @@ const CMFDataTable = ({
     setViewsState((prev) => { const next = { ...prev, activeViewId: id }; persist(next); return next; });
     setColumnVisibility(target.columnVisibility);
     setColumnOrder(target.columnOrder);
+    setColumnWidths(target.columnWidths || DEFAULT_WIDTHS);
+    setPinned(target.pinned || DEFAULT_PINNED);
     setSortConfig(target.sortConfig);
     setDensity(target.density);
-    setColumnWidths(target.columnWidths || {});
   };
 
   const createNewView = () => {
     const name = newViewName.trim();
     if (!name) return;
     const id = generateViewId();
-    const view = { id, name, description: newViewDescription.trim(), builtin: false, columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder], sortConfig: { ...sortConfig }, density, columnWidths: { ...columnWidths } };
+    const view = {
+      id, name, description: newViewDescription.trim(), builtin: false,
+      columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
+      columnWidths: { ...columnWidths }, pinned: { ...pinned },
+      sortConfig: { ...sortConfig }, density,
+    };
     setViewsState((prev) => { const next = { activeViewId: id, views: { ...prev.views, [id]: view } }; persist(next); return next; });
     setNewViewName(""); setNewViewDescription(""); setShowNewViewForm(false);
     setNotification({ type: "success", message: `View "${name}" created` });
@@ -297,7 +310,8 @@ const CMFDataTable = ({
     if (wasActive) {
       const def = viewsState.views[BUILTIN_VIEW_ID];
       setColumnVisibility(def.columnVisibility); setColumnOrder(def.columnOrder);
-      setSortConfig(def.sortConfig); setDensity(def.density); setColumnWidths(def.columnWidths || {});
+      setColumnWidths(def.columnWidths || DEFAULT_WIDTHS); setPinned(def.pinned || DEFAULT_PINNED);
+      setSortConfig(def.sortConfig); setDensity(def.density);
     }
     setNotification({ type: "success", message: "View deleted" });
   };
@@ -305,20 +319,27 @@ const CMFDataTable = ({
   const resetActiveView = () => {
     const layout = defaultLayout();
     setColumnVisibility(layout.columnVisibility); setColumnOrder(layout.columnOrder);
-    setSortConfig(layout.sortConfig); setDensity(layout.density); setColumnWidths(layout.columnWidths || {});
+    setColumnWidths(layout.columnWidths); setPinned(layout.pinned);
+    setSortConfig(layout.sortConfig); setDensity(layout.density);
     setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` });
   };
 
-  const valueOf = (row, col) => (col.getValue ? col.getValue(row) : row?.[col.key]);
+  const toggleColumn = (key) => setColumnVisibility((p) => ({ ...p, [key]: !p[key] }));
+  const cyclePin = (key) =>
+    setPinned((prev) => ({
+      ...prev,
+      [key]: prev[key] === "left" ? "right" : prev[key] === "right" ? null : "left",
+    }));
+
+  const valueOf = (row, col) => (col?.getValue ? col.getValue(row) : row?.[col?.key]);
   const primaryValue = (row) => (primary?.getValue ? primary.getValue(row) : row?.[primary?.key]);
 
   // ─── Filter / sort ──────────────────────────────────────────────────────
   const processed = useMemo(() => {
     let result = [...rows];
 
-
-    if (filters.__name__?.trim()) {
-      const q = filters.__name__.toLowerCase().trim();
+    if (filters[NAME_KEY]?.trim()) {
+      const q = filters[NAME_KEY].toLowerCase().trim();
       result = result.filter((row) => (primaryValue(row) ?? "").toString().toLowerCase().includes(q));
     }
 
@@ -342,7 +363,7 @@ const CMFDataTable = ({
     });
 
     if (sortConfig?.key) {
-      const isName = sortConfig.key === "__name__";
+      const isName = sortConfig.key === NAME_KEY;
       const col = isName ? null : COLUMN_DEFS[sortConfig.key];
       const isDate = col?.type === "date";
       const isNumber = col?.filter === "range" || col?.type === "match";
@@ -367,7 +388,7 @@ const CMFDataTable = ({
   useEffect(() => { setCurrentPage(1); }, [filters, pageSize]);
 
   const activeFilterCount = useMemo(() => {
-    let n = filters.__name__?.trim() ? 1 : 0;
+    let n = filters[NAME_KEY]?.trim() ? 1 : 0;
     columns.forEach((col) => {
       const v = filters[col.key];
       if (v == null) return;
@@ -377,10 +398,15 @@ const CMFDataTable = ({
     return n;
   }, [filters, columns]);
 
+  const clearAllFilters = () => setFilters({});
+
   const selectOptions = (col) =>
     col.options || [...new Set(rows.map((r) => (valueOf(r, col) ?? "").toString()).filter((v) => v && v !== "N/A"))].sort();
 
-  const toggleSort = (key) => {
+  // ─── Sorting ────────────────────────────────────────────────────────────
+  // asc → desc → cleared.
+  const toggleSort = (key, event) => {
+    event.stopPropagation();
     setSortConfig((prev) => {
       if (prev?.key !== key) return { key, direction: "asc" };
       if (prev.direction === "asc") return { key, direction: "desc" };
@@ -388,24 +414,21 @@ const CMFDataTable = ({
     });
   };
 
-  const handleDrop = (e, key) => {
-    e.preventDefault();
-    if (!draggedColumn || draggedColumn === key) { setDraggedColumn(null); setDragOverColumn(null); return; }
-    setColumnOrder((prev) => {
-      const next = [...prev];
-      const from = next.indexOf(draggedColumn), to = next.indexOf(key);
-      if (from === -1 || to === -1) return prev;
-      next.splice(from, 1); next.splice(to, 0, draggedColumn);
-      return next;
-    });
-    setDraggedColumn(null); setDragOverColumn(null);
+  const SortTrigger = ({ colKey }) => {
+    const isActive = sortConfig?.key === colKey;
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(colKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    );
   };
-
-  const SortIndicator = ({ colKey }) =>
-    sortConfig?.key !== colKey ? null :
-      sortConfig.direction === "asc"
-        ? <ArrowUp size={10} className="flex-shrink-0 text-[#e6d7c3]" />
-        : <ArrowDown size={10} className="flex-shrink-0 text-[#e6d7c3]" />;
 
   const FilterTrigger = ({ colKey }) => {
     const v = filters[colKey];
@@ -420,6 +443,76 @@ const CMFDataTable = ({
     );
   };
 
+  // ─── Drag to reorder ────────────────────────────────────────────────────
+  const handleDrop = (e, key) => {
+    e.preventDefault();
+    if (!draggedColumn || draggedColumn === key) { setDraggedColumn(null); setDragOverColumn(null); return; }
+    setColumnOrder((prev) => {
+      const next = [...prev];
+      const from = next.indexOf(draggedColumn), to = next.indexOf(key);
+      if (from === -1 || to === -1) return prev;
+      next.splice(from, 1); next.splice(to, 0, draggedColumn);
+      return next;
+    });
+    setDraggedColumn(null); setDragOverColumn(null);
+  };
+
+  // ─── Widths + resize ────────────────────────────────────────────────────
+  // widthOf is declared above startResize because startResize calls it — a
+  // const referenced before its initializer throws at render. It covers the
+  // reorderable columns *and* the two fixed ones, so every column in the table
+  // can be dragged wider.
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? DEFAULT_WIDTHS[key] ?? 148,
+    [columnWidths, DEFAULT_WIDTHS]
+  );
+
+  const startResize = (event, key) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = widthOf(key);
+    resizingRef.current = key;
+    setResizingColumn(key);
+
+    const onMove = (moveEvent) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, Math.round(startWidth + (moveEvent.clientX - startX)));
+      setColumnWidths((prev) => ({ ...prev, [key]: next }));
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      setResizingColumn(null);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
+    // the 6px handle mid-drag, and so text can't be selected while resizing.
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({ ...prev, [key]: DEFAULT_WIDTHS[key] ?? 148 }));
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="cmt-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => { e.stopPropagation(); resetColumnWidth(colKey); }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  );
+
+  // ─── Export ─────────────────────────────────────────────────────────────
   const handleExport = () => {
     try {
       const visible = columnOrder.filter((k) => columnVisibility[k] && COLUMN_DEFS[k]);
@@ -452,7 +545,56 @@ const CMFDataTable = ({
     }
   };
 
-  const renderCell = (row, col) => {
+  // ─── Layout ─────────────────────────────────────────────────────────────
+  const maxPriority = viewportWidth < 640 ? 1 : viewportWidth < 1024 ? 3 : 99;
+
+  const visibleColumnKeys = useMemo(
+    () => columnOrder.filter((k) => columnVisibility[k] && COLUMN_DEFS[k] && (COLUMN_DEFS[k].priority ?? 1) <= maxPriority),
+    [columnOrder, columnVisibility, COLUMN_DEFS, maxPriority]
+  );
+
+  const collapsedByViewport = useMemo(
+    () => columnOrder.filter((k) => columnVisibility[k] && COLUMN_DEFS[k] && (COLUMN_DEFS[k].priority ?? 1) > maxPriority).length,
+    [columnOrder, columnVisibility, COLUMN_DEFS, maxPriority]
+  );
+
+  const orderedColumns = useMemo(() => {
+    const left = visibleColumnKeys.filter((k) => pinned[k] === "left");
+    const right = visibleColumnKeys.filter((k) => pinned[k] === "right");
+    const middle = visibleColumnKeys.filter((k) => !pinned[k]);
+    return [...left, ...middle, ...right];
+  }, [visibleColumnKeys, pinned]);
+
+  const nameWidth = widthOf(NAME_KEY);
+  const actionWidth = actions ? widthOf(ACTION_KEY) : 0;
+
+  const stickyOffsets = useMemo(() => {
+    const offsets = {};
+    let leftAcc = nameWidth;
+    orderedColumns.forEach((key) => {
+      if (pinned[key] === "left") {
+        offsets[key] = { side: "left", value: leftAcc };
+        leftAcc += widthOf(key);
+      }
+    });
+    let rightAcc = 0;
+    [...orderedColumns].reverse().forEach((key) => {
+      if (pinned[key] === "right") {
+        offsets[key] = { side: "right", value: rightAcc };
+        rightAcc += widthOf(key);
+      }
+    });
+    return offsets;
+  }, [orderedColumns, pinned, widthOf, nameWidth]);
+
+  const totalWidth = nameWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0);
+
+  const searchedColumns = DEFAULT_ORDER.filter((key) =>
+    (COLUMN_DEFS[key]?.label || "").toLowerCase().includes(columnSearch.toLowerCase())
+  );
+
+  // ─── Cell renderer ──────────────────────────────────────────────────────
+  const renderCellBody = (row, col) => {
     const value = valueOf(row, col);
     if (col.render) return col.render(row, value);
     switch (col.type) {
@@ -460,9 +602,9 @@ const CMFDataTable = ({
         const score = Number(value) || 0;
         const label = getMatchLabel(score);
         return (
-          <div className="flex flex-col items-center gap-1 w-full max-w-[92px] mx-auto">
-            <span className={`${ds.fontSize} text-[#4a352f]`}>{score}%</span>
-            <span className="text-xs font-medium" style={{ color: label.color }}>{label.label}</span>
+          <div className="flex flex-col items-center gap-1 w-full">
+            <span className={`${ds.fontSize} font-semibold text-[#4a352f]`}>{score}%</span>
+            <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: label.color }}>{label.label}</span>
             <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
               <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: label.color }} />
             </div>
@@ -472,22 +614,44 @@ const CMFDataTable = ({
       case "status": {
         const color = col.statusColor?.(value, row) || "#7d5a50";
         return (
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap"
             style={{ backgroundColor: `${color}18`, color, borderColor: `${color}40` }}>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />{value || "—"}
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />{value || "—"}
           </span>
         );
       }
       case "badge":
         return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#f5f0e1] text-[#4a352f]">{value || "—"}</span>;
       case "date":
-        return <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{formatDate(value)}</div>;
+        return <div className="flex items-center gap-1.5"><Calendar size={13} className="text-[#7d5a50] flex-shrink-0" />{formatDate(value)}</div>;
       default:
-        return <span className="line-clamp-2">{value ?? "—"}</span>;
+        return <span className="line-clamp-2 break-words">{value ?? "—"}</span>;
     }
   };
 
-  const visibleColumns = columnOrder.filter((k) => columnVisibility[k] && COLUMN_DEFS[k]);
+  const renderCell = (row, key, rowBg) => {
+    const col = COLUMN_DEFS[key];
+    if (!col) return null;
+    const offset = stickyOffsets[key];
+    const stickyStyle = offset
+      ? {
+          position: "sticky",
+          [offset.side]: `${offset.value}px`,
+          zIndex: 9,
+          backgroundColor: rowBg,
+          boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+        }
+      : {};
+    return (
+      <td
+        key={key}
+        className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top ${col.align === "center" ? "text-center" : ""}`}
+        style={stickyStyle}
+      >
+        {renderCellBody(row, col)}
+      </td>
+    );
+  };
 
   return (
     <div className="w-full space-y-4 font-sans">
@@ -514,14 +678,23 @@ const CMFDataTable = ({
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
             {activeFilterCount > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
-                <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+              <>
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+                </span>
+                <button onClick={clearAllFilters} className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-white border border-[#e6d7c3] transition-colors">
+                  Clear all filters
+                </button>
+              </>
+            )}
+            {collapsedByViewport > 0 && (
+              <span className="px-3 py-1.5 rounded-xl text-xs font-medium text-[#a89482] border border-[#e6d7c3]">
+                {collapsedByViewport} column{collapsedByViewport > 1 ? "s" : ""} hidden on this screen size
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-
             <div className="relative">
               <button onClick={(e) => {
                 if (showColumnChooser) { setShowColumnChooser(false); setChooserRect(null); }
@@ -532,12 +705,12 @@ const CMFDataTable = ({
               </button>
 
               {showColumnChooser && chooserRect && (() => {
-                const panelWidth = 320, margin = 12;
+                const panelWidth = 340, margin = 12;
                 const left = Math.min(Math.max(chooserRect.right - panelWidth, margin), window.innerWidth - panelWidth - margin);
                 const spaceBelow = window.innerHeight - chooserRect.bottom - margin - 8;
                 const spaceAbove = chooserRect.top - margin - 8;
                 const upward = spaceBelow < 320 && spaceAbove > spaceBelow;
-                const maxHeight = Math.max(200, Math.min(620, upward ? spaceAbove : spaceBelow));
+                const maxHeight = Math.max(200, Math.min(640, upward ? spaceAbove : spaceBelow));
                 const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)));
                 return (
                   <PopupPortal>
@@ -606,27 +779,57 @@ const CMFDataTable = ({
                       )}
 
                       <div className="border-t border-[#e6d7c3] my-4" />
-                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Columns</h4>
+
+                      <div className="relative mb-3">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a89482] pointer-events-none" />
+                        <input value={columnSearch} onChange={(e) => setColumnSearch(e.target.value)} placeholder="Search columns..."
+                          className="w-full pl-7 pr-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs" />
+                      </div>
+
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag a column header to reorder it, or click its label to sort.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize. Every column resizes, including the pinned ones.
                       </p>
-                      <label className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
-                        <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
-                        <span className="text-sm text-[#4a352f]">{primary?.label || "Name"}</span>
-                      </label>
-                      {columns.map((col) => (
-                        <label key={col.key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
-                          <input type="checkbox" checked={columnVisibility[col.key] || false}
-                            onChange={() => setColumnVisibility((p) => ({ ...p, [col.key]: !p[col.key] }))}
-                            className="rounded border-[#c8b6a6] text-[#7d5a50]" />
-                          <span className="text-sm text-[#4a352f]">{col.label}</span>
-                        </label>
+
+                      <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f] flex-1">{primary?.label || "Name"}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
+                      </div>
+                      {actions && (
+                        <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                          <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f] flex-1">Actions</span>
+                          <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Always last</span>
+                        </div>
+                      )}
+                      <div className="border-t border-[#e6d7c3] my-2" />
+
+                      {searchedColumns.length === 0 && <p className="text-xs text-[#a89482] px-2 py-1.5">No columns match that search.</p>}
+                      {searchedColumns.map((key) => (
+                        <div key={key} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2]">
+                          <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                            <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)}
+                              className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                            <span className="text-sm text-[#4a352f] truncate">{COLUMN_DEFS[key].label}</span>
+                          </label>
+                          <button
+                            onClick={() => cyclePin(key)}
+                            title={pinned[key] === "left" ? "Pinned left — click to pin right" : pinned[key] === "right" ? "Pinned right — click to unpin" : "Pin left"}
+                            className={`p-1 rounded flex-shrink-0 ${pinned[key] ? "text-[#7d5a50]" : "text-[#c8b6a6] hover:text-[#7d5a50]"}`}
+                          >
+                            {pinned[key] ? <Pin size={13} /> : <PinOff size={13} />}
+                          </button>
+                          <span className="text-[10px] text-[#a89482] w-7 text-right flex-shrink-0">
+                            {pinned[key] === "left" ? "L" : pinned[key] === "right" ? "R" : ""}
+                          </span>
+                        </div>
                       ))}
 
                       <div className="border-t border-[#e6d7c3] my-4" />
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
                       <div className="flex gap-1.5 mb-1">
-                        {[["comfortable", "Comfortable"], ["compact", "Compact"], ["ultra-compact", "Ultra Compact"]].map(([key, label]) => (
+                        {[["comfortable", "Comfortable"], ["compact", "Compact"], ["ultra-compact", "Ultra"]].map(([key, label]) => (
                           <button key={key} onClick={() => setDensity(key)}
                             className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>
                             {label}
@@ -652,41 +855,80 @@ const CMFDataTable = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+      <div className="bg-white rounded-b-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
         {loading ? (
           <div className="p-8"><div className="space-y-4">{[...Array(6)].map((_, i) => (<div key={i} className="h-10 bg-[#f5f0e1] rounded-lg animate-pulse" />))}</div></div>
         ) : (
           <>
             <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
               <style>{`
-                .cmt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
+                /* No 'position: relative' here — it silently overrides the
+                   sticky positioning on every <th>. Sticky is itself a
+                   positioned ancestor, so the grip and resize handle still
+                   anchor. */
+                .cmt-th { color: #faf7f2 !important; vertical-align: top !important; }
                 .cmt-th-draggable { cursor: grab; }
                 .cmt-th-draggable:active { cursor: grabbing; }
-                /* Wrap header labels onto at most 2 lines rather than forcing
-                   the column wider. Only lays out cleanly because each column
-                   carries a real min-width. */
-                .cmt-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; text-align: left; }
-                /* Column resizing: an explicit header width only holds if the
-                   cells below can shrink, so long values wrap rather than
-                   forcing the column wider than the width that was dragged. */
-                .bigt-fit th, .bigt-fit td { overflow: hidden; }
-                .bigt-fit td { word-break: break-word; }
+                .cmt-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+                /* overflow-wrap: normal stops the browser splitting inside a
+                   word, which is what turns "Match Fit" into "MAT CH.." in
+                   narrow columns. */
+                .cmt-th-label {
+                  flex: 1 1 auto; min-width: 0;
+                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                  overflow: hidden; white-space: normal;
+                  overflow-wrap: normal; word-break: normal; hyphens: none;
+                  line-height: 1.2; letter-spacing: 0.02em;
+                }
+                .cmt-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+                /* The drag grip leaves the flex flow and only appears on hover,
+                   buying every header ~14px more room for its label. */
+                .cmt-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+                .cmt-th:hover .cmt-th-grip { opacity: .45; }
+                .cmt-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+                .cmt-resize:hover { background: rgba(255,255,255,0.25); }
               `}</style>
-              <table className="border-collapse bigt-fit" style={{ tableLayout: "auto" }}>
+
+              <table
+                className="text-sm"
+                style={{
+                  /* separate (not collapse) — collapsed borders are dropped by
+                     sticky cells, which makes the pinned column lose its edge
+                     and mispaint over its neighbour while scrolling. */
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  tableLayout: "fixed",
+                  width: totalWidth,
+                  minWidth: "100%",
+                }}
+              >
                 <thead>
-                  <tr className="bg-[#4a352f]">
-                    <th className="cmt-th py-3 px-3 relative border-r border-[#e6d7c3] sticky top-0 left-0 z-30"
-                      style={{ backgroundColor: "#4a352f", ...widthStyle("__name__", "180px", "210px") }}>
-                      <div className="flex items-start gap-1 min-w-0">
-                        <button onClick={() => toggleSort("__name__")} className="cmt-th-label hover:text-white transition-colors">{primary?.label || "Name"}</button>
-                        <SortIndicator colKey="__name__" />
-                        <FilterTrigger colKey="__name__" />
+                  <tr>
+                    {/* Primary name column — pinned, and resizable like the rest */}
+                    <th className="cmt-th text-left font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30"
+                      style={{
+                        backgroundColor: "#4a352f",
+                        width: nameWidth,
+                        padding: ds.header,
+                        borderBottom: "1px solid #e6d7c3",
+                        boxShadow: "2px 0 0 #e6d7c3",
+                      }}>
+                      <div className="cmt-th-row">
+                        <span className="cmt-th-label" title={primary?.label || "Name"}>{primary?.label || "Name"}</span>
+                        <span className="cmt-th-tools">
+                          <SortTrigger colKey={NAME_KEY} />
+                          <FilterTrigger colKey={NAME_KEY} />
+                          <HeaderInfoTooltip text={primary?.tooltip || "The name of the record. Click the eye to open its full details."} />
+                        </span>
                       </div>
-                      <ColumnResizer colKey="__name__" />
+                      <ColumnResizer colKey={NAME_KEY} />
                     </th>
 
-                    {visibleColumns.map((key) => {
+                    {orderedColumns.map((key) => {
                       const col = COLUMN_DEFS[key];
+                      const isDragging = draggedColumn === key;
+                      const isDragOver = dragOverColumn === key && draggedColumn !== key;
+                      const offset = stickyOffsets[key];
                       return (
                         <th key={key} draggable={!resizingColumn}
                           onDragStart={(e) => { setDraggedColumn(key); setDragHintRect(null); try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", key); } catch { /* some browsers are picky */ } }}
@@ -695,14 +937,30 @@ const CMFDataTable = ({
                           onDragEnd={() => { setDraggedColumn(null); setDragOverColumn(null); }}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`cmt-th cmt-th-draggable py-3 px-3 relative border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${draggedColumn === key ? "opacity-40" : ""}`}
-                          style={{ ...widthStyle(key, col.minWidth || "100px"), backgroundColor: dragOverColumn === key && draggedColumn !== key ? "#5a423b" : "#4a352f" }}>
-                          <div className={`flex items-start gap-1 min-w-0 ${col.align === "center" ? "justify-center" : ""}`}>
-                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <button onClick={() => toggleSort(key)} className="cmt-th-label hover:text-white transition-colors">{col.label}</button>
-                            <SortIndicator colKey={key} />
-                            {col.filter !== "none" && <FilterTrigger colKey={key} />}
-                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                          className={`cmt-th cmt-th-draggable font-semibold uppercase tracking-wider text-xs sticky top-0 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
+                          style={{
+                            width: widthOf(key),
+                            padding: ds.header,
+                            backgroundColor: isDragOver ? "#5a423b" : "#4a352f",
+                            zIndex: offset ? 25 : 20,
+                            borderBottom: "1px solid #e6d7c3",
+                            borderRight: "1px solid #e6d7c3",
+                            ...(offset
+                              ? {
+                                  [offset.side]: `${offset.value}px`,
+                                  boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
+                                }
+                              : {}),
+                          }}>
+                          <GripVertical size={11} className="cmt-th-grip" />
+                          <div className={`cmt-th-row ${col.align === "center" ? "justify-center" : ""}`}>
+                            <span className="cmt-th-label" title={col.label}>{col.label}</span>
+                            <span className="cmt-th-tools">
+                              {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
+                              {col.sortable !== false && <SortTrigger colKey={key} />}
+                              {col.filter !== "none" && <FilterTrigger colKey={key} />}
+                              <HeaderInfoTooltip text={col.tooltip} />
+                            </span>
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
@@ -710,39 +968,52 @@ const CMFDataTable = ({
                     })}
 
                     {actions && (
-                      <th className="cmt-th py-3 px-3 relative text-center whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "110px", backgroundColor: "#4a352f" }}>Actions</th>
+                      <th className="cmt-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
+                        style={{ width: actionWidth, backgroundColor: "#4a352f", padding: ds.header, borderBottom: "1px solid #e6d7c3" }}>
+                        <div className="cmt-th-row justify-center">
+                          <span className="cmt-th-label">Actions</span>
+                          <HeaderInfoTooltip text="Open the full record to see everything captured about it." />
+                        </div>
+                        <ColumnResizer colKey={ACTION_KEY} />
+                      </th>
                     )}
                   </tr>
                 </thead>
                 <tbody>
                   {paginated.length === 0 ? (
-                    <tr><td colSpan={visibleColumns.length + (actions ? 2 : 1)} className="text-center py-20">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center">
-                          {emptyState.icon || <Users size={32} className="text-[#7d5a50] opacity-50" />}
+                    <tr>
+                      <td colSpan={orderedColumns.length + (actions ? 2 : 1)} className="text-center py-20 border-b border-[#e6d7c3]">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center">
+                            {emptyState.icon || <Users size={32} className="text-[#7d5a50] opacity-50" />}
+                          </div>
+                          <p className="text-lg font-semibold text-[#4a352f]">{emptyState.title || "Nothing here yet"}</p>
+                          <p className="text-sm text-[#7d5a50] max-w-sm">
+                            {activeFilterCount > 0 ? "Clear a filter to widen the list." : emptyState.description}
+                          </p>
+                          {activeFilterCount > 0 && (
+                            <button onClick={clearAllFilters} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white">Clear all filters</button>
+                          )}
                         </div>
-                        <p className="text-lg font-semibold text-[#4a352f]">{emptyState.title || "Nothing here yet"}</p>
-                        <p className="text-sm text-[#7d5a50] max-w-sm">
-                          {activeFilterCount > 0 ? "Clear a filter to widen the list." : emptyState.description}
-                        </p>
-                      </div>
-                    </td></tr>
+                      </td>
+                    </tr>
                   ) : (
                     paginated.map((row, i) => {
                       const rowId = row.id ?? i;
+                      const rowBg = hoveredRow === rowId ? "#fdf8f4" : "#ffffff";
                       return (
-                        <tr key={rowId} className="border-b border-[#f0e6d9] transition-all"
-                          style={{ backgroundColor: hoveredRow === rowId ? "#fdf8f4" : undefined }}
+                        <tr key={rowId}
+                          style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                           onMouseEnter={() => setHoveredRow(rowId)} onMouseLeave={() => setHoveredRow(null)}>
-                          <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 border-r border-b border-[#e6d7c3] z-10 transition-colors`}
-                            style={{ ...widthStyle("__name__", "180px", "210px"), backgroundColor: hoveredRow === rowId ? "#fdf8f4" : "#ffffff" }}>
-                            <div className="flex items-start gap-2">
+                          <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 z-10 align-top border-b border-[#e6d7c3]`}
+                            style={{ width: nameWidth, backgroundColor: rowBg, boxShadow: "2px 0 0 #e6d7c3" }}>
+                            <div className="flex items-start gap-2 min-w-0">
                               <div className={`${ds.avatar} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>
                                 {(primaryValue(row) || "?").toString().charAt(0)}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-start gap-1.5 flex-wrap">
-                                  <span className={`${ds.fontSize} leading-snug text-[#4a352f]`}>{primaryValue(row)}</span>
+                                  <span className={`${ds.fontSize} font-medium leading-snug text-[#4a352f] break-words`}>{primaryValue(row)}</span>
                                   {primary?.onView && (
                                     <button onClick={() => primary.onView(row)} className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
                                       aria-label={`View details for ${primaryValue(row)}`} title="View details">
@@ -755,17 +1026,10 @@ const CMFDataTable = ({
                             </div>
                           </td>
 
-                          {visibleColumns.map((key) => {
-                            const col = COLUMN_DEFS[key];
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3] ${col.align === "center" ? "text-center" : ""}`}>
-                                {renderCell(row, col)}
-                              </td>
-                            );
-                          })}
+                          {orderedColumns.map((key) => renderCell(row, key, rowBg))}
 
                           {actions && (
-                            <td className={`${ds.cell} text-center`} style={{ minWidth: "110px" }}>
+                            <td className={`${ds.cell} text-center align-top border-b border-[#e6d7c3]`} style={{ width: actionWidth, backgroundColor: rowBg }}>
                               <div className="flex items-center justify-center gap-1.5">{actions(row)}</div>
                             </td>
                           )}
@@ -810,14 +1074,14 @@ const CMFDataTable = ({
         <PopupPortal>
           <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
             style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 220), width: "205px" }}>
-            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · click to sort
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
           </div>
         </PopupPortal>
       )}
 
       {headerFilterOpen && (() => {
         const key = headerFilterOpen.key;
-        const isName = key === "__name__";
+        const isName = key === NAME_KEY;
         const col = isName ? { label: primary?.label || "Name", filter: "text" } : COLUMN_DEFS[key];
         if (!col) return null;
         const filterType = col.filter || "text";
@@ -829,7 +1093,7 @@ const CMFDataTable = ({
           <PopupPortal>
             <div className="fixed inset-0 z-[1090]" onClick={() => setHeaderFilterOpen(null)} />
             <div className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
-              style={{ top: headerFilterOpen.rect.bottom + 8, left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292), width: "280px" }}>
+              style={{ top: headerFilterOpen.rect.bottom + 8, left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312), width: "300px", maxHeight: "70vh", overflowY: "auto" }}>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-semibold text-[#4a352f]">Filter by {col.label.toLowerCase()}</label>
                 {value != null && <button onClick={clear} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
@@ -841,7 +1105,7 @@ const CMFDataTable = ({
                   className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
               )}
               {filterType === "select" && (
-                <div className="flex flex-wrap gap-1.5 max-h-[200px] overflow-y-auto">
+                <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
                   {selectOptions(col).length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
                   {selectOptions(col).map((opt) => {
                     const selected = Array.isArray(value) && value.includes(opt);
@@ -881,69 +1145,6 @@ const CMFDataTable = ({
   );
 };
 
-// ─── Partner details modal ────────────────────────────────────────────────────
-const PartnerDetailsModal = ({ partner, type, onClose }) => {
-  if (!partner) return null;
-  const label = getMatchLabel(partner.matchPercentage);
-  return (
-    <PopupPortal>
-      <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans p-4" onClick={onClose}>
-        <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[600px] max-w-full max-h-[86vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-5 text-white sticky top-0 z-10 flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">{type === "funder" ? "Funder" : "Catalyst"}</p>
-              <h3 className="text-lg font-bold mt-0.5 truncate">{partner.name}</h3>
-              <p className="text-xs text-[#e6d7c3] mt-0.5">{partner.type}</p>
-            </div>
-            <button onClick={onClose} className="text-white/70 hover:text-white p-1 flex-shrink-0"><X size={20} /></button>
-          </div>
-
-          <div className="p-6 space-y-6">
-            <div className="px-4 py-3 rounded-xl bg-[#faf7f2] border border-[#e6d7c3]">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold">Match fit</span>
-                <span className="text-sm font-bold" style={{ color: label.color }}>{partner.matchPercentage}% · {label.label}</span>
-              </div>
-              <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${partner.matchPercentage}%`, backgroundColor: label.color }} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              {[
-                [type === "funder" ? "Funding range" : "Support focus", type === "funder" ? partner.fundingRange : partner.focus],
-                ["Location focus", partner.location],
-                ["Contact person", partner.contactPerson],
-                ["Email", partner.email],
-              ].map(([l, v]) => (
-                <div key={l}>
-                  <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{l}</p>
-                  <p className="text-sm text-[#4a352f] break-words">{v || "N/A"}</p>
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-2">Sector focus</p>
-              <div className="flex flex-wrap gap-1.5">
-                {(partner.sectors || []).map((s) => (
-                  <span key={s} className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#f5f0e1] text-[#4a352f]">{s}</span>
-                ))}
-                {(partner.sectors || []).length === 0 && <span className="text-sm text-[#a89482]">Not specified</span>}
-              </div>
-            </div>
-
-            <div className="px-4 py-3 rounded-xl bg-[#faf7f2] border border-[#e6d7c3]">
-              <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">About</p>
-              <p className="text-sm text-[#4a352f] leading-relaxed">{partner.description || "No description provided."}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </PopupPortal>
-  );
-};
-
 // ─── Sector chips (shared cell renderer for funders/catalysts) ────────────────
 const SectorChips = ({ sectors = [] }) => (
   <div className="flex flex-wrap gap-1">
@@ -972,9 +1173,12 @@ export default function CMFTabbedTables({
 }) {
   const [activeTab, setActiveTab] = useState("businesses");
   const [businessSubTab, setBusinessSubTab] = useState("pipeline");
-  const [selectedPartner, setSelectedPartner] = useState(null);
-  const [partnerType, setPartnerType] = useState(null);
-  const [selectedDeal, setSelectedDeal] = useState(null);
+  // Each list opens its own full-profile modal — catalysts get the catalyst
+  // modal, funders the funder modal, businesses the business modal — rather
+  // than one generic partner card for all three.
+  const [selectedCatalyst, setSelectedCatalyst] = useState(null);
+  const [selectedFunder, setSelectedFunder] = useState(null);
+  const [selectedSME, setSelectedSME] = useState(null);
 
   const activeStages = useMemo(() => getActiveStages(), []);
 
@@ -1001,6 +1205,10 @@ export default function CMFTabbedTables({
         const stage = activeStages.find((s) => s.id === stageId);
         return {
           id: sme.id,
+          // The full business record travels with the row so opening a deal
+          // shows the same complete profile the pipeline table shows, not just
+          // the seven summary fields this table displays.
+          raw: sme,
           smseName: sme.name,
           fundingRequired: sme.fundingRequired,
           equityOffered: sme.equityOffered || sme.investmentType || "N/A",
@@ -1039,7 +1247,7 @@ export default function CMFTabbedTables({
     { id: "catalysts", label: "Catalysts", icon: <Award size={16} />, count: filteredCatalysts.length },
   ];
 
-  const openPartner = (partner, type) => { setSelectedPartner(partner); setPartnerType(type); };
+  const openDeal = (row) => setSelectedSME(row?.raw || row);
 
   const ViewButton = ({ onClick }) => (
     <button onClick={onClick}
@@ -1103,23 +1311,33 @@ export default function CMFTabbedTables({
                   exportSheet="Active Deals"
                   defaultSort={{ key: "startDate", direction: "desc" }}
                   toolbarBadge={{ icon: <Trophy size={12} />, label: `${activeDeals.length} active deal${activeDeals.length === 1 ? "" : "s"}` }}
-                  primary={{ key: "smseName", label: "Business Name", onView: setSelectedDeal }}
+                  primary={{
+                    key: "smseName", label: "Business Name", width: 216, onView: openDeal,
+                    tooltip: "The business this deal belongs to. Click the eye to open the full deal record.",
+                  }}
                   emptyState={{
                     icon: <Trophy size={32} className="text-[#7d5a50] opacity-50" />,
                     title: "No Active Deals Yet",
                     description: "Businesses appear here once they reach the Active or Completed stage.",
                   }}
                   columns={[
-                    { key: "fundingRequired", label: "Funding", minWidth: "104px", filter: "text" },
-                    { key: "equityOffered", label: "Instrument", minWidth: "104px", filter: "select", type: "badge" },
-                    { key: "startDate", label: "Start Date", minWidth: "112px", filter: "date", type: "date" },
-                    { key: "currentStatus", label: "Status", minWidth: "116px", filter: "select", type: "status",
+                    { key: "fundingRequired", label: "Funding", width: 148, filter: "text", priority: 1,
+                      tooltip: "The support amount agreed or requested for this deal." },
+                    { key: "equityOffered", label: "Instrument", width: 152, filter: "select", type: "badge", priority: 2,
+                      tooltip: "The form the support takes — grant, equity, loan, in-kind and so on." },
+                    { key: "startDate", label: "Start Date", width: 150, filter: "date", type: "date", priority: 3,
+                      tooltip: "When the business entered the programme. Sorting and filtering use the real date, not the formatted label." },
+                    { key: "currentStatus", label: "Status", width: 154, filter: "select", type: "status", priority: 1,
+                      tooltip: "Where this deal stands — Active while it's running, Completed once the business has graduated.",
                       statusColor: (v, row) => getStageColors(row.statusGroup).color },
-                    { key: "sector", label: "Sector", minWidth: "110px", filter: "select" },
-                    { key: "location", label: "Location", minWidth: "104px", filter: "text" },
-                    { key: "supportRequired", label: "Support Required", minWidth: "130px", filter: "text", defaultVisible: false },
+                    { key: "sector", label: "Sector", width: 146, filter: "select", priority: 3,
+                      tooltip: "The industry the business operates in." },
+                    { key: "location", label: "Location", width: 140, filter: "text", priority: 4,
+                      tooltip: "Where the business is based." },
+                    { key: "supportRequired", label: "Support Required", width: 172, filter: "text", defaultVisible: false, sortable: false, priority: 4,
+                      tooltip: "The kind of help this business asked for when it applied." },
                   ]}
-                  actions={(row) => <ViewButton onClick={() => setSelectedDeal(row)} />}
+                  actions={(row) => <ViewButton onClick={() => openDeal(row)} />}
                 />
               </div>
             )}
@@ -1137,24 +1355,33 @@ export default function CMFTabbedTables({
               exportSheet="Funders"
               defaultSort={{ key: "matchPercentage", direction: "desc" }}
               toolbarBadge={{ icon: <Building size={12} />, label: `${filteredFunders.length} of ${funderMatches.length} matched` }}
-              primary={{ key: "name", label: "Funder Name", onView: (row) => openPartner(row, "funder"), subtitle: (row) => row.type }}
+              primary={{
+                key: "name", label: "Funder Name", width: 220, onView: (row) => setSelectedFunder(row), subtitle: (row) => row.type,
+                tooltip: "The funding organisation, with its type underneath. Click the eye to open its full profile.",
+              }}
               emptyState={{
                 icon: <Building size={32} className="text-[#7d5a50] opacity-50" />,
                 title: "No Matched Funders",
                 description: "Funders matching your businesses' criteria will appear here.",
               }}
               columns={[
-                { key: "matchPercentage", label: "Match Fit", minWidth: "112px", align: "center", filter: "range", type: "match",
-                  tooltip: "How closely this funder's mandate aligns with the businesses in your portfolio." },
-                { key: "type", label: "Funder Type", minWidth: "116px", filter: "select" },
-                { key: "fundingRange", label: "Ticket Size", minWidth: "124px", filter: "text" },
-                { key: "location", label: "Location Focus", minWidth: "116px", filter: "select" },
-                { key: "sectors", label: "Sector Focus", minWidth: "150px", filter: "none", sortable: false,
+                { key: "matchPercentage", label: "Match Fit", width: 152, align: "center", filter: "range", type: "match", priority: 1,
+                  tooltip: "How closely this funder's mandate aligns with the businesses in your portfolio — stage, ticket size, geography and sector." },
+                { key: "type", label: "Funder Type", width: 150, filter: "select", priority: 2,
+                  tooltip: "What kind of funder this is — DFI, bank, VC, angel, corporate ESD and so on." },
+                { key: "fundingRange", label: "Ticket Size", width: 154, filter: "text", priority: 2,
+                  tooltip: "The band between the smallest and largest amount this funder typically deploys." },
+                { key: "location", label: "Location Focus", width: 152, filter: "select", priority: 3,
+                  tooltip: "Where this funder can deploy capital. Outside it, a business can't be funded even if everything else fits." },
+                { key: "sectors", label: "Sector Focus", width: 178, filter: "none", sortable: false, priority: 3,
+                  tooltip: "The industries this funder backs. Hover the +N chip to see the rest.",
                   render: (row) => <SectorChips sectors={row.sectors} />, exportValue: (row) => (row.sectors || []).join(", ") },
-                { key: "contactPerson", label: "Contact", minWidth: "116px", filter: "text", defaultVisible: false },
-                { key: "email", label: "Email", minWidth: "150px", filter: "text", defaultVisible: false },
+                { key: "contactPerson", label: "Contact", width: 150, filter: "text", defaultVisible: false, priority: 4,
+                  tooltip: "The named person to approach at this organisation." },
+                { key: "email", label: "Email", width: 180, filter: "text", defaultVisible: false, priority: 4,
+                  tooltip: "The contact address for enquiries and submissions." },
               ]}
-              actions={(row) => <ViewButton onClick={() => openPartner(row, "funder")} />}
+              actions={(row) => <ViewButton onClick={() => setSelectedFunder(row)} />}
             />
           </div>
         )}
@@ -1170,65 +1397,55 @@ export default function CMFTabbedTables({
               exportSheet="Catalysts"
               defaultSort={{ key: "matchPercentage", direction: "desc" }}
               toolbarBadge={{ icon: <Award size={12} />, label: `${filteredCatalysts.length} of ${catalystMatches.length} matched` }}
-              primary={{ key: "name", label: "Organization", onView: (row) => openPartner(row, "catalyst"), subtitle: (row) => row.type }}
+              primary={{
+                key: "name", label: "Organization", width: 220, onView: (row) => setSelectedCatalyst(row), subtitle: (row) => row.type,
+                tooltip: "The organisation running the support programme, with its type underneath. Click the eye to open its full profile.",
+              }}
               emptyState={{
                 icon: <Award size={32} className="text-[#7d5a50] opacity-50" />,
                 title: "No Matched Catalysts",
                 description: "Catalysts matching your businesses' support needs will appear here.",
               }}
               columns={[
-                { key: "matchPercentage", label: "Match Fit", minWidth: "112px", align: "center", filter: "range", type: "match",
+                { key: "matchPercentage", label: "Match Fit", width: 152, align: "center", filter: "range", type: "match", priority: 1,
                   tooltip: "How closely this catalyst's support offering aligns with the businesses in your portfolio." },
-                { key: "type", label: "Catalyst Type", minWidth: "120px", filter: "select" },
-                { key: "focus", label: "Support Focus", minWidth: "130px", filter: "select" },
-                { key: "location", label: "Location Focus", minWidth: "116px", filter: "select" },
-                { key: "sectors", label: "Sector Focus", minWidth: "150px", filter: "none", sortable: false,
+                { key: "type", label: "Catalyst Type", width: 154, filter: "select", priority: 2,
+                  tooltip: "What kind of organisation this is — accelerator, incubator, ESD programme, supplier development and so on." },
+                { key: "focus", label: "Support Focus", width: 160, filter: "select", priority: 2,
+                  tooltip: "The kind of help offered — funding, market access, mentoring, technical support, training or incubation." },
+                { key: "location", label: "Location Focus", width: 152, filter: "select", priority: 3,
+                  tooltip: "Where this catalyst operates. Outside it, a business can't be admitted even if everything else fits." },
+                { key: "sectors", label: "Sector Focus", width: 178, filter: "none", sortable: false, priority: 3,
+                  tooltip: "The industries this catalyst accepts businesses from. Hover the +N chip to see the rest.",
                   render: (row) => <SectorChips sectors={row.sectors} />, exportValue: (row) => (row.sectors || []).join(", ") },
-                { key: "contactPerson", label: "Contact", minWidth: "116px", filter: "text", defaultVisible: false },
-                { key: "email", label: "Email", minWidth: "150px", filter: "text", defaultVisible: false },
+                { key: "contactPerson", label: "Contact", width: 150, filter: "text", defaultVisible: false, priority: 4,
+                  tooltip: "The named person to approach at this organisation." },
+                { key: "email", label: "Email", width: 180, filter: "text", defaultVisible: false, priority: 4,
+                  tooltip: "The contact address for enquiries and applications." },
               ]}
-              actions={(row) => <ViewButton onClick={() => openPartner(row, "catalyst")} />}
+              actions={(row) => <ViewButton onClick={() => setSelectedCatalyst(row)} />}
             />
           </div>
         )}
       </div>
 
-      {selectedPartner && (
-        <PartnerDetailsModal partner={selectedPartner} type={partnerType} onClose={() => { setSelectedPartner(null); setPartnerType(null); }} />
-      )}
+      <CMFCatalystDetailsModal
+        catalyst={selectedCatalyst}
+        isOpen={!!selectedCatalyst}
+        onClose={() => setSelectedCatalyst(null)}
+      />
 
-      {selectedDeal && (
-        <PopupPortal>
-          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans p-4" onClick={() => setSelectedDeal(null)}>
-            <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[560px] max-w-full max-h-[86vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-5 text-white sticky top-0 z-10 flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Active Deal</p>
-                  <h3 className="text-lg font-bold mt-0.5 truncate">{selectedDeal.smseName}</h3>
-                  <p className="text-xs text-[#e6d7c3] mt-0.5">{selectedDeal.sector} · {selectedDeal.location}</p>
-                </div>
-                <button onClick={() => setSelectedDeal(null)} className="text-white/70 hover:text-white p-1 flex-shrink-0"><X size={20} /></button>
-              </div>
-              <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-4">
-                {[
-                  ["Funding", selectedDeal.fundingRequired],
-                  ["Instrument", selectedDeal.equityOffered],
-                  ["Start date", formatDate(selectedDeal.startDate)],
-                  ["Status", selectedDeal.currentStatus],
-                  ["Sector", selectedDeal.sector],
-                  ["Location", selectedDeal.location],
-                  ["Support required", selectedDeal.supportRequired],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-[11px] uppercase tracking-wide text-[#a89482] font-semibold mb-1">{label}</p>
-                    <p className="text-sm text-[#4a352f]">{value || "N/A"}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </PopupPortal>
-      )}
+      <CMFFunderDetailsModal
+        funder={selectedFunder}
+        isOpen={!!selectedFunder}
+        onClose={() => setSelectedFunder(null)}
+      />
+
+      <CMFSMEDetailsModal
+        sme={selectedSME}
+        isOpen={!!selectedSME}
+        onClose={() => setSelectedSME(null)}
+      />
     </div>
   );
 }

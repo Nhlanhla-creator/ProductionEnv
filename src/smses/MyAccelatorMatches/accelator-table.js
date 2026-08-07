@@ -31,6 +31,7 @@ import {
   StickyNote,
   Flag,
   Rocket,
+  Info,
 } from "lucide-react"
 import { collection, getDocs, doc, setDoc, getDoc, serverTimestamp, query, where, limit } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
@@ -319,6 +320,38 @@ const PopupPortal = ({ children }) => {
   return createPortal(children, document.body)
 }
 
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Same component the other match tables use, so every table explains its
+   columns identically. Portaled to <body> because the header cell is sticky
+   and would otherwise clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
+}
+
 const TruncatedText = ({ text, maxLength = 50 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -352,11 +385,12 @@ const TruncatedText = ({ text, maxLength = 50 }) => {
    Section D column configuration.
 
    Programme/Catalyst is the pinned first column and Action the last, so
-   neither appears here. The seven above the divider are the spec default
-   view; everything below is a spec "hidden by default" column.
+   neither appears here — but both resize like everything else, via the
+   reserved width keys further down. The seven above the divider are the spec
+   default view; everything below is a spec "hidden by default" column.
 
    Widths raised in line with the other match tables — each header carries a
-   grip, sort and filter control (~60px of chrome), so the old 116–150px
+   grip, sort, filter and info control (~72px of chrome), so the old 116–150px
    columns left too little room and the browser broke labels mid-word
    ("MAT CH..", "STA TUS").
 
@@ -364,29 +398,29 @@ const TruncatedText = ({ text, maxLength = 50 }) => {
    tablet, everything shows on laptop and up.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
-  programmeType: { label: "Programme Type", width: 156, filterType: "programmeType", visible: true, priority: 2, sortable: true },
-  supportOffered: { label: "Support Offered", width: 198, filterType: "supportOffered", visible: true, priority: 3, sortable: false },
-  duration: { label: "Duration / Start Date", width: 166, filterType: "duration", visible: true, priority: 3, sortable: true },
-  deadline: { label: "Application Deadline", width: 168, filterType: "deadline", visible: true, priority: 2, sortable: true },
-  responsiveness: { label: "Responsiveness", width: 160, filterType: "responsiveness", visible: true, priority: 3, sortable: true },
-  status: { label: "Status", width: 144, filterType: "status", visible: true, priority: 1, sortable: true },
+  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true, tooltip: "How well this programme fits your business across stage, ticket size, geography, sector, instrument, support type, legal entity and revenue. Click the ? for the full breakdown." },
+  programmeType: { label: "Programme Type", width: 156, filterType: "programmeType", visible: true, priority: 2, sortable: true, tooltip: "What kind of programme this is — accelerator, incubator, ESD, supplier development and so on." },
+  supportOffered: { label: "Support Offered", width: 198, filterType: "supportOffered", visible: true, priority: 3, sortable: false, tooltip: "The kinds of help the programme provides, summarised as tags: funding, market access, mentoring, technical support, training or incubation." },
+  duration: { label: "Duration / Start Date", width: 166, filterType: "duration", visible: true, priority: 3, sortable: true, tooltip: "How long the programme runs, and when the next cohort starts if a date has been published." },
+  deadline: { label: "Application Deadline", width: 168, filterType: "deadline", visible: true, priority: 2, sortable: true, tooltip: "The closing date for applications. Programmes with no date accept applications on a rolling basis." },
+  responsiveness: { label: "Responsiveness", width: 160, filterType: "responsiveness", visible: true, priority: 3, sortable: true, tooltip: "Median business days from an enquiry to this catalyst's first meaningful reply, with the share of enquiries they answer. It measures the first reply, not the final decision." },
+  status: { label: "Status", width: 144, filterType: "status", visible: true, priority: 1, sortable: true, tooltip: "Where you stand with this programme, from New Match through Applied and Evaluation to Admitted or Declined." },
 
-  programmeSponsor: { label: "Programme Sponsor", width: 164, filterType: "programmeSponsor", visible: false, priority: 4, sortable: true },
-  sectorFocus: { label: "Sector Focus", width: 160, filterType: "sectorFocus", visible: false, priority: 4, sortable: true },
-  location: { label: "Location", width: 134, filterType: "location", visible: false, priority: 4, sortable: true },
-  geographicFocus: { label: "Geographic Focus", width: 156, filterType: "geographicFocus", visible: false, priority: 4, sortable: true },
-  deliveryFormat: { label: "Delivery Format", width: 148, filterType: "deliveryFormat", visible: false, priority: 4, sortable: true },
-  cohortSize: { label: "Cohort Size", width: 130, filterType: "cohortSize", visible: false, priority: 4, sortable: true },
-  programmeCost: { label: "Programme Cost", width: 152, filterType: "programmeCost", visible: false, priority: 4, sortable: true },
-  eligibility: { label: "Eligibility Requirements", width: 182, filterType: "eligibility", visible: false, priority: 4, sortable: false },
-  fundingAvailable: { label: "Funding Available", width: 156, filterType: "fundingAvailable", visible: false, priority: 4, sortable: true },
-  fundingStage: { label: "Funding Stage", width: 144, filterType: "fundingStage", visible: false, priority: 4, sortable: true },
-  fundingType: { label: "Funding Type", width: 144, filterType: "fundingType", visible: false, priority: 4, sortable: true },
-  servicesOffered: { label: "Services Offered", width: 160, filterType: "servicesOffered", visible: false, priority: 4, sortable: false },
-  reportingRequirements: { label: "Reporting Requirements", width: 182, filterType: "reportingRequirements", visible: false, priority: 4, sortable: false },
-  dateMatched: { label: "Date Matched", width: 144, filterType: null, visible: false, priority: 4, sortable: true },
-  nextStage: { label: "Next Stage", width: 140, filterType: "nextStage", visible: false, priority: 4, sortable: false },
+  programmeSponsor: { label: "Programme Sponsor", width: 164, filterType: "programmeSponsor", visible: false, priority: 4, sortable: true, tooltip: "The organisation funding or backing the programme, where it differs from the catalyst running it." },
+  sectorFocus: { label: "Sector Focus", width: 160, filterType: "sectorFocus", visible: false, priority: 4, sortable: true, tooltip: "The industries this programme accepts businesses from." },
+  location: { label: "Location", width: 134, filterType: "location", visible: false, priority: 4, sortable: true, tooltip: "Where the catalyst is based." },
+  geographicFocus: { label: "Geographic Focus", width: 156, filterType: "geographicFocus", visible: false, priority: 4, sortable: true, tooltip: "Where the programme can operate — global, regional, or restricted to named countries or provinces. Outside it you can't be admitted even if everything else fits." },
+  deliveryFormat: { label: "Delivery Format", width: 148, filterType: "deliveryFormat", visible: false, priority: 4, sortable: true, tooltip: "Whether the programme runs in person, remotely, or as a hybrid." },
+  cohortSize: { label: "Cohort Size", width: 130, filterType: "cohortSize", visible: false, priority: 4, sortable: true, tooltip: "How many businesses are taken on per intake." },
+  programmeCost: { label: "Programme Cost", width: 152, filterType: "programmeCost", visible: false, priority: 4, sortable: true, tooltip: "What participation costs you, where the programme charges a fee." },
+  eligibility: { label: "Eligibility Requirements", width: 182, filterType: "eligibility", visible: false, priority: 4, sortable: false, tooltip: "What a business must have or be before this programme will consider it." },
+  fundingAvailable: { label: "Funding Available", width: 156, filterType: "fundingAvailable", visible: false, priority: 4, sortable: true, tooltip: "The support amount on offer, or the band between the minimum and maximum." },
+  fundingStage: { label: "Funding Stage", width: 144, filterType: "fundingStage", visible: false, priority: 4, sortable: true, tooltip: "The business stages the programme backs — startup, growth, scaling, turnaround or mature." },
+  fundingType: { label: "Funding Type", width: 144, filterType: "fundingType", visible: false, priority: 4, sortable: true, tooltip: "What form the support takes — grant, equity, loan, in-kind and so on." },
+  servicesOffered: { label: "Services Offered", width: 160, filterType: "servicesOffered", visible: false, priority: 4, sortable: false, tooltip: "The specific services the programme delivers, in the catalyst's own words." },
+  reportingRequirements: { label: "Reporting Requirements", width: 182, filterType: "reportingRequirements", visible: false, priority: 4, sortable: false, tooltip: "What you'd have to report back, and how often, once admitted." },
+  dateMatched: { label: "Date Matched", width: 144, filterType: null, visible: false, priority: 4, sortable: true, tooltip: "When you applied to this programme. Blank until you do." },
+  nextStage: { label: "Next Stage", width: 140, filterType: "nextStage", visible: false, priority: 4, sortable: false, tooltip: "The stage this application moves to next. Derived live from the current status, so it updates as the catalyst advances you." },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -397,15 +431,19 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const CATALYST_WIDTH = 224
-const ACTION_WIDTH = 208
+/* Programme and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const CATALYST_KEY = "__catalyst__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [CATALYST_KEY]: 224, [ACTION_KEY]: 208 }
 const MIN_COLUMN_WIDTH = 84
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v3: the stored widths from earlier versions are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "catalyst-matches-views-v3"
+// v4: the two fixed columns now store their widths in this map too, so a v3
+// view would leave them undefined.
+const VIEWS_STORAGE_KEY = "catalyst-matches-views-v4"
 const FILTERS_STORAGE_KEY = "catalyst-matches-filters-v1"
 
 const EMPTY_FILTERS = {
@@ -445,7 +483,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -465,7 +503,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -604,6 +642,7 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
 
@@ -1209,12 +1248,23 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
     setDragOverColumn(null)
   }
 
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -1222,6 +1272,7 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -1233,6 +1284,31 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
   }
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="kt-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
 
   /* ─── Header filter + sort ────────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
@@ -1798,12 +1874,13 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const catalystWidth = widthOf(CATALYST_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
     // Left-pinned columns stack to the right of the frozen first column.
-    let leftAcc = CATALYST_WIDTH
+    let leftAcc = catalystWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1819,9 +1896,9 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, catalystWidth])
 
-  const totalWidth = CATALYST_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = catalystWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPad = density === "compact" ? "py-2 px-2" : density === "ultra-compact" ? "py-1.5 px-1.5" : "py-3 px-3"
   const cellFont = density === "comfortable" ? "text-sm" : "text-xs"
@@ -2272,12 +2349,13 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                         </div>
 
                         <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                          <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                          <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                          resize. Every column resizes, including the pinned ones.
                         </p>
 
                         <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                           <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f] flex-1">Programme</span>
+                          <span className="text-sm text-[#4a352f] flex-1">Catalyst Name</span>
                           <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
                         </div>
                         <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -2382,7 +2460,7 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                  buying every header ~14px more room for its label. */
               .kt-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
               .kt-th:hover .kt-th-grip { opacity: .45; }
-              .kt-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+              .kt-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
               .kt-resize:hover { background: rgba(255,255,255,0.25); }
             `}</style>
 
@@ -2401,25 +2479,28 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
             >
               <thead>
                 <tr>
+                  {/* Programme — pinned first column, resizable like the rest */}
                   <th
                     className="kt-th text-left font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30"
                     style={{
                       backgroundColor: "#4a352f",
-                      width: CATALYST_WIDTH,
+                      width: catalystWidth,
                       padding: headerPadding,
                       borderBottom: "1px solid #e6d7c3",
                       boxShadow: "2px 0 0 #e6d7c3",
                     }}
                   >
                     <div className="kt-th-row">
-                      <span className="kt-th-label" title="Programme">
-                        Programme
+                      <span className="kt-th-label" title="Catalyst Name">
+                        Catalyst Name
                       </span>
                       <span className="kt-th-tools">
                         <SortTrigger columnKey="name" />
                         <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                        <HeaderInfoTooltip text="The organisation running the programme, with the specific programme underneath. A catalyst running several programmes appears once per programme." />
                       </span>
                     </div>
+                    <ColumnResizer colKey={CATALYST_KEY} />
                   </th>
 
                   {orderedColumns.map((key) => {
@@ -2430,7 +2511,7 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                     return (
                       <th
                         key={key}
-                        draggable
+                        draggable={!resizingColumn}
                         onDragStart={(e) => handleColumnDragStart(e, key)}
                         onDragOver={(e) => handleColumnDragOver(e, key)}
                         onDrop={(e) => handleColumnDrop(e, key)}
@@ -2464,9 +2545,10 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                             {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                             {col.sortable && <SortTrigger columnKey={key} />}
                             {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                            <HeaderInfoTooltip text={col.tooltip} />
                           </span>
                         </div>
-                        <div className="kt-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                        <ColumnResizer colKey={key} />
                       </th>
                     )
                   })}
@@ -2477,12 +2559,16 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                     className="kt-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
                     style={{
                       backgroundColor: "#4a352f",
-                      width: ACTION_WIDTH,
+                      width: actionWidth,
                       padding: headerPadding,
                       borderBottom: "1px solid #e6d7c3",
                     }}
                   >
-                    Action
+                    <div className="kt-th-row justify-center">
+                      <span className="kt-th-label">Action</span>
+                      <HeaderInfoTooltip text="Apply to the programme or open what you've already sent, bookmark it to come back to, or open quick actions for more options." />
+                    </div>
+                    <ColumnResizer colKey={ACTION_KEY} />
                   </th>
                 </tr>
               </thead>
@@ -2531,14 +2617,21 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                         onMouseLeave={() => setHoveredRowKey(null)}
                         style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                       >
-                        {/* Programme — pinned left. Name only; the catalyst is
-                            searchable by name and shown in the details modal. */}
+                        {/* Catalyst — pinned left. The organisation leads, with
+                            the programme underneath, so the column reads as its
+                            header says while still naming which programme the
+                            row is. */}
                         <td
                           className={`${cellPad} sticky left-0 z-10 align-top border-b border-[#e6d7c3]`}
-                          style={{ width: CATALYST_WIDTH, backgroundColor: rowBg, boxShadow: "2px 0 0 #e6d7c3" }}
+                          style={{ width: catalystWidth, backgroundColor: rowBg, boxShadow: "2px 0 0 #e6d7c3" }}
                         >
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-[#4a352f] break-words text-sm">{a.programmeName || a.name}</span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="min-w-0">
+                              <span className="font-medium text-[#4a352f] break-words text-sm">{a.name}</span>
+                              {a.programmeName && (
+                                <div className="text-[10px] text-[#a89482] mt-0.5 break-words">{a.programmeName}</div>
+                              )}
+                            </div>
                             <button
                               onClick={() => handleViewClick(a)}
                               className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0"
@@ -2555,7 +2648,7 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                         {/* Action — scrolls with the table */}
                         <td
                           className={`${cellPad} align-top border-b border-[#e6d7c3] text-center`}
-                          style={{ width: ACTION_WIDTH, backgroundColor: rowBg }}
+                          style={{ width: actionWidth, backgroundColor: rowBg }}
                         >
                           <div className="flex items-center justify-center gap-1.5">
                             <button
@@ -2565,7 +2658,11 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
                               className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 disabled:opacity-60 ${
                                 actions.terminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
                               }`}
-                              style={{ width: "126px", height: "34px", backgroundColor: actions.terminal ? undefined : "#7d5a50" }}
+                              style={{
+                                width: `${Math.max(100, actionWidth - 82)}px`,
+                                height: "34px",
+                                backgroundColor: actions.terminal ? undefined : "#7d5a50",
+                              }}
                             >
                               {!actions.terminal && !isApplying && <ArrowRight size={13} className="flex-shrink-0" />}
                               <span className="truncate">{isApplying ? "Sending..." : actions.primary}</span>
