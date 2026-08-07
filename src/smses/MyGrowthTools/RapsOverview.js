@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "../../firebaseConfig";
-import { FaUsers, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaClipboardList, FaArrowRight, FaExclamationTriangle, FaCheckCircle, FaBell } from "react-icons/fa";
+import { FaUsers, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaClipboardList, FaArrowRight, FaExclamationTriangle, FaCheckCircle, FaBell, FaEdit, FaSave, FaTimes } from "react-icons/fa";
 
 const RapsOverview = () => {
   const location = useLocation();
@@ -14,6 +14,8 @@ const RapsOverview = () => {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+  const [tempEditValue, setTempEditValue] = useState("");
 
   const getMeetingId = () => {
     const params = new URLSearchParams(location.search);
@@ -87,6 +89,48 @@ const RapsOverview = () => {
     loadMeeting();
   }, [currentUser, meetingId]);
 
+  // Save meeting field (highlights, lowlights, risks, headsUp)
+  const saveMeetingField = async (field, value) => {
+    if (!currentUser || !meeting) return;
+    
+    try {
+      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+      const calendarSnap = await getDoc(calendarRef);
+      
+      if (calendarSnap.exists()) {
+        const data = calendarSnap.data();
+        const meetings = data.meetings || [];
+        const updatedMeetings = meetings.map(m => {
+          if (m.id === meeting.id) {
+            return { ...m, [field]: value };
+          }
+          return m;
+        });
+        
+        await setDoc(calendarRef, {
+          meetings: updatedMeetings,
+          updatedAt: new Date().toISOString(),
+          userId: currentUser.uid,
+        }, { merge: true });
+        
+        setMeeting(prev => ({ ...prev, [field]: value }));
+        setEditingField(null);
+        
+        setNotification({
+          type: "success",
+          message: "Field updated successfully!",
+        });
+        setTimeout(() => setNotification(null), 2000);
+      }
+    } catch (error) {
+      console.error("Error saving field:", error);
+      setNotification({
+        type: "error",
+        message: "Failed to update field. Please try again.",
+      });
+    }
+  };
+
   const getStatus = (meeting) => {
     if (!meeting || !meeting.instances || meeting.instances.length === 0) return "Unknown";
     const today = new Date();
@@ -107,15 +151,24 @@ const RapsOverview = () => {
 
   const getActionStats = (meeting) => {
     const actions = meeting?.actions || [];
-    const open = actions.filter(a => a.status === "open").length;
-    const inProgress = actions.filter(a => a.status === "in-progress").length;
-    const completed = actions.filter(a => a.status === "completed").length;
+    const open = actions.filter(a => a.status === "open" || a.status === "Not Done").length;
+    const inProgress = actions.filter(a => a.status === "in-progress" || a.status === "In Progress").length;
+    const completed = actions.filter(a => a.status === "completed" || a.status === "Done").length;
     const overdue = actions.filter(a => {
-      if (a.status === "completed") return false;
+      if (a.status === "completed" || a.status === "Done") return false;
       if (!a.dueDate) return false;
       return new Date(a.dueDate) < new Date();
     }).length;
     return { open, inProgress, completed, overdue };
+  };
+
+  const formatDateDisplay = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   // Styles
@@ -168,6 +221,9 @@ const RapsOverview = () => {
     textTransform: "uppercase",
     letterSpacing: "0.5px",
     marginBottom: "12px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
   };
 
   const statusBadgeStyles = (status) => ({
@@ -237,6 +293,41 @@ const RapsOverview = () => {
     gap: "6px",
   };
 
+  const editableFieldStyles = {
+    backgroundColor: "#f7f3f0",
+    padding: "12px 16px",
+    borderRadius: "6px",
+    marginBottom: "12px",
+    border: "1px solid #e8ddd4",
+    minHeight: "60px",
+    fontSize: "14px",
+    color: "#4a352f",
+    lineHeight: "1.6",
+    width: "100%",
+    fontFamily: "inherit",
+    resize: "vertical",
+  };
+
+  const notificationBannerStyles = (type) => {
+    const colors = {
+      success: { bg: "#E8F5E9", border: "#4CAF50" },
+      error: { bg: "#FFEBEE", border: "#F44336" },
+      warning: { bg: "#FFF3E0", border: "#FF9800" },
+      info: { bg: "#E3F2FD", border: "#2196F3" },
+    };
+    const color = colors[type] || colors.info;
+    return {
+      padding: "12px 16px",
+      borderRadius: "8px",
+      backgroundColor: color.bg,
+      borderLeft: `4px solid ${color.border}`,
+      marginBottom: "16px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+    };
+  };
+
   const actionStats = meeting ? getActionStats(meeting) : { open: 0, inProgress: 0, completed: 0, overdue: 0 };
 
   if (loading) {
@@ -280,6 +371,20 @@ const RapsOverview = () => {
 
   return (
     <div style={containerStyles}>
+      {notification && (
+        <div style={notificationBannerStyles(notification.type)}>
+          <span style={{ color: "#4a352f", fontSize: "14px" }}>
+            {notification.message}
+          </span>
+          <button
+            onClick={() => setNotification(null)}
+            style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#8d6e63" }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div style={headerStyles}>
         <div>
@@ -408,28 +513,178 @@ const RapsOverview = () => {
         </div>
       </div>
 
-      {/* Section 3: Highlights */}
+      {/* Section 3: Highlights - Editable */}
       <div style={cardStyles}>
-        <div style={cardTitleStyles}>Highlights</div>
-        <div style={placeholderStyles}>
-          <FaCheckCircle style={{ fontSize: "24px", color: "#bdbdbd", marginBottom: "8px" }} />
-          <div>No highlights available.</div>
-          <div style={{ fontSize: "12px", color: "#bdbdbd", marginTop: "4px" }}>
-            Highlights will be generated from connected Growth Tools.
-          </div>
+        <div style={cardTitleStyles}>
+          <span>⭐ Highlights</span>
+          {editingField !== "highlights" && (
+            <button
+              onClick={() => {
+                setEditingField("highlights");
+                setTempEditValue(meeting.highlights || "");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#7d5a50",
+                cursor: "pointer",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <FaEdit size={12} /> Edit
+            </button>
+          )}
         </div>
+        {editingField === "highlights" ? (
+          <div>
+            <textarea
+              value={tempEditValue}
+              onChange={(e) => setTempEditValue(e.target.value)}
+              style={editableFieldStyles}
+              placeholder="Enter highlights from this meeting..."
+              rows="4"
+            />
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <button
+                onClick={() => saveMeetingField("highlights", tempEditValue)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaSave size={12} /> Save
+              </button>
+              <button
+                onClick={() => setEditingField(null)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaTimes size={12} /> Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            backgroundColor: "#f7f3f0",
+            padding: "12px 16px",
+            borderRadius: "6px",
+            minHeight: "40px",
+            border: "1px solid #e8ddd4",
+            fontSize: "14px",
+            color: meeting.highlights ? "#4a352f" : "#bdbdbd",
+            fontStyle: meeting.highlights ? "normal" : "italic",
+          }}>
+            {meeting.highlights || "No highlights added yet. Click Edit to add."}
+          </div>
+        )}
       </div>
 
-      {/* Section 4: Lowlights */}
+      {/* Section 4: Lowlights - Editable */}
       <div style={cardStyles}>
-        <div style={cardTitleStyles}>Lowlights</div>
-        <div style={placeholderStyles}>
-          <FaExclamationTriangle style={{ fontSize: "24px", color: "#bdbdbd", marginBottom: "8px" }} />
-          <div>No lowlights available.</div>
-          <div style={{ fontSize: "12px", color: "#bdbdbd", marginTop: "4px" }}>
-            This section will display areas requiring management attention.
-          </div>
+        <div style={cardTitleStyles}>
+          <span>⚠️ Lowlights</span>
+          {editingField !== "lowlights" && (
+            <button
+              onClick={() => {
+                setEditingField("lowlights");
+                setTempEditValue(meeting.lowlights || "");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#7d5a50",
+                cursor: "pointer",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <FaEdit size={12} /> Edit
+            </button>
+          )}
         </div>
+        {editingField === "lowlights" ? (
+          <div>
+            <textarea
+              value={tempEditValue}
+              onChange={(e) => setTempEditValue(e.target.value)}
+              style={editableFieldStyles}
+              placeholder="Enter lowlights from this meeting..."
+              rows="4"
+            />
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <button
+                onClick={() => saveMeetingField("lowlights", tempEditValue)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaSave size={12} /> Save
+              </button>
+              <button
+                onClick={() => setEditingField(null)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaTimes size={12} /> Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            backgroundColor: "#f7f3f0",
+            padding: "12px 16px",
+            borderRadius: "6px",
+            minHeight: "40px",
+            border: "1px solid #e8ddd4",
+            fontSize: "14px",
+            color: meeting.lowlights ? "#4a352f" : "#bdbdbd",
+            fontStyle: meeting.lowlights ? "normal" : "italic",
+          }}>
+            {meeting.lowlights || "No lowlights added yet. Click Edit to add."}
+          </div>
+        )}
       </div>
 
       {/* Section 5: Actions Summary */}
@@ -473,28 +728,178 @@ const RapsOverview = () => {
         </div>
       </div>
 
-      {/* Section 6: Risks */}
-      <div style={cardStyles}>
-        <div style={cardTitleStyles}>Risks</div>
-        <div style={placeholderStyles}>
-          <div>No risks available.</div>
-          <div style={{ fontSize: "12px", color: "#bdbdbd", marginTop: "4px" }}>
-            Risks will be displayed here once the Risk Management module is connected.
-          </div>
-        </div>
-      </div>
-
-      {/* Section 7: Heads-up */}
+      {/* Section 6: Risks - Editable */}
       <div style={cardStyles}>
         <div style={cardTitleStyles}>
-          <FaBell style={{ marginRight: "6px" }} /> Heads-up
+          <span>🚨 Risks</span>
+          {editingField !== "risks" && (
+            <button
+              onClick={() => {
+                setEditingField("risks");
+                setTempEditValue(meeting.risks || "");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#7d5a50",
+                cursor: "pointer",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <FaEdit size={12} /> Edit
+            </button>
+          )}
         </div>
-        <div style={placeholderStyles}>
-          <div>No updates available.</div>
-          <div style={{ fontSize: "12px", color: "#bdbdbd", marginTop: "4px" }}>
-            Important updates and alerts will appear here.
+        {editingField === "risks" ? (
+          <div>
+            <textarea
+              value={tempEditValue}
+              onChange={(e) => setTempEditValue(e.target.value)}
+              style={editableFieldStyles}
+              placeholder="Enter risks identified from this meeting..."
+              rows="4"
+            />
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <button
+                onClick={() => saveMeetingField("risks", tempEditValue)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaSave size={12} /> Save
+              </button>
+              <button
+                onClick={() => setEditingField(null)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaTimes size={12} /> Cancel
+              </button>
+            </div>
           </div>
+        ) : (
+          <div style={{
+            backgroundColor: "#f7f3f0",
+            padding: "12px 16px",
+            borderRadius: "6px",
+            minHeight: "40px",
+            border: "1px solid #e8ddd4",
+            fontSize: "14px",
+            color: meeting.risks ? "#4a352f" : "#bdbdbd",
+            fontStyle: meeting.risks ? "normal" : "italic",
+          }}>
+            {meeting.risks || "No risks added yet. Click Edit to add."}
+          </div>
+        )}
+      </div>
+
+      {/* Section 7: Heads-up - Editable */}
+      <div style={cardStyles}>
+        <div style={cardTitleStyles}>
+          <span>🔔 Heads-up</span>
+          {editingField !== "headsUp" && (
+            <button
+              onClick={() => {
+                setEditingField("headsUp");
+                setTempEditValue(meeting.headsUp || "");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#7d5a50",
+                cursor: "pointer",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <FaEdit size={12} /> Edit
+            </button>
+          )}
         </div>
+        {editingField === "headsUp" ? (
+          <div>
+            <textarea
+              value={tempEditValue}
+              onChange={(e) => setTempEditValue(e.target.value)}
+              style={editableFieldStyles}
+              placeholder="Enter important updates or alerts for this meeting..."
+              rows="4"
+            />
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <button
+                onClick={() => saveMeetingField("headsUp", tempEditValue)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaSave size={12} /> Save
+              </button>
+              <button
+                onClick={() => setEditingField(null)}
+                style={{
+                  padding: "6px 16px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "13px",
+                }}
+              >
+                <FaTimes size={12} /> Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            backgroundColor: "#f7f3f0",
+            padding: "12px 16px",
+            borderRadius: "6px",
+            minHeight: "40px",
+            border: "1px solid #e8ddd4",
+            fontSize: "14px",
+            color: meeting.headsUp ? "#4a352f" : "#bdbdbd",
+            fontStyle: meeting.headsUp ? "normal" : "italic",
+          }}>
+            {meeting.headsUp || "No heads-up added yet. Click Edit to add."}
+          </div>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -507,18 +912,15 @@ const RapsOverview = () => {
           <button onClick={() => navigate(`/raps-actions?meeting=${meeting.id}`)} style={quickActionButtonStyles}>
             <FaClipboardList /> Manage Actions
           </button>
-       <button 
-        onClick={() => navigate(`/governance-calendar?meeting=${meeting.id}&edit=true`)} 
-        style={quickActionButtonStyles}
-      >
-        ✏️ Edit Meeting
-      </button>
+          <button 
+            onClick={() => navigate(`/governance-calendar?meeting=${meeting.id}&edit=true`)} 
+            style={quickActionButtonStyles}
+          >
+            ✏️ Edit Meeting
+          </button>
         </div>
       </div>
-      
     </div>
-
-    
   );
 };
 

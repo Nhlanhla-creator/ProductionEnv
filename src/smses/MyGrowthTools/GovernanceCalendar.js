@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import { FaChevronLeft, FaChevronRight, FaEdit, FaSave, FaTimes, FaPlus } from "react-icons/fa";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
@@ -48,7 +48,7 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   const [showDetailsModal, setShowDetailsModal] = useState(null);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
-    const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loadingMessage, setLoadingMessage] = useState("Processing...");
   const [notification, setNotification] = useState(null);
   const [showDoubleBookingWarning, setShowDoubleBookingWarning] = useState(false);
@@ -63,6 +63,18 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
     newDate: "",
     newTime: "",
     reason: "",
+  });
+
+  // Tabs state
+  const [activeTab, setActiveTab] = useState("overview");
+  const [editingField, setEditingField] = useState(null);
+  const [tempEditValue, setTempEditValue] = useState("");
+  const [showQuickAddAction, setShowQuickAddAction] = useState(false);
+  const [quickActionForm, setQuickActionForm] = useState({
+    title: "",
+    assignedTo: "",
+    dueDate: "",
+    status: "In Progress",
   });
 
   // Department options with colors
@@ -83,9 +95,9 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   
   const [formData, setFormData] = useState({
     title: "",
-    category: categoryOptions[0].name,  // ← NEW: Category
-    department: departmentOptionsOld[0].name,  // ← Keep for backward compatibility
-    departments: [],  // ← NEW: Multi-select departments
+    category: categoryOptions[0].name,
+    department: departmentOptionsOld[0].name,
+    departments: [],
     purpose: "",
     participants: [],
     repeatType: "none",
@@ -100,9 +112,9 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [editFormData, setEditFormData] = useState({
     title: "",
-    category: categoryOptions[0].name,  // ← NEW: Category
-    department: "",  // ← Keep for backward compatibility
-    departments: [],  // ← NEW: Multi-select departments
+    category: categoryOptions[0].name,
+    department: "",
+    departments: [],
     purpose: "",
     participants: [],
     repeatType: "none",
@@ -147,26 +159,26 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
     }
   };
 
-useEffect(() => {
-  const fetchUserProfile = async () => {
-    if (!currentUser) return;
-    try {
-      const profileRef = doc(db, "universalProfiles", currentUser.uid);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
-        const data = profileSnap.data();
-        const name = data.entityOverview?.registeredName || 
-                     data.contactDetails?.contactName ||
-                     currentUser.displayName ||
-                     "User";
-        setUserProfile(name);
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!currentUser) return;
+      try {
+        const profileRef = doc(db, "universalProfiles", currentUser.uid);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const data = profileSnap.data();
+          const name = data.entityOverview?.registeredName || 
+                       data.contactDetails?.contactName ||
+                       currentUser.displayName ||
+                       "User";
+          setUserProfile(name);
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
       }
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-    }
-  };
-  fetchUserProfile();
-}, [currentUser]);
+    };
+    fetchUserProfile();
+  }, [currentUser]);
 
   // Get current user
   useEffect(() => {
@@ -182,25 +194,22 @@ useEffect(() => {
   }, []);
   
   useEffect(() => {
-  // Check if there's a meeting query param
-  const params = new URLSearchParams(location.search);
-  const meetingId = params.get("meeting");
-  
-  if (meetingId && meetings.length > 0) {
-    const meeting = meetings.find(m => m.id === meetingId);
-    if (meeting) {
-      // Auto-select the meeting
-      setShowDetailsModal(meeting);
-      // Highlight the date on the calendar
-      const instance = meeting.instances?.[0];
-      if (instance) {
-        const date = new Date(instance.date);
-        setSelectedDate(date);
-        setCurrentDate(date);
+    const params = new URLSearchParams(location.search);
+    const meetingId = params.get("meeting");
+    
+    if (meetingId && meetings.length > 0) {
+      const meeting = meetings.find(m => m.id === meetingId);
+      if (meeting) {
+        setShowDetailsModal(meeting);
+        const instance = meeting.instances?.[0];
+        if (instance) {
+          const date = new Date(instance.date);
+          setSelectedDate(date);
+          setCurrentDate(date);
+        }
       }
     }
-  }
-}, [location.search, meetings]);
+  }, [location.search, meetings]);
 
   const getRandomColor = () => {
     const colors = ["#607D8B", "#795548", "#009688", "#673AB7", "#3F51B5", "#CDDC39", "#FFC107"];
@@ -272,103 +281,101 @@ useEffect(() => {
   };
   
   const generateInstances = (startDate, endDate, repeatType) => {
-  const instances = [];
-  const start = new Date(startDate);
-  const end = endDate ? new Date(endDate) : null;
-  
-  // ✅ Cap at 1 year (12 months) from start date
-  const maxEndDate = new Date(start);
-  maxEndDate.setFullYear(maxEndDate.getFullYear() + 1);
-  
-  // If no end date provided or end date is beyond 1 year, cap at 1 year
-  const actualEnd = end && end < maxEndDate ? end : maxEndDate;
-  
-  if (repeatType === "none") {
-    if (start < today) {
-      throw new Error("Cannot schedule meetings on past dates");
-    }
-    instances.push({
-      instanceId: generateId(),
-      date: start.toISOString(),
-      time: formData.time,
-      status: "scheduled",
-    });
-    return instances;
-  }
-  
-  if (repeatType === "weekly") {
-    let current = new Date(start);
-    let maxIterations = 52; // Max 52 weeks (1 year)
-    let iterations = 0;
+    const instances = [];
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : null;
     
-    while ((!end || current <= actualEnd) && iterations < maxIterations) {
-      if (current >= today) {
-        instances.push({
-          instanceId: generateId(),
-          date: current.toISOString(),
-          time: formData.time,
-          status: "scheduled",
-        });
-      }
-      current.setDate(current.getDate() + 7);
-      iterations++;
-    }
-    return instances;
-  }
-  
-  if (repeatType === "monthly") {
-    let current = new Date(start);
-    let maxIterations = 12; // Max 12 months (1 year)
-    let iterations = 0;
+    const maxEndDate = new Date(start);
+    maxEndDate.setFullYear(maxEndDate.getFullYear() + 1);
     
-    while ((!end || current <= actualEnd) && iterations < maxIterations) {
-      if (current >= today) {
-        instances.push({
-          instanceId: generateId(),
-          date: current.toISOString(),
-          time: formData.time,
-          status: "scheduled",
-        });
-      }
-      current.setMonth(current.getMonth() + 1);
-      iterations++;
-    }
-    return instances;
-  }
-  
-  if (repeatType === "quarterly") {
-    let current = new Date(start);
-    let maxIterations = 4; // Max 4 quarters (1 year)
-    let iterations = 0;
+    const actualEnd = end && end < maxEndDate ? end : maxEndDate;
     
-    while ((!end || current <= actualEnd) && iterations < maxIterations) {
-      if (current >= today) {
-        instances.push({
-          instanceId: generateId(),
-          date: current.toISOString(),
-          time: formData.time,
-          status: "scheduled",
-        });
+    if (repeatType === "none") {
+      if (start < today) {
+        throw new Error("Cannot schedule meetings on past dates");
       }
-      current.setMonth(current.getMonth() + 3);
-      iterations++;
+      instances.push({
+        instanceId: generateId(),
+        date: start.toISOString(),
+        time: formData.time,
+        status: "scheduled",
+      });
+      return instances;
     }
+    
+    if (repeatType === "weekly") {
+      let current = new Date(start);
+      let maxIterations = 52;
+      let iterations = 0;
+      
+      while ((!end || current <= actualEnd) && iterations < maxIterations) {
+        if (current >= today) {
+          instances.push({
+            instanceId: generateId(),
+            date: current.toISOString(),
+            time: formData.time,
+            status: "scheduled",
+          });
+        }
+        current.setDate(current.getDate() + 7);
+        iterations++;
+      }
+      return instances;
+    }
+    
+    if (repeatType === "monthly") {
+      let current = new Date(start);
+      let maxIterations = 12;
+      let iterations = 0;
+      
+      while ((!end || current <= actualEnd) && iterations < maxIterations) {
+        if (current >= today) {
+          instances.push({
+            instanceId: generateId(),
+            date: current.toISOString(),
+            time: formData.time,
+            status: "scheduled",
+          });
+        }
+        current.setMonth(current.getMonth() + 1);
+        iterations++;
+      }
+      return instances;
+    }
+    
+    if (repeatType === "quarterly") {
+      let current = new Date(start);
+      let maxIterations = 4;
+      let iterations = 0;
+      
+      while ((!end || current <= actualEnd) && iterations < maxIterations) {
+        if (current >= today) {
+          instances.push({
+            instanceId: generateId(),
+            date: current.toISOString(),
+            time: formData.time,
+            status: "scheduled",
+          });
+        }
+        current.setMonth(current.getMonth() + 3);
+        iterations++;
+      }
+      return instances;
+    }
+    
     return instances;
-  }
-  
-  return instances;
-};
+  };
 
- const addParticipant = () => {
-  console.log("Add participant clicked!");
-  setFormData((prev) => {
-    console.log("Current participants:", prev.participants);
-    return {
-      ...prev,
-      participants: [...prev.participants, { name: "", email: "" }]
-    };
-  });
-};
+  const addParticipant = () => {
+    console.log("Add participant clicked!");
+    setFormData((prev) => {
+      console.log("Current participants:", prev.participants);
+      return {
+        ...prev,
+        participants: [...prev.participants, { name: "", email: "" }]
+      };
+    });
+  };
 
   // Remove a participant
   const removeParticipant = (index) => {
@@ -387,143 +394,141 @@ useEffect(() => {
     });
   };
 
-const proceedWithBooking = async () => {
-  setLoading(true);
+  const proceedWithBooking = async () => {
+    setLoading(true);
     setLoadingMessage("Booking your meeting...");
 
-
-  try {
-    const selectedCategory = categoryOptions.find(c => c.name === formData.category);
-    const selectedDepartment = allDepartments.find(d => d.name === formData.department);
-    let instances;
-    
     try {
-      instances = generateInstances(formData.startDate, formData.endDate, formData.repeatType);
-    } catch (error) {
-      setErrors({ startDate: error.message });
-      setLoading(false);
-      return;
-    }
-    
-    if (instances.length === 0) {
-      setErrors({ startDate: "No valid dates found. Please check your date range." });
-      setLoading(false);
-      return;
-    }
-    
-    const newMeeting = {
-      id: generateId(),
-      title: formData.title,
-      category: formData.category,  // ← NEW: Category
-      department: formData.department,  // ← Keep for backward compatibility
-      categoryColor: selectedCategory?.color || "#757575",  // ← NEW
-      categoryBg: selectedCategory?.bg || "#EEEEEE",  // ← NEW
-      departmentColor: selectedDepartment?.color || "#757575",
-      departmentBg: selectedDepartment?.bg || "#EEEEEE",
-      departments: formData.departments || [],  // ← NEW: Multi-select departments
-      purpose: formData.purpose,
-      participants: formData.participants,
-      isRecurring: formData.repeatType !== "none",
-      recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
-      recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
-      instances: instances,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    
-    const updatedMeetings = [...meetings, newMeeting];
-    setMeetings(updatedMeetings);
-    
-    const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-    await setDoc(calendarRef, {
-      meetings: updatedMeetings,
-      updatedAt: new Date().toISOString(),
-      userId: currentUser.uid,
-    }, { merge: true });
-    
-    setFormData({
-      title: "",
-      category: categoryOptions[0].name,
-      department: departmentOptionsOld[0].name,
-      departments: [],
-      purpose: "",
-      participants: [],
-      repeatType: "none",
-      startDate: "",
-      endDate: "",
-      time: "10:00",
-    });
-    setErrors({});
-    setShowAddModal(false);
-    
-    // ==================== NOTIFICATIONS ====================
-    
-    const formattedDate = new Date(formData.startDate).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    
-    const meetingTime = formData.time;
-    const participantText = newMeeting.participants.length > 0 
-      ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
-      : 'No participants specified';
-    const departmentsText = newMeeting.departments.length > 0 
-      ? newMeeting.departments.join(", ")
-      : 'No departments specified';
-    const recurrenceText = newMeeting.isRecurring 
-      ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
-                      newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
-                      'Quarterly'}` 
-      : '';
-    
-    // Get user name for notification
-    let userName = "User";
-    try {
-      const profileRef = doc(db, "universalProfiles", currentUser.uid);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
-        const data = profileSnap.data();
-        userName = data.entityOverview?.registeredName || 
-                   data.contactDetails?.contactName ||
-                   data.contactDetails?.primaryContactName ||
-                   currentUser.displayName ||
-                   "User";
+      const selectedCategory = categoryOptions.find(c => c.name === formData.category);
+      const selectedDepartment = allDepartments.find(d => d.name === formData.department);
+      let instances;
+      
+      try {
+        instances = generateInstances(formData.startDate, formData.endDate, formData.repeatType);
+      } catch (error) {
+        setErrors({ startDate: error.message });
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error("Error fetching user name:", error);
-    }
-    
-    // Determine if this is a double-booking
-    const isDoubleBooked = conflictingMeetingData !== null && conflictingMeetingData.length > 0;
-    const notificationEmoji = isDoubleBooked ? "⚠️" : "✅";
-    const notificationType = isDoubleBooked ? "warning" : "success";
-    const notificationSubject = isDoubleBooked ? "Double-Booked" : "Confirmed";
-    
-    // In-app banner notification
-    setNotification({ 
-      type: notificationType, 
-      message: `${notificationEmoji} "${formData.title}" ${isDoubleBooked ? 'double-booked' : 'confirmed'} for ${formattedDate} at ${meetingTime}` 
-    });
-    setTimeout(() => setNotification(null), 5000);
-    
-    // Build notification content
-    let notificationContent = `Dear ${userName},
+      
+      if (instances.length === 0) {
+        setErrors({ startDate: "No valid dates found. Please check your date range." });
+        setLoading(false);
+        return;
+      }
+      
+      const newMeeting = {
+        id: generateId(),
+        title: formData.title,
+        category: formData.category,
+        department: formData.department,
+        categoryColor: selectedCategory?.color || "#757575",
+        categoryBg: selectedCategory?.bg || "#EEEEEE",
+        departmentColor: selectedDepartment?.color || "#757575",
+        departmentBg: selectedDepartment?.bg || "#EEEEEE",
+        departments: formData.departments || [],
+        purpose: formData.purpose,
+        participants: formData.participants,
+        isRecurring: formData.repeatType !== "none",
+        recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
+        recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
+        instances: instances,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        highlights: "",
+        lowlights: "",
+        risks: "",
+        headsUp: "",
+        actions: [],
+      };
+      
+      const updatedMeetings = [...meetings, newMeeting];
+      setMeetings(updatedMeetings);
+      
+      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+      await setDoc(calendarRef, {
+        meetings: updatedMeetings,
+        updatedAt: new Date().toISOString(),
+        userId: currentUser.uid,
+      }, { merge: true });
+      
+      setFormData({
+        title: "",
+        category: categoryOptions[0].name,
+        department: departmentOptionsOld[0].name,
+        departments: [],
+        purpose: "",
+        participants: [],
+        repeatType: "none",
+        startDate: "",
+        endDate: "",
+        time: "10:00",
+      });
+      setErrors({});
+      setShowAddModal(false);
+      
+      const formattedDate = new Date(formData.startDate).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      
+      const meetingTime = formData.time;
+      const participantText = newMeeting.participants.length > 0 
+        ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
+        : 'No participants specified';
+      const departmentsText = newMeeting.departments.length > 0 
+        ? newMeeting.departments.join(", ")
+        : 'No departments specified';
+      const recurrenceText = newMeeting.isRecurring 
+        ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
+                        newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
+                        'Quarterly'}` 
+        : '';
+      
+      let userName = "User";
+      try {
+        const profileRef = doc(db, "universalProfiles", currentUser.uid);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const data = profileSnap.data();
+          userName = data.entityOverview?.registeredName || 
+                     data.contactDetails?.contactName ||
+                     data.contactDetails?.primaryContactName ||
+                     currentUser.displayName ||
+                     "User";
+        }
+      } catch (error) {
+        console.error("Error fetching user name:", error);
+      }
+      
+      const isDoubleBooked = conflictingMeetingData !== null && conflictingMeetingData.length > 0;
+      const notificationEmoji = isDoubleBooked ? "⚠️" : "✅";
+      const notificationType = isDoubleBooked ? "warning" : "success";
+      const notificationSubject = isDoubleBooked ? "Double-Booked" : "Confirmed";
+      
+      setNotification({ 
+        type: notificationType, 
+        message: `${notificationEmoji} "${formData.title}" ${isDoubleBooked ? 'double-booked' : 'confirmed'} for ${formattedDate} at ${meetingTime}` 
+      });
+      setTimeout(() => setNotification(null), 5000);
+      
+      let notificationContent = `Dear ${userName},
 
 Your meeting "${formData.title}" has been successfully added to your calendar.`;
 
-    if (isDoubleBooked && conflictingMeetingData?.length > 0) {
-      notificationContent += `\n\n⚠️ Notice: You already have ${conflictingMeetingData.length} other meeting${conflictingMeetingData.length > 1 ? 's' : ''} scheduled at the same time:\n\n`;
-      
-      conflictingMeetingData.forEach((meeting, index) => {
-        notificationContent += `${index + 1}. "${meeting.title}" (${meeting.category || meeting.department})\n`;
-      });
-      
-      notificationContent += `\nPlease check your calendar and manage your schedule accordingly.`;
-    }
+      if (isDoubleBooked && conflictingMeetingData?.length > 0) {
+        notificationContent += `\n\n⚠️ Notice: You already have ${conflictingMeetingData.length} other meeting${conflictingMeetingData.length > 1 ? 's' : ''} scheduled at the same time:\n\n`;
+        
+        conflictingMeetingData.forEach((meeting, index) => {
+          notificationContent += `${index + 1}. "${meeting.title}" (${meeting.category || meeting.department})\n`;
+        });
+        
+        notificationContent += `\nPlease check your calendar and manage your schedule accordingly.`;
+      }
 
-    notificationContent += `\n\n📋 Meeting Details:
+      notificationContent += `\n\n📋 Meeting Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📅 Date: ${formattedDate}
 ⏰ Time: ${meetingTime}
@@ -550,646 +555,6 @@ This is an automated notification from the BIG Marketplace Governance System.
 Best regards,
 BIG Marketplace Team 🌍`;
 
-// ==================== SEND EMAIL ====================
-
-// Get user email
-let userEmail = null;
-try {
-  const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
-  if (userDocRef.exists()) {
-    const userData = userDocRef.data();
-    userEmail = userData.email;
-  }
-} catch (error) {
-  console.error("Error fetching user email:", error);
-}
-
-if (userEmail) {
-  try {
-    const sendGovernanceMeetingConfirmation = httpsCallable(
-      functions, 
-      'sendGovernanceMeetingConfirmation'
-    );
-    
-    await sendGovernanceMeetingConfirmation({
-      to: currentUser.uid,
-      useTestMode: false, 
-      meetingTitle: formData.title,
-      meetingDate: formattedDate,
-      meetingTime: meetingTime,
-      department: formData.category,  // ← Use category for email
-      participants: formData.participants,
-      purpose: formData.purpose,
-      isRecurring: newMeeting.isRecurring,
-      recurrencePattern: newMeeting.recurrencePattern,
-      isDoubleBooked: isDoubleBooked,
-      conflictingMeetings: conflictingMeetingData || []
-    });
-    
-    console.log("✅ Meeting confirmation email sent to:", userEmail);
-  } catch (emailError) {
-    console.error("Failed to send meeting confirmation email:", emailError);
-  }
-}
-
-    // Save to Firestore messages
-    await addDoc(collection(db, "messages"), {
-      to: currentUser.uid,
-      from: "system",
-      subject: `${notificationEmoji} Meeting ${notificationSubject}: ${formData.title}`,
-      content: notificationContent,
-      date: new Date().toISOString(),
-      read: false,
-      type: "inbox",
-      meetingId: newMeeting.id,
-      linkTo: "/governance-calendar",
-    });
-    
-    // ==================== END NOTIFICATIONS ====================
-     setNotification({ 
-      type: "success", 
-      message: `✅ "${formData.title}" confirmed for ${formattedDate} at ${meetingTime}` 
-    });
-    
-  } catch (error) {
-    setNotification({ 
-      type: "error", 
-      message: "Failed to schedule meeting. Please try again." 
-    });
-  } finally {
-    setLoading(false);  // ✅ Hide loading overlay
-  }
-};
-
-const handleSubmit = async () => {
-  if (!currentUser) {
-    setNotification({ 
-      type: "error", 
-      message: "Please log in to add meetings." 
-    });
-    return;
-  }
-  
-  const newErrors = {};
-  if (!formData.title.trim()) newErrors.title = "Meeting title is required";
-  if (!formData.purpose.trim()) newErrors.purpose = "Purpose is required";
-  if (!formData.startDate) newErrors.startDate = "Start date is required";
-  if (!formData.time) newErrors.time = "Time is required";
-  
-  const startDateObj = new Date(formData.startDate);
-  if (startDateObj < today) {
-    newErrors.startDate = "Cannot schedule meetings on past dates";
-  }
-  
-  if (formData.endDate) {
-    const endDateObj = new Date(formData.endDate);
-    if (endDateObj < startDateObj) {
-      newErrors.endDate = "End date cannot be before start date";
-    }
-  }
-  
-  if (Object.keys(newErrors).length > 0) {
-    setErrors(newErrors);
-    return;
-  } 
-  
-  
-  // ==================== DOUBLE-BOOKING CHECK (ALL CONFLICTS) ====================
-  
-  const formattedDateForCheck = new Date(formData.startDate);
-  const conflictingMeetings = meetings.filter(meeting => {
-    return meeting.instances?.some(instance => {
-      const instanceDate = new Date(instance.date);
-      const sameDate = instanceDate.toDateString() === formattedDateForCheck.toDateString();
-      const sameTime = instance.time === formData.time;
-      return sameDate && sameTime;
-    });
-  });
-  
-  if (conflictingMeetings.length > 0) {
-    // Get the selected category for the new meeting
-    const selectedCategory = categoryOptions.find(c => c.name === formData.category);
-    
-    // Prepare the pending meeting data for the modal
-    setPendingMeetingData({
-      title: formData.title,
-      category: formData.category,
-      categoryColor: selectedCategory?.color || "#757575",
-      time: formData.time,
-      date: formattedDateForCheck,
-      purpose: formData.purpose,
-    });
-    
-    setConflictingMeetingData(conflictingMeetings);
-    setShowDoubleBookingWarning(true);
-    return; // Stop submission, wait for user decision
-  }
-  
-  // ==================== END DOUBLE-BOOKING CHECK ====================
-  
-  // No conflict, proceed with booking
-  await proceedWithBooking();
-
-  setLoading(true);
-  
-  
-  try {
-    const selectedCategory = categoryOptions.find(c => c.name === formData.category);
-    const selectedDepartment = allDepartments.find(d => d.name === formData.department);
-    let instances;
-    
-    try {
-      instances = generateInstances(formData.startDate, formData.endDate, formData.repeatType);
-    } catch (error) {
-      setErrors({ startDate: error.message });
-      setLoading(false);
-      return;
-    }
-    
-    if (instances.length === 0) {
-      setErrors({ startDate: "No valid dates found. Please check your date range." });
-      setLoading(false);
-      return;
-    }
-    
-    const newMeeting = {
-      id: generateId(),
-      title: formData.title,
-      category: formData.category,  // ← NEW: Category
-      department: formData.department,
-      categoryColor: selectedCategory?.color || "#757575",  // ← NEW
-      categoryBg: selectedCategory?.bg || "#EEEEEE",  // ← NEW
-      departmentColor: selectedDepartment?.color || "#757575",
-      departmentBg: selectedDepartment?.bg || "#EEEEEE",
-      departments: formData.departments || [],  // ← NEW: Multi-select departments
-      purpose: formData.purpose,
-      participants: formData.participants,
-      isRecurring: formData.repeatType !== "none",
-      recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
-      recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
-      instances: instances,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    
-    const updatedMeetings = [...meetings, newMeeting];
-    setMeetings(updatedMeetings);
-    
-    const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-    await setDoc(calendarRef, {
-      meetings: updatedMeetings,
-      updatedAt: new Date().toISOString(),
-      userId: currentUser.uid,
-    }, { merge: true });
-    
-    setFormData({
-      title: "",
-      category: categoryOptions[0].name,
-      department: departmentOptionsOld[0].name,
-      departments: [],
-      purpose: "",
-      participants: [],
-      repeatType: "none",
-      startDate: "",
-      endDate: "",
-      time: "10:00",
-    });
-    setErrors({});
-    setShowAddModal(false);
-    
-    // ==================== NOTIFICATIONS ====================
-    
-    const formattedDate = new Date(formData.startDate).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    
-    const meetingTime = formData.time;
-    const participantText = newMeeting.participants.length > 0 
-      ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
-      : 'No participants specified';
-    const departmentsText = newMeeting.departments.length > 0 
-      ? newMeeting.departments.join(", ")
-      : 'No departments specified';
-    const recurrenceText = newMeeting.isRecurring 
-      ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'Weekly' : 
-                      newMeeting.recurrencePattern === 'monthly' ? 'Monthly' : 
-                      'Quarterly'}` 
-      : '';
-    const displayName = currentUser.displayName || "User";
-    
-    // 1. In-app banner notification
-    setNotification({ 
-      type: "success", 
-      message: `✅ "${formData.title}" confirmed for ${formattedDate} at ${meetingTime}` 
-    });
-    setTimeout(() => setNotification(null), 5000);
-    
-    // 2. Save to Firestore messages collection (ONCE - only inbox, no duplicate sent)
-    await addDoc(collection(db, "messages"), {
-      to: currentUser.uid,
-      from: "system",
-      subject: `✅ Meeting Confirmed: ${formData.title}`,
-      content: `Dear ${userProfile || "User"},
-
-Your "${formData.title}" meeting has been successfully added to your calendar.
-
-📋 Meeting Details:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 Date: ${formattedDate}
-⏰ Time: ${meetingTime}
-📂 Category: ${formData.category}
-📁 Departments: ${departmentsText}
-👥 Attendees: ${participantText}
-
-📌 Purpose:
-${formData.purpose}
-
-${recurrenceText ? `\n${recurrenceText}` : ''}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🔔 Next Steps:
-• Review the meeting agenda and prepare any necessary materials
-• Add this meeting to your personal calendar as a backup
-
-📎 Resources:
-• View or reschedule all your meetings in the Governance Calendar
-
-This is an automated notification from the BIG Marketplace Governance System.
-
-Best regards,
-BIG Marketplace Team 🌍`,
-      date: new Date().toISOString(),
-      read: false,
-      type: "inbox",
-      meetingId: newMeeting.id,
-      linkTo: "/governance-calendar",
-    });
-    
-    // ==================== END NOTIFICATIONS ====================
-    
-  } catch (error) {
-    console.error("Error saving meeting:", error);
-    setNotification({ 
-      type: "error", 
-      message: "Failed to schedule meeting. Please try again." 
-    });
-  } finally {
-    setLoading(false);
-  }
-};
-
-// Open edit modal with meeting data
-const handleEditMeeting = (meeting) => {
-  setEditingMeeting(meeting);
-  
-  // Get the first instance for date/time
-  const firstInstance = meeting.instances?.[0];
-  const instanceDate = firstInstance ? new Date(firstInstance.date) : new Date();
-  
-  setEditFormData({
-    title: meeting.title || "",
-    category: meeting.category || categoryOptions[0].name,  // ← NEW: Category
-    department: meeting.department || departmentOptionsOld[0].name,
-    departments: meeting.departments || [],  // ← NEW: Multi-select departments
-    purpose: meeting.purpose || "",
-    participants: meeting.participants || [],
-    repeatType: meeting.recurrencePattern || "none",
-    startDate: instanceDate.toISOString().split('T')[0],
-    time: firstInstance?.time || "10:00",
-  });
-  
-  setShowEditModal(true);
-};
-
-// Update participant in edit form
-const updateEditParticipant = (index, field, value) => {
-  const updated = [...editFormData.participants];
-  updated[index] = { ...updated[index], [field]: value };
-  setEditFormData({ ...editFormData, participants: updated });
-};
-
-// Add participant to edit form
-const addEditParticipant = () => {
-  setEditFormData({
-    ...editFormData,
-    participants: [...editFormData.participants, { name: "", email: "" }],
-  });
-};
-
-// Remove participant from edit form
-const removeEditParticipant = (index) => {
-  const updated = editFormData.participants.filter((_, i) => i !== index);
-  setEditFormData({ ...editFormData, participants: updated });
-};
-
-const saveEditedMeeting = async () => {
-   if (!editingMeeting || !currentUser) return;
-  
-  setLoading(true);
-  setLoadingMessage("Saving changes...");
-  
-  try {
-    const originalMeeting = { ...editingMeeting };
-    
-    // ✅ Get the selected category color
-    const selectedCategory = categoryOptions.find(c => c.name === editFormData.category);
-    const categoryColor = selectedCategory?.color || "#757575";
-    const categoryBg = selectedCategory?.bg || "#EEEEEE";
-    
-    // ✅ Get the selected department color (for backward compatibility)
-    const selectedDepartment = allDepartments.find(d => d.name === editFormData.department);
-    const departmentColor = selectedDepartment?.color || "#757575";
-    const departmentBg = selectedDepartment?.bg || "#EEEEEE";
-    
-    const updatedMeeting = {
-      ...editingMeeting,
-      title: editFormData.title,
-      category: editFormData.category,  // ← NEW: Category
-      department: editFormData.department,
-      categoryColor: categoryColor,  // ← NEW
-      categoryBg: categoryBg,  // ← NEW
-      departmentColor: departmentColor,
-      departmentBg: departmentBg,
-      departments: editFormData.departments || [],  // ← NEW: Multi-select departments
-      purpose: editFormData.purpose,
-      participants: editFormData.participants,
-      isRecurring: editFormData.repeatType !== "none",
-      recurrencePattern: editFormData.repeatType !== "none" ? editFormData.repeatType : null,
-      updatedAt: new Date().toISOString(),
-    };
-    
-    // Update the first instance date/time if changed
-    const oldDate = updatedMeeting.instances?.[0]?.date;
-    const oldTime = updatedMeeting.instances?.[0]?.time;
-    
-    if (updatedMeeting.instances && updatedMeeting.instances.length > 0) {
-      const newDate = new Date(editFormData.startDate);
-      updatedMeeting.instances[0].date = newDate.toISOString();
-      updatedMeeting.instances[0].time = editFormData.time;
-    }
-    
-    const newDate = updatedMeeting.instances?.[0]?.date;
-    const newTime = updatedMeeting.instances?.[0]?.time;
-    
-    // Check what changed
-    const titleChanged = originalMeeting.title !== updatedMeeting.title;
-    const dateChanged = oldDate !== newDate;
-    const timeChanged = oldTime !== newTime;
-    const categoryChanged = originalMeeting.category !== updatedMeeting.category;
-    const departmentChanged = originalMeeting.department !== updatedMeeting.department;
-    const departmentsChanged = JSON.stringify(originalMeeting.departments) !== JSON.stringify(updatedMeeting.departments);
-    const participantsChanged = JSON.stringify(originalMeeting.participants) !== JSON.stringify(updatedMeeting.participants);
-    
-    const hasChanges = titleChanged || dateChanged || timeChanged || categoryChanged || departmentChanged || departmentsChanged || participantsChanged;
-    
-    if (!hasChanges) {
-      setNotification({ type: "info", message: "No changes were made." });
-      setShowEditModal(false);
-      setEditingMeeting(null);
-      setLoading(false);
-      return;
-    }
-    
-    // Update in the array
-    const updatedMeetings = meetings.map(m => 
-      m.id === editingMeeting.id ? updatedMeeting : m
-    );
-    
-    setMeetings(updatedMeetings);
-    
-    // Save to Firestore
-    const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-    await setDoc(calendarRef, {
-      meetings: updatedMeetings,
-      updatedAt: new Date().toISOString(),
-      userId: currentUser.uid,
-    }, { merge: true });
-    
-    
-    // ==================== SEND NOTIFICATIONS ====================
-    
-    // Format dates for notification
-    const formattedOldDate = oldDate ? new Date(oldDate).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }) : "TBD";
-    
-    const formattedNewDate = newDate ? new Date(newDate).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }) : "TBD";
-    
-    // Build change description
-    let changes = [];
-    if (titleChanged) changes.push(`Title changed to "${updatedMeeting.title}"`);
-    if (dateChanged) changes.push(`Date changed from ${formattedOldDate} to ${formattedNewDate}`);
-    if (timeChanged) changes.push(`Time changed from ${oldTime} to ${newTime}`);
-    if (categoryChanged) changes.push(`Category changed to ${updatedMeeting.category}`);
-    if (departmentChanged) changes.push(`Department changed to ${updatedMeeting.department}`);
-    if (departmentsChanged) changes.push(`Departments updated`);
-    if (participantsChanged) changes.push(`Participants updated`);
-    
-    const changeSummary = changes.join("; ");
-    
-    // Get user name
-    let userName = "User";
-    try {
-      const profileRef = doc(db, "universalProfiles", currentUser.uid);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
-        const data = profileSnap.data();
-        userName = data.entityOverview?.registeredName || 
-                   data.contactDetails?.contactName ||
-                   currentUser.displayName ||
-                   "User";
-      }
-    } catch (error) {
-      console.error("Error fetching user name:", error);
-    }
-    
-    // Build recipients list (owner + participants with emails)
-    const recipients = [];
-    let ownerEmail = null;
-    
-    try {
-      const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
-      if (userDocRef.exists()) {
-        ownerEmail = userDocRef.data().email;
-      }
-    } catch (error) {
-      console.error("Error fetching owner email:", error);
-    }
-    
-    if (ownerEmail) {
-      recipients.push({ email: ownerEmail, name: userName, isOrganizer: true });
-    }
-    
-    if (updatedMeeting.participants && updatedMeeting.participants.length > 0) {
-      updatedMeeting.participants.forEach(p => {
-        if (p.email && p.email.trim()) {
-          recipients.push({
-            email: p.email.trim(),
-            name: p.name || "Participant",
-            isOrganizer: false,
-          });
-        }
-      });
-    }
-    
-    // Send notifications to all recipients
-    for (const recipient of recipients) {
-      try {
-        // In-app notification
-        const notificationContent = `Dear ${recipient.name},\n\n` +
-          `The meeting "${updatedMeeting.title}" has been updated.\n\n` +
-          `📋 Changes:\n${changeSummary}\n\n` +
-          `${recipient.isOrganizer ? 'Your meeting has been updated successfully.' : 'Please review the updated meeting details.'}\n\n` +
-          `Best regards,\nBIG Marketplace Team 🌍`;
-        
-        await addDoc(collection(db, "messages"), {
-          to: recipient.isOrganizer ? currentUser.uid : updatedMeeting.participants.find(p => p.email === recipient.email)?.id || recipient.email,
-          toName: recipient.name,
-          from: "system",
-          fromName: "BIG Marketplace",
-          subject: `📅 Meeting Updated: ${updatedMeeting.title}`,
-          content: notificationContent,
-          date: new Date().toISOString(),
-          read: false,
-          type: "inbox",
-          meetingId: updatedMeeting.id,
-          linkTo: "/governance-calendar",
-        });
-        
-        console.log(`✅ Update notification sent to: ${recipient.name}`);
-      } catch (error) {
-        console.error(`❌ Failed to send update notification to ${recipient.name}:`, error);
-      }
-    }
-    
-    // ==================== END NOTIFICATIONS ====================
-    
-    // ==================== SEND EMAILS ====================
-
-// Get sender name for email
-let senderName = "User";
-try {
-  const profileRef = doc(db, "universalProfiles", currentUser.uid);
-  const profileSnap = await getDoc(profileRef);
-  if (profileSnap.exists()) {
-    const data = profileSnap.data();
-    senderName = data.entityOverview?.registeredName || 
-                 data.contactDetails?.contactName ||
-                 currentUser.displayName ||
-                 "User";
-  }
-} catch (error) {
-  console.error("Error fetching user name:", error);
-}
-
-// Send email to all recipients
-for (const recipient of recipients) {
-  try {
-    const functions = getFunctions();
-    const sendMeetingUpdateEmail = httpsCallable(functions, 'sendGovernanceMeetingUpdateEmail');
-    
-    await sendMeetingUpdateEmail({
-      to: recipient.email,
-      name: recipient.name,
-      meetingTitle: updatedMeeting.title,
-      changes: changeSummary,
-      meetingDate: formattedNewDate,
-      meetingTime: newTime || "TBD",
-      department: updatedMeeting.category || updatedMeeting.department,
-      isOrganizer: recipient.isOrganizer,
-      linkTo: "https://www.bigmarketplace.africa/governance-calendar"
-    });
-    
-    console.log(`✅ Meeting update email sent to: ${recipient.email}`);
-  } catch (emailError) {
-    console.error(`❌ Failed to send meeting update email to ${recipient.email}:`, emailError);
-  }
-}
-
-// ==================== END EMAILS ====================
-
-    setNotification({
-      type: "success",
-      message: `✅ "${updatedMeeting.title}" updated successfully!`,
-    });
-    setTimeout(() => setNotification(null), 3000);
-    
-    setShowEditModal(false);
-    setEditingMeeting(null);
-    
-  } catch (error) {
-    console.error("Error updating meeting:", error);
-    setNotification({
-      type: "error",
-      message: "Failed to update meeting. Please try again.",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
-  
- const handleDeleteMeeting = async (meetingId) => {
-   const meeting = meetings.find(m => m.id === meetingId);
-  
-  if (meeting?.isRecurring) {
-    const confirmDelete = window.confirm(
-      `⚠️ "${meeting.title}" is a recurring meeting.\n\n` +
-      `This will delete ALL ${meeting.instances?.length || 0} instances.\n\n` +
-      `Are you sure?`
-    );
-    
-    if (!confirmDelete) {
-      return; // Stop here, don't delete
-    }
-  }
-  
-
-  setLoading(true);
-    setLoadingMessage("Deleting meeting...");
- 
-  try {
-    // Find the meeting before deleting
-    const deletedMeeting = meetings.find(m => m.id === meetingId);
-    
-    const updatedMeetings = meetings.filter(m => m.id !== meetingId);
-    setMeetings(updatedMeetings);
-    
-    const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-    await setDoc(calendarRef, {
-      meetings: updatedMeetings,
-      updatedAt: new Date().toISOString(),
-      userId: currentUser.uid,
-    }, { merge: true });
-    
-    setShowDeleteConfirm(null);
-    setShowDetailsModal(null);
-    
-    // ==================== SEND CANCELLATION EMAIL ====================
-    
-    if (deletedMeeting) {
-      const firstInstance = deletedMeeting.instances?.[0];
-      const formattedDate = firstInstance 
-        ? new Date(firstInstance.date).toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
-        : "TBD";
-      const meetingTime = firstInstance?.time || "TBD";
-      
-      // ✅ Get user email for the cancellation function
       let userEmail = null;
       try {
         const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
@@ -1200,49 +565,492 @@ for (const recipient of recipients) {
       } catch (error) {
         console.error("Error fetching user email:", error);
       }
-      
+
       if (userEmail) {
         try {
-          const functions = getFunctions();
-          const sendGovernanceMeetingCancellation = httpsCallable(
+          const sendGovernanceMeetingConfirmation = httpsCallable(
             functions, 
-            'sendGovernanceMeetingCancellation'
+            'sendGovernanceMeetingConfirmation'
           );
           
-          // ✅ PASS PARTICIPANTS TO THE CANCELLATION FUNCTION
-          await sendGovernanceMeetingCancellation({
+          await sendGovernanceMeetingConfirmation({
             to: currentUser.uid,
-            meetingTitle: deletedMeeting.title,
+            useTestMode: false, 
+            meetingTitle: formData.title,
             meetingDate: formattedDate,
             meetingTime: meetingTime,
-            department: deletedMeeting.category || deletedMeeting.department,
-            purpose: deletedMeeting.purpose,
-            isRecurring: deletedMeeting.isRecurring || false,
-            participants: deletedMeeting.participants || []  // ✅ ADD THIS
+            department: formData.category,
+            participants: formData.participants,
+            purpose: formData.purpose,
+            isRecurring: newMeeting.isRecurring,
+            recurrencePattern: newMeeting.recurrencePattern,
+            isDoubleBooked: isDoubleBooked,
+            conflictingMeetings: conflictingMeetingData || []
           });
           
-          console.log("✅ Meeting cancellation email sent to organizer and participants");
+          console.log("✅ Meeting confirmation email sent to:", userEmail);
         } catch (emailError) {
-          console.error("Failed to send meeting cancellation email:", emailError);
+          console.error("Failed to send meeting confirmation email:", emailError);
         }
       }
-      
-      // ==================== IN-APP NOTIFICATION ====================
-      
-      // 1. In-app banner notification
-      setNotification({ 
-        type: "warning", 
-        message: `❌ "${deletedMeeting.title}" has been cancelled` 
-      });
-      setTimeout(() => setNotification(null), 5000);
-      
-      // 2. Save to Firestore messages
-      const displayName = currentUser.displayName || "User";
+
       await addDoc(collection(db, "messages"), {
         to: currentUser.uid,
         from: "system",
-        subject: `❌ Meeting Cancelled: ${deletedMeeting.title}`,
-        content: `Dear ${displayName},
+        subject: `${notificationEmoji} Meeting ${notificationSubject}: ${formData.title}`,
+        content: notificationContent,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        meetingId: newMeeting.id,
+        linkTo: "/governance-calendar",
+      });
+      
+      setNotification({ 
+        type: "success", 
+        message: `✅ "${formData.title}" confirmed for ${formattedDate} at ${meetingTime}` 
+      });
+      
+    } catch (error) {
+      setNotification({ 
+        type: "error", 
+        message: "Failed to schedule meeting. Please try again." 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!currentUser) {
+      setNotification({ 
+        type: "error", 
+        message: "Please log in to add meetings." 
+      });
+      return;
+    }
+    
+    const newErrors = {};
+    if (!formData.title.trim()) newErrors.title = "Meeting title is required";
+    if (!formData.purpose.trim()) newErrors.purpose = "Purpose is required";
+    if (!formData.startDate) newErrors.startDate = "Start date is required";
+    if (!formData.time) newErrors.time = "Time is required";
+    
+    const startDateObj = new Date(formData.startDate);
+    if (startDateObj < today) {
+      newErrors.startDate = "Cannot schedule meetings on past dates";
+    }
+    
+    if (formData.endDate) {
+      const endDateObj = new Date(formData.endDate);
+      if (endDateObj < startDateObj) {
+        newErrors.endDate = "End date cannot be before start date";
+      }
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    } 
+    
+    const formattedDateForCheck = new Date(formData.startDate);
+    const conflictingMeetings = meetings.filter(meeting => {
+      return meeting.instances?.some(instance => {
+        const instanceDate = new Date(instance.date);
+        const sameDate = instanceDate.toDateString() === formattedDateForCheck.toDateString();
+        const sameTime = instance.time === formData.time;
+        return sameDate && sameTime;
+      });
+    });
+    
+    if (conflictingMeetings.length > 0) {
+      const selectedCategory = categoryOptions.find(c => c.name === formData.category);
+      
+      setPendingMeetingData({
+        title: formData.title,
+        category: formData.category,
+        categoryColor: selectedCategory?.color || "#757575",
+        time: formData.time,
+        date: formattedDateForCheck,
+        purpose: formData.purpose,
+      });
+      
+      setConflictingMeetingData(conflictingMeetings);
+      setShowDoubleBookingWarning(true);
+      return;
+    }
+    
+    await proceedWithBooking();
+  };
+
+  // Open edit modal with meeting data
+  const handleEditMeeting = (meeting) => {
+    setEditingMeeting(meeting);
+    
+    const firstInstance = meeting.instances?.[0];
+    const instanceDate = firstInstance ? new Date(firstInstance.date) : new Date();
+    
+    setEditFormData({
+      title: meeting.title || "",
+      category: meeting.category || categoryOptions[0].name,
+      department: meeting.department || departmentOptionsOld[0].name,
+      departments: meeting.departments || [],
+      purpose: meeting.purpose || "",
+      participants: meeting.participants || [],
+      repeatType: meeting.recurrencePattern || "none",
+      startDate: instanceDate.toISOString().split('T')[0],
+      time: firstInstance?.time || "10:00",
+    });
+    
+    setShowEditModal(true);
+  };
+
+  // Update participant in edit form
+  const updateEditParticipant = (index, field, value) => {
+    const updated = [...editFormData.participants];
+    updated[index] = { ...updated[index], [field]: value };
+    setEditFormData({ ...editFormData, participants: updated });
+  };
+
+  // Add participant to edit form
+  const addEditParticipant = () => {
+    setEditFormData({
+      ...editFormData,
+      participants: [...editFormData.participants, { name: "", email: "" }],
+    });
+  };
+
+  // Remove participant from edit form
+  const removeEditParticipant = (index) => {
+    const updated = editFormData.participants.filter((_, i) => i !== index);
+    setEditFormData({ ...editFormData, participants: updated });
+  };
+
+  const saveEditedMeeting = async () => {
+    if (!editingMeeting || !currentUser) return;
+    
+    setLoading(true);
+    setLoadingMessage("Saving changes...");
+    
+    try {
+      const originalMeeting = { ...editingMeeting };
+      
+      const selectedCategory = categoryOptions.find(c => c.name === editFormData.category);
+      const categoryColor = selectedCategory?.color || "#757575";
+      const categoryBg = selectedCategory?.bg || "#EEEEEE";
+      
+      const selectedDepartment = allDepartments.find(d => d.name === editFormData.department);
+      const departmentColor = selectedDepartment?.color || "#757575";
+      const departmentBg = selectedDepartment?.bg || "#EEEEEE";
+      
+      const updatedMeeting = {
+        ...editingMeeting,
+        title: editFormData.title,
+        category: editFormData.category,
+        department: editFormData.department,
+        categoryColor: categoryColor,
+        categoryBg: categoryBg,
+        departmentColor: departmentColor,
+        departmentBg: departmentBg,
+        departments: editFormData.departments || [],
+        purpose: editFormData.purpose,
+        participants: editFormData.participants,
+        isRecurring: editFormData.repeatType !== "none",
+        recurrencePattern: editFormData.repeatType !== "none" ? editFormData.repeatType : null,
+        updatedAt: new Date().toISOString(),
+      };
+      
+      const oldDate = updatedMeeting.instances?.[0]?.date;
+      const oldTime = updatedMeeting.instances?.[0]?.time;
+      
+      if (updatedMeeting.instances && updatedMeeting.instances.length > 0) {
+        const newDate = new Date(editFormData.startDate);
+        updatedMeeting.instances[0].date = newDate.toISOString();
+        updatedMeeting.instances[0].time = editFormData.time;
+      }
+      
+      const newDate = updatedMeeting.instances?.[0]?.date;
+      const newTime = updatedMeeting.instances?.[0]?.time;
+      
+      const titleChanged = originalMeeting.title !== updatedMeeting.title;
+      const dateChanged = oldDate !== newDate;
+      const timeChanged = oldTime !== newTime;
+      const categoryChanged = originalMeeting.category !== updatedMeeting.category;
+      const departmentChanged = originalMeeting.department !== updatedMeeting.department;
+      const departmentsChanged = JSON.stringify(originalMeeting.departments) !== JSON.stringify(updatedMeeting.departments);
+      const participantsChanged = JSON.stringify(originalMeeting.participants) !== JSON.stringify(updatedMeeting.participants);
+      
+      const hasChanges = titleChanged || dateChanged || timeChanged || categoryChanged || departmentChanged || departmentsChanged || participantsChanged;
+      
+      if (!hasChanges) {
+        setNotification({ type: "info", message: "No changes were made." });
+        setShowEditModal(false);
+        setEditingMeeting(null);
+        setLoading(false);
+        return;
+      }
+      
+      const updatedMeetings = meetings.map(m => 
+        m.id === editingMeeting.id ? updatedMeeting : m
+      );
+      
+      setMeetings(updatedMeetings);
+      
+      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+      await setDoc(calendarRef, {
+        meetings: updatedMeetings,
+        updatedAt: new Date().toISOString(),
+        userId: currentUser.uid,
+      }, { merge: true });
+      
+      const formattedOldDate = oldDate ? new Date(oldDate).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }) : "TBD";
+      
+      const formattedNewDate = newDate ? new Date(newDate).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }) : "TBD";
+      
+      let changes = [];
+      if (titleChanged) changes.push(`Title changed to "${updatedMeeting.title}"`);
+      if (dateChanged) changes.push(`Date changed from ${formattedOldDate} to ${formattedNewDate}`);
+      if (timeChanged) changes.push(`Time changed from ${oldTime} to ${newTime}`);
+      if (categoryChanged) changes.push(`Category changed to ${updatedMeeting.category}`);
+      if (departmentChanged) changes.push(`Department changed to ${updatedMeeting.department}`);
+      if (departmentsChanged) changes.push(`Departments updated`);
+      if (participantsChanged) changes.push(`Participants updated`);
+      
+      const changeSummary = changes.join("; ");
+      
+      let userName = "User";
+      try {
+        const profileRef = doc(db, "universalProfiles", currentUser.uid);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const data = profileSnap.data();
+          userName = data.entityOverview?.registeredName || 
+                     data.contactDetails?.contactName ||
+                     currentUser.displayName ||
+                     "User";
+        }
+      } catch (error) {
+        console.error("Error fetching user name:", error);
+      }
+      
+      const recipients = [];
+      let ownerEmail = null;
+      
+      try {
+        const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDocRef.exists()) {
+          ownerEmail = userDocRef.data().email;
+        }
+      } catch (error) {
+        console.error("Error fetching owner email:", error);
+      }
+      
+      if (ownerEmail) {
+        recipients.push({ email: ownerEmail, name: userName, isOrganizer: true });
+      }
+      
+      if (updatedMeeting.participants && updatedMeeting.participants.length > 0) {
+        updatedMeeting.participants.forEach(p => {
+          if (p.email && p.email.trim()) {
+            recipients.push({
+              email: p.email.trim(),
+              name: p.name || "Participant",
+              isOrganizer: false,
+            });
+          }
+        });
+      }
+      
+      for (const recipient of recipients) {
+        try {
+          const notificationContent = `Dear ${recipient.name},\n\n` +
+            `The meeting "${updatedMeeting.title}" has been updated.\n\n` +
+            `📋 Changes:\n${changeSummary}\n\n` +
+            `${recipient.isOrganizer ? 'Your meeting has been updated successfully.' : 'Please review the updated meeting details.'}\n\n` +
+            `Best regards,\nBIG Marketplace Team 🌍`;
+          
+          await addDoc(collection(db, "messages"), {
+            to: recipient.isOrganizer ? currentUser.uid : updatedMeeting.participants.find(p => p.email === recipient.email)?.id || recipient.email,
+            toName: recipient.name,
+            from: "system",
+            fromName: "BIG Marketplace",
+            subject: `📅 Meeting Updated: ${updatedMeeting.title}`,
+            content: notificationContent,
+            date: new Date().toISOString(),
+            read: false,
+            type: "inbox",
+            meetingId: updatedMeeting.id,
+            linkTo: "/governance-calendar",
+          });
+          
+          console.log(`✅ Update notification sent to: ${recipient.name}`);
+        } catch (error) {
+          console.error(`❌ Failed to send update notification to ${recipient.name}:`, error);
+        }
+      }
+      
+      let senderName = "User";
+      try {
+        const profileRef = doc(db, "universalProfiles", currentUser.uid);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const data = profileSnap.data();
+          senderName = data.entityOverview?.registeredName || 
+                       data.contactDetails?.contactName ||
+                       currentUser.displayName ||
+                       "User";
+        }
+      } catch (error) {
+        console.error("Error fetching user name:", error);
+      }
+      
+      for (const recipient of recipients) {
+        try {
+          const functions = getFunctions();
+          const sendMeetingUpdateEmail = httpsCallable(functions, 'sendGovernanceMeetingUpdateEmail');
+          
+          await sendMeetingUpdateEmail({
+            to: recipient.email,
+            name: recipient.name,
+            meetingTitle: updatedMeeting.title,
+            changes: changeSummary,
+            meetingDate: formattedNewDate,
+            meetingTime: newTime || "TBD",
+            department: updatedMeeting.category || updatedMeeting.department,
+            isOrganizer: recipient.isOrganizer,
+            linkTo: "https://www.bigmarketplace.africa/governance-calendar"
+          });
+          
+          console.log(`✅ Meeting update email sent to: ${recipient.email}`);
+        } catch (emailError) {
+          console.error(`❌ Failed to send meeting update email to ${recipient.email}:`, emailError);
+        }
+      }
+      
+      setNotification({
+        type: "success",
+        message: `✅ "${updatedMeeting.title}" updated successfully!`,
+      });
+      setTimeout(() => setNotification(null), 3000);
+      
+      setShowEditModal(false);
+      setEditingMeeting(null);
+      
+    } catch (error) {
+      console.error("Error updating meeting:", error);
+      setNotification({
+        type: "error",
+        message: "Failed to update meeting. Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleDeleteMeeting = async (meetingId) => {
+    const meeting = meetings.find(m => m.id === meetingId);
+    
+    if (meeting?.isRecurring) {
+      const confirmDelete = window.confirm(
+        `⚠️ "${meeting.title}" is a recurring meeting.\n\n` +
+        `This will delete ALL ${meeting.instances?.length || 0} instances.\n\n` +
+        `Are you sure?`
+      );
+      
+      if (!confirmDelete) {
+        return;
+      }
+    }
+    
+    setLoading(true);
+    setLoadingMessage("Deleting meeting...");
+   
+    try {
+      const deletedMeeting = meetings.find(m => m.id === meetingId);
+      
+      const updatedMeetings = meetings.filter(m => m.id !== meetingId);
+      setMeetings(updatedMeetings);
+      
+      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+      await setDoc(calendarRef, {
+        meetings: updatedMeetings,
+        updatedAt: new Date().toISOString(),
+        userId: currentUser.uid,
+      }, { merge: true });
+      
+      setShowDeleteConfirm(null);
+      setShowDetailsModal(null);
+      
+      if (deletedMeeting) {
+        const firstInstance = deletedMeeting.instances?.[0];
+        const formattedDate = firstInstance 
+          ? new Date(firstInstance.date).toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
+          : "TBD";
+        const meetingTime = firstInstance?.time || "TBD";
+        
+        let userEmail = null;
+        try {
+          const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
+          if (userDocRef.exists()) {
+            const userData = userDocRef.data();
+            userEmail = userData.email;
+          }
+        } catch (error) {
+          console.error("Error fetching user email:", error);
+        }
+        
+        if (userEmail) {
+          try {
+            const functions = getFunctions();
+            const sendGovernanceMeetingCancellation = httpsCallable(
+              functions, 
+              'sendGovernanceMeetingCancellation'
+            );
+            
+            await sendGovernanceMeetingCancellation({
+              to: currentUser.uid,
+              meetingTitle: deletedMeeting.title,
+              meetingDate: formattedDate,
+              meetingTime: meetingTime,
+              department: deletedMeeting.category || deletedMeeting.department,
+              purpose: deletedMeeting.purpose,
+              isRecurring: deletedMeeting.isRecurring || false,
+              participants: deletedMeeting.participants || []
+            });
+            
+            console.log("✅ Meeting cancellation email sent to organizer and participants");
+          } catch (emailError) {
+            console.error("Failed to send meeting cancellation email:", emailError);
+          }
+        }
+        
+        setNotification({ 
+          type: "warning", 
+          message: `❌ "${deletedMeeting.title}" has been cancelled` 
+        });
+        setTimeout(() => setNotification(null), 5000);
+        
+        const displayName = currentUser.displayName || "User";
+        await addDoc(collection(db, "messages"), {
+          to: currentUser.uid,
+          from: "system",
+          subject: `❌ Meeting Cancelled: ${deletedMeeting.title}`,
+          content: `Dear ${displayName},
 
 The meeting "${deletedMeeting.title}" has been cancelled and removed from your calendar.
 
@@ -1264,28 +1072,26 @@ ${deletedMeeting.isRecurring ? '• All future recurring instances have been rem
 
 Best regards,
 BIG Marketplace Team 🌍`,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        meetingId: deletedMeeting.id,
-        linkTo: "/governance-calendar",
+          date: new Date().toISOString(),
+          read: false,
+          type: "inbox",
+          meetingId: deletedMeeting.id,
+          linkTo: "/governance-calendar",
+        });
+      }
+      setNotification({ 
+        type: "warning", 
+        message: `❌ "${deletedMeeting.title}" has been cancelled` 
       });
-      
-      // ==================== END NOTIFICATIONS ====================
+    } catch (error) {
+      setNotification({ 
+        type: "error", 
+        message: "Failed to delete meeting. Please try again." 
+      });
+    } finally {
+      setLoading(false);
     }
-   setNotification({ 
-      type: "warning", 
-      message: `❌ "${deletedMeeting.title}" has been cancelled` 
-    });
-  } catch (error) {
-    setNotification({ 
-      type: "error", 
-      message: "Failed to delete meeting. Please try again." 
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  };
   
   const getMeetingColor = (meeting) => meeting.categoryColor || meeting.departmentColor || "#757575";
   
@@ -1373,24 +1179,172 @@ BIG Marketplace Team 🌍`,
     }
   };
   
-const handleOpenAddModal = (date = null) => {
-  // Use the provided date, or fallback to selectedDate, or today
-  let targetDate = date || selectedDate || new Date();
+  const handleOpenAddModal = (date = null) => {
+    let targetDate = date || selectedDate || new Date();
+    
+    if (date instanceof Date) {
+      targetDate = date;
+    }
+    
+    if (targetDate >= today) {
+      setFormData(prev => ({
+        ...prev,
+        startDate: targetDate.toISOString().split('T')[0],
+      }));
+    }
+    setShowAddModal(true);
+  };
+
+  // ============================================
+  // DETAILS MODAL WITH TABS
+  // ============================================
   
-  // If it's a Date object from calendar click, use it directly
-  if (date instanceof Date) {
-    targetDate = date;
-  }
-  
-  // Don't allow pre-filling past dates
-  if (targetDate >= today) {
-    setFormData(prev => ({
-      ...prev,
-      startDate: targetDate.toISOString().split('T')[0],
-    }));
-  }
-  setShowAddModal(true);
-};
+  // Save meeting field (highlights, lowlights, risks, headsUp)
+  const saveMeetingField = async (meetingId, field, value) => {
+    if (!currentUser) return;
+    
+    try {
+      const updatedMeetings = meetings.map(m => {
+        if (m.id === meetingId) {
+          return { ...m, [field]: value };
+        }
+        return m;
+      });
+      
+      setMeetings(updatedMeetings);
+      
+      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+      await setDoc(calendarRef, {
+        meetings: updatedMeetings,
+        updatedAt: new Date().toISOString(),
+        userId: currentUser.uid,
+      }, { merge: true });
+      
+      // Update the modal data
+      setShowDetailsModal(prev => ({ ...prev, [field]: value }));
+      setEditingField(null);
+      
+      setNotification({
+        type: "success",
+        message: "Field updated successfully!",
+      });
+      setTimeout(() => setNotification(null), 2000);
+      
+    } catch (error) {
+      console.error("Error saving field:", error);
+      setNotification({
+        type: "error",
+        message: "Failed to update field. Please try again.",
+      });
+    }
+  };
+
+  // Quick add action
+  const handleQuickAddAction = async () => {
+    if (!showDetailsModal || !quickActionForm.title.trim()) {
+      setNotification({
+        type: "error",
+        message: "Please fill in the action title.",
+      });
+      return;
+    }
+
+    const newAction = {
+      id: Date.now().toString(),
+      title: quickActionForm.title.trim(),
+      description: "",
+      assignedTo: quickActionForm.assignedTo || "",
+      dueDate: quickActionForm.dueDate || "",
+      status: quickActionForm.status || "In Progress",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      revisedDate: null,
+    };
+
+    try {
+      const updatedMeetings = meetings.map(m => {
+        if (m.id === showDetailsModal.id) {
+          return {
+            ...m,
+            actions: [...(m.actions || []), newAction],
+          };
+        }
+        return m;
+      });
+
+      setMeetings(updatedMeetings);
+
+      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+      await setDoc(calendarRef, {
+        meetings: updatedMeetings,
+        updatedAt: new Date().toISOString(),
+        userId: currentUser.uid,
+      }, { merge: true });
+
+      // Update the modal data
+      const updatedModal = { ...showDetailsModal };
+      updatedModal.actions = [...(showDetailsModal.actions || []), newAction];
+      setShowDetailsModal(updatedModal);
+
+      setQuickActionForm({
+        title: "",
+        assignedTo: "",
+        dueDate: "",
+        status: "In Progress",
+      });
+      setShowQuickAddAction(false);
+
+      setNotification({
+        type: "success",
+        message: "Action added successfully!",
+      });
+      setTimeout(() => setNotification(null), 2000);
+
+    } catch (error) {
+      console.error("Error adding action:", error);
+      setNotification({
+        type: "error",
+        message: "Failed to add action. Please try again.",
+      });
+    }
+  };
+
+  // Get action stats
+  const getActionStats = (meeting) => {
+    const actions = meeting?.actions || [];
+    const open = actions.filter(a => a.status === "open" || a.status === "Not Done").length;
+    const inProgress = actions.filter(a => a.status === "in-progress" || a.status === "In Progress").length;
+    const completed = actions.filter(a => a.status === "completed" || a.status === "Done").length;
+    const overdue = actions.filter(a => {
+      if (a.status === "completed" || a.status === "Done") return false;
+      if (!a.dueDate) return false;
+      return new Date(a.dueDate) < new Date();
+    }).length;
+    return { open, inProgress, completed, overdue };
+  };
+
+  // Get status display for actions in modal
+  const getActionStatusDisplay = (status) => {
+    const statusMap = {
+      "open": { label: "Open", color: "#E65100", bg: "#FFF3E0" },
+      "in-progress": { label: "In Progress", color: "#0D47A1", bg: "#E3F2FD" },
+      "completed": { label: "Done", color: "#2E7D32", bg: "#E8F5E9" },
+      "Not Done": { label: "Not Done", color: "#C62828", bg: "#FFEBEE" },
+      "In Progress": { label: "In Progress", color: "#E65100", bg: "#FFF3E0" },
+      "Done": { label: "Done", color: "#2E7D32", bg: "#E8F5E9" },
+    };
+    return statusMap[status] || statusMap["open"];
+  };
+
+  // Format date for display
+  const formatDateDisplay = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   const selectedMeetings = getMeetingsForDate(selectedDate);
   
@@ -1402,15 +1356,6 @@ const handleOpenAddModal = (date = null) => {
     padding: "20px",
     maxWidth: "1200px",
     margin: "0 auto",
-  };
-  
-  
-  const keyQuestionStyles = {
-    backgroundColor: "#DCDCDC",
-    padding: "15px 20px",
-    borderRadius: "8px",
-    marginBottom: "20px",
-    border: "1px solid #5d4037",
   };
   
   const headerRowStyles = {
@@ -1706,8 +1651,8 @@ const handleOpenAddModal = (date = null) => {
     backgroundColor: "white",
     borderRadius: "12px",
     width: "90%",
-    maxWidth: "550px",
-    maxHeight: "85vh",
+    maxWidth: "700px",
+    maxHeight: "90vh",
     overflow: "auto",
     boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
   };
@@ -1790,42 +1735,6 @@ const handleOpenAddModal = (date = null) => {
     marginTop: "4px",
   };
   
-  const departmentDropdownStyles = {
-    border: "2px solid #e8ddd4",
-    borderRadius: "6px",
-    overflow: "hidden",
-  };
-  
-  const departmentOptionStyles = (dept, isSelected) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "10px 12px",
-    cursor: "pointer",
-    backgroundColor: isSelected ? dept.bg : "white",
-    transition: "all 0.2s ease",
-    borderBottom: "1px solid #f0e6d9",
-  });
-  
-  const departmentColorBlockStyles = (color) => ({
-    width: "20px",
-    height: "20px",
-    borderRadius: "4px",
-    backgroundColor: color,
-  });
-  
-  const addDepartmentButtonStyles = {
-    width: "100%",
-    padding: "10px",
-    backgroundColor: "#f7f3f0",
-    border: "2px dashed #e8ddd4",
-    borderRadius: "6px",
-    cursor: "pointer",
-    color: "#7d5a50",
-    fontSize: "13px",
-    marginTop: "8px",
-  };
-  
   const modalFooterStyles = {
     padding: "16px 24px",
     borderTop: "2px solid #e8ddd4",
@@ -1864,15 +1773,58 @@ const handleOpenAddModal = (date = null) => {
     fontStyle: "italic",
   };
   
-  // Details Modal Styles
+  // Details Modal with Tabs Styles
   const detailsModalStyles = {
     backgroundColor: "white",
     borderRadius: "12px",
     width: "90%",
-    maxWidth: "500px",
-    maxHeight: "85vh",
+    maxWidth: "800px",
+    maxHeight: "90vh",
     overflow: "auto",
     boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+  };
+  
+  const tabContainerStyles = {
+    display: "flex",
+    borderBottom: "2px solid #e8ddd4",
+    padding: "0 24px",
+    gap: "4px",
+  };
+  
+  const tabStyles = (isActive) => ({
+    padding: "12px 20px",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: isActive ? "600" : "500",
+    color: isActive ? "#7d5a50" : "#8d6e63",
+    borderBottom: isActive ? "3px solid #7d5a50" : "3px solid transparent",
+    transition: "all 0.2s ease",
+    background: "none",
+    border: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  });
+  
+  const tabContentStyles = {
+    padding: "24px",
+    maxHeight: "55vh",
+    overflowY: "auto",
+  };
+  
+  const editableFieldStyles = {
+    backgroundColor: "#f7f3f0",
+    padding: "12px 16px",
+    borderRadius: "6px",
+    marginBottom: "12px",
+    border: "1px solid #e8ddd4",
+    minHeight: "60px",
+    fontSize: "14px",
+    color: "#4a352f",
+    lineHeight: "1.6",
+    width: "100%",
+    fontFamily: "inherit",
+    resize: "vertical",
   };
   
   const detailsSectionStyles = {
@@ -1886,6 +1838,9 @@ const handleOpenAddModal = (date = null) => {
     textTransform: "uppercase",
     letterSpacing: "0.5px",
     marginBottom: "6px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
   };
   
   const detailsValueStyles = {
@@ -1933,11 +1888,11 @@ const handleOpenAddModal = (date = null) => {
     marginTop: "20px",
     paddingTop: "20px",
     borderTop: "1px solid #e8ddd4",
+    flexWrap: "wrap",
   };
   
   const detailsDeleteButtonStyles = {
-    flex: 1,
-    padding: "10px",
+    padding: "10px 20px",
     backgroundColor: "#f44336",
     color: "white",
     border: "none",
@@ -1948,8 +1903,7 @@ const handleOpenAddModal = (date = null) => {
   };
   
   const detailsCloseButtonStyles = {
-    flex: 1,
-    padding: "10px",
+    padding: "10px 20px",
     backgroundColor: "#e6d7c3",
     color: "#4a352f",
     border: "none",
@@ -2020,50 +1974,46 @@ const handleOpenAddModal = (date = null) => {
     fontWeight: "500",
   };
 
-  
-  // Styles object
-const styles = {
-  container: {
-    backgroundColor: "#fdfcfb",
-    borderRadius: "8px",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-    padding: "20px",
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-  keyQuestion: {
-    backgroundColor: "#DCDCDC",
-    padding: "15px 20px",
-    borderRadius: "8px",
-    marginBottom: "20px",
-    border: "1px solid #5d4037",
-  },
-  notification: {
-    padding: "12px 20px",
-    borderRadius: "8px",
-    marginBottom: "16px",
-    color: "#4a352f",
-    fontSize: "14px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-  },
-  // ✅ ADD SPIN ANIMATION AS AN OBJECT
-  spin: {
-    animation: 'spin 1s linear infinite',
-  },
-};
+  const styles = {
+    container: {
+      backgroundColor: "#fdfcfb",
+      borderRadius: "8px",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      padding: "20px",
+      maxWidth: "1200px",
+      margin: "0 auto",
+    },
+    keyQuestion: {
+      backgroundColor: "#DCDCDC",
+      padding: "15px 20px",
+      borderRadius: "8px",
+      marginBottom: "20px",
+      border: "1px solid #5d4037",
+    },
+    notification: {
+      padding: "12px 20px",
+      borderRadius: "8px",
+      marginBottom: "16px",
+      color: "#4a352f",
+      fontSize: "14px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    },
+    spin: {
+      animation: 'spin 1s linear infinite',
+    },
+  };
 
-// ✅ ADD KEYFRAMES AS A STYLE TAG (only once)
-const SpinKeyframes = () => (
-  <style>{`
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  `}</style>
-);
+  const SpinKeyframes = () => (
+    <style>{`
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `}</style>
+  );
 
   // If no user is logged in, show login message
   if (!currentUser) {
@@ -2079,81 +2029,80 @@ const SpinKeyframes = () => (
   
   return (
     <div style={containerStyles}>
-          <SpinKeyframes />
+      <SpinKeyframes />
       {/* Notification Banner */}
-{notification && (
-  <div style={{
-    padding: "12px 20px",
-    borderRadius: "8px",
-    marginBottom: "16px",
-    backgroundColor: notification.type === "success" ? "#E8F5E9" : 
-                     notification.type === "warning" ? "#FFF3E0" : 
-                     notification.type === "error" ? "#FFEBEE" : "#E3F2FD",
-    borderLeft: `4px solid ${
-      notification.type === "success" ? "#4CAF50" : 
-      notification.type === "warning" ? "#FF9800" : 
-      notification.type === "error" ? "#F44336" : "#2196F3"
-    }`,
-    color: "#4a352f",
-    fontSize: "14px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-  }}>
-    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-      {notification.type === "success" && "✅"}
-      {notification.type === "warning" && "⚠️"}
-      {notification.type === "error" && "❌"}
-      {notification.type === "info" && "ℹ️"}
-      {notification.message}
-    </span>
-    <button
-      onClick={() => setNotification(null)}
-      style={{
-        background: "none",
-        border: "none",
-        fontSize: "18px",
-        cursor: "pointer",
-        color: "#8d6e63",
-        padding: "0 4px",
-      }}
-    >
-      ×
-    </button>
-  </div>
-)}
+      {notification && (
+        <div style={{
+          padding: "12px 20px",
+          borderRadius: "8px",
+          marginBottom: "16px",
+          backgroundColor: notification.type === "success" ? "#E8F5E9" : 
+                           notification.type === "warning" ? "#FFF3E0" : 
+                           notification.type === "error" ? "#FFEBEE" : "#E3F2FD",
+          borderLeft: `4px solid ${
+            notification.type === "success" ? "#4CAF50" : 
+            notification.type === "warning" ? "#FF9800" : 
+            notification.type === "error" ? "#F44336" : "#2196F3"
+          }`,
+          color: "#4a352f",
+          fontSize: "14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {notification.type === "success" && "✅"}
+            {notification.type === "warning" && "⚠️"}
+            {notification.type === "error" && "❌"}
+            {notification.type === "info" && "ℹ️"}
+            {notification.message}
+          </span>
+          <button
+            onClick={() => setNotification(null)}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "18px",
+              cursor: "pointer",
+              color: "#8d6e63",
+              padding: "0 4px",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {/* Header with Page Title and Add Button */}
       <div style={headerRowStyles}>
-          <div style={{ 
-            marginBottom: "24px",
-            paddingBottom: "16px",
-            borderBottom: "2px solid #e8ddd4",
+        <div style={{ 
+          marginBottom: "24px",
+          paddingBottom: "16px",
+          borderBottom: "2px solid #e8ddd4",
+        }}>
+          <h1 style={{
+            color: "#5d4037",
+            fontSize: "28px",
+            fontWeight: "700",
+            margin: 0,
+            marginBottom: "8px",
+            letterSpacing: "-0.5px",
           }}>
-            <h1 style={{
-              color: "#5d4037",
-              fontSize: "28px",
-              fontWeight: "700",
-              margin: 0,
-              marginBottom: "8px",
-              letterSpacing: "-0.5px",
-            }}>
-              Governance Calendar
-            </h1>
-            <p style={{
-              color: "#8d6e63",
-              fontSize: "15px",
-              fontWeight: "400",
-              margin: 0,
-              lineHeight: "1.5",
-            }}>
-              Track and manage board meetings, committee sessions, and key governance events in one place.
-            </p>
-          </div>
-       <button onClick={() => handleOpenAddModal(null)} style={addButtonStyles} disabled={isInvestorView}>
+            Governance Calendar
+          </h1>
+          <p style={{
+            color: "#8d6e63",
+            fontSize: "15px",
+            fontWeight: "400",
+            margin: 0,
+            lineHeight: "1.5",
+          }}>
+            Track and manage board meetings, committee sessions, and key governance events in one place.
+          </p>
+        </div>
+        <button onClick={() => handleOpenAddModal(null)} style={addButtonStyles} disabled={isInvestorView}>
           + Add Meeting
         </button>
-
       </div>
       
       {/* Calendar Header */}
@@ -2221,7 +2170,7 @@ const SpinKeyframes = () => (
         ))}
       </div>
 
-        {/* Color Legend */}
+      {/* Color Legend */}
       <div style={legendContainerStyles}>
         <div style={legendTitleStyles}>Department Color Guide</div>
         <div style={legendItemsContainer}>
@@ -2249,7 +2198,7 @@ const SpinKeyframes = () => (
             No governance meetings scheduled for this date.
             {!isInvestorView && selectedDate >= today && (
               <button
-                onClick={() => handleOpenAddModal(selectedDate)}  // ← Pass the selected date
+                onClick={() => handleOpenAddModal(selectedDate)}
                 style={{
                   background: "none",
                   border: "none",
@@ -2265,94 +2214,89 @@ const SpinKeyframes = () => (
             )}
           </div>
         ) : (
-        selectedMeetings.map((meeting, idx) => {
-  // ✅ Check if there are any future instances
-  const hasFutureInstance = meeting.instances?.some(instance => {
-    return new Date(instance.date) >= new Date();
-  });
-  
-  // ✅ Only hide delete if ALL instances are in the past
-  const isPastMeeting = !hasFutureInstance;
-  const instance = meeting.instances?.find(inst => {
-    const instDate = new Date(inst.date);
-    return instDate.toDateString() === selectedDate.toDateString();
-  });
-  
-  const participantCount = meeting.participants?.length || 0;
-  
-  return (
-    <div
-      key={idx}
-      style={meetingItemStyles(meeting.categoryColor || meeting.departmentColor, meeting.categoryBg || meeting.departmentBg)}
-      onClick={() => setShowDetailsModal(meeting)}
-    >
-      <div style={meetingTitleStyles}>
-        <span>{meeting.title}</span>
-        {/* Only show delete button for future meetings */}
-        {!isPastMeeting && !isInvestorView && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDeleteConfirm(meeting.id);
-            }}
-            style={deleteIconStyles}
-            title="Delete meeting"
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#ffebee"}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-          >
-            ×
-          </button>
-        )}
-      </div>
-      <div style={meetingMetaStyles}>
-        <span>{meeting.category || meeting.department}</span>
-        <span>•</span>
-        <span>{instance?.time || "Time TBD"}</span>
-        {participantCount > 0 && (
-          <>
-            <span>•</span>
-            <span style={participantBadgeStyles}>
-              👥 {participantCount} participant{participantCount !== 1 ? "s" : ""}
-            </span>
-          </>
-        )}
-       {meeting.isRecurring && (
-          <>
-            <span>•</span>
-            <span>🔄 {meeting.recurrencePattern === "weekly" ? "Weekly" : 
-                        meeting.recurrencePattern === "monthly" ? "Monthly" : 
-                        "Quarterly"}</span>
-          </>
-        )}
-      </div>
-      <div style={purposePreviewStyles}>
-        {meeting.purpose.length > 100 ? meeting.purpose.substring(0, 100) + "..." : meeting.purpose}
-      </div>
-      {meeting.departments && meeting.departments.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-          {meeting.departments.map((dept, deptIdx) => (
-            <span key={deptIdx} style={{
-              fontSize: "9px",
-              padding: "2px 8px",
-              borderRadius: "10px",
-              backgroundColor: getDepartmentBg(dept),
-              color: getDepartmentColor(dept),
-              fontWeight: "500",
-              display: "inline-block",
-              border: `1px solid ${getDepartmentColor(dept)}40`,
-            }}>
-              {dept}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
+          selectedMeetings.map((meeting, idx) => {
+            const hasFutureInstance = meeting.instances?.some(instance => {
+              return new Date(instance.date) >= new Date();
+            });
+            
+            const isPastMeeting = !hasFutureInstance;
+            const instance = meeting.instances?.find(inst => {
+              const instDate = new Date(inst.date);
+              return instDate.toDateString() === selectedDate.toDateString();
+            });
+            
+            const participantCount = meeting.participants?.length || 0;
+            
+            return (
+              <div
+                key={idx}
+                style={meetingItemStyles(meeting.categoryColor || meeting.departmentColor, meeting.categoryBg || meeting.departmentBg)}
+                onClick={() => setShowDetailsModal(meeting)}
+              >
+                <div style={meetingTitleStyles}>
+                  <span>{meeting.title}</span>
+                  {!isPastMeeting && !isInvestorView && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeleteConfirm(meeting.id);
+                      }}
+                      style={deleteIconStyles}
+                      title="Delete meeting"
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#ffebee"}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div style={meetingMetaStyles}>
+                  <span>{meeting.category || meeting.department}</span>
+                  <span>•</span>
+                  <span>{instance?.time || "Time TBD"}</span>
+                  {participantCount > 0 && (
+                    <>
+                      <span>•</span>
+                      <span style={participantBadgeStyles}>
+                        👥 {participantCount} participant{participantCount !== 1 ? "s" : ""}
+                      </span>
+                    </>
+                  )}
+                  {meeting.isRecurring && (
+                    <>
+                      <span>•</span>
+                      <span>🔄 {meeting.recurrencePattern === "weekly" ? "Weekly" : 
+                                  meeting.recurrencePattern === "monthly" ? "Monthly" : 
+                                  "Quarterly"}</span>
+                    </>
+                  )}
+                </div>
+                <div style={purposePreviewStyles}>
+                  {meeting.purpose.length > 100 ? meeting.purpose.substring(0, 100) + "..." : meeting.purpose}
+                </div>
+                {meeting.departments && meeting.departments.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                    {meeting.departments.map((dept, deptIdx) => (
+                      <span key={deptIdx} style={{
+                        fontSize: "9px",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        backgroundColor: getDepartmentBg(dept),
+                        color: getDepartmentColor(dept),
+                        fontWeight: "500",
+                        display: "inline-block",
+                        border: `1px solid ${getDepartmentColor(dept)}40`,
+                      }}>
+                        {dept}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })
         )}
       </div>
-    
-      
     
       {/* KPIs Section */}
       <div style={{ backgroundColor: "#f7f3f0", padding: "20px", borderRadius: "6px" }}>
@@ -2377,19 +2321,1125 @@ const SpinKeyframes = () => (
         </div>
       </div>
       
-      {/* Add Meeting Modal */}
-      {showAddModal && (
-        <div style={modalOverlayStyles} onClick={() => setShowAddModal(false)}>
+      {/* ============================================ */}
+      {/* DETAILS MODAL WITH TABS */}
+      {/* ============================================ */}
+      {showDetailsModal && (
+        <div style={modalOverlayStyles} onClick={() => setShowDetailsModal(null)}>
+          <div style={detailsModalStyles} onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div style={modalHeaderStyles}>
+              <div>
+                <h3 style={modalTitleStyles}>{showDetailsModal.title}</h3>
+                <div style={{ fontSize: "13px", color: "#8d6e63", marginTop: "4px" }}>
+                  {showDetailsModal.category || showDetailsModal.department}
+                  {" • "}
+                  {showDetailsModal.instances?.[0]?.date
+                    ? new Date(showDetailsModal.instances[0].date).toLocaleDateString("en-US", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "No date"}
+                  {" • "}
+                  {showDetailsModal.instances?.[0]?.time || "Time TBD"}
+                </div>
+              </div>
+              <button onClick={() => setShowDetailsModal(null)} style={closeButtonStyles}>
+                ×
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div style={tabContainerStyles}>
+              <button
+                style={tabStyles(activeTab === "overview")}
+                onClick={() => setActiveTab("overview")}
+              >
+                📋 Overview
+              </button>
+              <button
+                style={tabStyles(activeTab === "performance")}
+                onClick={() => setActiveTab("performance")}
+              >
+                📊 Performance
+              </button>
+              <button
+                style={tabStyles(activeTab === "actions")}
+                onClick={() => setActiveTab("actions")}
+              >
+                ✅ Actions
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div style={tabContentStyles}>
+              {/* ===================== TAB 1: OVERVIEW ===================== */}
+              {activeTab === "overview" && (
+                <div>
+                  <div style={departmentColorStripStyles(showDetailsModal.categoryColor || showDetailsModal.departmentColor)} />
+                  
+                  {/* Meeting Details */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>Meeting Details</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#8d6e63" }}>Category</div>
+                        <div style={{ fontSize: "14px", color: "#4a352f", fontWeight: "500" }}>
+                          {showDetailsModal.category || showDetailsModal.department}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#8d6e63" }}>Departments</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                          {showDetailsModal.departments && showDetailsModal.departments.length > 0 ? (
+                            showDetailsModal.departments.map((dept, idx) => (
+                              <span key={idx} style={{
+                                fontSize: "11px",
+                                padding: "2px 10px",
+                                borderRadius: "12px",
+                                backgroundColor: getDepartmentBg(dept),
+                                color: getDepartmentColor(dept),
+                                fontWeight: "500",
+                                display: "inline-block",
+                                border: `1px solid ${getDepartmentColor(dept)}40`,
+                              }}>
+                                {dept}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ color: "#8d6e63", fontSize: "13px" }}>No departments specified</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#8d6e63" }}>Date</div>
+                        <div style={{ fontSize: "14px", color: "#4a352f", fontWeight: "500" }}>
+                          {showDetailsModal.instances?.[0]?.date
+                            ? new Date(showDetailsModal.instances[0].date).toLocaleDateString("en-US", {
+                                weekday: "long",
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })
+                            : "TBD"}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#8d6e63" }}>Time</div>
+                        <div style={{ fontSize: "14px", color: "#4a352f", fontWeight: "500" }}>
+                          {showDetailsModal.instances?.[0]?.time || "TBD"}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#8d6e63" }}>Frequency</div>
+                        <div style={{ fontSize: "14px", color: "#4a352f", fontWeight: "500" }}>
+                          {showDetailsModal.isRecurring
+                            ? showDetailsModal.recurrencePattern === "weekly" ? "Weekly" :
+                              showDetailsModal.recurrencePattern === "monthly" ? "Monthly" :
+                              showDetailsModal.recurrencePattern === "quarterly" ? "Quarterly" : "Custom"
+                            : "One-time"}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#8d6e63" }}>Location</div>
+                        <div style={{ fontSize: "14px", color: "#4a352f", fontWeight: "500" }}>
+                          {showDetailsModal.location || "Virtual"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Purpose */}
+                  {showDetailsModal.purpose && (
+                    <div style={detailsSectionStyles}>
+                      <div style={detailsLabelStyles}>Purpose / Agenda</div>
+                      <div style={detailsValueStyles}>{showDetailsModal.purpose}</div>
+                    </div>
+                  )}
+
+                  {/* Participants */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>Participants</div>
+                    {showDetailsModal.participants && showDetailsModal.participants.length > 0 ? (
+                      <div style={participantsListStyles}>
+                        {showDetailsModal.participants.map((participant, idx) => (
+                          <span key={idx} style={participantTagStyles}>
+                            {participant.name || participant.email || "Participant"}
+                            {participant.email && participant.name ? ` (${participant.email})` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={detailsValueStyles}>No participants specified</div>
+                    )}
+                  </div>
+
+                  {/* Highlights - Editable */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>
+                      ⭐ Highlights
+                      {editingField !== "highlights" && (
+                        <button
+                          onClick={() => {
+                            setEditingField("highlights");
+                            setTempEditValue(showDetailsModal.highlights || "");
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#7d5a50",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <FaEdit size={12} /> Edit
+                        </button>
+                      )}
+                    </div>
+                    {editingField === "highlights" ? (
+                      <div>
+                        <textarea
+                          value={tempEditValue}
+                          onChange={(e) => setTempEditValue(e.target.value)}
+                          style={editableFieldStyles}
+                          placeholder="Enter highlights from this meeting..."
+                          rows="3"
+                        />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                          <button
+                            onClick={() => saveMeetingField(showDetailsModal.id, "highlights", tempEditValue)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#7d5a50",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaSave size={12} /> Save
+                          </button>
+                          <button
+                            onClick={() => setEditingField(null)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#e6d7c3",
+                              color: "#4a352f",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaTimes size={12} /> Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        backgroundColor: "#f7f3f0",
+                        padding: "12px 16px",
+                        borderRadius: "6px",
+                        minHeight: "40px",
+                        border: "1px solid #e8ddd4",
+                        fontSize: "14px",
+                        color: showDetailsModal.highlights ? "#4a352f" : "#bdbdbd",
+                        fontStyle: showDetailsModal.highlights ? "normal" : "italic",
+                      }}>
+                        {showDetailsModal.highlights || "No highlights added yet. Click Edit to add."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Lowlights - Editable */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>
+                      ⚠️ Lowlights
+                      {editingField !== "lowlights" && (
+                        <button
+                          onClick={() => {
+                            setEditingField("lowlights");
+                            setTempEditValue(showDetailsModal.lowlights || "");
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#7d5a50",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <FaEdit size={12} /> Edit
+                        </button>
+                      )}
+                    </div>
+                    {editingField === "lowlights" ? (
+                      <div>
+                        <textarea
+                          value={tempEditValue}
+                          onChange={(e) => setTempEditValue(e.target.value)}
+                          style={editableFieldStyles}
+                          placeholder="Enter lowlights from this meeting..."
+                          rows="3"
+                        />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                          <button
+                            onClick={() => saveMeetingField(showDetailsModal.id, "lowlights", tempEditValue)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#7d5a50",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaSave size={12} /> Save
+                          </button>
+                          <button
+                            onClick={() => setEditingField(null)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#e6d7c3",
+                              color: "#4a352f",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaTimes size={12} /> Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        backgroundColor: "#f7f3f0",
+                        padding: "12px 16px",
+                        borderRadius: "6px",
+                        minHeight: "40px",
+                        border: "1px solid #e8ddd4",
+                        fontSize: "14px",
+                        color: showDetailsModal.lowlights ? "#4a352f" : "#bdbdbd",
+                        fontStyle: showDetailsModal.lowlights ? "normal" : "italic",
+                      }}>
+                        {showDetailsModal.lowlights || "No lowlights added yet. Click Edit to add."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Risks - Editable */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>
+                      🚨 Risks
+                      {editingField !== "risks" && (
+                        <button
+                          onClick={() => {
+                            setEditingField("risks");
+                            setTempEditValue(showDetailsModal.risks || "");
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#7d5a50",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <FaEdit size={12} /> Edit
+                        </button>
+                      )}
+                    </div>
+                    {editingField === "risks" ? (
+                      <div>
+                        <textarea
+                          value={tempEditValue}
+                          onChange={(e) => setTempEditValue(e.target.value)}
+                          style={editableFieldStyles}
+                          placeholder="Enter risks identified from this meeting..."
+                          rows="3"
+                        />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                          <button
+                            onClick={() => saveMeetingField(showDetailsModal.id, "risks", tempEditValue)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#7d5a50",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaSave size={12} /> Save
+                          </button>
+                          <button
+                            onClick={() => setEditingField(null)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#e6d7c3",
+                              color: "#4a352f",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaTimes size={12} /> Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        backgroundColor: "#f7f3f0",
+                        padding: "12px 16px",
+                        borderRadius: "6px",
+                        minHeight: "40px",
+                        border: "1px solid #e8ddd4",
+                        fontSize: "14px",
+                        color: showDetailsModal.risks ? "#4a352f" : "#bdbdbd",
+                        fontStyle: showDetailsModal.risks ? "normal" : "italic",
+                      }}>
+                        {showDetailsModal.risks || "No risks added yet. Click Edit to add."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Heads-up - Editable */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>
+                      🔔 Heads-up
+                      {editingField !== "headsUp" && (
+                        <button
+                          onClick={() => {
+                            setEditingField("headsUp");
+                            setTempEditValue(showDetailsModal.headsUp || "");
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#7d5a50",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <FaEdit size={12} /> Edit
+                        </button>
+                      )}
+                    </div>
+                    {editingField === "headsUp" ? (
+                      <div>
+                        <textarea
+                          value={tempEditValue}
+                          onChange={(e) => setTempEditValue(e.target.value)}
+                          style={editableFieldStyles}
+                          placeholder="Enter important updates or alerts for this meeting..."
+                          rows="3"
+                        />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                          <button
+                            onClick={() => saveMeetingField(showDetailsModal.id, "headsUp", tempEditValue)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#7d5a50",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaSave size={12} /> Save
+                          </button>
+                          <button
+                            onClick={() => setEditingField(null)}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#e6d7c3",
+                              color: "#4a352f",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaTimes size={12} /> Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        backgroundColor: "#f7f3f0",
+                        padding: "12px 16px",
+                        borderRadius: "6px",
+                        minHeight: "40px",
+                        border: "1px solid #e8ddd4",
+                        fontSize: "14px",
+                        color: showDetailsModal.headsUp ? "#4a352f" : "#bdbdbd",
+                        fontStyle: showDetailsModal.headsUp ? "normal" : "italic",
+                      }}>
+                        {showDetailsModal.headsUp || "No heads-up added yet. Click Edit to add."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Created At */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>Created</div>
+                    <div style={detailsValueStyles}>
+                      {new Date(showDetailsModal.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ===================== TAB 2: PERFORMANCE ===================== */}
+              {activeTab === "performance" && (
+                <div>
+                  <div style={departmentColorStripStyles(showDetailsModal.categoryColor || showDetailsModal.departmentColor)} />
+                  
+                  {/* Financial Performance */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>💰 Financial Performance</div>
+                    <div style={{
+                      backgroundColor: "#f7f3f0",
+                      padding: "20px",
+                      borderRadius: "6px",
+                      textAlign: "center",
+                      border: "1px solid #e8ddd4",
+                    }}>
+                      <div style={{ fontSize: "14px", color: "#8d6e63" }}>
+                        Not connected yet
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#bdbdbd", marginTop: "4px" }}>
+                        Connect Financial Performance module to see data.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Operational Performance */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>🔧 Operational Performance</div>
+                    <div style={{
+                      backgroundColor: "#f7f3f0",
+                      padding: "20px",
+                      borderRadius: "6px",
+                      textAlign: "center",
+                      border: "1px solid #e8ddd4",
+                    }}>
+                      <div style={{ fontSize: "14px", color: "#8d6e63" }}>
+                        Not connected yet
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#bdbdbd", marginTop: "4px" }}>
+                        Connect Operational Performance module to see data.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* People Performance */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>👥 People Performance</div>
+                    <div style={{
+                      backgroundColor: "#f7f3f0",
+                      padding: "20px",
+                      borderRadius: "6px",
+                      textAlign: "center",
+                      border: "1px solid #e8ddd4",
+                    }}>
+                      <div style={{ fontSize: "14px", color: "#8d6e63" }}>
+                        Not connected yet
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#bdbdbd", marginTop: "4px" }}>
+                        Connect People module to see data.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ===================== TAB 3: ACTIONS ===================== */}
+              {activeTab === "actions" && (
+                <div>
+                  <div style={departmentColorStripStyles(showDetailsModal.categoryColor || showDetailsModal.departmentColor)} />
+                  
+                  {/* Action Stats */}
+                  {(() => {
+                    const stats = getActionStats(showDetailsModal);
+                    const total = stats.open + stats.inProgress + stats.completed;
+                    return (
+                      <div style={detailsSectionStyles}>
+                        <div style={detailsLabelStyles}>📊 Action Statistics</div>
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
+                          gap: "12px",
+                        }}>
+                          <div style={{ textAlign: "center", padding: "12px", backgroundColor: "#FFF3E0", borderRadius: "6px" }}>
+                            <div style={{ fontSize: "20px", fontWeight: "700", color: "#E65100" }}>{stats.open}</div>
+                            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Open</div>
+                          </div>
+                          <div style={{ textAlign: "center", padding: "12px", backgroundColor: "#E3F2FD", borderRadius: "6px" }}>
+                            <div style={{ fontSize: "20px", fontWeight: "700", color: "#0D47A1" }}>{stats.inProgress}</div>
+                            <div style={{ fontSize: "11px", color: "#8d6e63" }}>In Progress</div>
+                          </div>
+                          <div style={{ textAlign: "center", padding: "12px", backgroundColor: "#E8F5E9", borderRadius: "6px" }}>
+                            <div style={{ fontSize: "20px", fontWeight: "700", color: "#2E7D32" }}>{stats.completed}</div>
+                            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Done</div>
+                          </div>
+                          <div style={{ textAlign: "center", padding: "12px", backgroundColor: "#FFEBEE", borderRadius: "6px" }}>
+                            <div style={{ fontSize: "20px", fontWeight: "700", color: "#C62828" }}>{stats.overdue}</div>
+                            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Overdue</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Quick Add Action */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>
+                      ➕ Add Action
+                      {!showQuickAddAction && (
+                        <button
+                          onClick={() => setShowQuickAddAction(true)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#7d5a50",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <FaPlus size={12} /> Quick Add
+                        </button>
+                      )}
+                    </div>
+                    {showQuickAddAction ? (
+                      <div style={{
+                        backgroundColor: "#f7f3f0",
+                        padding: "16px",
+                        borderRadius: "6px",
+                        border: "1px solid #e8ddd4",
+                      }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            <input
+                              type="text"
+                              placeholder="Action Title *"
+                              value={quickActionForm.title}
+                              onChange={(e) => setQuickActionForm({ ...quickActionForm, title: e.target.value })}
+                              style={{
+                                width: "100%",
+                                padding: "8px 12px",
+                                border: "2px solid #e8ddd4",
+                                borderRadius: "4px",
+                                fontSize: "14px",
+                                fontFamily: "inherit",
+                                boxSizing: "border-box",
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <select
+                              value={quickActionForm.assignedTo}
+                              onChange={(e) => setQuickActionForm({ ...quickActionForm, assignedTo: e.target.value })}
+                              style={{
+                                width: "100%",
+                                padding: "8px 12px",
+                                border: "2px solid #e8ddd4",
+                                borderRadius: "4px",
+                                fontSize: "14px",
+                                fontFamily: "inherit",
+                                backgroundColor: "white",
+                              }}
+                            >
+                              <option value="">Unassigned</option>
+                              {(showDetailsModal.participants || []).map((p, idx) => {
+                                const name = typeof p === "string" ? p : p.name || p.email || "Participant";
+                                return (
+                                  <option key={idx} value={name}>
+                                    {name}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                          <div>
+                            <input
+                              type="date"
+                              value={quickActionForm.dueDate}
+                              onChange={(e) => setQuickActionForm({ ...quickActionForm, dueDate: e.target.value })}
+                              style={{
+                                width: "100%",
+                                padding: "8px 12px",
+                                border: "2px solid #e8ddd4",
+                                borderRadius: "4px",
+                                fontSize: "14px",
+                                fontFamily: "inherit",
+                                boxSizing: "border-box",
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <select
+                              value={quickActionForm.status}
+                              onChange={(e) => setQuickActionForm({ ...quickActionForm, status: e.target.value })}
+                              style={{
+                                width: "100%",
+                                padding: "8px 12px",
+                                border: "2px solid #e8ddd4",
+                                borderRadius: "4px",
+                                fontSize: "14px",
+                                fontFamily: "inherit",
+                                backgroundColor: "white",
+                              }}
+                            >
+                              <option value="In Progress">In Progress</option>
+                              <option value="Not Done">Not Done</option>
+                              <option value="Done">Done</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                          <button
+                            onClick={handleQuickAddAction}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#7d5a50",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaPlus size={12} /> Add Action
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowQuickAddAction(false);
+                              setQuickActionForm({
+                                title: "",
+                                assignedTo: "",
+                                dueDate: "",
+                                status: "In Progress",
+                              });
+                            }}
+                            style={{
+                              padding: "6px 16px",
+                              backgroundColor: "#e6d7c3",
+                              color: "#4a352f",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <FaTimes size={12} /> Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        backgroundColor: "#f7f3f0",
+                        padding: "12px 16px",
+                        borderRadius: "6px",
+                        border: "1px solid #e8ddd4",
+                        fontSize: "13px",
+                        color: "#8d6e63",
+                        fontStyle: "italic",
+                        textAlign: "center",
+                      }}>
+                        Click "Quick Add" to add a new action
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action List */}
+                  <div style={detailsSectionStyles}>
+                    <div style={detailsLabelStyles}>📋 Actions</div>
+                    {showDetailsModal.actions && showDetailsModal.actions.length > 0 ? (
+                      <div>
+                        {showDetailsModal.actions.slice(0, 10).map((action) => {
+                          const statusInfo = getActionStatusDisplay(action.status);
+                          const isOverdue = action.dueDate && action.status !== "Done" && action.status !== "completed" && new Date(action.dueDate) < new Date();
+                          return (
+                            <div
+                              key={action.id}
+                              style={{
+                                padding: "10px 12px",
+                                backgroundColor: "#f7f3f0",
+                                borderRadius: "6px",
+                                marginBottom: "6px",
+                                borderLeft: `4px solid ${isOverdue ? "#f44336" : statusInfo.color}`,
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "13px", fontWeight: "500", color: "#4a352f" }}>
+                                  {action.title}
+                                  {isOverdue && (
+                                    <span style={{ color: "#f44336", fontSize: "11px", fontWeight: "600", marginLeft: "8px" }}>
+                                      ⚠️ Overdue
+                                    </span>
+                                  )}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
+                                    backgroundColor: statusInfo.bg,
+                                    color: statusInfo.color,
+                                  }}
+                                >
+                                  {statusInfo.label}
+                                </span>
+                              </div>
+                              {action.assignedTo && (
+                                <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "2px" }}>
+                                  👤 {action.assignedTo} {action.dueDate && `• 📅 ${formatDateDisplay(action.dueDate)}`}
+                                </div>
+                              )}
+                              {action.revisedDate && (
+                                <div style={{ fontSize: "10px", color: "#bdbdbd", marginTop: "2px" }}>
+                                  Revised: {formatDateDisplay(action.revisedDate)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {showDetailsModal.actions.length > 10 && (
+                          <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px", textAlign: "center" }}>
+                            +{showDetailsModal.actions.length - 10} more actions
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{
+                        fontSize: "13px",
+                        color: "#8d6e63",
+                        fontStyle: "italic",
+                        textAlign: "center",
+                        padding: "20px",
+                        backgroundColor: "#f7f3f0",
+                        borderRadius: "6px",
+                        border: "1px solid #e8ddd4",
+                      }}>
+                        No actions created yet.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* View All Actions Button */}
+                  <div style={{ marginTop: "16px" }}>
+                    <button
+                      onClick={() => {
+                        setShowDetailsModal(null);
+                        window.location.href = `/raps-actions?meeting=${showDetailsModal.id}`;
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        backgroundColor: "#7d5a50",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      📋 View All Actions in RAPS
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div style={modalFooterStyles}>
+              {(() => {
+                const isPastMeeting = showDetailsModal.instances?.[0]?.date 
+                  ? new Date(showDetailsModal.instances[0].date) < new Date()
+                  : false;
+                return (
+                  <>
+                    {!isPastMeeting && !isInvestorView && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setShowDetailsModal(null);
+                            handleEditMeeting(showDetailsModal);
+                          }}
+                          style={{
+                            padding: "8px 16px",
+                            backgroundColor: "#2196F3",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontWeight: "500",
+                            fontSize: "13px",
+                          }}
+                        >
+                          ✏️ Edit Meeting
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowDetailsModal(null);
+                            setShowDeleteConfirm(showDetailsModal.id);
+                          }}
+                          style={detailsDeleteButtonStyles}
+                        >
+                          Delete Meeting
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowDetailsModal(null);
+                        window.location.href = `/raps-overview?meeting=${showDetailsModal.id}`;
+                      }}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e6d7c3",
+                        color: "#4a352f",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontWeight: "500",
+                        fontSize: "13px",
+                      }}
+                    >
+                      📋 View Full Overview
+                    </button>
+                    <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
+                      Close
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div style={confirmOverlayStyles} onClick={() => setShowDeleteConfirm(null)}>
+          <div style={confirmModalStyles} onClick={(e) => e.stopPropagation()}>
+            <div style={confirmTitleStyles}>Delete Meeting</div>
+            <div style={confirmMessageStyles}>Are you sure you want to delete this meeting? This action cannot be undone.</div>
+            <div style={confirmButtonsStyles}>
+              <button onClick={() => setShowDeleteConfirm(null)} style={confirmCancelStyles}>Cancel</button>
+              <button onClick={() => handleDeleteMeeting(showDeleteConfirm)} style={confirmDeleteStyles}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+            
+      {/* Double Booking Warning Modal */}
+      {showDoubleBookingWarning && (
+        <div style={modalOverlayStyles} onClick={() => setShowDoubleBookingWarning(false)}>
           <div style={modalStyles} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeaderStyles}>
-              <h3 style={modalTitleStyles}>Schedule Governance Meeting</h3>
-              <button onClick={() => setShowAddModal(false)} style={closeButtonStyles}>×</button>
+              <h3 style={modalTitleStyles}>⚠️ Double Booking Warning</h3>
+              <button onClick={() => setShowDoubleBookingWarning(false)} style={closeButtonStyles}>×</button>
             </div>
             <div style={modalBodyStyles}>
+              <div style={{
+                backgroundColor: "#FFF3E0",
+                padding: "16px",
+                borderRadius: "8px",
+                marginBottom: "16px",
+                borderLeft: "4px solid #FF9800",
+              }}>
+                <p style={{ margin: 0, color: "#E65100", fontWeight: "500" }}>
+                  You already have {conflictingMeetingData?.length || 0} meeting{conflictingMeetingData?.length > 1 ? 's' : ''} scheduled at this time.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <p style={{ fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
+                  Existing Meeting{conflictingMeetingData?.length > 1 ? 's' : ''}:
+                </p>
+                {conflictingMeetingData?.map((meeting, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#f5f5f5",
+                      borderRadius: "6px",
+                      borderLeft: `4px solid ${meeting.categoryColor || meeting.departmentColor || "#757575"}`,
+                      marginBottom: index < conflictingMeetingData.length - 1 ? "8px" : "0",
+                    }}
+                  >
+                    <div><strong>{meeting.title}</strong></div>
+                    <div style={{ fontSize: "13px", color: "#6d5a4f" }}>
+                      {meeting.category || meeting.department} • {
+                        new Date(meeting.instances?.[0]?.date).toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })
+                      }
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px" }}>
+                      {meeting.purpose}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <p style={{ fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
+                  New Meeting:
+                </p>
+                <div style={{
+                  padding: "12px",
+                  backgroundColor: "#f5f5f5",
+                  borderRadius: "6px",
+                  borderLeft: `4px solid ${pendingMeetingData?.categoryColor || "#757575"}`,
+                }}>
+                  <div><strong>{pendingMeetingData?.title}</strong></div>
+                  <div style={{ fontSize: "13px", color: "#6d5a4f" }}>
+                    {pendingMeetingData?.category || pendingMeetingData?.department} • {pendingMeetingData?.time}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px" }}>
+                    {pendingMeetingData?.purpose}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                backgroundColor: "#FFEBEE",
+                padding: "12px",
+                borderRadius: "6px",
+                marginBottom: "16px",
+              }}>
+                <p style={{ margin: 0, fontSize: "13px", color: "#C62828" }}>
+                  ⚠️ You are about to schedule {conflictingMeetingData?.length + 1} meeting{conflictingMeetingData?.length + 1 > 1 ? 's' : ''} at the same time. 
+                  This will create {conflictingMeetingData?.length} conflict{conflictingMeetingData?.length > 1 ? 's' : ''}.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button
+                  onClick={() => {
+                    setShowDoubleBookingWarning(false);
+                    proceedWithBooking();
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    backgroundColor: "#f00a0a",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                  }}
+                >
+                  Yes, Double-Book All
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDoubleBookingWarning(false);
+                    setConflictingMeetingData(null);
+                    setPendingMeetingData(null);
+                    setLoading(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    backgroundColor: "#e6d7c3",
+                    color: "#4a352f",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                  }}
+                >
+                  No, Cancel Booking
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Meeting Modal */}
+      {showEditModal && editingMeeting && (
+        <div style={modalOverlayStyles} onClick={() => setShowEditModal(false)}>
+          <div style={modalStyles} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeaderStyles}>
+              <h3 style={modalTitleStyles}>✏️ Edit Meeting</h3>
+              <button onClick={() => setShowEditModal(false)} style={closeButtonStyles}>×</button>
+            </div>
+            <div style={modalBodyStyles}>
+              {/* Meeting Title */}
               <div style={formGroupStyles}>
                 <label style={labelStyles}>Meeting Title *</label>
-                <input type="text" placeholder="e.g., Q4 Board Meeting, Strategy Review" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} style={inputStyles(errors.title)} />
-                {errors.title && <div style={errorTextStyles}>{errors.title}</div>}
+                <input
+                  type="text"
+                  placeholder="e.g., Q4 Board Meeting, Strategy Review"
+                  value={editFormData.title}
+                  onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                  style={inputStyles(false)}
+                />
               </div>
               
               {/* Category - Single Select */}
@@ -2399,19 +3449,19 @@ const SpinKeyframes = () => (
                   {categoryOptions.map((cat) => (
                     <div
                       key={cat.name}
-                      onClick={() => setFormData({ ...formData, category: cat.name })}
+                      onClick={() => setEditFormData({ ...editFormData, category: cat.name })}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: "10px",
                         padding: "8px 14px",
                         cursor: "pointer",
-                        backgroundColor: formData.category === cat.name ? cat.bg : "#f7f3f0",
-                        border: formData.category === cat.name ? `2px solid ${cat.color}` : "2px solid transparent",
+                        backgroundColor: editFormData.category === cat.name ? cat.bg : "#f7f3f0",
+                        border: editFormData.category === cat.name ? `2px solid ${cat.color}` : "2px solid transparent",
                         borderRadius: "20px",
                         transition: "all 0.2s ease",
-                        fontWeight: formData.category === cat.name ? "600" : "400",
-                        color: formData.category === cat.name ? cat.color : "#4a352f",
+                        fontWeight: editFormData.category === cat.name ? "600" : "400",
+                        color: editFormData.category === cat.name ? cat.color : "#4a352f",
                       }}
                     >
                       <div style={{ width: "16px", height: "16px", borderRadius: "4px", backgroundColor: cat.color }} />
@@ -2426,11 +3476,11 @@ const SpinKeyframes = () => (
                 <label style={labelStyles}>Departments</label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px", border: "2px solid #e8ddd4", borderRadius: "6px", minHeight: "50px", backgroundColor: "white" }}>
                   {allDepartments.map((dept) => {
-                    const isSelected = formData.departments?.includes(dept.name) || false;
+                    const isSelected = editFormData.departments?.includes(dept.name) || false;
                     return (
                       <div
                         key={dept.name}
-                        onClick={() => toggleDepartment(dept.name)}
+                        onClick={() => toggleEditDepartment(dept.name)}
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -2453,792 +3503,147 @@ const SpinKeyframes = () => (
                     );
                   })}
                 </div>
-                
-                {showAddDepartment ? (
-                  <div style={{ marginTop: "12px" }}>
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-                      <input
-                        type="text"
-                        placeholder="Enter department name"
-                        value={newDepartmentName}
-                        onChange={(e) => setNewDepartmentName(e.target.value)}
-                        style={{ flex: 1, ...inputStyles(false) }}
-                        autoFocus
-                      />
-                      <input
-                        type="color"
-                        value={newDepartmentColor}
-                        onChange={(e) => setNewDepartmentColor(e.target.value)}
-                        style={{ width: "50px", padding: "4px", border: "2px solid #e8ddd4", borderRadius: "4px", cursor: "pointer" }}
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button
-                        onClick={handleAddCustomDepartment}
-                        style={{ padding: "6px 12px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}
-                      >
-                        Add
-                      </button>
-                      <button
-                        onClick={() => setShowAddDepartment(false)}
-                        style={{ padding: "6px 12px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowAddDepartment(true)}
-                    style={addDepartmentButtonStyles}
-                  >
-                    + Add Custom Department
-                  </button>
-                )}
               </div>
               
+              {/* Purpose */}
               <div style={formGroupStyles}>
                 <label style={labelStyles}>Purpose of Meeting *</label>
-                <textarea rows="3" placeholder="What is the goal of this meeting? What decisions need to be made?" value={formData.purpose} onChange={(e) => setFormData({ ...formData, purpose: e.target.value })} style={textareaStyles(errors.purpose)} />
-                {errors.purpose && <div style={errorTextStyles}>{errors.purpose}</div>}
+                <textarea
+                  rows="3"
+                  placeholder="What is the goal of this meeting?"
+                  value={editFormData.purpose}
+                  onChange={(e) => setEditFormData({ ...editFormData, purpose: e.target.value })}
+                  style={textareaStyles(false)}
+                />
               </div>
-
-            {/* Participants Section */}
-                  <div style={formGroupStyles}>
-                    <label style={labelStyles}>Participants</label>
-                    
-                    {/* 👇 THIS MAP RENDERS THE INPUT FIELDS */}
-                    {formData.participants && formData.participants.length > 0 ? (
-                      formData.participants.map((participant, index) => (
-                        <div key={index} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-                          <input
-                            type="text"
-                            placeholder="Full Name"
-                            value={participant.name || ""}
-                            onChange={(e) => updateParticipant(index, "name", e.target.value)}
-                            style={{ flex: 1, ...inputStyles(false) }}
-                          />
-                          <input
-                            type="email"
-                            placeholder="Email"
-                            value={participant.email || ""}
-                            onChange={(e) => updateParticipant(index, "email", e.target.value)}
-                            style={{ flex: 1, ...inputStyles(false) }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeParticipant(index)}
-                            style={{ padding: "8px 12px", backgroundColor: "#f44336", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <p style={{ color: "#8d6e63", fontSize: "13px", fontStyle: "italic" }}>
-                        No participants added yet. Click "Add Participant" to invite people.
-                      </p>
-                    )}
-                    
+              
+              {/* Participants */}
+              <div style={formGroupStyles}>
+                <label style={labelStyles}>Participants</label>
+                {editFormData.participants.map((participant, index) => (
+                  <div key={index} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                    <input
+                      type="text"
+                      placeholder="Full Name"
+                      value={participant.name || ""}
+                      onChange={(e) => updateEditParticipant(index, "name", e.target.value)}
+                      style={{ flex: 1, ...inputStyles(false) }}
+                    />
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={participant.email || ""}
+                      onChange={(e) => updateEditParticipant(index, "email", e.target.value)}
+                      style={{ flex: 1, ...inputStyles(false) }}
+                    />
                     <button
                       type="button"
-                      onClick={addParticipant}
-                      style={{
-                        padding: "8px 16px",
-                        backgroundColor: "#e6d7c3",
-                        color: "#4a352f",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontSize: "13px",
-                        marginTop: "8px",
-                      }}
+                      onClick={() => removeEditParticipant(index)}
+                      style={{ padding: "8px 12px", backgroundColor: "#f44336", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
                     >
-                      + Add Participant
+                      ×
                     </button>
                   </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addEditParticipant}
+                  style={{ padding: "8px 16px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "13px", marginTop: "8px" }}
+                >
+                  + Add Participant
+                </button>
+              </div>
               
-              <div style={formGroupStyles}>
-                  <label style={labelStyles}>Repeat Frequency</label>
-                  <select
-                    value={formData.repeatType}
-                    onChange={(e) => setFormData({ ...formData, repeatType: e.target.value })}
-                    style={selectStyles(false)}
-                  >
-                    <option value="none">One-time meeting</option>
-                    <option value="weekly">Weekly (every 7 days)</option>
-                    <option value="monthly">Monthly (same date each month)</option>
-                    <option value="quarterly">Quarterly (every 3 months)</option> {/* ✅ ADD THIS */}
-                  </select>
-                  <div style={repeatHelpStyles}>
-                    Weekly/Monthly/Quarterly will schedule all future instances between start and end dates (capped at 1 year)
-                  </div>
-                </div>
-                              
+              {/* Date & Time */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
                 <div style={formGroupStyles}>
-                  <label style={labelStyles}>Start Date *</label>
-                  <input type="date" value={formData.startDate} min={today.toISOString().split('T')[0]} onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} style={inputStyles(errors.startDate)} />
-                  {errors.startDate && <div style={errorTextStyles}>{errors.startDate}</div>}
-                </div>
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>Time *</label>
-                  <input type="time" value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} style={inputStyles(errors.time)} />
-                  {errors.time && <div style={errorTextStyles}>{errors.time}</div>}
-                </div>
-              </div>
-              
-              {formData.repeatType !== "none" && (
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>End Date (optional)</label>
-                  <input type="date" value={formData.endDate} min={formData.startDate || today.toISOString().split('T')[0]} onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} style={inputStyles(errors.endDate)} />
-                  {errors.endDate && <div style={errorTextStyles}>{errors.endDate}</div>}
-                  <div style={repeatHelpStyles}>Leave empty to schedule indefinitely</div>
-                </div>
-              )}
-            </div>
-            <div style={modalFooterStyles}>
-              <button onClick={() => setShowAddModal(false)} style={cancelButtonStyles}>Cancel</button>
-              <button onClick={handleSubmit} disabled={loading} style={submitButtonStyles}>{loading ? "Scheduling..." : "Schedule Meeting"}</button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Meeting Details Modal */}
-  {showDetailsModal && (
-  <div style={modalOverlayStyles} onClick={() => setShowDetailsModal(null)}>
-    <div style={detailsModalStyles} onClick={(e) => e.stopPropagation()}>
-      <div style={modalHeaderStyles}>
-        <h3 style={modalTitleStyles}>Meeting Details</h3>
-        <button onClick={() => setShowDetailsModal(null)} style={closeButtonStyles}>×</button>
-      </div>
-      <div style={modalBodyStyles}>
-        <div style={departmentColorStripStyles(showDetailsModal.categoryColor || showDetailsModal.departmentColor)} />
-        
-        <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Meeting Title</div>
-          <div style={detailsValueStyles}>{showDetailsModal.title}</div>
-        </div>
-        
-        <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Category</div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: showDetailsModal.categoryColor || "#757575" }} />
-            <span style={detailsValueStyles}>{showDetailsModal.category || showDetailsModal.department}</span>
-          </div>
-        </div>
-        
-        <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Departments</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
-            {showDetailsModal.departments && showDetailsModal.departments.length > 0 ? (
-              showDetailsModal.departments.map((dept, idx) => (
-                <span key={idx} style={{
-                  fontSize: "11px",
-                  padding: "3px 10px",
-                  borderRadius: "12px",
-                  backgroundColor: getDepartmentBg(dept),
-                  color: getDepartmentColor(dept),
-                  fontWeight: "500",
-                  display: "inline-block",
-                  border: `1px solid ${getDepartmentColor(dept)}40`,
-                }}>
-                  {dept}
-                </span>
-              ))
-            ) : (
-              <span style={{ color: "#8d6e63", fontSize: "14px" }}>No departments specified</span>
-            )}
-          </div>
-        </div>
-        
-        <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Purpose / Agenda</div>
-          <div style={detailsValueStyles}>{showDetailsModal.purpose}</div>
-        </div>
-        
-       <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Participants</div>
-          {showDetailsModal.participants && showDetailsModal.participants.length > 0 ? (
-            <div style={participantsListStyles}>
-              {showDetailsModal.participants.map((participant, idx) => (
-                <span key={idx} style={participantTagStyles}>
-                  {participant.name || participant.email || "Participant"}
-                  {participant.email && participant.name ? ` (${participant.email})` : ''}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div style={detailsValueStyles}>No participants specified</div>
-          )}
-        </div>
-        
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
-          <div>
-            <div style={detailsLabelStyles}>Date</div>
-            <div style={detailsValueStyles}>
-              {new Date(selectedDate).toLocaleDateString("default", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </div>
-          </div>
-          <div>
-            <div style={detailsLabelStyles}>Time</div>
-            <div style={detailsValueStyles}>
-              {showDetailsModal.instances?.find(inst => {
-                const instDate = new Date(inst.date);
-                return instDate.toDateString() === selectedDate.toDateString();
-              })?.time || "Time TBD"}
-            </div>
-          </div>
-        </div>
-        
-       {showDetailsModal.isRecurring && (
-        <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Recurrence</div>
-          <div style={recurringBadgeStyles}>
-            🔄 Repeats {showDetailsModal.recurrencePattern === "weekly" ? "Weekly" : 
-                        showDetailsModal.recurrencePattern === "monthly" ? "Monthly" : 
-                        "Quarterly"}
-          </div>
-        </div>
-      )}
-        
-        <div style={detailsSectionStyles}>
-          <div style={detailsLabelStyles}>Created</div>
-          <div style={detailsValueStyles}>
-            {new Date(showDetailsModal.createdAt).toLocaleDateString()}
-          </div>
-        </div>
-      {/* Actions Section in Meeting Details Modal */}
-<div style={detailsSectionStyles}>
-  <div style={detailsLabelStyles}>Actions</div>
-  {showDetailsModal.actions && showDetailsModal.actions.length > 0 ? (
-    <div>
-      {showDetailsModal.actions.slice(0, 3).map((action) => (
-        <div
-          key={action.id}
-          style={{
-            padding: "8px 12px",
-            backgroundColor: "#f7f3f0",
-            borderRadius: "6px",
-            marginBottom: "6px",
-            borderLeft: `4px solid ${
-              action.status === "completed" ? "#4CAF50" :
-              action.status === "in-progress" ? "#2196F3" : "#FF9800"
-            }`,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: "500", color: "#4a352f" }}>
-              {action.title}
-            </span>
-            <span
-              style={{
-                fontSize: "11px",
-                padding: "2px 8px",
-                borderRadius: "10px",
-                backgroundColor:
-                  action.status === "completed" ? "#E8F5E9" :
-                  action.status === "in-progress" ? "#E3F2FD" : "#FFF3E0",
-                color:
-                  action.status === "completed" ? "#2E7D32" :
-                  action.status === "in-progress" ? "#0D47A1" : "#E65100",
-              }}
-            >
-              {action.status === "completed" ? "Done" :
-               action.status === "in-progress" ? "In Progress" : "Open"}
-            </span>
-          </div>
-          {action.assignedTo && (
-            <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "2px" }}>
-              👤 {action.assignedTo}
-            </div>
-          )}
-        </div>
-      ))}
-      {showDetailsModal.actions.length > 3 && (
-        <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px" }}>
-          +{showDetailsModal.actions.length - 3} more actions
-        </div>
-      )}
-    </div>
-  ) : (
-    <div style={{ fontSize: "13px", color: "#8d6e63", fontStyle: "italic" }}>
-      No actions created yet.
-    </div>
-  )}
-  
-  {/* ✅ Navigation Buttons */}
-  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-    <button
-      onClick={() => {
-        window.location.href = `/raps-overview?meeting=${showDetailsModal.id}`;
-      }}
-      style={{
-        flex: 1,
-        padding: "8px 16px",
-        backgroundColor: "#7d5a50",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        cursor: "pointer",
-        fontSize: "13px",
-        fontWeight: "500",
-      }}
-    >
-      📊 View Overview
-    </button>
-    <button
-      onClick={() => {
-        window.location.href = `/raps-actions?meeting=${showDetailsModal.id}`;
-      }}
-      style={{
-        flex: 1,
-        padding: "8px 16px",
-        backgroundColor: "#e6d7c3",
-        color: "#4a352f",
-        border: "none",
-        borderRadius: "6px",
-        cursor: "pointer",
-        fontSize: "13px",
-        fontWeight: "500",
-      }}
-    >
-      📋 View Actions
-    </button>
-  </div>
-</div>
-        {/* Action Buttons - Only show Delete for future meetings */}
-        {(() => {
-          const isPastMeeting = new Date(showDetailsModal.instances?.[0]?.date) < new Date();
-          return (
-            <>
-              {!isPastMeeting && !isInvestorView && (
-                <div style={detailsActionButtonsStyles}>
-                   <button
-                      onClick={() => {
-                        setShowDetailsModal(null);
-                        handleEditMeeting(showDetailsModal);
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: "10px",
-                        backgroundColor: "#2196F3",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontWeight: "500",
-                        fontSize: "14px",
-                      }}
-                    >
-                      ✏️ Edit Meeting
-                    </button>
-                  <button
-                    onClick={() => {
-                      setShowDetailsModal(null);
-                      setShowDeleteConfirm(showDetailsModal.id);
-                    }}
-                    style={detailsDeleteButtonStyles}
-                  >
-                    Delete Meeting
-                  </button>
-                  <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
-                    Close
-                  </button>
-                </div>
-              )}
-              
-              {(isPastMeeting || isInvestorView) && (
-                <div style={detailsActionButtonsStyles}>
-                  <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
-                    Close
-                  </button>
-                </div>
-              )}
-            </>
-          );
-        })()}
-        
-
-      </div>
-    </div>
-    
-  </div>
-)}
-      
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div style={confirmOverlayStyles} onClick={() => setShowDeleteConfirm(null)}>
-          <div style={confirmModalStyles} onClick={(e) => e.stopPropagation()}>
-            <div style={confirmTitleStyles}>Delete Meeting</div>
-            <div style={confirmMessageStyles}>Are you sure you want to delete this meeting? This action cannot be undone.</div>
-            <div style={confirmButtonsStyles}>
-              <button onClick={() => setShowDeleteConfirm(null)} style={confirmCancelStyles}>Cancel</button>
-              <button onClick={() => handleDeleteMeeting(showDeleteConfirm)} style={confirmDeleteStyles}>Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
-              
-            {/* Double Booking Warning Modal */}
-        {showDoubleBookingWarning && (
-          <div style={modalOverlayStyles} onClick={() => setShowDoubleBookingWarning(false)}>
-            <div style={modalStyles} onClick={(e) => e.stopPropagation()}>
-              <div style={modalHeaderStyles}>
-                <h3 style={modalTitleStyles}>⚠️ Double Booking Warning</h3>
-                <button onClick={() => setShowDoubleBookingWarning(false)} style={closeButtonStyles}>×</button>
-              </div>
-              <div style={modalBodyStyles}>
-                <div style={{
-                  backgroundColor: "#FFF3E0",
-                  padding: "16px",
-                  borderRadius: "8px",
-                  marginBottom: "16px",
-                  borderLeft: "4px solid #FF9800",
-                }}>
-                  <p style={{ margin: 0, color: "#E65100", fontWeight: "500" }}>
-                    You already have {conflictingMeetingData?.length || 0} meeting{conflictingMeetingData?.length > 1 ? 's' : ''} scheduled at this time.
-                  </p>
-                </div>
-
-                <div style={{ marginBottom: "16px" }}>
-                  <p style={{ fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
-                    Existing Meeting{conflictingMeetingData?.length > 1 ? 's' : ''}:
-                  </p>
-                  {conflictingMeetingData?.map((meeting, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: "12px",
-                        backgroundColor: "#f5f5f5",
-                        borderRadius: "6px",
-                        borderLeft: `4px solid ${meeting.categoryColor || meeting.departmentColor || "#757575"}`,
-                        marginBottom: index < conflictingMeetingData.length - 1 ? "8px" : "0",
-                      }}
-                    >
-                      <div><strong>{meeting.title}</strong></div>
-                      <div style={{ fontSize: "13px", color: "#6d5a4f" }}>
-                        {meeting.category || meeting.department} • {
-                          new Date(meeting.instances?.[0]?.date).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })
-                        }
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px" }}>
-                        {meeting.purpose}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ marginBottom: "16px" }}>
-                  <p style={{ fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
-                    New Meeting:
-                  </p>
-                  <div style={{
-                    padding: "12px",
-                    backgroundColor: "#f5f5f5",
-                    borderRadius: "6px",
-                    borderLeft: `4px solid ${pendingMeetingData?.categoryColor || "#757575"}`,
-                  }}>
-                    <div><strong>{pendingMeetingData?.title}</strong></div>
-                    <div style={{ fontSize: "13px", color: "#6d5a4f" }}>
-                      {pendingMeetingData?.category || pendingMeetingData?.department} • {pendingMeetingData?.time}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px" }}>
-                      {pendingMeetingData?.purpose}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{
-                  backgroundColor: "#FFEBEE",
-                  padding: "12px",
-                  borderRadius: "6px",
-                  marginBottom: "16px",
-                }}>
-                  <p style={{ margin: 0, fontSize: "13px", color: "#C62828" }}>
-                    ⚠️ You are about to schedule {conflictingMeetingData?.length + 1} meeting{conflictingMeetingData?.length + 1 > 1 ? 's' : ''} at the same time. 
-                    This will create {conflictingMeetingData?.length} conflict{conflictingMeetingData?.length > 1 ? 's' : ''}.
-                  </p>
-                </div>
-
-                <div style={{ display: "flex", gap: "12px" }}>
-                  <button
-                    onClick={() => {
-                      setShowDoubleBookingWarning(false);
-                      proceedWithBooking();
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "12px",
-                      backgroundColor: "#f00a0a",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Yes, Double-Book All
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowDoubleBookingWarning(false);
-                      setConflictingMeetingData(null);
-                      setPendingMeetingData(null);
-                      setLoading(false);
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "12px",
-                      backgroundColor: "#e6d7c3",
-                      color: "#4a352f",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                    }}
-                  >
-                    No, Cancel Booking
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Meeting Modal */}
-        {showEditModal && editingMeeting && (
-          <div style={modalOverlayStyles} onClick={() => setShowEditModal(false)}>
-            <div style={modalStyles} onClick={(e) => e.stopPropagation()}>
-              <div style={modalHeaderStyles}>
-                <h3 style={modalTitleStyles}>✏️ Edit Meeting</h3>
-                <button onClick={() => setShowEditModal(false)} style={closeButtonStyles}>×</button>
-              </div>
-              <div style={modalBodyStyles}>
-                {/* Meeting Title */}
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>Meeting Title *</label>
+                  <label style={labelStyles}>Date *</label>
                   <input
-                    type="text"
-                    placeholder="e.g., Q4 Board Meeting, Strategy Review"
-                    value={editFormData.title}
-                    onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                    type="date"
+                    value={editFormData.startDate}
+                    onChange={(e) => setEditFormData({ ...editFormData, startDate: e.target.value })}
                     style={inputStyles(false)}
                   />
                 </div>
-                
-                {/* Category - Single Select */}
                 <div style={formGroupStyles}>
-                  <label style={labelStyles}>Category *</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px", border: "2px solid #e8ddd4", borderRadius: "6px", minHeight: "50px", backgroundColor: "white" }}>
-                    {categoryOptions.map((cat) => (
-                      <div
-                        key={cat.name}
-                        onClick={() => setEditFormData({ ...editFormData, category: cat.name })}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          padding: "8px 14px",
-                          cursor: "pointer",
-                          backgroundColor: editFormData.category === cat.name ? cat.bg : "#f7f3f0",
-                          border: editFormData.category === cat.name ? `2px solid ${cat.color}` : "2px solid transparent",
-                          borderRadius: "20px",
-                          transition: "all 0.2s ease",
-                          fontWeight: editFormData.category === cat.name ? "600" : "400",
-                          color: editFormData.category === cat.name ? cat.color : "#4a352f",
-                        }}
-                      >
-                        <div style={{ width: "16px", height: "16px", borderRadius: "4px", backgroundColor: cat.color }} />
-                        <span>{cat.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Departments - Multi-Select */}
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>Departments</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px", border: "2px solid #e8ddd4", borderRadius: "6px", minHeight: "50px", backgroundColor: "white" }}>
-                    {allDepartments.map((dept) => {
-                      const isSelected = editFormData.departments?.includes(dept.name) || false;
-                      return (
-                        <div
-                          key={dept.name}
-                          onClick={() => toggleEditDepartment(dept.name)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
-                            borderRadius: "20px",
-                            cursor: "pointer",
-                            backgroundColor: isSelected ? dept.bg : "#f7f3f0",
-                            border: isSelected ? `2px solid ${dept.color}` : "2px solid transparent",
-                            transition: "all 0.2s ease",
-                            fontSize: "13px",
-                            fontWeight: isSelected ? "600" : "400",
-                            color: isSelected ? dept.color : "#4a352f",
-                          }}
-                        >
-                          <div style={{ width: "14px", height: "14px", borderRadius: "3px", backgroundColor: dept.color }} />
-                          <span>{dept.name}</span>
-                          {isSelected && <span style={{ marginLeft: "4px", fontSize: "12px" }}>✓</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                {/* Purpose */}
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>Purpose of Meeting *</label>
-                  <textarea
-                    rows="3"
-                    placeholder="What is the goal of this meeting?"
-                    value={editFormData.purpose}
-                    onChange={(e) => setEditFormData({ ...editFormData, purpose: e.target.value })}
-                    style={textareaStyles(false)}
+                  <label style={labelStyles}>Time *</label>
+                  <input
+                    type="time"
+                    value={editFormData.time}
+                    onChange={(e) => setEditFormData({ ...editFormData, time: e.target.value })}
+                    style={inputStyles(false)}
                   />
                 </div>
-                
-                {/* Participants */}
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>Participants</label>
-                  {editFormData.participants.map((participant, index) => (
-                    <div key={index} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-                      <input
-                        type="text"
-                        placeholder="Full Name"
-                        value={participant.name || ""}
-                        onChange={(e) => updateEditParticipant(index, "name", e.target.value)}
-                        style={{ flex: 1, ...inputStyles(false) }}
-                      />
-                      <input
-                        type="email"
-                        placeholder="Email"
-                        value={participant.email || ""}
-                        onChange={(e) => updateEditParticipant(index, "email", e.target.value)}
-                        style={{ flex: 1, ...inputStyles(false) }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeEditParticipant(index)}
-                        style={{ padding: "8px 12px", backgroundColor: "#f44336", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={addEditParticipant}
-                    style={{ padding: "8px 16px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "13px", marginTop: "8px" }}
-                  >
-                    + Add Participant
-                  </button>
-                </div>
-                
-                {/* Date & Time */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-                  <div style={formGroupStyles}>
-                    <label style={labelStyles}>Date *</label>
-                    <input
-                      type="date"
-                      value={editFormData.startDate}
-                      onChange={(e) => setEditFormData({ ...editFormData, startDate: e.target.value })}
-                      style={inputStyles(false)}
-                    />
-                  </div>
-                  <div style={formGroupStyles}>
-                    <label style={labelStyles}>Time *</label>
-                    <input
-                      type="time"
-                      value={editFormData.time}
-                      onChange={(e) => setEditFormData({ ...editFormData, time: e.target.value })}
-                      style={inputStyles(false)}
-                    />
-                  </div>
-                </div>
-                
-                {/* Repeat Type */}
-               <div style={formGroupStyles}>
-                  <label style={labelStyles}>Repeat Frequency</label>
-                  <select
-                    value={editFormData.repeatType}
-                    onChange={(e) => setEditFormData({ ...editFormData, repeatType: e.target.value })}
-                    style={selectStyles(false)}
-                  >
-                    <option value="none">One-time meeting</option>
-                    <option value="weekly">Weekly (every 7 days)</option>
-                    <option value="monthly">Monthly (same date each month)</option>
-                    <option value="quarterly">Quarterly (every 3 months)</option>
-                  </select>
-                </div>
+              </div>
+              
+              {/* Repeat Type */}
+              <div style={formGroupStyles}>
+                <label style={labelStyles}>Repeat Frequency</label>
+                <select
+                  value={editFormData.repeatType}
+                  onChange={(e) => setEditFormData({ ...editFormData, repeatType: e.target.value })}
+                  style={selectStyles(false)}
+                >
+                  <option value="none">One-time meeting</option>
+                  <option value="weekly">Weekly (every 7 days)</option>
+                  <option value="monthly">Monthly (same date each month)</option>
+                  <option value="quarterly">Quarterly (every 3 months)</option>
+                </select>
+              </div>
 
-                <div style={modalFooterStyles}>
-                  <button onClick={() => setShowEditModal(false)} style={cancelButtonStyles}>
-                    Cancel
-                  </button>
-                  <button onClick={saveEditedMeeting} disabled={loading} style={submitButtonStyles}>
-                    {loading ? "Saving..." : "Save Changes"}
-                  </button>
-                </div>
+              <div style={modalFooterStyles}>
+                <button onClick={() => setShowEditModal(false)} style={cancelButtonStyles}>
+                  Cancel
+                </button>
+                <button onClick={saveEditedMeeting} disabled={loading} style={submitButtonStyles}>
+                  {loading ? "Saving..." : "Save Changes"}
+                </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Loading Overlay */}
-          {loading && (
+      {/* Loading Overlay */}
+      {loading && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          backdropFilter: "blur(4px)",
+        }}>
+          <div style={{
+            backgroundColor: "white",
+            padding: "32px 40px",
+            borderRadius: "12px",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+            textAlign: "center",
+          }}>
             <div style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 9999,
-              backdropFilter: "blur(4px)",
-            }}>
-              <div style={{
-                backgroundColor: "white",
-                padding: "32px 40px",
-                borderRadius: "12px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-                textAlign: "center",
-              }}>
-                <div style={{
-                  width: "48px",
-                  height: "48px",
-                  border: "4px solid #f3e5f5",
-                  borderTop: "4px solid #7d5a50",
-                  borderRadius: "50%",
-                  animation: "spin 1s linear infinite",
-                  margin: "0 auto 16px",
-                }} />
-                <p style={{ color: "#4a352f", fontSize: "16px", fontWeight: "500", margin: 0 }}>
-                  {loadingMessage || "Processing..."}
-                </p>
-              </div>
-            </div>
-          )}
+              width: "48px",
+              height: "48px",
+              border: "4px solid #f3e5f5",
+              borderTop: "4px solid #7d5a50",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "0 auto 16px",
+            }} />
+            <p style={{ color: "#4a352f", fontSize: "16px", fontWeight: "500", margin: 0 }}>
+              {loadingMessage || "Processing..."}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
-
 };
 
 export default GovernanceCalendar;

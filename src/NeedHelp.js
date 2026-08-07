@@ -2,18 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send } from 'lucide-react';
-import emailjs from '@emailjs/browser';
-import { API_KEYS } from './API';
-import { auth } from './firebaseConfig';
+import { auth, db } from './firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const NeedHelp = ({ disabled }) => {
-  const emailjsConfig = {
-    serviceId: API_KEYS.SERVICE_ID_FEEDBACK,
-    templateId: API_KEYS.TEMPLATE_ID_FEEDBACK,
-    autoReplyTemplateId: API_KEYS.AUTORESPONSE_TEMPLATE_FEEDBACK,
-    publicKey: API_KEYS.PUBLIC_KEY_FEEDBACK
-  };
-
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpMessage, setHelpMessage] = useState('');
   const [helpSending, setHelpSending] = useState(false);
@@ -21,22 +14,117 @@ const NeedHelp = ({ disabled }) => {
   const [error, setError] = useState(null);
   const helpRef = useRef(null);
   const [userEmail, setUserEmail] = useState('');
+  const [userInfo, setUserInfo] = useState(null);
+  const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
+  // Fetch user info when modal opens
   useEffect(() => {
-    emailjs.init(emailjsConfig.publicKey);
-  }, []);
+    if (showHelpModal) {
+      fetchUserInfo();
+    }
+  }, [showHelpModal]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (helpRef.current && !helpRef.current.contains(event.target)) {
-        setShowHelpModal(false);
+  const fetchUserInfo = async () => {
+    try {
+      setLoadingUserInfo(true);
+      const user = auth.currentUser;
+      
+      if (!user) {
+        setUserInfo(null);
+        setUserEmail('anonymous@user.com');
+        return;
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+
+      setUserEmail(user.email || 'anonymous@user.com');
+
+      let info = {
+        uid: user.uid,
+        email: user.email || 'Not provided',
+        displayName: user.displayName || 'Unknown User',
+        registeredName: null,
+        phone: null,
+        companyName: null,
+        userType: 'unknown',
+        profileType: 'unknown'
+      };
+
+      // Try universalProfiles first
+      try {
+        const universalProfileRef = doc(db, "universalProfiles", user.uid);
+        const universalSnap = await getDoc(universalProfileRef);
+        if (universalSnap.exists()) {
+          const data = universalSnap.data();
+          info = {
+            ...info,
+            displayName: user.displayName || data?.entityOverview?.registeredName || data?.formData?.business?.registeredName || data?.formData?.applicant?.fullName || 'Unknown User',
+            registeredName: data?.entityOverview?.registeredName || data?.formData?.business?.registeredName || null,
+            phone: data?.entityOverview?.phone || data?.formData?.business?.phone || data?.formData?.applicant?.phone || null,
+            companyName: data?.formData?.business?.registeredName || data?.entityOverview?.registeredName || null,
+            userType: data?.userType || 'sme',
+            profileType: 'universal'
+          };
+          setUserInfo(info);
+          setLoadingUserInfo(false);
+          return;
+        }
+      } catch (err) {
+        console.log('Error fetching universal profile:', err);
+      }
+
+      // Try catalystProfiles
+      try {
+        const catalystProfileRef = doc(db, "catalystProfiles", user.uid);
+        const catalystSnap = await getDoc(catalystProfileRef);
+        if (catalystSnap.exists()) {
+          const data = catalystSnap.data();
+          info = {
+            ...info,
+            displayName: user.displayName || data?.formData?.business?.registeredName || data?.formData?.applicant?.fullName || 'Unknown User',
+            registeredName: data?.formData?.business?.registeredName || null,
+            phone: data?.formData?.business?.phone || data?.formData?.applicant?.phone || null,
+            companyName: data?.formData?.business?.registeredName || null,
+            userType: 'catalyst',
+            profileType: 'catalyst'
+          };
+          setUserInfo(info);
+          setLoadingUserInfo(false);
+          return;
+        }
+      } catch (err) {
+        console.log('Error fetching catalyst profile:', err);
+      }
+
+      // Try advisorProfiles
+      try {
+        const advisorProfileRef = doc(db, "advisorProfiles", user.uid);
+        const advisorSnap = await getDoc(advisorProfileRef);
+        if (advisorSnap.exists()) {
+          const data = advisorSnap.data();
+          info = {
+            ...info,
+            displayName: user.displayName || data?.formData?.personalInfo?.fullName || data?.fullName || 'Unknown User',
+            phone: data?.formData?.personalInfo?.phone || data?.phone || null,
+            userType: 'advisor',
+            profileType: 'advisor'
+          };
+          setUserInfo(info);
+          setLoadingUserInfo(false);
+          return;
+        }
+      } catch (err) {
+        console.log('Error fetching advisor profile:', err);
+      }
+
+      // Fallback - just use auth info
+      setUserInfo(info);
+      setLoadingUserInfo(false);
+
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+      setUserInfo(null);
+      setLoadingUserInfo(false);
+    }
+  };
 
   const handleHelpSubmit = async () => {
     if (!helpMessage.trim()) return;
@@ -45,32 +133,29 @@ const NeedHelp = ({ disabled }) => {
     setError(null);
 
     try {
-      const email = auth.currentUser?.email || 'anonymous@user.com';
-      setUserEmail(email);
+      const user = auth.currentUser;
+      const functions = getFunctions();
+      const sendSupportEmail = httpsCallable(functions, 'sendSupportEmail');
 
-      await emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.templateId,
-        {
-          from_email: email,
-          subject: 'Help Request',
-          message: helpMessage,
-          to_email: 'support@bigmarketplace.africa'
-        },
-        emailjsConfig.publicKey
-      );
+      const email = user?.email || 'anonymous@user.com';
+      const displayName = userInfo?.displayName || user?.displayName || 'Unknown User';
 
-      if (email !== 'anonymous@user.com') {
-        await emailjs.send(
-          emailjsConfig.serviceId,
-          emailjsConfig.autoReplyTemplateId,
-          {
-            from_email: email,
-            subject: 'no-reply:Help Request Received'
-          },
-          emailjsConfig.publicKey
-        );
-      }
+      // Call the cloud function
+      const result = await sendSupportEmail({
+        userEmail: email,
+        userName: displayName,
+        userUid: userInfo?.uid || user?.uid || 'Not logged in',
+        userPhone: userInfo?.phone || 'Not provided',
+        userRegisteredName: userInfo?.registeredName || 'Not provided',
+        userCompany: userInfo?.companyName || 'Not provided',
+        userType: userInfo?.userType || 'Unknown',
+        userProfileType: userInfo?.profileType || 'Unknown',
+        message: helpMessage,
+        url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
+        platform: 'BIG Marketplace'
+      });
+
+      console.log('Support email sent:', result.data);
 
       setHelpSent(true);
       setHelpMessage('');
@@ -79,9 +164,10 @@ const NeedHelp = ({ disabled }) => {
         setHelpSent(false);
         setShowHelpModal(false);
       }, 3000);
+
     } catch (err) {
       console.error('Help request sending error:', err);
-      setError(err.response?.text || err.message || 'Failed to send help request. Please try again.');
+      setError(err.message || 'Failed to send help request. Please try again.');
     } finally {
       setHelpSending(false);
     }
@@ -91,7 +177,7 @@ const NeedHelp = ({ disabled }) => {
     <div style={{ position: 'relative' }} ref={helpRef}>
       <button
         onClick={() => !disabled && setShowHelpModal(!showHelpModal)}
-        title={disabled ? undefined : "Need help with your score?"}
+        title={disabled ? undefined : "Need help?"}
         disabled={disabled}
         style={{
           padding: '12px 16px',
@@ -238,31 +324,40 @@ const NeedHelp = ({ disabled }) => {
                   <p style={{ fontSize: '14px', color: '#155724', margin: '0' }}>
                     Our team will get back to you shortly.
                   </p>
+                  <p style={{ fontSize: '13px', color: '#155724', marginTop: '8px' }}>
+                    We've also sent a confirmation to your email.
+                  </p>
                 </div>
               ) : (
                 <>
+                  {/* User info summary */}
                   <div style={{
                     background: 'linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)',
-                    padding: '16px',
+                    padding: '12px 16px',
                     borderRadius: '8px',
                     border: '1px solid #d6b88a',
-                    marginBottom: '20px',
+                    marginBottom: '16px',
                   }}>
                     <p style={{
-                      margin: '0 0 8px 0',
+                      margin: '0 0 4px 0',
                       color: '#5d4037',
-                      fontSize: '14px',
+                      fontSize: '13px',
                       fontWeight: '600',
                     }}>
-                      🆘 How can we help you?
+                      👤 Account Info
                     </p>
-                    <p style={{
-                      margin: '0',
-                      color: '#6d4c41',
-                      fontSize: '13px',
-                    }}>
-                      Describe your issue and we'll assist you as soon as possible.
-                    </p>
+                    {loadingUserInfo ? (
+                      <p style={{ fontSize: '12px', color: '#8d6e63', margin: '0' }}>Loading your account info...</p>
+                    ) : userInfo ? (
+                      <div style={{ fontSize: '12px', color: '#6d4c41' }}>
+                        <p style={{ margin: '2px 0' }}><strong>Name:</strong> {userInfo.displayName}</p>
+                        <p style={{ margin: '2px 0' }}><strong>Email:</strong> {userInfo.email}</p>
+                        {userInfo.registeredName && <p style={{ margin: '2px 0' }}><strong>Business:</strong> {userInfo.registeredName}</p>}
+                        <p style={{ margin: '2px 0' }}><strong>Profile Type:</strong> {userInfo.profileType}</p>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '12px', color: '#8d6e63', margin: '0' }}>Please sign in to include your account info</p>
+                    )}
                   </div>
 
                   <div style={{ marginBottom: '20px' }}>

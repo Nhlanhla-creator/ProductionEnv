@@ -1,28 +1,16 @@
 "use client"
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send } from 'lucide-react';
-import emailjs from '@emailjs/browser';
-import { API_KEYS } from './API';
 import { auth } from './firebaseConfig';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const NeedHelp = ({ open, onClose }) => {
-  const emailjsConfig = {
-    serviceId: API_KEYS.SERVICE_ID_FEEDBACK,
-    templateId: API_KEYS.TEMPLATE_ID_FEEDBACK,
-    autoReplyTemplateId: API_KEYS.AUTORESPONSE_TEMPLATE_FEEDBACK,
-    publicKey: API_KEYS.PUBLIC_KEY_FEEDBACK
-  };
-
   const [helpMessage, setHelpMessage] = useState('');
   const [helpSending, setHelpSending] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
   const [error, setError] = useState(null);
   const helpRef = useRef(null);
   const [userEmail, setUserEmail] = useState('');
-
-  useEffect(() => {
-    emailjs.init(emailjsConfig.publicKey);
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -37,55 +25,67 @@ const NeedHelp = ({ open, onClose }) => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [open, onClose]);
+// NeedHelp.js - update the error handling
+const handleHelpSubmit = async () => {
+  if (!helpMessage.trim()) return;
 
-  const handleHelpSubmit = async () => {
-    if (!helpMessage.trim()) return;
+  setHelpSending(true);
+  setError(null);
 
-    setHelpSending(true);
-    setError(null);
+  try {
+    const user = auth.currentUser;
+    const functions = getFunctions();
+    const sendSupportEmail = httpsCallable(functions, 'sendSupportEmail');
 
-    try {
-      const email = auth.currentUser?.email || 'anonymous@user.com';
-      setUserEmail(email);
+    const email = user?.email || 'anonymous@user.com';
+    const displayName = user?.displayName || 'Unknown User';
+    const userUid = user?.uid || 'Not logged in';
 
-      await emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.templateId,
-        {
-          from_email: email,
-          subject: 'Help Request',
-          message: helpMessage,
-          to_email: 'support@bigmarketplace.africa'
-        },
-        emailjsConfig.publicKey
-      );
+    // Call the cloud function
+    const result = await sendSupportEmail({
+      userEmail: email,
+      userName: displayName,
+      userUid: userUid,
+      userPhone: 'Not provided',
+      userRegisteredName: 'Not provided',
+      userCompany: 'Not provided',
+      userType: 'Unknown',
+      userProfileType: 'Unknown',
+      message: helpMessage,
+      url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
+      platform: 'BIG Marketplace'
+    });
 
-      if (email !== 'anonymous@user.com') {
-        await emailjs.send(
-          emailjsConfig.serviceId,
-          emailjsConfig.autoReplyTemplateId,
-          {
-            from_email: email,
-            subject: 'no-reply:Help Request Received'
-          },
-          emailjsConfig.publicKey
-        );
-      }
+    console.log('Support email sent:', result.data);
 
-      setHelpSent(true);
-      setHelpMessage('');
+    setHelpSent(true);
+    setHelpMessage('');
 
-      setTimeout(() => {
-        setHelpSent(false);
-        onClose();
-      }, 3000);
-    } catch (err) {
-      console.error('Help request sending error:', err);
-      setError(err.response?.text || err.message || 'Failed to send help request. Please try again.');
-    } finally {
-      setHelpSending(false);
+    setTimeout(() => {
+      setHelpSent(false);
+      onClose();
+    }, 3000);
+
+  } catch (err) {
+    console.error('Help request sending error:', err);
+    
+    // User-friendly error message
+    let userMessage = 'Failed to send help request. Please try again.';
+    
+    // Check for specific error types
+    if (err.message?.includes('unauthenticated')) {
+      userMessage = 'Please sign in to send a help request.';
+    } else if (err.message?.includes('invalid-argument')) {
+      userMessage = 'Please enter a message before sending.';
+    } else if (err.message?.includes('network') || err.message?.includes('offline')) {
+      userMessage = 'Network error. Please check your connection and try again.';
     }
-  };
+    
+    setError(userMessage);
+  } finally {
+    setHelpSending(false);
+  }
+};
 
   if (!open) return null;
 
