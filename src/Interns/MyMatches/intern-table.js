@@ -57,7 +57,16 @@ import BusinessDetailsModal from "./BusinessDetailsModal"
      header #4a352f · header text #faf7f2 · toolbar #faf7f2 · border #e6d7c3
      border2 #c8b6a6 · chip #f5f0e1 · chip active #7d5a50 · accent #a67c52
      muted #a89482 · body text #4a352f
+
+   Type scale — matches the advisor / investor / catalyst match tables, which
+   set body cells in Tailwind's text-sm. This table used to run everything at
+   0.8rem with 0.75rem inside cells, which is what made it read smaller than
+   every other table on the page.
+     body cell 0.875rem · secondary 0.75rem · header 0.75rem uppercase
    ════════════════════════════════════════════════════════════════════════ */
+
+const CELL_FONT_SIZE = "0.875rem"
+const SECONDARY_FONT_SIZE = "0.75rem"
 
 /* Must stay identical to the strings intern-dealflow.jsx uses. */
 export const INTERN_STAGE_FILTER_EVENT = "intern-stage-filter"
@@ -131,11 +140,13 @@ const HeaderInfoTooltip = ({ text }) => {
   )
 }
 
+/* Inherits the cell's font size rather than hard-coding one, so a change to
+   the table's type scale carries through instead of leaving these smaller. */
 const TruncatedText = ({ text, maxLength = 25 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#a89482", fontSize: "0.75rem" }}>{text || "-"}</span>
+    return <span style={{ color: "#a89482", fontSize: "inherit" }}>{text || "-"}</span>
   }
 
   const value = text.toString()
@@ -143,7 +154,7 @@ const TruncatedText = ({ text, maxLength = 25 }) => {
   const displayText = isExpanded || !shouldTruncate ? value : `${value.slice(0, maxLength)}...`
 
   return (
-    <div style={{ lineHeight: "1.3", fontSize: "0.75rem" }}>
+    <div style={{ lineHeight: "1.35", fontSize: "inherit" }}>
       <span style={{ wordBreak: "break-word" }}>{displayText}</span>
       {shouldTruncate && (
         <button
@@ -152,7 +163,7 @@ const TruncatedText = ({ text, maxLength = 25 }) => {
             border: "none",
             color: "#a67c52",
             cursor: "pointer",
-            fontSize: "0.7rem",
+            fontSize: SECONDARY_FONT_SIZE,
             marginLeft: "4px",
             textDecoration: "underline",
             padding: "0",
@@ -493,6 +504,9 @@ const SMSE_KEY = "__smse__"
 const ACTION_KEY = "__action__"
 const FIXED_WIDTHS = { [SMSE_KEY]: 230, [ACTION_KEY]: 190 }
 const MIN_COLUMN_WIDTH = 84
+
+const NAME_TOOLTIP = "The business offering the internship. Click the name to open its full details."
+const ACTION_TOOLTIP = "Apply to this internship, accept a request the business sent you, or message them a question."
 
 /* Every filter is a list of selected values, so the header popovers can offer
    what is actually in the table rather than a blank search box. */
@@ -1402,17 +1416,17 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
 
   const totalWidth = smseWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
-  const cellPadding = density === "compact" ? "0.4rem 0.3rem" : "0.6rem 0.4rem"
+  const cellPadding = density === "compact" ? "0.45rem 0.4rem" : "0.65rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
 
   const tableCellStyle = {
     padding: cellPadding,
     borderBottom: "1px solid #e6d7c3",
     borderRight: "1px solid #e6d7c3",
-    fontSize: "0.8rem",
+    fontSize: CELL_FONT_SIZE,
     verticalAlign: "top",
     color: "#4a352f",
-    lineHeight: "1.3",
+    lineHeight: "1.35",
     overflow: "hidden",
   }
 
@@ -1421,7 +1435,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
   const matchContainerStyle = { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%" }
   const progressBarStyle = { width: "60%", height: "6px", background: "#e6d7c3", borderRadius: "3px", overflow: "hidden" }
   const progressFillStyle = { height: "100%", borderRadius: "3px", transition: "width 0.3s ease" }
-  const matchScoreStyle = { fontWeight: "600", color: "#4a352f", fontSize: "0.75rem" }
+  const matchScoreStyle = { fontWeight: "600", color: "#4a352f", fontSize: CELL_FONT_SIZE }
 
   const searchedColumns = DEFAULT_COLUMN_ORDER.filter((key) =>
     COLUMN_DEFS[key].label.toLowerCase().includes(columnSearch.toLowerCase()),
@@ -2383,7 +2397,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
       case "sector":
         return (
           <td key={key} style={style}>
-            <span className="inline-block px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium">
+            <span className="inline-block px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-xs font-medium">
               {intern.sector || "-"}
             </span>
           </td>
@@ -2395,7 +2409,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
             <TruncatedText text={intern.internshipRole} maxLength={26} />
             <button
               onClick={() => handleViewBrief(intern)}
-              className="mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] transition-colors"
+              className="mt-1 px-2 py-0.5 rounded-full text-xs font-semibold text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#f5f0e1] transition-colors"
               title="Read the internship brief"
             >
               Brief
@@ -2407,7 +2421,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
         return (
           <td key={key} style={style}>
             <span
-              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+              className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap"
               style={
                 intern.stipend === "not specified" || intern.stipend === "Pro-Bono"
                   ? { backgroundColor: "#f5f0e1", color: "#a89482" }
@@ -2946,7 +2960,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
               borderCollapse: "separate",
               borderSpacing: 0,
               background: "white",
-              fontSize: "0.8rem",
+              fontSize: CELL_FONT_SIZE,
               backgroundColor: "#faf7f2",
               tableLayout: "fixed",
               width: totalWidth,
@@ -2972,7 +2986,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                     <span className="it-th-tools">
                       <SortTrigger columnKey="name" />
                       <FilterTrigger type="name" active={localFilters.name.length > 0} />
-                      <HeaderInfoTooltip text="The business offering the internship. Click the name to open its full details." />
+                      <HeaderInfoTooltip text={NAME_TOOLTIP} />
                     </span>
                   </div>
                   <ColumnResizer colKey={SMSE_KEY} />
@@ -3042,7 +3056,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                 >
                   <div className="it-th-row justify-center">
                     <span className="it-th-label">Action</span>
-                    <HeaderInfoTooltip text="Apply to this internship, accept a request the business sent you, or message them a question." />
+                    <HeaderInfoTooltip text={ACTION_TOOLTIP} />
                   </div>
                   <ColumnResizer colKey={ACTION_KEY} />
                 </th>
@@ -3118,7 +3132,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
                           />
                         </div>
                         {intern.location && intern.location !== "N/A" && (
-                          <div className="text-[10px] text-[#a89482] mt-0.5 pl-7">{intern.location}</div>
+                          <div className="text-xs text-[#a89482] mt-0.5 pl-7">{intern.location}</div>
                         )}
                       </td>
 
