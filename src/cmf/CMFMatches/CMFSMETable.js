@@ -16,6 +16,8 @@ import {
   getNextStageId, getStageActionConfig, loadPipelineSettings, getActiveStages,
   PIPELINE_SETTINGS_EVENT,
 } from "./cmfStageConfig";
+import { db } from "../../firebaseConfig";        // match the path used by SupportSMETable
+import { doc, getDoc } from "firebase/firestore";
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 const BIG_SCORE_LABELS = {
@@ -457,6 +459,12 @@ export function CMFSMETable({
 
   // ─── Programme-aware pipeline stages ──────────────────────────────────────
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
+
+const [bigScoreLoading, setBigScoreLoading] = useState(false);
+  const [bigScoreData, setBigScoreData] = useState({
+    compliance: { score: 0 }, legitimacy: { score: 0 },
+    fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
+  });
 
   useEffect(() => {
     const refresh = () => setPipelineSettings(loadPipelineSettings());
@@ -920,6 +928,7 @@ export function CMFSMETable({
     let popupWidth, popupHeight;
     switch (type) {
       case "stage": popupWidth = 450; popupHeight = 500; break;
+      case "bigScore": popupWidth = 380; popupHeight = 480; break;
       case "quickActions": popupWidth = 210; popupHeight = 220; break;
       default: popupWidth = 300; popupHeight = 300;
     }
@@ -945,6 +954,37 @@ export function CMFSMETable({
       setStageFormErrors({});
       setAvailabilities(sme.availableDates || []);
     }
+
+    if (type === "bigScore") {
+      setBigScoreLoading(true);
+      setBigScoreData({
+        compliance: { score: 0 }, legitimacy: { score: 0 },
+        fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
+      });
+      const userId = sme.userId || sme.smeId || sme.id;
+      getDoc(doc(db, "bigEvaluations", userId))
+        .then((snap) => {
+          if (!snap.exists()) {
+            setBigScoreData((prev) => ({ ...prev, _missing: true }));
+            return;
+          }
+          const s = snap.data().scores || {};
+          setBigScoreData({
+            compliance:           { score: s.compliance           || 0 },
+            legitimacy:           { score: s.legitimacy           || 0 },
+            fundability:          { score: s.fundability          || 0 },
+            governanceLeadership: { score: s.governanceLeadership || 0 },
+            operational:          { score: s.operational          || 0 },
+            _bigScore:            s.bigScore    || 0,
+            _lastUpdated:         s.lastUpdated || null,
+          });
+        })
+        .catch((err) => {
+          console.error("bigEvaluations fetch error:", err);
+          setBigScoreData((prev) => ({ ...prev, _error: true }));
+        })
+        .finally(() => setBigScoreLoading(false));
+    }
   };
 
   const openPopupFromEvent = (type, sme, event, options) => {
@@ -952,10 +992,11 @@ export function CMFSMETable({
     openPopup(type, sme, event.currentTarget.getBoundingClientRect(), options);
   };
 
-  const closePopup = () => {
+ const closePopup = () => {
     setActivePopup(null);
     setSelectedSMEForPopup(null);
     setShowCalendarPopup(false);
+    setBigScoreLoading(false);   // 👈 add
   };
 
   // Forward-only through the live stages, with terminal outcomes always
@@ -1175,7 +1216,13 @@ export function CMFSMETable({
       case "bigScore": {
         const label = getBigScoreLabel(sme.bigScore);
         return (
-          <td key={key} className={`${cellPad} text-center border-r border-b border-[#e6d7c3] align-top`} style={stickyStyle}>
+         <td
+            key={key}
+            className={`${cellPad} text-center border-r border-b border-[#e6d7c3] align-top cursor-pointer hover:bg-[#faf7f2]/60 transition-colors`}
+            style={stickyStyle}
+            onClick={(e) => openPopupFromEvent("bigScore", sme, e)}
+            title="Click to see the BIG Score breakdown"
+          >
             <div className="flex flex-col items-center gap-1">
               <div className="relative w-11 h-11">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
@@ -1967,6 +2014,78 @@ export function CMFSMETable({
         </PopupPortal>
       )}
 
+
+{/* ─── BIG Score Breakdown Popup ────────────────────────────────────── */}
+      {activePopup?.type === "bigScore" && selectedSMEForPopup && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px", maxHeight: "480px", overflowY: "auto" }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+                  {bigScoreData._lastUpdated && (
+                    <p className="text-[10px] text-[#f5f0e1]/70 mt-0.5">
+                      Updated {formatDate(bigScoreData._lastUpdated)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {bigScoreLoading ? "…" : (bigScoreData._bigScore || selectedSMEForPopup.bigScore)}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {bigScoreLoading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (<div key={i} className="h-16 bg-[#f5f0e1] rounded-xl animate-pulse" />))}
+                </div>
+              ) : bigScoreData._error ? (
+                <p className="text-xs text-red-600 text-center py-6">Couldn't load the breakdown. Try again shortly.</p>
+              ) : bigScoreData._missing ? (
+                <p className="text-xs text-[#7d5a50] text-center py-6">
+                  No detailed BIG Score breakdown has been recorded for this business yet.
+                </p>
+              ) : (
+                [
+                  { key: "compliance",           label: "Compliance",             desc: "Regulatory & legal standing" },
+                  { key: "legitimacy",           label: "Legitimacy",             desc: "Business verification status" },
+                  { key: "fundability",          label: "Capital Appeal",         desc: "Investment readiness & fundability" },
+                  { key: "governanceLeadership", label: "Governance & Leadership",desc: "Governance structure & leadership capability" },
+                  { key: "operational",          label: "Operational",            desc: "Operational capacity & systems" },
+                ].map(({ key, label, desc }) => {
+                  const score = bigScoreData[key]?.score || 0;
+                  const lbl = getBigScoreLabel(score);
+                  return (
+                    <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-1 gap-2">
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-[#4a352f]">{label}</span>
+                          <p className="text-[10px] text-[#7d5a50]">{desc}</p>
+                        </div>
+                        <span className="text-sm font-bold flex-shrink-0" style={{ color: lbl.color }}>{score}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, backgroundColor: lbl.color }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </PopupPortal>
+      )}
+
+      
       {/* ─── Stage Update Popup ───────────────────────────────────────────── */}
       {activePopup?.type === "stage" && selectedSMEForPopup && (() => {
         const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);

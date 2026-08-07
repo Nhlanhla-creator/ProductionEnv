@@ -490,6 +490,18 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const [tempDates, setTempDates] = useState([]);
   const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" });
   const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
+const [bigScoreLoading, setBigScoreLoading] = useState(false);
+  const [bigScoreData, setBigScoreData] = useState({
+    compliance: { score: 0 }, legitimacy: { score: 0 },
+    fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
+  });
+  // bigEvaluations is per business and doesn't change while the table is open,
+  // so a reopened popup reuses the fetch instead of re-reading Firestore.
+  const bigScoreCacheRef = useRef({});
+// bigEvaluations keyed by the business's user id. Feeds both the donut in
+  // the table and the breakdown popup, so the two can never disagree.
+  const [bigScoresByUser, setBigScoresByUser] = useState({});
+  const [bigScoresLoading, setBigScoresLoading] = useState(false);
 
   // ─── Engagement-aware pipeline stages ─────────────────────────────────────
   // Pipeline settings live in the shared localStorage key
@@ -660,10 +672,58 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     fetchAdvisorApplications();
   }, [onMatchesCountChange]);
 
+
+  // Pulls the live BIG Score for every business in the table. The score copied
+  // onto the application document is a snapshot from apply time and drifts as
+  // the business improves its profile, so the row donut, the sort, and the
+  // "BIG Score below threshold" attention flag all read this instead.
+  useEffect(() => {
+    if (rawApps.length === 0) return;
+
+    const userIds = [...new Set(
+      rawApps.map((a) => a.userId || a.smeUserId || a.smeId || a.id).filter(Boolean)
+    )];
+    if (userIds.length === 0) return;
+
+    let cancelled = false;
+    setBigScoresLoading(true);
+
+    (async () => {
+      const entries = await Promise.all(userIds.map(async (uid) => {
+        try {
+          const snap = await getDoc(doc(db, "bigEvaluations", uid));
+          if (!snap.exists()) return [uid, { _missing: true }];
+          const s = snap.data().scores || {};
+          return [uid, {
+            bigScore:             s.bigScore    || 0,
+            compliance:           { score: s.compliance           || 0 },
+            legitimacy:           { score: s.legitimacy           || 0 },
+            fundability:          { score: s.fundability          || 0 },
+            governanceLeadership: { score: s.governanceLeadership || 0 },
+            operational:          { score: s.operational          || 0 },
+            lastUpdated:          s.lastUpdated || null,
+          }];
+        } catch (error) {
+          console.error(`bigEvaluations fetch failed for ${uid}:`, error);
+          return [uid, { _error: true }];
+        }
+      }));
+
+      if (cancelled) return;
+      setBigScoresByUser(Object.fromEntries(entries));
+      setBigScoresLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [rawApps]);
+
+
   // ─── Row mapping ──────────────────────────────────────────────────────────
   const smes = useMemo(() => {
     let mapped = rawApps.map((a) => {
       const currentStatus = updatedStages[a.id] || a.status || a.pipelineStage || "New Match";
+      const userId = a.userId || a.smeUserId || a.smeId || a.id;
+      const liveBig = bigScoresByUser[userId];
       return {
         id: a.id,
         docId: a.docId,
@@ -679,12 +739,13 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
         supportRequired: formatLabel(a.smeSupport) || "N/A",
         revenueBand: a.revenue || "N/A",
         compensationModel: formatLabel(a.advisorCompensationModel) || "N/A",
-        bigScore: a.bigScore || 0,
+       // Live evaluation wins; the application's copied score is the fallback
+        // while the fetch is in flight or when no evaluation exists.
+        bigScore: liveBig?.bigScore ?? a.bigScore ?? 0,
+        bigScoreLive: liveBig || null,
         bigScoreBreakdown: a.bigScoreBreakdown,
         matchPercentage: a.matchPercentage || 0,
-        // The breakdown has been written under three different names by three
-        // different writers over time; the popup falls back to fetching it
-        // from the mirror collections when none of these are present.
+       
         matchBreakdown: a.matchBreakdown || a.breakdown || a.matchDetails || {},
         applicationDateLabel: formatDate(a.createdAt),
         applicationDateRaw: toDate(a.createdAt),
@@ -708,7 +769,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     }
 
     return mapped;
-  }, [rawApps, updatedStages, activeStages, stageFilter]);
+  }, [rawApps, updatedStages, activeStages,bigScoresByUser,stageFilter]);
 
   useEffect(() => { onSMEsLoaded?.(smes); }, [smes, onSMEsLoaded]);
 
@@ -1027,6 +1088,16 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     }
   };
 
+  // The AdvisorApplications row carries a headline `bigScore` and a set of
+  // component fields copied at apply time; the components are frequently
+  // missing or out of date. bigEvaluations/{userId} is the live record the
+  // business's own dashboard renders, so the popup reads that instead.
+ const loadBigScore = (sme) => {
+    const userId = sme.userId || sme.smeId || sme.id;
+    const live = bigScoresByUser[userId];
+    setBigScoreLoading(bigScoresLoading && !live);
+    setBigScoreData(live || (bigScoresLoading ? {} : { _missing: true }));
+  };
   // ─── Popups ───────────────────────────────────────────────────────────────
   const openPopup = (type, sme, rect, options = {}) => {
     let popupWidth, popupHeight;
@@ -1051,7 +1122,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
     setActivePopup({ type, smeKey: sme.id, position: { x, y }, rect });
 
     if (type === "match") loadMatchBreakdown(sme);
-
+if (type === "bigScore") loadBigScore(sme);
     if (type === "stage") {
       const presetStage = options.presetStage || sme.nextStage || getNextStage(sme.currentStatus, activeStages);
       const presetId = mapStatusToStageId(presetStage, activeStages);
@@ -1072,6 +1143,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
 
   const closePopup = () => {
     setActivePopup(null);
+    setBigScoreLoading(false);
     setSelectedSMEForPopup(null);
     setShowCalendarPopup(false);
     setMatchBreakdownData(null);
@@ -2199,45 +2271,64 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
           <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
             style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px", maxHeight: "480px", overflowY: "auto" }}>
-            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
-              <div className="flex items-center justify-between">
-                <div>
+            
+           <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
                   <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
                   <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+                  {bigScoreData._lastUpdated && (
+                    <p className="text-[10px] text-[#f5f0e1]/70 mt-0.5">Updated {formatDate(bigScoreData._lastUpdated)}</p>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
-                    {selectedSMEForPopup.bigScore}
+                    {bigScoreLoading ? "…" : (bigScoreData._bigScore || selectedSMEForPopup.bigScore)}
                   </div>
-                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1"><X size={18} /></button>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors p-1"><X size={18} /></button>
                 </div>
               </div>
             </div>
+
             <div className="p-4 space-y-3">
-              {[
-                { key: "compliance", label: "Compliance", desc: "Regulatory & legal standing" },
-                { key: "legitimacy", label: "Legitimacy", desc: "Business verification status" },
-                { key: "fundability", label: "Capital Appeal", desc: "Investment readiness & fundability" },
-                { key: "pis", label: "Performance", desc: "Performance indicators & strategic metrics" },
-                { key: "leadership", label: "Leadership", desc: "Management team quality & experience" },
-              ].map(({ key, label, desc }) => {
-                const score = selectedSMEForPopup.bigScoreBreakdown?.[key] || 0;
-                const lbl = getBigScoreLabel(score);
-                return (
-                  <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <div>
-                        <span className="text-xs font-semibold text-[#4a352f]">{label}</span>
-                        <p className="text-[10px] text-[#7d5a50]">{desc}</p>
+              {bigScoreLoading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (<div key={i} className="h-16 bg-[#f5f0e1] rounded-xl animate-pulse" />))}
+                </div>
+              ) : bigScoreData._error ? (
+                <p className="text-xs text-red-600 text-center py-6">Couldn't load the breakdown. Try again shortly.</p>
+              ) : bigScoreData._missing ? (
+                <div className="text-center py-6">
+                  <p className="text-xs text-[#7d5a50] m-0">No BIG Score evaluation has been recorded for this business yet.</p>
+                  <p className="text-[11px] text-[#a89482] mt-1 m-0">The headline score shown above came with the application.</p>
+                </div>
+              ) : (
+                [
+                  { key: "compliance",           label: "Compliance",              desc: "Regulatory & legal standing" },
+                  { key: "legitimacy",           label: "Legitimacy",              desc: "Business verification status" },
+                  { key: "fundability",          label: "Capital Appeal",          desc: "Investment readiness & fundability" },
+                  { key: "governanceLeadership", label: "Governance & Leadership", desc: "Governance structure & leadership capability" },
+                  { key: "operational",          label: "Operational",             desc: "Operational capacity & systems" },
+                ].map(({ key, label, desc }) => {
+                  const score = bigScoreData[key]?.score || 0;
+                  const lbl = getBigScoreLabel(score);
+                  return (
+                    <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-1 gap-2">
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-[#4a352f]">{label}</span>
+                          <p className="text-[10px] text-[#7d5a50]">{desc}</p>
+                        </div>
+                        <span className="text-sm font-bold flex-shrink-0" style={{ color: lbl.color }}>{score}%</span>
                       </div>
-                      <span className="text-sm font-bold" style={{ color: lbl.color }}>{score}%</span>
+                      <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, backgroundColor: lbl.color }} />
+                      </div>
                     </div>
-                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full">
-                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, backgroundColor: lbl.color }} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
+          
             </div>
             {/* Same jump-off as the catalyst table: opens the business's own
                 dashboard, locked to the BIG Score tab. */}
