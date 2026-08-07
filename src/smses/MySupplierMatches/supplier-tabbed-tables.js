@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
   X,
+  Info,
   Trophy,
   Users,
   Star,
@@ -108,6 +109,37 @@ export const useEffectiveUserId = () => {
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
+}
+
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
 }
 
 const TruncatedText = ({ text, maxLength = 30 }) => {
@@ -375,35 +407,73 @@ const ReviewsModal = ({ deal, isOpen, onClose, onNotify }) => {
 /* ════════════════════════════════════════════════════════════════════════════
    Successful supplier deals — column configuration.
 
-   Supplier is the pinned first column and Action the last, so neither appears
-   here. Widths raised across the board: each header carries a grip, a sort and
-   a filter control (~60px of chrome), so the old 116–186px columns left too
-   little room for the label and the browser broke it mid-word.
+   Supplier Name is the pinned first column and Action the last, so neither
+   appears here — but both resize like everything else, via the reserved width
+   keys further down. Every column carries a tooltip, shown from the ⓘ in its
+   header.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  productService: { label: "Product / Service", width: 210, filterType: "productService", visible: true, priority: 2, sortable: true },
-  dealAmount: { label: "Deal Value", width: 152, filterType: "dealAmount", visible: true, priority: 2, sortable: true },
-  startDate: { label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 3, sortable: true },
-  status: { label: "Status", width: 148, filterType: "status", visible: true, priority: 1, sortable: true },
-  rating: { label: "Rating", align: "center", width: 158, filterType: "rating", visible: true, priority: 1, sortable: true },
+  productService: {
+    label: "Product / Service", width: 210, filterType: "productService", visible: true, priority: 2, sortable: true,
+    tooltip: "What this supplier was appointed to deliver, taken from the request you raised.",
+  },
+  dealAmount: {
+    label: "Deal Value", width: 152, filterType: "dealAmount", visible: true, priority: 2, sortable: true,
+    tooltip: "What the engagement is worth. Sorting uses the underlying number, not the formatted label.",
+  },
+  startDate: {
+    label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 3, sortable: true,
+    tooltip: "When the engagement started, or when you accepted the supplier if no start date was captured.",
+  },
+  status: {
+    label: "Status", width: 148, filterType: "status", visible: true, priority: 1, sortable: true,
+    tooltip: "Where the engagement stands — accepted, under active contract, or completed.",
+  },
+  rating: {
+    label: "Rating", align: "center", width: 158, filterType: "rating", visible: true, priority: 1, sortable: true,
+    tooltip: "The average star rating across every review left on this supplier, with the review count in brackets. Click the star in Action to add yours.",
+  },
 
-  location: { label: "Location", width: 152, filterType: "location", visible: false, priority: 4, sortable: true },
-  matchPercentage: { label: "Match %", align: "center", width: 138, filterType: "matchPercentage", visible: false, priority: 4, sortable: true },
-  bbbeeLevel: { label: "B-BBEE Level", width: 162, filterType: "bbbeeLevel", visible: false, priority: 4, sortable: true },
-  requestedAt: { label: "Date Requested", width: 164, filterType: "requestedAt", visible: false, priority: 4, sortable: true },
+  location: {
+    label: "Location", width: 152, filterType: "location", visible: false, priority: 4, sortable: true,
+    tooltip: "Where the supplier is based. Also shown under the supplier name.",
+  },
+  matchPercentage: {
+    label: "Match %", align: "center", width: 138, filterType: "matchPercentage", visible: false, priority: 4, sortable: true,
+    tooltip: "How well this supplier scored against your request at the moment you appointed them. It's a snapshot, not a live score.",
+  },
+  bbbeeLevel: {
+    label: "B-BBEE Level", width: 162, filterType: "bbbeeLevel", visible: false, priority: 4, sortable: true,
+    tooltip: "The supplier's B-BBEE contributor level, which feeds your own procurement recognition.",
+  },
+  requestedAt: {
+    label: "Date Requested", width: 164, filterType: "requestedAt", visible: false, priority: 4, sortable: true,
+    tooltip: "When you first raised the quote request that led to this engagement.",
+  },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
   DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].visible !== false]),
 )
-const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width]))
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const SUPPLIER_WIDTH = 226
-const ACTION_WIDTH = 200
+/* Supplier Name and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const NAME_KEY = "__name__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [NAME_KEY]: 226, [ACTION_KEY]: 200 }
 const MIN_COLUMN_WIDTH = 84
+
+const DEFAULT_COLUMN_WIDTHS = {
+  ...Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])),
+  ...FIXED_WIDTHS,
+}
+
+const NAME_TOOLTIP = "The supplier you appointed, with their location underneath. Click the eye to open the full engagement record."
+const ACTION_TOOLTIP = "Open the engagement, leave a review, or use quick actions for more."
 
 const EMPTY_FILTERS = {
   name: "",
@@ -420,9 +490,9 @@ const EMPTY_FILTERS = {
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v2: the stored widths from the kit version are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "supplier-deals-views-v2"
+// v3: the two fixed columns now store their widths in this map too, so a v2
+// view would leave them undefined.
+const VIEWS_STORAGE_KEY = "supplier-deals-views-v3"
 const FILTERS_STORAGE_KEY = "supplier-deals-filters-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -572,6 +642,7 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -763,13 +834,23 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 152,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -777,6 +858,7 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -788,6 +870,31 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
   }
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 152,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="st-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
 
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
@@ -1016,12 +1123,13 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const nameWidth = widthOf(NAME_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    // Left-pinned columns stack to the right of the frozen Supplier column.
-    let leftAcc = SUPPLIER_WIDTH
+    // Left-pinned columns stack to the right of the frozen name column.
+    let leftAcc = nameWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1037,9 +1145,9 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, nameWidth])
 
-  const totalWidth = SUPPLIER_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = nameWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -1350,12 +1458,13 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                       </div>
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                        <span className="text-sm text-[#4a352f] flex-1">Supplier</span>
+                        <span className="text-sm text-[#4a352f] flex-1">Supplier Name</span>
                         <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
                       </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -1462,7 +1571,7 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                buying every header ~14px more room for its label. */
             .st-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .st-th:hover .st-th-grip { opacity: .45; }
-            .st-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .st-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .st-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -1483,25 +1592,28 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
           >
             <thead>
               <tr>
+                {/* Supplier Name — pinned first column, resizable like the rest */}
                 <th
                   className="st-th font-semibold uppercase tracking-wider text-xs top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: SUPPLIER_WIDTH,
+                    width: nameWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
                   }}
                 >
                   <div className="st-th-row">
-                    <span className="st-th-label" title="Supplier">
-                      Supplier
+                    <span className="st-th-label" title="Supplier Name">
+                      Supplier Name
                     </span>
                     <span className="st-th-tools">
                       <SortTrigger columnKey="name" />
                       <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <HeaderInfoTooltip text={NAME_TOOLTIP} />
                     </span>
                   </div>
+                  <ColumnResizer colKey={NAME_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -1513,7 +1625,7 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -1547,9 +1659,10 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
                           {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="st-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -1560,12 +1673,16 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                   className="st-th text-center font-semibold uppercase tracking-wider text-xs top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="st-th-row justify-center">
+                    <span className="st-th-label">Action</span>
+                    <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -1608,12 +1725,12 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                       onMouseLeave={() => setHoveredRow(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* Supplier — pinned left. */}
+                      {/* Supplier Name — pinned left. */}
                       <td
                         className="sticky left-0 z-10"
                         style={{
                           ...tableCellStyle,
-                          width: SUPPLIER_WIDTH,
+                          width: nameWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -1641,7 +1758,7 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -1652,7 +1769,7 @@ const SuccessfulSupplierDealsTable = ({ deals = [], loading, onCountChange, onNo
                             onClick={() => setSelectedDeal(d)}
                             title="View Deal"
                             className="inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 text-white hover:shadow-md hover:brightness-105"
-                            style={{ width: "118px", height: "34px", backgroundColor: "#7d5a50" }}
+                            style={{ width: `${Math.max(96, actionWidth - 82)}px`, height: "34px", backgroundColor: "#7d5a50" }}
                           >
                             <ArrowRight size={13} className="flex-shrink-0" />
                             <span className="truncate">View Deal</span>

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
   X,
+  Info,
   Trophy,
   Users,
   Star,
@@ -37,10 +38,17 @@ import AdvisorTable, { SME_ADVISOR_COLLECTION, normalizeAdvisorStatus } from "./
    `position: relative` on every <th>, which overrode the sticky positioning:
    the header scrolled away while the pinned body cells stayed frozen. Its
    default widths were also too narrow for labels that share their cell with a
-   grip, a sort control and a filter control (~60px of chrome), so the browser
-   broke them mid-word — "ENGAGEMENT MOD..", "BUSINESS STA..".
+   grip, a sort control, a filter control and an info control (~74px of
+   chrome), so the browser broke them mid-word — "ENGAGEMENT MOD..",
+   "BUSINESS STA..".
 
    This table now owns its head, toolbar, filters and row actions.
+
+   Every column resizes — including the pinned Advisor Name column and the
+   Action column, whose widths live under reserved keys in the same
+   columnWidths map — and every column carries a tooltip, shown from the ⓘ in
+   its header, so what a column means never has to be guessed from a two-word
+   label.
 
    AdvisorTable (the matches tab) still uses the kit and shares a page with
    this table, so every selector here is prefixed ad- (advisor deals) and the
@@ -51,7 +59,7 @@ import AdvisorTable, { SME_ADVISOR_COLLECTION, normalizeAdvisorStatus } from "./
 /* The old shell read and wrote `smseAdvisoryMatches`, which nothing in the
    codebase ever created — the table wrote AdvisoryMatches, AdvisorApplications
    and SmeAdvisorApplications. That is why both tab badges sat at zero and
-   Successful Engagements was always empty. Both tabs now read the one SME-side
+   Successful Deals was always empty. Both tabs now read the one SME-side
    collection the table writes. */
 const ENGAGED_STATUSES = ["Accepted", "Engaged/Placed"]
 
@@ -95,6 +103,37 @@ const useEffectiveUserId = () => {
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
+}
+
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
 }
 
 const TruncatedText = ({ text, maxLength = 30 }) => {
@@ -173,42 +212,83 @@ const StarRating = ({ rating, size = 13 }) => (
 )
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Successful advisor engagements — column configuration.
+   Successful deals — column configuration.
 
-   Advisor is the pinned first column and Action the last, so neither appears
-   here. Widths raised in line with the other match tables: each header carries
-   a grip, sort and filter control, so the old 116–180px columns left too
-   little room and the browser broke labels mid-word.
+   Advisor Name is the pinned first column and Action the last, so neither
+   appears here — but both resize like everything else, via the reserved width
+   keys further down. Every column carries a tooltip, shown from the ⓘ in its
+   header.
 
    Date Contacted carries no filterType — the kit version rendered a filter
    button for it that opened an empty popover, because no filter body was ever
    written for that column.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  engagementModel: { label: "Engagement Model", width: 196, filterType: "engagementModel", visible: true, priority: 2, sortable: true },
-  sectorExperience: { label: "Sector", width: 158, filterType: "sectorExperience", visible: true, priority: 3, sortable: true },
-  startDate: { label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 2, sortable: true },
-  dealAmount: { label: "Deal Value", width: 152, filterType: "dealAmount", visible: true, priority: 3, sortable: true },
-  status: { label: "Status", width: 158, filterType: "status", visible: true, priority: 1, sortable: true },
-  rating: { label: "Rating", align: "center", width: 158, filterType: "rating", visible: true, priority: 1, sortable: true },
+  engagementModel: {
+    label: "Engagement Model", width: 196, filterType: "engagementModel", visible: true, priority: 2, sortable: true,
+    tooltip: "How the advisor works with you — retainer, project-based, hourly, equity-linked and so on.",
+  },
+  sectorExperience: {
+    label: "Sector", width: 158, filterType: "sectorExperience", visible: true, priority: 3, sortable: true,
+    tooltip: "The industry the advisor brings experience in, as recorded on their profile.",
+  },
+  startDate: {
+    label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 2, sortable: true,
+    tooltip: "When the engagement began, or the date it was accepted if no start date was captured.",
+  },
+  dealAmount: {
+    label: "Deal Value", width: 152, filterType: "dealAmount", visible: true, priority: 3, sortable: true,
+    tooltip: "What the engagement is worth. Sorting uses the underlying number, not the formatted label.",
+  },
+  status: {
+    label: "Status", width: 158, filterType: "status", visible: true, priority: 1, sortable: true,
+    tooltip: "Where the engagement stands now — accepted, or engaged and placed.",
+  },
+  rating: {
+    label: "Rating", align: "center", width: 158, filterType: "rating", visible: true, priority: 1, sortable: true,
+    tooltip: "The performance rating recorded against this engagement, out of five.",
+  },
 
-  matchPercentage: { label: "Match %", align: "center", width: 138, filterType: "matchPercentage", visible: false, priority: 4, sortable: true },
-  servicesDelivered: { label: "Services Delivered", width: 198, filterType: "servicesDelivered", visible: false, priority: 4, sortable: false },
-  smeStage: { label: "Business Stage", width: 170, filterType: "smeStage", visible: false, priority: 4, sortable: true },
-  contactedAt: { label: "Date Contacted", width: 168, filterType: null, visible: false, priority: 4, sortable: true },
+  matchPercentage: {
+    label: "Match %", align: "center", width: 138, filterType: "matchPercentage", visible: false, priority: 4, sortable: true,
+    tooltip: "How strongly you and the advisor matched at the point the connection was made.",
+  },
+  servicesDelivered: {
+    label: "Services Delivered", width: 198, filterType: "servicesDelivered", visible: false, priority: 4, sortable: false,
+    tooltip: "What the advisor actually delivered under this engagement, in their own words.",
+  },
+  smeStage: {
+    label: "Business Stage", width: 170, filterType: "smeStage", visible: false, priority: 4, sortable: true,
+    tooltip: "The stage your business was at when this engagement started.",
+  },
+  contactedAt: {
+    label: "Date Contacted", width: 168, filterType: null, visible: false, priority: 4, sortable: true,
+    tooltip: "When you first reached out to this advisor, before the engagement was agreed.",
+  },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
   DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].visible !== false]),
 )
-const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width]))
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const ADVISOR_WIDTH = 226
-const ACTION_WIDTH = 184
+/* Advisor Name and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const NAME_KEY = "__name__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [NAME_KEY]: 226, [ACTION_KEY]: 184 }
 const MIN_COLUMN_WIDTH = 84
+
+const DEFAULT_COLUMN_WIDTHS = {
+  ...Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])),
+  ...FIXED_WIDTHS,
+}
+
+const NAME_TOOLTIP = "The advisor this engagement is with. Click the eye to open the full engagement record."
+const ACTION_TOOLTIP = "Open the full engagement record for this advisor."
 
 const EMPTY_FILTERS = {
   name: "",
@@ -226,9 +306,9 @@ const EMPTY_FILTERS = {
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v2: the stored widths from the kit version are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "advisor-deals-views-v2"
+// v3: the two fixed columns now store their widths in this map too, so a v2
+// view would leave them undefined.
+const VIEWS_STORAGE_KEY = "advisor-deals-views-v3"
 const FILTERS_STORAGE_KEY = "advisor-deals-filters-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -336,7 +416,7 @@ const STATUS_COLORS = {
 const statusStyle = (s) => STATUS_COLORS[s] || { color: "#F5F5F5", textColor: "#616161" }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Successful advisor engagements table
+   Successful advisor deals table
    ════════════════════════════════════════════════════════════════════════ */
 const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNotify }) => {
   const [selectedDeal, setSelectedDeal] = useState(null)
@@ -370,6 +450,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -538,13 +619,23 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 148,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -552,6 +643,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -563,6 +655,31 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
   }
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 148,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="ad-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
 
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
@@ -748,12 +865,13 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const nameWidth = widthOf(NAME_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    // Left-pinned columns stack to the right of the frozen Advisor column.
-    let leftAcc = ADVISOR_WIDTH
+    // Left-pinned columns stack to the right of the frozen Advisor Name column.
+    let leftAcc = nameWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -769,9 +887,9 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, nameWidth])
 
-  const totalWidth = ADVISOR_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = nameWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -875,7 +993,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
   }
 
   if (loading) {
-    return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading engagements...</div>
+    return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading deals...</div>
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -887,7 +1005,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
       <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-bold text-[#4a352f] m-0">Successful Engagements</h2>
+            <h2 className="text-lg font-bold text-[#4a352f] m-0">Successful Deals</h2>
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
               Viewing: {activeView.name}
@@ -1093,12 +1211,13 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                       </div>
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                        <span className="text-sm text-[#4a352f] flex-1">Advisor</span>
+                        <span className="text-sm text-[#4a352f] flex-1">Advisor Name</span>
                         <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
                       </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -1205,7 +1324,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                buying every header ~14px more room for its label. */
             .ad-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .ad-th:hover .ad-th-grip { opacity: .45; }
-            .ad-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .ad-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .ad-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -1226,25 +1345,28 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
           >
             <thead>
               <tr>
+                {/* Advisor Name — pinned first column, resizable like the rest */}
                 <th
                   className="ad-th font-semibold uppercase tracking-wider text-xs top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ADVISOR_WIDTH,
+                    width: nameWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
                   }}
                 >
                   <div className="ad-th-row">
-                    <span className="ad-th-label" title="Advisor">
-                      Advisor
+                    <span className="ad-th-label" title="Advisor Name">
+                      Advisor Name
                     </span>
                     <span className="ad-th-tools">
                       <SortTrigger columnKey="name" />
                       <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <HeaderInfoTooltip text={NAME_TOOLTIP} />
                     </span>
                   </div>
+                  <ColumnResizer colKey={NAME_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -1256,7 +1378,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -1290,9 +1412,10 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
                           {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="ad-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -1303,12 +1426,16 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                   className="ad-th text-center font-semibold uppercase tracking-wider text-xs top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="ad-th-row justify-center">
+                    <span className="ad-th-label">Action</span>
+                    <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -1325,7 +1452,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                         <Trophy size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
-                        {deals.length === 0 ? "No successful engagements yet" : "No engagements match these filters"}
+                        {deals.length === 0 ? "No successful deals yet" : "No deals match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
                         {deals.length === 0
@@ -1351,12 +1478,12 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                       onMouseLeave={() => setHoveredRow(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* Advisor — pinned left, sector underneath. */}
+                      {/* Advisor Name — pinned left, sector underneath. */}
                       <td
                         className="sticky left-0 z-10"
                         style={{
                           ...tableCellStyle,
-                          width: ADVISOR_WIDTH,
+                          width: nameWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -1367,8 +1494,8 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                           <button
                             onClick={() => setSelectedDeal(d)}
                             className="text-[#a89482] hover:text-[#7d5a50] flex-shrink-0"
-                            aria-label={`View engagement with ${d.advisorName}`}
-                            title="View engagement"
+                            aria-label={`View deal with ${d.advisorName}`}
+                            title="View deal"
                           >
                             <Eye size={13} />
                           </button>
@@ -1384,7 +1511,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -1392,12 +1519,12 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                       >
                         <button
                           onClick={() => setSelectedDeal(d)}
-                          title="View Engagement"
+                          title="View Deal"
                           className="inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-white hover:shadow-md hover:brightness-105"
-                          style={{ width: "150px", height: "34px", backgroundColor: "#7d5a50" }}
+                          style={{ width: `${Math.max(96, actionWidth - 34)}px`, height: "34px", backgroundColor: "#7d5a50" }}
                         >
                           <ArrowRight size={13} className="flex-shrink-0" />
-                          <span className="truncate">View Engagement</span>
+                          <span className="truncate">View Deal</span>
                         </button>
                       </td>
                     </tr>
@@ -1661,7 +1788,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
         </PopupPortal>
       )}
 
-      {/* Engagement detail */}
+      {/* Deal detail */}
       {selectedDeal &&
         createPortal(
           <div
@@ -1678,7 +1805,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                   <div className="min-w-0 flex items-center gap-2">
                     <Trophy size={20} className="text-[#f5f0e1] flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Successful engagement</p>
+                      <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Successful deal</p>
                       <h3 className="text-sm font-bold mt-0.5 truncate">{selectedDeal.advisorName}</h3>
                     </div>
                   </div>
@@ -1789,7 +1916,7 @@ const AdvisorTabbedTables = ({ filters, stageFilter, onConnectionRequested }) =>
         setLoadingDeals(false)
       },
       (error) => {
-        console.error("Advisor engagements listener failed:", error)
+        console.error("Advisor deals listener failed:", error)
         setLoadingDeals(false)
       },
     )
@@ -1799,7 +1926,7 @@ const AdvisorTabbedTables = ({ filters, stageFilter, onConnectionRequested }) =>
 
   const TABS = [
     { id: "my-matches", label: "Advisor Matches", icon: Users, count: matchesCount },
-    { id: "successful-deals", label: "Successful Engagements", icon: Trophy, count: dealsCount },
+    { id: "successful-deals", label: "Successful Deals", icon: Trophy, count: dealsCount },
   ]
 
   return (

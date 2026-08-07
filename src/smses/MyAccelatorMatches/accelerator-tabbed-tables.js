@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
   X,
+  Info,
   Trophy,
   TrendingUp,
   Ticket,
@@ -41,10 +42,16 @@ import { DEFAULT_STAGES, mapStatusToStageId, getStageColors } from "../../cataly
    `position: relative` on every <th>, which overrode the sticky positioning:
    the header scrolled away while the pinned body cells stayed frozen. Its
    default widths were also too narrow for labels that share their cell with a
-   grip, a sort control and a filter control (~60px of chrome), so the browser
-   broke them mid-word — "PROGRAMME COHO..", "SERVICES DELIV..".
+   grip, a sort control, a filter control and an info control (~74px of
+   chrome), so the browser broke them mid-word — "PROGRAMME COHO..",
+   "SERVICES DELIV..".
 
    This table now owns its head, toolbar, filters and row actions.
+
+   Every column resizes — including the pinned Programme / Catalyst column and
+   the Action column, whose widths live under reserved keys in the same
+   columnWidths map — and every column carries a tooltip, shown from the ⓘ in
+   its header.
 
    AcceleratorTable (the matches tab) still uses the kit and shares a page with
    this table, so every selector here is prefixed ct- (catalyst table) and the
@@ -185,6 +192,37 @@ const PopupPortal = ({ children }) => {
   return createPortal(children, document.body)
 }
 
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1400] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
+}
+
 const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -316,40 +354,97 @@ const VoucherView = ({ voucher, onClose }) => {
    Successful deals — column configuration.
 
    Programme / Catalyst is the pinned first column and Action the last, so
-   neither appears here. Widths raised in line with the other match tables:
-   each header carries a grip, sort and filter control, so the old 116–180px
-   columns left too little room and the browser broke labels mid-word.
+   neither appears here — but both resize like everything else, via the
+   reserved width keys further down. Every column carries a tooltip, shown from
+   the ⓘ in its header, so what a column means never has to be guessed from a
+   two-word label.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  sectorFocus: { label: "Sector Focus", width: 174, filterType: "sectorFocus", visible: true, priority: 3, sortable: true },
-  fundingType: { label: "Funding Type", width: 166, filterType: "fundingType", visible: true, priority: 2, sortable: true },
-  startDate: { label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 2, sortable: true },
-  ticketSize: { label: "Ticket Size", width: 154, filterType: "ticketSize", visible: true, priority: 3, sortable: true },
-  location: { label: "Location", width: 152, filterType: "location", visible: true, priority: 3, sortable: true },
-  status: { label: "Status", width: 152, filterType: "status", visible: true, priority: 1, sortable: true },
-  vouchers: { label: "Vouchers", width: 150, filterType: "vouchers", visible: true, priority: 1, sortable: true },
+  sectorFocus: {
+    label: "Sector Focus", width: 174, filterType: "sectorFocus", visible: true, priority: 3, sortable: true,
+    tooltip: "The industries this catalyst backs, taken from their matching preferences.",
+  },
+  fundingType: {
+    label: "Funding Type", width: 166, filterType: "fundingType", visible: true, priority: 2, sortable: true,
+    tooltip: "The kind of support on offer — grant, equity, debt, in-kind programme support and so on.",
+  },
+  startDate: {
+    label: "Start Date", width: 152, filterType: "startDate", visible: true, priority: 2, sortable: true,
+    tooltip: "When you applied, or when the record was created if no application date was captured.",
+  },
+  ticketSize: {
+    label: "Ticket Size", width: 154, filterType: "ticketSize", visible: true, priority: 3, sortable: true,
+    tooltip: "The funding amount attached to this application. Sorting uses the underlying number.",
+  },
+  location: {
+    label: "Location", width: 152, filterType: "location", visible: true, priority: 3, sortable: true,
+    tooltip: "Where the catalyst operates or focuses its support.",
+  },
+  status: {
+    label: "Status", width: 152, filterType: "status", visible: true, priority: 1, sortable: true,
+    tooltip: "Where this deal sits in the pipeline. Legacy labels are mapped onto the current stage names.",
+  },
+  vouchers: {
+    label: "Vouchers", width: 150, filterType: "vouchers", visible: true, priority: 1, sortable: true,
+    tooltip: "Vouchers this catalyst has issued you. Click the badge to view or choose one.",
+  },
 
-  programCohort: { label: "Programme Cohort", width: 190, filterType: "programCohort", visible: false, priority: 4, sortable: true },
-  duration: { label: "Duration", width: 146, filterType: "duration", visible: false, priority: 4, sortable: true },
-  equityTaken: { label: "Equity Taken", width: 160, filterType: "equityTaken", visible: false, priority: 4, sortable: true },
-  contractValue: { label: "Contract Value", width: 170, filterType: "contractValue", visible: false, priority: 4, sortable: true },
-  nextMilestone: { label: "Next Milestone", width: 174, filterType: "nextMilestone", visible: false, priority: 4, sortable: true },
-  servicesDelivered: { label: "Services Delivered", width: 200, filterType: "servicesDelivered", visible: false, priority: 4, sortable: false },
-  fundingStage: { label: "Funding Stage", width: 166, filterType: "fundingStage", visible: false, priority: 4, sortable: true },
-  matchPercentage: { label: "Match %", align: "center", width: 138, filterType: "matchPercentage", visible: false, priority: 4, sortable: true },
+  programCohort: {
+    label: "Programme Cohort", width: 190, filterType: "programCohort", visible: false, priority: 4, sortable: true,
+    tooltip: "Which cohort of the programme this placement belongs to.",
+  },
+  duration: {
+    label: "Duration", width: 146, filterType: "duration", visible: false, priority: 4, sortable: true,
+    tooltip: "How long the programme or support period runs for.",
+  },
+  equityTaken: {
+    label: "Equity Taken", width: 160, filterType: "equityTaken", visible: false, priority: 4, sortable: true,
+    tooltip: "The equity given up in exchange for the support, where any was.",
+  },
+  contractValue: {
+    label: "Contract Value", width: 170, filterType: "contractValue", visible: false, priority: 4, sortable: true,
+    tooltip: "The full value of the agreement, where it differs from the ticket size.",
+  },
+  nextMilestone: {
+    label: "Next Milestone", width: 174, filterType: "nextMilestone", visible: false, priority: 4, sortable: true,
+    tooltip: "The next stage or checkpoint due on this deal.",
+  },
+  servicesDelivered: {
+    label: "Services Delivered", width: 200, filterType: "servicesDelivered", visible: false, priority: 4, sortable: false,
+    tooltip: "What the programme actually provides — mentoring, workspace, capital, market access and so on.",
+  },
+  fundingStage: {
+    label: "Funding Stage", width: 166, filterType: "fundingStage", visible: false, priority: 4, sortable: true,
+    tooltip: "The stage of funding your business was raising at — pre-seed, seed, Series A and so on.",
+  },
+  matchPercentage: {
+    label: "Match %", align: "center", width: 138, filterType: "matchPercentage", visible: false, priority: 4, sortable: true,
+    tooltip: "How strongly you matched this catalyst at the point you applied.",
+  },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
   DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].visible !== false]),
 )
-const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width]))
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const PROGRAMME_WIDTH = 240
-const ACTION_WIDTH = 152
+/* Programme / Catalyst and Action can't be hidden or reordered, so they aren't
+   in COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const NAME_KEY = "__name__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [NAME_KEY]: 240, [ACTION_KEY]: 152 }
 const MIN_COLUMN_WIDTH = 84
+
+const DEFAULT_COLUMN_WIDTHS = {
+  ...Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])),
+  ...FIXED_WIDTHS,
+}
+
+const NAME_TOOLTIP = "The programme, with its catalyst underneath. Click the eye to open the full deal record."
+const ACTION_TOOLTIP = "Open the full deal record, including any vouchers attached to it."
 
 const EMPTY_FILTERS = {
   name: "",
@@ -375,9 +470,9 @@ const VOUCHER_BUCKETS = ["Has active voucher", "Has expired voucher", "No vouche
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v2: the stored widths from the kit version are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "catalyst-deals-views-v2"
+// v3: the two fixed columns now store their widths in this map too, so a v2
+// view would leave them undefined.
+const VIEWS_STORAGE_KEY = "catalyst-deals-views-v3"
 const FILTERS_STORAGE_KEY = "catalyst-deals-filters-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -520,6 +615,7 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -788,13 +884,23 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 148,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -802,6 +908,7 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -813,6 +920,31 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
   }
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 148,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="ct-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
 
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
@@ -1032,12 +1164,13 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const nameWidth = widthOf(NAME_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
     // Left-pinned columns stack to the right of the frozen Programme column.
-    let leftAcc = PROGRAMME_WIDTH
+    let leftAcc = nameWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1053,9 +1186,9 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, nameWidth])
 
-  const totalWidth = PROGRAMME_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = nameWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -1380,7 +1513,8 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                       </div>
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -1492,7 +1626,7 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                buying every header ~14px more room for its label. */
             .ct-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .ct-th:hover .ct-th-grip { opacity: .45; }
-            .ct-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .ct-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .ct-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -1513,11 +1647,12 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
           >
             <thead>
               <tr>
+                {/* Programme / Catalyst — pinned first column, resizable like the rest */}
                 <th
                   className="ct-th font-semibold uppercase tracking-wider text-xs top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: PROGRAMME_WIDTH,
+                    width: nameWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
@@ -1530,8 +1665,10 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                     <span className="ct-th-tools">
                       <SortTrigger columnKey="name" />
                       <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <HeaderInfoTooltip text={NAME_TOOLTIP} />
                     </span>
                   </div>
+                  <ColumnResizer colKey={NAME_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -1543,7 +1680,7 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -1577,9 +1714,10 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
                           {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="ct-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -1590,12 +1728,16 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                   className="ct-th text-center font-semibold uppercase tracking-wider text-xs top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="ct-th-row justify-center">
+                    <span className="ct-th-label">Action</span>
+                    <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -1643,7 +1785,7 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                         className="sticky left-0 z-10"
                         style={{
                           ...tableCellStyle,
-                          width: PROGRAMME_WIDTH,
+                          width: nameWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -1671,7 +1813,7 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -1681,7 +1823,7 @@ const SuccessfulAcceleratorDealsTable = ({ effectiveUserId, resolved, onCountCha
                           onClick={() => setSelectedDeal(d)}
                           title="View Deal"
                           className="inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-white hover:shadow-md hover:brightness-105"
-                          style={{ width: "118px", height: "34px", backgroundColor: "#7d5a50" }}
+                          style={{ width: `${Math.max(96, actionWidth - 34)}px`, height: "34px", backgroundColor: "#7d5a50" }}
                         >
                           <ArrowRight size={13} className="flex-shrink-0" />
                           <span className="truncate">View Deal</span>
