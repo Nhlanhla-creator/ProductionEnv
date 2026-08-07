@@ -5,14 +5,16 @@ import { createPortal } from "react-dom";
 import {
   Users, XCircle, Eye, X, Info, Calendar, ChevronDown, Download, Plus,
   Trash2, Settings, RotateCcw, SlidersHorizontal, LayoutGrid, GripVertical,
-  CheckCircle, ArrowUp, ArrowDown
+  CheckCircle, ArrowUp, ArrowDown, ArrowUpDown
 } from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import * as XLSX from "xlsx";
 import { AdvisorTable } from "./advisor-sme-table";
 import BusinessDetailsModal from "./BusinessDetailsModal";
-import { mapStatusToStageId, getActiveStages, PIPELINE_REFRESH_EVENT } from "./advisorStageConfig";
+import {
+  mapStatusToStageId, getActiveStages, loadPipelineSettings, PIPELINE_REFRESH_EVENT
+} from "./advisorStageConfig";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatLabel = (value) => {
@@ -46,6 +48,11 @@ const formatDate = (value) => {
   return d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "N/A";
 };
 
+// Any wording a negative terminal stage might carry, across every engagement
+// template. Used twice: to pick the terminal stage ids out of the active stage
+// list, and as a fallback against the row's raw status string.
+const NEGATIVE_STATUS_RE = /declin|withdraw|unsuccess|reject|not proceed/i;
+
 // Renders straight to <body> so `position: fixed` popups can't be trapped by an
 // ancestor that establishes a containing block.
 const PopupPortal = ({ children }) => {
@@ -55,6 +62,7 @@ const PopupPortal = ({ children }) => {
 
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
     <span onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setRect(null)} className="inline-flex">
       <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
@@ -80,18 +88,24 @@ const DEFAULT_COLUMN_ORDER = [
   "sector", "location", "compensationModel", "revenueBand", "smeStage"
 ];
 
+// Every column carries a tooltip, matching the pipeline table — a header label
+// alone doesn't say where a value came from, and on this table several of them
+// (Date Declined, Reason Given) are derived rather than stored.
 const COLUMN_DEFS = {
-  dealType: { label: "Support Required", minWidth: "134px", filter: "select", type: "badge" },
+  dealType: { label: "Support Required", minWidth: "134px", filter: "select", type: "badge", tooltip: "The kind of advisory help this business asked for when it applied." },
   appliedDate: { label: "Date Applied", minWidth: "112px", filter: "date", type: "date", tooltip: "When the business first applied to work with you." },
   declinedDate: { label: "Date Declined", minWidth: "116px", filter: "date", type: "date", tooltip: "When the application was last updated — for these rows, when it was declined or withdrawn." },
-  currentStatus: { label: "Outcome", minWidth: "124px", filter: "select", type: "status" },
-  reason: { label: "Reason Given", minWidth: "180px", filter: "text" },
-  sector: { label: "Sector", minWidth: "110px", filter: "select" },
-  location: { label: "Location", minWidth: "104px", filter: "text" },
-  compensationModel: { label: "Compensation Model", minWidth: "140px", filter: "select" },
-  revenueBand: { label: "Revenue Band", minWidth: "112px", filter: "select" },
-  smeStage: { label: "Business Stage", minWidth: "116px", filter: "select" },
+  currentStatus: { label: "Outcome", minWidth: "124px", filter: "select", type: "status", tooltip: "The final stage this application ended on: declined, withdrawn, or not proceeding." },
+  reason: { label: "Reason Given", minWidth: "180px", filter: "text", tooltip: "The reason recorded at decline. Falls back to the last message sent when no reason was captured." },
+  sector: { label: "Sector", minWidth: "110px", filter: "select", tooltip: "The industry the business trades in." },
+  location: { label: "Location", minWidth: "104px", filter: "text", tooltip: "Where the business operates from." },
+  compensationModel: { label: "Compensation Model", minWidth: "140px", filter: "select", tooltip: "How this business expected to compensate an advisor." },
+  revenueBand: { label: "Revenue Band", minWidth: "112px", filter: "select", tooltip: "The business's annual revenue range." },
+  smeStage: { label: "Business Stage", minWidth: "116px", filter: "select", tooltip: "How far along the business was when it applied — pre-seed, seed, Series A and so on." },
 };
+
+const NAME_TOOLTIP = "The business whose application ended here. Click the eye to open its full profile.";
+const ACTIONS_TOOLTIP = "Open the full profile for this business, including its match score and BIG Score.";
 
 const DEFAULT_COLUMN_VISIBILITY = {
   dealType: true, appliedDate: true, declinedDate: true, currentStatus: true,
@@ -215,9 +229,10 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
 
   // ─── Column resizing ──────────────────────────────────────────────────────
   // Drag the divider on a header's right edge to resize the column; double-click
-  // it to snap that column back to auto width. Widths are stored per view
-  // alongside visibility/order/sort/density, so they persist and travel with
-  // whichever view is active.
+  // it to snap that column back to auto width. Every header carries one —
+  // including the pinned Business Name and the Actions column. Widths are stored
+  // per view alongside visibility/order/sort/density, so they persist and travel
+  // with whichever view is active.
   const [resizingColumn, setResizingColumn] = useState(null);
 
   const widthStyle = (key, fallbackMin, fallbackMax) => {
@@ -286,10 +301,14 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
       // status string, so a renamed stage or a different engagement template
       // can't quietly empty this table. Anything that ends negatively —
       // "Declined", "Withdrawn", "Not Proceeding" — lands here.
-      const stages = getActiveStages();
+      //
+      // getActiveStages needs the current pipeline settings passed in; calling
+      // it bare returns the fallback stage list, whose terminal ids may not
+      // match the template the advisor is actually running.
+      const stages = getActiveStages(loadPipelineSettings());
       const declinedIds = new Set(
         stages
-          .filter((s) => s.terminal && (s.group === "negative" || /declin|withdraw|unsuccess|reject|not proceed/i.test(s.name || "")))
+          .filter((s) => s.terminal && (s.group === "negative" || NEGATIVE_STATUS_RE.test(s.name || "")))
           .map((s) => s.id)
       );
 
@@ -298,9 +317,16 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
       const rows = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        const stageId = mapStatusToStageId(data.status || data.pipelineStage, stages);
-        if (!declinedIds.has(stageId)) return;
+        const rawStatus = (data.status || data.pipelineStage || "").toString();
+        const stageId = mapStatusToStageId(rawStatus, stages);
         const stage = stages.find((s) => s.id === stageId);
+
+        // Two ways in. mapStatusToStageId falls back to the first stage for
+        // anything it doesn't recognise, so a row declined under a different
+        // template would otherwise be misread as "New Match" and vanish. The
+        // raw-status check catches those.
+        const matchedStage = declinedIds.has(stageId);
+        if (!matchedStage && !NEGATIVE_STATUS_RE.test(rawStatus)) return;
 
         rows.push({
           id: docSnap.id,
@@ -318,7 +344,10 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
           reason: data.declineReason || data.lastMessage || "No reason recorded",
           sector: formatLabel(data.smeSector) || "N/A",
           location: formatLabel(data.smeLocation) || "N/A",
-          currentStatus: stage?.name || "Declined",
+          // Prefer the configured stage name, but keep whatever the document
+          // actually says when the stage list doesn't know it — showing the
+          // real outcome beats showing a guess.
+          currentStatus: (matchedStage && stage?.name) || rawStatus || "Declined",
           smeStage: formatLabel(data.smeStage) || "N/A",
           revenueBand: data.revenue || "N/A",
           matchPercentage: data.matchPercentage ?? null,
@@ -340,7 +369,9 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
   useEffect(() => { fetchDeals(); }, [fetchDeals]);
 
   // Declining an application in the pipeline table lands it here — refresh on
-  // that signal rather than making the advisor reload the page.
+  // that signal rather than making the advisor reload the page. This only works
+  // because the wrapper keeps both tables mounted; an unmounted table has no
+  // listener to fire.
   useEffect(() => {
     const refresh = () => fetchDeals();
     window.addEventListener(PIPELINE_REFRESH_EVENT, refresh);
@@ -483,12 +514,30 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
   const selectOptions = (key) =>
     [...new Set(deals.map((d) => (d[key] || "").toString()).filter((v) => v && v !== "N/A"))].sort();
 
-  const toggleSort = (key) => {
+  // Three-state, same as the pipeline table: ascending, descending, then back to
+  // this table's default (most recently declined first) rather than to no order
+  // at all — otherwise rows fall back to fetch order, which reads as random.
+  const toggleSort = (key, event) => {
+    event?.stopPropagation();
     setSortConfig((prev) => {
       if (prev?.key !== key) return { key, direction: "asc" };
       if (prev.direction === "asc") return { key, direction: "desc" };
-      return { key: null, direction: "desc" };
+      return { ...DEFAULT_SORT };
     });
+  };
+
+  const SortTrigger = ({ colKey }) => {
+    const isActive = sortConfig?.key === colKey;
+    return (
+      <button type="button"
+        onClick={(e) => toggleSort(colKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Reset sorting") : "Sort ascending"}>
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    );
   };
 
   const handleDrop = (e, key) => {
@@ -503,12 +552,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
     });
     setDraggedColumn(null); setDragOverColumn(null);
   };
-
-  const SortIndicator = ({ colKey }) =>
-    sortConfig?.key !== colKey ? null :
-      sortConfig.direction === "asc"
-        ? <ArrowUp size={10} className="flex-shrink-0 text-[#e6d7c3]" />
-        : <ArrowDown size={10} className="flex-shrink-0 text-[#e6d7c3]" />;
 
   const FilterTrigger = ({ colKey }) => {
     const v = filters[colKey];
@@ -689,7 +732,7 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
                       <div className="border-t border-[#e6d7c3] my-4" />
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag a column header to reorder it, or click its label to sort.
+                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header to reorder it, or drag its right edge to resize.
                       </p>
                       <label className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
@@ -760,9 +803,10 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
                     <th className="asd-th py-3 px-3 relative border-r border-[#e6d7c3] sticky top-0 left-0 z-30"
                       style={{ backgroundColor: "#4a352f", ...widthStyle("__name__", "180px", "210px") }}>
                       <div className="flex items-start gap-1 min-w-0">
-                        <button onClick={() => toggleSort("__name__")} className="asd-th-label hover:text-white transition-colors">Business Name</button>
-                        <SortIndicator colKey="__name__" />
+                        <span className="asd-th-label">Business Name</span>
+                        <SortTrigger colKey="__name__" />
                         <FilterTrigger colKey="__name__" />
+                        <HeaderInfoTooltip text={NAME_TOOLTIP} />
                       </div>
                       <ColumnResizer colKey="__name__" />
                     </th>
@@ -781,17 +825,27 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
                           style={{ ...widthStyle(key, col.minWidth), backgroundColor: dragOverColumn === key && draggedColumn !== key ? "#5a423b" : "#4a352f" }}>
                           <div className="flex items-start gap-1 min-w-0">
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <button onClick={() => toggleSort(key)} className="asd-th-label hover:text-white transition-colors">{col.label}</button>
-                            <SortIndicator colKey={key} />
+                            <span className="asd-th-label">{col.label}</span>
+                            <SortTrigger colKey={key} />
                             <FilterTrigger colKey={key} />
-                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                            <HeaderInfoTooltip text={col.tooltip} />
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
                       );
                     })}
 
-                    <th className="asd-th py-3 px-3 relative text-center whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "110px", backgroundColor: "#4a352f" }}>Actions</th>
+                    {/* Actions resizes too — it's the only column whose width
+                        isn't driven by its content, so it's the one most likely
+                        to need tightening on a narrow screen. */}
+                    <th className="asd-th py-3 px-3 relative text-center whitespace-nowrap sticky top-0 z-20"
+                      style={{ backgroundColor: "#4a352f", ...widthStyle("__actions__", "110px") }}>
+                      <div className="flex items-start gap-1 justify-center">
+                        <span>Actions</span>
+                        <HeaderInfoTooltip text={ACTIONS_TOOLTIP} />
+                      </div>
+                      <ColumnResizer colKey="__actions__" />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -833,12 +887,13 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
                         </td>
 
                         {visibleColumns.map((key) => (
-                          <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                          <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}
+                            style={widthStyle(key, COLUMN_DEFS[key].minWidth)}>
                             {renderCell(deal, key)}
                           </td>
                         ))}
 
-                        <td className={`${ds.cell} text-center`} style={{ minWidth: "110px" }}>
+                        <td className={`${ds.cell} text-center`} style={widthStyle("__actions__", "110px")}>
                           <button onClick={() => setSelectedDeal(deal)}
                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white hover:shadow-md hover:brightness-105 transition-all"
                             style={{ backgroundColor: "#7d5a50" }}>
@@ -887,7 +942,7 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
         <PopupPortal>
           <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
             style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 220), width: "205px" }}>
-            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · click to sort
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
           </div>
         </PopupPortal>
       )}
@@ -998,15 +1053,18 @@ const AdvisorTabbedTables = ({ filters, stageFilter, loading }) => {
         })}
       </div>
 
+      {/* Both tables stay mounted and the inactive one is hidden, rather than
+          unmounted. Two things depend on this: the tab count badges are fed by
+          onCountChange, which never fires from a table that hasn't rendered;
+          and the declined table's PIPELINE_REFRESH_EVENT listener has to exist
+          at the moment an application is declined over on the matches tab. */}
       <div className="bg-white rounded-b-2xl border border-[#e6d7c3] border-t-0 shadow-lg min-h-[500px]">
-        {activeTab === "my-matches" && (
+        <div style={{ display: activeTab === "my-matches" ? "block" : "none" }}>
           <AdvisorTable filters={filters} stageFilter={stageFilter} onMatchesCountChange={handleMatchesCount} />
-        )}
-        {activeTab === "declined-deals" && (
-          <div className="p-6">
-            <DeclinedAdvisorDealsTable onCountChange={handleDeclinedCount} />
-          </div>
-        )}
+        </div>
+        <div className="p-6" style={{ display: activeTab === "declined-deals" ? "block" : "none" }}>
+          <DeclinedAdvisorDealsTable onCountChange={handleDeclinedCount} />
+        </div>
       </div>
     </div>
   );
