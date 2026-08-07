@@ -1,10 +1,40 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc, addDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+  updateDoc,
+  doc,
+  getDoc,
+  addDoc,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Eye, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Hash, DollarSign, Table2 } from "lucide-react"
+import {
+  Eye,
+  Calendar,
+  Plus,
+  RefreshCw,
+  Trash2,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Hash,
+  DollarSign,
+  Table2,
+  X,
+  Info,
+  MoreVertical,
+  Send,
+  ChevronDown,
+} from "lucide-react"
 
 /**
  * FundingApplicationsList
@@ -16,7 +46,9 @@ import { Eye, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle
  * - onViewSummary: (applicationId, applicationData) => void
  * - onEditApplication: (applicationId) => void
  * - onCreateNew: () => void
- * - onNavigateToMatches: (applicationId) => void   optional; wins over the route
+ * - onNavigateToMatches: (applicationId, matchRange) => void   optional; wins over the route
+ * - onSubmitApplication: (applicationId, applicationData) => void  optional; without
+ *   it this component writes status: "submitted" itself
  * - embedded: boolean
  */
 
@@ -25,11 +57,88 @@ import { Eye, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle
    /intern-matches-page; this is the funding equivalent. */
 const MATCHES_ROUTE = "/funding-matches"
 
+/* Both events are string literals rather than imports from the funding table,
+   so the two files can't form an import cycle. They must match the constants
+   exported there: FUNDING_APPLICATION_FILTER_EVENT and
+   FUNDING_MATCH_RANGE_EVENT. */
+const FUNDING_APPLICATION_FILTER_EVENT = "funding-application-filter"
+const FUNDING_MATCH_RANGE_EVENT = "funding-match-range-filter"
+
+/* The bands offered on each row's Matches cell. `test` counts them here;
+   `range` is what the Funding Matches table filters on. */
+const MATCH_BANDS = [
+  { key: "all", label: "All matches", short: "All", range: [0, 100], test: () => true },
+  { key: "above75", label: "Above 75%", short: ">75%", range: [75, 100], test: (s) => s >= 75 },
+  { key: "above50", label: "Above 50%", short: ">50%", range: [50, 100], test: (s) => s >= 50 },
+  { key: "below50", label: "Below 50%", short: "<50%", range: [0, 49], test: (s) => s < 50 },
+]
+const bandOf = (key) => MATCH_BANDS.find((b) => b.key === key) || MATCH_BANDS[0]
+
+/* Column explanations, same idea as the Funding Matches table: an i beside
+   each header, portaled to <body> so nothing clips it. */
+const COLUMN_TOOLTIPS = {
+  appId: "The short id for this funding request. Hover it in the row to see the full document id.",
+  application: "The funding stage you applied for, with the amount requested underneath.",
+  type: "The funding instruments you asked for — debt, equity, grant and so on.",
+  matches:
+    "Funds matched to this application. Pick a score band to see how many fall in it, then press the eye to open those matches in the Funding Matches table.",
+  lastUpdated: "When you last saved a change to this application.",
+  status: "Draft while sections are still incomplete, Ready once every section is done, Submitted after you send it.",
+  actions: "Open the quick actions menu to view matches, view the application, submit it, or delete it.",
+}
+
+const Portal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
+
+/* ─── Column header info tooltip ─────────────────────────────────────────── */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      style={{ display: "inline-flex", alignItems: "center", cursor: "help" }}
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} />
+      {rect && (
+        <Portal>
+          <div
+            style={{
+              position: "fixed",
+              zIndex: 1200,
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 100, 12), window.innerWidth - 244),
+              width: 232,
+              background: "#4a352f",
+              color: "#faf7f2",
+              fontSize: 11.5,
+              lineHeight: 1.5,
+              fontWeight: 400,
+              textTransform: "none",
+              letterSpacing: 0,
+              borderRadius: 10,
+              padding: "9px 12px",
+              boxShadow: "0 12px 28px rgba(0,0,0,0.25)",
+              pointerEvents: "none",
+            }}
+          >
+            {text}
+          </div>
+        </Portal>
+      )}
+    </span>
+  )
+}
+
 const FundingApplicationsList = ({
   onViewSummary,
   onEditApplication,
   onCreateNew,
   onNavigateToMatches,
+  onSubmitApplication,
   embedded = false,
 }) => {
   const [applications, setApplications] = useState([])
@@ -37,36 +146,53 @@ const FundingApplicationsList = ({
   const [error, setError] = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const [matchCounts, setMatchCounts] = useState({})
+  const [submittingId, setSubmittingId] = useState(null)
+  const [navNotice, setNavNotice] = useState(null)
+
+  /* applicationId -> [finalScore, ...]. Scores are kept rather than a single
+     count so the row's band picker can answer all four questions without
+     going back to Firestore. */
+  const [matchScores, setMatchScores] = useState({})
+
+  /* applicationId -> band key. Defaults to "all". */
+  const [rowBand, setRowBand] = useState({})
+
+  /* { app, rect } for the quick actions popover. */
+  const [quickActions, setQuickActions] = useState(null)
 
   const navigate = useNavigate()
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) fetchApplications(user.uid)
-      else { setLoading(false); setError("Please log in") }
+      else {
+        setLoading(false)
+        setError("Please log in")
+      }
     })
     return () => unsubscribe()
   }, [])
 
   const fetchMatchCounts = async (userId) => {
     try {
-      const q = query(
-        collection(db, "smseFundingMatches"),
-        where("smeId", "==", userId),
-        where("status", "==", "matched")
-      )
+      /* No status filter and no score floor. It used to require
+         status == "matched" and finalScore >= 70, but the match table shows
+         every record whatever its stage — so the moment a fund moved to
+         "applied" the badge count dropped while the table still listed the
+         row, and anything under 70 was invisible here even though it was
+         sitting in the table. */
+      const q = query(collection(db, "smseFundingMatches"), where("smeId", "==", userId))
       const snapshot = await getDocs(q)
-      const counts = {}
-      snapshot.forEach(d => {
+      const scores = {}
+      snapshot.forEach((d) => {
         const data = d.data()
         const appId = data.applicationId
-        const finalScore = data.finalScore || 0
-        if (appId && finalScore >= 70) {
-          counts[appId] = (counts[appId] || 0) + 1
-        }
+        if (!appId) return
+        const finalScore = Number(data.finalScore) || 0
+        if (!scores[appId]) scores[appId] = []
+        scores[appId].push(finalScore)
       })
-      setMatchCounts(counts)
+      setMatchScores(scores)
     } catch (err) {
       console.error("Failed to fetch match counts:", err)
     }
@@ -74,7 +200,8 @@ const FundingApplicationsList = ({
 
   const fetchApplications = async (userId) => {
     try {
-      setLoading(true); setError(null)
+      setLoading(true)
+      setError(null)
       let apps = []
 
       // Check if any apps exist in fundingApplicationsV2
@@ -126,8 +253,11 @@ const FundingApplicationsList = ({
 
       setApplications(apps)
       await fetchMatchCounts(userId)
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const formatAppData = (docId, data) => {
@@ -165,26 +295,93 @@ const FundingApplicationsList = ({
     }
   }
 
+  /* ─── Match bands ───────────────────────────────────────────────────── */
+  const countInBand = useMemo(
+    () => (appId, bandKey) => {
+      const scores = matchScores[appId] || []
+      return scores.filter(bandOf(bandKey).test).length
+    },
+    [matchScores],
+  )
+
+  const totalMatches = (appId) => (matchScores[appId] || []).length
+
+  /* ─── Actions ───────────────────────────────────────────────────────── */
   const handleDelete = async (appId) => {
     try {
       setDeleting(true)
       await deleteDoc(doc(db, "fundingApplicationsV2", appId))
       setApplications((p) => p.filter((a) => a.id !== appId))
       setShowDeleteConfirm(null)
-    } catch { alert("Failed to delete. Please try again.") }
-    finally { setDeleting(false) }
+      setNavNotice("Application deleted.")
+    } catch {
+      alert("Failed to delete. Please try again.")
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  /* Open the Funding Matches table. A shell-provided handler wins when there
-     is one, so a tabbed layout can switch panes without a route change. The id
-     rides along in the query string so it survives the navigation. */
-  const openMatchTable = (appId) => {
-    if (typeof onNavigateToMatches === "function") {
-      onNavigateToMatches(appId)
+  /* Submit hands off to the shell when it wants to run its own validation or
+     flow; otherwise the status is written here so the badge updates. */
+  const handleSubmit = async (app) => {
+    if (typeof onSubmitApplication === "function") {
+      onSubmitApplication(app.id, app)
       return
     }
-    navigate(`${MATCHES_ROUTE}?applicationId=${encodeURIComponent(appId)}`)
+    if (!app.isComplete) {
+      setNavNotice("Finish every section before submitting this application.")
+      return
+    }
+    try {
+      setSubmittingId(app.id)
+      await updateDoc(doc(db, "fundingApplicationsV2", app.id), {
+        status: "submitted",
+        submittedAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      })
+      setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, status: "submitted" } : a)))
+      setNavNotice(`${app.name} submitted. You'll see new fund matches as they come in.`)
+    } catch (err) {
+      console.error("Failed to submit application:", err)
+      setNavNotice("Could not submit the application. Please try again.")
+    } finally {
+      setSubmittingId(null)
+    }
   }
+
+  /* Open the Funding Matches table scoped to this application, narrowed to the
+     score band picked on the row.
+
+     Both channels are used on purpose. The query params are what survive the
+     route change and are read on mount; the events cover the case where the
+     table is already mounted and only needs re-scoping. A shell-provided
+     handler wins when there is one, so a tabbed layout can switch panes
+     without a route change. */
+  const openMatchTable = (appId, bandKey = "all") => {
+    const band = bandOf(bandKey)
+
+    window.dispatchEvent(new CustomEvent(FUNDING_APPLICATION_FILTER_EVENT, { detail: appId }))
+    window.dispatchEvent(new CustomEvent(FUNDING_MATCH_RANGE_EVENT, { detail: band.range }))
+
+    if (typeof onNavigateToMatches === "function") {
+      onNavigateToMatches(appId, band.range)
+      return
+    }
+
+    const params = new URLSearchParams({
+      applicationId: appId,
+      matchMin: String(band.range[0]),
+      matchMax: String(band.range[1]),
+    })
+    navigate(`${MATCHES_ROUTE}?${params.toString()}`)
+  }
+
+  const openQuickActions = (app, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setQuickActions((prev) => (prev?.app?.id === app.id ? null : { app, rect }))
+  }
+  const closeQuickActions = () => setQuickActions(null)
 
   const getStatusBadge = (app) => {
     if (app.status === "submitted") return { label: "Submitted", color: "#10b981", bg: "#d1fae5", Icon: CheckCircle }
@@ -223,41 +420,79 @@ const FundingApplicationsList = ({
           background:linear-gradient(135deg,rgba(250,247,242,0.97),rgba(245,240,225,0.97));
           animation:fl-fadein 0.35s ease-out;
         }
-        .fl-tbl { width:100%; min-width:900px; border-collapse:collapse; table-layout:fixed; }
+        .fl-tbl { width:100%; min-width:960px; border-collapse:collapse; table-layout:fixed; }
         .fl-tbl col.c0 { width:9%;  }
-        .fl-tbl col.c1 { width:22%; }
-        .fl-tbl col.c2 { width:11%; }
-        .fl-tbl col.c3 { width:11%; }
-        .fl-tbl col.c4 { width:12%; }
-        .fl-tbl col.c5 { width:10%; }
-        .fl-tbl col.c6 { width:25%; }
-        .fl-tbl th {
+        .fl-tbl col.c1 { width:24%; }
+        .fl-tbl col.c2 { width:12%; }
+        .fl-tbl col.c3 { width:20%; }
+        .fl-tbl col.c4 { width:13%; }
+        .fl-tbl col.c5 { width:11%; }
+        .fl-tbl col.c6 { width:11%; }
+
+        /* Same header treatment as the Funding Matches table: white label on
+           the dark bar, so the two tables read as one product. */
+        .fl-tbl thead th {
           padding:13px 15px; text-align:left;
-          font-size:11px; font-weight:700; color:#4a352f;
+          font-size:11px; font-weight:700; color:#faf7f2;
+          background:#4a352f;
           text-transform:uppercase; letter-spacing:0.55px; white-space:nowrap;
-          border-bottom:2px solid rgba(166,124,82,0.2);
+          border-bottom:1px solid rgba(230,215,195,0.35);
         }
+        .fl-th-row { display:inline-flex; align-items:center; gap:6px; }
         .fl-tbl th.r { text-align:center; }
+        .fl-tbl th.r .fl-th-row { justify-content:center; }
         .fl-tbl td { padding:12px 15px; vertical-align:middle; overflow:hidden; }
         .fl-tbl tbody tr { border-bottom:1px solid rgba(200,182,166,0.15); transition:background 0.15s; }
         .fl-tbl tbody tr:last-child { border-bottom:none; }
         .fl-tbl tbody tr:hover { background:rgba(166,124,82,0.04); }
         .ell { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
-        .fl-acts { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:nowrap; }
-        .fl-btn {
-          display:inline-flex; align-items:center; gap:5px;
-          padding:6px 11px; border-radius:7px;
-          font-size:12px; font-weight:500; cursor:pointer;
-          white-space:nowrap; flex-shrink:0;
-          border:1px solid transparent;
-          transition:transform 0.15s, box-shadow 0.15s; line-height:1;
-        }
-        .fl-btn:hover { transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,0.12); }
-        .fl-view    { background:rgba(250,247,242,0.9); color:#4a352f; border-color:rgba(200,182,166,0.4); }
-        .fl-del     { background:rgba(250,247,242,0.9); color:#dc2626; border-color:rgba(220,38,38,0.2); padding:6px 8px; }
-        .fb-matches { background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2; box-shadow:0 2px 6px rgba(166,124,82,0.3); font-weight:600; }
-        .fb-matches:hover { box-shadow:0 4px 12px rgba(166,124,82,0.45) !important; }
         .fl-appid { display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:linear-gradient(135deg,#5d4037,#4a332a);color:#FAF7F2;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.5px;white-space:nowrap;font-family:'SF Mono','Monaco','Consolas',monospace; }
+
+        /* Matches cell: band picker + the eye that opens those matches */
+        .fl-match { display:flex; align-items:center; gap:7px; min-width:0; }
+        .fl-sel-wrap { position:relative; flex:1 1 auto; min-width:0; }
+        .fl-sel {
+          width:100%; appearance:none; -webkit-appearance:none;
+          padding:5px 24px 5px 10px; border-radius:999px;
+          border:1px solid rgba(200,182,166,0.55);
+          background:rgba(255,255,255,0.85); color:#4a352f;
+          font-size:11.5px; font-weight:600; font-family:inherit;
+          cursor:pointer; line-height:1.4;
+          text-overflow:ellipsis;
+        }
+        .fl-sel:focus-visible { outline:2px solid #a67c52; outline-offset:1px; }
+        .fl-sel-chev { position:absolute; right:8px; top:50%; transform:translateY(-50%); pointer-events:none; color:#7d5a50; }
+        .fl-eye {
+          display:inline-flex; align-items:center; justify-content:center;
+          width:28px; height:28px; flex-shrink:0;
+          border-radius:8px; cursor:pointer;
+          border:1px solid transparent;
+          background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2;
+          box-shadow:0 2px 6px rgba(166,124,82,0.3);
+          transition:transform 0.15s, box-shadow 0.15s;
+        }
+        .fl-eye:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(166,124,82,0.45); }
+        .fl-eye:disabled { opacity:0.4; cursor:not-allowed; transform:none; box-shadow:none; }
+
+        .fl-kebab {
+          display:inline-flex; align-items:center; justify-content:center;
+          width:32px; height:32px; margin:0 auto;
+          border-radius:9px; cursor:pointer;
+          border:1px solid rgba(200,182,166,0.5);
+          background:rgba(250,247,242,0.9); color:#4a352f;
+          transition:transform 0.15s, box-shadow 0.15s, background 0.15s;
+        }
+        .fl-kebab:hover { transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,0.12); background:#fff; }
+
+        .fl-menu-item {
+          width:100%; display:flex; align-items:center; gap:9px;
+          padding:10px 14px; background:none; border:none;
+          font-size:12.5px; font-family:inherit; color:#4a352f;
+          text-align:left; cursor:pointer;
+        }
+        .fl-menu-item:hover:not(:disabled) { background:#faf7f2; }
+        .fl-menu-item:disabled { color:#b9aa9c; cursor:not-allowed; }
+        .fl-menu-item.danger { color:#dc2626; }
       `}</style>
 
       <div style={{ width: "100%", boxSizing: "border-box", padding: embedded ? "14px" : "22px", fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
@@ -277,6 +512,15 @@ const FundingApplicationsList = ({
             <Plus size={16} /> Create New Application
           </button>
         </div>
+
+        {navNotice && (
+          <div style={{ marginBottom: 14, padding: "12px 16px", borderRadius: 12, background: "#faf7f2", border: "1px solid #e6d7c3", color: "#4a352f", fontSize: 13, display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <span>{navNotice}</span>
+            <button onClick={() => setNavNotice(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#7d5a50" }}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* EMPTY */}
         {applications.length === 0 ? (
@@ -298,18 +542,50 @@ const FundingApplicationsList = ({
               </colgroup>
               <thead>
                 <tr>
-                  <th>AppID</th>
-                  <th>Application</th>
-                  <th>Type</th>
-                  <th>Matches</th>
-                  <th>Last Updated</th>
-                  <th>Status</th>
-                  <th className="r">Actions</th>
+                  <th>
+                    <span className="fl-th-row">
+                      AppID <HeaderInfoTooltip text={COLUMN_TOOLTIPS.appId} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="fl-th-row">
+                      Application <HeaderInfoTooltip text={COLUMN_TOOLTIPS.application} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="fl-th-row">
+                      Type <HeaderInfoTooltip text={COLUMN_TOOLTIPS.type} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="fl-th-row">
+                      Matches <HeaderInfoTooltip text={COLUMN_TOOLTIPS.matches} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="fl-th-row">
+                      Last Updated <HeaderInfoTooltip text={COLUMN_TOOLTIPS.lastUpdated} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="fl-th-row">
+                      Status <HeaderInfoTooltip text={COLUMN_TOOLTIPS.status} />
+                    </span>
+                  </th>
+                  <th className="r">
+                    <span className="fl-th-row">
+                      Actions <HeaderInfoTooltip text={COLUMN_TOOLTIPS.actions} />
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {applications.map((app) => {
                   const { label, color, bg, Icon } = getStatusBadge(app)
+                  const bandKey = rowBand[app.id] || "all"
+                  const bandTotal = countInBand(app.id, bandKey)
+                  const hasAnyMatch = totalMatches(app.id) > 0
+
                   return (
                     <tr key={app.id}>
                       <td>
@@ -317,6 +593,7 @@ const FundingApplicationsList = ({
                           <Hash size={10} /> {app.appId}
                         </span>
                       </td>
+
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                           <div style={{ width: 32, height: 32, flexShrink: 0, background: "rgba(166,124,82,0.1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -328,47 +605,80 @@ const FundingApplicationsList = ({
                           </div>
                         </div>
                       </td>
+
                       <td>
-                        <span style={{ fontSize: 12, color: "#4a352f", fontWeight: 500 }}>{app.fundingType || "—"}</span>
+                        <span className="ell" style={{ fontSize: 12, color: "#4a352f", fontWeight: 500 }} title={app.fundingType}>
+                          {app.fundingType || "—"}
+                        </span>
                       </td>
+
+                      {/* Matches — pick a score band, then press the eye to open
+                          exactly those rows in the Funding Matches table. */}
                       <td>
-                        {matchCounts[app.id] > 0 ? (
-                          <span className="ell" style={{ display: "inline-block", maxWidth: "100%", padding: "3px 9px", background: "rgba(166,124,82,0.1)", borderRadius: 20, fontSize: 11, fontWeight: 500, color: "#7d5a50" }}>
-                            {matchCounts[app.id]} {matchCounts[app.id] === 1 ? "match" : "matches"}
-                          </span>
+                        {hasAnyMatch ? (
+                          <div className="fl-match">
+                            <span className="fl-sel-wrap">
+                              <select
+                                className="fl-sel"
+                                value={bandKey}
+                                onChange={(e) => setRowBand((prev) => ({ ...prev, [app.id]: e.target.value }))}
+                                aria-label={`Match score band for ${app.name}`}
+                                title="Choose which matches to count and open"
+                              >
+                                {MATCH_BANDS.map((b) => (
+                                  <option key={b.key} value={b.key}>
+                                    {countInBand(app.id, b.key)} · {b.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown size={12} className="fl-sel-chev" />
+                            </span>
+                            <button
+                              className="fl-eye"
+                              onClick={() => openMatchTable(app.id, bandKey)}
+                              disabled={bandTotal === 0}
+                              aria-label={`Open ${bandOf(bandKey).label.toLowerCase()} for ${app.name}`}
+                              title={
+                                bandTotal === 0
+                                  ? `No funds in ${bandOf(bandKey).label.toLowerCase()} yet`
+                                  : `Open the Funding Matches table — ${bandTotal} ${
+                                      bandTotal === 1 ? "fund" : "funds"
+                                    } ${bandOf(bandKey).short}`
+                              }
+                            >
+                              <Eye size={14} />
+                            </button>
+                          </div>
                         ) : (
-                          <span style={{ fontSize: 11, color: "#9ca3af" }}>—</span>
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>— no matches yet</span>
                         )}
                       </td>
+
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#6b7280", fontSize: 11, whiteSpace: "nowrap" }}>
                           <Calendar size={12} style={{ flexShrink: 0 }} /> {app.lastUpdatedFormatted}
                         </div>
                       </td>
+
+                      {/* Status — unchanged */}
                       <td>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", background: bg, color, borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
                           <Icon size={10} /> {label}
                         </span>
                       </td>
 
-                      {/* Actions — one route to the matches, plus summary and
-                          delete. The inline matches panel is gone. */}
-                      <td>
-                        <div className="fl-acts">
-                          <button
-                            className="fl-btn fb-matches"
-                            onClick={() => openMatchTable(app.id)}
-                            title="Open the Funding Matches table"
-                          >
-                            <Table2 size={12} /> View Match Table
-                          </button>
-                          <button className="fl-btn fl-view" onClick={() => onViewSummary(app.id, app)} title="View application summary">
-                            <Eye size={12} />
-                          </button>
-                          <button className="fl-btn fl-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
+                      {/* Actions — one quick actions menu, nothing else. */}
+                      <td style={{ textAlign: "center" }}>
+                        <button
+                          className="fl-kebab"
+                          onClick={(e) => openQuickActions(app, e)}
+                          aria-label={`Quick actions for ${app.name}`}
+                          aria-haspopup="menu"
+                          aria-expanded={quickActions?.app?.id === app.id}
+                          title="Quick actions"
+                        >
+                          <MoreVertical size={15} />
+                        </button>
                       </td>
                     </tr>
                   )
@@ -378,6 +688,120 @@ const FundingApplicationsList = ({
           </div>
         )}
       </div>
+
+      {/* QUICK ACTIONS MENU */}
+      {quickActions &&
+        (() => {
+          const app = quickActions.app
+          const rect = quickActions.rect
+          const menuWidth = 232
+          const menuHeight = 208
+          let left = rect.right - menuWidth
+          left = Math.min(Math.max(left, 12), window.innerWidth - menuWidth - 12)
+          const openUpward = rect.bottom + menuHeight > window.innerHeight - 12
+          const top = openUpward ? undefined : rect.bottom + 8
+          const bottom = openUpward ? window.innerHeight - rect.top + 8 : undefined
+          const bandKey = rowBand[app.id] || "all"
+          const alreadySubmitted = app.status === "submitted"
+
+          return (
+            <Portal>
+              <div style={{ position: "fixed", inset: 0, zIndex: 1100 }} onClick={closeQuickActions} />
+              <div
+                role="menu"
+                style={{
+                  position: "fixed",
+                  left,
+                  top,
+                  bottom,
+                  width: menuWidth,
+                  zIndex: 1101,
+                  background: "#fff",
+                  borderRadius: 14,
+                  border: "1px solid #e6d7c3",
+                  boxShadow: "0 20px 44px rgba(74,53,47,0.22)",
+                  overflow: "hidden",
+                  paddingBottom: 4,
+                  fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    borderBottom: "1px solid #e6d7c3",
+                  }}
+                >
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "#4a352f" }}>Quick actions</span>
+                  <button
+                    onClick={closeQuickActions}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#7d5a50", display: "flex" }}
+                    aria-label="Close quick actions"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <button
+                  className="fl-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    closeQuickActions()
+                    openMatchTable(app.id, bandKey)
+                  }}
+                >
+                  <Table2 size={14} /> View matches
+                </button>
+
+                <button
+                  className="fl-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    closeQuickActions()
+                    onViewSummary(app.id, app)
+                  }}
+                >
+                  <Eye size={14} /> View application
+                </button>
+
+                <button
+                  className="fl-menu-item"
+                  role="menuitem"
+                  disabled={alreadySubmitted || submittingId === app.id}
+                  title={
+                    alreadySubmitted
+                      ? "This application has already been submitted"
+                      : app.isComplete
+                        ? "Send this application"
+                        : "Finish every section first"
+                  }
+                  onClick={() => {
+                    closeQuickActions()
+                    handleSubmit(app)
+                  }}
+                >
+                  <Send size={14} />{" "}
+                  {alreadySubmitted ? "Already submitted" : submittingId === app.id ? "Submitting…" : "Submit application"}
+                </button>
+
+                <div style={{ borderTop: "1px solid #e6d7c3", margin: "4px 0" }} />
+
+                <button
+                  className="fl-menu-item danger"
+                  role="menuitem"
+                  onClick={() => {
+                    closeQuickActions()
+                    setShowDeleteConfirm(app.id)
+                  }}
+                >
+                  <Trash2 size={14} /> Delete application
+                </button>
+              </div>
+            </Portal>
+          )
+        })()}
 
       {/* DELETE MODAL */}
       {showDeleteConfirm && (

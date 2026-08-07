@@ -1,12 +1,12 @@
 // src/utils/roleRoutes.js
 // Single source of truth for "where does this logged-in user belong?"
 //
-// Strategy:
-//   1. If we remember which portal they were last in, send them back there.
-//   2. Otherwise fall back to their highest-priority role.
-// Step 1 matters because multi-role users (e.g. a catalyst who is also an
-// admin) would otherwise always be routed to whichever role ranks highest,
-// regardless of which portal they were actually using.
+// Strategy, in order:
+//   1. The portal they were actually last in (recorded by PortalMemory).
+//      This is trusted on its own: ProtectedRoute already admitted them
+//      there, which is better evidence than string-matching a role field.
+//   2. Their highest-priority role, if we have no memory.
+//   3. SME dashboard as a last resort.
 
 export const PUBLIC_HOME = "/";
 
@@ -21,7 +21,7 @@ export const DASHBOARD_ROUTES = {
   associator: "/associator-dashboard",
   cmf: "/cmf-profile",
   investor: "/investor-profile",
- catalyst: "/support-profile",
+  catalyst: "/support-profile",
   programsponsor: "/program-sponsor-profile",
   advisor: "/advisor-dashboard",
   intern: "/intern-dashboard",
@@ -44,18 +44,6 @@ const ROLE_PRIORITY = [
 // Every portal uses the same wording on the "go back" button.
 const DEFAULT_PORTAL_LABEL = "My Dashboard";
 
-export const PORTAL_LABELS = {
-  admin: DEFAULT_PORTAL_LABEL,
-  associator: DEFAULT_PORTAL_LABEL,
-  cmf: DEFAULT_PORTAL_LABEL,
-  investor: DEFAULT_PORTAL_LABEL,
-  catalyst: DEFAULT_PORTAL_LABEL,
-  programsponsor: DEFAULT_PORTAL_LABEL,
-  advisor: DEFAULT_PORTAL_LABEL,
-  intern: DEFAULT_PORTAL_LABEL,
-  sme: DEFAULT_PORTAL_LABEL,
-};
-
 // Every spelling your Firestore docs might contain -> canonical key.
 const ROLE_ALIASES = {
   admin: "admin",
@@ -69,11 +57,14 @@ const ROLE_ALIASES = {
   business: "sme",
   businesses: "sme",
   npo: "sme",
+  npos: "sme",
   corporate: "sme",
+  corporates: "sme",
 
   investor: "investor",
   investors: "investor",
   funder: "investor",
+  funders: "investor",
 
   catalyst: "catalyst",
   catalysts: "catalyst",
@@ -89,27 +80,44 @@ const ROLE_ALIASES = {
   advisor: "advisor",
   advisors: "advisor",
   adviser: "advisor",
+  advisers: "advisor",
   mentor: "advisor",
+  mentors: "advisor",
   boardmember: "advisor",
+  boardmembers: "advisor",
 
   intern: "intern",
   interns: "intern",
   graduate: "intern",
+  graduates: "intern",
   student: "intern",
+  students: "intern",
 
   programsponsor: "programsponsor",
   programsponsors: "programsponsor",
+  programmesponsor: "programsponsor",
+  programmesponsors: "programsponsor",
   sponsor: "programsponsor",
+  sponsors: "programsponsor",
 
   associator: "associator",
+  associators: "associator",
   association: "associator",
   associations: "associator",
   memberorganisation: "associator",
+  memberorganisations: "associator",
+  memberorganization: "associator",
 
   cmf: "cmf",
+  cmfs: "cmf",
   capitalmarketfacilitator: "cmf",
+  capitalmarketfacilitators: "cmf",
   capitalandmarketfacilitator: "cmf",
+  capitalandmarketfacilitators: "cmf",
+  capitalmarketsfacilitator: "cmf",
+  marketfacilitator: "cmf",
   facilitator: "cmf",
+  facilitators: "cmf",
 };
 
 const normalise = (value) =>
@@ -154,11 +162,7 @@ const PORTAL_TESTS = [
       p === "/my-cohorts",
   },
   {
-    // Catalyst pages are split across two prefixes:
-    //   /support-profile, /support-matches, /support-messages, /support-insights,
-    //   /support-documents, /support-calendar, /support-settings,
-    //   /support-beneficiaries, /support-analytics, /support/billing/*
-    //   /catalyst/cohorts, /catalyst/investments
+    // Catalyst pages span two prefixes: /support-* and /catalyst/*
     role: "catalyst",
     test: (p) => p.startsWith("/support") || p.startsWith("/catalyst"),
   },
@@ -223,19 +227,30 @@ export const rememberPortal = (pathname) => {
 };
 
 /**
- * Read the remembered portal, but only trust it if the user still holds
- * that role.
+ * The portal the user was last in.
+ *
+ * This is trusted whether or not the role field confirms it. The user reached
+ * that portal through ProtectedRoute, so the visit itself is the evidence —
+ * and role strings in Firestore vary too much to be a reliable gatekeeper
+ * here. Access control stays with ProtectedRoute, where it belongs; this
+ * function only decides which link to show.
  */
 export const getRememberedPortal = (userRoles = []) => {
   try {
     const stored = sessionStorage.getItem(LAST_PORTAL_KEY);
-    if (!stored) return null;
+    if (!stored || !DASHBOARD_ROUTES[stored]) return null;
 
-    const held = normaliseRoles(userRoles);
     if (DEBUG_PORTAL) {
-      console.log("[portal] stored:", stored, "| held roles:", held);
+      console.log(
+        "[portal] stored:",
+        stored,
+        "| held roles:",
+        normaliseRoles(userRoles),
+        "| raw:",
+        userRoles
+      );
     }
-    return held.includes(stored) ? stored : null;
+    return stored;
   } catch {
     return null;
   }
