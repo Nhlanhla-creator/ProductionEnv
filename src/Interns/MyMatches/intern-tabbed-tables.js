@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Check,
   TrendingUp,
+  Info,
 } from "lucide-react"
 import { collection, getDocs, doc, getDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
@@ -51,7 +52,15 @@ import { InternTable } from "./intern-table"
      header #4a352f · header text #faf7f2 · toolbar #faf7f2 · border #e6d7c3
      border2 #c8b6a6 · chip #f5f0e1 · chip active #7d5a50 · accent #a67c52
      muted #a89482 · body text #4a352f
+
+   Type scale — the same constants intern-table.jsx uses, so the two tabs read
+   as one table rather than two. Both used to sit at 0.8rem, a step below every
+   other match table in the product.
+     body cell 0.875rem · secondary 0.75rem · header 0.75rem uppercase
    ════════════════════════════════════════════════════════════════════════ */
+
+const CELL_FONT_SIZE = "0.875rem"
+const SECONDARY_FONT_SIZE = "0.75rem"
 
 // Same success statuses the SME side uses, so an accepted/confirmed deal
 // shows on BOTH the Intern and SME sides (includes every status variant).
@@ -73,11 +82,43 @@ const PopupPortal = ({ children }) => {
   return createPortal(children, document.body)
 }
 
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Same component as the matches table. Portaled to <body> because the header
+   cell is sticky and would otherwise clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
+}
+
+/* Inherits the cell's font size rather than hard-coding one. */
 const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#a89482", fontSize: "0.75rem" }}>{text || "-"}</span>
+    return <span style={{ color: "#a89482", fontSize: "inherit" }}>{text || "-"}</span>
   }
 
   const value = text.toString()
@@ -85,7 +126,7 @@ const TruncatedText = ({ text, maxLength = 30 }) => {
   const displayText = isExpanded || !shouldTruncate ? value : `${value.slice(0, maxLength)}...`
 
   return (
-    <div style={{ lineHeight: "1.3", fontSize: "0.75rem" }}>
+    <div style={{ lineHeight: "1.35", fontSize: "inherit" }}>
       <span style={{ wordBreak: "break-word" }}>{displayText}</span>
       {shouldTruncate && (
         <button
@@ -94,7 +135,7 @@ const TruncatedText = ({ text, maxLength = 30 }) => {
             border: "none",
             color: "#a67c52",
             cursor: "pointer",
-            fontSize: "0.7rem",
+            fontSize: SECONDARY_FONT_SIZE,
             marginLeft: "4px",
             textDecoration: "underline",
             padding: "0",
@@ -404,26 +445,28 @@ const SmsRatingModal = ({ internship, isOpen, onClose }) => {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Internship history — column configuration.
+   Successful deals — column configuration.
 
-   Company is the pinned first column and Action the last, so neither appears
-   here. Widths are generous: each header carries a grip, a sort control and a
-   filter control, and narrow columns break labels mid-word.
+   Business Name is the pinned first column and Action the last, so neither
+   appears here — but both resize like everything else, via the reserved width
+   keys below. Every column carries a tooltip, matching the matches table:
+   several of these values are derived rather than stored, and a label alone
+   doesn't say where they came from.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  fundType: { label: "Monthly Stipend", width: 178, filterType: "fundType", visible: true, priority: 2, sortable: true },
-  location: { label: "Location", width: 152, filterType: "location", visible: true, priority: 3, sortable: true },
-  completionDate: { label: "Completion Date", width: 172, filterType: "completionDate", visible: true, priority: 3, sortable: true },
-  sector: { label: "Sector", width: 158, filterType: "sector", visible: true, priority: 3, sortable: true },
-  duration: { label: "Duration", width: 146, filterType: "duration", visible: true, priority: 4, sortable: true },
-  rating: { label: "Rating", align: "center", width: 158, filterType: "rating", visible: true, priority: 1, sortable: true },
-  status: { label: "Status", width: 158, filterType: "status", visible: true, priority: 1, sortable: true },
-  absorptionStatus: { label: "Post-Internship", width: 180, filterType: "absorptionStatus", visible: true, priority: 2, sortable: true },
+  fundType: { label: "Monthly Stipend", width: 178, filterType: "fundType", visible: true, priority: 2, sortable: true, tooltip: "What the placement pays per month, as recorded on the application." },
+  location: { label: "Location", width: 152, filterType: "location", visible: true, priority: 3, sortable: true, tooltip: "Where the business is based." },
+  completionDate: { label: "Completion Date", width: 172, filterType: "completionDate", visible: true, priority: 3, sortable: true, tooltip: "When the placement finished. Blank while it's still running." },
+  sector: { label: "Sector", width: 158, filterType: "sector", visible: true, priority: 3, sortable: true, tooltip: "The industry the business trades in." },
+  duration: { label: "Duration", width: 146, filterType: "duration", visible: true, priority: 4, sortable: true, tooltip: "How long the placement runs for." },
+  rating: { label: "Rating", align: "center", width: 158, filterType: "rating", visible: true, priority: 1, sortable: true, tooltip: "The average rating interns have given this business, across every review on file — not just yours." },
+  status: { label: "Status", width: 158, filterType: "status", visible: true, priority: 1, sortable: true, tooltip: "Where the placement stands: accepted, confirmed, active, signed or completed." },
+  absorptionStatus: { label: "Post-Internship", width: 180, filterType: "absorptionStatus", visible: true, priority: 2, sortable: true, tooltip: "What happened after the placement ended — hired, extended, under review, or not continuing. You set this from the detail pop-up." },
 
-  role: { label: "Role", width: 182, filterType: "role", visible: false, priority: 4, sortable: true },
-  matchScore: { label: "Match %", align: "center", width: 138, filterType: "matchScore", visible: false, priority: 4, sortable: true },
-  startDate: { label: "Start Date", width: 152, filterType: null, visible: false, priority: 4, sortable: true },
-  appliedDate: { label: "Applied", width: 152, filterType: null, visible: false, priority: 4, sortable: true },
+  role: { label: "Role", width: 182, filterType: "role", visible: false, priority: 4, sortable: true, tooltip: "The role you were placed in." },
+  matchScore: { label: "Match %", align: "center", width: 138, filterType: "matchScore", visible: false, priority: 4, sortable: true, tooltip: "The match score calculated when you applied — skills, work mode, location and availability." },
+  startDate: { label: "Start Date", width: 152, filterType: null, visible: false, priority: 4, sortable: true, tooltip: "When the placement began." },
+  appliedDate: { label: "Applied", width: 152, filterType: null, visible: false, priority: 4, sortable: true, tooltip: "When you submitted the application." },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -434,9 +477,16 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const COMPANY_WIDTH = 230
-const ACTION_WIDTH = 190
+/* Business Name and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const COMPANY_KEY = "__company__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [COMPANY_KEY]: 230, [ACTION_KEY]: 190 }
 const MIN_COLUMN_WIDTH = 84
+
+const NAME_TOOLTIP = "The business you were placed with. Click the eye to open the full record and set the post-internship outcome."
+const ACTION_TOOLTIP = "Open the full record for this placement, or rate the business so other interns can see what it was like."
 
 const EMPTY_FILTERS = {
   name: "",
@@ -455,7 +505,9 @@ const EMPTY_FILTERS = {
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-const VIEWS_STORAGE_KEY = "intern-history-views-v1"
+// v2: the fixed columns now store their widths in this map too, so a v1 view
+// would leave them undefined.
+const VIEWS_STORAGE_KEY = "intern-history-views-v2"
 const FILTERS_STORAGE_KEY = "intern-history-filters-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -469,7 +521,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -489,7 +541,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -577,7 +629,7 @@ const ABSORPTION_COLORS = {
 const absorptionStyle = (s) => ABSORPTION_COLORS[s] || { color: "#f5f0e1", textColor: "#a89482" }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Internship history table
+   Successful deals table
    ════════════════════════════════════════════════════════════════════════ */
 const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, onNotify, onRate }) => {
   const [selectedInternship, setSelectedInternship] = useState(null)
@@ -612,6 +664,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -780,13 +833,23 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared above startResize because startResize calls it — a
+     const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider, exactly as on the matches tab. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -794,6 +857,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -805,6 +869,31 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
   }
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="ih-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
 
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
@@ -1000,12 +1089,13 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const companyWidth = widthOf(COMPANY_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    // Left-pinned columns stack to the right of the frozen Company column.
-    let leftAcc = COMPANY_WIDTH
+    // Left-pinned columns stack to the right of the frozen Business Name column.
+    let leftAcc = companyWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1021,21 +1111,21 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, companyWidth])
 
-  const totalWidth = COMPANY_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = companyWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
-  const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
+  const cellPadding = density === "compact" ? "0.45rem 0.4rem" : "0.65rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
 
   const tableCellStyle = {
     padding: cellPadding,
     borderBottom: "1px solid #e6d7c3",
     borderRight: "1px solid #e6d7c3",
-    fontSize: "0.8rem",
+    fontSize: CELL_FONT_SIZE,
     verticalAlign: "top",
     color: "#4a352f",
-    lineHeight: "1.3",
+    lineHeight: "1.35",
     overflow: "hidden",
   }
 
@@ -1086,7 +1176,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
       case "fundType":
         return (
           <td key={key} style={style}>
-            <span className="inline-block px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-[10px] font-medium">
+            <span className="inline-block px-2 py-0.5 rounded-full bg-[#f5f0e1] text-[#4a352f] text-xs font-medium">
               {d.fundType || "Not specified"}
             </span>
           </td>
@@ -1121,7 +1211,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
         return (
           <td key={key} style={style}>
             <span
-              className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap"
+              className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
               style={{ backgroundColor: s.color, color: s.textColor }}
             >
               {d.absorptionStatus || "Not specified"}
@@ -1136,11 +1226,11 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
           <td key={key} style={{ ...style, textAlign: "center" }}>
             <div className="flex flex-col items-center gap-1">
               <StarRating rating={Math.round(rating)} size={13} />
-              <span className="text-[11px] font-semibold text-[#7d5a50]">
+              <span className="text-xs font-semibold text-[#7d5a50]">
                 {rating > 0 ? `${rating.toFixed(1)}/5` : "Not rated"}
               </span>
               {d.reviewsCount > 0 && (
-                <span className="text-[10px] text-[#a89482]">
+                <span className="text-xs text-[#a89482]">
                   {d.reviewsCount} review{d.reviewsCount > 1 ? "s" : ""}
                 </span>
               )}
@@ -1166,7 +1256,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
   }
 
   if (loading) {
-    return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading internship history...</div>
+    return <div className="p-10 text-center text-[#7d5a50] text-sm">Loading successful deals...</div>
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -1178,7 +1268,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
       <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-bold text-[#4a352f] m-0">Internship History</h2>
+            <h2 className="text-lg font-bold text-[#4a352f] m-0">Successful Deals</h2>
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
               Viewing: {activeView.name}
@@ -1404,7 +1494,8 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                       </div>
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -1509,7 +1600,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
             .ih-th-tools { display: flex; align-items: center; flex-shrink: 0; }
             .ih-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .ih-th:hover .ih-th-grip { opacity: .45; }
-            .ih-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .ih-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .ih-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -1520,7 +1611,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
               borderCollapse: "separate",
               borderSpacing: 0,
               background: "white",
-              fontSize: "0.8rem",
+              fontSize: CELL_FONT_SIZE,
               backgroundColor: "#faf7f2",
               tableLayout: "fixed",
               width: totalWidth,
@@ -1533,21 +1624,23 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                   className="ih-th font-semibold uppercase tracking-wider text-xs top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: COMPANY_WIDTH,
+                    width: companyWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
                   }}
                 >
                   <div className="ih-th-row">
-                    <span className="ih-th-label" title="Company">
+                    <span className="ih-th-label" title="Business Name">
                       Business Name
                     </span>
                     <span className="ih-th-tools">
                       <SortTrigger columnKey="name" />
                       <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <HeaderInfoTooltip text={NAME_TOOLTIP} />
                     </span>
                   </div>
+                  <ColumnResizer colKey={COMPANY_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -1559,7 +1652,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -1593,9 +1686,10 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                           {pinned[key] && <Pin size={10} className="opacity-60 mt-0.5" />}
                           {col.sortable && <SortTrigger columnKey={key} />}
                           {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="ih-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -1604,12 +1698,16 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                   className="ih-th text-center font-semibold uppercase tracking-wider text-xs top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="ih-th-row justify-center">
+                    <span className="ih-th-label">Action</span>
+                    <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -1626,7 +1724,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                         <Trophy size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
-                        {internships.length === 0 ? "No internships here yet" : "No internships match these filters"}
+                        {internships.length === 0 ? "No successful deals yet" : "No deals match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0 max-w-md">
                         {internships.length === 0
@@ -1655,30 +1753,35 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                       onMouseLeave={() => setHoveredRow(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* Company — pinned left, sector underneath. */}
+                      {/* Business Name — pinned left, sector underneath. */}
                       <td
                         className="sticky left-0 z-10"
                         style={{
                           ...tableCellStyle,
-                          width: COMPANY_WIDTH,
+                          width: companyWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
                         }}
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-[#4a352f] break-words text-sm">{d.sponsorName}</span>
+                          <div className="w-6 h-6 rounded-full bg-[#f5f0e1] text-[#7d5a50] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                            {(d.sponsorName || "?").charAt(0)}
+                          </div>
                           <button
                             onClick={() => handleViewDetails(d)}
-                            className="text-[#a89482] hover:text-[#7d5a50] flex-shrink-0"
-                            aria-label={`View internship with ${d.sponsorName}`}
-                            title="View internship"
+                            className="font-medium text-[#4a352f] break-words text-sm text-left hover:text-[#7d5a50]"
                           >
-                            <Eye size={13} />
+                            {d.sponsorName}
                           </button>
+                          <Eye
+                            size={13}
+                            className="text-[#a89482] hover:text-[#7d5a50] flex-shrink-0 cursor-pointer"
+                            onClick={() => handleViewDetails(d)}
+                          />
                         </div>
                         {d.sector && d.sector !== "-" && (
-                          <div className="text-[10px] text-[#a89482] mt-0.5">{d.sector}</div>
+                          <div className="text-xs text-[#a89482] mt-0.5 pl-7">{d.sector}</div>
                         )}
                       </td>
 
@@ -1688,7 +1791,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -1697,7 +1800,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                         <div className="flex flex-col gap-1.5">
                           <button
                             onClick={() => handleViewDetails(d)}
-                            title="View internship"
+                            title="View deal"
                             className="inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-white hover:brightness-105 px-2.5 py-1.5 bg-[#7d5a50]"
                           >
                             <ArrowRight size={13} className="flex-shrink-0" />
@@ -1780,7 +1883,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
                     className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
                   />
                 </div>
-                <p className="text-[10px] text-[#a89482] mt-2">Internships without a completion date are hidden while this filter is on.</p>
+                <p className="text-[10px] text-[#a89482] mt-2">Deals without a completion date are hidden while this filter is on.</p>
               </>
             )}
 
@@ -1902,7 +2005,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
             )}
 
             {[
-              { type: "name", label: "Company name", placeholder: "Search company..." },
+              { type: "name", label: "Business name", placeholder: "Search business..." },
               { type: "fundType", label: "Monthly Stipend", placeholder: "Search stipend..." },
               { type: "role", label: "Role", placeholder: "Search role..." },
             ].map(
@@ -1976,7 +2079,7 @@ const SuccessfulInternshipsTable = ({ internships = [], loading, onCountChange, 
         </PopupPortal>
       )}
 
-      {/* Internship detail */}
+      {/* Deal detail */}
       {selectedInternship &&
         createPortal(
           <div
@@ -2211,13 +2314,13 @@ const InternTabbedTables = ({ filters, stageFilter, loading, matchesCount }) => 
 
           setInternships(successfulApps)
         } catch (error) {
-          console.error("Error fetching successful internships:", error)
+          console.error("Error fetching successful deals:", error)
         } finally {
           setLoadingInternships(false)
         }
       },
       (error) => {
-        console.error("Error in successful internships listener:", error)
+        console.error("Error in successful deals listener:", error)
         setLoadingInternships(false)
       },
     )
@@ -2232,7 +2335,7 @@ const InternTabbedTables = ({ filters, stageFilter, loading, matchesCount }) => 
 
   const TABS = [
     { id: "my-matches", label: "My Matches", icon: Users, count: tableMatchesCount ?? matchesCount ?? 0 },
-    { id: "internship-history", label: "My Internship History", icon: Trophy, count: internshipsCount },
+    { id: "successful-deals", label: "Successful Deals", icon: Trophy, count: internshipsCount },
   ]
 
   return (
@@ -2296,7 +2399,7 @@ const InternTabbedTables = ({ filters, stageFilter, loading, matchesCount }) => 
           />
         </div>
 
-        <div style={{ display: activeTab === "internship-history" ? "block" : "none" }}>
+        <div style={{ display: activeTab === "successful-deals" ? "block" : "none" }}>
           <SuccessfulInternshipsTable
             internships={internships}
             loading={loading || loadingInternships}
