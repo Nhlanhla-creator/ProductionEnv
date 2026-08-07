@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   Info, Calendar, X, Eye, ChevronDown, MoreVertical, CheckCircle,
   Clock, Users, Download, MessageSquare, ArrowRight, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase, Video, LayoutGrid, Trash2, Plus,
-  GripVertical, ExternalLink, AlertTriangle, Shield, XCircle
+  GripVertical, ExternalLink, AlertTriangle, Shield, XCircle,
+  ArrowUp, ArrowDown, ArrowUpDown
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import {
@@ -63,10 +64,7 @@ const getMatchLabel = (score) => {
 
 // Stage lookups take the currently *active* stage list as a parameter (BIG
 // Default, or whichever PROGRAMME_TEMPLATES entry the investor has switched
-// to, with any customization applied) — rather than always resolving against
-// the flat DEFAULT_STAGES import. Without this, an investor switching to e.g.
-// the Grant Funding template (which introduces a "Committee Review" stage)
-// would find that stage never shows up anywhere in this table.
+// to, with any customization applied).
 const getStageById = (id, stages = DEFAULT_STAGES) =>
   stages.find((s) => s.id === id) || stages[0];
 
@@ -116,12 +114,7 @@ const formatCurrency = (value) => {
   return `R${num}`;
 };
 
-// Derives how many calendar days have elapsed since the stage was last
-// updated. Handles the shapes `updatedAt` can arrive in:
-//   • ISO string (what this collection writes)  → new Date(string)
-//   • Firestore Timestamp object                → .toDate()
-//   • Serialised { seconds, nanoseconds }       → seconds * 1000
-//   • Already a JS Date                         → use directly
+// Derives how many calendar days have elapsed since the stage was last updated.
 const calculateDaysInStage = (updatedAt) => {
   if (!updatedAt) return 0;
   let date;
@@ -277,8 +270,11 @@ const PopupPortal = ({ children }) => {
 };
 
 // ─── Column header info tooltip ───────────────────────────────────────────────
+// Portaled to <body> because the header cell is sticky and would otherwise clip
+// the bubble.
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
     <span
       onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
@@ -307,34 +303,113 @@ const HeaderInfoTooltip = ({ text }) => {
 // ─── Reorderable column definitions ───────────────────────────────────────────
 // These are the columns that live *between* the pinned "Business Name" (always
 // first) and "Actions" (always last) columns. Users can drag these to reorder
-// them; the array below is only the default/fallback order.
-const DEFAULT_COLUMN_ORDER = [
-  "bigScore", "match", "fundingStage", "fundingRequired", "status", "applied",
-  "daysInStage", "lastActivity", "location", "sector", "instrument", "guarantees",
-  "support", "revenue", "teamSize"
-];
-
+// them, drag their right edge to resize, and read what each one means from the
+// ⓘ in its header.
+//
+// Widths are numeric px and double as the factory default a double-click on the
+// divider snaps back to.
 const COLUMN_DEFS = {
-  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", tooltip: "BIG Score measures business credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
-  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", tooltip: "Match Score measures fit with your mandate — sector, stage, ticket size and instrument." },
-  fundingStage: { label: "Funding Stage", align: "left", minWidth: "94px", filterType: "fundingStage" },
-  fundingRequired: { label: "Funding", align: "left", minWidth: "92px", filterType: "fundingRequired" },
-  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status" },
-  applied: { label: "Applied", align: "left", minWidth: "92px", filterType: "applied" },
-  daysInStage: { label: "Days in Stage", align: "left", minWidth: "134px", filterType: "daysInStage" },
-  lastActivity: { label: "Last Activity", align: "left", minWidth: "108px", filterType: "lastActivity" },
-  location: { label: "Location", align: "left", minWidth: "92px", filterType: "location" },
-  sector: { label: "Sector", align: "left", minWidth: "100px", filterType: "sector" },
-  instrument: { label: "Instrument", align: "left", minWidth: "100px", filterType: "instrument" },
-  guarantees: { label: "Guarantees", align: "left", minWidth: "110px", filterType: "guarantees" },
-  support: { label: "Support", align: "left", minWidth: "92px", filterType: "support" },
-  revenue: { label: "Revenue", align: "left", minWidth: "96px", filterType: "revenue" },
-  teamSize: { label: "Team Size", align: "left", minWidth: "92px", filterType: "teamSize" }
+  bigScore: {
+    label: "BIG Score", align: "center", width: 150, filterType: "bigScore",
+    tooltip: "Business credibility and readiness — compliance, legitimacy, fundability, PIS and leadership. Click a score to see the full breakdown.",
+  },
+  match: {
+    label: "Match %", align: "center", width: 150, filterType: "match",
+    tooltip: "Fit with your mandate — sector, stage, ticket size and instrument, each weighted. Click a score to see which part carried it.",
+  },
+  fundingStage: {
+    label: "Funding Stage", align: "left", width: 150, filterType: "fundingStage",
+    tooltip: "The round this business is raising — pre-seed, seed, Series A onwards, or growth.",
+  },
+  fundingRequired: {
+    label: "Funding", align: "left", width: 150, filterType: "fundingRequired",
+    tooltip: "The amount the business has asked for. Filtering uses the underlying number, not the formatted label.",
+  },
+  status: {
+    label: "Status", align: "left", width: 152, filterType: "status",
+    tooltip: "Where this application sits in your pipeline. Stage names follow whichever pipeline template is selected.",
+  },
+  applied: {
+    label: "Applied", align: "left", width: 148, filterType: "applied",
+    tooltip: "The date the business submitted its application to your fund.",
+  },
+  daysInStage: {
+    label: "Days in Stage", align: "left", width: 152, filterType: "daysInStage",
+    tooltip: "How long this application has sat at its current stage. Past 14 days it counts as stalled and floats to the top of the default sort.",
+  },
+  lastActivity: {
+    label: "Last Activity", align: "left", width: 150, filterType: "lastActivity",
+    tooltip: "The most recent recorded movement — a stage change, a message or a document.",
+  },
+  location: {
+    label: "Location", align: "left", width: 140, filterType: "location",
+    tooltip: "Where the business is based.",
+  },
+  sector: {
+    label: "Sector", align: "left", width: 150, filterType: "sector",
+    tooltip: "The industries the business operates in, as captured on its profile.",
+  },
+  instrument: {
+    label: "Instrument", align: "left", width: 152, filterType: "instrument",
+    tooltip: "The funding instruments the business is open to — equity, debt, grant, convertible and so on.",
+  },
+  guarantees: {
+    label: "Guarantees", align: "left", width: 158, filterType: "guarantees",
+    tooltip: "Security the business can put behind a deal — contracts, purchase orders, sureties, collateral. Click the count to see each one and whether documents are attached.",
+  },
+  support: {
+    label: "Support", align: "left", width: 150, filterType: "support",
+    tooltip: "The kind of non-financial help the business is asking for alongside capital.",
+  },
+  revenue: {
+    label: "Revenue", align: "left", width: 146, filterType: "revenue",
+    tooltip: "Annual revenue from the business's financial overview.",
+  },
+  teamSize: {
+    label: "Team Size", align: "left", width: 140, filterType: "teamSize",
+    tooltip: "Headcount as declared on the business profile.",
+  }
 };
 
-// Maps a column key (used for visibility/order) to the actual field name on
-// the mapped row object — these don't always match (e.g. the "sme" column
-// shows the `name` field, "match" shows `matchPercentage`).
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS);
+const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(
+  DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])
+);
+
+// Business Name and Actions can't be hidden or reordered, so they aren't in
+// COLUMN_DEFS — but they resize like everything else, and their widths live
+// under these reserved keys inside the same columnWidths map.
+const NAME_KEY = "__name__";
+const ACTION_KEY = "__action__";
+const FIXED_WIDTHS = { [NAME_KEY]: 210, [ACTION_KEY]: 210 };
+const MIN_COLUMN_WIDTH = 84;
+
+const NAME_TOOLTIP = "The business's trading or registered name. Click the eye to open its full profile.";
+const ACTION_TOOLTIP = "Move the application to its next stage, or open quick actions to view the profile, the BIG Score breakdown, guarantees, or decline it.";
+
+// Sorting reads the mapped row field, which doesn't always match the column
+// key (e.g. "match" lives on matchPercentage, "applied" on applicationDateRaw,
+// and "fundingRequired" sorts on the raw number rather than the "R1.2M" label).
+const SORT_ACCESSORS = {
+  [NAME_KEY]: (r) => (r.name || "").toLowerCase(),
+  bigScore: (r) => Number(r.bigScore) || 0,
+  match: (r) => Number(r.matchPercentage) || 0,
+  fundingStage: (r) => (r.fundingStage || "").toLowerCase(),
+  fundingRequired: (r) => Number(r.fundingAmount) || 0,
+  status: (r) => (r.currentStatus || "").toLowerCase(),
+  applied: (r) => r.applicationDateRaw?.getTime?.() || 0,
+  daysInStage: (r) => Number(r.daysInStage) || 0,
+  lastActivity: (r) => new Date(r.lastActivity).getTime() || 0,
+  location: (r) => (r.location || "").toLowerCase(),
+  sector: (r) => (r.sector || "").toLowerCase(),
+  instrument: (r) => (r.investmentType || "").toLowerCase(),
+  guarantees: (r) => Number(r.guaranteeCount) || 0,
+  support: (r) => (r.supportRequired || "").toLowerCase(),
+  revenue: (r) => Number((r.revenue || "").toString().replace(/[^0-9.]/g, "")) || 0,
+  teamSize: (r) => Number((r.teamSize || "").toString().replace(/[^0-9.]/g, "")) || 0,
+};
+
+// Maps a column key to the actual field name on the mapped row object.
 const EXPORT_FIELD_MAP = {
   sme: "name",
   bigScore: "bigScore",
@@ -352,7 +427,7 @@ const EXPORT_FIELD_MAP = {
   teamSize: "teamSize",
   daysInStage: "daysInStage",
   lastActivity: "lastActivity"
-  // Note: "action" is intentionally omitted — it's a UI-only column.
+  // Note: the Actions column is intentionally omitted — it's UI only.
 };
 
 const EXPORT_HEADERS = {
@@ -365,14 +440,9 @@ const EXPORT_HEADERS = {
 };
 
 // ─── Custom Views ─────────────────────────────────────────────────────────────
-// A "view" bundles every layout preference a person can customize — column
-// visibility, column order, sort, and density — into one named, describable
-// object, with exactly one view "active" at a time. Editing the table always
-// edits the active view; there's no separate hidden "current layout" that can
-// silently drift out of sync with whatever view you think you're on.
 const DEFAULT_COLUMN_VISIBILITY = {
-  sme: true, bigScore: true, match: true, fundingStage: true,
-  fundingRequired: true, status: true, applied: true, action: true,
+  bigScore: true, match: true, fundingStage: true,
+  fundingRequired: true, status: true, applied: true,
   daysInStage: true, lastActivity: true,
   location: false, sector: false, instrument: false, guarantees: false,
   support: false, revenue: false, teamSize: false
@@ -381,12 +451,10 @@ const DEFAULT_SORT_CONFIG = { key: "attentionThenScore", direction: "desc" };
 const DEFAULT_DENSITY = "comfortable";
 
 const BUILTIN_VIEW_ID = "__default__";
-const VIEWS_STORAGE_KEY = "investor-sme-table-views-v2";
+// v3: views now carry per-column widths in px, including the two fixed columns,
+// so a v2 view's auto-width entries no longer apply.
+const VIEWS_STORAGE_KEY = "investor-sme-table-views-v3";
 
-// Keeps a stored column order valid against the columns this build of the
-// table actually knows about: drops keys that no longer exist, and appends any
-// newly-introduced columns so a future column addition can't silently corrupt
-// an old saved view's header row.
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
   const known = new Set(DEFAULT_COLUMN_ORDER);
@@ -398,9 +466,9 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   sortConfig: { ...DEFAULT_SORT_CONFIG },
   density: DEFAULT_DENSITY,
-  columnWidths: {},
 });
 
 const createBuiltinDefaultView = () => ({
@@ -418,9 +486,9 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
   density: view?.density || DEFAULT_DENSITY,
-  columnWidths: view?.columnWidths || {},
 });
 
 const loadViewsState = () => {
@@ -607,18 +675,13 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   const [authLoading, setAuthLoading] = useState(true);
 
   // ─── Views ────────────────────────────────────────────────────────────────
-  // viewsState = { activeViewId, views: { [id]: {...layout} } }. The four
-  // "live" pieces below are what the rest of the table renders from; they're
-  // initialized from the active view and auto-saved back into that same view
-  // on every change. Switching views is the only thing that reassigns them
-  // from a *different* view's stored layout.
   const [viewsState, setViewsState] = useState(() => loadViewsState());
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
   const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility);
   const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder);
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths);
   const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig);
   const [density, setDensity] = useState(() => initialActiveView.density);
-  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths || {});
 
   const [showColumnChooser, setShowColumnChooser] = useState(false);
   const [columnChooserRect, setColumnChooserRect] = useState(null);
@@ -639,10 +702,12 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Column drag-to-reorder state
+  // Column drag-to-reorder + resize state
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [dragHintRect, setDragHintRect] = useState(null);
+  const resizingRef = useRef(null);
+  const [resizingColumn, setResizingColumn] = useState(null);
 
   // Popup states
   const [activePopup, setActivePopup] = useState(null);
@@ -672,9 +737,6 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   // ─── Programme-aware pipeline stages ──────────────────────────────────────
-  // Pipeline settings (active programme template plus any customization) live
-  // in the shared localStorage key InvestorDealFlowPipeline.jsx writes to, so
-  // the table's stage list always matches whatever pipeline is selected.
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
 
   useEffect(() => {
@@ -694,20 +756,19 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
 
-  // Auto-save: any edit to columns/order/sort/density writes straight back into
-  // the active view (and persists immediately) — there's no separate "unsaved
-  // changes" state to lose track of.
+  // Auto-save: any edit to columns/order/widths/sort/density writes straight
+  // back into the active view (and persists immediately).
   useEffect(() => {
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId];
       if (!current) return prev;
-      const updated = { ...current, columnVisibility, columnOrder, sortConfig, density, columnWidths };
+      const updated = { ...current, columnVisibility, columnOrder, columnWidths, sortConfig, density };
       const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } };
       persistViewsState(next);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columnVisibility, columnOrder, sortConfig, density, columnWidths]);
+  }, [columnVisibility, columnOrder, columnWidths, sortConfig, density]);
 
   const switchToView = (viewId) => {
     const target = viewsState.views[viewId];
@@ -719,9 +780,9 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     });
     setColumnVisibility(target.columnVisibility);
     setColumnOrder(target.columnOrder);
+    setColumnWidths(target.columnWidths);
     setSortConfig(target.sortConfig);
     setDensity(target.density);
-    setColumnWidths(target.columnWidths || {});
   };
 
   const createNewView = () => {
@@ -731,7 +792,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     const newView = {
       id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
       columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
-      sortConfig: { ...sortConfig }, density, columnWidths: { ...columnWidths },
+      columnWidths: { ...columnWidths }, sortConfig: { ...sortConfig }, density,
     };
     setViewsState((prev) => {
       const next = { activeViewId: id, views: { ...prev.views, [id]: newView } };
@@ -780,9 +841,9 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
       const def = viewsState.views[BUILTIN_VIEW_ID];
       setColumnVisibility(def.columnVisibility);
       setColumnOrder(def.columnOrder);
+      setColumnWidths(def.columnWidths);
       setSortConfig(def.sortConfig);
       setDensity(def.density);
-      setColumnWidths(def.columnWidths || {});
     }
     setNotification({ type: "success", message: "View deleted" });
   };
@@ -791,9 +852,9 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     const layout = createDefaultViewLayout();
     setColumnVisibility(layout.columnVisibility);
     setColumnOrder(layout.columnOrder);
+    setColumnWidths(layout.columnWidths);
     setSortConfig(layout.sortConfig);
     setDensity(layout.density);
-    setColumnWidths(layout.columnWidths || {});
     setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` });
   };
 
@@ -895,8 +956,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     };
   }, []);
 
-  // BIG Scores come from their own collection — previously this table showed a
-  // random placeholder number, which made the column meaningless.
+  // BIG Scores come from their own collection.
   useEffect(() => {
     const fetchBigScores = async () => {
       try {
@@ -1063,14 +1123,15 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
         return b.bigScore - a.bigScore;
       });
     } else if (sortConfig.key) {
+      const accessor = SORT_ACCESSORS[sortConfig.key] || ((r) => (r[sortConfig.key] ?? "").toString().toLowerCase());
       result.sort((a, b) => {
-        let aVal = a[sortConfig.key], bVal = b[sortConfig.key];
-        if (typeof aVal === "string") aVal = aVal.toLowerCase();
-        if (typeof bVal === "string") bVal = bVal.toLowerCase();
-        if (aVal == null) aVal = ""; if (bVal == null) bVal = "";
-        if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-        return 0;
+        const av = accessor(a);
+        const bv = accessor(b);
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av;
+        }
+        const cmp = (av ?? "").toString().localeCompare((bv ?? "").toString());
+        return sortConfig.direction === "asc" ? cmp : -cmp;
       });
     }
 
@@ -1160,12 +1221,96 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     setDragOverColumn(null);
   };
 
+  // ─── Widths + resize ──────────────────────────────────────────────────────
+  // widthOf is declared above startResize because startResize calls it — a
+  // const referenced before its initializer throws at render. It covers the
+  // reorderable columns *and* the two fixed ones, so every column in the table
+  // can be dragged wider.
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths]
+  );
+
+  const startResize = (event, key) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = widthOf(key);
+    resizingRef.current = key;
+    setResizingColumn(key);
+
+    const onMove = (moveEvent) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, Math.round(startWidth + (moveEvent.clientX - startX)));
+      setColumnWidths((prev) => ({ ...prev, [key]: next }));
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      setResizingColumn(null);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
+    // the 6px handle mid-drag, and so text can't be selected while resizing.
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }));
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="ismt-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => { e.stopPropagation(); resetColumnWidth(colKey); }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  );
+
   const openHeaderFilter = (type, event) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }));
   };
   const closeHeaderFilter = () => setHeaderFilterOpen(null);
+
+  // asc → desc → back to the default "needs attention first" sort.
+  const toggleSort = (key, event) => {
+    event.stopPropagation();
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { ...DEFAULT_SORT_CONFIG };
+    });
+  };
+
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey;
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    );
+  };
 
   const FilterTrigger = ({ type, active }) => (
     <button
@@ -1291,8 +1436,6 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   };
 
   // ─── Stage progression ────────────────────────────────────────────────────
-  // Forward-only through the live stages, with terminal outcomes always
-  // reachable. "Deal Closed" additionally needs a decision and terms on record.
   const getStageProgressionError = (targetStageName, sme) => {
     const targetId = mapStatusToStageId(targetStageName, activeStages);
     const currentId = mapStatusToStageId(sme.currentStatus, activeStages);
@@ -1520,18 +1663,11 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   // ─── Export ───────────────────────────────────────────────────────────────
   const handleExport = () => {
     try {
-      // Respect the table's current visual order: pinned "Business Name"
-      // first, then the reorderable columns in whatever order they've been
-      // dragged into, skipping the UI-only "Action" column and hidden columns.
       const visibleCols = [
         "sme",
-        ...columnOrder.filter((key) => key !== "sme" && key !== "action" && columnVisibility[key])
-      ].filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key]);
+        ...columnOrder.filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key])
+      ];
 
-      if (visibleCols.length === 0) {
-        setNotification({ type: "error", message: "No visible columns to export" });
-        return;
-      }
       if (filteredAndSortedSMEs.length === 0) {
         setNotification({ type: "error", message: "No businesses to export" });
         return;
@@ -1587,73 +1723,27 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   };
 
   const densityStyles = {
-    comfortable: { cell: "py-3 px-3", header: "py-3 px-3", fontSize: "text-sm", avatarSize: "w-8 h-8" },
-    compact: { cell: "py-2 px-2", header: "py-2 px-2", fontSize: "text-xs", avatarSize: "w-7 h-7" },
-    "ultra-compact": { cell: "py-1.5 px-1.5", header: "py-1.5 px-1.5", fontSize: "text-xs", avatarSize: "w-6 h-6" },
+    comfortable: { cell: "py-3 px-3", header: "0.7rem 0.6rem", fontSize: "text-sm", avatarSize: "w-8 h-8" },
+    compact: { cell: "py-2 px-2", header: "0.5rem 0.6rem", fontSize: "text-xs", avatarSize: "w-7 h-7" },
+    "ultra-compact": { cell: "py-1.5 px-1.5", header: "0.5rem 0.6rem", fontSize: "text-xs", avatarSize: "w-6 h-6" },
   };
   const ds = densityStyles[density] || densityStyles.comfortable;
-
-  // ─── Column resizing ──────────────────────────────────────────────────────
-  // Drag the divider on a header's right edge to resize the column; double-click
-  // it to snap that column back to auto width. Widths are stored per view
-  // alongside visibility/order/sort/density, so they persist and travel with
-  // whichever view is active.
-  const [resizingColumn, setResizingColumn] = useState(null);
-
-  const widthStyle = (key, fallbackMin, fallbackMax) => {
-    const w = columnWidths[key];
-    if (w) return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    return fallbackMax ? { minWidth: fallbackMin, maxWidth: fallbackMax } : { minWidth: fallbackMin };
-  };
-
-  const startResize = (event, key) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const th = event.currentTarget.closest("th");
-    const startX = event.clientX;
-    const startWidth = th ? th.getBoundingClientRect().width : 120;
-    setResizingColumn(key);
-
-    const onMove = (moveEvent) => {
-      const next = Math.max(64, Math.round(startWidth + (moveEvent.clientX - startX)));
-      setColumnWidths((prev) => ({ ...prev, [key]: next }));
-    };
-    const onUp = () => {
-      setResizingColumn(null);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
-    // the 6px handle mid-drag, and so text can't be selected while resizing.
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  };
-
-  const autoFitColumn = (key) =>
-    setColumnWidths((prev) => { const { [key]: _dropped, ...rest } = prev; return rest; });
-
-  const ColumnResizer = ({ colKey }) => (
-    <span
-      onMouseDown={(e) => startResize(e, colKey)}
-      onDoubleClick={(e) => { e.stopPropagation(); autoFitColumn(colKey); }}
-      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-      onClick={(e) => e.stopPropagation()}
-      title="Drag to resize · double-click to auto-fit"
-      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none z-10"
-      style={{ backgroundColor: resizingColumn === colKey ? "#a67c52" : "transparent" }}
-    />
-  );
 
   useEffect(() => {
     if (!notification) return;
     const t = setTimeout(() => setNotification(null), 4000);
     return () => clearTimeout(t);
   }, [notification]);
+
+  // ─── Layout ───────────────────────────────────────────────────────────────
+  const visibleColumns = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key]),
+    [columnOrder, columnVisibility]
+  );
+
+  const nameWidth = widthOf(NAME_KEY);
+  const actionWidth = widthOf(ACTION_KEY);
+  const totalWidth = nameWidth + actionWidth + visibleColumns.reduce((sum, key) => sum + widthOf(key), 0);
 
   if (!authLoading && !user) {
     return (
@@ -1682,8 +1772,6 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]" title="Determined by the pipeline's programme type setting">
               <Briefcase size={12} /> {activeProgrammeLabel} pipeline
             </span>
-            {/* Always-visible active view name (+ description, if any) — no
-                hover required, so it's never ambiguous which view is live. */}
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
               Viewing: {activeView.name}
@@ -1829,26 +1917,20 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                       {/* ─── Hide/Unhide ─────────────────────────────── */}
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize. Every column resizes, including the pinned ones.
                       </p>
-                      {[{ key: "sme", label: "Business Name" }, { key: "bigScore", label: "BIG Score" }, { key: "match", label: "Match %" }, { key: "status", label: "Status" }, { key: "action", label: "Action" }].map(({ key, label }) => (
+                      {[{ key: "sme", label: "Business Name", note: "Pinned" }, { key: "action", label: "Actions", note: "Always last" }].map(({ key, label, note }) => (
                         <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
                           <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f]">{label}</span>
+                          <span className="text-sm text-[#4a352f] flex-1">{label}</span>
+                          <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">{note}</span>
                         </label>
                       ))}
                       <div className="border-t border-[#e6d7c3] my-2" />
-                      {[
-                        { key: "fundingStage", label: "Funding Stage" }, { key: "fundingRequired", label: "Funding Required" },
-                        { key: "applied", label: "Applied Date" }, { key: "daysInStage", label: "Days in Stage" },
-                        { key: "lastActivity", label: "Last Activity" }, { key: "location", label: "Location" },
-                        { key: "sector", label: "Sector" }, { key: "instrument", label: "Instrument" },
-                        { key: "guarantees", label: "Guarantees" }, { key: "support", label: "Support Required" },
-                        { key: "revenue", label: "Annual Revenue" }, { key: "teamSize", label: "Team Size" },
-                      ].map(({ key, label }) => (
+                      {DEFAULT_COLUMN_ORDER.map((key) => (
                         <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
                           <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
-                          <span className="text-sm text-[#4a352f]">{label}</span>
+                          <span className="text-sm text-[#4a352f]">{COLUMN_DEFS[key].label}</span>
                         </label>
                       ))}
 
@@ -1891,36 +1973,72 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
           <>
             <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
               <style>{`
-                .ismt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
+                /* No 'position: relative' here — it would override the sticky
+                   positioning on every <th>. Sticky is itself a positioned
+                   ancestor, so the grip and resize handle still anchor. */
+                .ismt-th { color: #faf7f2 !important; vertical-align: top !important; }
                 .ismt-th-draggable { cursor: grab; }
                 .ismt-th-draggable:active { cursor: grabbing; }
-                /* Wrap header labels onto at most 2 lines instead of forcing
-                   the column wider than needed. This only lays out cleanly
-                   because each column also has a real min-width in
-                   COLUMN_DEFS — without that floor, the browser sizes
-                   wrapped-text columns to their smallest possible content. */
-                .ismt-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
-                /* Column resizing: an explicit header width only holds if the
-                   cells below can shrink, so long values wrap rather than
-                   forcing the column wider than the width that was dragged. */
-                .bigt-fit th, .bigt-fit td { overflow: hidden; }
-                .bigt-fit td { word-break: break-word; }
+                .ismt-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+                /* overflow-wrap: normal stops the browser splitting inside a
+                   word, which is what turned "Match %" into "MAT CH.." and
+                   "Status" into "STA TUS" in narrow columns. */
+                .ismt-th-label {
+                  flex: 1 1 auto; min-width: 0;
+                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                  overflow: hidden; white-space: normal;
+                  overflow-wrap: normal; word-break: normal; hyphens: none;
+                  line-height: 1.2; letter-spacing: 0.02em;
+                }
+                .ismt-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+                /* The drag grip leaves the flex flow and only appears on hover,
+                   buying every header ~14px more room for its label. */
+                .ismt-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+                .ismt-th:hover .ismt-th-grip { opacity: .45; }
+                .ismt-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+                .ismt-resize:hover { background: rgba(255,255,255,0.25); }
               `}</style>
-              <table className="border-collapse bigt-fit" style={{ tableLayout: "auto" }}>
+
+              <table
+                className="text-sm"
+                style={{
+                  /* separate (not collapse) — collapsed borders are dropped by
+                     sticky cells, which made the pinned column lose its edge
+                     and mispaint over its neighbour while scrolling. */
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  tableLayout: "fixed",
+                  width: totalWidth,
+                  minWidth: "100%",
+                }}
+              >
                 <thead>
-                  <tr className="bg-[#4a352f]">
-                    <th className="ismt-th py-3 px-3 relative text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30" style={{ backgroundColor: "#4a352f", ...widthStyle("__name__", "170px", "190px") }}>
-                      <div className="flex items-start gap-1 min-w-0">
-                        <span className="ismt-th-label">Business Name</span>
-                        <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                  <tr>
+                    {/* Business Name — pinned first column, resizable like the rest */}
+                    <th
+                      className="ismt-th text-left font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30"
+                      style={{
+                        backgroundColor: "#4a352f",
+                        width: nameWidth,
+                        padding: ds.header,
+                        borderBottom: "1px solid #e6d7c3",
+                        boxShadow: "2px 0 0 #e6d7c3",
+                      }}
+                    >
+                      <div className="ismt-th-row">
+                        <span className="ismt-th-label" title="Business Name">Business Name</span>
+                        <span className="ismt-th-tools">
+                          <SortTrigger columnKey={NAME_KEY} />
+                          <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                          <HeaderInfoTooltip text={NAME_TOOLTIP} />
+                        </span>
                       </div>
-                      <ColumnResizer colKey="__name__" />
+                      <ColumnResizer colKey={NAME_KEY} />
                     </th>
 
                     {/* ─── Reorderable columns ──────────────────────── */}
-                    {columnOrder.filter((key) => columnVisibility[key]).map((key) => {
+                    {visibleColumns.map((key) => {
                       const col = COLUMN_DEFS[key];
-                      if (!col) return null;
                       const isDragging = draggedColumn === key;
                       const isDragOver = dragOverColumn === key && draggedColumn !== key;
                       return (
@@ -1933,36 +2051,61 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                           onDragEnd={handleColumnDragEnd}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`ismt-th ismt-th-draggable py-3 px-3 relative font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
-                          style={{ ...widthStyle(key, col.minWidth), backgroundColor: isDragOver ? "#5a423b" : "#4a352f" }}
+                          className={`ismt-th ismt-th-draggable font-semibold uppercase tracking-wider text-xs sticky top-0 z-20 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
+                          style={{
+                            width: widthOf(key),
+                            padding: ds.header,
+                            backgroundColor: isDragOver ? "#5a423b" : "#4a352f",
+                            borderBottom: "1px solid #e6d7c3",
+                            borderRight: "1px solid #e6d7c3",
+                          }}
                         >
-                          <div className={`flex items-start gap-1 min-w-0 ${col.align === "center" ? "justify-center" : ""}`}>
-                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <span className="ismt-th-label">{col.label}</span>
-                            <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
-                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                          <GripVertical size={11} className="ismt-th-grip" />
+                          <div className={`ismt-th-row ${col.align === "center" ? "justify-center" : ""}`}>
+                            <span className="ismt-th-label" title={col.label}>{col.label}</span>
+                            <span className="ismt-th-tools">
+                              <SortTrigger columnKey={key} />
+                              <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                              <HeaderInfoTooltip text={col.tooltip} />
+                            </span>
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
                       );
                     })}
 
-                    {columnVisibility.action && (
-                      <th className="ismt-th py-3 px-3 relative text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20" style={{ minWidth: "190px", backgroundColor: "#4a352f" }}>Actions</th>
-                    )}
+                    {/* Actions — scrolls horizontally with the table, holds
+                        position on vertical scroll. */}
+                    <th
+                      className="ismt-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
+                      style={{
+                        backgroundColor: "#4a352f",
+                        width: actionWidth,
+                        padding: ds.header,
+                        borderBottom: "1px solid #e6d7c3",
+                      }}
+                    >
+                      <div className="ismt-th-row justify-center">
+                        <span className="ismt-th-label">Actions</span>
+                        <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                      </div>
+                      <ColumnResizer colKey={ACTION_KEY} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedSMEs.length === 0 ? (
-                    <tr><td colSpan={Object.values(columnVisibility).filter(Boolean).length + 1} className="text-center py-20">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
-                        <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
-                        <p className="text-sm text-[#7d5a50] max-w-xs">
-                          {activeFilterCount > 0 ? "Clear a filter to widen the list." : "Applications will appear here as businesses apply to your fund."}
-                        </p>
-                      </div>
-                    </td></tr>
+                    <tr>
+                      <td colSpan={visibleColumns.length + 2} className="text-center py-20 border-b border-[#e6d7c3]">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
+                          <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
+                          <p className="text-sm text-[#7d5a50] max-w-xs">
+                            {activeFilterCount > 0 ? "Clear a filter to widen the list." : "Applications will appear here as businesses apply to your fund."}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
                   ) : (
                     paginatedSMEs.map((sme) => {
                       const bigScoreLabel = getBigScoreLabel(sme.bigScore);
@@ -1971,30 +2114,32 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                       const isTerminal = !!statusStyle.stage.terminal;
                       const nextStageLabel = sme.nextStage || "—";
                       const termsheetStatus = termsheetStatuses[sme.id];
+                      const rowBg = hoveredRowKey === sme.id ? "#fdf8f4" : "#ffffff";
+                      const cellCls = `${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top`;
 
                       const renderCell = (key) => {
                         switch (key) {
                           case "bigScore":
                             return (
-                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent("bigScore", sme, e)}>
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-b border-[#e6d7c3] align-top`} onClick={(e) => openPopupFromEvent("bigScore", sme, e)}>
                                 <div className="flex flex-col items-center gap-1">
                                   <div className="relative w-11 h-11">
                                     <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                                       <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
                                       <circle cx="18" cy="18" r="14" fill="none" stroke={bigScoreLabel.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
                                     </svg>
-                                    <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-normal`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
+                                    <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-semibold`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
                                   </div>
-                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
+                                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
                                 </div>
                               </td>
                             );
                           case "match":
                             return (
-                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent("match", sme, e)}>
-                                <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
-                                  <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
-                                  <span className="text-xs font-medium" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-b border-[#e6d7c3] align-top`} onClick={(e) => openPopupFromEvent("match", sme, e)}>
+                                <div className="flex flex-col items-center gap-1 w-full">
+                                  <span className={`${ds.fontSize} font-semibold text-[#4a352f]`}>{sme.matchPercentage}%</span>
+                                  <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
                                   <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
                                     <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: matchLabel.color }} />
                                   </div>
@@ -2003,43 +2148,39 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                             );
                           case "fundingStage":
                             return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                              <td key={key} className={cellCls}>
                                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span>
                               </td>
                             );
                           case "fundingRequired":
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="font-normal">{sme.fundingRequired}</span>
-                              </td>
-                            );
+                            return <td key={key} className={cellCls}><span className="font-medium">{sme.fundingRequired}</span></td>;
                           case "status":
                             return (
-                              <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}>
+                              <td key={key} className={`${ds.cell} border-r border-b border-[#e6d7c3] align-top`}>
                                 <span
-                                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap"
                                   style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
                                   title={statusStyle.stage.tooltip}
                                 >
-                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
                                 </span>
                               </td>
                             );
                           case "applied":
                             return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{sme.applicationDate}</div>
+                              <td key={key} className={cellCls}>
+                                <div className="flex items-center gap-1.5"><Calendar size={13} className="text-[#7d5a50] flex-shrink-0" />{sme.applicationDate}</div>
                               </td>
                             );
                           case "daysInStage":
                             return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <div className="flex items-center gap-1.5"><Clock size={14} className="text-[#7d5a50]" />{sme.daysInStage} days</div>
+                              <td key={key} className={cellCls}>
+                                <div className="flex items-center gap-1.5"><Clock size={13} className="text-[#7d5a50] flex-shrink-0" />{sme.daysInStage} days</div>
                               </td>
                             );
                           case "guarantees":
                             return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                              <td key={key} className={cellCls}>
                                 {sme.guaranteeCount > 0 ? (
                                   <button
                                     onClick={() => handleOpenGuarantees(sme)}
@@ -2058,15 +2199,11 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                           case "sector":
                           case "revenue":
                           case "teamSize":
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme[key]}</td>;
+                            return <td key={key} className={cellCls}><span className="break-words">{sme[key]}</span></td>;
                           case "instrument":
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.investmentType}</td>;
+                            return <td key={key} className={cellCls}><span className="break-words">{sme.investmentType}</span></td>;
                           case "support":
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="line-clamp-1">{sme.supportRequired}</span>
-                              </td>
-                            );
+                            return <td key={key} className={cellCls}><span className="line-clamp-2 break-words">{sme.supportRequired}</span></td>;
                           default:
                             return null;
                         }
@@ -2075,77 +2212,72 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                       return (
                         <tr
                           key={sme.id}
-                          className="border-b border-[#f0e6d9] transition-all"
-                          style={{ backgroundColor: hoveredRowKey === sme.id ? "#fdf8f4" : undefined }}
+                          style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                           onMouseEnter={() => setHoveredRowKey(sme.id)}
                           onMouseLeave={() => setHoveredRowKey(null)}
                         >
-                          {columnVisibility.sme && (
-                            <td
-                              className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 border-r border-b border-[#e6d7c3] z-10 transition-colors`}
-                              style={{ ...widthStyle("__name__", "170px", "190px"), backgroundColor: hoveredRowKey === sme.id ? "#fdf8f4" : "#ffffff" }}
-                            >
-                              <div className="flex items-start gap-2">
-                                <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start gap-1.5 flex-wrap">
-                                    <span className={`${ds.fontSize} font-normal leading-snug text-[#4a352f]`}>{sme.name}</span>
-                                    <button
-                                      onClick={() => handleViewDetails(sme)}
-                                      className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
-                                      aria-label={`View profile for ${sme.name}`}
-                                      title="View profile"
-                                    >
-                                      <Eye size={13} />
-                                    </button>
-                                  </div>
+                          <td
+                            className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 z-10 align-top border-b border-[#e6d7c3]`}
+                            style={{ width: nameWidth, backgroundColor: rowBg, boxShadow: "2px 0 0 #e6d7c3" }}
+                          >
+                            <div className="flex items-start gap-2 min-w-0">
+                              <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start gap-1.5 flex-wrap">
+                                  <span className={`${ds.fontSize} font-medium leading-snug text-[#4a352f] break-words`}>{sme.name}</span>
+                                  <button
+                                    onClick={() => handleViewDetails(sme)}
+                                    className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
+                                    aria-label={`View profile for ${sme.name}`}
+                                    title="View profile"
+                                  >
+                                    <Eye size={13} />
+                                  </button>
                                 </div>
                               </div>
-                            </td>
-                          )}
+                            </div>
+                          </td>
 
-                          {columnOrder.filter((key) => columnVisibility[key]).map((key) => renderCell(key))}
+                          {visibleColumns.map((key) => renderCell(key))}
 
-                          {columnVisibility.action && (
-                            <td className={`${ds.cell} text-center`} style={{ minWidth: "190px" }}>
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  onClick={(e) => { if (!isTerminal && !subscriptionLoading) openStageUpdate(sme, e); }}
-                                  disabled={isTerminal || subscriptionLoading}
-                                  title={isTerminal ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
-                                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
-                                    isTerminal || subscriptionLoading
-                                      ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
-                                      : "text-white hover:shadow-md hover:brightness-105"
-                                  }`}
-                                  style={{ width: "128px", height: "34px", backgroundColor: isTerminal || subscriptionLoading ? undefined : "#7d5a50" }}
+                          <td className={`${ds.cell} text-center align-top border-b border-[#e6d7c3]`} style={{ width: actionWidth, backgroundColor: rowBg }}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={(e) => { if (!isTerminal && !subscriptionLoading) openStageUpdate(sme, e); }}
+                                disabled={isTerminal || subscriptionLoading}
+                                title={isTerminal ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
+                                className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                                  isTerminal || subscriptionLoading
+                                    ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
+                                    : "text-white hover:shadow-md hover:brightness-105"
+                                }`}
+                                style={{ width: `${Math.max(100, actionWidth - 90)}px`, height: "34px", backgroundColor: isTerminal || subscriptionLoading ? undefined : "#7d5a50" }}
+                              >
+                                {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
+                                <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
+                              </button>
+
+                              {/* Term sheet response indicator */}
+                              {mapStatusToStageId(sme.currentStatus, activeStages) === "terms" && termsheetStatus && (
+                                <span
+                                  title={termsheetStatus === "accepted" ? "Term sheet accepted" : "Term sheet declined"}
+                                  className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[11px] font-bold flex-shrink-0"
+                                  style={{ backgroundColor: termsheetStatus === "accepted" ? "#22c55e" : "#ef4444" }}
                                 >
-                                  {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
-                                  <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
-                                </button>
+                                  {termsheetStatus === "accepted" ? "✓" : "✗"}
+                                </span>
+                              )}
 
-                                {/* Term sheet response indicator */}
-                                {mapStatusToStageId(sme.currentStatus, activeStages) === "terms" && termsheetStatus && (
-                                  <span
-                                    title={termsheetStatus === "accepted" ? "Term sheet accepted" : "Term sheet declined"}
-                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[11px] font-bold flex-shrink-0"
-                                    style={{ backgroundColor: termsheetStatus === "accepted" ? "#22c55e" : "#ef4444" }}
-                                  >
-                                    {termsheetStatus === "accepted" ? "✓" : "✗"}
-                                  </span>
-                                )}
-
-                                <button
-                                  onClick={(e) => openPopupFromEvent("quickActions", sme, e)}
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
-                                  style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
-                                  title="More actions"
-                                >
-                                  <MoreVertical size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          )}
+                              <button
+                                onClick={(e) => openPopupFromEvent("quickActions", sme, e)}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                                style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
+                                title="More actions"
+                              >
+                                <MoreVertical size={14} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
@@ -2155,7 +2287,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl flex-wrap gap-3">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-[#4a352f]">
                   Showing {Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedSMEs.length)}-{Math.min(currentPage * pageSize, filteredAndSortedSMEs.length)} of {filteredAndSortedSMEs.length} Businesses
@@ -2190,11 +2322,11 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
             className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
             style={{
               top: dragHintRect.bottom + 8,
-              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200),
-              width: "190px",
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 210),
+              width: "200px",
             }}
           >
-            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
           </div>
         </PopupPortal>
       )}
@@ -2207,8 +2339,10 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
             className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
             style={{
               top: headerFilterOpen.rect.bottom + 8,
-              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292),
-              width: "280px",
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312),
+              width: "300px",
+              maxHeight: "70vh",
+              overflowY: "auto",
             }}
           >
             {headerFilterOpen.type === "name" && (
@@ -2308,7 +2442,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                       <button onClick={() => setLocalFilters((p) => ({ ...p, [key]: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
                     {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
                     {options.map((s) => (
                       <button key={s}

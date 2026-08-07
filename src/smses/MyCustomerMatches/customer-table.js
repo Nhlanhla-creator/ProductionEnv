@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  Info,
   FileText,
   Send,
   Calendar,
@@ -85,10 +86,6 @@ import CustomerDetailsModal from "./CustomerDetailsModal"
 
 /* ════════════════════════════════════════════════════════════════════════════
    Events the pipeline uses to talk to this table.
-
-   They're declared here, not in customer-flow-pipeline.jsx, because that file
-   already imports the status vocabulary from this one — pointing the imports
-   both ways would make a circular module dependency.
 
      CUSTOMER_STAGE_FILTER_EVENT   pipeline → table. Detail is the pressed
                                    status name, or null to clear.
@@ -176,6 +173,37 @@ const PopupPortal = ({ children }) => {
   return createPortal(children, document.body)
 }
 
+/* ─── Column header info tooltip ──────────────────────────────────────────
+   Portaled to <body> because the header cell is sticky and would otherwise
+   clip the bubble. */
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  )
+}
+
 const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -239,36 +267,95 @@ export const toISODateOnly = (value) => {
    Section A column configuration.
 
    Customer is the pinned first column and Action the last, so neither appears
-   here. The six above the divider are the spec default view; everything below
-   is a spec "hidden by default" column.
+   here — but both resize like everything else, via the reserved width keys
+   further down. The six above the divider are the spec default view;
+   everything below is a spec "hidden by default" column.
 
-   Widths raised in line with the other match tables — each header carries a
-   grip, sort and filter control (~60px of chrome), so the old 120–150px
-   columns left too little room and the browser broke labels mid-word
-   ("MAT CH..", "STA TUS").
+   Every column carries a tooltip, shown from the ⓘ in its header, so what a
+   column means never has to be guessed from a two-word label.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
-  match: { label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true },
-  productService: { label: "Product or Service Required", width: 210, filterType: "productService", visible: true, priority: 2, sortable: true },
-  opportunityType: { label: "Opportunity Type", width: 158, filterType: "opportunityType", visible: true, priority: 3, sortable: true },
-  estimatedValue: { label: "Estimated Value / Range", width: 178, filterType: "estimatedValue", visible: true, priority: 2, sortable: true },
-  closingDate: { label: "Closing Date", width: 148, filterType: "closingDate", visible: true, priority: 2, sortable: true },
-  status: { label: "Status", width: 144, filterType: "status", visible: true, priority: 1, sortable: true },
+  match: {
+    label: "Match %", align: "center", width: 136, filterType: "match", visible: true, priority: 1, sortable: true,
+    tooltip: "How well your business fits this opportunity across category, B-BBEE level, location, delivery mode, budget, ownership, lead time, experience and rating. Click the ? for the full breakdown.",
+  },
+  productService: {
+    label: "Product or Service Required", width: 210, filterType: "productService", visible: true, priority: 2, sortable: true,
+    tooltip: "What the customer is actually buying, in their own words.",
+  },
+  opportunityType: {
+    label: "Opportunity Type", width: 158, filterType: "opportunityType", visible: true, priority: 3, sortable: true,
+    tooltip: "How the work is being awarded — RFQ, RFP, tender, purchase order, framework agreement or direct award.",
+  },
+  estimatedValue: {
+    label: "Estimated Value / Range", width: 178, filterType: "estimatedValue", visible: true, priority: 2, sortable: true,
+    tooltip: "The budget band the customer published for this opportunity. Sorting uses the top of the range.",
+  },
+  closingDate: {
+    label: "Closing Date", width: 148, filterType: "closingDate", visible: true, priority: 2, sortable: true,
+    tooltip: "The deadline for submissions, with the days remaining underneath. Opportunities with no date accept submissions on a rolling basis.",
+  },
+  status: {
+    label: "Status", width: 144, filterType: "status", visible: true, priority: 1, sortable: true,
+    tooltip: "Where you stand on this opportunity, from New Match through Shortlisted and Applied to Accepted or Declined.",
+  },
 
-  customerSector: { label: "Customer Sector", width: 166, filterType: "customerSector", visible: false, priority: 4, sortable: true },
-  deliveryLocation: { label: "Delivery Location", width: 160, filterType: "deliveryLocation", visible: false, priority: 4, sortable: true },
-  contractDuration: { label: "Contract Duration", width: 160, filterType: "contractDuration", visible: false, priority: 4, sortable: true },
-  paymentTerms: { label: "Payment Terms", width: 154, filterType: "paymentTerms", visible: false, priority: 4, sortable: true },
-  minimumRequirements: { label: "Minimum Requirements", width: 190, filterType: "minimumRequirements", visible: false, priority: 4, sortable: false },
-  bbbeeRequirement: { label: "B-BBEE Requirement", width: 168, filterType: "bbbeeRequirement", visible: false, priority: 4, sortable: true },
-  complianceRequirements: { label: "Compliance Requirements", width: 196, filterType: "complianceRequirements", visible: false, priority: 4, sortable: false },
-  contactPerson: { label: "Contact Person", width: 156, filterType: "contactPerson", visible: false, priority: 4, sortable: true },
-  deliveryTurnaround: { label: "Delivery Turnaround", width: 166, filterType: "deliveryTurnaround", visible: false, priority: 4, sortable: true },
-  customerType: { label: "Customer Type", width: 150, filterType: "customerType", visible: false, priority: 4, sortable: true },
-  documents: { label: "Documents", align: "center", width: 132, filterType: "documents", visible: false, priority: 4, sortable: true },
-  dateMatched: { label: "Date Matched", width: 148, filterType: null, visible: false, priority: 4, sortable: true },
-  lastActivity: { label: "Last Activity", width: 148, filterType: null, visible: false, priority: 4, sortable: true },
-  nextStage: { label: "Next Stage", width: 142, filterType: "nextStage", visible: false, priority: 4, sortable: false },
+  customerSector: {
+    label: "Customer Sector", width: 166, filterType: "customerSector", visible: false, priority: 4, sortable: true,
+    tooltip: "The industries the buying organisation operates in.",
+  },
+  deliveryLocation: {
+    label: "Delivery Location", width: 160, filterType: "deliveryLocation", visible: false, priority: 4, sortable: true,
+    tooltip: "Where the goods or services have to be delivered.",
+  },
+  contractDuration: {
+    label: "Contract Duration", width: 160, filterType: "contractDuration", visible: false, priority: 4, sortable: true,
+    tooltip: "How long the resulting contract runs for.",
+  },
+  paymentTerms: {
+    label: "Payment Terms", width: 154, filterType: "paymentTerms", visible: false, priority: 4, sortable: true,
+    tooltip: "When and how you'd be paid — 30 days, on delivery, milestone-based and so on.",
+  },
+  minimumRequirements: {
+    label: "Minimum Requirements", width: 190, filterType: "minimumRequirements", visible: false, priority: 4, sortable: false,
+    tooltip: "What a supplier must have or be before this customer will consider a submission.",
+  },
+  bbbeeRequirement: {
+    label: "B-BBEE Requirement", width: 168, filterType: "bbbeeRequirement", visible: false, priority: 4, sortable: true,
+    tooltip: "The B-BBEE level the customer requires. Your own level is scored against it in Match %.",
+  },
+  complianceRequirements: {
+    label: "Compliance Requirements", width: 196, filterType: "complianceRequirements", visible: false, priority: 4, sortable: false,
+    tooltip: "Certifications, registrations and clearances the customer expects you to hold.",
+  },
+  contactPerson: {
+    label: "Contact Person", width: 156, filterType: "contactPerson", visible: false, priority: 4, sortable: true,
+    tooltip: "The named person handling this opportunity at the customer.",
+  },
+  deliveryTurnaround: {
+    label: "Delivery Turnaround", width: 166, filterType: "deliveryTurnaround", visible: false, priority: 4, sortable: true,
+    tooltip: "How quickly the customer needs delivery after award.",
+  },
+  customerType: {
+    label: "Customer Type", width: 150, filterType: "customerType", visible: false, priority: 4, sortable: true,
+    tooltip: "What kind of buyer this is — corporate, government, SOE, NGO and so on.",
+  },
+  documents: {
+    label: "Documents", align: "center", width: 132, filterType: "documents", visible: false, priority: 4, sortable: true,
+    tooltip: "Attached briefing documents — the RFQ, RFP or tender pack. Click the count to open them.",
+  },
+  dateMatched: {
+    label: "Date Matched", width: 148, filterType: null, visible: false, priority: 4, sortable: true,
+    tooltip: "When this opportunity was first matched to your business.",
+  },
+  lastActivity: {
+    label: "Last Activity", width: 148, filterType: null, visible: false, priority: 4, sortable: true,
+    tooltip: "The most recent movement on this opportunity — a status change, a proposal or a message.",
+  },
+  nextStage: {
+    label: "Next Stage", width: 142, filterType: "nextStage", visible: false, priority: 4, sortable: false,
+    tooltip: "The status this opportunity moves to next. Derived live from the current status, so it updates as things progress.",
+  },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -279,9 +366,16 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) =>
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-const CUSTOMER_WIDTH = 230
-const ACTION_WIDTH = 208
+/* Customer and Action can't be hidden or reordered, so they aren't in
+   COLUMN_DEFS — but they resize like everything else, and their widths live
+   under these reserved keys inside the same columnWidths map. */
+const CUSTOMER_KEY = "__customer__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [CUSTOMER_KEY]: 230, [ACTION_KEY]: 208 }
 const MIN_COLUMN_WIDTH = 84
+
+const CUSTOMER_TOOLTIP = "The buying organisation behind this opportunity. Click the eye to open its full profile."
+const ACTION_TOOLTIP = "The one thing to do next on this opportunity — shortlist it, send a proposal, or open what you've already sent. Bookmark it to come back to, or open quick actions for more."
 
 const EMPTY_FILTERS = {
   name: "",
@@ -308,9 +402,9 @@ const EMPTY_FILTERS = {
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v2: the stored widths from the kit version are the narrow ones that caused
-// the mid-word header breaks, so old saved views fall back to the new defaults.
-const VIEWS_STORAGE_KEY = "customer-matches-views-v2"
+// v3: the two fixed columns now store their widths in this map too, so a v2
+// view would leave them undefined.
+const VIEWS_STORAGE_KEY = "customer-matches-views-v3"
 const FILTERS_STORAGE_KEY = "customer-matches-filters-v1"
 const SAVED_STORAGE_KEY = "customer-matches-saved-v1"
 
@@ -346,7 +440,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   pinned: { ...DEFAULT_PINNED },
   density: DEFAULT_DENSITY,
 })
@@ -366,7 +460,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   pinned: { ...DEFAULT_PINNED, ...(view?.pinned || {}) },
   density: view?.density || DEFAULT_DENSITY,
 })
@@ -712,9 +806,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
   const [authResolved, setAuthResolved] = useState(false)
 
   /* A stage pressed in the pipeline arrives here. The `stageFilter` prop
-     still wins when the page passes one, so wiring props is optional rather
-     than required — drop <CustomerFlowPipeline /> anywhere on the page and
-     the two find each other. */
+     still wins when the page passes one. */
   const [eventStageFilter, setEventStageFilter] = useState(null)
   useEffect(() => {
     const onFilter = (e) => setEventStageFilter(e.detail ?? null)
@@ -752,8 +844,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
 
   const savedCount = useMemo(() => Object.values(savedMatches).filter(Boolean).length, [savedMatches])
 
-  /* Popups — anchored popovers portaled to <body>, same pattern as the other
-     match tables. { type, row, position:{x,y}, rect } */
+  /* Popups — anchored popovers portaled to <body>. { type, row, position, rect } */
   const [activePopup, setActivePopup] = useState(null)
 
   // Filters + sort, restored from the last visit
@@ -784,6 +875,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
   const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   // Viewport, for responsive column collapse
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth)
@@ -923,11 +1015,8 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     return () => unsubscribe()
   }, [authResolved, currentCustomerId])
 
-  /* Publish the unfiltered rows. This is what makes a card reading 8 and the
-     table showing 8 the same number — the pipeline used to count whatever
-     list the page handed it, which came from a different query than this
-     component's own listener. The request handler covers a pipeline that
-     mounts after the first broadcast has already gone out. */
+  /* Publish the unfiltered rows so the pipeline cards count exactly what this
+     component holds. */
   useEffect(() => {
     if (typeof window === "undefined") return
     const emit = () => window.dispatchEvent(new CustomEvent(CUSTOMER_ROWS_EVENT, { detail: applications }))
@@ -967,8 +1056,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
   }, [])
 
   /* One place that both the row bookmark and the quick-actions entry call,
-     so the two can't drift apart. Declared after `notify` because it uses
-     it — a const referenced before its initializer throws at render. */
+     so the two can't drift apart. Declared after `notify` because it uses it. */
   const toggleSaved = useCallback(
     (row) => {
       const nowSaved = !savedMatches[row.id]
@@ -1118,13 +1206,23 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     setDragOverColumn(null)
   }
 
-  /* ─── Resize ────────────────────────────────────────────────────────── */
+  /* ─── Widths + resize ───────────────────────────────────────────────────
+     widthOf is declared here, above startResize, because startResize calls it —
+     a const referenced before its initializer throws at render. It covers the
+     reorderable columns *and* the two fixed ones, so every column in the table
+     can be dragged wider. */
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths],
+  )
+
   const startResize = (e, key) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = columnWidths[key] ?? COLUMN_DEFS[key].width
+    const startWidth = widthOf(key)
     resizingRef.current = key
+    setResizingColumn(key)
 
     const onMove = (ev) => {
       const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
@@ -1132,6 +1230,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     }
     const onUp = () => {
       resizingRef.current = null
+      setResizingColumn(null)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       window.removeEventListener("mousemove", onMove)
@@ -1143,6 +1242,31 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
   }
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="ct-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        resetColumnWidth(colKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
 
   /* ─── Header filter + sort ──────────────────────────────────────────── */
   const openHeaderFilter = (type, event) => {
@@ -1600,12 +1724,13 @@ export function CustomerTable({ stageFilter, onCountChange }) {
     return [...left, ...middle, ...right]
   }, [visibleColumnKeys, pinned])
 
-  const widthOf = useCallback((key) => columnWidths[key] ?? COLUMN_DEFS[key].width, [columnWidths])
+  const customerWidth = widthOf(CUSTOMER_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
     // Left-pinned columns stack to the right of the frozen Customer column.
-    let leftAcc = CUSTOMER_WIDTH
+    let leftAcc = customerWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
         offsets[key] = { side: "left", value: leftAcc }
@@ -1621,9 +1746,9 @@ export function CustomerTable({ stageFilter, onCountChange }) {
       }
     })
     return offsets
-  }, [orderedColumns, pinned, widthOf])
+  }, [orderedColumns, pinned, widthOf, customerWidth])
 
-  const totalWidth = CUSTOMER_WIDTH + ACTION_WIDTH + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
+  const totalWidth = customerWidth + actionWidth + orderedColumns.reduce((sum, key) => sum + widthOf(key), 0)
 
   const cellPadding = density === "compact" ? "0.4rem 0.4rem" : "0.6rem 0.5rem"
   const headerPadding = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
@@ -1872,8 +1997,6 @@ export function CustomerTable({ stageFilter, onCountChange }) {
               Viewing: {activeView.name}
               {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
             </span>
-            {/* Which pipeline stage the table is narrowed to. Press the same
-                card again in the pipeline to clear it. */}
             {activeStageFilter && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#a67c52]/10 text-[#4a352f] border border-[#a67c52]/40">
                 <Target size={12} className="text-[#7d5a50]" />
@@ -1881,8 +2004,6 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                 <span className="font-normal text-[#a89482]">({filteredApplications.length})</span>
               </span>
             )}
-            {/* Saved matches. The bookmark on each row writes here; this is
-                where you get them back. */}
             {(showSavedOnly || savedCount > 0) && (
               <button
                 onClick={() => setShowSavedOnly((v) => !v)}
@@ -2118,12 +2239,12 @@ export function CustomerTable({ stageFilter, onCountChange }) {
 
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
                         <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to
-                        resize.
+                        resize. Every column resizes, including the pinned ones.
                       </p>
 
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked disabled className="rounded border-[#c8b6a6]" />
-                        <span className="text-sm text-[#4a352f] flex-1">Customer</span>
+                        <span className="text-sm text-[#4a352f] flex-1">Customer Name</span>
                         <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Pinned</span>
                       </div>
                       <div className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
@@ -2228,7 +2349,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                buying every header ~14px more room for its label. */
             .ct-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .ct-th:hover .ct-th-grip { opacity: .45; }
-            .ct-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
+            .ct-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
             .ct-resize:hover { background: rgba(255,255,255,0.25); }
           `}</style>
 
@@ -2249,25 +2370,28 @@ export function CustomerTable({ stageFilter, onCountChange }) {
           >
             <thead>
               <tr>
+                {/* Customer — pinned first column, resizable like the rest */}
                 <th
                   className="ct-th font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30 text-left"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: CUSTOMER_WIDTH,
+                    width: customerWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                     boxShadow: "2px 0 0 #e6d7c3",
                   }}
                 >
                   <div className="ct-th-row">
-                    <span className="ct-th-label" title="Customer">
-                      Customer
+                    <span className="ct-th-label" title="Customer Name">
+                      Customer Name
                     </span>
                     <span className="ct-th-tools">
                       <SortTrigger columnKey="name" />
                       <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <HeaderInfoTooltip text={CUSTOMER_TOOLTIP} />
                     </span>
                   </div>
+                  <ColumnResizer colKey={CUSTOMER_KEY} />
                 </th>
 
                 {orderedColumns.map((key) => {
@@ -2279,7 +2403,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                   return (
                     <th
                       key={key}
-                      draggable
+                      draggable={!resizingColumn}
                       onDragStart={(e) => handleColumnDragStart(e, key)}
                       onDragOver={(e) => handleColumnDragOver(e, key)}
                       onDrop={(e) => handleColumnDrop(e, key)}
@@ -2315,9 +2439,10 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                           {col.filterType && (
                             <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
                           )}
+                          <HeaderInfoTooltip text={col.tooltip} />
                         </span>
                       </div>
-                      <div className="ct-resize" onMouseDown={(e) => startResize(e, key)} onClick={(e) => e.stopPropagation()} />
+                      <ColumnResizer colKey={key} />
                     </th>
                   )
                 })}
@@ -2328,12 +2453,16 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                   className="ct-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
                   style={{
                     backgroundColor: "#4a352f",
-                    width: ACTION_WIDTH,
+                    width: actionWidth,
                     padding: headerPadding,
                     borderBottom: "1px solid #e6d7c3",
                   }}
                 >
-                  Action
+                  <div className="ct-th-row justify-center">
+                    <span className="ct-th-label">Action</span>
+                    <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                  </div>
+                  <ColumnResizer colKey={ACTION_KEY} />
                 </th>
               </tr>
             </thead>
@@ -2412,7 +2541,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                         className="sticky left-0 z-10"
                         style={{
                           ...tableCellStyle,
-                          width: CUSTOMER_WIDTH,
+                          width: customerWidth,
                           backgroundColor: rowBg,
                           borderRight: "none",
                           boxShadow: "2px 0 0 #e6d7c3",
@@ -2437,7 +2566,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                       <td
                         style={{
                           ...tableCellStyle,
-                          width: ACTION_WIDTH,
+                          width: actionWidth,
                           borderRight: "none",
                           backgroundColor: rowBg,
                           textAlign: "center",
@@ -2450,7 +2579,11 @@ export function CustomerTable({ stageFilter, onCountChange }) {
                             className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
                               isTerminal ? "bg-[#e6d7c3]/60 text-[#a89482]" : "text-white hover:shadow-md hover:brightness-105"
                             }`}
-                            style={{ width: "126px", height: "34px", backgroundColor: isTerminal ? undefined : "#7d5a50" }}
+                            style={{
+                              width: `${Math.max(100, actionWidth - 82)}px`,
+                              height: "34px",
+                              backgroundColor: isTerminal ? undefined : "#7d5a50",
+                            }}
                           >
                             {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
                             <span className="truncate">{actions.primary}</span>
@@ -2609,7 +2742,7 @@ export function CustomerTable({ stageFilter, onCountChange }) {
             )}
 
             {[
-              { type: "name", label: "Customer / opportunity", placeholder: "Search..." },
+              { type: "name", label: "Customer name / opportunity", placeholder: "Search..." },
               { type: "productService", label: "Product or Service Required", placeholder: "e.g. cleaning, IT support" },
               { type: "estimatedValue", label: "Estimated Value", placeholder: "Search value..." },
               { type: "deliveryLocation", label: "Delivery Location", placeholder: "Search location..." },

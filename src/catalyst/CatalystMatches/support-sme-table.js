@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  Info, MapPin, Calendar, Filter, X, Eye, BarChart3,
-  ChevronDown, ChevronUp, MoreVertical, CheckCircle, XCircle,
-  Clock, Users, DollarSign, Building,
+  Info, Calendar, X, Eye,
+  ChevronDown, MoreVertical, CheckCircle,
+  Clock, Users,
   LayoutGrid, Download, MessageSquare,
   Share2, ArrowRight, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase,
-  Video, Link, LogOut, Trash2, Plus, GripVertical, ExternalLink
+  Video, Trash2, Plus, GripVertical, ExternalLink,
+  ArrowUp, ArrowDown, ArrowUpDown
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -30,7 +31,7 @@ const BIG_SCORE_LABELS = {
   critical: { min: 0, label: "Critical", color: "#dc2626" }
 };
 
-// Match % now maps to a plain label + fit bar instead of a 5-star rating
+// Match % maps to a plain label + fit bar instead of a 5-star rating
 const MATCH_LABELS = {
   excellent: { min: 80, label: "Excellent Fit", color: "#22c55e" },
   strong: { min: 60, label: "Strong Fit", color: "#86efac" },
@@ -53,14 +54,10 @@ const getMatchLabel = (score) => {
   return MATCH_LABELS.poor;
 };
 
-// Stage lookup helpers now take the currently *active* stage list as a
-// parameter (BIG Default, or whichever PROGRAMME_TEMPLATES entry the
-// catalyst has switched to, with any admin customization applied) — rather
-// than always resolving against the flat DEFAULT_STAGES import. Without
-// this, a catalyst switching to e.g. the Grant Programme template (which
-// introduces a "Committee" stage) would find that stage never shows up
-// anywhere in this table, since every lookup would keep resolving against
-// the 9 BIG-default stages regardless of which programme is active.
+// Stage lookup helpers take the currently *active* stage list as a parameter
+// (BIG Default, or whichever PROGRAMME_TEMPLATES entry the catalyst has
+// switched to, with any admin customization applied) — rather than always
+// resolving against the flat DEFAULT_STAGES import.
 const getStageById = (id, stages = DEFAULT_STAGES) =>
   stages.find((s) => s.id === id) || stages[0];
 
@@ -93,13 +90,8 @@ const formatCurrency = (value) => {
   return `R${num}`;
 };
 
-
 // Derives how many calendar days have elapsed since the stage was last
 // updated, using the `updatedAt` field written by serverTimestamp().
-// Handles three shapes the field can arrive in from Firestore:
-//   • Firestore Timestamp object  → .toDate()
-//   • Plain object { seconds, nanoseconds } → seconds * 1000
-//   • Already a JS Date           → use directly
 const calculateDaysInStage = (updatedAt) => {
   if (!updatedAt) return 0;
   let date;
@@ -134,8 +126,11 @@ const PopupPortal = ({ children }) => {
 };
 
 // ─── Column header info tooltip ────────────────────────────────────────────
+// Portaled to <body> because the header cell is sticky and would otherwise
+// clip the bubble.
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
     <span
       onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
@@ -164,28 +159,106 @@ const HeaderInfoTooltip = ({ text }) => {
 // ─── Reorderable column definitions ────────────────────────────────────────
 // These are the columns that live *between* the pinned "Business Name" (always
 // first) and "Actions" (always last) columns. Users can drag these to reorder
-// them; the array below is only the default/fallback order.
-const DEFAULT_COLUMN_ORDER = [
-  "bigScore", "match", "fundingStage", "fundingRequired", "status", "applied",
-  "daysInStage", "lastActivity", "location", "sector", "equity", "guarantees",
-  "support", "services"
-];
-
+// them, drag their right edge to resize, and read what each one means from the
+// ⓘ in its header.
+//
+// Widths are numeric px and double as the factory default a double-click on
+// the divider snaps back to. They're set high enough that the header chrome
+// (grip, filter, info — roughly 55px) doesn't force labels to break mid-word.
 const COLUMN_DEFS = {
-  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", tooltip: "BIG Score measures SME credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
-  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", tooltip: "Match Score measures programme fit — alignment with this programme's mandate and criteria." },
-  fundingStage: { label: "Funding Stage", align: "left", minWidth: "94px", filterType: "fundingStage" },
-  fundingRequired: { label: "Funding", align: "left", minWidth: "92px", filterType: "fundingRequired" },
-  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status" },
-  applied: { label: "Applied", align: "left", minWidth: "92px", filterType: "applied" },
-  daysInStage: { label: "Days in Stage", align: "left", minWidth: "134px", filterType: "daysInStage" },
-  lastActivity: { label: "Last Activity", align: "left", minWidth: "108px", filterType: "lastActivity" },
-  location: { label: "Location", align: "left", minWidth: "92px", filterType: "location" },
-  sector: { label: "Sector", align: "left", minWidth: "100px", filterType: "sector" },
-  equity: { label: "Equity", align: "left", minWidth: "92px", filterType: "equity" },
-  guarantees: { label: "Guarantees", align: "left", minWidth: "100px", filterType: "guarantees" },
-  support: { label: "Support", align: "left", minWidth: "92px", filterType: "support" },
-  services: { label: "Services", align: "left", minWidth: "92px", filterType: "services" }
+  bigScore: {
+    label: "BIG Score", align: "center", width: 150, filterType: "bigScore",
+    tooltip: "Business credibility and readiness — compliance, legitimacy, fundability, PIS and leadership, rolled into one score out of 100. Click a score to see the breakdown.",
+  },
+  match: {
+    label: "Match %", align: "center", width: 150, filterType: "match",
+    tooltip: "Programme fit — how closely this business aligns with your programme's mandate and criteria. Separate from BIG Score, which measures the business itself.",
+  },
+  fundingStage: {
+    label: "Funding Stage", align: "left", width: 150, filterType: "fundingStage",
+    tooltip: "Where the business sits in its funding journey — startup, growth, scale or established.",
+  },
+  fundingRequired: {
+    label: "Funding", align: "left", width: 150, filterType: "fundingRequired",
+    tooltip: "The amount of support the business has asked for. Filtering uses the underlying number, not the formatted label.",
+  },
+  status: {
+    label: "Status", align: "left", width: 152, filterType: "status",
+    tooltip: "The stage this application currently sits at in your pipeline. Stage names follow whichever programme template is selected.",
+  },
+  applied: {
+    label: "Applied", align: "left", width: 148, filterType: "applied",
+    tooltip: "The date the business submitted its application to this programme.",
+  },
+  daysInStage: {
+    label: "Days in Stage", align: "left", width: 152, filterType: "daysInStage",
+    tooltip: "How long this application has sat at its current stage. Anything past 14 days counts as stalled and floats to the top of the default sort.",
+  },
+  lastActivity: {
+    label: "Last Activity", align: "left", width: 150, filterType: "lastActivity",
+    tooltip: "The most recent recorded movement on this application — a stage change, a message or a document.",
+  },
+  location: {
+    label: "Location", align: "left", width: 140, filterType: "location",
+    tooltip: "The city or town the business operates from.",
+  },
+  sector: {
+    label: "Sector", align: "left", width: 150, filterType: "sector",
+    tooltip: "The industries the business operates in, as captured on its profile.",
+  },
+  equity: {
+    label: "Equity", align: "left", width: 140, filterType: "equity",
+    tooltip: "The equity the business is offering in exchange for support, where it offers any.",
+  },
+  guarantees: {
+    label: "Guarantees", align: "left", width: 154, filterType: "guarantees",
+    tooltip: "Security the business can put behind a deal — contracts, purchase orders, sureties, collateral and so on.",
+  },
+  support: {
+    label: "Support", align: "left", width: 150, filterType: "support",
+    tooltip: "The kind of help the business says it needs — funding, market access, mentoring, technical support and so on.",
+  },
+  services: {
+    label: "Services", align: "left", width: 150, filterType: "services",
+    tooltip: "The specific services the business has asked for, in its own words.",
+  }
+};
+
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS);
+const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(
+  DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])
+);
+
+// Business Name and Actions can't be hidden or reordered, so they aren't in
+// COLUMN_DEFS — but they resize like everything else, and their widths live
+// under these reserved keys inside the same columnWidths map.
+const NAME_KEY = "__name__";
+const ACTION_KEY = "__action__";
+const FIXED_WIDTHS = { [NAME_KEY]: 210, [ACTION_KEY]: 200 };
+const MIN_COLUMN_WIDTH = 84;
+
+const NAME_TOOLTIP = "The registered business name, with its programme number appended when the same business has applied to more than one of your programmes. Click the eye to open its full profile.";
+const ACTION_TOOLTIP = "Move the application to its next stage, or open quick actions to view the profile, open the BIG Score page, or share an NDA.";
+
+// Sorting reads the mapped row field, which doesn't always match the column
+// key (e.g. "match" lives on matchPercentage, "applied" on applicationDateRaw,
+// and "fundingRequired" sorts on the raw number rather than the "R1.2M" label).
+const SORT_ACCESSORS = {
+  [NAME_KEY]: (r) => (r.name || "").toLowerCase(),
+  bigScore: (r) => Number(r.bigScore) || 0,
+  match: (r) => Number(r.matchPercentage) || 0,
+  fundingStage: (r) => (r.fundingStage || "").toLowerCase(),
+  fundingRequired: (r) => Number(r.fundingAmount) || 0,
+  status: (r) => (r.currentStatus || "").toLowerCase(),
+  applied: (r) => r.applicationDateRaw?.getTime?.() || 0,
+  daysInStage: (r) => Number(r.daysInStage) || 0,
+  lastActivity: (r) => new Date(r.lastActivity).getTime() || 0,
+  location: (r) => (r.location || "").toLowerCase(),
+  sector: (r) => (r.sector || "").toLowerCase(),
+  equity: (r) => (r.equityOffered || "").toLowerCase(),
+  guarantees: (r) => (r.guarantees || "").toLowerCase(),
+  support: (r) => (r.supportRequired || "").toLowerCase(),
+  services: (r) => (r.servicesRequired || "").toLowerCase(),
 };
 
 // Maps a column key (used for visibility/order) to the actual field name on
@@ -209,7 +282,7 @@ const EXPORT_FIELD_MAP = {
   lastActivity: "lastActivity",
   notes: "notes",
   assignedUser: "assignedUser"
-  // Note: "action" is intentionally omitted — it's a UI-only column
+  // Note: the Actions column is intentionally omitted — it's a UI-only column
   // (the stage-advance button), not a data field on the SME row.
 };
 
@@ -225,30 +298,27 @@ const EXPORT_HEADERS = {
 
 // ─── Custom Views ───────────────────────────────────────────────────────────
 // A "view" bundles every layout preference a person can customize — column
-// visibility, column order, sort, and density — into one named, describable
-// object, with exactly one view "active" at a time. Editing the table always
-// edits the active view; there's no separate hidden "current layout" that
-// can silently drift out of sync with whatever view you think you're on.
-// That drift (edit while a saved view is loaded, then have the view reload
-// later and wipe those edits) was the source of columns appearing to
-// "randomly" rearrange or vanish.
+// visibility, column order, column widths, sort, and density — into one named,
+// describable object, with exactly one view "active" at a time. Editing the
+// table always edits the active view.
 const DEFAULT_COLUMN_VISIBILITY = {
-  sme: true, bigScore: true, match: true, fundingStage: true,
-  fundingRequired: true, status: true, applied: true, action: true,
+  bigScore: true, match: true, fundingStage: true,
+  fundingRequired: true, status: true, applied: true,
   location: false, sector: false, equity: false, guarantees: false,
-  support: false, services: false, notes: false, assignedUser: false,
+  support: false, services: false,
   daysInStage: true, lastActivity: true
 };
 const DEFAULT_SORT_CONFIG = { key: 'attentionThenScore', direction: 'desc' };
 const DEFAULT_DENSITY = 'comfortable';
 
 const BUILTIN_VIEW_ID = "__default__";
-const VIEWS_STORAGE_KEY = "sme-table-views-v2";
+// v3: views now carry per-column widths, including the two fixed columns, so a
+// v2 view would leave every width undefined.
+const VIEWS_STORAGE_KEY = "sme-table-views-v3";
 
 // Keeps a stored column order valid against the columns this build of the
 // table actually knows about: drops keys that no longer exist, and appends
-// any newly-introduced columns (hidden by default) so a future column
-// addition can't silently corrupt an old saved view's header row.
+// any newly-introduced columns.
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
   const known = new Set(DEFAULT_COLUMN_ORDER);
@@ -260,6 +330,7 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS },
   sortConfig: { ...DEFAULT_SORT_CONFIG },
   density: DEFAULT_DENSITY,
 });
@@ -272,9 +343,8 @@ const createBuiltinDefaultView = () => ({
   ...createDefaultViewLayout(),
 });
 
-// Defends against a stored view missing fields (older schema, partial
-// write, etc.) by filling in safe defaults rather than letting a column set
-// come out blank.
+// Defends against a stored view missing fields (older schema, partial write)
+// by filling in safe defaults rather than letting a column set come out blank.
 const sanitizeView = (view, fallbackId) => ({
   id: view?.id || fallbackId,
   name: (view?.name || "Untitled view").toString(),
@@ -282,6 +352,7 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...FIXED_WIDTHS, ...(view?.columnWidths || {}) },
   sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
   density: view?.density || DEFAULT_DENSITY,
 });
@@ -294,8 +365,6 @@ const loadViewsState = () => {
     const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {};
     const views = {};
     Object.entries(rawViews).forEach(([id, v]) => { views[id] = sanitizeView(v, id); });
-    // The builtin Default view must always exist and keep its identity,
-    // even on first load or if it was somehow dropped from storage.
     views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
       ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
       : createBuiltinDefaultView();
@@ -311,8 +380,8 @@ const persistViewsState = (state) => {
   try {
     window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state));
   } catch {
-    // Storage can fail (private browsing, quota) — the table still works
-    // for the current session, it just won't persist across reloads.
+    // Storage can fail (private browsing, quota) — the table still works for
+    // the current session, it just won't persist across reloads.
   }
 };
 
@@ -327,20 +396,13 @@ const generateViewId = () => {
 // ─── Component ────────────────────────────────────────────────────────────────
 export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOverride }) {
   const [smes, setSmes] = useState([]);
-  const [expandedRows, setExpandedRows] = useState(new Set());
 
   // ─── Views ──────────────────────────────────────────────────────────────
-  // viewsState = { activeViewId, views: { [id]: {id,name,description,builtin,
-  // columnVisibility,columnOrder,sortConfig,density} } }. The four "live"
-  // pieces below (columnVisibility/columnOrder/sortConfig/density) are what
-  // the rest of the table actually reads/renders from; they're initialized
-  // from the active view and, via the effect further down, auto-saved back
-  // into that same view on every change. Switching views is the only thing
-  // that reassigns them from a *different* view's stored layout.
   const [viewsState, setViewsState] = useState(() => loadViewsState());
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
   const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility);
   const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder);
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths);
   const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig);
   const [density, setDensity] = useState(() => initialActiveView.density);
 
@@ -349,7 +411,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [showNewViewForm, setShowNewViewForm] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const [newViewDescription, setNewViewDescription] = useState("");
-  const [editingViewMeta, setEditingViewMeta] = useState(null); // { id, name, description } while renaming/describing an existing view
+  const [editingViewMeta, setEditingViewMeta] = useState(null);
   const [bigScoreLoading, setBigScoreLoading] = useState(false);
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
@@ -365,10 +427,12 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [isNDASharing, setIsNDASharing] = useState({});
   const [updatedStages, setUpdatedStages] = useState({});
 
-  // Column drag-to-reorder state
+  // Column drag-to-reorder + resize state
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [dragHintRect, setDragHintRect] = useState(null);
+  const resizingRef = useRef(null);
+  const [resizingColumn, setResizingColumn] = useState(null);
 
   // Popup states
   const [activePopup, setActivePopup] = useState(null);
@@ -394,21 +458,10 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const { enriched, catalystFormData, loading } = usePortfolio();
 
   // ─── Programme-aware pipeline stages ───────────────────────────────────────
-  // The pipeline settings (which programme template is active, plus any
-  // admin customization — renames/hidden/reordered/custom stages) live in
-  // the same shared localStorage key that SupportDealFlowPipeline.jsx writes
-  // to. We read them here so the table's stage list always matches whatever
-  // programme is actually selected, instead of being permanently locked to
-  // the BIG default stages.
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
 
   useEffect(() => {
     const refreshPipelineSettings = () => setPipelineSettings(loadPipelineSettings());
-    // 'storage' fires when another tab/window changes the settings;
-    // PIPELINE_SETTINGS_EVENT fires when this same tab changes them (e.g. the
-    // catalyst edits the pipeline programme type/stages and switches back to
-    // this table without a full page reload); 'focus' is a cheap safety net
-    // for either case.
     window.addEventListener("storage", refreshPipelineSettings);
     window.addEventListener(PIPELINE_SETTINGS_EVENT, refreshPipelineSettings);
     window.addEventListener("focus", refreshPipelineSettings);
@@ -425,29 +478,22 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     [pipelineSettings]
   );
 
-  // The currently active view, derived straight from viewsState — this is
-  // what the UI displays as "you're editing X". Falls back to the builtin
-  // Default view defensively (should never actually be missing).
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
 
-  // Auto-save: any edit to columns/order/sort/density writes straight back
-  // into the active view (and persists immediately) — there's no separate
-  // "unsaved changes" state to lose track of, and no way for a view to
-  // silently go stale relative to what's on screen.
+  // Auto-save: any edit to columns/order/widths/sort/density writes straight
+  // back into the active view (and persists immediately).
   useEffect(() => {
     setViewsState(prev => {
       const current = prev.views[prev.activeViewId];
       if (!current) return prev;
-      const updated = { ...current, columnVisibility, columnOrder, sortConfig, density };
+      const updated = { ...current, columnVisibility, columnOrder, columnWidths, sortConfig, density };
       const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } };
       persistViewsState(next);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columnVisibility, columnOrder, sortConfig, density]);
+  }, [columnVisibility, columnOrder, columnWidths, sortConfig, density]);
 
-  // Switch the active view: loads that view's layout into the live state
-  // (which then drives everything else in the table) and marks it active.
   const switchToView = (viewId) => {
     const target = viewsState.views[viewId];
     if (!target) return;
@@ -458,13 +504,11 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     });
     setColumnVisibility(target.columnVisibility);
     setColumnOrder(target.columnOrder);
+    setColumnWidths(target.columnWidths);
     setSortConfig(target.sortConfig);
     setDensity(target.density);
   };
 
-  // Creates a new named (optionally described) view as a snapshot of
-  // whatever the table currently looks like, and switches to it. This is
-  // the only explicit "save" action left — everything else auto-saves.
   const createNewView = () => {
     const trimmedName = newViewName.trim();
     if (!trimmedName) return;
@@ -472,7 +516,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     const newView = {
       id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
       columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
-      sortConfig: { ...sortConfig }, density,
+      columnWidths: { ...columnWidths }, sortConfig: { ...sortConfig }, density,
     };
     setViewsState(prev => {
       const next = { activeViewId: id, views: { ...prev.views, [id]: newView } };
@@ -487,9 +531,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const startEditingViewMeta = (view) => setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin });
 
-  // Renames/redescribes an existing view without touching its layout. The
-  // builtin Default view's name is protected (identity stays fixed), but
-  // its description can still be edited like any other view's.
   const saveViewMeta = () => {
     if (!editingViewMeta) return;
     const trimmedName = editingViewMeta.name.trim();
@@ -509,7 +550,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     setEditingViewMeta(null);
   };
 
-  // Deletes a saved (non-builtin) view; if it was active, falls back to Default.
   const removeView = (viewId) => {
     if (viewId === BUILTIN_VIEW_ID) return;
     const wasActive = viewsState.activeViewId === viewId;
@@ -524,19 +564,18 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       const def = viewsState.views[BUILTIN_VIEW_ID];
       setColumnVisibility(def.columnVisibility);
       setColumnOrder(def.columnOrder);
+      setColumnWidths(def.columnWidths);
       setSortConfig(def.sortConfig);
       setDensity(def.density);
     }
     setNotification({ type: "success", message: "View deleted" });
   };
 
-  // Resets whichever view is currently active back to factory-default
-  // columns/order/sort/density — without touching its name or description,
-  // and without deleting it.
   const resetActiveViewToDefault = () => {
     const layout = createDefaultViewLayout();
     setColumnVisibility(layout.columnVisibility);
     setColumnOrder(layout.columnOrder);
+    setColumnWidths(layout.columnWidths);
     setSortConfig(layout.sortConfig);
     setDensity(layout.density);
     setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` });
@@ -574,7 +613,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         pipelineStage: a.pipelineStage || a.status || "Matched",
         nextStage: a.nextStage || getNextStage(a.pipelineStage || a.status, activeStages),
         availableDates: a.availableDates || [],
-       lastActivity: a.lastActiveDate || a.lastActivity || "N/A",
+        lastActivity: a.lastActiveDate || a.lastActivity || "N/A",
         assignedUser: a.assignedUser || "Unassigned",
         notes: a.notes || "", documents: a.documents || [],
         matchBreakdown: a.matchBreakdown || null,
@@ -669,21 +708,22 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         return b.bigScore - a.bigScore;
       });
     } else if (sortConfig.key) {
+      const accessor = SORT_ACCESSORS[sortConfig.key] || ((r) => (r[sortConfig.key] ?? '').toString().toLowerCase());
       result.sort((a, b) => {
-        let aVal = a[sortConfig.key], bVal = b[sortConfig.key];
-        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
-        if (aVal == null) aVal = ''; if (bVal == null) bVal = '';
-        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
+        const av = accessor(a);
+        const bv = accessor(b);
+        if (typeof av === 'number' && typeof bv === 'number') {
+          return sortConfig.direction === 'asc' ? av - bv : bv - av;
+        }
+        const cmp = (av ?? '').toString().localeCompare((bv ?? '').toString());
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
       });
     }
 
     return result;
   }, [smes, sortConfig, localFilters, activeStages]);
 
-  const totalPages = Math.ceil(filteredAndSortedSMEs.length / pageSize);
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const sectorOptions = useMemo(
@@ -739,7 +779,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', key);
     } catch {
-      // Some browsers are picky about dataTransfer in certain contexts — safe to ignore
+      // Some browsers are picky about dataTransfer in certain contexts.
     }
   };
 
@@ -774,12 +814,96 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     setDragOverColumn(null);
   };
 
+  // ─── Widths + resize ────────────────────────────────────────────────────────
+  // widthOf is declared above startResize because startResize calls it — a
+  // const referenced before its initializer throws at render. It covers the
+  // reorderable columns *and* the two fixed ones, so every column in the table
+  // can be dragged wider.
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths]
+  );
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = widthOf(key);
+    resizingRef.current = key;
+    setResizingColumn(key);
+
+    const onMove = (ev) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX));
+      setColumnWidths(prev => ({ ...prev, [key]: next }));
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      setResizingColumn(null);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+
+    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
+    // the 6px handle mid-drag, and so text can't be selected while resizing.
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths(prev => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }));
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="smt-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => { e.stopPropagation(); resetColumnWidth(colKey); }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  );
+
   const openHeaderFilter = (type, event) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     setHeaderFilterOpen(prev => (prev?.type === type ? null : { type, rect }));
   };
   const closeHeaderFilter = () => setHeaderFilterOpen(null);
+
+  // asc → desc → back to the default "needs attention first" sort.
+  const toggleSort = (key, event) => {
+    event.stopPropagation();
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: 'asc' };
+      if (prev.direction === 'asc') return { key, direction: 'desc' };
+      return { ...DEFAULT_SORT_CONFIG };
+    });
+  };
+
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey;
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === 'asc' ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    );
+  };
 
   const FilterTrigger = ({ type, active }) => (
     <button
@@ -799,13 +923,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   };
 
   // Sends the catalyst to this SME's own /dashboard, restricted to just the
-  // BIG Score tab (no "Improve My BIG Score" tools tab, no ability to
-  // switch), with a visible "Back" control to return. Uses the same
-  // session-storage "investor view" pattern the Growth Suite / Documents
-  // navigation elsewhere in the app already relies on (viewingSMEId/
-  // viewingSMEName/investorViewMode/viewOrigin), plus a new
-  // viewOnlyBigScore flag that Dashboard.jsx checks to lock the view down
-  // to just that one tab and show the Back button.
+  // BIG Score tab, with a visible "Back" control to return.
   const handleViewBigScorePage = (sme) => {
     sessionStorage.setItem('viewingSMEId', sme.userId || sme.id);
     sessionStorage.setItem('viewingSMEName', sme.name);
@@ -830,40 +948,37 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20;
     if (x < 20) x = 20;
-
-    if (y + popupHeight > window.innerHeight - 20) {
-      y = rect.top - popupHeight - 8;
-    }
+    if (y + popupHeight > window.innerHeight - 20) y = rect.top - popupHeight - 8;
     if (y < 20) y = 20;
 
     setSelectedSMEForPopup(sme);
     setActivePopup({ type, smeKey: `${sme.id}_${sme.programIndex}`, position: { x, y }, rect });
 
     if (type === 'bigScore') {
-  setBigScoreLoading(true);
-  setBigScoreData({
-    compliance: { score: 0 }, legitimacy: { score: 0 },
-    fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
-  });
-  const userId = sme.userId || sme.id;
-  getDoc(doc(db, "bigEvaluations", userId))
-    .then((snap) => {
-      if (snap.exists()) {
-        const s = snap.data().scores || {};
-        setBigScoreData({
-          compliance:          { score: s.compliance          || 0 },
-          legitimacy:          { score: s.legitimacy          || 0 },
-          fundability:         { score: s.fundability         || 0 },
-          governanceLeadership:{ score: s.governanceLeadership|| 0 },
-          operational:         { score: s.operational         || 0 },
-          _bigScore:           s.bigScore    || 0,
-          _lastUpdated:        s.lastUpdated || null,
-        });
-      }
-    })
-    .catch((err) => console.error("bigEvaluations fetch error:", err))
-    .finally(() => setBigScoreLoading(false));
-}
+      setBigScoreLoading(true);
+      setBigScoreData({
+        compliance: { score: 0 }, legitimacy: { score: 0 },
+        fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
+      });
+      const userId = sme.userId || sme.id;
+      getDoc(doc(db, "bigEvaluations", userId))
+        .then((snap) => {
+          if (snap.exists()) {
+            const s = snap.data().scores || {};
+            setBigScoreData({
+              compliance: { score: s.compliance || 0 },
+              legitimacy: { score: s.legitimacy || 0 },
+              fundability: { score: s.fundability || 0 },
+              governanceLeadership: { score: s.governanceLeadership || 0 },
+              operational: { score: s.operational || 0 },
+              _bigScore: s.bigScore || 0,
+              _lastUpdated: s.lastUpdated || null,
+            });
+          }
+        })
+        .catch((err) => console.error("bigEvaluations fetch error:", err))
+        .finally(() => setBigScoreLoading(false));
+    }
     if (type === 'match') {
       if (sme.matchBreakdown) {
         setMatchBreakdownData(sme.matchBreakdown);
@@ -918,16 +1033,15 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       const smeId = selectedSMEForPopup.id;
       const programIndex = selectedSMEForPopup.programIndex || "0";
       const documentId = `${user.uid}_${smeId}_${programIndex}`;
-const nextStage = getNextStage(stageUpdateData.nextStage, activeStages);
-const updateData = {
-  status: stageUpdateData.nextStage,
-  pipelineStage: stageUpdateData.nextStage,
-  nextStage: nextStage,                     // 👈 store it
-  updatedAt: serverTimestamp(),
-  lastMessage: stageUpdateData.message,
-  lastActivity: new Date().toISOString()
-};
-  
+      const nextStage = getNextStage(stageUpdateData.nextStage, activeStages);
+      const updateData = {
+        status: stageUpdateData.nextStage,
+        pipelineStage: stageUpdateData.nextStage,
+        nextStage: nextStage,
+        updatedAt: serverTimestamp(),
+        lastMessage: stageUpdateData.message,
+        lastActivity: new Date().toISOString()
+      };
 
       if (stageFields.showMeeting && stageUpdateData.meetingLocation && stageUpdateData.meetingPurpose) {
         updateData.meetingDetails = {
@@ -937,7 +1051,6 @@ const updateData = {
       }
 
       await updateDoc(doc(db, "catalystApplications", documentId), updateData);
-      
 
       const stageKey = `${smeId}_${programIndex}`;
       setUpdatedStages(prev => ({ ...prev, [stageKey]: stageUpdateData.nextStage }));
@@ -996,17 +1109,12 @@ const updateData = {
     try {
       // Respect the table's current visual order: pinned "Business Name"
       // first, then the reorderable columns in whatever order the user has
-      // dragged them into, skipping the UI-only "Action" column and any
-      // hidden columns.
+      // dragged them into, skipping hidden columns.
       const visibleCols = [
         "sme",
-        ...columnOrder.filter((key) => key !== "sme" && key !== "action" && columnVisibility[key])
-      ].filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key]);
+        ...columnOrder.filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key])
+      ];
 
-      if (visibleCols.length === 0) {
-        setNotification({ type: "error", message: "No visible columns to export" });
-        return;
-      }
       if (filteredAndSortedSMEs.length === 0) {
         setNotification({ type: "error", message: "No businesses to export" });
         return;
@@ -1028,10 +1136,7 @@ const updateData = {
       const headerOrder = visibleCols.map((key) => EXPORT_HEADERS[key] || key);
       const worksheet = XLSX.utils.json_to_sheet(rows, { header: headerOrder });
 
-      // Reasonable auto column widths based on header/content length so the
-      // sheet doesn't open with everything squashed into narrow columns.
-      worksheet["!cols"] = headerOrder.map((label, i) => {
-        const key = visibleCols[i];
+      worksheet["!cols"] = headerOrder.map((label) => {
         const contentLengths = rows.map((r) => String(r[label] ?? "").length);
         const maxLen = Math.max(label.length, ...contentLengths, 8);
         return { wch: Math.min(maxLen + 2, 45) };
@@ -1048,7 +1153,7 @@ const updateData = {
     }
   };
 
-  // Match breakdown now carries a percentage per component
+  // Match breakdown carries a percentage per component
   const calculateMatchScore = (smeProfileData, catalystFormData, program = null) => {
     const breakdown = {
       fundingStage: { score: 0, maxScore: 12.5, matched: false, details: {} },
@@ -1078,13 +1183,12 @@ const updateData = {
     return { score: Math.round(totalScore), breakdown };
   };
 
-
   const densityStyles = {
-    'comfortable': { cell: 'py-3 px-3', header: 'py-3 px-3', fontSize: 'text-sm', avatarSize: 'w-8 h-8' },
-    'compact': { cell: 'py-2 px-2', header: 'py-2 px-2', fontSize: 'text-xs', avatarSize: 'w-7 h-7' },
-    'ultra-compact': { cell: 'py-1.5 px-1.5', header: 'py-1.5 px-1.5', fontSize: 'text-xs', avatarSize: 'w-6 h-6' }
+    'comfortable': { cell: 'py-3 px-3', header: '0.7rem 0.6rem', fontSize: 'text-sm', avatarSize: 'w-8 h-8' },
+    'compact': { cell: 'py-2 px-2', header: '0.5rem 0.6rem', fontSize: 'text-xs', avatarSize: 'w-7 h-7' },
+    'ultra-compact': { cell: 'py-1.5 px-1.5', header: '0.5rem 0.6rem', fontSize: 'text-xs', avatarSize: 'w-6 h-6' }
   };
-  const ds = densityStyles[density];
+  const ds = densityStyles[density] || densityStyles.comfortable;
 
   useEffect(() => {
     const loadSentNDAs = async () => {
@@ -1116,6 +1220,16 @@ const updateData = {
     setShowCalendarPopup(false);
   };
 
+  // ─── Layout ─────────────────────────────────────────────────────────────────
+  const visibleColumns = useMemo(
+    () => columnOrder.filter((key) => columnVisibility[key] && COLUMN_DEFS[key]),
+    [columnOrder, columnVisibility]
+  );
+
+  const nameWidth = widthOf(NAME_KEY);
+  const actionWidth = widthOf(ACTION_KEY);
+  const totalWidth = nameWidth + actionWidth + visibleColumns.reduce((sum, key) => sum + widthOf(key), 0);
+
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="w-full space-y-4 p-6">
@@ -1135,8 +1249,6 @@ const updateData = {
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]" title="Determined by the pipeline's programme type setting">
               <Briefcase size={12} /> {activeProgrammeLabel} pipeline
             </span>
-            {/* Always-visible active view name (+ description, if any) — no
-                hover required, so it's never ambiguous which view is live. */}
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
               Viewing: {activeView.name}
@@ -1152,7 +1264,7 @@ const updateData = {
           </div>
           <div className="flex items-center gap-2">
 
-            {/* ─── Customize Table control (Views + Hide/Unhide + Density + Reset) ── */}
+            {/* ─── Customize Table (Views + Hide/Unhide + Density + Reset) ── */}
             <div className="relative">
               <button
                 onClick={(e) => {
@@ -1175,7 +1287,6 @@ const updateData = {
                 const margin = 12;
                 let left = columnChooserRect.right - panelWidth;
                 left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
-                // Available vertical space below the button; fall back to opening upward if it's too tight.
                 const spaceBelow = window.innerHeight - columnChooserRect.bottom - margin - 8;
                 const spaceAbove = columnChooserRect.top - margin - 8;
                 const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
@@ -1283,19 +1394,20 @@ const updateData = {
                       {/* ─── Hide/Unhide ───────────────────────────────────── */}
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                        <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize. Every column resizes, including the pinned ones.
                       </p>
-                      {[{ key: 'sme', label: 'Business Name' }, { key: 'bigScore', label: 'BIG Score' }, { key: 'match', label: 'Match %' }, { key: 'status', label: 'Status' }, { key: 'action', label: 'Action' }].map(({ key, label }) => (
+                      {[{ key: 'sme', label: 'Business Name' }, { key: 'action', label: 'Actions' }].map(({ key, label }) => (
                         <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
-                          <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f]">{label}</span>
+                          <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f] flex-1">{label}</span>
+                          <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">{key === 'sme' ? 'Pinned' : 'Always last'}</span>
                         </label>
                       ))}
                       <div className="border-t border-[#e6d7c3] my-2" />
-                      {[{ key: 'fundingStage', label: 'Funding Stage' }, { key: 'fundingRequired', label: 'Funding Required' }, { key: 'applied', label: 'Applied Date' }, { key: 'daysInStage', label: 'Days in Stage' }, { key: 'lastActivity', label: 'Last Activity' }, { key: 'location', label: 'Location' }, { key: 'sector', label: 'Sector' }, { key: 'equity', label: 'Equity Offered' }, { key: 'guarantees', label: 'Guarantees' }, { key: 'support', label: 'Support Required' }, { key: 'services', label: 'Services Required' }].map(({ key, label }) => (
+                      {DEFAULT_COLUMN_ORDER.map((key) => (
                         <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
                           <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
-                          <span className="text-sm text-[#4a352f]">{label}</span>
+                          <span className="text-sm text-[#4a352f]">{COLUMN_DEFS[key].label}</span>
                         </label>
                       ))}
 
@@ -1333,73 +1445,146 @@ const updateData = {
       {/* Table */}
       <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
         {loading ? (
-          <div className="p-8"><div className="space-y-4">{[...Array(8)].map((_, i) => (<div key={i} className="h-10 bg-shimmer-light rounded-lg animate-shimmer" />))}</div></div>
+          <div className="p-8"><div className="space-y-4">{[...Array(8)].map((_, i) => (<div key={i} className="h-10 bg-[#f5f0e1] rounded-lg animate-pulse" />))}</div></div>
         ) : (
           <>
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
               <style>{`
-                .smt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
+                /* No 'position: relative' here — it would override the sticky
+                   positioning on every <th>, so the header would scroll away
+                   while the pinned body cells stayed. Sticky is itself a
+                   positioned ancestor, so the grip and resize handle still
+                   anchor. */
+                .smt-th { color: #faf7f2 !important; vertical-align: top !important; }
                 .smt-th-draggable { cursor: grab; }
                 .smt-th-draggable:active { cursor: grabbing; }
-                /* Wrap header labels onto at most 2 lines instead of forcing
-                   the column wider than needed (Excel-style sizing). This only
-                   lays out cleanly because each column now also has a real
-                   min-width set in COLUMN_DEFS — without that floor, the
-                   browser sizes wrapped-text columns to their smallest
-                   possible content, which is what cut words down to 1-2
-                   letters before. */
-                .smt-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+                .smt-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+                /* overflow-wrap: normal stops the browser splitting inside a
+                   word, which is what turned "Match %" into "MAT CH.." and
+                   "Status" into "STA TUS" in narrow columns. */
+                .smt-th-label {
+                  flex: 1 1 auto; min-width: 0;
+                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                  overflow: hidden; white-space: normal;
+                  overflow-wrap: normal; word-break: normal; hyphens: none;
+                  line-height: 1.2; letter-spacing: 0.02em;
+                }
+                .smt-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+                /* The drag grip leaves the flex flow and only appears on hover,
+                   buying every header ~14px more room for its label. */
+                .smt-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+                .smt-th:hover .smt-th-grip { opacity: .45; }
+                .smt-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+                .smt-resize:hover { background: rgba(255,255,255,0.25); }
               `}</style>
-              <table className="border-collapse" style={{ tableLayout: 'auto' }}>
+
+              <table
+                className="text-sm"
+                style={{
+                  /* separate (not collapse) — collapsed borders are dropped by
+                     sticky cells, which made the pinned column lose its edge
+                     and mispaint over its neighbour while scrolling. */
+                  borderCollapse: 'separate',
+                  borderSpacing: 0,
+                  tableLayout: 'fixed',
+                  width: totalWidth,
+                  minWidth: '100%',
+                }}
+              >
                 <thead>
-                  <tr className="bg-[#4a352f]">
-                    <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '170px', maxWidth: '190px' }}>
-                      <div className="flex items-start gap-1 min-w-0">
-                        <span className="smt-th-label">Business Name</span>
-                        <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                  <tr>
+                    {/* Business Name — pinned first column, resizable like the rest */}
+                    <th
+                      className="smt-th text-left font-semibold uppercase tracking-wider text-xs sticky top-0 left-0 z-30"
+                      style={{
+                        backgroundColor: '#4a352f',
+                        width: nameWidth,
+                        padding: ds.header,
+                        borderBottom: '1px solid #e6d7c3',
+                        boxShadow: '2px 0 0 #e6d7c3',
+                      }}
+                    >
+                      <div className="smt-th-row">
+                        <span className="smt-th-label" title="Business Name">Business Name</span>
+                        <span className="smt-th-tools">
+                          <SortTrigger columnKey={NAME_KEY} />
+                          <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                          <HeaderInfoTooltip text={NAME_TOOLTIP} />
+                        </span>
                       </div>
+                      <ColumnResizer colKey={NAME_KEY} />
                     </th>
 
                     {/* ─── Reorderable columns ────────────────────────────── */}
-                    {columnOrder.filter((key) => columnVisibility[key]).map((key) => {
+                    {visibleColumns.map((key) => {
                       const col = COLUMN_DEFS[key];
-                      if (!col) return null;
                       const isDragging = draggedColumn === key;
                       const isDragOver = dragOverColumn === key && draggedColumn !== key;
                       return (
                         <th
                           key={key}
-                          draggable
+                          draggable={!resizingColumn}
                           onDragStart={(e) => handleColumnDragStart(e, key)}
                           onDragOver={(e) => handleColumnDragOver(e, key)}
                           onDrop={(e) => handleColumnDrop(e, key)}
                           onDragEnd={handleColumnDragEnd}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`smt-th smt-th-draggable py-3 px-3 font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === 'center' ? 'text-center' : 'text-left'} ${isDragging ? 'opacity-40' : ''}`}
-                          style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
+                          className={`smt-th smt-th-draggable font-semibold uppercase tracking-wider text-xs sticky top-0 z-20 select-none transition-opacity ${col.align === 'center' ? 'text-center' : 'text-left'} ${isDragging ? 'opacity-40' : ''}`}
+                          style={{
+                            width: widthOf(key),
+                            padding: ds.header,
+                            backgroundColor: isDragOver ? '#5a423b' : '#4a352f',
+                            borderBottom: '1px solid #e6d7c3',
+                            borderRight: '1px solid #e6d7c3',
+                          }}
                         >
-                          <div className={`flex items-start gap-1 min-w-0 ${col.align === 'center' ? 'justify-center' : ''}`}>
-                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <span className="smt-th-label">{col.label}</span>
-                            <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
-                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                          <GripVertical size={11} className="smt-th-grip" />
+                          <div className={`smt-th-row ${col.align === 'center' ? 'justify-center' : ''}`}>
+                            <span className="smt-th-label" title={col.label}>{col.label}</span>
+                            <span className="smt-th-tools">
+                              <SortTrigger columnKey={key} />
+                              <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                              <HeaderInfoTooltip text={col.tooltip} />
+                            </span>
                           </div>
+                          <ColumnResizer colKey={key} />
                         </th>
                       );
                     })}
 
-                    {columnVisibility.action && <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20`} style={{ minWidth: '190px', backgroundColor: '#4a352f' }}>Actions</th>}
+                    {/* Actions — scrolls horizontally with the table, holds
+                        position on vertical scroll. */}
+                    <th
+                      className="smt-th text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20"
+                      style={{
+                        backgroundColor: '#4a352f',
+                        width: actionWidth,
+                        padding: ds.header,
+                        borderBottom: '1px solid #e6d7c3',
+                      }}
+                    >
+                      <div className="smt-th-row justify-center">
+                        <span className="smt-th-label">Actions</span>
+                        <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                      </div>
+                      <ColumnResizer colKey={ACTION_KEY} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedSMEs.length === 0 ? (
-                    <tr><td colSpan={Object.values(columnVisibility).filter(Boolean).length + 1} className="text-center py-20">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
-                        <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
-                      </div>
-                    </td></tr>
+                    <tr>
+                      <td colSpan={visibleColumns.length + 2} className="text-center py-20 border-b border-[#e6d7c3]">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
+                          <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
+                          <p className="text-sm text-[#7d5a50] max-w-xs">
+                            {activeFilterCount > 0 ? "Clear a filter to widen the list." : "Matched businesses will appear here as your programme criteria are applied."}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
                   ) : (
                     paginatedSMEs.map((sme) => {
                       const bigScoreLabel = getBigScoreLabel(sme.bigScore);
@@ -1408,34 +1593,32 @@ const updateData = {
                       const isTerminalNegative = /declined|withdrawn/i.test(statusStyle.stage.name || "");
                       const nextStageLabel = sme.nextStage || "—";
                       const smeKey = `${sme.id}_${sme.programIndex}`;
-                      const currentStatus = updatedStages[smeKey] || sme.currentStatus;
-                      const showNDAButton = mapStatusToStageId(currentStatus, activeStages) === "evaluation";
-                      const ndaSent = sentNDAs[smeKey];
-                      const attentionReasons = getAttentionReasons(sme, activeStages);
+                      const rowBg = hoveredRowKey === smeKey ? '#fdf8f4' : '#ffffff';
+                      const cellCls = `${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top`;
 
                       const renderCell = (key) => {
                         switch (key) {
                           case 'bigScore':
                             return (
-                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent('bigScore', sme, e)}>
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-b border-[#e6d7c3] align-top`} onClick={(e) => openPopupFromEvent('bigScore', sme, e)}>
                                 <div className="flex flex-col items-center gap-1">
                                   <div className="relative w-11 h-11">
                                     <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                                       <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
                                       <circle cx="18" cy="18" r="14" fill="none" stroke={bigScoreLabel.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
                                     </svg>
-                                    <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-normal`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
+                                    <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-semibold`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
                                   </div>
-                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
+                                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
                                 </div>
                               </td>
                             );
                           case 'match':
                             return (
-                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent('match', sme, e)}>
-                                <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
-                                  <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
-                                  <span className="text-xs font-medium" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-b border-[#e6d7c3] align-top`} onClick={(e) => openPopupFromEvent('match', sme, e)}>
+                                <div className="flex flex-col items-center gap-1 w-full">
+                                  <span className={`${ds.fontSize} font-semibold text-[#4a352f]`}>{sme.matchPercentage}%</span>
+                                  <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
                                   <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
                                     <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: matchLabel.color }} />
                                   </div>
@@ -1444,66 +1627,50 @@ const updateData = {
                             );
                           case 'fundingStage':
                             return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                              <td key={key} className={cellCls}>
                                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span>
                               </td>
                             );
                           case 'fundingRequired':
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="font-normal">{sme.fundingRequired}</span>
-                              </td>
-                            );
+                            return <td key={key} className={cellCls}><span className="font-medium">{sme.fundingRequired}</span></td>;
                           case 'status':
                             return (
-                              <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}>
+                              <td key={key} className={`${ds.cell} border-r border-b border-[#e6d7c3] align-top`}>
                                 <span
-                                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap"
                                   style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
                                   title={statusStyle.stage.tooltip}
                                 >
-                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
                                 </span>
                               </td>
                             );
                           case 'applied':
                             return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{sme.applicationDate}</div>
+                              <td key={key} className={cellCls}>
+                                <div className="flex items-center gap-1.5"><Calendar size={13} className="text-[#7d5a50] flex-shrink-0" />{sme.applicationDate}</div>
                               </td>
                             );
                           case 'daysInStage':
                             return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <div className="flex items-center gap-1.5"><Clock size={14} className="text-[#7d5a50]" />{sme.daysInStage} days</div>
+                              <td key={key} className={cellCls}>
+                                <div className="flex items-center gap-1.5"><Clock size={13} className="text-[#7d5a50] flex-shrink-0" />{sme.daysInStage} days</div>
                               </td>
                             );
                           case 'lastActivity':
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.lastActivity}</td>;
+                            return <td key={key} className={cellCls}>{sme.lastActivity}</td>;
                           case 'location':
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.location}</td>;
+                            return <td key={key} className={cellCls}><span className="break-words">{sme.location}</span></td>;
                           case 'sector':
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.sector}</td>;
+                            return <td key={key} className={cellCls}><span className="break-words">{sme.sector}</span></td>;
                           case 'equity':
-                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.equityOffered}</td>;
+                            return <td key={key} className={cellCls}><span className="break-words">{sme.equityOffered}</span></td>;
                           case 'guarantees':
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="line-clamp-1">{sme.guarantees}</span>
-                              </td>
-                            );
+                            return <td key={key} className={cellCls}><span className="line-clamp-2 break-words">{sme.guarantees}</span></td>;
                           case 'support':
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="line-clamp-1">{sme.supportRequired}</span>
-                              </td>
-                            );
+                            return <td key={key} className={cellCls}><span className="line-clamp-2 break-words">{sme.supportRequired}</span></td>;
                           case 'services':
-                            return (
-                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
-                                <span className="line-clamp-1">{sme.servicesRequired}</span>
-                              </td>
-                            );
+                            return <td key={key} className={cellCls}><span className="line-clamp-2 break-words">{sme.servicesRequired}</span></td>;
                           default:
                             return null;
                         }
@@ -1512,69 +1679,59 @@ const updateData = {
                       return (
                         <tr
                           key={smeKey}
-                          className="border-b border-[#f0e6d9] transition-all"
-                          style={{ backgroundColor: hoveredRowKey === smeKey ? '#fdf8f4' : undefined }}
+                          style={{ backgroundColor: rowBg, transition: 'background-color .15s' }}
                           onMouseEnter={() => setHoveredRowKey(smeKey)}
                           onMouseLeave={() => setHoveredRowKey(null)}
                         >
-                          {columnVisibility.sme && (
-                            <td
-                              className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 border-r border-b border-[#e6d7c3] z-10 transition-colors`}
-                              style={{ minWidth: '170px', maxWidth: '190px', backgroundColor: hoveredRowKey === smeKey ? '#fdf8f4' : '#ffffff' }}
-                            >
-                              <div className="flex items-start gap-2">
-                                <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start gap-1.5 flex-wrap">
-                                    <span className={`${ds.fontSize} font-normal leading-snug text-[#4a352f]`}>
-                                      {sme.name}
-                                    </span>
-                                    <button
-                                      onClick={() => handleViewDetails(sme)}
-                                      className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
-                                      aria-label={`View profile for ${sme.name}`}
-                                      title="View profile"
-                                    >
-                                      <Eye size={13} />
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          )}
-
-                          {columnOrder.filter((key) => columnVisibility[key]).map((key) => renderCell(key))}
-
-                          {columnVisibility.action && (
-                            <td className={`${ds.cell} text-center`} style={{ minWidth: '190px' }}>
-                              <div className="flex flex-col items-center gap-1">
-
-                                <div className="flex items-center justify-center gap-1.5">
+                          <td
+                            className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 z-10 align-top border-b border-[#e6d7c3]`}
+                            style={{ width: nameWidth, backgroundColor: rowBg, boxShadow: '2px 0 0 #e6d7c3' }}
+                          >
+                            <div className="flex items-start gap-2 min-w-0">
+                              <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start gap-1.5 flex-wrap">
+                                  <span className={`${ds.fontSize} font-medium leading-snug text-[#4a352f] break-words`}>{sme.name}</span>
                                   <button
-                                    onClick={(e) => { if (!isTerminalNegative) openPopupFromEvent('stage', sme, e); }}
-                                    disabled={isTerminalNegative}
-                                    title={isTerminalNegative ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
-                                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${isTerminalNegative
-                                        ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
-                                        : "text-white hover:shadow-md hover:brightness-105"
-                                      }`}
-                                    style={{ width: '128px', height: '34px', backgroundColor: isTerminalNegative ? undefined : "#7d5a50" }}
+                                    onClick={() => handleViewDetails(sme)}
+                                    className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
+                                    aria-label={`View profile for ${sme.name}`}
+                                    title="View profile"
                                   >
-                                    {!isTerminalNegative && <ArrowRight size={13} className="flex-shrink-0" />}
-                                    <span className="truncate">{isTerminalNegative ? statusStyle.stage.name : nextStageLabel}</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => openPopupFromEvent('quickActions', sme, e)}
-                                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
-                                    style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
-                                    title="More actions"
-                                  >
-                                    <MoreVertical size={14} />
+                                    <Eye size={13} />
                                   </button>
                                 </div>
                               </div>
-                            </td>
-                          )}
+                            </div>
+                          </td>
+
+                          {visibleColumns.map((key) => renderCell(key))}
+
+                          <td className={`${ds.cell} text-center align-top border-b border-[#e6d7c3]`} style={{ width: actionWidth, backgroundColor: rowBg }}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={(e) => { if (!isTerminalNegative) openPopupFromEvent('stage', sme, e); }}
+                                disabled={isTerminalNegative}
+                                title={isTerminalNegative ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
+                                className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${isTerminalNegative
+                                  ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
+                                  : "text-white hover:shadow-md hover:brightness-105"
+                                  }`}
+                                style={{ width: `${Math.max(100, actionWidth - 62)}px`, height: '34px', backgroundColor: isTerminalNegative ? undefined : "#7d5a50" }}
+                              >
+                                {!isTerminalNegative && <ArrowRight size={13} className="flex-shrink-0" />}
+                                <span className="truncate">{isTerminalNegative ? statusStyle.stage.name : nextStageLabel}</span>
+                              </button>
+                              <button
+                                onClick={(e) => openPopupFromEvent('quickActions', sme, e)}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                                style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
+                                title="More actions"
+                              >
+                                <MoreVertical size={14} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
@@ -1584,7 +1741,7 @@ const updateData = {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl flex-wrap gap-3">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-[#4a352f]">Showing {Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedSMEs.length)}-{Math.min(currentPage * pageSize, filteredAndSortedSMEs.length)} of {filteredAndSortedSMEs.length} Businesses</span>
                 <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f]">
@@ -1613,11 +1770,11 @@ const updateData = {
             className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
             style={{
               top: dragHintRect.bottom + 8,
-              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200),
-              width: '190px',
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 210),
+              width: '200px',
             }}
           >
-            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
           </div>
         </PopupPortal>
       )}
@@ -1630,8 +1787,10 @@ const updateData = {
             className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
             style={{
               top: headerFilterOpen.rect.bottom + 8,
-              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292),
-              width: '280px',
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312),
+              width: '300px',
+              maxHeight: '70vh',
+              overflowY: 'auto',
             }}
           >
             {headerFilterOpen.type === 'name' && (
@@ -1653,22 +1812,27 @@ const updateData = {
               </>
             )}
 
-            {headerFilterOpen.type === 'bigScore' && (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-[#4a352f]">BIG Score: {localFilters.bigScoreRange[0]} - {localFilters.bigScoreRange[1]}</label>
-                  {(localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100) && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, bigScoreRange: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 mb-3">
-                  <input type="number" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [Math.min(parseInt(e.target.value) || 0, prev.bigScoreRange[1]), prev.bigScoreRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                  <span className="text-[#7d5a50]">to</span>
-                  <input type="number" min="0" max="100" value={localFilters.bigScoreRange[1]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [prev.bigScoreRange[0], Math.max(parseInt(e.target.value) || 0, prev.bigScoreRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                </div>
-                <input type="range" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [parseInt(e.target.value), prev.bigScoreRange[1]] }))} className="w-full accent-[#7d5a50]" />
-              </>
-            )}
+            {(headerFilterOpen.type === 'bigScore' || headerFilterOpen.type === 'match') && (() => {
+              const isBig = headerFilterOpen.type === 'bigScore';
+              const rangeKey = isBig ? 'bigScoreRange' : 'matchRange';
+              const range = localFilters[rangeKey];
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-[#4a352f]">{isBig ? 'BIG Score' : 'Match %'}: {range[0]} - {range[1]}</label>
+                    {(range[0] > 0 || range[1] < 100) && (
+                      <button onClick={() => setLocalFilters(prev => ({ ...prev, [rangeKey]: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <input type="number" min="0" max="100" value={range[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, [rangeKey]: [Math.min(parseInt(e.target.value) || 0, prev[rangeKey][1]), prev[rangeKey][1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                    <span className="text-[#7d5a50]">to</span>
+                    <input type="number" min="0" max="100" value={range[1]} onChange={(e) => setLocalFilters(prev => ({ ...prev, [rangeKey]: [prev[rangeKey][0], Math.max(parseInt(e.target.value) || 0, prev[rangeKey][0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  </div>
+                  <input type="range" min="0" max="100" value={range[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, [rangeKey]: [parseInt(e.target.value), prev[rangeKey][1]] }))} className="w-full accent-[#7d5a50]" />
+                </>
+              );
+            })()}
 
             {headerFilterOpen.type === 'status' && (
               <>
@@ -1702,88 +1866,48 @@ const updateData = {
               </>
             )}
 
-            {headerFilterOpen.type === 'sector' && (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-[#4a352f]">Sector</label>
-                  {localFilters.sector.length > 0 && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, sector: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
-                  {sectorOptions.length === 0 && <span className="text-xs text-[#a89482]">No sector data available</span>}
-                  {sectorOptions.map(s => (
-                    <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter(x => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
-                  ))}
-                </div>
-              </>
-            )}
+            {(headerFilterOpen.type === 'sector' || headerFilterOpen.type === 'equity') && (() => {
+              const isSector = headerFilterOpen.type === 'sector';
+              const key = isSector ? 'sector' : 'equity';
+              const options = isSector ? sectorOptions : equityOptions;
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-[#4a352f]">{isSector ? 'Sector' : 'Equity Offered'}</label>
+                    {localFilters[key].length > 0 && (
+                      <button onClick={() => setLocalFilters(prev => ({ ...prev, [key]: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                    {options.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
+                    {options.map(s => (
+                      <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, [key]: prev[key].includes(s) ? prev[key].filter(x => x !== s) : [...prev[key], s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters[key].includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
 
-            {headerFilterOpen.type === 'match' && (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-[#4a352f]">Match %: {localFilters.matchRange[0]} - {localFilters.matchRange[1]}</label>
-                  {(localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100) && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, matchRange: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 mb-3">
-                  <input type="number" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, matchRange: [Math.min(parseInt(e.target.value) || 0, prev.matchRange[1]), prev.matchRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                  <span className="text-[#7d5a50]">to</span>
-                  <input type="number" min="0" max="100" value={localFilters.matchRange[1]} onChange={(e) => setLocalFilters(prev => ({ ...prev, matchRange: [prev.matchRange[0], Math.max(parseInt(e.target.value) || 0, prev.matchRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                </div>
-                <input type="range" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, matchRange: [parseInt(e.target.value), prev.matchRange[1]] }))} className="w-full accent-[#7d5a50]" />
-              </>
-            )}
-
-            {headerFilterOpen.type === 'equity' && (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-[#4a352f]">Equity Offered</label>
-                  {localFilters.equity.length > 0 && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, equity: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
-                  {equityOptions.length === 0 && <span className="text-xs text-[#a89482]">No equity data available</span>}
-                  {equityOptions.map(s => (
-                    <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, equity: prev.equity.includes(s) ? prev.equity.filter(x => x !== s) : [...prev.equity, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.equity.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {headerFilterOpen.type === 'fundingRequired' && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Funding Required (R)</label>
-                  {(localFilters.fundingRequiredRange[0] != null || localFilters.fundingRequiredRange[1] != null) && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, fundingRequiredRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <input type="number" min="0" placeholder="Min" value={localFilters.fundingRequiredRange[0] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, fundingRequiredRange: [e.target.value === '' ? null : Number(e.target.value), prev.fundingRequiredRange[1]] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                  <span className="text-[#7d5a50]">to</span>
-                  <input type="number" min="0" placeholder="Max" value={localFilters.fundingRequiredRange[1] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, fundingRequiredRange: [prev.fundingRequiredRange[0], e.target.value === '' ? null : Number(e.target.value)] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                </div>
-              </>
-            )}
-
-            {headerFilterOpen.type === 'daysInStage' && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Days in Stage</label>
-                  {(localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null) && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, daysInStageRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <input type="number" min="0" placeholder="Min" value={localFilters.daysInStageRange[0] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, daysInStageRange: [e.target.value === '' ? null : Number(e.target.value), prev.daysInStageRange[1]] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                  <span className="text-[#7d5a50]">to</span>
-                  <input type="number" min="0" placeholder="Max" value={localFilters.daysInStageRange[1] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, daysInStageRange: [prev.daysInStageRange[0], e.target.value === '' ? null : Number(e.target.value)] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                </div>
-              </>
-            )}
+            {(headerFilterOpen.type === 'fundingRequired' || headerFilterOpen.type === 'daysInStage') && (() => {
+              const isFunding = headerFilterOpen.type === 'fundingRequired';
+              const key = isFunding ? 'fundingRequiredRange' : 'daysInStageRange';
+              const range = localFilters[key];
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">{isFunding ? 'Funding Required (R)' : 'Days in Stage'}</label>
+                    {(range[0] != null || range[1] != null) && (
+                      <button onClick={() => setLocalFilters(prev => ({ ...prev, [key]: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input type="number" min="0" placeholder="Min" value={range[0] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, [key]: [e.target.value === '' ? null : Number(e.target.value), prev[key][1]] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                    <span className="text-[#7d5a50]">to</span>
+                    <input type="number" min="0" placeholder="Max" value={range[1] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, [key]: [prev[key][0], e.target.value === '' ? null : Number(e.target.value)] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  </div>
+                </>
+              );
+            })()}
 
             {headerFilterOpen.type === 'applied' && (
               <>
@@ -1800,140 +1924,98 @@ const updateData = {
               </>
             )}
 
-            {headerFilterOpen.type === 'location' && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Filter by location</label>
-                  {localFilters.location && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, location: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <input autoFocus type="text" value={localFilters.location} onChange={(e) => setLocalFilters(prev => ({ ...prev, location: e.target.value }))} placeholder="Search location..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
-              </>
-            )}
-
-            {headerFilterOpen.type === 'lastActivity' && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Filter by last activity</label>
-                  {localFilters.lastActivity && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, lastActivity: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <input autoFocus type="text" value={localFilters.lastActivity} onChange={(e) => setLocalFilters(prev => ({ ...prev, lastActivity: e.target.value }))} placeholder="Search last activity..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
-              </>
-            )}
-
-            {headerFilterOpen.type === 'guarantees' && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Filter by guarantees</label>
-                  {localFilters.guarantees && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, guarantees: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <input autoFocus type="text" value={localFilters.guarantees} onChange={(e) => setLocalFilters(prev => ({ ...prev, guarantees: e.target.value }))} placeholder="Search guarantees..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
-              </>
-            )}
-
-            {headerFilterOpen.type === 'support' && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Filter by support required</label>
-                  {localFilters.support && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, support: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <input autoFocus type="text" value={localFilters.support} onChange={(e) => setLocalFilters(prev => ({ ...prev, support: e.target.value }))} placeholder="Search support required..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
-              </>
-            )}
-
-            {headerFilterOpen.type === 'services' && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Filter by services required</label>
-                  {localFilters.services && (
-                    <button onClick={() => setLocalFilters(prev => ({ ...prev, services: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <input autoFocus type="text" value={localFilters.services} onChange={(e) => setLocalFilters(prev => ({ ...prev, services: e.target.value }))} placeholder="Search services required..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
-              </>
-            )}
+            {['location', 'lastActivity', 'guarantees', 'support', 'services'].includes(headerFilterOpen.type) && (() => {
+              const key = headerFilterOpen.type;
+              const labels = {
+                location: 'location', lastActivity: 'last activity', guarantees: 'guarantees',
+                support: 'support required', services: 'services required',
+              };
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-[#4a352f]">Filter by {labels[key]}</label>
+                    {localFilters[key] && (
+                      <button onClick={() => setLocalFilters(prev => ({ ...prev, [key]: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                    )}
+                  </div>
+                  <input autoFocus type="text" value={localFilters[key]} onChange={(e) => setLocalFilters(prev => ({ ...prev, [key]: e.target.value }))} placeholder={`Search ${labels[key]}...`} className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+                </>
+              );
+            })()}
           </div>
         </PopupPortal>
-      )}{activePopup?.type === 'bigScore' && selectedSMEForPopup && (
-  <PopupPortal>
-    <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
-    <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden animate-fadeIn"
-      style={{ top: activePopup.position.y, left: activePopup.position.x, width: '380px', maxHeight: '480px', overflowY: 'auto' }}>
+      )}
 
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
-            <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
-            {bigScoreData._lastUpdated && (
-              <p className="text-[10px] text-[#f5f0e1]/70 mt-0.5">
-                Updated {new Date(bigScoreData._lastUpdated).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
-              {bigScoreLoading ? '…' : (bigScoreData._bigScore || selectedSMEForPopup.bigScore)}
-            </div>
-            <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1">
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* ─── BIG Score Popup ──────────────────────────────────────────────── */}
+      {activePopup?.type === 'bigScore' && selectedSMEForPopup && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: '380px', maxHeight: '480px', overflowY: 'auto' }}>
 
-      {/* Body */}
-      <div className="p-4 space-y-3">
-        {bigScoreLoading ? (
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-[#f5f0e1] rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          [
-            { key: 'compliance',           label: 'Compliance',            desc: 'Regulatory & legal standing' },
-            { key: 'legitimacy',           label: 'Legitimacy',            desc: 'Business verification status' },
-            { key: 'fundability',          label: 'Capital Appeal',        desc: 'Investment readiness & fundability' },
-            { key: 'governanceLeadership', label: 'Governance & Leadership',desc: 'Governance structure & leadership capability' },
-            { key: 'operational',          label: 'Operational',           desc: 'Operational capacity & systems' },
-          ].map(({ key, label, desc }) => {
-            const score = bigScoreData[key]?.score || 0;
-            const lbl = getBigScoreLabel(score);
-            return (
-              <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <div>
-                    <span className="text-xs font-semibold text-[#4a352f]">{label}</span>
-                    <p className="text-[10px] text-[#7d5a50]">{desc}</p>
-                  </div>
-                  <span className="text-sm font-bold" style={{ color: lbl.color }}>{score}%</span>
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+                  {bigScoreData._lastUpdated && (
+                    <p className="text-[10px] text-[#f5f0e1]/70 mt-0.5">
+                      Updated {new Date(bigScoreData._lastUpdated).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  )}
                 </div>
-                <div className="w-full h-2 bg-[#e6d7c3] rounded-full">
-                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, backgroundColor: lbl.color }} />
+                <div className="flex items-center gap-2">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {bigScoreLoading ? '…' : (bigScoreData._bigScore || selectedSMEForPopup.bigScore)}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1">
+                    <X size={18} />
+                  </button>
                 </div>
               </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  </PopupPortal>
-)}
+            </div>
+
+            <div className="p-4 space-y-3">
+              {bigScoreLoading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (<div key={i} className="h-16 bg-[#f5f0e1] rounded-xl animate-pulse" />))}
+                </div>
+              ) : (
+                [
+                  { key: 'compliance', label: 'Compliance', desc: 'Regulatory & legal standing' },
+                  { key: 'legitimacy', label: 'Legitimacy', desc: 'Business verification status' },
+                  { key: 'fundability', label: 'Capital Appeal', desc: 'Investment readiness & fundability' },
+                  { key: 'governanceLeadership', label: 'Governance & Leadership', desc: 'Governance structure & leadership capability' },
+                  { key: 'operational', label: 'Operational', desc: 'Operational capacity & systems' },
+                ].map(({ key, label, desc }) => {
+                  const score = bigScoreData[key]?.score || 0;
+                  const lbl = getBigScoreLabel(score);
+                  return (
+                    <div key={key} className="bg-[#faf7f2] rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <div>
+                          <span className="text-xs font-semibold text-[#4a352f]">{label}</span>
+                          <p className="text-[10px] text-[#7d5a50]">{desc}</p>
+                        </div>
+                        <span className="text-sm font-bold" style={{ color: lbl.color }}>{score}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-[#e6d7c3] rounded-full">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, backgroundColor: lbl.color }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </PopupPortal>
+      )}
 
       {/* ─── Match Breakdown Popup ─────────────────────────── */}
       {activePopup?.type === 'match' && selectedSMEForPopup && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
-          <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden animate-fadeIn"
+          <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
             style={{ top: activePopup.position.y, left: activePopup.position.x, width: '380px', maxHeight: '420px', overflowY: 'auto' }}>
             <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
               <div className="flex items-center justify-between">
@@ -1965,7 +2047,7 @@ const updateData = {
                     </div>
                   </div>
                 );
-              }) : <p className="text-xs text-gray-500 text-center py-4">Loading breakdown...</p>}
+              }) : <p className="text-xs text-[#a89482] text-center py-4">Loading breakdown...</p>}
             </div>
           </div>
         </PopupPortal>
@@ -1977,7 +2059,7 @@ const updateData = {
         return (
           <PopupPortal>
             <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
-            <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden animate-fadeIn"
+            <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
               style={{ top: activePopup.position.y, left: activePopup.position.x, width: '450px', maxHeight: '550px', overflowY: 'auto' }}>
               <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
                 <div className="flex items-center justify-between">
@@ -2050,10 +2132,10 @@ const updateData = {
                               <div key={i} className="flex items-center justify-between bg-white p-2 rounded-lg border border-[#e6d7c3]">
                                 <div>
                                   <div className="text-xs font-medium text-[#4a352f]">
-                                    {a.date?.toLocaleDateString?.('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) || 'N/A'}
+                                    {a.date?.toLocaleDateString?.('en-ZA', { weekday: 'short', month: 'short', day: 'numeric' }) || 'Date unavailable'}
                                   </div>
                                   {a.timeSlots?.[0] && (
-                                    <div className="text-xs text-[#7d5a50]">{a.timeSlots[0].start} - {a.timeSlots[0].end}</div>
+                                    <div className="text-xs text-[#7d5a50]">{a.timeSlots[0].start} – {a.timeSlots[0].end}</div>
                                   )}
                                 </div>
                                 <button onClick={() => removeAvailability(a.date)} className="text-red-500 hover:text-red-700 p-1"><X size={14} /></button>
@@ -2077,8 +2159,8 @@ const updateData = {
                 )}
 
                 <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={closePopup} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200 transition-all">Cancel</button>
-                  <button onClick={handleStageUpdate} disabled={isStageSubmitting} className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs font-medium hover:bg-[#4a352f] transition-all disabled:opacity-50">
+                  <button onClick={closePopup} className="px-4 py-2 bg-[#faf7f2] text-[#7d5a50] rounded-lg text-xs font-medium hover:bg-[#f5f0e1] transition-all">Cancel</button>
+                  <button onClick={handleStageUpdate} disabled={isStageSubmitting} className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold hover:bg-[#4a352f] transition-all disabled:opacity-50">
                     {isStageSubmitting ? "Updating..." : "Update Stage"}
                   </button>
                 </div>
@@ -2089,7 +2171,7 @@ const updateData = {
             {showCalendarPopup && (
               <>
                 <div className="fixed inset-0 z-[1100]" onClick={() => setShowCalendarPopup(false)} />
-                <div className="fixed z-[1101] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-6 animate-fadeIn"
+                <div className="fixed z-[1101] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-6"
                   style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '400px', maxHeight: '80vh', overflowY: 'auto' }}>
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-sm font-bold text-[#4a352f]">Select Available Dates</h4>
@@ -2099,7 +2181,7 @@ const updateData = {
                     <label className="block text-xs font-semibold text-[#4a352f] mb-2">Time Slot</label>
                     <div className="flex gap-2">
                       <input type="time" value={timeSlot.start} onChange={(e) => handleTimeChange('start', e.target.value)} className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs" />
-                      <span className="text-[#7d5a50]">to</span>
+                      <span className="text-[#7d5a50] self-center">to</span>
                       <input type="time" value={timeSlot.end} onChange={(e) => handleTimeChange('end', e.target.value)} className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs" />
                     </div>
                   </div>
@@ -2107,8 +2189,8 @@ const updateData = {
                     <DayPicker mode="multiple" selected={tempDates} onSelect={handleDateSelect} fromDate={new Date()} />
                   </div>
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setShowCalendarPopup(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs">Cancel</button>
-                    <button onClick={saveSelectedDates} disabled={tempDates.length === 0} className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs disabled:opacity-50">Save Dates</button>
+                    <button onClick={() => setShowCalendarPopup(false)} className="px-4 py-2 bg-[#faf7f2] text-[#7d5a50] rounded-lg text-xs">Cancel</button>
+                    <button onClick={saveSelectedDates} disabled={tempDates.length === 0} className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs disabled:opacity-50">Save Dates ({tempDates.length})</button>
                   </div>
                 </div>
               </>
@@ -2121,7 +2203,7 @@ const updateData = {
       {activePopup?.type === 'quickActions' && selectedSMEForPopup && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
-          <div className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden animate-fadeIn"
+          <div className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
             style={{ top: activePopup.position.y, left: activePopup.position.x, width: '200px' }}>
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
@@ -2145,9 +2227,6 @@ const updateData = {
         <SMEDetailsModal sme={selectedSMEDetails} isOpen={showSMEDetails} onClose={() => { setShowSMEDetails(false); setSelectedSMEDetails(null); }} />
       )}
     </div>
-
-
-
   );
 }
 
@@ -2156,4 +2235,3 @@ const updateData = {
 // `import SupportSMETable from "./SupportSMETable"` (default) or
 // `import { SupportSMETable } from "./SupportSMETable"` (named).
 export default SupportSMETable;
-
