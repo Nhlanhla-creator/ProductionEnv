@@ -35,10 +35,13 @@ export function useUserProfile(collection, nameField, fallback = "User", customD
           if (userDocSnap.exists()) {
             const data = userDocSnap.data()
             
-            // First try to get the registered name directly from formData.entityOverview
+            // First try to get the trading name, then registered name directly from formData.entityOverview
+            const tradingName = getNestedValue(data, 'formData.entityOverview.tradingName')
             const registeredName = getNestedValue(data, 'formData.entityOverview.registeredName')
             
-            if (registeredName) {
+            if (tradingName) {
+              setUserName(tradingName)
+            } else if (registeredName) {
               setUserName(registeredName)
             } else {
               // Fall back to the generic display name helper
@@ -58,7 +61,7 @@ export function useUserProfile(collection, nameField, fallback = "User", customD
     })
 
     return () => unsubscribe()
-  }, [collection, nameField, fallback])
+  }, [collection, nameField, fallback, customDocId])
 
   return { user, userName, loading }
 }

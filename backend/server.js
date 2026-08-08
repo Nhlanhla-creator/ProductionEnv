@@ -45,6 +45,7 @@ app.use((req, res, next) => {
 const paymentRoutes = require("./routes/peachPayments");
 
 const tenderRoutes = require("./routes/tenders");
+const emailRoutes = require("./routes/email");
 // const fundingMatchesRoutes = require("./routes/fundingMatches");
 // const supplierMatchingRoutes = require("./routes/supplierMatching");
 // const advisorMatchingRoutes = require("./routes/advisorMatching");
@@ -219,6 +220,12 @@ app.use("/api/tenders", (req, res, next) => {
   next();
 
 }, tenderRoutes.router);
+
+// Email routes with bypass header
+app.use("/api/email", (req, res, next) => {
+  res.setHeader('x-vercel-protection-bypass', '1');
+  next();
+}, emailRoutes);
 
 // Funder matching AI route (local dev/testing path)
 // app.use("/api/funders", (req, res, next) => {

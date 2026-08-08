@@ -280,37 +280,46 @@ export default function UniversalProfile() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          const userDocRef = doc(db, "users", user.uid)
-          const userDocSnap = await getDoc(userDocRef)
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data()
-            const userCompanyId = userData.companyId
-            const userCompanyRole = userData.userRole
-            if (userCompanyId) {
-              const companyDocRef = doc(db, "companies", userCompanyId)
-              const companyDocSnap = await getDoc(companyDocRef)
-              if (companyDocSnap.exists()) {
-                const companyData = companyDocSnap.data()
-                const ownerId = companyData.createdBy
-                setUserRole(userCompanyRole || "viewer")
-                if (ownerId === user.uid) {
-                  setIsCompanyMember(false); setEffectiveUserId(user.uid); setEditPermissions(ROLE_PERMISSIONS.owner)
-                } else {
-                  setIsCompanyMember(true); setCompanyOwnerId(ownerId); setEffectiveUserId(ownerId); setEditPermissions(ROLE_PERMISSIONS[userCompanyRole] || ROLE_PERMISSIONS.viewer)
+          const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+          if (isCmfView) {
+            const viewingId = sessionStorage.getItem("viewingSMEId")
+            setIsCompanyMember(false)
+            setEffectiveUserId(viewingId)
+            setUserRole("owner")
+            setEditPermissions(ROLE_PERMISSIONS.owner)
+          } else {
+            const userDocRef = doc(db, "users", user.uid)
+            const userDocSnap = await getDoc(userDocRef)
+            if (userDocSnap.exists()) {
+              const userData = userDocSnap.data()
+              const userCompanyId = userData.companyId
+              const userCompanyRole = userData.userRole
+              if (userCompanyId) {
+                const companyDocRef = doc(db, "companies", userCompanyId)
+                const companyDocSnap = await getDoc(companyDocRef)
+                if (companyDocSnap.exists()) {
+                  const companyData = companyDocSnap.data()
+                  const ownerId = companyData.createdBy
+                  setUserRole(userCompanyRole || "viewer")
+                  if (ownerId === user.uid) {
+                    setIsCompanyMember(false); setEffectiveUserId(user.uid); setEditPermissions(ROLE_PERMISSIONS.owner)
+                  } else {
+                    setIsCompanyMember(true); setCompanyOwnerId(ownerId); setEffectiveUserId(ownerId); setEditPermissions(ROLE_PERMISSIONS[userCompanyRole] || ROLE_PERMISSIONS.viewer)
+                  }
                 }
+              } else {
+                setIsCompanyMember(false); setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
               }
-            } else {
-              setIsCompanyMember(false); setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
             }
+            const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"))
+            const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"))
+            const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"))
+            const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true"
+            if (savedData) setFormData(JSON.parse(savedData))
+            if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
+            if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
+            if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true") }
           }
-          const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"))
-          const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"))
-          const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"))
-          const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true"
-          if (savedData) setFormData(JSON.parse(savedData))
-          if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
-          if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
-          if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true") }
         } catch (error) {
           console.error("Error checking company membership:", error)
           setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
@@ -321,9 +330,11 @@ export default function UniversalProfile() {
     return () => unsubscribe()
   }, [])
 
-  const getUserSpecificKey = (baseKey) => { const userId = auth.currentUser?.uid; return userId ? `${baseKey}_${userId}` : baseKey }
+  const getUserSpecificKey = (baseKey) => { const userId = effectiveUserId || auth.currentUser?.uid; return userId ? `${baseKey}_${userId}` : baseKey }
 
   useEffect(() => {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+    if (isCmfView) return // skip local storage auto-save during CMF view mode
     const userId = auth.currentUser?.uid; if (!userId) return
     localStorage.setItem(getUserSpecificKey("universalProfileData"), JSON.stringify(formData))
     localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(completedSections))
@@ -337,11 +348,14 @@ export default function UniversalProfile() {
   const markSectionAsCompleted = async (section) => {
     const updated = { ...completedSections, [section]: true }
     setCompletedSections(updated)
-    const userId = auth.currentUser?.uid
+    const userId = effectiveUserId || auth.currentUser?.uid
     if (userId) {
       const docRef = doc(db, "universalProfiles", userId)
       await setDoc(docRef, { completedSections: updated }, { merge: true })
-      localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(updated))
+      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+      if (!isCmfView) {
+        localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(updated))
+      }
     }
   }
 
@@ -613,10 +627,56 @@ export default function UniversalProfile() {
     )
   }
 
-  if (showSummary && !isEditing) return <ProfileSummary data={profileData || formData} onEdit={handleEditProfile} />
+  const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+  const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
+
+  const renderCmfBanner = () => {
+    if (!isCmfView) return null;
+    return (
+      <div style={{
+        backgroundColor: "#e8f5e9", padding: "16px 20px",
+        borderRadius: "8px", border: "2px solid #4caf50",
+        display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: "20px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "20px" }}>👁️</span>
+          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+            Facilitator View: Managing {viewingSMEName}'s Profile
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("viewingSMEId");
+            sessionStorage.removeItem("viewingSMEName");
+            sessionStorage.removeItem("investorViewMode");
+            sessionStorage.removeItem("viewOrigin");
+            window.location.href = "/cmf-cohorts";
+          }}
+          style={{
+            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
+            border: "none", borderRadius: "6px", cursor: "pointer",
+            fontWeight: "600", fontSize: "14px",
+          }}
+        >
+          ← Back to My Cohorts
+        </button>
+      </div>
+    );
+  };
+
+  if (showSummary && !isEditing) {
+    return (
+      <div className="universal-profile-container">
+        {renderCmfBanner()}
+        <ProfileSummary data={profileData || formData} onEdit={handleEditProfile} />
+      </div>
+    )
+  }
 
   return (
     <div className="universal-profile-container">
+      {renderCmfBanner()}
       {validationModal.open && (
         <div className="popup-overlay">
           <div className="validation-popup">

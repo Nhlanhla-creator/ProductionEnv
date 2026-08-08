@@ -1237,7 +1237,7 @@ function App() {
         <Route path="/cmf-profile" element={withProtection(CMFUniversalProfile, {}, renderCMFRoute)} />
         <Route path="/cmf-matches" element={withProtection(CMFMatches, {}, renderCMFRoute)} />
         <Route path="/cmf-cohorts" element={withProtection(CMFCohorts, {}, renderCMFRoute)} />
-        <Route path="/cmf-cohorts/new" element={withProtection(CMFOnboardProfile, {}, (Comp, props) => <Comp {...props} />)} />
+        <Route path="/cmf-cohorts/new" element={withProtection(CMFOnboardProfile, {}, renderCMFRoute)} />
         <Route path="/cmf-documents" element={withProtection(CMFDocuments, {}, renderCMFRoute)} />
         <Route path="/cmf-insights" element={withProtection(CatalystInsights, { isCatalystProfile: true }, renderCMFRoute)} />
         <Route path="/cmf-messages" element={withProtection(CatalystMessages, {}, renderCMFRoute)} />

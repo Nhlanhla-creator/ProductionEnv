@@ -111,7 +111,15 @@ export default function LegalCompliance({ data = {}, updateData }) {
     const loadLegalCompliance = async () => {
       try {
         setIsLoading(true)
-        const userId = auth.currentUser?.uid
+        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+        if (isOnboarding) {
+          setFormData(data || {});
+          setIsLoading(false);
+          return;
+        }
+
+        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
         if (!userId) { setIsLoading(false); return }
 
         const docRef = doc(db, "universalProfiles", userId)

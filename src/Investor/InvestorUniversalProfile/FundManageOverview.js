@@ -5,6 +5,8 @@ import FormField from "./FormField"
 import FileUpload from "./FileUpload"
 import styles from "./InvestorUniversalProfile.module.css"
 import ViewUniversalProfile from "./Investortestview"
+import { db } from "../../firebaseConfig"
+import { collection, getDocs } from "firebase/firestore"
 
 const firmTypeCategories = [
   {
@@ -389,6 +391,55 @@ function MultiSelectDropdown({
 }
 
 export default function EntityOverview({ data = {}, updateData }) {
+  const [dynamicSponsors, setDynamicSponsors] = useState(null)
+
+  useEffect(() => {
+    const fetchSponsors = async () => {
+      try {
+        const collections = {
+          CMF: "cmfProfiles",
+          Investor: "MyuniversalProfiles",
+          Catalyst: "catalystProfiles",
+          Advisor: "advisorProfiles"
+        }
+        const loadedSponsors = {}
+        for (const [type, collName] of Object.entries(collections)) {
+          const qSnap = await getDocs(collection(db, collName))
+          const list = []
+          qSnap.forEach(docSnap => {
+            const docData = docSnap.data()
+            let label = ""
+            if (type === "CMF" || type === "Investor" || type === "Catalyst") {
+              label = docData?.entityOverview?.tradingName || 
+                      docData?.entityOverview?.registeredName || 
+                      docData?.formData?.entityOverview?.tradingName || 
+                      docData?.formData?.entityOverview?.registeredName ||
+                      docData?.contactDetails?.contactName ||
+                      docData?.contactDetails?.primaryContactName ||
+                      docData?.formData?.contactDetails?.contactName ||
+                      docData?.formData?.contactDetails?.primaryContactName ||
+                      docData?.registeredName ||
+                      docSnap.id
+            } else if (type === "Advisor") {
+              label = docData?.personalProfessionalOverview?.fullName ||
+                      docData?.formData?.personalProfessionalOverview?.fullName ||
+                      docData?.contactDetails?.contactName ||
+                      docData?.formData?.contactDetails?.contactName ||
+                      docData?.name ||
+                      docSnap.id
+            }
+            list.push({ value: docSnap.id, label: label })
+          })
+          loadedSponsors[type] = list
+        }
+        setDynamicSponsors(loadedSponsors)
+      } catch (err) {
+        console.error("Error loading dynamic sponsors:", err)
+      }
+    }
+    fetchSponsors()
+  }, [])
+
   const handleChange = (e) => {
     const { name, value } = e.target
     updateData({ [name]: value })
@@ -424,8 +475,9 @@ export default function EntityOverview({ data = {}, updateData }) {
   }
 
   // ── Sponsor handlers ──
+  const isOnboarding = sessionStorage.getItem("isOnboarding") === "true"
   const sponsorType = data.sponsorType || ""
-  const sponsorOptions = sponsorDirectory[sponsorType] || []
+  const sponsorOptions = (dynamicSponsors && dynamicSponsors[sponsorType]) || sponsorDirectory[sponsorType] || []
   const selectedSponsorLabel = sponsorOptions.find((s) => s.value === data.sponsorName)?.label || ""
 
   // Changing the sponsor type clears the sponsor and permission below it,
@@ -642,44 +694,48 @@ export default function EntityOverview({ data = {}, updateData }) {
             )}
 
           {/* ── Sponsor ── */}
-          <FormField label="Are you working with a specific sponsor?">
-            <select
-              name="sponsorType"
-              value={sponsorType}
-              onChange={handleSponsorTypeChange}
-              className={styles.formSelect}
-            >
-              <option value="">Select sponsor type</option>
-              {sponsorTypes.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </FormField>
+          {!isOnboarding && (
+            <>
+              <FormField label="Are you working with a specific sponsor?">
+                <select
+                  name="sponsorType"
+                  value={sponsorType}
+                  onChange={handleSponsorTypeChange}
+                  className={styles.formSelect}
+                >
+                  <option value="">Select sponsor type</option>
+                  {sponsorTypes.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </FormField>
 
-          {sponsorType && (
-            <FormField label={`Which ${sponsorType}?`}>
-              <select
-                name="sponsorName"
-                value={data.sponsorName || ""}
-                onChange={handleSponsorNameChange}
-                className={styles.formSelect}
-              >
-                <option value="">{`Select ${sponsorType}...`}</option>
-                {sponsorOptions.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </FormField>
-          )}
+              {sponsorType && (
+                <FormField label={`Which ${sponsorType}?`}>
+                  <select
+                    name="sponsorName"
+                    value={data.sponsorName || ""}
+                    onChange={handleSponsorNameChange}
+                    className={styles.formSelect}
+                  >
+                    <option value="">{`Select ${sponsorType}...`}</option>
+                    {sponsorOptions.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
 
-          {sponsorType && data.sponsorName && (
-            <FormField label="Do you give them permission to view your profile?">
-              <YesNoPillRadio
-                name="sponsorViewPermission"
-                value={data.sponsorViewPermission}
-                onChange={(value) => updateData({ sponsorViewPermission: value })}
-              />
-            </FormField>
+              {sponsorType && data.sponsorName && (
+                <FormField label="Do you give them permission to view your profile?">
+                  <YesNoPillRadio
+                    name="sponsorViewPermission"
+                    value={data.sponsorViewPermission}
+                    onChange={(value) => updateData({ sponsorViewPermission: value })}
+                  />
+                </FormField>
+              )}
+            </>
           )}
         </div>
 

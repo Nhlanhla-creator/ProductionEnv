@@ -126,6 +126,51 @@ export default function CatalystUniversalProfile() {
   // Load saved data from Firebase or localStorage
   useEffect(() => {
     const loadProfileData = async () => {
+      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+      if (isCmfView) {
+        const viewingId = sessionStorage.getItem("viewingSMEId")
+        setUser({ uid: viewingId })
+        try {
+          const userRef = doc(db, "catalystProfiles", viewingId)
+          const docSnap = await getDoc(userRef)
+          if (docSnap.exists()) {
+            const data = docSnap.data()
+            if (data?.formData) {
+              setFormData((prev) => ({
+                ...prev,
+                ...data.formData,
+                entityOverview: {
+                  ...prev.entityOverview,
+                  ...data.formData.entityOverview,
+                },
+                programBriefMatchingPreference: {
+                  ...prev.programBriefMatchingPreference,
+                  ...data.formData.programBriefMatchingPreference,
+                },
+                applicationBrief: {
+                  ...prev.applicationBrief,
+                  ...data.formData.applicationBrief,
+                },
+                declarationConsent: {
+                  ...prev.declarationConsent,
+                  ...data.formData.declarationConsent,
+                },
+              }))
+            }
+            if (data?.completedSections) {
+              setCompletedSections(data.completedSections)
+            }
+            if (data?.completedSections?.declarationConsent) {
+              setShowSummary(true)
+            }
+          }
+        } catch (err) {
+          console.error("Error loading catalyst profile:", err)
+        }
+        setLoading(false)
+        return
+      }
+
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
         if (currentUser) {
           setUser(currentUser)
@@ -185,10 +230,14 @@ export default function CatalystUniversalProfile() {
 
   // Persist to localStorage
   useEffect(() => {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+    if (isCmfView) return
     localStorage.setItem("catalystProfileData", JSON.stringify(formData))
   }, [formData])
 
   useEffect(() => {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+    if (isCmfView) return
     localStorage.setItem("catalystProfileCompletedSections", JSON.stringify(completedSections))
   }, [completedSections])
 
@@ -314,12 +363,56 @@ export default function CatalystUniversalProfile() {
     return <div className="flex justify-center items-center h-screen text-lg">Loading...</div>
   }
 
+  const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+  const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
+
+  const renderCmfBanner = () => {
+    if (!isCmfView) return null;
+    return (
+      <div style={{
+        backgroundColor: "#e8f5e9", padding: "16px 20px",
+        borderRadius: "8px", border: "2px solid #4caf50",
+        display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: "20px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "20px" }}>👁️</span>
+          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+            Facilitator View: Managing {viewingSMEName}'s Profile
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("viewingSMEId");
+            sessionStorage.removeItem("viewingSMEName");
+            sessionStorage.removeItem("investorViewMode");
+            sessionStorage.removeItem("viewOrigin");
+            window.location.href = "/cmf-cohorts";
+          }}
+          style={{
+            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
+            border: "none", borderRadius: "6px", cursor: "pointer",
+            fontWeight: "600", fontSize: "14px",
+          }}
+        >
+          ← Back to My Cohorts
+        </button>
+      </div>
+    );
+  };
+
   if (showSummary) {
-    return <CatalystProfileSummary formData={formData} onEdit={handleEditFromSummary} />
+    return (
+      <div className="universal-profile-container" style={{ padding: "20px" }}>
+        {renderCmfBanner()}
+        <CatalystProfileSummary formData={formData} onEdit={handleEditFromSummary} />
+      </div>
+    )
   }
 
   return (
     <div className="universal-profile-container">
+      {renderCmfBanner()}
       <h1>My Catalyst Profile</h1>
       <div className={`${styles.profileTracker} profile-tracker`}>
         <div className={`${styles.profileTrackerInner} profile-tracker-inner`}>

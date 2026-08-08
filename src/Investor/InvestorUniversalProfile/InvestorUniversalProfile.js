@@ -327,11 +327,12 @@ export default function UniversalProfile() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const user = auth.currentUser
-      if (!user) { setLoading(false); return }
+      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+      const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
+      if (!userId) { setLoading(false); return }
       try {
         setLoading(true)
-        const docRef = doc(db, "MyuniversalProfiles", user.uid)
+        const docRef = doc(db, "MyuniversalProfiles", userId)
         const docSnap = await getDoc(docRef)
         let firebaseData = null
         let firebaseCompletedSections = null
@@ -346,7 +347,7 @@ export default function UniversalProfile() {
           if (firebaseCompletedSections) setCompletedSections(prev => ({ ...prev, ...firebaseCompletedSections }))
           if (firebaseSubmissionStatus) { setProfileSubmitted(true); setShowSummary(true) }
         }
-        if (!firebaseData || !firebaseSubmissionStatus) {
+        if (!isCmfView && (!firebaseData || !firebaseSubmissionStatus)) {
           const savedData = localStorage.getItem("investorProfileData")
           const savedCompletedSections = localStorage.getItem("investorProfileCompletedSections")
           const savedSubmissionStatus = localStorage.getItem("investorProfileSubmitted")
@@ -354,20 +355,24 @@ export default function UniversalProfile() {
           if (savedCompletedSections && !firebaseCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
           if (savedSubmissionStatus === "true" && !firebaseSubmissionStatus) {
             setProfileSubmitted(true); setShowSummary(true)
-            try { await setDoc(doc(db, "MyuniversalProfiles", user.uid), { profileSubmitted: true }, { merge: true }) } catch (e) { console.error(e) }
+            try { await setDoc(doc(db, "MyuniversalProfiles", userId), { profileSubmitted: true }, { merge: true }) } catch (e) { console.error(e) }
           }
         }
-        const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenInvestorWelcomePopup")) === "true"
-        if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenInvestorWelcomePopup"), "true") }
+        if (!isCmfView) {
+          const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenInvestorWelcomePopup")) === "true"
+          if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenInvestorWelcomePopup"), "true") }
+        }
       } catch (error) {
         console.error("Error fetching profile data:", error)
         setError("Failed to load profile data. Please try again later.")
-        const savedData = localStorage.getItem("investorProfileData")
-        const savedCompletedSections = localStorage.getItem("investorProfileCompletedSections")
-        const savedSubmissionStatus = localStorage.getItem("investorProfileSubmitted")
-        if (savedData) setFormData(JSON.parse(savedData))
-        if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
-        if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
+        if (!isCmfView) {
+          const savedData = localStorage.getItem("investorProfileData")
+          const savedCompletedSections = localStorage.getItem("investorProfileCompletedSections")
+          const savedSubmissionStatus = localStorage.getItem("investorProfileSubmitted")
+          if (savedData) setFormData(JSON.parse(savedData))
+          if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
+          if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
+        }
       } finally {
         setLoading(false)
       }
@@ -375,9 +380,23 @@ export default function UniversalProfile() {
     fetchData()
   }, [])
 
-  useEffect(() => { localStorage.setItem("investorProfileData", JSON.stringify(formData)) }, [formData])
-  useEffect(() => { localStorage.setItem("investorProfileCompletedSections", JSON.stringify(completedSections)) }, [completedSections])
-  useEffect(() => { localStorage.setItem("investorProfileSubmitted", profileSubmitted.toString()) }, [profileSubmitted])
+  useEffect(() => {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+    if (isCmfView) return
+    localStorage.setItem("investorProfileData", JSON.stringify(formData))
+  }, [formData])
+
+  useEffect(() => {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+    if (isCmfView) return
+    localStorage.setItem("investorProfileCompletedSections", JSON.stringify(completedSections))
+  }, [completedSections])
+
+  useEffect(() => {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+    if (isCmfView) return
+    localStorage.setItem("investorProfileSubmitted", profileSubmitted.toString())
+  }, [profileSubmitted])
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
@@ -386,7 +405,8 @@ export default function UniversalProfile() {
   const markSectionAsCompleted = async (section) => {
     setCompletedSections((prev) => {
       const updated = { ...prev, [section]: true }
-      const userId = auth.currentUser?.uid
+      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+      const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
       if (userId) {
         const docRef = doc(db, "MyuniversalProfiles", userId)
         setDoc(docRef, { completedSections: updated }, { merge: true })
@@ -434,9 +454,11 @@ export default function UniversalProfile() {
   }
 
   const uploadFilesAndReplaceWithURLs = async (data, section) => {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+    const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
     const uploadRecursive = async (item, pathPrefix) => {
       if (item instanceof File) {
-        const fileRef = ref(storage, `MyuniversalProfile/${auth.currentUser?.uid}/${pathPrefix}`)
+        const fileRef = ref(storage, `MyuniversalProfile/${userId}/${pathPrefix}`)
         await uploadBytes(fileRef, item)
         return await getDownloadURL(fileRef)
       } else if (Array.isArray(item)) {
@@ -452,7 +474,8 @@ export default function UniversalProfile() {
 
   const saveDataToFirebase = async (section = null, includingSubmissionStatus = false) => {
     try {
-      const userId = auth.currentUser?.uid
+      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+      const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
       if (!userId) throw new Error("User not logged in.")
       const docRef = doc(db, "MyuniversalProfiles", userId)
       const sectionData = section ? formData[section] : formData
@@ -535,10 +558,56 @@ export default function UniversalProfile() {
   if (sectionLoading) return (
     <div className="loading"><div className="spinner"></div><div className="loading-message">Preparing next step...</div></div>
   )
-  if (showSummary && !showCongratulationsPopup) return <InvestorProfileSummary data={formData} onEdit={handleEditProfile} />
+  const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
+  const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
+
+  const renderCmfBanner = () => {
+    if (!isCmfView) return null;
+    return (
+      <div style={{
+        backgroundColor: "#e8f5e9", padding: "16px 20px",
+        borderRadius: "8px", border: "2px solid #4caf50",
+        display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: "20px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "20px" }}>👁️</span>
+          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+            Facilitator View: Managing {viewingSMEName}'s Profile
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("viewingSMEId");
+            sessionStorage.removeItem("viewingSMEName");
+            sessionStorage.removeItem("investorViewMode");
+            sessionStorage.removeItem("viewOrigin");
+            window.location.href = "/cmf-cohorts";
+          }}
+          style={{
+            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
+            border: "none", borderRadius: "6px", cursor: "pointer",
+            fontWeight: "600", fontSize: "14px",
+          }}
+        >
+          ← Back to My Cohorts
+        </button>
+      </div>
+    );
+  };
+
+  if (showSummary && !showCongratulationsPopup) {
+    return (
+      <div className="universal-profile-container" style={{ padding: "20px" }}>
+        {renderCmfBanner()}
+        <InvestorProfileSummary data={formData} onEdit={handleEditProfile} />
+      </div>
+    )
+  }
 
   return (
-    <div className="universal-profile-container">
+    <div className="universal-profile-container" style={{ padding: "20px" }}>
+      {renderCmfBanner()}
       {validationModal.open && (
         <div className="popup-overlay">
           <div className="validation-popup">

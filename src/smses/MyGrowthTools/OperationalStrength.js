@@ -2496,12 +2496,15 @@ const OperationalPerformance = () => {
   }, [isInvestorView, viewingSMEId])
 
   const handleExitInvestorView = () => {
+    const origin = sessionStorage.getItem("viewOrigin")
     sessionStorage.removeItem("viewingSMEId")
     sessionStorage.removeItem("viewingSMEName")
     sessionStorage.removeItem("investorViewMode")
     sessionStorage.removeItem("viewOrigin")
     
-    if (viewOrigin === "catalyst") {
+    if (origin === "cmf") {
+      window.location.href = "/cmf-cohorts"
+    } else if (origin === "catalyst") {
       window.location.href = "/catalyst/cohorts"
     } else {
       window.location.href = "/my-cohorts"
@@ -2541,6 +2544,8 @@ const OperationalPerformance = () => {
               <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
                 {viewOrigin === "catalyst" 
                   ? `Catalyst View: Viewing ${viewingSMEName}'s Operational Performance`
+                  : viewOrigin === "cmf"
+                  ? `Facilitator View: Viewing ${viewingSMEName}'s Operational Performance`
                   : `Investor View: Viewing ${viewingSMEName}'s Operational Performance`
                 }
               </span>

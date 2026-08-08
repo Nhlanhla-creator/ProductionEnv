@@ -78,6 +78,7 @@ const FinancialPerformance = () => {
 
   const handleExitInvestorView = () => {
     // Clear all session storage items
+    const origin = sessionStorage.getItem("viewOrigin");
     [
       "viewingSMEId",
       "viewingSMEName",
@@ -86,7 +87,9 @@ const FinancialPerformance = () => {
     ].forEach((k) => sessionStorage.removeItem(k));
 
     // Navigate based on origin
-    if (viewOrigin === "catalyst") {
+    if (origin === "cmf") {
+      window.location.href = "/cmf-cohorts";
+    } else if (origin === "catalyst") {
       window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
     } else {
       window.location.href = "/my-cohorts"; // Go back to Investor cohorts
@@ -105,6 +108,8 @@ const FinancialPerformance = () => {
               <span className="text-green-800 font-semibold text-sm">
                 {viewOrigin === "catalyst"
                   ? `Catalyst View: Viewing ${viewingSMEName}'s Financial Performance`
+                  : viewOrigin === "cmf"
+                  ? `Facilitator View: Viewing ${viewingSMEName}'s Financial Performance`
                   : `Investor View: Viewing ${viewingSMEName}'s Financial Performance`}
               </span>
             </div>

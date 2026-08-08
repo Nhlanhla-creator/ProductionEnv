@@ -192,7 +192,15 @@ export default function Documents({ data = {}, updateData }) {
     const loadDocuments = async () => {
       try {
         setIsLoading(true);
-        const userId = auth.currentUser?.uid;
+        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+        if (isOnboarding) {
+          setFormData(data || {});
+          setIsLoading(false);
+          return;
+        }
+
+        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
         
         if (!userId) {
           setIsLoading(false);
@@ -849,9 +857,12 @@ const handleDeleteFile = async (documentId, fileIndex) => {
   
   // Update Firebase - CLEAR VERIFICATION STATUS AND TIMESTAMPS TOO
   try {
-    const userId = auth.currentUser?.uid
-    if (userId) {
-      const docRef = doc(db, "universalProfiles", userId)
+    const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+    if (!isOnboarding) {
+      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+      const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
+      if (userId) {
+        const docRef = doc(db, "universalProfiles", userId)
       
       // Create update data that clears both document URL, verification, and timestamps
       const updateData = {
@@ -910,6 +921,7 @@ const handleDeleteFile = async (documentId, fileIndex) => {
       
       await updateDoc(docRef, updateData)
       console.log(`Document ${documentId} deleted and timestamps cleared`)
+      }
     }
   } catch (error) {
     console.error("Error deleting file:", error)

@@ -43,8 +43,13 @@ function SMESidebar() {
         setFilteredMenuItems(dashboardItem ? [dashboardItem] : smeMenuItems)
         setAutoExpandMenus({})
       } else {
-        // Filter to only show Growth Suite for investors
-        setFilteredMenuItems(smeMenuItems.filter((item) => item.id === "growth-tools"))
+        // Filter to only show Growth Suite for investors, but include profile if CMF is viewing
+        const viewOrigin = sessionStorage.getItem("viewOrigin")
+        if (viewOrigin === "cmf") {
+          setFilteredMenuItems(smeMenuItems.filter((item) => item.id === "growth-tools" || item.id === "profile"))
+        } else {
+          setFilteredMenuItems(smeMenuItems.filter((item) => item.id === "growth-tools"))
+        }
 
         // Auto-expand My Growth Suite for investors
         setAutoExpandMenus({ "growth-tools": true,

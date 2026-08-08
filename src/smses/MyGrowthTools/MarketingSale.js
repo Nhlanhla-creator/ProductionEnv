@@ -3331,11 +3331,14 @@ const [user, setUser] = useState(null);  // This should already exist
   }, [isInvestorView, viewingSMEId]);
 
   const handleExitInvestorView = () => {
+    const origin = sessionStorage.getItem("viewOrigin");
     sessionStorage.removeItem("viewingSMEId");
     sessionStorage.removeItem("viewingSMEName");
     sessionStorage.removeItem("investorViewMode");
     sessionStorage.removeItem("viewOrigin");
-    if (viewOrigin === "catalyst") {
+    if (origin === "cmf") {
+      window.location.href = "/cmf-cohorts";
+    } else if (origin === "catalyst") {
       window.location.href = "/catalyst/cohorts";
     } else {
       window.location.href = "/my-cohorts";
@@ -3374,6 +3377,8 @@ const [user, setUser] = useState(null);  // This should already exist
               <span className="text-[#2e7d32] font-semibold text-[15px]">
                 {viewOrigin === "catalyst"
                   ? `Catalyst View: Viewing ${viewingSMEName}'s Marketing & Sales Data`
+                  : viewOrigin === "cmf"
+                  ? `Facilitator View: Viewing ${viewingSMEName}'s Marketing & Sales Data`
                   : `Investor View: Viewing ${viewingSMEName}'s Marketing & Sales Data`}
               </span>
             </div>

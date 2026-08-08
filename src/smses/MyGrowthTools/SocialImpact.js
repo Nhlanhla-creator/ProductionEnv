@@ -4393,13 +4393,16 @@ const ESG = () => {
   // UPDATED: Enhanced exit function with origin-based navigation
   const handleExitInvestorView = () => {
     // Clear all session storage items
+    const origin = sessionStorage.getItem("viewOrigin")
     sessionStorage.removeItem("viewingSMEId")
     sessionStorage.removeItem("viewingSMEName")
     sessionStorage.removeItem("investorViewMode")
     sessionStorage.removeItem("viewOrigin")
     
     // Navigate based on origin
-    if (viewOrigin === "catalyst") {
+    if (origin === "cmf") {
+      window.location.href = "/cmf-cohorts"
+    } else if (origin === "catalyst") {
       window.location.href = "/catalyst/cohorts" // Go back to Catalyst cohorts
     } else {
       window.location.href = "/my-cohorts" // Go back to Investor cohorts
@@ -4441,6 +4444,8 @@ const ESG = () => {
               <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
                 {viewOrigin === "catalyst" 
                   ? `Catalyst View: Viewing ${viewingSMEName}'s ESG Impact`
+                  : viewOrigin === "cmf"
+                  ? `Facilitator View: Viewing ${viewingSMEName}'s ESG Impact`
                   : `Investor View: Viewing ${viewingSMEName}'s ESG Impact`
                 }
               </span>

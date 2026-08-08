@@ -527,7 +527,24 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     const loadOwnershipManagement = async () => {
       try {
         setIsLoading(true);
-        const userId = auth.currentUser?.uid;
+        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+        if (isOnboarding) {
+          setFormData({
+            shareholders: data.shareholders || [],
+            directors: data.directors || [],
+            executives: data.executives || [],
+            employees: data.employees || [],
+            businessLeadership: data.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
+            totalEmployees: data.totalEmployees || "",
+            activeInterests: data.activeInterests || [],
+            previousInterests: data.previousInterests || [],
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
         if (!userId) { setIsLoading(false); return; }
         const docRef = doc(db, "universalProfiles", userId);
         const docSnap = await getDoc(docRef);

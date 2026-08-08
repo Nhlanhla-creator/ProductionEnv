@@ -10133,13 +10133,16 @@ const Strategy = () => {
 
   const handleExitInvestorView = () => {
     // Clear all session storage items
+    const origin = sessionStorage.getItem("viewOrigin");
     sessionStorage.removeItem("viewingSMEId");
     sessionStorage.removeItem("viewingSMEName");
     sessionStorage.removeItem("investorViewMode");
     sessionStorage.removeItem("viewOrigin");
 
     // Navigate based on origin
-    if (viewOrigin === "catalyst") {
+    if (origin === "cmf") {
+      window.location.href = "/cmf-cohorts";
+    } else if (origin === "catalyst") {
       window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
     } else {
       window.location.href = "/my-cohorts"; // Go back to Investor cohorts
@@ -10181,6 +10184,8 @@ const Strategy = () => {
               >
                 {viewOrigin === "catalyst"
                   ? `Catalyst View: Viewing ${viewingSMEName}'s Strategy & Execution`
+                  : viewOrigin === "cmf"
+                  ? `Facilitator View: Viewing ${viewingSMEName}'s Strategy & Execution`
                   : `Investor View: Viewing ${viewingSMEName}'s Strategy & Execution`}
               </span>
             </div>
