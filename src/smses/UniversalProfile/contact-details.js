@@ -15,7 +15,15 @@ export default function ContactDetails({ data = {}, updateData }) {
     const loadContactDetails = async () => {
       try {
         setIsLoading(true)
-        const userId = auth.currentUser?.uid
+        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+        if (isOnboarding) {
+          setFormData(data || {});
+          setIsLoading(false);
+          return;
+        }
+
+        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
         
         if (!userId) {
           setIsLoading(false)

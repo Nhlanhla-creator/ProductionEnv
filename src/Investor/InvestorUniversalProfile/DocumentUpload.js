@@ -51,7 +51,15 @@ useEffect(() => {
   const loadDocuments = async () => {
     try {
       setIsLoading(true)
-      const userId = auth.currentUser?.uid
+      const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+      if (isOnboarding) {
+        setFormData(data || {});
+        setIsLoading(false);
+        return;
+      }
+
+      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+      const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
 
       if (!userId) {
         setIsLoading(false)
@@ -346,9 +354,12 @@ const handleDeleteFile = async (documentId, fileIndex) => {
 
 // Direct Firestore update to ensure the file reference is completely removed
 try {
-  const userId = auth.currentUser?.uid;
-  if (userId) {
-    const docRef = doc(db, "MyuniversalProfiles", userId);
+  const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+  if (!isOnboarding) {
+    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+    const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+    if (userId) {
+      const docRef = doc(db, "MyuniversalProfiles", userId);
     
     // Update the specific document field in Firestore
     await updateDoc(docRef, {
@@ -363,12 +374,13 @@ try {
         [`completedSections.documentUpload`]: false
       });
       console.log("✅ Document upload section marked as incomplete");
+      }
     }
   }
 } catch (firestoreError) {
-  console.error("❌ Firestore update failed:", firestoreError);
-  // Don't throw error here - we still want to update local state
-}
+    console.error("❌ Firestore update failed:", firestoreError);
+    // Don't throw error here - we still want to update local state
+  }
     // Update upload status
     setUploadStatus(prev => ({
       ...prev,

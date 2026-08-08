@@ -9,7 +9,7 @@ function CMFHeader() {
   return (
     <Header
       userCollection="cmfProfiles"
-      userNameField="formData.entityOverview.registeredName"
+      userNameField="contactDetails.contactName"
       logoField="formData.entityOverview.companyLogo"
       portalName="CMF Dashboard"
       roleOptions={profileRoleOptions.capitalMarketFacilitator}

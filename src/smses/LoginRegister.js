@@ -38,7 +38,7 @@ import {
 } from "../firebaseConfig";
 import { doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-import { onAuthStateChanged, deleteUser } from "firebase/auth";
+import { onAuthStateChanged, deleteUser, updatePassword } from "firebase/auth";
 import { normalizeRoleName } from "../utils/profileHelpers";
 import NDASignupPopup from "../NDAsign";
 import TermsConditionsCheckbox from "./Ts&cs";
@@ -203,6 +203,42 @@ export default function LoginRegister() {
     show: false,
     roles: [],
   });
+
+  // Onboarding parameters password change states
+  const [onboardTempPassword, setOnboardTempPassword] = useState("");
+  const [onboardEmail, setOnboardEmail] = useState("");
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [newOnboardPassword, setNewOnboardPassword] = useState("");
+  const [confirmOnboardPassword, setConfirmOnboardPassword] = useState("");
+  const [changePasswordError, setChangePasswordError] = useState("");
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+
+  // Handle auto-login and password setup for onboarded users
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const emailParam = params.get("email");
+    const tempParam = params.get("temp");
+    const onboardedParam = params.get("onboarded");
+
+    if (onboardedParam === "true" && emailParam && tempParam) {
+      setOnboardEmail(emailParam);
+      setOnboardTempPassword(tempParam);
+      
+      const doAutoLogin = async () => {
+        setIsLoading(true);
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, emailParam, tempParam);
+          setShowPasswordChangeModal(true);
+        } catch (error) {
+          console.error("Auto login failed:", error);
+          setAuthError("Failed to log in with temporary credentials. Please try logging in manually.");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      doAutoLogin();
+    }
+  }, [location.search]);
   const [resumingRegistration, setResumingRegistration] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
   const [termsAcceptanceTimestamp, setTermsAcceptanceTimestamp] = useState(null);
@@ -1715,6 +1751,144 @@ By using this platform, you confirm that you:
     }
   };
 
+  const handleUpdateOnboardPassword = async () => {
+    setChangePasswordError("");
+    setChangePasswordLoading(true);
+
+    const validation = validatePassword(newOnboardPassword);
+    if (!validation.isValid) {
+      setChangePasswordError(validation.errors.join(", "));
+      setChangePasswordLoading(false);
+      return;
+    }
+
+    if (newOnboardPassword !== confirmOnboardPassword) {
+      setChangePasswordError("Passwords do not match.");
+      setChangePasswordLoading(false);
+      return;
+    }
+
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("No authenticated user found.");
+      
+      // Update password in Firebase Auth
+      await updatePassword(user, newOnboardPassword);
+      
+      // Also update firestore user doc to remove any temporary password field or mark as setup
+      const userDocRef = doc(db, "users", user.uid);
+      await updateDoc(userDocRef, {
+        passwordSetupCompleted: true,
+        updatedAt: serverTimestamp()
+      });
+      
+      alert("Password setup successful! Redirecting to your profile...");
+      setShowPasswordChangeModal(false);
+      
+      // Now redirect to their profile!
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        proceedWithLogin(user, userData);
+      } else {
+        navigate("/profile");
+      }
+    } catch (error) {
+      console.error("Password update error:", error);
+      setChangePasswordError(getCustomErrorMessage(error));
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
+  const renderPasswordChangeModal = () => {
+    if (!showPasswordChangeModal) return null;
+    return (
+      <div className="modal-overlay" style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(74, 53, 47, 0.65)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
+      }}>
+        <div className="modal-content" style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '24px',
+          padding: '32px',
+          width: '420px',
+          maxWidth: '100%',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          border: '1px solid #e6d7c3'
+        }}>
+          <h3 style={{
+            fontSize: '1.25rem',
+            fontWeight: 700,
+            color: '#4a352f',
+            marginBottom: '8px',
+            textAlign: 'center'
+          }}>Secure Your Account</h3>
+          <p style={{
+            fontSize: '0.85rem',
+            color: '#a89482',
+            marginBottom: '24px',
+            textAlign: 'center'
+          }}>Choose a new permanent password to complete your account setup.</p>
+          
+          {changePasswordError && (
+            <div className="auth-error" style={{
+              backgroundColor: '#fdf2f2',
+              color: '#de3535',
+              padding: '12px',
+              borderRadius: '12px',
+              fontSize: '0.8rem',
+              marginBottom: '16px',
+              border: '1px solid #fbd5d5'
+            }}>{changePasswordError}</div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+            <FormInput
+              type="password"
+              placeholder="New Password"
+              value={newOnboardPassword}
+              onChange={(e) => setNewOnboardPassword(e.target.value)}
+              icon={Lock}
+            />
+            <FormInput
+              type="password"
+              placeholder="Confirm New Password"
+              value={confirmOnboardPassword}
+              onChange={(e) => setConfirmOnboardPassword(e.target.value)}
+              icon={Lock}
+            />
+          </div>
+
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={handleUpdateOnboardPassword}
+            disabled={changePasswordLoading}
+            style={{ width: '100%' }}
+          >
+            {changePasswordLoading ? (
+              <span className="loading-button">
+                <Loader2 className="animate-spin" size={16} />
+                Saving...
+              </span>
+            ) : "Save & Complete Setup"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderLoginForm = () => (
     <form
       className="form-step"
@@ -1877,6 +2051,7 @@ By using this platform, you confirm that you:
       )}
       {renderForgotPasswordModal()}
       {renderRoleSelectionModal()}
+      {renderPasswordChangeModal()}
     </div>
   );
 }

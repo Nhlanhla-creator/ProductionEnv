@@ -994,6 +994,22 @@ export default function CMFCohorts() {
     setRowMenu(null)
   }
 
+  const handleManagePartnerProfile = (cohort) => {
+    sessionStorage.setItem('viewingSMEId', cohort.id)
+    sessionStorage.setItem('viewingSMEName', cohort.smeName)
+    sessionStorage.setItem('investorViewMode', 'true')
+    sessionStorage.setItem('viewOrigin', 'cmf')
+    
+    const profileRoutes = {
+      businesses: '/profile',
+      funders: '/investor-profile',
+      catalysts: '/support-profile',
+      cmfs: '/cmf-profile'
+    }
+    const route = profileRoutes[activeCohortTab] || '/profile'
+    window.location.href = route
+  }
+
   // ─── Voucher ──────────────────────────────────────────────────────────────
   const generateVoucherCode = (type) => {
     const prefix = type === "legitimacy" ? "LG" : type === "capital" ? "CA" : type === "governance" ? "GV" : type === "compliance" ? "CM" : "PR"
@@ -1340,7 +1356,9 @@ export default function CMFCohorts() {
               {refreshing ? "Refreshing..." : "Refresh Data"}
             </button> */}
             <button
-              onClick={() => setShowBridgePopup(true)}
+              onClick={() => {
+                setShowBridgePopup(true)
+              }}
               className="bg-[#7d5a50] hover:bg-[#6b4c43] text-white rounded-lg px-4 py-2.5 text-xs font-semibold flex items-center gap-1.5 transition-all duration-300 shadow-md border-2 border-[#7d5a50]"
             >
               <Plus size={14} />
@@ -1905,6 +1923,9 @@ export default function CMFCohorts() {
             </button>
             <button onClick={() => handleViewDetails(rowMenu.cohort)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               <Eye size={12} /> View Details
+            </button>
+            <button onClick={() => { handleManagePartnerProfile(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
+              <Settings size={12} /> Manage Profile
             </button>
             <button onClick={() => { toggleExpandRow(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               {expandedRows.has(rowMenu.cohort.id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}

@@ -276,9 +276,17 @@ const Governance = ({ data, updateData }) => {
   useEffect(() => {
     const fetchGovernanceData = async () => {
       try {
-        const user = auth.currentUser
-        if (user) {
-          const docRef = doc(db, "universalProfiles", user.uid)
+        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+        if (isOnboarding) {
+          setFormData(data || {});
+          setIsLoading(false);
+          return;
+        }
+
+        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+        if (userId) {
+          const docRef = doc(db, "universalProfiles", userId)
           const docSnap = await getDoc(docRef)
 
           if (docSnap.exists()) {
@@ -357,10 +365,14 @@ const Governance = ({ data, updateData }) => {
     updateData("governance", updatedFormData)
 
     try {
-      const user = auth.currentUser
-      if (user) {
-        const docRef = doc(db, "universalProfiles", user.uid)
-        await updateDoc(docRef, { "governance.governanceChecklist": updatedChecklist })
+      const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+      if (!isOnboarding) {
+        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+        if (userId) {
+          const docRef = doc(db, "universalProfiles", userId)
+          await updateDoc(docRef, { "governance.governanceChecklist": updatedChecklist })
+        }
       }
     } catch (error) {
       console.error("Error saving checklist to Firebase:", error)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Info, ChevronDown, ChevronUp, Upload, X, Check } from "lucide-react"
 import { db, auth, storage } from '../../firebaseConfig';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { uploadDocumentWithSync, deleteDocumentWithSync, getDocumentUrlFromAnyLocation } from '../../utils/documentSyncService';
 import { validateDocument, validateCompanyDocument } from '../../services/documentValidationService';
@@ -463,6 +463,55 @@ function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "
 // Main component
 export default function EntityOverview({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
+  const [dynamicSponsors, setDynamicSponsors] = useState(null)
+
+  useEffect(() => {
+    const fetchSponsors = async () => {
+      try {
+        const collections = {
+          CMF: "cmfProfiles",
+          Investor: "MyuniversalProfiles",
+          Catalyst: "catalystProfiles",
+          Advisor: "advisorProfiles"
+        }
+        const loadedSponsors = {}
+        for (const [type, collName] of Object.entries(collections)) {
+          const qSnap = await getDocs(collection(db, collName))
+          const list = []
+          qSnap.forEach(docSnap => {
+            const docData = docSnap.data()
+            let label = ""
+            if (type === "CMF" || type === "Investor" || type === "Catalyst") {
+              label = docData?.entityOverview?.tradingName || 
+                      docData?.entityOverview?.registeredName || 
+                      docData?.formData?.entityOverview?.tradingName || 
+                      docData?.formData?.entityOverview?.registeredName ||
+                      docData?.contactDetails?.contactName ||
+                      docData?.contactDetails?.primaryContactName ||
+                      docData?.formData?.contactDetails?.contactName ||
+                      docData?.formData?.contactDetails?.primaryContactName ||
+                      docData?.registeredName ||
+                      docSnap.id
+            } else if (type === "Advisor") {
+              label = docData?.personalProfessionalOverview?.fullName ||
+                      docData?.formData?.personalProfessionalOverview?.fullName ||
+                      docData?.contactDetails?.contactName ||
+                      docData?.formData?.contactDetails?.contactName ||
+                      docData?.name ||
+                      docSnap.id
+            }
+            list.push({ value: docSnap.id, label: label })
+          })
+          loadedSponsors[type] = list
+        }
+        setDynamicSponsors(loadedSponsors)
+      } catch (err) {
+        console.error("Error loading dynamic sponsors:", err)
+      }
+    }
+    fetchSponsors()
+  }, [])
+
   const [isLoading, setIsLoading] = useState(true)
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoPreview, setLogoPreview] = useState("");
@@ -585,7 +634,15 @@ export default function EntityOverview({ data = {}, updateData }) {
     const loadEntityOverview = async () => {
       try {
         setIsLoading(true);
-        const userId = auth.currentUser?.uid;
+        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+        if (isOnboarding) {
+          setFormData(data || {});
+          setIsLoading(false);
+          return;
+        }
+
+        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
+        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
         if (!userId) { setIsLoading(false); return; }
 
         const docRef = doc(db, "universalProfiles", userId);
@@ -840,9 +897,10 @@ export default function EntityOverview({ data = {}, updateData }) {
   const selectedCountries = Array.isArray(formData.operatingCountries) ? formData.operatingCountries : []
   const showProvinces = selectedCountries.includes("South Africa")
   const memberOfAssociation = formData.memberOfAssociation
+  const isOnboarding = sessionStorage.getItem("isOnboarding") === "true"
 
   const sponsorType = formData.sponsorType || ""
-  const sponsorOptions = sponsorDirectory[sponsorType] || []
+  const sponsorOptions = (dynamicSponsors && dynamicSponsors[sponsorType]) || sponsorDirectory[sponsorType] || []
   const selectedSponsorLabel = sponsorOptions.find((s) => s.value === formData.sponsorName)?.label || ""
 
   return (
@@ -1025,44 +1083,48 @@ export default function EntityOverview({ data = {}, updateData }) {
         )}
 
         {/* ── Sponsor ── */}
-        <FormField label="Are you working with a specific sponsor?">
-          <select
-            name="sponsorType"
-            value={sponsorType}
-            onChange={handleSponsorTypeChange}
-            style={inputStyle}
-          >
-            <option value="">Select sponsor type</option>
-            {sponsorTypes.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-        </FormField>
+        {!isOnboarding && (
+          <>
+            <FormField label="Are you working with a specific sponsor?">
+              <select
+                name="sponsorType"
+                value={sponsorType}
+                onChange={handleSponsorTypeChange}
+                style={inputStyle}
+              >
+                <option value="">Select sponsor type</option>
+                {sponsorTypes.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </FormField>
 
-        {sponsorType && (
-          <FormField label={`Which ${sponsorType}?`}>
-            <select
-              name="sponsorName"
-              value={formData.sponsorName || ""}
-              onChange={handleSponsorNameChange}
-              style={inputStyle}
-            >
-              <option value="">{`Select ${sponsorType}...`}</option>
-              {sponsorOptions.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </FormField>
-        )}
+            {sponsorType && (
+              <FormField label={`Which ${sponsorType}?`}>
+                <select
+                  name="sponsorName"
+                  value={formData.sponsorName || ""}
+                  onChange={handleSponsorNameChange}
+                  style={inputStyle}
+                >
+                  <option value="">{`Select ${sponsorType}...`}</option>
+                  {sponsorOptions.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </FormField>
+            )}
 
-        {sponsorType && formData.sponsorName && (
-          <FormField label="Do you give them permission to view your profile?">
-            <RadioGroup
-              name="sponsorViewPermission"
-              value={formData.sponsorViewPermission}
-              onChange={(value) => handleRadioChange("sponsorViewPermission", value)}
-            />
-          </FormField>
+            {sponsorType && formData.sponsorName && (
+              <FormField label="Do you give them permission to view your profile?">
+                <RadioGroup
+                  name="sponsorViewPermission"
+                  value={formData.sponsorViewPermission}
+                  onChange={(value) => handleRadioChange("sponsorViewPermission", value)}
+                />
+              </FormField>
+            )}
+          </>
         )}
       </div>
 
