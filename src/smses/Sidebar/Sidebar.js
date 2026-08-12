@@ -4,6 +4,29 @@ import Sidebar from "../../components/profile/sidebar/Sidebar"
 import { useUserProfile } from "../../hooks/useUserProfile"
 import { smeMenuItems } from "../../config/menuConfig"
 
+// ─── What an outside viewer can reach ───────────────────────────────────────
+// While a catalyst / investor / facilitator is viewing an SME's account, the
+// sidebar is narrowed to the screens their cohorts table can actually send
+// them to. That set is now driven by one list instead of a per-case filter,
+// because the per-case version was the bug: it kept only "growth-tools", so
+// "View Documents" navigated correctly to /my-documents but arrived with no
+// Documents entry in the menu — the page rendered under a sidebar that had
+// filtered its own destination out.
+//
+// The three ids below map 1:1 onto the three row actions:
+//   Open BIG Score Page → dashboard     (/dashboard)
+//   Open Growth Suite   → growth-tools  (/overall-company-health et al)
+//   View Documents      → documents     (/my-documents)
+//
+// Keep this in sync with the quick-actions menus in MyCohorts — if an action
+// is added there, its menu id belongs here, or the destination will load
+// under a sidebar that can't represent it.
+const VIEWER_MENU_IDS = ["dashboard", "growth-tools", "documents"]
+
+// A facilitator additionally reviews the business's own profile, so they get
+// one extra entry on top of the shared set.
+const CMF_EXTRA_MENU_IDS = ["profile"]
+
 function SMESidebar() {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEName, setViewingSMEName] = useState("")
@@ -16,62 +39,46 @@ function SMESidebar() {
     "Company"
   )
 
-  
   // Check for investor view mode
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
     const smeId = sessionStorage.getItem("viewingSMEId")
     const smeName = sessionStorage.getItem("viewingSMEName")
-    // FIX: this flag (set by SupportSMETable.jsx's "Open BIG Score Page"
-    // action) means the catalyst was sent specifically to /dashboard to
-    // view BIG Score — not to Growth Suite. The filter below used to
-    // unconditionally show only the "growth-tools" item for *any*
-    // investor-view session, which is exactly why the Dashboard/BIG Score
-    // nav item disappeared even though that's the page actually being
-    // viewed: the sidebar was filtering it out.
-    const viewOnlyBigScore = sessionStorage.getItem("viewOnlyBigScore") === "true"
+    const viewOrigin = sessionStorage.getItem("viewOrigin")
 
     if (investorViewMode === "true" && smeId) {
       setIsInvestorView(true)
       setViewingSMEName(smeName || "SME")
-      console.log("Investor view mode activated for SME:", smeId)
 
-      if (viewOnlyBigScore) {
-        // The SME menu's Dashboard/BIG Score entry is { id: "dashboard",
-        // label: "My BIG Score", route: "/dashboard" } — match it exactly.
-        const dashboardItem = smeMenuItems.find((item) => item.id === "dashboard")
-        setFilteredMenuItems(dashboardItem ? [dashboardItem] : smeMenuItems)
-        setAutoExpandMenus({})
-      } else {
-        // Filter to only show Growth Suite for investors, but include profile if CMF is viewing
-        const viewOrigin = sessionStorage.getItem("viewOrigin")
-        if (viewOrigin === "cmf") {
-          setFilteredMenuItems(smeMenuItems.filter((item) => item.id === "growth-tools" || item.id === "profile"))
-        } else {
-          setFilteredMenuItems(smeMenuItems.filter((item) => item.id === "growth-tools"))
-        }
+      const allowedIds = new Set(
+        viewOrigin === "cmf" ? [...VIEWER_MENU_IDS, ...CMF_EXTRA_MENU_IDS] : VIEWER_MENU_IDS
+      )
 
-        // Auto-expand My Growth Suite for investors
-        setAutoExpandMenus({ "growth-tools": true,
-           "raps": true,
-        })
-      }
+      // filter() preserves smeMenuItems' own order, so the viewer sees the
+      // same sequence the SME does — just fewer entries.
+      const visible = smeMenuItems.filter((item) => allowedIds.has(item.id))
+      setFilteredMenuItems(visible.length > 0 ? visible : smeMenuItems)
+
+      // Growth Suite holds its children behind a collapsed parent, so it's
+      // expanded on arrival — otherwise landing on /overall-company-health
+      // shows a collapsed menu with nothing marked active.
+      setAutoExpandMenus({ "growth-tools": true, raps: true })
     } else {
       setFilteredMenuItems(smeMenuItems)
       setAutoExpandMenus({})
     }
   }, [])
 
-    return (
+  return (
     <Sidebar
       menuItems={filteredMenuItems}
       userName={isInvestorView ? viewingSMEName : userName}
       portalTitle="SMSE Dashboard"
       storageKey="smeSidebarCollapsed"
       autoExpandMenus={autoExpandMenus}
-      enableNested={true}  
+      enableNested={true}
     />
-  );
+  )
 }
 
 export default SMESidebar

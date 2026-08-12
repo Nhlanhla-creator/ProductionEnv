@@ -1105,9 +1105,10 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
       case "bigScore": popupWidth = 380; popupHeight = 450; break;
       case "match": popupWidth = 380; popupHeight = 420; break;
       case "stage": popupWidth = 450; popupHeight = 520; break;
-      // Grew as rows were added (BIG Score page, Save Match, View Saved), so
-      // the flip-upward calculation below still has an accurate height.
-      case "quickActions": popupWidth = 230; popupHeight = 380; break;
+      // Height tracks the current row count — the in-popup "BIG Score
+      // Breakdown" item was removed (the donut in the table already opens it),
+      // so the flip-upward calculation below stays accurate.
+      case "quickActions": popupWidth = 230; popupHeight = 340; break;
       default: popupWidth = 300; popupHeight = 300;
     }
 
@@ -2594,9 +2595,9 @@ if (type === "bigScore") loadBigScore(sme);
                 <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
               </div>
               <button onClick={() => { setShowDetails(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
-              <button onClick={() => openPopup("bigScore", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> BIG Score Breakdown</button>
-              {/* Opens the business's own dashboard, locked to the BIG Score
-                  tab — same behaviour as the catalyst table's action. */}
+              {/* "BIG Score Breakdown" used to sit here. It's gone: the donut
+                  in the BIG Score column already opens that popup, and the row
+                  below covers the full page. */}
               <button onClick={() => { handleViewBigScorePage(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
               <button onClick={() => openPopup("match", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
               <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>

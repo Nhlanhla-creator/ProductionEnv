@@ -1,12 +1,12 @@
 "use client"
-import React, { useState, useEffect, useRef, useMemo } from "react"
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
 import {
   Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench,
   Loader, RefreshCw, X, BarChart3, ChevronDown, ChevronUp, FileText, Ticket, Copy,
   CheckCircle, MoreVertical, AlertCircle, Info, GraduationCap, Layers,
   SlidersHorizontal, Trash2, StickyNote, Archive,
-  ArrowUpDown, Download, Square, CheckSquare, Plus, GripVertical, RotateCcw, Settings, LayoutGrid
+  ArrowUpDown, ArrowUp, ArrowDown, Download, Square, CheckSquare, Plus, GripVertical, RotateCcw, Settings, LayoutGrid
 } from "lucide-react"
 import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
@@ -73,6 +73,34 @@ const daysInProgramme = (cohort) => {
   const d = toDateSafe(cohort.completionDate)
   if (!d) return null
   return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)))
+}
+
+// ─── Impersonation ("view as this SME") session flags ───────────────────────
+// The sidebar decides which menu to render from these four keys together. If
+// any one of them is missing or stale, it renders the wrong menu — which is
+// exactly why "View Documents" used to land on /my-documents with no
+// Documents tab visible: handleViewDocuments set only three of the four and
+// left `viewOrigin` off, so the sidebar fell back to the catalyst menu
+// (whose Documents entry points at /support-documents instead).
+//
+// Everything that navigates into an SME's own screens now goes through this
+// one helper, so the flags can't drift apart again.
+const enterSMEView = (cohort, { onlyBigScore = false } = {}) => {
+  if (typeof window === "undefined") return
+  sessionStorage.setItem("viewingSMEId", cohort.smeId)
+  sessionStorage.setItem("viewingSMEName", cohort.smeName)
+  sessionStorage.setItem("investorViewMode", "true")
+  sessionStorage.setItem("viewOrigin", "catalyst")
+
+  // Written (or removed) on EVERY entry, not just when true. Previously this
+  // key was only ever set to "true" and never cleared, so once a catalyst
+  // opened a BIG Score page the sidebar stayed locked to that single tab for
+  // the rest of the session.
+  if (onlyBigScore) {
+    sessionStorage.setItem("viewOnlyBigScore", "true")
+  } else {
+    sessionStorage.removeItem("viewOnlyBigScore")
+  }
 }
 
 // ─── Status vocabulary ──────────────────────────────────────────────────────
@@ -235,6 +263,37 @@ const Portal = ({ children }) => {
   return createPortal(children, document.body)
 }
 
+// ─── Column header info tooltip ─────────────────────────────────────────────
+// Portaled to <body> because the header cell is sticky and would otherwise
+// clip the bubble.
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <Portal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </Portal>
+      )}
+    </span>
+  )
+}
+
 // ─── Voucher info hover tooltip ──────────────────────────────────────────────
 const VoucherInfoTooltip = ({ anchorRect }) => {
   if (!anchorRect) return null
@@ -356,21 +415,59 @@ const LoadingSkeleton = () => (
 // hideable, reorderable, filterable columns here (matching the equivalent
 // columns on the DealFlow SME table).
 //
-// This config also drives column order (drag-and-drop) and every column's
-// filter — every column has one, no exceptions.
+// This config drives column order (drag-and-drop), width (drag the right
+// edge — `width` doubles as the factory default a double-click snaps back
+// to), sorting, the ⓘ explanation in each header, and every column's
+// filter. Every column has all four — no exceptions.
 const COLUMN_DEFS = {
-  supportValue: { label: "Support Value", minWidth: "112px", filterType: "supportValue" },
-  startDate: { label: "Start Date", minWidth: "96px", filterType: "startDate" },
-  daysInProgramme: { label: "Days in Programme", minWidth: "136px", filterType: "daysInProgramme" },
-  appliedDate: { label: "Applied Date", minWidth: "100px", filterType: "appliedDate" },
-  teamSize: { label: "Employees", minWidth: "92px", filterType: "teamSize" },
-  sector: { label: "Sector", minWidth: "100px", filterType: "sector" },
-  location: { label: "Location", minWidth: "92px", filterType: "location" },
-  equityOffered: { label: "Equity Offered", minWidth: "108px", filterType: "equity" },
-  guarantees: { label: "Guarantees", minWidth: "100px", filterType: "guarantees" },
-  servicesRequired: { label: "Services", minWidth: "92px", filterType: "services" },
-  status: { label: "Status", minWidth: "130px", filterType: "status" },
-  progress: { label: "Progress", minWidth: "112px", filterType: "progress" },
+  supportValue: {
+    label: "Support Value", width: 150, filterType: "supportValue",
+    tooltip: "The funding or support allocation recorded against this business. Reads \"No allocation\" when nothing has been captured on the record yet.",
+  },
+  startDate: {
+    label: "Start Date", width: 142, filterType: "startDate",
+    tooltip: "When this business started in the programme. Taken from the record's last status update, so it moves if the record is re-stamped.",
+  },
+  daysInProgramme: {
+    label: "Days in Programme", width: 158, filterType: "daysInProgramme",
+    tooltip: "Calendar days elapsed since the start date. Reads \"Not available\" when the start date is missing or unparseable.",
+  },
+  appliedDate: {
+    label: "Applied Date", width: 142, filterType: "appliedDate",
+    tooltip: "When the business first submitted its application, before it was admitted into the programme.",
+  },
+  teamSize: {
+    label: "Employees", width: 128, filterType: "teamSize",
+    tooltip: "Headcount as captured on the business's own profile. Not verified by BIG.",
+  },
+  sector: {
+    label: "Sector", width: 140, filterType: "sector",
+    tooltip: "The primary industry the business operates in, from its profile.",
+  },
+  location: {
+    label: "Location", width: 132, filterType: "location",
+    tooltip: "The city or town the business operates from.",
+  },
+  equityOffered: {
+    label: "Equity Offered", width: 150, filterType: "equity",
+    tooltip: "The equity the business offered in exchange for support, where any was offered.",
+  },
+  guarantees: {
+    label: "Guarantees", width: 142, filterType: "guarantees",
+    tooltip: "Security the business can put behind a deal — contracts, purchase orders, sureties, collateral and so on.",
+  },
+  servicesRequired: {
+    label: "Services", width: 132, filterType: "services",
+    tooltip: "The specific services the business asked for, in its own words.",
+  },
+  status: {
+    label: "Status", width: 168, filterType: "status",
+    tooltip: "Where this business sits in the post-admission journey. An \"Attention\" tag next to it means core data is missing on the record, not that the business itself is at risk.",
+  },
+  progress: {
+    label: "Progress", width: 148, filterType: "progress",
+    tooltip: "Overall Business Health, read from the report the business generated in its own Growth Suite. Worst category wins. \"Pending\" means they haven't run one yet.",
+  },
 }
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = {
@@ -381,16 +478,71 @@ const DEFAULT_COLUMN_VISIBILITY = {
 }
 const DEFAULT_DENSITY = "comfortable"
 
+// The checkbox, Business and Action columns can't be hidden or reordered, so
+// they aren't in COLUMN_DEFS — but they resize like everything else, and
+// their widths live under these reserved keys inside the same map.
+const SELECT_KEY = "__select__"
+const NAME_KEY = "__name__"
+const ACTION_KEY = "__action__"
+const FIXED_WIDTHS = { [SELECT_KEY]: 46, [NAME_KEY]: 230, [ACTION_KEY]: 186 }
+const MIN_COLUMN_WIDTH = 44
+
+const DEFAULT_COLUMN_WIDTHS = {
+  ...Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])),
+  ...FIXED_WIDTHS,
+}
+
+const SELECT_TOOLTIP = "Select rows to export them or change their status in bulk. The header checkbox selects everything currently visible after filtering."
+const NAME_TOOLTIP = "The registered business name, with its programme number appended when the same business appears in more than one of your programmes. Click the chevron to expand notes, or the eye to open the full summary."
+const ACTION_TOOLTIP = "The single most useful next step for this record — it changes with the business's stage. The ⋮ menu holds everything else: Growth Suite, documents, vouchers, notes, status changes and archiving."
+
+// ─── Sorting ────────────────────────────────────────────────────────────────
+// Accessors read the mapped cohort field, which doesn't always match the
+// column key (e.g. "equityOffered" lives on dealType, "supportValue" sorts
+// on the underlying number rather than the "R 1 200 000" label, and
+// "progress" sorts by severity so at-risk businesses group together).
+const parseAmount = (value) => {
+  if (value == null || value === "Not specified") return -1
+  const n = parseFloat(value.toString().replace(/[^0-9.]/g, ""))
+  return isNaN(n) ? -1 : n
+}
+const PROGRESS_SORT_RANK = { red: 0, yellow: 1, green: 2 }
+const SORT_ACCESSORS = {
+  [NAME_KEY]: (c) => (c.smeName || "").toLowerCase(),
+  supportValue: (c) => parseAmount(c.dealAmount),
+  startDate: (c) => toDateSafe(c.completionDate)?.getTime() ?? -1,
+  daysInProgramme: (c) => daysInProgramme(c) ?? -1,
+  appliedDate: (c) => toDateSafe(c.applicationDateRaw)?.getTime() ?? -1,
+  teamSize: (c) => {
+    const n = parseFloat((c.teamSize || "").toString().replace(/[^0-9.]/g, ""))
+    return isNaN(n) ? -1 : n
+  },
+  sector: (c) => (c.sector || "").toLowerCase(),
+  location: (c) => (c.location || "").toLowerCase(),
+  equityOffered: (c) => (c.dealType || "").toLowerCase(),
+  guarantees: (c) => (c.guarantees || "").toLowerCase(),
+  servicesRequired: (c) => (c.servicesRequired || "").toLowerCase(),
+  status: (c) => getStatusMeta(c.currentStatus).label.toLowerCase(),
+  progress: (c) => (c.health?.overall ? PROGRESS_SORT_RANK[c.health.overall] : 3),
+}
+
+// The default isn't a column sort at all — it's the spec §20 triage order
+// (attention first, then onboarding, active, exited; ties alphabetical).
+// Cycling a column's arrow goes asc → desc → back to this.
+const DEFAULT_SORT_CONFIG = { key: "attentionThenName", direction: "desc" }
+
 // ─── Custom Views (same model as the DealFlow SME table, kept consistent
 // on purpose) ─────────────────────────────────────────────────────────────
-// A "view" bundles column visibility, order, and density into one named,
-// describable object with exactly one view active at a time. Editing the
-// table always edits the active view and auto-saves immediately — there's
-// no separate hidden "current layout" that can silently drift out of sync
-// with a named view, which is what used to make column changes feel
+// A "view" bundles column visibility, order, width, sort, and density into
+// one named, describable object with exactly one view active at a time.
+// Editing the table always edits the active view and auto-saves immediately
+// — there's no separate hidden "current layout" that can silently drift out
+// of sync with a named view, which is what used to make column changes feel
 // unpredictable (columns "randomly" rearranging/disappearing).
 const BUILTIN_VIEW_ID = "__default__"
-const VIEWS_STORAGE_KEY = "my-cohorts-views-v2"
+// v3: views now carry per-column widths (including the three fixed columns)
+// and a sort config, so a v2 view would leave every width undefined.
+const VIEWS_STORAGE_KEY = "my-cohorts-views-v3"
 const ACTIVE_FILTER_STORAGE_KEY = "my-cohorts-active-filter-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -404,6 +556,8 @@ const sanitizeColumnOrder = (order) => {
 const createDefaultViewLayout = () => ({
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
   columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS },
+  sortConfig: { ...DEFAULT_SORT_CONFIG },
   density: DEFAULT_DENSITY,
 })
 
@@ -418,6 +572,8 @@ const sanitizeView = (view, fallbackId) => ({
   builtin: !!view?.builtin,
   columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  columnWidths: { ...DEFAULT_COLUMN_WIDTHS, ...(view?.columnWidths || {}) },
+  sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
   density: view?.density || DEFAULT_DENSITY,
 })
 
@@ -543,11 +699,13 @@ function MyCohorts() {
   // counter, a filter, or the "Completed & Exited" saved view.
   const [activeFilter, setActiveFilter] = useState(() => loadStoredActiveFilter())
 
-  // ─── Views (column visibility / order / density) ─────────────────────────
+  // ─── Views (column visibility / order / width / sort / density) ──────────
   const [viewsState, setViewsState] = useState(() => loadViewsState())
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
   const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
   const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths)
+  const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig)
   const [density, setDensity] = useState(() => initialActiveView.density)
 
   const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
@@ -557,10 +715,12 @@ function MyCohorts() {
   const [newViewDescription, setNewViewDescription] = useState("")
   const [editingViewMeta, setEditingViewMeta] = useState(null) // { id, name, description, builtin }
 
-  // Column drag-to-reorder state
+  // Column drag-to-reorder + resize state
   const [draggedColumn, setDraggedColumn] = useState(null)
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const [dragHintRect, setDragHintRect] = useState(null)
+  const resizingRef = useRef(null)
+  const [resizingColumn, setResizingColumn] = useState(null)
 
   const [rowMenu, setRowMenu] = useState(null) // { cohort, position }
   const [voucherTooltip, setVoucherTooltip] = useState(null) // { rect }
@@ -596,20 +756,20 @@ function MyCohorts() {
     fetchCohorts()
   }, [])
 
-  // Auto-save: any edit to columns/order/density writes straight back into
-  // the active view (and persists immediately) — no separate "unsaved
-  // changes" state to lose track of.
+  // Auto-save: any edit to columns/order/widths/sort/density writes straight
+  // back into the active view (and persists immediately) — no separate
+  // "unsaved changes" state to lose track of.
   useEffect(() => {
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId]
       if (!current) return prev
-      const updated = { ...current, columnVisibility, columnOrder, density }
+      const updated = { ...current, columnVisibility, columnOrder, columnWidths, sortConfig, density }
       const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
       persistViewsState(next)
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columnVisibility, columnOrder, density])
+  }, [columnVisibility, columnOrder, columnWidths, sortConfig, density])
 
   // activeFilter (which pipeline stage is selected) is a lightweight,
   // separate preference — not part of a "view" — same split as the SME table.
@@ -632,6 +792,8 @@ function MyCohorts() {
     })
     setColumnVisibility(target.columnVisibility)
     setColumnOrder(target.columnOrder)
+    setColumnWidths(target.columnWidths)
+    setSortConfig(target.sortConfig)
     setDensity(target.density)
   }
 
@@ -639,7 +801,11 @@ function MyCohorts() {
     const trimmedName = newViewName.trim()
     if (!trimmedName) return
     const id = generateViewId()
-    const newView = { id, name: trimmedName, description: newViewDescription.trim(), builtin: false, columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder], density }
+    const newView = {
+      id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
+      columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
+      columnWidths: { ...columnWidths }, sortConfig: { ...sortConfig }, density,
+    }
     setViewsState((prev) => {
       const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
       persistViewsState(next)
@@ -681,6 +847,8 @@ function MyCohorts() {
       const def = viewsState.views[BUILTIN_VIEW_ID]
       setColumnVisibility(def.columnVisibility)
       setColumnOrder(def.columnOrder)
+      setColumnWidths(def.columnWidths)
+      setSortConfig(def.sortConfig)
       setDensity(def.density)
     }
   }
@@ -689,6 +857,8 @@ function MyCohorts() {
     const layout = createDefaultViewLayout()
     setColumnVisibility(layout.columnVisibility)
     setColumnOrder(layout.columnOrder)
+    setColumnWidths(layout.columnWidths)
+    setSortConfig(layout.sortConfig)
     setDensity(layout.density)
   }
 
@@ -721,6 +891,65 @@ function MyCohorts() {
     setDragOverColumn(null)
   }
   const handleColumnDragEnd = () => { setDraggedColumn(null); setDragOverColumn(null) }
+
+  // ─── Widths + resize ──────────────────────────────────────────────────────
+  // widthOf is declared above startResize because startResize calls it — a
+  // const referenced before its initializer throws at render. It covers the
+  // reorderable columns *and* the three fixed ones, so every column in the
+  // table can be dragged wider.
+  const widthOf = useCallback(
+    (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    [columnWidths]
+  )
+
+  const startResize = (e, key) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = widthOf(key)
+    resizingRef.current = key
+    setResizingColumn(key)
+
+    const onMove = (ev) => {
+      const next = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
+      setColumnWidths((prev) => ({ ...prev, [key]: next }))
+    }
+    const onUp = () => {
+      resizingRef.current = null
+      setResizingColumn(null)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+
+    // Held on <body> so the cursor doesn't flicker back as the pointer
+    // leaves the 6px handle mid-drag, and so text can't be selected while
+    // resizing.
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
+
+  // Double-click a divider to put that column back to its default width.
+  const resetColumnWidth = (key) =>
+    setColumnWidths((prev) => ({
+      ...prev,
+      [key]: COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 140,
+    }))
+
+  const ColumnResizer = ({ colKey }) => (
+    <div
+      className="mc-resize"
+      onMouseDown={(e) => startResize(e, colKey)}
+      onDoubleClick={(e) => { e.stopPropagation(); resetColumnWidth(colKey) }}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation() }}
+      title="Drag to resize · double-click to reset"
+      style={{ background: resizingColumn === colKey ? "rgba(255,255,255,0.35)" : undefined }}
+    />
+  )
 
   const fetchCohorts = async () => {
     try {
@@ -936,19 +1165,28 @@ function MyCohorts() {
     }
   }
 
+  // Both of these now go through enterSMEView, so the sidebar receives the
+  // identical, complete flag set either way. "View Documents" previously
+  // omitted viewOrigin, which left the sidebar rendering the catalyst menu
+  // (Documents → /support-documents) while the browser sat on /my-documents
+  // — so no Documents tab appeared to be selected.
   const handleViewGrowthSuite = (cohort) => {
-    sessionStorage.setItem('viewingSMEId', cohort.smeId)
-    sessionStorage.setItem('viewingSMEName', cohort.smeName)
-    sessionStorage.setItem('investorViewMode', 'true')
-    sessionStorage.setItem('viewOrigin', 'catalyst')
+    enterSMEView(cohort)
     window.location.href = '/overall-company-health'
   }
 
   const handleViewDocuments = (cohort) => {
-    sessionStorage.setItem('viewingSMEId', cohort.smeId)
-    sessionStorage.setItem('viewingSMEName', cohort.smeName)
-    sessionStorage.setItem('investorViewMode', 'true')
+    enterSMEView(cohort)
     window.location.href = '/my-documents'
+  }
+
+  // Mirrors SupportSMETable's handleViewBigScorePage: opens the SME's own
+  // /dashboard restricted to the BIG Score tab. onlyBigScore is the one entry
+  // point that sets that restriction — every other entry point above clears
+  // it, so it can't leak into a later Growth Suite or Documents visit.
+  const handleViewBigScore = (cohort) => {
+    enterSMEView(cohort, { onlyBigScore: true })
+    window.location.href = '/dashboard'
   }
 
   const handleViewDetails = (cohort) => {
@@ -1240,14 +1478,30 @@ function MyCohorts() {
       })
     }
 
-    return [...result].sort((a, b) => {
-      const rankDiff = cohortSortRank(a) - cohortSortRank(b)
-      if (rankDiff !== 0) return rankDiff
-      return a.smeName.localeCompare(b.smeName)
-    })
-  }, [visibleCohorts, activeFilter, localFilters])
+    const sorted = [...result]
+    if (!sortConfig?.key || sortConfig.key === "attentionThenName") {
+      sorted.sort((a, b) => {
+        const rankDiff = cohortSortRank(a) - cohortSortRank(b)
+        if (rankDiff !== 0) return rankDiff
+        return a.smeName.localeCompare(b.smeName)
+      })
+    } else {
+      const accessor = SORT_ACCESSORS[sortConfig.key] || ((c) => (c[sortConfig.key] ?? "").toString().toLowerCase())
+      sorted.sort((a, b) => {
+        const av = accessor(a)
+        const bv = accessor(b)
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av
+        }
+        const cmp = (av ?? "").toString().localeCompare((bv ?? "").toString())
+        return sortConfig.direction === "asc" ? cmp : -cmp
+      })
+    }
+    return sorted
+  }, [visibleCohorts, activeFilter, localFilters, sortConfig])
 
   const rowPad = density === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"
+  const headerPad = density === "compact" ? "0.5rem 0.6rem" : "0.7rem 0.6rem"
 
   const openRowMenu = (cohort, event) => {
     event.stopPropagation()
@@ -1277,6 +1531,32 @@ function MyCohorts() {
   }
   const closeHeaderFilter = () => setHeaderFilterOpen(null)
 
+  // asc → desc → back to the default "needs attention first" triage order.
+  const toggleSort = (key, event) => {
+    event.stopPropagation()
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" }
+      if (prev.direction === "asc") return { key, direction: "desc" }
+      return { ...DEFAULT_SORT_CONFIG }
+    })
+  }
+
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    )
+  }
+
   // Small icon button placed on a column header; lights up when that
   // column currently has an active filter. Fixed-size slot so it lands in
   // the exact same position on every header regardless of label length.
@@ -1290,6 +1570,24 @@ function MyCohorts() {
       <SlidersHorizontal size={11} />
     </button>
   )
+
+  const getFilterActive = (filterType) => {
+    switch (filterType) {
+      case "supportValue": return localFilters.hasAllocation !== "any"
+      case "startDate": return !!(localFilters.startDateFrom || localFilters.startDateTo)
+      case "daysInProgramme": return localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650
+      case "appliedDate": return !!(localFilters.appliedDateFrom || localFilters.appliedDateTo)
+      case "teamSize": return localFilters.teamSize.length > 0
+      case "sector": return localFilters.sector.length > 0
+      case "location": return localFilters.location.length > 0
+      case "equity": return localFilters.equity.length > 0
+      case "guarantees": return !!localFilters.guarantees.trim()
+      case "services": return !!localFilters.services.trim()
+      case "status": return localFilters.status.length > 0
+      case "progress": return localFilters.progress.length > 0
+      default: return false
+    }
+  }
 
   // Spec §6: one contextual primary action instead of always "View
   // Progress" — varies with what the record actually needs next, using only
@@ -1321,36 +1619,42 @@ function MyCohorts() {
   const allVisibleSelected = filteredCohorts.length > 0 && filteredCohorts.every((c) => selectedRows.has(c.id))
   const visibleColumnKeys = columnOrder.filter((key) => columnVisibility[key])
 
+  const selectWidth = widthOf(SELECT_KEY)
+  const nameWidth = widthOf(NAME_KEY)
+  const actionWidth = widthOf(ACTION_KEY)
+  const totalWidth = selectWidth + nameWidth + actionWidth + visibleColumnKeys.reduce((sum, key) => sum + widthOf(key), 0)
+
   // Data-driven cell renderer for every optional column — keeps header and
   // body rendering in sync with columnOrder/columnVisibility without a
   // long, error-prone sequence of near-duplicate JSX blocks.
   const renderCell = (key, cohort, days, healthColor, healthLabel) => {
+    const cellCls = `${rowPad} border-r border-[#e6d7c3] align-top`
     switch (key) {
       case "supportValue":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}><span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span></td>
+        return <td key={key} className={cellCls}><span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span></td>
       case "startDate":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}><span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span></td>
       case "daysInProgramme":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}><span className="text-[#5d4037]">{days === null ? "Not available" : `${days} days`}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037]">{days === null ? "Not available" : `${days} days`}</span></td>
       case "appliedDate":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}><span className="text-[#5d4037]">{cohort.applicationDate}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037]">{cohort.applicationDate}</span></td>
       case "teamSize":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
       case "sector":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.sector}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037] break-words">{cohort.sector}</span></td>
       case "location":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.location}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037] break-words">{cohort.location}</span></td>
       case "equityOffered":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.dealType}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037] break-words">{cohort.dealType}</span></td>
       case "guarantees":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.guarantees}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037] line-clamp-2 break-words">{cohort.guarantees}</span></td>
       case "servicesRequired":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.servicesRequired}</span></td>
+        return <td key={key} className={cellCls}><span className="text-[#5d4037] line-clamp-2 break-words">{cohort.servicesRequired}</span></td>
       case "status": {
         const meta = getStatusMeta(cohort.currentStatus)
         const flagged = meta.group === "active" && needsAttention(cohort)
         return (
-          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}>
+          <td key={key} className={cellCls}>
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap" style={{ backgroundColor: meta.color + "20", color: meta.color }}>
                 {meta.label}
@@ -1366,7 +1670,7 @@ function MyCohorts() {
       }
       case "progress":
         return (
-          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '110px' }}>
+          <td key={key} className={cellCls}>
             <button onClick={(e) => openHealthPopover(cohort, e)} className="px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap" style={{ backgroundColor: healthColor + "20", color: healthColor }}>
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: healthColor }} />
               {healthLabel}
@@ -1411,7 +1715,7 @@ function MyCohorts() {
 
         <CohortStagePipeline counts={counts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
 
-        {/* Toolbar: Customize Table (Views + Hide/Unhide + Density + Reset), filter count */}
+        {/* Toolbar: Customize Table (Views + Hide/Unhide + Density + Reset), filter/sort chips */}
         <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
@@ -1424,6 +1728,17 @@ function MyCohorts() {
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
                   <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
                 </span>
+              )}
+              {sortConfig?.key && sortConfig.key !== "attentionThenName" && (
+                <button
+                  onClick={() => setSortConfig({ ...DEFAULT_SORT_CONFIG })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#e6d7c3]"
+                  title="Back to the default triage order (attention first)"
+                >
+                  {sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                  Sorted by {sortConfig.key === NAME_KEY ? "Business" : COLUMN_DEFS[sortConfig.key]?.label || sortConfig.key}
+                  <X size={11} />
+                </button>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -1514,12 +1829,15 @@ function MyCohorts() {
                         {/* ─── Hide/Unhide ───────────────────────────────── */}
                         <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
                         <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                          <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                          <GripVertical size={12} className="flex-shrink-0" /> Drag a header to reorder, drag its right edge to resize. Every column resizes, including the pinned ones.
                         </p>
-                        <label className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
-                          <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
-                          <span className="text-sm text-[#4a352f]">Business</span>
-                        </label>
+                        {[{ key: 'select', label: 'Selection checkbox', note: 'Pinned' }, { key: 'business', label: 'Business', note: 'Pinned' }, { key: 'action', label: 'Action', note: 'Always last' }].map(({ key, label, note }) => (
+                          <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                            <input type="checkbox" checked readOnly disabled className="rounded border-[#c8b6a6]" />
+                            <span className="text-sm text-[#4a352f] flex-1">{label}</span>
+                            <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">{note}</span>
+                          </label>
+                        ))}
                         <div className="border-t border-[#e6d7c3] my-2" />
                         {DEFAULT_COLUMN_ORDER.map((key) => (
                           <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
@@ -1578,24 +1896,83 @@ function MyCohorts() {
 
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
               <style>{`
+                /* No 'position: relative' here — it would override the sticky
+                   positioning on every <th>, so the header would scroll away
+                   while the pinned body cells stayed. Sticky is itself a
+                   positioned ancestor, so the grip and resize handle still
+                   anchor correctly. */
                 .mc-th { color: #faf7f2 !important; vertical-align: top !important; }
                 .mc-th-draggable { cursor: grab; }
                 .mc-th-draggable:active { cursor: grabbing; }
-                .mc-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+                .mc-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+                /* overflow-wrap: normal stops the browser splitting inside a
+                   word, which is what turns "Status" into "STA TUS" once a
+                   column is dragged narrow. */
+                .mc-th-label {
+                  flex: 1 1 auto; min-width: 0;
+                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                  overflow: hidden; white-space: normal;
+                  overflow-wrap: normal; word-break: normal; hyphens: none;
+                  line-height: 1.2; letter-spacing: 0.02em;
+                }
+                .mc-th-tools { display: flex; align-items: center; flex-shrink: 0; }
+                /* The drag grip leaves the flex flow and only appears on
+                   hover, buying every header ~14px more room for its label. */
+                .mc-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
+                .mc-th:hover .mc-th-grip { opacity: .45; }
+                .mc-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+                .mc-resize:hover { background: rgba(255,255,255,0.25); }
               `}</style>
-              <table className="border-collapse text-sm" style={{ tableLayout: 'auto' }}>
+              <table
+                className="text-sm"
+                style={{
+                  /* separate (not collapse) — collapsed borders get dropped by
+                     sticky cells, which made the pinned columns lose their
+                     edge and mispaint over their neighbour while scrolling. */
+                  borderCollapse: 'separate',
+                  borderSpacing: 0,
+                  tableLayout: 'fixed',
+                  width: totalWidth,
+                  minWidth: '100%',
+                }}
+              >
                 <thead>
-                  <tr className="bg-[#4a352f]">
-                    <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30 border-r border-[#e6d7c3]`} style={{ backgroundColor: '#4a352f', width: '40px' }}>
-                      <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center">
-                        {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </button>
-                    </th>
-                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '190px', maxWidth: '210px' }}>
-                      <div className="flex items-start gap-1 min-w-0">
-                        <span className="mc-th-label">Business</span>
-                        <FilterTrigger type="business" active={!!localFilters.name.trim()} />
+                  <tr>
+                    {/* Selection checkbox — pinned, resizable */}
+                    <th
+                      className="mc-th sticky top-0 left-0 z-30"
+                      style={{ backgroundColor: '#4a352f', width: selectWidth, padding: headerPad, borderBottom: '1px solid #e6d7c3', borderRight: '1px solid #e6d7c3' }}
+                    >
+                      <div className="mc-th-row justify-center">
+                        <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center" title="Select all visible rows">
+                          {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                        <HeaderInfoTooltip text={SELECT_TOOLTIP} />
                       </div>
+                      <ColumnResizer colKey={SELECT_KEY} />
+                    </th>
+
+                    {/* Business — pinned second, resizable */}
+                    <th
+                      className="mc-th text-left font-semibold text-xs uppercase tracking-wide sticky top-0 z-30"
+                      style={{
+                        backgroundColor: '#4a352f',
+                        left: selectWidth,
+                        width: nameWidth,
+                        padding: headerPad,
+                        borderBottom: '1px solid #e6d7c3',
+                        boxShadow: '2px 0 0 #e6d7c3',
+                      }}
+                    >
+                      <div className="mc-th-row">
+                        <span className="mc-th-label" title="Business">Business</span>
+                        <span className="mc-th-tools">
+                          <SortTrigger columnKey={NAME_KEY} />
+                          <FilterTrigger type="business" active={!!localFilters.name.trim()} />
+                          <HeaderInfoTooltip text={NAME_TOOLTIP} />
+                        </span>
+                      </div>
+                      <ColumnResizer colKey={NAME_KEY} />
                     </th>
 
                     {/* ─── Reorderable columns ────────────────────────────── */}
@@ -1606,43 +1983,47 @@ function MyCohorts() {
                       return (
                         <th
                           key={key}
-                          draggable
+                          draggable={!resizingColumn}
                           onDragStart={(e) => handleColumnDragStart(e, key)}
                           onDragOver={(e) => handleColumnDragOver(e, key)}
                           onDrop={(e) => handleColumnDrop(e, key)}
                           onDragEnd={handleColumnDragEnd}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`mc-th mc-th-draggable ${rowPad} text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${isDragging ? 'opacity-40' : ''}`}
-                          style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
+                          className={`mc-th mc-th-draggable text-left font-semibold text-xs uppercase tracking-wide sticky top-0 z-20 select-none transition-opacity ${isDragging ? 'opacity-40' : ''}`}
+                          style={{
+                            width: widthOf(key),
+                            padding: headerPad,
+                            backgroundColor: isDragOver ? '#5a423b' : '#4a352f',
+                            borderBottom: '1px solid #e6d7c3',
+                            borderRight: '1px solid #e6d7c3',
+                          }}
                         >
-                          <div className="flex items-start gap-1 min-w-0">
-                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <span className="mc-th-label">{col.label}</span>
-                            <FilterTrigger
-                              type={col.filterType}
-                              active={
-                                col.filterType === "supportValue" ? localFilters.hasAllocation !== "any" :
-                                col.filterType === "startDate" ? !!(localFilters.startDateFrom || localFilters.startDateTo) :
-                                col.filterType === "daysInProgramme" ? (localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650) :
-                                col.filterType === "appliedDate" ? !!(localFilters.appliedDateFrom || localFilters.appliedDateTo) :
-                                col.filterType === "teamSize" ? localFilters.teamSize.length > 0 :
-                                col.filterType === "sector" ? localFilters.sector.length > 0 :
-                                col.filterType === "location" ? localFilters.location.length > 0 :
-                                col.filterType === "equity" ? localFilters.equity.length > 0 :
-                                col.filterType === "guarantees" ? !!localFilters.guarantees.trim() :
-                                col.filterType === "services" ? !!localFilters.services.trim() :
-                                col.filterType === "status" ? localFilters.status.length > 0 :
-                                col.filterType === "progress" ? localFilters.progress.length > 0 :
-                                false
-                              }
-                            />
+                          <GripVertical size={11} className="mc-th-grip" />
+                          <div className="mc-th-row">
+                            <span className="mc-th-label" title={col.label}>{col.label}</span>
+                            <span className="mc-th-tools">
+                              <SortTrigger columnKey={key} />
+                              <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                              <HeaderInfoTooltip text={col.tooltip} />
+                            </span>
                           </div>
+                          <ColumnResizer colKey={key} />
                         </th>
                       )
                     })}
-                    <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                      Action
+
+                    {/* Action — scrolls horizontally with the table, holds
+                        position on vertical scroll. */}
+                    <th
+                      className="mc-th text-center font-semibold text-xs uppercase tracking-wide sticky top-0 z-20"
+                      style={{ backgroundColor: '#4a352f', width: actionWidth, padding: headerPad, borderBottom: '1px solid #e6d7c3' }}
+                    >
+                      <div className="mc-th-row justify-center">
+                        <span className="mc-th-label">Action</span>
+                        <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                      </div>
+                      <ColumnResizer colKey={ACTION_KEY} />
                     </th>
                   </tr>
                 </thead>
@@ -1653,43 +2034,47 @@ function MyCohorts() {
                     const days = daysInProgramme(cohort)
                     const healthColor = cohort.health?.overall ? HEALTH_COLORS[cohort.health.overall] : "#a89482"
                     const healthLabel = cohort.health?.overall ? HEALTH_LABELS[cohort.health.overall] : "Pending"
+                    const rowBg = hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff'
 
                     return (
                       <React.Fragment key={cohort.id}>
                         <tr
-                          className="last:border-b-0 border-b border-[#f0e6d9] transition-colors duration-200"
-                          style={{ backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : undefined }}
+                          className="transition-colors duration-200"
+                          style={{ backgroundColor: rowBg }}
                           onMouseEnter={() => setHoveredRowKey(cohort.id)}
                           onMouseLeave={() => setHoveredRowKey(null)}
                         >
-                          <td className={`${rowPad} border-r border-[#e6d7c3]`}>
+                          <td
+                            className={`${rowPad} sticky left-0 z-10 border-r border-b border-[#e6d7c3] align-top`}
+                            style={{ width: selectWidth, backgroundColor: rowBg }}
+                          >
                             <button onClick={() => toggleRowSelected(cohort.id)} className="flex items-center justify-center">
                               {selectedRows.has(cohort.id) ? <CheckSquare size={16} className="text-[#7d5a50]" /> : <Square size={16} className="text-[#c8b6a6]" />}
                             </button>
                           </td>
                           <td
-                            className={`${rowPad} sticky left-0 z-10 border-r border-b border-[#e6d7c3] transition-colors`}
-                            style={{ minWidth: '190px', maxWidth: '210px', backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
+                            className={`${rowPad} sticky z-10 border-b border-[#e6d7c3] align-top transition-colors`}
+                            style={{ left: selectWidth, width: nameWidth, backgroundColor: rowBg, boxShadow: '2px 0 0 #e6d7c3' }}
                           >
-                            <div className="flex items-start gap-1.5">
+                            <div className="flex items-start gap-1.5 min-w-0">
                               <button onClick={() => toggleExpandRow(cohort)} className="mt-0.5 text-[#a89482] hover:text-[#4a352f] flex-shrink-0">
                                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-[#4a352f]">
+                              <div className="min-w-0">
+                                <div className="flex items-start gap-1.5 flex-wrap">
+                                  <span className="font-semibold text-[#4a352f] break-words leading-snug">
                                     {cohort.smeName}
                                   </span>
                                   <button
                                     onClick={() => handleViewDetails(cohort)}
-                                    className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0"
+                                    className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
                                     aria-label={`View summary for ${cohort.smeName}`}
                                     title="View summary"
                                   >
                                     <Eye size={13} />
                                   </button>
                                 </div>
-                                <div className="text-xs text-[#7d5a50] mt-0.5">
+                                <div className="text-xs text-[#7d5a50] mt-0.5 break-words">
                                   {cohort.sector} · {cohort.location}
                                 </div>
                               </div>
@@ -1698,18 +2083,19 @@ function MyCohorts() {
 
                           {visibleColumnKeys.map((key) => renderCell(key, cohort, days, healthColor, healthLabel))}
 
-                          <td className={`${rowPad} text-center`} style={{ minWidth: '170px' }}>
+                          <td className={`${rowPad} text-center border-b border-[#e6d7c3] align-top`} style={{ width: actionWidth, backgroundColor: rowBg }}>
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => primaryAction.handler(cohort)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:shadow-md whitespace-nowrap"
-                                style={{ backgroundColor: "#a67c52" }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:shadow-md truncate"
+                                style={{ backgroundColor: "#a67c52", maxWidth: `${Math.max(80, actionWidth - 80)}px` }}
+                                title={primaryAction.label}
                               >
                                 {primaryAction.label}
                               </button>
                               <button
                                 onClick={(e) => openRowMenu(cohort, e)}
-                                className="p-2 rounded-lg border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] transition-all"
+                                className="p-2 rounded-lg border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] transition-all flex-shrink-0"
                                 aria-label="More actions"
                               >
                                 <MoreVertical size={16} />
@@ -1721,9 +2107,9 @@ function MyCohorts() {
                         {/* Expandable row (spec §8): only new info, nothing
                             already visible in the collapsed row. */}
                         {isExpanded && (
-                          <tr className="bg-[#faf7f2] border-b border-[#f0e6d9]">
-                            <td></td>
-                            <td colSpan={visibleColumnKeys.length + 2} className="px-4 py-4">
+                          <tr className="bg-[#faf7f2]">
+                            <td className="border-b border-[#e6d7c3]" style={{ backgroundColor: '#faf7f2' }}></td>
+                            <td colSpan={visibleColumnKeys.length + 2} className="px-4 py-4 border-b border-[#e6d7c3]">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <p className="text-xs font-semibold text-[#4a352f] mb-1 uppercase tracking-wide">Description</p>
@@ -1787,8 +2173,8 @@ function MyCohorts() {
       {/* ─── Drag-to-reorder hint tooltip ──────────────────────────────────── */}
       {dragHintRect && !draggedColumn && (
         <Portal>
-          <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5" style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200), width: '190px' }}>
-            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+          <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5" style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 210), width: '200px' }}>
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder · edge to resize
           </div>
         </Portal>
       )}
@@ -2055,6 +2441,12 @@ function MyCohorts() {
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
               <TrendingUp size={12} /> Open Growth Suite
+            </button>
+            <button
+              onClick={() => { handleViewBigScore(rowMenu.cohort); setRowMenu(null) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <BarChart3 size={12} /> Open BIG Score Page
             </button>
             <button
               onClick={() => { handleViewDocuments(rowMenu.cohort); setRowMenu(null) }}

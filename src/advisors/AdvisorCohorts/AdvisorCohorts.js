@@ -8,9 +8,9 @@ import { db, auth } from "../../firebaseConfig"
 import {
   Trophy, TrendingUp, Building, DollarSign, Calendar, Eye, Wrench,
   RefreshCw, X, BarChart3, Briefcase, Package, ChevronDown, ChevronUp,
-  AlertCircle, Info, GraduationCap, MoreVertical,
+  AlertCircle, Info, GraduationCap, MoreVertical, FileText, Layers, TrendingDown,
   CheckCircle, SlidersHorizontal, LayoutGrid, Settings, RotateCcw, GripVertical,
-  Square, CheckSquare, ArrowUpDown, Download, Archive, StickyNote, Plus, Trash2,
+  Square, CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, Download, Archive, StickyNote, Plus, Trash2,
   Star, ExternalLink
 } from "lucide-react"
 import { getActiveStages, mapStatusToStageId, PIPELINE_REFRESH_EVENT } from "../AdvisorMatches/advisorStageConfig"
@@ -60,13 +60,49 @@ const formatDate = (dateValue, { fallback = "Not recorded" } = {}) => {
   })
 }
 
+// Sorting needs the value behind the label, not the label itself — otherwise
+// "R 900,000" sorts above "R 1,200,000" and "Mar 2024" above "Nov 2023".
+const toDateSafe = (value) => {
+  if (!value) return null
+  const d = typeof value === "object" && typeof value.toDate === "function" ? value.toDate() : new Date(value)
+  return isNaN(d.getTime()) ? null : d
+}
+const toAmount = (value) => {
+  if (value == null) return -1
+  const n = parseFloat(value.toString().replace(/[^0-9.]/g, ""))
+  return isNaN(n) ? -1 : n
+}
+
+// ─── Impersonation session flags ────────────────────────────────────────────
+// FIX: handleViewGrowthSuite used to write `advisorViewMode`, but nothing reads
+// that key — MyDocuments, OverallCompanyHealth and SMESidebar all check
+// `investorViewMode`. The result was that "Deep Dive" navigated to the SME's
+// Growth Suite as *yourself*: your own data, the full SME menu, and no banner
+// offering a way back. Every entry point now goes through this one helper, so
+// the flag set can't diverge again.
+//
+// viewOnlyBigScore is written (or removed) on every entry, never left behind —
+// a stale "true" from an earlier BIG Score visit would otherwise narrow the
+// sidebar on a later Documents or Growth Suite visit.
+const enterSMEView = (cohort, { onlyBigScore = false } = {}) => {
+  if (typeof window === "undefined") return
+  sessionStorage.setItem("viewingSMEId", cohort.smeId)
+  sessionStorage.setItem("viewingSMEName", cohort.smeName)
+  sessionStorage.setItem("investorViewMode", "true")
+  sessionStorage.setItem("viewOrigin", "advisor")
+  if (onlyBigScore) sessionStorage.setItem("viewOnlyBigScore", "true")
+  else sessionStorage.removeItem("viewOnlyBigScore")
+}
+
 // ─── Status vocabulary ──────────────────────────────────────────────────────
 // These are the statuses this page owns. A row that has been moved to one of
 // them here must keep showing up on the next fetch, which is why the query
 // below matches on these *as well as* on the pipeline's success stages.
 const STATUS_META = {
+  "Onboarding": { label: "Onboarding", color: "#a67c52", group: "onboarding" },
   "Active Advisory": { label: "Active Advisory", color: "#4caf50", group: "active" },
   "Completed Successfully": { label: "Completed", color: "#2196f3", group: "completed" },
+  "Exited": { label: "Exited", color: "#9e9e9e", group: "exited" },
   "Under Review": { label: "Under Review", color: "#ff9800", group: "active" },
 }
 const PAGE_MANAGED_STATUSES = new Set(Object.keys(STATUS_META))
@@ -90,6 +126,12 @@ const getRatingLabel = (rating) => {
   if (score >= 4.0) return "Good"
   if (score >= 3.5) return "Satisfactory"
   return "Needs Improvement"
+}
+
+const ratingToNumber = (rating) => {
+  if (!rating) return -1
+  const n = Number.parseFloat(rating.toString().split("/")[0])
+  return isNaN(n) ? -1 : n
 }
 
 // ─── Portal + tooltip helpers ──────────────────────────────────────────────
@@ -131,8 +173,10 @@ const HeaderInfoTooltip = ({ text }) => {
 
 // ─── Stage pipeline ─────────────────────────────────────────────────────────
 const ADVISOR_STAGE_CARDS = [
+  { key: "onboarding", label: "Onboarding", icon: Layers, note: true, noteText: "Engagements that reached a successful stage in your pipeline but haven't been started here yet. Set a status from the row's More menu to move one on." },
   { key: "active", label: "Active Engagements", icon: TrendingUp, note: true, noteText: "Businesses you're currently providing advisory services to." },
-  { key: "completed", label: "Completed", icon: GraduationCap, note: true, noteText: "Advisory engagements that have been successfully completed." },
+  { key: "completed", label: "Completed", icon: GraduationCap, note: true, noteText: "Advisory engagements that ran their course and were completed successfully." },
+  { key: "exited", label: "Exited", icon: TrendingDown, note: true, noteText: "Engagements that ended before completing — withdrawn, cancelled, or otherwise wound down early." },
 ]
 
 const AdvisorStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
@@ -171,7 +215,7 @@ const AdvisorStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
                 isSelected ? "shadow-lg -translate-y-0.5" : "hover:-translate-y-0.5 shadow-sm hover:shadow-md"
               }`}
               style={{
-                width: "180px",
+                width: "168px",
                 background: "linear-gradient(135deg, #4a352f 0%, #241a14 100%)",
                 border: `2px solid ${isSelected ? "#d9b98a" : "rgba(255,255,255,0.12)"}`,
               }}
@@ -205,15 +249,21 @@ const AdvisorStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
 // `value` returns exactly what the cell displays. The header filter builds its
 // chip list from that same function, so what you filter on is always what you
 // can see in the column — no free-text search, no values that aren't there.
+//
+// `sortValue` is optional and only exists where the displayed text sorts
+// wrongly on its own: money, dates and ratings all need the number behind the
+// label. Columns without one sort alphabetically on `value`.
 const COLUMN_DEFS = {
   compensation: {
     label: "Compensation", minWidth: "130px",
     value: (c) => formatCurrency(c.dealAmount),
+    sortValue: (c) => toAmount(c.dealAmount),
     tooltip: "How you're paid on this engagement — retainer, success fee, equity share, and so on.",
   },
   startDate: {
     label: "Start Date", minWidth: "120px",
     value: (c) => formatDate(c.completionDate),
+    sortValue: (c) => toDateSafe(c.completionDate)?.getTime() ?? -1,
     tooltip: "When this advisory engagement began.",
   },
   sector: {
@@ -229,16 +279,18 @@ const COLUMN_DEFS = {
   teamSize: {
     label: "Team Size", minWidth: "88px",
     value: (c) => c.teamSize,
+    sortValue: (c) => toAmount(c.teamSize),
     tooltip: "How many people the business employs.",
   },
   status: {
     label: "Status", minWidth: "130px",
     value: (c) => getStatusMeta(c.currentStatus).label,
-    tooltip: "Whether the engagement is still running or has been completed. Change it from the row's More menu.",
+    tooltip: "Where the engagement sits: Onboarding, Active Advisory, Completed, or Exited. Change it from the row's More menu.",
   },
   rating: {
     label: "Performance", minWidth: "110px",
     value: (c) => c.performanceRating,
+    sortValue: (c) => ratingToNumber(c.performanceRating),
     tooltip: "Your performance rating for this engagement, out of 5.",
   },
   advisoryType: {
@@ -255,6 +307,8 @@ const NAME_COLUMN = {
   tooltip: "The business you're advising. Click the eye for a summary, or the chevron to open notes.",
 }
 
+const ACTION_TOOLTIP = "Deep dive into the business's growth data, or open the More menu for its BIG Score page, documents, notes and status changes."
+
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = {
   compensation: true, startDate: true, status: true, rating: true,
@@ -262,13 +316,25 @@ const DEFAULT_COLUMN_VISIBILITY = {
 }
 const DEFAULT_DENSITY = "comfortable"
 
+// The default isn't a column sort — it's a triage order: running engagements
+// first, completed ones after, ties alphabetical. Cycling a column's arrow
+// goes asc → desc → back to this.
+const DEFAULT_SORT_CONFIG = { key: "stageThenName", direction: "desc" }
+// Onboarding first (it's the group waiting on you), then running engagements,
+// then the two terminal groups — exited last so wound-down work doesn't sit at
+// the top of an operational list.
+const STAGE_SORT_RANK = { onboarding: 0, active: 1, completed: 2, exited: 3 }
+const engagementSortRank = (cohort) => STAGE_SORT_RANK[getStatusMeta(cohort.currentStatus).group] ?? 1
+
 // The checkbox column is pinned at the very left; the Business column pins
 // immediately after it, so this offset has to match its rendered width exactly.
 const SELECT_COL_WIDTH = 44
+const SELECT_TOOLTIP = "Select rows to export them or change their status in bulk. The header checkbox selects everything currently visible after filtering."
 
 // ─── Custom Views ──────────────────────────────────────────────────────────
 const BUILTIN_VIEW_ID = "__default__"
-const VIEWS_STORAGE_KEY = "advisor-cohorts-views-v1"
+// v2: views now carry a sort config, so a v1 view would leave it undefined.
+const VIEWS_STORAGE_KEY = "advisor-cohorts-views-v2"
 const ACTIVE_FILTER_STORAGE_KEY = "advisor-cohorts-active-filter-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -284,6 +350,7 @@ const createDefaultViewLayout = () => ({
   columnOrder: [...DEFAULT_COLUMN_ORDER],
   density: DEFAULT_DENSITY,
   columnWidths: {},
+  sortConfig: { ...DEFAULT_SORT_CONFIG },
 })
 
 const createBuiltinDefaultView = () => ({
@@ -300,6 +367,7 @@ const sanitizeView = (view, fallbackId) => ({
   density: view?.density || DEFAULT_DENSITY,
   // Views saved before resizing existed simply come back with no widths.
   columnWidths: view?.columnWidths || {},
+  sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
 })
 
 const loadViewsState = () => {
@@ -460,13 +528,14 @@ function AdvisorCohorts() {
   const [columnFilters, setColumnFilters] = useState({})
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null) // { key, rect }
 
-  // ─── Views (column visibility / order / density / widths) ─────────────────
+  // ─── Views (column visibility / order / density / widths / sort) ──────────
   const [viewsState, setViewsState] = useState(() => loadViewsState())
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
   const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
   const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
   const [density, setDensity] = useState(() => initialActiveView.density)
   const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths || {})
+  const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig || { ...DEFAULT_SORT_CONFIG })
 
   const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
   const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
@@ -487,12 +556,12 @@ function AdvisorCohorts() {
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId]
       if (!current) return prev
-      const updated = { ...current, columnVisibility, columnOrder, density, columnWidths }
+      const updated = { ...current, columnVisibility, columnOrder, density, columnWidths, sortConfig }
       const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
       persistViewsState(next)
       return next
     })
-  }, [columnVisibility, columnOrder, density, columnWidths])
+  }, [columnVisibility, columnOrder, density, columnWidths, sortConfig])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -603,9 +672,12 @@ function AdvisorCohorts() {
               location: formatLabel(data.smeLocation) || "Not specified",
               teamSize: data.teamSize || "Not specified",
               description: data.serviceDelivered || "Advisory services provided",
-              // A row that's only just arrived from the pipeline starts as
-              // Active Advisory; one already managed here keeps its status.
-              currentStatus: isManagedHere ? rawStatus : "Active Advisory",
+              // A row that's only just arrived from the pipeline has never been
+              // triaged here, so it starts in Onboarding; one already managed
+              // here keeps whatever status was set. This is the only honest
+              // signal available for "started or not" — there's no separate
+              // kickoff field on the record.
+              currentStatus: isManagedHere ? rawStatus : "Onboarding",
               pipelineStatus: rawStatus,
               profileData: profileData,
               lastUpdated: new Date().toISOString(),
@@ -737,14 +809,21 @@ function AdvisorCohorts() {
   const submitStatusChange = async () => {
     if (!statusModal?.targetGroup) return
 
-    const newStatus = statusModal.targetGroup === "completed" ? "Completed Successfully" : "Active Advisory"
+    // targetGroup is a group name; this maps it back to the stored status.
+    const STATUS_FOR_GROUP = {
+      onboarding: "Onboarding",
+      active: "Active Advisory",
+      completed: "Completed Successfully",
+      exited: "Exited",
+    }
+    const newStatus = STATUS_FOR_GROUP[statusModal.targetGroup] || "Active Advisory"
     const run = async () => {
       try {
         for (const cohort of statusModal.cohorts) {
           const prevMeta = getStatusMeta(cohort.currentStatus)
           const historyEntry = {
             previousStatus: prevMeta.label,
-            newStatus: statusModal.targetGroup === "completed" ? "Completed" : "Active Advisory",
+            newStatus: getStatusMeta(newStatus).label,
             changedAt: new Date().toISOString(),
             reason: statusModal.reason || null,
             note: statusModal.note || null,
@@ -763,11 +842,14 @@ function AdvisorCohorts() {
       }
     }
 
-    if (statusModal.targetGroup === "completed") {
+    // Both terminal groups close an engagement out, so both confirm first.
+    const isTerminal = statusModal.targetGroup === "completed" || statusModal.targetGroup === "exited"
+    if (isTerminal) {
+      const label = getStatusMeta(newStatus).label
       setBulkConfirm({
         message: statusModal.cohorts.length > 1
-          ? `Mark ${statusModal.cohorts.length} engagements as Completed?`
-          : `Mark ${statusModal.cohorts[0].smeName} as Completed?`,
+          ? `Mark ${statusModal.cohorts.length} engagements as ${label}?`
+          : `Mark ${statusModal.cohorts[0].smeName} as ${label}?`,
         onConfirm: run,
       })
     } else {
@@ -826,6 +908,7 @@ function AdvisorCohorts() {
     setColumnOrder(target.columnOrder)
     setDensity(target.density)
     setColumnWidths(target.columnWidths || {})
+    setSortConfig(target.sortConfig || { ...DEFAULT_SORT_CONFIG })
   }
 
   const createNewView = () => {
@@ -835,7 +918,7 @@ function AdvisorCohorts() {
     const newView = {
       id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
       columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
-      density, columnWidths: { ...columnWidths },
+      density, columnWidths: { ...columnWidths }, sortConfig: { ...sortConfig },
     }
     setViewsState((prev) => {
       const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
@@ -880,6 +963,7 @@ function AdvisorCohorts() {
       setColumnOrder(def.columnOrder)
       setDensity(def.density)
       setColumnWidths(def.columnWidths || {})
+      setSortConfig(def.sortConfig || { ...DEFAULT_SORT_CONFIG })
     }
   }
 
@@ -889,6 +973,7 @@ function AdvisorCohorts() {
     setColumnOrder(layout.columnOrder)
     setDensity(layout.density)
     setColumnWidths(layout.columnWidths || {})
+    setSortConfig(layout.sortConfig)
   }
 
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -924,7 +1009,7 @@ function AdvisorCohorts() {
   // ─── Column resizing ─────────────────────────────────────────────────────
   // Drag the divider on a header's right edge to resize; double-click it to
   // snap that column back to auto width. Widths live in the active view
-  // alongside visibility/order/density, so they persist and travel with it.
+  // alongside visibility/order/sort/density, so they persist and travel with it.
   const widthStyle = (key, fallbackMin, fallbackMax) => {
     const w = columnWidths[key]
     if (w) return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }
@@ -974,11 +1059,38 @@ function AdvisorCohorts() {
     />
   )
 
+  // ─── Sorting ─────────────────────────────────────────────────────────────
+  // asc → desc → back to the default "active engagements first" order.
+  const toggleSort = (key, event) => {
+    event.stopPropagation()
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" }
+      if (prev.direction === "asc") return { key, direction: "desc" }
+      return { ...DEFAULT_SORT_CONFIG }
+    })
+  }
+
+  const SortTrigger = ({ colKey }) => {
+    const isActive = sortConfig?.key === colKey
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(colKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    )
+  }
+
   const openRowMenu = (cohort, event) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
     const menuWidth = 230
-    const menuHeight = 330 // grew when "Open BIG Score Page" was added
+    const menuHeight = 370 // grew again when "View Documents" was added
     let x = rect.right - menuWidth
     let y = rect.bottom + 6
     if (x < 12) x = 12
@@ -986,24 +1098,23 @@ function AdvisorCohorts() {
     setRowMenu({ cohort, position: { x, y } })
   }
 
+  // All three entry points below share enterSMEView, so the destination pages
+  // and the SME sidebar always receive the same, complete flag set.
   const handleViewGrowthSuite = (cohort) => {
-    sessionStorage.setItem('viewingSMEId', cohort.smeId)
-    sessionStorage.setItem('viewingSMEName', cohort.smeName)
-    sessionStorage.setItem('advisorViewMode', 'true')
-    sessionStorage.setItem('viewOrigin', 'advisor')
+    enterSMEView(cohort)
     window.location.href = '/overall-company-health'
   }
 
   // Opens the business's own dashboard, locked to the BIG Score tab, with a
-  // Back control to return here. Same session-storage "investor view" contract
-  // the catalyst and advisor pipeline tables use.
+  // Back control to return here.
   const handleViewBigScorePage = (cohort) => {
-    sessionStorage.setItem('viewingSMEId', cohort.smeId)
-    sessionStorage.setItem('viewingSMEName', cohort.smeName)
-    sessionStorage.setItem('investorViewMode', 'true')
-    sessionStorage.setItem('viewOrigin', 'advisor')
-    sessionStorage.setItem('viewOnlyBigScore', 'true')
+    enterSMEView(cohort, { onlyBigScore: true })
     window.location.href = '/dashboard'
+  }
+
+  const handleViewDocuments = (cohort) => {
+    enterSMEView(cohort)
+    window.location.href = '/my-documents'
   }
 
   const handleViewDetails = (cohort) => {
@@ -1014,23 +1125,37 @@ function AdvisorCohorts() {
   // ─── Get primary action ──────────────────────────────────────────────────
   const getPrimaryAction = (cohort) => {
     const meta = getStatusMeta(cohort.currentStatus)
-    if (meta.group === "completed") return { label: "View Record", handler: handleViewGrowthSuite }
+    if (meta.group === "onboarding") return { label: "Begin Onboarding", handler: handleViewGrowthSuite }
+    if (meta.group === "completed" || meta.group === "exited") return { label: "View Record", handler: handleViewGrowthSuite }
     return { label: "Deep Dive", handler: handleViewGrowthSuite }
   }
 
   // ─── Derived: counters ──────────────────────────────────────────────────
   const visibleCohorts = useMemo(() => cohorts.filter((c) => showArchived || !c.archived), [cohorts, showArchived])
 
+  const countByGroup = (group) => visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === group).length
   const counts = {
     total: visibleCohorts.length,
-    active: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active").length,
-    completed: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "completed").length,
+    onboarding: countByGroup("onboarding"),
+    active: countByGroup("active"),
+    completed: countByGroup("completed"),
+    exited: countByGroup("exited"),
   }
 
   // Chip options come from the rows themselves, using the same accessor the
   // cell renders with — so the list is always exactly what's in the column.
   const getColumnValue = (key, cohort) =>
     (key === NAME_COLUMN_KEY ? NAME_COLUMN.value(cohort) : COLUMN_DEFS[key]?.value(cohort)) ?? ""
+
+  // Sorting prefers sortValue where a column defines one, and falls back to the
+  // same text the cell shows otherwise.
+  const getSortValue = (key, cohort) => {
+    if (key === NAME_COLUMN_KEY) return (NAME_COLUMN.value(cohort) || "").toString().toLowerCase()
+    const col = COLUMN_DEFS[key]
+    if (!col) return ""
+    if (col.sortValue) return col.sortValue(cohort)
+    return (col.value(cohort) || "").toString().toLowerCase()
+  }
 
   const filterOptions = useMemo(() => {
     const keys = [NAME_COLUMN_KEY, ...Object.keys(COLUMN_DEFS)]
@@ -1062,18 +1187,36 @@ function AdvisorCohorts() {
 
   const filteredCohorts = useMemo(() => {
     let result = visibleCohorts
-    if (activeFilter === "active") {
-      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "active")
-    } else if (activeFilter === "completed") {
-      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "completed")
+    // Card keys are group names, so one lookup covers every card.
+    if (activeFilter !== "all") {
+      result = result.filter((c) => getStatusMeta(c.currentStatus).group === activeFilter)
     }
     Object.entries(columnFilters).forEach(([key, selected]) => {
       if (!selected?.length) return
       result = result.filter((c) => selected.includes((getColumnValue(key, c) || "").toString().trim()))
     })
-    return result
+
+    const sorted = [...result]
+    if (!sortConfig?.key || sortConfig.key === "stageThenName") {
+      sorted.sort((a, b) => {
+        const rankDiff = engagementSortRank(a) - engagementSortRank(b)
+        if (rankDiff !== 0) return rankDiff
+        return a.smeName.localeCompare(b.smeName)
+      })
+    } else {
+      sorted.sort((a, b) => {
+        const av = getSortValue(sortConfig.key, a)
+        const bv = getSortValue(sortConfig.key, b)
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av
+        }
+        const cmp = (av ?? "").toString().localeCompare((bv ?? "").toString())
+        return sortConfig.direction === "asc" ? cmp : -cmp
+      })
+    }
+    return sorted
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleCohorts, activeFilter, columnFilters])
+  }, [visibleCohorts, activeFilter, columnFilters, sortConfig])
 
   const rowPad = density === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"
 
@@ -1201,6 +1344,17 @@ function AdvisorCohorts() {
                   title="Clear all column filters"
                 >
                   <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active — clear
+                </button>
+              )}
+              {sortConfig?.key && sortConfig.key !== "stageThenName" && (
+                <button
+                  onClick={() => setSortConfig({ ...DEFAULT_SORT_CONFIG })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#e6d7c3]"
+                  title="Back to the default order (onboarding first, exited last)"
+                >
+                  {sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                  Sorted by {sortConfig.key === NAME_COLUMN_KEY ? NAME_COLUMN.label : COLUMN_DEFS[sortConfig.key]?.label || sortConfig.key}
+                  <X size={11} />
                 </button>
               )}
             </div>
@@ -1357,7 +1511,9 @@ function AdvisorCohorts() {
                 .mc-th { color: #faf7f2 !important; vertical-align: top !important; }
                 .mc-th-draggable { cursor: grab; }
                 .mc-th-draggable:active { cursor: grabbing; }
-                .mc-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+                .mc-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+                .mc-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: normal; word-break: normal; line-height: 1.2; }
+                .mc-th-tools { display: flex; align-items: center; flex-shrink: 0; }
                 /* An explicit header width only holds if the cells below can
                    shrink, so long values wrap rather than forcing the column
                    wider than the width that was dragged. */
@@ -1368,18 +1524,24 @@ function AdvisorCohorts() {
                 <thead>
                   <tr className="bg-[#4a352f]">
                     <th className="mc-th py-3 px-2 text-center sticky top-0 left-0 z-30 border-r border-[#e6d7c3]" style={{ backgroundColor: '#4a352f', width: SELECT_COL_WIDTH, minWidth: SELECT_COL_WIDTH, maxWidth: SELECT_COL_WIDTH }}>
-                      <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center mx-auto" title="Select all rows">
-                        {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </button>
+                      <div className="mc-th-row justify-center">
+                        <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center" title="Select all rows">
+                          {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                        <HeaderInfoTooltip text={SELECT_TOOLTIP} />
+                      </div>
                     </th>
                     <th
                       className={`mc-th ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-30`}
                       style={{ backgroundColor: '#4a352f', left: SELECT_COL_WIDTH, ...nameWidth }}
                     >
-                      <div className="flex items-start gap-1 min-w-0">
-                        <span className="mc-th-label">{NAME_COLUMN.label}</span>
-                        <FilterTrigger colKey={NAME_COLUMN_KEY} />
-                        <HeaderInfoTooltip text={NAME_COLUMN.tooltip} />
+                      <div className="mc-th-row">
+                        <span className="mc-th-label" title={NAME_COLUMN.label}>{NAME_COLUMN.label}</span>
+                        <span className="mc-th-tools">
+                          <SortTrigger colKey={NAME_COLUMN_KEY} />
+                          <FilterTrigger colKey={NAME_COLUMN_KEY} />
+                          <HeaderInfoTooltip text={NAME_COLUMN.tooltip} />
+                        </span>
                       </div>
                       <ColumnResizer colKey={NAME_COLUMN_KEY} />
                     </th>
@@ -1401,20 +1563,23 @@ function AdvisorCohorts() {
                           className={`mc-th mc-th-draggable ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${isDragging ? 'opacity-40' : ''}`}
                           style={{ ...widthStyle(key, col.minWidth), backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
                         >
-                          <div className="flex items-start gap-1 min-w-0">
+                          <div className="mc-th-row">
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <span className="mc-th-label">{col.label}</span>
-                            <FilterTrigger colKey={key} />
-                            <HeaderInfoTooltip text={col.tooltip} />
+                            <span className="mc-th-label" title={col.label}>{col.label}</span>
+                            <span className="mc-th-tools">
+                              <SortTrigger colKey={key} />
+                              <FilterTrigger colKey={key} />
+                              <HeaderInfoTooltip text={col.tooltip} />
+                            </span>
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
                       )
                     })}
                     <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                      <div className="flex items-start gap-1 justify-center">
+                      <div className="mc-th-row justify-center">
                         <span>Action</span>
-                        <HeaderInfoTooltip text="Deep dive into the business's growth data, or open the More menu for notes, status changes and the BIG Score page." />
+                        <HeaderInfoTooltip text={ACTION_TOOLTIP} />
                       </div>
                     </th>
                   </tr>
@@ -1639,7 +1804,13 @@ function AdvisorCohorts() {
               onClick={() => { handleViewBigScorePage(rowMenu.cohort); setRowMenu(null) }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
-              <ExternalLink size={12} /> Open BIG Score Page
+              <BarChart3 size={12} /> Open BIG Score Page
+            </button>
+            <button
+              onClick={() => { handleViewDocuments(rowMenu.cohort); setRowMenu(null) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <FileText size={12} /> View Documents
             </button>
             <button
               onClick={() => { setNoteModal({ cohort: rowMenu.cohort, text: "" }); setRowMenu(null) }}
@@ -1705,24 +1876,32 @@ function AdvisorCohorts() {
             </div>
             <label className="block text-xs font-semibold text-[#5d4037] mb-2">New status</label>
             <div className="grid grid-cols-2 gap-2 mb-4">
-              <button
-                onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: "active" }))}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold border-2 ${statusModal.targetGroup === "active" ? "border-[#4caf50] bg-[#e8f5e9] text-[#2e7d32]" : "border-[#e6d7c3] text-[#4a352f]"}`}
-              >
-                Active Advisory
-              </button>
-              <button
-                onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: "completed" }))}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold border-2 ${statusModal.targetGroup === "completed" ? "border-[#2196f3] bg-[#e3f2fd] text-[#0d47a1]" : "border-[#e6d7c3] text-[#4a352f]"}`}
-              >
-                Completed
-              </button>
+              {[
+                { group: "onboarding", label: "Onboarding", border: "#a67c52", bg: "#f5f0e1", text: "#7d5a50" },
+                { group: "active", label: "Active Advisory", border: "#4caf50", bg: "#e8f5e9", text: "#2e7d32" },
+                { group: "completed", label: "Completed", border: "#2196f3", bg: "#e3f2fd", text: "#0d47a1" },
+                { group: "exited", label: "Exited", border: "#9e9e9e", bg: "#f3f4f6", text: "#4a352f" },
+              ].map(({ group, label, border, bg, text }) => {
+                const isSelected = statusModal.targetGroup === group
+                return (
+                  <button
+                    key={group}
+                    onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: group }))}
+                    className="px-3 py-2 rounded-lg text-sm font-semibold border-2"
+                    style={isSelected
+                      ? { borderColor: border, backgroundColor: bg, color: text }
+                      : { borderColor: "#e6d7c3", color: "#4a352f" }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
-            {statusModal.targetGroup === "completed" && (
+            {(statusModal.targetGroup === "completed" || statusModal.targetGroup === "exited") && (
               <textarea
                 value={statusModal.note}
                 onChange={(e) => setStatusModal((prev) => ({ ...prev, note: e.target.value }))}
-                placeholder="Completion note (optional)"
+                placeholder={statusModal.targetGroup === "exited" ? "Why did this engagement end early? (optional)" : "Completion note (optional)"}
                 rows={3}
                 className="w-full px-3 py-2 border-2 border-[#c8b6a6] rounded-lg text-sm resize-y mb-2"
               />
@@ -1871,7 +2050,15 @@ function AdvisorCohorts() {
                 className="bg-white text-[#7d5a50] border-2 border-[#c8b6a6] rounded-xl px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#f5f0e1]"
               >
                 <span className="flex items-center gap-2">
-                  <ExternalLink size={18} /> BIG Score Page
+                  <BarChart3 size={18} /> BIG Score Page
+                </span>
+              </button>
+              <button
+                onClick={() => handleViewDocuments(selectedCohort)}
+                className="bg-white text-[#7d5a50] border-2 border-[#c8b6a6] rounded-xl px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#f5f0e1]"
+              >
+                <span className="flex items-center gap-2">
+                  <FileText size={18} /> Documents
                 </span>
               </button>
               <button

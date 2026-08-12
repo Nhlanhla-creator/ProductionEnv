@@ -6,6 +6,41 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 
+// ==================== VIEWER ORIGINS ====================
+// Every cohorts table that can open this page "as" an SME writes viewOrigin
+// into sessionStorage. These two maps are the only place that value is
+// interpreted, so adding a new viewer type is a two-line change rather than
+// another `else if` chain to keep in sync.
+//
+// Investor is the fallback purely because /my-cohorts is the investor route.
+// An origin missing from ROUTE_BY_ORIGIN doesn't error — it silently sends the
+// viewer to the investor portfolio, which is exactly what advisors hit before
+// "advisor" was listed here.
+const ROUTE_BY_ORIGIN = {
+  cmf: "/cmf-cohorts",
+  catalyst: "/catalyst/cohorts",
+  advisor: "/advisor-cohorts",
+  investor: "/my-cohorts",
+};
+
+const VIEWER_COPY = {
+  catalyst: { banner: (name) => `Catalyst View: Viewing ${name}'s Company Health`, back: "Back to Catalyst Cohorts" },
+  cmf: { banner: (name) => `Facilitator View: Viewing ${name}'s Company Health`, back: "Back to CMF Cohorts" },
+  advisor: { banner: (name) => `Advisor View: Viewing ${name}'s Company Health`, back: "Back to Advisory Cohorts" },
+  investor: { banner: (name) => `Investor View: Viewing ${name}'s Company Health`, back: "Back to My Cohorts" },
+};
+
+// Cleared together on exit. Leaving any one behind changes how an unrelated
+// page behaves later in the same session — a stale viewOnlyBigScore narrows the
+// SME sidebar, a stale viewOrigin misroutes the next Back button.
+const IMPERSONATION_KEYS = [
+  "viewingSMEId",
+  "viewingSMEName",
+  "investorViewMode",
+  "viewOrigin",
+  "viewOnlyBigScore",
+];
+
 // ==================== CACHE SERVICE ====================
 // Mirrors AnalysisCacheService pattern from marketing analysis
 
@@ -338,17 +373,8 @@ function OverallCompanyHealth() {
 
   const handleExitInvestorView = () => {
     const origin = sessionStorage.getItem("viewOrigin");
-    sessionStorage.removeItem("viewingSMEId");
-    sessionStorage.removeItem("viewingSMEName");
-    sessionStorage.removeItem("investorViewMode");
-    sessionStorage.removeItem("viewOrigin");
-    if (origin === "cmf") {
-      window.location.href = "/cmf-cohorts";
-    } else if (origin === "catalyst") {
-      window.location.href = "/catalyst/cohorts";
-    } else {
-      window.location.href = "/my-cohorts";
-    }
+    IMPERSONATION_KEYS.forEach((key) => sessionStorage.removeItem(key));
+    window.location.href = ROUTE_BY_ORIGIN[origin] || ROUTE_BY_ORIGIN.investor;
   };
 
   // ---- Render helpers ----
@@ -367,6 +393,7 @@ function OverallCompanyHealth() {
   const overallScore = aiResults?.overallHealthScore;
   const executiveSummary = aiResults?.executiveSummary;
   const criticalActions = aiResults?.criticalActions || [];
+  const viewerCopy = VIEWER_COPY[viewOrigin] || VIEWER_COPY.investor;
 
   return (
     <div style={{
@@ -375,7 +402,7 @@ function OverallCompanyHealth() {
     }}>
       <div style={{ maxWidth: "100%", margin: "0 auto", width: "100%" }}>
 
-        {/* ---- Investor / Catalyst Banner ---- */}
+        {/* ---- Viewer Banner ---- */}
         {isInvestorView && (
           <div style={{
             backgroundColor: "#e8f5e9", padding: "16px 20px",
@@ -386,11 +413,7 @@ function OverallCompanyHealth() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <span style={{ fontSize: "20px" }}>👁️</span>
               <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-                {viewOrigin === "catalyst"
-                  ? `Catalyst View: Viewing ${viewingSMEName}'s Company Health`
-                  : viewOrigin === "cmf"
-                  ? `Facilitator View: Viewing ${viewingSMEName}'s Company Health`
-                  : `Investor View: Viewing ${viewingSMEName}'s Company Health`}
+                {viewerCopy.banner(viewingSMEName)}
               </span>
             </div>
             <button
@@ -401,7 +424,7 @@ function OverallCompanyHealth() {
                 fontWeight: "600", fontSize: "14px",
               }}
             >
-              ← {viewOrigin === "catalyst" ? "Back to Catalyst Cohorts" : "Back to My Cohorts"}
+              ← {viewerCopy.back}
             </button>
           </div>
         )}
