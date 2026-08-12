@@ -5,12 +5,47 @@ import { useState, useEffect } from "react";
 import { auth } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 
+// ==================== VIEWER ORIGINS ====================
+// Every cohorts table that can open this page "as" an SME writes viewOrigin
+// into sessionStorage. These maps are the only place that value is
+// interpreted, so adding a viewer type is a two-line change rather than
+// another `else if` chain to keep in sync across pages.
+//
+// Investor is the fallback purely because /my-cohorts is the investor route.
+// An origin missing from ROUTE_BY_ORIGIN doesn't error — it silently sends the
+// viewer to the investor portfolio, which is what advisors hit before
+// "advisor" was listed here.
+const ROUTE_BY_ORIGIN = {
+  cmf: "/cmf-cohorts",
+  catalyst: "/catalyst/cohorts",
+  advisor: "/advisor-cohorts",
+  investor: "/my-cohorts",
+};
+
+const VIEWER_COPY = {
+  catalyst: { label: "Catalyst View", back: "Back to Catalyst Cohorts" },
+  cmf: { label: "Facilitator View", back: "Back to CMF Cohorts" },
+  advisor: { label: "Advisor View", back: "Back to Advisory Cohorts" },
+  investor: { label: "Investor View", back: "Back to My Cohorts" },
+};
+
+// Cleared together on exit. Leaving any one behind changes how an unrelated
+// page behaves later in the same session — a stale viewOnlyBigScore narrows the
+// SME sidebar, a stale viewOrigin misroutes the next Back button.
+const IMPERSONATION_KEYS = [
+  "viewingSMEId",
+  "viewingSMEName",
+  "investorViewMode",
+  "viewOrigin",
+  "viewOnlyBigScore",
+];
+
 function GrowthSuiteLanding() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
-  const [viewOrigin, setViewOrigin] = useState("investor"); // ADD THIS LINE
+  const [viewOrigin, setViewOrigin] = useState("investor");
   const [showFullDescription, setShowFullDescription] = useState(false);
 
   useEffect(() => {
@@ -18,11 +53,17 @@ function GrowthSuiteLanding() {
     const investorViewMode = sessionStorage.getItem("investorViewMode");
     const smeId = sessionStorage.getItem("viewingSMEId");
     const smeName = sessionStorage.getItem("viewingSMEName");
+    // FIX: viewOrigin was declared as state but never read out of session
+    // storage, so it kept its "investor" initial value forever — the banner
+    // announced "Investor View" to catalysts, advisors and facilitators alike,
+    // and the Back button's label followed suit.
+    const origin = sessionStorage.getItem("viewOrigin");
 
     if (investorViewMode === "true" && smeId) {
       setIsInvestorView(true);
       setViewingSMEId(smeId);
       setViewingSMEName(smeName || "SME");
+      setViewOrigin(origin || "investor");
     }
   }, []);
 
@@ -39,22 +80,12 @@ function GrowthSuiteLanding() {
   }, [isInvestorView, viewingSMEId]);
 
   const handleExitInvestorView = () => {
-    // Clear all session storage items
     const origin = sessionStorage.getItem("viewOrigin");
-    sessionStorage.removeItem("viewingSMEId");
-    sessionStorage.removeItem("viewingSMEName");
-    sessionStorage.removeItem("investorViewMode");
-    sessionStorage.removeItem("viewOrigin");
-
-    // Navigate based on origin
-    if (origin === "cmf") {
-      window.location.href = "/cmf-cohorts";
-    } else if (origin === "catalyst") {
-      window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
-    } else {
-      window.location.href = "/my-cohorts"; // Go back to Investor cohorts
-    }
+    IMPERSONATION_KEYS.forEach((key) => sessionStorage.removeItem(key));
+    window.location.href = ROUTE_BY_ORIGIN[origin] || ROUTE_BY_ORIGIN.investor;
   };
+
+  const viewerCopy = VIEWER_COPY[viewOrigin] || VIEWER_COPY.investor;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -88,11 +119,7 @@ function GrowthSuiteLanding() {
                   fontSize: "15px",
                 }}
               >
-                {viewOrigin === "catalyst"
-                  ? `Catalyst View: Viewing ${viewingSMEName}'s Growth Suite Overview`
-                  : viewOrigin === "cmf"
-                  ? `Facilitator View: Viewing ${viewingSMEName}'s Growth Suite Overview`
-                  : `Investor View: Viewing ${viewingSMEName}'s Growth Suite Overview`}
+                {`${viewerCopy.label}: Viewing ${viewingSMEName}'s Growth Suite Overview`}
               </span>
             </div>
             <button
@@ -119,9 +146,7 @@ function GrowthSuiteLanding() {
               }}
             >
               <span>←</span>
-              {viewOrigin === "catalyst"
-                ? "Back to Catalyst Cohorts"
-                : "Back to My Cohorts"}
+              {viewerCopy.back}
             </button>
           </div>
         )}

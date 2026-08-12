@@ -10,7 +10,7 @@ import {
   Loader, RefreshCw, X, BarChart3, ChevronDown, ChevronUp, AlertCircle, Info,
   Layers, GraduationCap, MoreVertical, FileText, Ticket, Copy, CheckCircle,
   SlidersHorizontal, LayoutGrid, Settings, RotateCcw, GripVertical, Square,
-  CheckSquare, ArrowUpDown, Download, Archive, StickyNote, Plus, Trash2,
+  CheckSquare, ArrowUpDown, ArrowUp, ArrowDown, Download, Archive, StickyNote, Plus, Trash2,
   Briefcase, Award, Package, FileCheck, Star, Clock, Activity, TrendingDown
 } from "lucide-react"
 import Upsell from "../../components/Upsell/Upsell"
@@ -67,6 +67,24 @@ const toAmount = (value) => {
   return isNaN(n) ? 0 : n
 }
 
+// ─── Impersonation session flags ────────────────────────────────────────────
+// Every screen reachable "as" the SME reads these four keys, and the exit
+// buttons on those screens clear them. They must all be written together:
+// OverallCompanyHealth branches on viewOrigin for its Back button, and the
+// SME dashboard reads viewOnlyBigScore to decide whether to restrict itself.
+// viewOnlyBigScore in particular is written (or removed) on EVERY entry, not
+// just when true — leaving a stale "true" behind is how one BIG Score visit
+// ends up restricting an unrelated page later in the same session.
+const enterSMEView = (cohort, { onlyBigScore = false } = {}) => {
+  if (typeof window === "undefined") return
+  sessionStorage.setItem("viewingSMEId", cohort.smeId)
+  sessionStorage.setItem("viewingSMEName", cohort.smeName)
+  sessionStorage.setItem("investorViewMode", "true")
+  sessionStorage.setItem("viewOrigin", "investor")
+  if (onlyBigScore) sessionStorage.setItem("viewOnlyBigScore", "true")
+  else sessionStorage.removeItem("viewOnlyBigScore")
+}
+
 // ─── Status vocabulary ──────────────────────────────────────────────────────
 const STATUS_META = {
   "Active Investment": { label: "Active Investment", color: "#4caf50", group: "active" },
@@ -99,6 +117,19 @@ const getRoiLabel = (roi) => {
   return "Needs Attention"
 }
 
+// Sorting reads the number behind the label so "R 900,000" doesn't sort above
+// "R 1,200,000" the way a plain string compare would. Pending ROI sorts last.
+const roiToNumber = (roi) => {
+  if (!roi) return -1
+  const n = Number.parseInt(roi.toString().replace(/[+%]/g, ""))
+  return isNaN(n) ? -1 : n
+}
+
+const toCount = (value) => {
+  const n = parseFloat((value || "").toString().replace(/[^0-9.]/g, ""))
+  return isNaN(n) ? -1 : n
+}
+
 // ─── Attention Required heuristic ──────────────────────────────────────────
 const needsAttention = (cohort) => {
   const hasValidDate = !!toDateSafe(cohort.completionDate)
@@ -109,6 +140,37 @@ const needsAttention = (cohort) => {
 const Portal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
+}
+
+// ─── Column header info tooltip ─────────────────────────────────────────────
+// Portaled to <body> because the header cell is sticky and would otherwise
+// clip the bubble.
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null)
+  if (!text) return null
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
+      {rect && (
+        <Portal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </Portal>
+      )}
+    </span>
+  )
 }
 
 // ─── Stage pipeline ─────────────────────────────────────────────────────────
@@ -185,17 +247,41 @@ const InvestorStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
 }
 
 // ─── Column definitions ────────────────────────────────────────────────────
-// filterType drives which popover opens from that column's header. Every
-// column has one.
+// filterType drives which popover opens from that column's header; tooltip is
+// the ⓘ explanation. Every column has a sort control, a filter and a tooltip.
 const COLUMN_DEFS = {
-  investmentAmount: { label: "Investment", minWidth: "112px", filterType: "investment" },
-  startDate: { label: "Start Date", minWidth: "96px", filterType: "startDate" },
-  sector: { label: "Sector", minWidth: "100px", filterType: "sector" },
-  location: { label: "Location", minWidth: "92px", filterType: "location" },
-  teamSize: { label: "Team Size", minWidth: "80px", filterType: "teamSize" },
-  status: { label: "Status", minWidth: "130px", filterType: "status" },
-  roi: { label: "ROI", minWidth: "80px", filterType: "roi" },
-  dealType: { label: "Deal Type", minWidth: "100px", filterType: "dealType" },
+  investmentAmount: {
+    label: "Investment", minWidth: "112px", filterType: "investment",
+    tooltip: "The amount approved for this deal. Sorting and range filtering use the underlying number, not the formatted label.",
+  },
+  startDate: {
+    label: "Start Date", minWidth: "96px", filterType: "startDate",
+    tooltip: "When the investment was made. Taken from the record's last update, so it moves if the record is re-stamped.",
+  },
+  sector: {
+    label: "Sector", minWidth: "100px", filterType: "sector",
+    tooltip: "The primary industry the business operates in, from its own profile.",
+  },
+  location: {
+    label: "Location", minWidth: "92px", filterType: "location",
+    tooltip: "The city or town the business operates from.",
+  },
+  teamSize: {
+    label: "Team Size", minWidth: "80px", filterType: "teamSize",
+    tooltip: "Headcount as captured on the business's profile. Not verified by BIG.",
+  },
+  status: {
+    label: "Status", minWidth: "130px", filterType: "status",
+    tooltip: "Where this investment stands. An \"Attention\" tag means core data is missing on the record, not that the investment itself is at risk.",
+  },
+  roi: {
+    label: "ROI", minWidth: "80px", filterType: "roi",
+    tooltip: "Return on investment as recorded. Reads \"Pending\" until a figure is captured — pending rows sort last.",
+  },
+  dealType: {
+    label: "Deal Type", minWidth: "100px", filterType: "dealType",
+    tooltip: "The instrument behind the deal — equity, debt, convertible and so on.",
+  },
 }
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
@@ -204,6 +290,43 @@ const DEFAULT_COLUMN_VISIBILITY = {
   sector: true, location: false, teamSize: false, dealType: false,
 }
 const DEFAULT_DENSITY = "comfortable"
+
+// Reserved width/sort keys for the three columns that can't be hidden or
+// reordered but still resize and (for the name column) sort.
+const NAME_KEY = "__name__"
+const ACTION_KEY = "action"
+
+const SELECT_TOOLTIP = "Select rows to export them or change their status in bulk. The header checkbox selects everything currently visible after filtering."
+const NAME_TOOLTIP = "The trading or registered name of the business you invested in. Click the eye to open the full investment record."
+const ACTION_TOOLTIP = "The most useful next step for this record — it changes with the investment's stage. The ⋮ menu holds Growth Suite, documents, BIG Score, notes, status changes and archiving."
+
+// ─── Sorting ────────────────────────────────────────────────────────────────
+// Accessors read the mapped field, which doesn't always match the column key
+// (e.g. "dealType" is on dealType but "investmentAmount" sorts on the parsed
+// number behind dealAmount).
+const SORT_ACCESSORS = {
+  [NAME_KEY]: (c) => (c.smeName || "").toLowerCase(),
+  investmentAmount: (c) => toAmount(c.dealAmount),
+  startDate: (c) => toDateSafe(c.completionDate)?.getTime() ?? -1,
+  sector: (c) => (c.sector || "").toLowerCase(),
+  location: (c) => (c.location || "").toLowerCase(),
+  teamSize: (c) => toCount(c.teamSize),
+  status: (c) => getStatusMeta(c.currentStatus).label.toLowerCase(),
+  roi: (c) => roiToNumber(c.roi),
+  dealType: (c) => (c.dealType || "").toLowerCase(),
+}
+
+// The default isn't a column sort — it's a triage order: anything flagged for
+// attention floats to the top, then active, then exited, ties alphabetical.
+// Cycling a column's arrow goes asc → desc → back to this.
+const DEFAULT_SORT_CONFIG = { key: "attentionThenName", direction: "desc" }
+
+const investmentSortRank = (cohort) => {
+  const meta = getStatusMeta(cohort.currentStatus)
+  if (meta.group === "active" && needsAttention(cohort)) return 0
+  if (meta.group === "active") return 1
+  return 2
+}
 
 const EMPTY_FILTERS = {
   name: "",
@@ -214,11 +337,12 @@ const EMPTY_FILTERS = {
 }
 
 // ─── Custom Views ──────────────────────────────────────────────────────────
-// A view bundles column visibility, order, width and density into one named
-// object, with exactly one active at a time. Editing the table edits the
+// A view bundles column visibility, order, width, sort and density into one
+// named object, with exactly one active at a time. Editing the table edits the
 // active view and auto-saves immediately.
 const BUILTIN_VIEW_ID = "__default__"
-const VIEWS_STORAGE_KEY = "investor-cohorts-views-v1"
+// v2: views now carry a sort config, so a v1 view would leave it undefined.
+const VIEWS_STORAGE_KEY = "investor-cohorts-views-v2"
 const ACTIVE_FILTER_STORAGE_KEY = "investor-cohorts-active-filter-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -234,6 +358,7 @@ const createDefaultViewLayout = () => ({
   columnOrder: [...DEFAULT_COLUMN_ORDER],
   density: DEFAULT_DENSITY,
   columnWidths: {},
+  sortConfig: { ...DEFAULT_SORT_CONFIG },
 })
 
 const createBuiltinDefaultView = () => ({
@@ -249,6 +374,7 @@ const sanitizeView = (view, fallbackId) => ({
   columnOrder: sanitizeColumnOrder(view?.columnOrder),
   density: view?.density || DEFAULT_DENSITY,
   columnWidths: view?.columnWidths || {},
+  sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
 })
 
 const loadViewsState = () => {
@@ -406,13 +532,14 @@ function MyCohorts() {
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
   const navigate = useNavigate()
 
-  // ─── Views (column visibility / order / width / density) ─────────────────
+  // ─── Views (column visibility / order / width / sort / density) ──────────
   const [viewsState, setViewsState] = useState(() => loadViewsState())
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
   const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
   const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
   const [density, setDensity] = useState(() => initialActiveView.density)
   const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths || {})
+  const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig || { ...DEFAULT_SORT_CONFIG })
 
   const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
   const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
@@ -431,13 +558,13 @@ function MyCohorts() {
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId]
       if (!current) return prev
-      const updated = { ...current, columnVisibility, columnOrder, density, columnWidths }
+      const updated = { ...current, columnVisibility, columnOrder, density, columnWidths, sortConfig }
       const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
       persistViewsState(next)
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columnVisibility, columnOrder, density, columnWidths])
+  }, [columnVisibility, columnOrder, density, columnWidths, sortConfig])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -718,6 +845,7 @@ function MyCohorts() {
     setColumnOrder(target.columnOrder)
     setDensity(target.density)
     setColumnWidths(target.columnWidths || {})
+    setSortConfig(target.sortConfig || { ...DEFAULT_SORT_CONFIG })
   }
 
   const createNewView = () => {
@@ -727,7 +855,7 @@ function MyCohorts() {
     const newView = {
       id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
       columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
-      density, columnWidths: { ...columnWidths },
+      density, columnWidths: { ...columnWidths }, sortConfig: { ...sortConfig },
     }
     setViewsState((prev) => { const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }; persistViewsState(next); return next })
     setNewViewName(""); setNewViewDescription(""); setShowNewViewForm(false)
@@ -763,6 +891,7 @@ function MyCohorts() {
       const def = viewsState.views[BUILTIN_VIEW_ID]
       setColumnVisibility(def.columnVisibility); setColumnOrder(def.columnOrder)
       setDensity(def.density); setColumnWidths(def.columnWidths || {})
+      setSortConfig(def.sortConfig || { ...DEFAULT_SORT_CONFIG })
     }
   }
 
@@ -770,6 +899,7 @@ function MyCohorts() {
     const layout = createDefaultViewLayout()
     setColumnVisibility(layout.columnVisibility); setColumnOrder(layout.columnOrder)
     setDensity(layout.density); setColumnWidths(layout.columnWidths || {})
+    setSortConfig(layout.sortConfig)
   }
 
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -802,7 +932,7 @@ function MyCohorts() {
   // ─── Column drag-to-resize ────────────────────────────────────────────────
   // Drag the divider on a header's right edge to resize; double-click it to
   // snap back to auto width. Widths live in the active view alongside
-  // visibility/order/density, so they persist and travel between views.
+  // visibility/order/sort/density, so they persist and travel between views.
   const widthStyle = (key, fallbackMin, fallbackMax) => {
     const w = columnWidths[key]
     if (w) return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }
@@ -848,6 +978,33 @@ function MyCohorts() {
     />
   )
 
+  // ─── Sorting ──────────────────────────────────────────────────────────────
+  // asc → desc → back to the default triage order.
+  const toggleSort = (key, event) => {
+    event.stopPropagation()
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" }
+      if (prev.direction === "asc") return { key, direction: "desc" }
+      return { ...DEFAULT_SORT_CONFIG }
+    })
+  }
+
+  const SortTrigger = ({ columnKey }) => {
+    const isActive = sortConfig?.key === columnKey
+    return (
+      <button
+        type="button"
+        onClick={(e) => toggleSort(columnKey, e)}
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${isActive ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+        title={isActive ? (sortConfig.direction === "asc" ? "Sort descending" : "Clear sort") : "Sort ascending"}
+      >
+        {isActive
+          ? (sortConfig.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+          : <ArrowUpDown size={11} />}
+      </button>
+    )
+  }
+
   // ─── Header filters ───────────────────────────────────────────────────────
   const openHeaderFilter = (type, event) => {
     event.stopPropagation()
@@ -885,16 +1042,26 @@ function MyCohorts() {
     let x = rect.right - menuWidth
     let y = rect.bottom + 6
     if (x < 12) x = 12
-    if (y + 300 > window.innerHeight - 12) y = rect.top - 300 - 6
+    // Menu grew by two entries, so the flip-upwards threshold grew with it.
+    if (y + 360 > window.innerHeight - 12) y = rect.top - 360 - 6
     setRowMenu({ cohort, position: { x, y } })
   }
 
+  // All three of these enter the SME's own screens through the same helper, so
+  // the session flags can't drift apart between entry points.
   const handleViewGrowthSuite = (cohort) => {
-    sessionStorage.setItem('viewingSMEId', cohort.smeId)
-    sessionStorage.setItem('viewingSMEName', cohort.smeName)
-    sessionStorage.setItem('investorViewMode', 'true')
-    sessionStorage.setItem('viewOrigin', 'investor')
+    enterSMEView(cohort)
     window.location.href = '/overall-company-health'
+  }
+
+  const handleViewDocuments = (cohort) => {
+    enterSMEView(cohort)
+    window.location.href = '/my-documents'
+  }
+
+  const handleViewBigScore = (cohort) => {
+    enterSMEView(cohort, { onlyBigScore: true })
+    window.location.href = '/dashboard'
   }
 
   const handleViewDetails = (cohort) => {
@@ -973,8 +1140,27 @@ function MyCohorts() {
       result = result.filter((c) => (c.roi || "").toString().toLowerCase().includes(q))
     }
 
-    return result
-  }, [visibleCohorts, activeFilter, localFilters])
+    const sorted = [...result]
+    if (!sortConfig?.key || sortConfig.key === "attentionThenName") {
+      sorted.sort((a, b) => {
+        const rankDiff = investmentSortRank(a) - investmentSortRank(b)
+        if (rankDiff !== 0) return rankDiff
+        return a.smeName.localeCompare(b.smeName)
+      })
+    } else {
+      const accessor = SORT_ACCESSORS[sortConfig.key] || ((c) => (c[sortConfig.key] ?? "").toString().toLowerCase())
+      sorted.sort((a, b) => {
+        const av = accessor(a)
+        const bv = accessor(b)
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av
+        }
+        const cmp = (av ?? "").toString().localeCompare((bv ?? "").toString())
+        return sortConfig.direction === "asc" ? cmp : -cmp
+      })
+    }
+    return sorted
+  }, [visibleCohorts, activeFilter, localFilters, sortConfig])
 
   const rowPad = density === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"
 
@@ -1087,6 +1273,17 @@ function MyCohorts() {
                   <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
                   <button onClick={() => setLocalFilters({ ...EMPTY_FILTERS })} className="ml-1 underline hover:text-[#4a352f]">Clear</button>
                 </span>
+              )}
+              {sortConfig?.key && sortConfig.key !== "attentionThenName" && (
+                <button
+                  onClick={() => setSortConfig({ ...DEFAULT_SORT_CONFIG })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6] hover:bg-[#e6d7c3]"
+                  title="Back to the default order (attention first)"
+                >
+                  {sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                  Sorted by {sortConfig.key === NAME_KEY ? "Company Name" : COLUMN_DEFS[sortConfig.key]?.label || sortConfig.key}
+                  <X size={11} />
+                </button>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -1240,7 +1437,9 @@ function MyCohorts() {
                 .ic-th { color: #faf7f2 !important; vertical-align: top !important; }
                 .ic-th-draggable { cursor: grab; }
                 .ic-th-draggable:active { cursor: grabbing; }
-                .ic-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+                .ic-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+                .ic-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: none; line-height: 1.2; }
+                .ic-th-tools { display: flex; align-items: center; flex-shrink: 0; }
                 /* Column resizing: a dragged header width only holds if the
                    cells below it can shrink, so long values wrap rather than
                    setting a min-content width that forces the column open. */
@@ -1251,16 +1450,23 @@ function MyCohorts() {
                 <thead>
                   <tr className="bg-[#4a352f]">
                     <th className={`ic-th ${rowPad} sticky top-0 left-0 z-30 border-r border-[#e6d7c3]`} style={{ backgroundColor: '#4a352f', width: '40px' }}>
-                      <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center">
-                        {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </button>
-                    </th>
-                    <th className={`ic-th ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', ...widthStyle('__name__', '200px', '240px') }}>
-                      <div className="flex items-start gap-1 min-w-0">
-                        <span className="ic-th-label">Company Name</span>
-                        <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      <div className="ic-th-row justify-center">
+                        <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center" title="Select all visible rows">
+                          {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                        <HeaderInfoTooltip text={SELECT_TOOLTIP} />
                       </div>
-                      <ColumnResizer colKey="__name__" />
+                    </th>
+                    <th className={`ic-th ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', ...widthStyle(NAME_KEY, '200px', '240px') }}>
+                      <div className="ic-th-row">
+                        <span className="ic-th-label" title="Company Name">Company Name</span>
+                        <span className="ic-th-tools">
+                          <SortTrigger columnKey={NAME_KEY} />
+                          <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                          <HeaderInfoTooltip text={NAME_TOOLTIP} />
+                        </span>
+                      </div>
+                      <ColumnResizer colKey={NAME_KEY} />
                     </th>
 
                     {visibleColumnKeys.map((key) => {
@@ -1280,18 +1486,25 @@ function MyCohorts() {
                           className={`ic-th ic-th-draggable ${rowPad} relative text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${isDragging ? 'opacity-40' : ''}`}
                           style={{ ...widthStyle(key, col.minWidth), backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
                         >
-                          <div className="flex items-start gap-1 min-w-0">
+                          <div className="ic-th-row">
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
-                            <span className="ic-th-label">{col.label}</span>
-                            <FilterTrigger type={col.filterType} active={filterActiveFor(col.filterType)} />
+                            <span className="ic-th-label" title={col.label}>{col.label}</span>
+                            <span className="ic-th-tools">
+                              <SortTrigger columnKey={key} />
+                              <FilterTrigger type={col.filterType} active={filterActiveFor(col.filterType)} />
+                              <HeaderInfoTooltip text={col.tooltip} />
+                            </span>
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>
                       )
                     })}
-                    <th className={`ic-th ${rowPad} relative text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', ...widthStyle('action', '170px') }}>
-                      Action
-                      <ColumnResizer colKey="action" />
+                    <th className={`ic-th ${rowPad} relative text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', ...widthStyle(ACTION_KEY, '170px') }}>
+                      <div className="ic-th-row justify-center">
+                        <span className="ic-th-label">Action</span>
+                        <HeaderInfoTooltip text={ACTION_TOOLTIP} />
+                      </div>
+                      <ColumnResizer colKey={ACTION_KEY} />
                     </th>
                   </tr>
                 </thead>
@@ -1315,7 +1528,7 @@ function MyCohorts() {
                           </td>
                           <td
                             className={`${rowPad} sticky left-0 z-10 border-r border-[#e6d7c3] transition-colors`}
-                            style={{ ...widthStyle('__name__', '200px', '240px'), backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
+                            style={{ ...widthStyle(NAME_KEY, '200px', '240px'), backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="text-[#4a352f]">{cohort.smeName}</span>
@@ -1332,7 +1545,7 @@ function MyCohorts() {
 
                           {visibleColumnKeys.map((key) => renderCell(key, cohort))}
 
-                          <td className={`${rowPad} text-center`} style={widthStyle('action', '170px')}>
+                          <td className={`${rowPad} text-center`} style={widthStyle(ACTION_KEY, '170px')}>
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => primaryAction.handler(cohort)}
@@ -1538,6 +1751,12 @@ function MyCohorts() {
             </div>
             <button onClick={() => { handleViewGrowthSuite(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               <TrendingUp size={12} /> Open Growth Suite
+            </button>
+            <button onClick={() => { handleViewBigScore(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
+              <BarChart3 size={12} /> Open BIG Score Page
+            </button>
+            <button onClick={() => { handleViewDocuments(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
+              <FileText size={12} /> View Documents
             </button>
             <button onClick={() => { setNoteModal({ cohort: rowMenu.cohort, text: "" }); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               <StickyNote size={12} /> Add Note
@@ -1746,7 +1965,15 @@ function MyCohorts() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 flex-wrap">
+              <button onClick={() => handleViewBigScore(selectedCohort)}
+                className="bg-white text-[#a67c52] border-2 border-[#a67c52] rounded-xl px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#f5f0e1]">
+                <span className="flex items-center gap-2"><BarChart3 size={18} /> BIG Score</span>
+              </button>
+              <button onClick={() => handleViewDocuments(selectedCohort)}
+                className="bg-white text-[#a67c52] border-2 border-[#a67c52] rounded-xl px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#f5f0e1]">
+                <span className="flex items-center gap-2"><FileText size={18} /> Documents</span>
+              </button>
               <button onClick={() => handleViewGrowthSuite(selectedCohort)}
                 className="bg-[#a67c52] text-white border-none rounded-xl px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#8d6e63]">
                 <span className="flex items-center gap-2"><Wrench size={18} /> Open Growth Suite</span>

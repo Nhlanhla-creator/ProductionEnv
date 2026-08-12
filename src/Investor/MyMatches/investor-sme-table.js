@@ -7,11 +7,12 @@ import {
   Clock, Users, Download, MessageSquare, ArrowRight, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase, Video, LayoutGrid, Trash2, Plus,
   GripVertical, ExternalLink, AlertTriangle, Shield, XCircle,
-  ArrowUp, ArrowDown, ArrowUpDown
+  ArrowUp, ArrowDown, ArrowUpDown, Bookmark
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import {
   collection, query, where, onSnapshot, updateDoc, doc, getDoc, getDocs, addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onAuthStateChanged } from "firebase/auth";
@@ -379,13 +380,16 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(
 // Business Name and Actions can't be hidden or reordered, so they aren't in
 // COLUMN_DEFS — but they resize like everything else, and their widths live
 // under these reserved keys inside the same columnWidths map.
+//
+// Actions defaults wider than before because it now carries three controls:
+// the stage button, the save bookmark, and the quick-actions menu.
 const NAME_KEY = "__name__";
 const ACTION_KEY = "__action__";
-const FIXED_WIDTHS = { [NAME_KEY]: 210, [ACTION_KEY]: 210 };
+const FIXED_WIDTHS = { [NAME_KEY]: 210, [ACTION_KEY]: 250 };
 const MIN_COLUMN_WIDTH = 84;
 
 const NAME_TOOLTIP = "The business's trading or registered name. Click the eye to open its full profile.";
-const ACTION_TOOLTIP = "Move the application to its next stage, or open quick actions to view the profile, the BIG Score breakdown, guarantees, or decline it.";
+const ACTION_TOOLTIP = "Move the application to its next stage, save it for later with the bookmark, or open quick actions to view the profile, the BIG Score page, guarantees, or decline it.";
 
 // Sorting reads the mapped row field, which doesn't always match the column
 // key (e.g. "match" lives on matchPercentage, "applied" on applicationDateRaw,
@@ -451,9 +455,9 @@ const DEFAULT_SORT_CONFIG = { key: "attentionThenScore", direction: "desc" };
 const DEFAULT_DENSITY = "comfortable";
 
 const BUILTIN_VIEW_ID = "__default__";
-// v3: views now carry per-column widths in px, including the two fixed columns,
-// so a v2 view's auto-width entries no longer apply.
-const VIEWS_STORAGE_KEY = "investor-sme-table-views-v3";
+// v4: the Actions column got a third control (the save bookmark) and a wider
+// factory default, so v3's stored width for that column no longer fits.
+const VIEWS_STORAGE_KEY = "investor-sme-table-views-v4";
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
@@ -673,6 +677,13 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+
+  // Rows with an in-flight save/unsave write, so the bookmark can't be
+  // double-fired.
+  const [savingRows, setSavingRows] = useState({});
+  // "Saved" toolbar toggle: narrows the table to bookmarked rows and is how you
+  // get them back.
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
 
   // ─── Views ────────────────────────────────────────────────────────────────
   const [viewsState, setViewsState] = useState(() => loadViewsState());
@@ -1043,6 +1054,10 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
         availableDates: a.availableDates || [],
         documents: a.documentURLs || {},
         email: a.email || entity.email || "N/A",
+        // Bookmark flag, stored on the application document itself so it
+        // follows the investor across devices rather than living in this
+        // browser's localStorage.
+        saved: !!a.saved,
         profile: a.profile,
         raw: a,
       };
@@ -1066,6 +1081,10 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   // ─── Filtering & Sorting ──────────────────────────────────────────────────
   const filteredAndSortedSMEs = useMemo(() => {
     let result = [...smes];
+
+    // Saved-only view. Kept out of activeFilterCount deliberately — it's a
+    // view toggle with its own visible chip, not a column filter.
+    if (showSavedOnly) result = result.filter((s) => s.saved);
 
     if (localFilters.name?.trim()) {
       const q = localFilters.name.toLowerCase().trim();
@@ -1136,7 +1155,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     }
 
     return result;
-  }, [smes, sortConfig, localFilters, activeStages]);
+  }, [smes, sortConfig, localFilters, activeStages, showSavedOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -1149,6 +1168,10 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     () => [...new Set(smes.map((s) => s.investmentType).filter((s) => s && s !== "N/A"))].sort(),
     [smes]
   );
+
+  // Counted off every mapped row, not the filtered list, so the chip still
+  // reads the true total while a filter is narrowing the table.
+  const savedCount = useMemo(() => smes.filter((s) => s.saved).length, [smes]);
 
   const activeFilterCount = (localFilters.name?.trim() ? 1 : 0)
     + localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length + localFilters.instrument.length
@@ -1176,6 +1199,58 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
       case "instrument": return localFilters.instrument.length > 0;
       default: return !!localFilters[filterType]?.toString().trim();
     }
+  };
+
+  // ─── Save / bookmark ──────────────────────────────────────────────────────
+  // Writes `saved` onto the application document. The UI flips first and rolls
+  // back if the write fails, so the bookmark never lags behind the click. Note
+  // this deliberately does NOT touch `updatedAt`: that field drives "Days in
+  // Stage" and "Last Activity", and bookmarking is not pipeline activity —
+  // stamping it here would silently reset every stalled-row indicator.
+  const toggleSaved = async (sme) => {
+    const key = sme.docId || sme.id;
+    if (!key || savingRows[key]) return;
+
+    const nextSaved = !sme.saved;
+    setSavingRows((prev) => ({ ...prev, [key]: true }));
+    setRawApps((prev) => prev.map((a) => (a.id === key ? { ...a, saved: nextSaved } : a)));
+
+    try {
+      if (!auth.currentUser) throw new Error("User not authenticated");
+      await updateDoc(doc(db, "investorApplications", key), {
+        saved: nextSaved,
+        savedAt: nextSaved ? serverTimestamp() : null,
+      });
+      setNotification({
+        type: "success",
+        message: nextSaved ? `${sme.name} saved` : `${sme.name} removed from saved`,
+      });
+    } catch (error) {
+      console.error("Save toggle error:", error);
+      setRawApps((prev) => prev.map((a) => (a.id === key ? { ...a, saved: !nextSaved } : a)));
+      setNotification({
+        type: "error",
+        message: `Couldn't ${nextSaved ? "save" : "remove"} ${sme.name}: ${error.message}`,
+      });
+    } finally {
+      setSavingRows((prev) => { const { [key]: _done, ...rest } = prev; return rest; });
+    }
+  };
+
+  // Sends the investor to this business's own /dashboard, restricted to just
+  // the BIG Score tab (no "Improve My BIG Score" tools tab, no ability to
+  // switch), with a visible "Back" control to return. Same session-storage
+  // "investor view" pattern the advisor and catalyst tables use
+  // (viewingSMEId / viewingSMEName / investorViewMode / viewOrigin), plus the
+  // viewOnlyBigScore flag that Dashboard.jsx checks to lock the view down to
+  // that one tab.
+  const handleViewBigScorePage = (sme) => {
+    sessionStorage.setItem("viewingSMEId", sme.userId || sme.smeId || sme.id);
+    sessionStorage.setItem("viewingSMEName", sme.name);
+    sessionStorage.setItem("investorViewMode", "true");
+    sessionStorage.setItem("viewOrigin", "investor");
+    sessionStorage.setItem("viewOnlyBigScore", "true");
+    window.location.href = "/dashboard";
   };
 
   // ─── Column drag-to-reorder ───────────────────────────────────────────────
@@ -1342,7 +1417,9 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
       case "bigScore": popupWidth = 380; popupHeight = 450; break;
       case "match": popupWidth = 380; popupHeight = 420; break;
       case "stage": popupWidth = 460; popupHeight = 540; break;
-      case "quickActions": popupWidth = 210; popupHeight = 260; break;
+      // Grew as rows were added (BIG Score page, Save Match, View Saved), so
+      // the flip-upward calculation below still has an accurate height.
+      case "quickActions": popupWidth = 230; popupHeight = 400; break;
       default: popupWidth = 300; popupHeight = 300;
     }
 
@@ -1779,6 +1856,22 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                 <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
               )}
             </span>
+            {/* Saved businesses. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => { setShowSavedOnly((v) => !v); setCurrentPage(1); }}
+                title={showSavedOnly ? "Show all businesses" : "Show only saved businesses"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
                 <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
@@ -2099,10 +2192,24 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                       <td colSpan={visibleColumns.length + 2} className="text-center py-20 border-b border-[#e6d7c3]">
                         <div className="flex flex-col items-center gap-4">
                           <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
-                          <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
-                          <p className="text-sm text-[#7d5a50] max-w-xs">
-                            {activeFilterCount > 0 ? "Clear a filter to widen the list." : "Applications will appear here as businesses apply to your fund."}
+                          <p className="text-lg font-semibold text-[#4a352f]">
+                            {showSavedOnly ? "No Saved Businesses" : "No Businesses Found"}
                           </p>
+                          <p className="text-sm text-[#7d5a50] max-w-xs">
+                            {showSavedOnly
+                              ? "Bookmark a row to keep it here."
+                              : activeFilterCount > 0
+                                ? "Clear a filter to widen the list."
+                                : "Applications will appear here as businesses apply to your fund."}
+                          </p>
+                          {showSavedOnly && (
+                            <button
+                              onClick={() => setShowSavedOnly(false)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white"
+                            >
+                              Show all businesses
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2115,6 +2222,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                       const nextStageLabel = sme.nextStage || "—";
                       const termsheetStatus = termsheetStatuses[sme.id];
                       const rowBg = hoveredRowKey === sme.id ? "#fdf8f4" : "#ffffff";
+                      const isSaving = !!savingRows[sme.docId || sme.id];
                       const cellCls = `${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top`;
 
                       const renderCell = (key) => {
@@ -2251,10 +2359,24 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                                     ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
                                     : "text-white hover:shadow-md hover:brightness-105"
                                 }`}
-                                style={{ width: `${Math.max(100, actionWidth - 90)}px`, height: "34px", backgroundColor: isTerminal || subscriptionLoading ? undefined : "#7d5a50" }}
+                                style={{ width: `${Math.max(100, actionWidth - 130)}px`, height: "34px", backgroundColor: isTerminal || subscriptionLoading ? undefined : "#7d5a50" }}
                               >
                                 {!isTerminal && <ArrowRight size={13} className="flex-shrink-0" />}
                                 <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
+                              </button>
+
+                              {/* Save match — borderless bookmark, dims while
+                                  the write is in flight. */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleSaved(sme); }}
+                                disabled={isSaving}
+                                aria-pressed={sme.saved}
+                                aria-label={sme.saved ? "Remove from saved" : "Save match"}
+                                title={sme.saved ? "Remove from saved" : "Save match"}
+                                className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0 ${isSaving ? "opacity-50 cursor-wait" : ""}`}
+                                style={{ color: sme.saved ? "#a67c52" : "#c8b6a6" }}
+                              >
+                                <Bookmark size={14} fill={sme.saved ? "#a67c52" : "none"} />
                               </button>
 
                               {/* Term sheet response indicator */}
@@ -2581,6 +2703,17 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                 })
               )}
             </div>
+
+            {/* Same jump-off as the advisor and catalyst tables: opens the
+                business's own dashboard, locked to the BIG Score tab. */}
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => handleViewBigScorePage(selectedSMEForPopup)}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#7d5a50] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
+              >
+                <ExternalLink size={12} /> Open full BIG Score page
+              </button>
+            </div>
           </div>
         </PopupPortal>
       )}
@@ -2874,18 +3007,45 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
           <PopupPortal>
             <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
             <div className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
-              style={{ top: activePopup.position.y, left: activePopup.position.x, width: "210px" }}>
+              style={{ top: activePopup.position.y, left: activePopup.position.x, width: "230px" }}>
               <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
                 <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
                 <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
               </div>
               <button onClick={() => handleViewDetails(sme)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
-              <button onClick={() => openPopup("bigScore", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> BIG Score Breakdown</button>
+              {/* Opens the business's own dashboard, locked to the BIG Score
+                  tab — same behaviour as the advisor and catalyst tables. */}
+              <button onClick={() => { handleViewBigScorePage(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
               <button onClick={() => openPopup("match", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
               {sme.guaranteeCount > 0 && (
                 <button onClick={() => { handleOpenGuarantees(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Shield size={12} /> View Guarantees</button>
               )}
               <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
+              {/* Both entry points call the same toggleSaved, so the row
+                  bookmark and this item can't drift apart. */}
+              <button
+                onClick={() => { closePopup(); toggleSaved(sme); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+              >
+                <Bookmark size={12} fill={sme.saved ? "#a67c52" : "none"} />
+                {sme.saved ? "Remove from Saved" : "Save Match"}
+              </button>
+              <button
+                onClick={() => {
+                  closePopup();
+                  setShowSavedOnly(true);
+                  setCurrentPage(1);
+                  setNotification({
+                    type: "success",
+                    message: savedCount > 0
+                      ? `Showing your ${savedCount} saved business${savedCount === 1 ? "" : "es"}.`
+                      : "You haven't saved any businesses yet — use the bookmark on a row.",
+                  });
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+              >
+                <LayoutGrid size={12} /> View Saved ({savedCount})
+              </button>
               {!stage.terminal && declinedStage && (
                 <button
                   onClick={(e) => openStageUpdate(sme, e, { presetStage: declinedStage.name })}

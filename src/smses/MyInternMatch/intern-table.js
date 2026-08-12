@@ -853,6 +853,7 @@ const STATUS_TO_PIPELINE_MAP = {
 const CUSTOM_NEXT_STAGE_MAP = {
   applied: "interviewed",
   requested: "accepted",
+  shortlisted: "Contacted/Interview", // Add this mapping
 }
 
 const computeNextStageName = (currentStage) => {
@@ -912,7 +913,7 @@ const NextStageIndicator = ({ currentStage }) => {
 
 const INTERN_ROW_ACTIONS = {
   Matched: { primary: { label: "Shortlist", kind: "shortlist" } },
-  Shortlisted: { primary: { label: "Request", kind: "request" } },
+  Shortlisted: { primary: { label: "Contact/Interview", kind: "stage" } },
   Requested: { primary: { label: "View Status", kind: "stage" } },
   Applied: { primary: { label: "View Application", kind: "stage" } },
   "Contacted/Interview": { primary: { label: "Schedule Interview", kind: "stage" } },
@@ -4410,7 +4411,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                     />
                   </>
                 )
-              })()}
+              })}
 
             {/* Every filter offers the values actually present in the table,
                 so you pick from what exists instead of guessing at a search

@@ -120,6 +120,48 @@ const MULTI_UPLOAD_DOCUMENTS = [
   "CV"
 ];
 
+// ─── Impersonation session flags ────────────────────────────────────────────
+// Every screen that can be reached "as" another party writes the same four
+// keys, and every exit path must clear all four. Leaving one behind is how a
+// stale viewOnlyBigScore or viewOrigin ends up changing the behaviour of a
+// completely unrelated page later in the same browser session.
+const IMPERSONATION_KEYS = [
+  "investorViewMode",
+  "viewingSMEId",
+  "viewingSMEName",
+  "viewOrigin",
+  "viewOnlyBigScore",
+];
+
+// Where "Exit View Mode" should return to, based on who entered the view.
+// Mirrors OverallCompanyHealth's handleExitInvestorView exactly — that page
+// already got this right; this one used to hardcode the catalyst destination,
+// so an investor or facilitator was dumped into the catalyst cohorts list.
+const COHORTS_ROUTE_BY_ORIGIN = {
+  cmf: "/cmf-cohorts",
+  catalyst: "/catalyst/cohorts",
+  advisor: "/advisor-cohorts",
+};
+// Investors are the fallback because theirs is the /my-cohorts route. Any new
+// viewer type must be added above, or its Back button silently sends people to
+// the investor portfolio instead of their own list — which is exactly what an
+// advisor saw before "advisor" was mapped here.
+const DEFAULT_COHORTS_ROUTE = "/my-cohorts";
+
+const VIEWER_LABEL = {
+  catalyst: "Catalyst view — documents for:",
+  cmf: "Facilitator view — documents for:",
+  advisor: "Advisor view — documents for:",
+  investor: "Investor view — documents for:",
+};
+
+const BACK_LABEL = {
+  catalyst: "Back to Catalyst Cohorts",
+  cmf: "Back to CMF Cohorts",
+  advisor: "Back to Advisory Cohorts",
+  investor: "Back to My Cohorts",
+};
+
 const MyDocuments = () => {
   const [profileData, setProfileData] = useState({});
   const [filter, setFilter] = useState("all");
@@ -141,6 +183,9 @@ const MyDocuments = () => {
   const [isInvestorView, setIsInvestorView] = useState(false);
  const [viewingSMEId, setViewingSMEId] = useState(null);
  const [viewingSMEName, setViewingSMEName] = useState("");
+ // Read alongside the other flags so the banner and the exit button can tell
+ // a catalyst from an investor from a facilitator.
+ const [viewOrigin, setViewOrigin] = useState("investor");
   const [expandedFinancialStatements, setExpandedFinancialStatements] = useState(false);
   const [expandedFunderContracts, setExpandedFunderContracts] = useState(false);
   const [catalystCoreDocuments, setCatalystCoreDocuments] = useState([]);
@@ -223,17 +268,30 @@ const MyDocuments = () => {
     }
   };
 
+  // Clears every impersonation flag and returns to whichever cohorts list the
+  // viewer came from. Uses absolute paths — the old version used the relative
+  // string 'catalyst/cohorts', which only resolved correctly by accident from
+  // this particular route and would append rather than replace from a nested
+  // one.
+  const handleExitInvestorView = () => {
+    const origin = sessionStorage.getItem("viewOrigin");
+    IMPERSONATION_KEYS.forEach((key) => sessionStorage.removeItem(key));
+    window.location.href = COHORTS_ROUTE_BY_ORIGIN[origin] || DEFAULT_COHORTS_ROUTE;
+  };
+
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode") === "true";
     const smeId = sessionStorage.getItem("viewingSMEId");
     const smeName = sessionStorage.getItem("viewingSMEName");
+    const origin = sessionStorage.getItem("viewOrigin");
     const catalystId = getAuth().currentUser?.uid;
 
     if (investorViewMode && smeId) {
       setIsInvestorView(true);
       setViewingSMEId(smeId);
       setViewingSMEName(smeName || "SME");
-      console.log("Investor view mode active, viewing SME:", smeId);
+      setViewOrigin(origin || "investor");
+      console.log("Investor view mode active, viewing SME:", smeId, "origin:", origin);
       
       if (catalystId) {
         setLoadingCoreDocs(true);
@@ -1062,8 +1120,17 @@ const handleFileUpload = async (docLabel, file) => {
     });
   };
   
-  const documentsToDisplay = isInvestorView 
-    ? (catalystCoreDocuments.length > 0 ? catalystCoreDocuments : [])
+  // A catalyst can pin a required set in their Application Brief, and when they
+  // have, that's the list a viewer should review against. Everyone else —
+  // investors, advisors, facilitators — has no such set to read (there is no
+  // catalystProfiles doc for them at all), and a catalyst who never configured
+  // one has nothing to narrow by either. Those cases used to resolve to an
+  // empty array, which rendered "No required documents found for this program"
+  // on a page that had loaded perfectly well. Falling back to the full list
+  // shows what the business actually has on file instead of a blank table.
+  const hasRequiredDocSet = catalystCoreDocuments.length > 0;
+  const documentsToDisplay = isInvestorView
+    ? (hasRequiredDocSet ? catalystCoreDocuments : DOCUMENTS)
     : DOCUMENTS;
     
   const filteredDocuments = documentsToDisplay.filter((docLabel) => {
@@ -1768,16 +1835,13 @@ const badgeStyles = (status) => {
            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
              <Eye size={20} />
              <div>
-               <strong>Viewing required documents for:</strong> {viewingSMEName}
+               <strong>
+                 {VIEWER_LABEL[viewOrigin] || VIEWER_LABEL.investor}
+               </strong> {viewingSMEName}
              </div>
            </div>
            <button
-             onClick={() => {
-               sessionStorage.removeItem('investorViewMode');
-               sessionStorage.removeItem('viewingSMEId');
-               sessionStorage.removeItem('viewingSMEName');
-               window.location.href = 'catalyst/cohorts';
-             }}
+             onClick={handleExitInvestorView}
              style={{
                background: 'rgba(255,255,255,0.2)',
                border: '1px solid white',
@@ -1791,7 +1855,7 @@ const badgeStyles = (status) => {
              onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.3)'}
              onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.2)'}
            >
-             Exit View Mode
+             ← {BACK_LABEL[viewOrigin] || BACK_LABEL.investor}
            </button>
          </div>
        )}
@@ -1816,7 +1880,9 @@ const badgeStyles = (status) => {
              margin: "0 0 8px 0",
              letterSpacing: "-0.025em"
            }}>
-             {isInvestorView ? `${viewingSMEName}'s Required Documents` : "My Documents"}
+             {isInvestorView
+               ? `${viewingSMEName}'s ${hasRequiredDocSet ? "Required Documents" : "Documents"}`
+               : "My Documents"}
            </h1>
            <p style={{
              fontSize: "1.125rem",
@@ -1824,8 +1890,10 @@ const badgeStyles = (status) => {
              margin: "0",
              fontWeight: "400"
            }}>
-             {isInvestorView 
-               ? `Reviewing documents required by your program` 
+             {isInvestorView
+               ? (hasRequiredDocSet
+                 ? "Reviewing the documents required by your programme"
+                 : "Reviewing everything this business has on file")
                : "Track all your submitted documents in one place"}
            </p>
 
@@ -2051,7 +2119,9 @@ const badgeStyles = (status) => {
              fontWeight: "500",
              width: "100%"
            }}>
-             {isInvestorView ? "No required documents found for this program" : "No documents found"}
+             {isInvestorView
+               ? (hasRequiredDocSet ? "No required documents match the current filters" : "This business hasn't uploaded any documents yet")
+               : "No documents found"}
            </div>
          ) : (
            <div className="documents-table-container" style={{
