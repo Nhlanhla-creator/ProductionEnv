@@ -10,7 +10,7 @@ import {
   Share2, ArrowRight, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase,
   Video, Trash2, Plus, GripVertical, ExternalLink,
-  ArrowUp, ArrowDown, ArrowUpDown
+  ArrowUp, ArrowDown, ArrowUpDown, Bookmark
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import { serverTimestamp, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -251,11 +251,13 @@ const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(
 // under these reserved keys inside the same columnWidths map.
 const NAME_KEY = "__name__";
 const ACTION_KEY = "__action__";
-const FIXED_WIDTHS = { [NAME_KEY]: 210, [ACTION_KEY]: 200 };
+// Actions is 240 rather than 200 because it now holds three controls: the
+// stage button, the bookmark, and the ⋮ menu.
+const FIXED_WIDTHS = { [NAME_KEY]: 210, [ACTION_KEY]: 240 };
 const MIN_COLUMN_WIDTH = 84;
 
 const NAME_TOOLTIP = "The registered business name, with its programme number appended when the same business has applied to more than one of your programmes. Click the eye to open its full profile.";
-const ACTION_TOOLTIP = "Move the application to its next stage, or open quick actions to view the profile, open the BIG Score page, or share an NDA.";
+const ACTION_TOOLTIP = "Move the application to its next stage, bookmark it to your saved list, or open quick actions to view the profile, open the BIG Score page, or share an NDA.";
 
 // Sorting reads the mapped row field, which doesn't always match the column
 // key (e.g. "match" lives on matchPercentage, "applied" on applicationDateRaw,
@@ -331,7 +333,10 @@ const DEFAULT_DENSITY = 'comfortable';
 const BUILTIN_VIEW_ID = "__default__";
 // v3: views now carry per-column widths, including the two fixed columns, so a
 // v2 view would leave every width undefined.
-const VIEWS_STORAGE_KEY = "sme-table-views-v3";
+// v4: the Actions column got wider to fit the bookmark button. A stored v3
+// view would keep the old 200px and leave the row cramped, so the key is
+// bumped rather than trying to patch widths in place.
+const VIEWS_STORAGE_KEY = "sme-table-views-v4";
 
 // Keeps a stored column order valid against the columns this build of the
 // table actually knows about: drops keys that no longer exist, and appends
@@ -442,6 +447,18 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [pageSize, setPageSize] = useState(25);
   const [sentNDAs, setSentNDAs] = useState({});
   const [isNDASharing, setIsNDASharing] = useState({});
+
+  // ─── Save / bookmark state ──────────────────────────────────────────────
+  // Rows are mapped fresh out of PortfolioContext on every refresh, so a
+  // bookmark can't simply be patched into `smes` and left there — the next
+  // context tick would map right over it. savedOverrides is read back by the
+  // mapping effect below, exactly like updatedStages, so an optimistic flip
+  // survives a re-map until the server value catches up.
+  const [savedOverrides, setSavedOverrides] = useState({});
+  const [savingRows, setSavingRows] = useState({});
+  // "Saved" toolbar toggle: narrows the table to bookmarked rows. Kept
+  // separate from localFilters so it doesn't count as a column filter.
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
 
   // Optimistic stage overrides, keyed by rowKeyOf(). These are now *read back*
   // by the mapping effect below — without that, a PortfolioContext refresh
@@ -632,11 +649,16 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       const funding = a.profile?.useOfFunds || {};
       const financials = a.profile?.financialOverview || {};
       const multiProgram = enriched.filter((e) => e.smeId === a.smeId).length > 1;
+      const key = rowKeyOf(a.smeId, a.programIndex);
 
       // An in-flight or recently-committed stage change wins over whatever the
       // context is still reporting.
-      const override = updatedStages[rowKeyOf(a.smeId, a.programIndex)];
+      const override = updatedStages[key];
       const resolvedStage = override?.stage || a.pipelineStage || a.status || "Matched";
+
+      // Same idea for the bookmark: an optimistic flip outranks the context
+      // value until the server round-trip lands.
+      const savedOverride = savedOverrides[key];
 
       return {
         id: a.smeId, docId: a.docId, programIndex: a.programIndex,
@@ -661,6 +683,10 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         currentStatus: resolvedStage,
         pipelineStage: resolvedStage,
         nextStage: override?.nextStage || a.nextStage || getNextStage(resolvedStage, activeStages),
+        // Bookmark flag, stored on the application document itself so it
+        // follows the catalyst across devices rather than living in
+        // localStorage.
+        saved: savedOverride != null ? savedOverride : !!a.saved,
         availableDates: a.availableDates || [],
         lastActivity: a.lastActiveDate || a.lastActivity || "N/A",
         assignedUser: a.assignedUser || "Unassigned",
@@ -686,11 +712,16 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     mapped.sort((a, b) => b.bigScore - a.bigScore);
     setSmes(mapped);
     onSMEsLoaded?.(mapped);
-  }, [enriched, stageFilter, catalystFormData, activeStages, updatedStages]);
+  }, [enriched, stageFilter, catalystFormData, activeStages, updatedStages, savedOverrides]);
 
   // ─── Filtering & Sorting ────────────────────────────────────────────────────
   const filteredAndSortedSMEs = useMemo(() => {
     let result = [...smes];
+
+    // Saved-only view. Applied first, and deliberately left out of
+    // activeFilterCount — it's a view toggle with its own visible chip, not a
+    // column filter, and counting it would make the filter badge misleading.
+    if (showSavedOnly) result = result.filter(sme => sme.saved);
 
     if (localFilters.name?.trim()) {
       const query = localFilters.name.toLowerCase().trim();
@@ -770,10 +801,14 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
 
     return result;
-  }, [smes, sortConfig, localFilters, activeStages]);
+  }, [smes, sortConfig, localFilters, activeStages, showSavedOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  // Counted off the full mapped set, not the filtered one, so the chip still
+  // reads "Saved (4)" while you're filtered down to a single row.
+  const savedCount = useMemo(() => smes.filter((s) => s.saved).length, [smes]);
 
   const sectorOptions = useMemo(
     () => [...new Set(smes.map((s) => s.sector).filter((s) => s && s !== "N/A"))].sort(),
@@ -817,6 +852,72 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       case 'support': return !!localFilters.support?.trim();
       case 'services': return !!localFilters.services?.trim();
       default: return false;
+    }
+  };
+
+  // ─── Save / bookmark ────────────────────────────────────────────────────────
+  // Writes `saved` onto the application document. The UI flips first and rolls
+  // back if the write fails, so the bookmark never lags behind the click.
+  //
+  // Two things worth knowing:
+  //  • setDoc + merge, not updateDoc — matching handleStageUpdate. updateDoc
+  //    rejects outright on a document that doesn't exist yet, which would show
+  //    up here as a bookmark that flips and instantly flips back.
+  //  • It deliberately does NOT touch `updatedAt`. That field drives "Days in
+  //    Stage" and the stalled-row highlighting; bookmarking isn't pipeline
+  //    activity, and stamping it here would quietly reset every attention flag
+  //    in the table.
+  const toggleSaved = async (sme) => {
+    const rowKey = rowKeyOf(sme.id, sme.programIndex);
+    if (savingRows[rowKey]) return;
+
+    const user = auth.currentUser;
+    if (!user) {
+      setNotification({ type: "error", message: "You've been signed out. Please sign in again." });
+      return;
+    }
+
+    const documentId = sme.docId || `${user.uid}_${sme.id}_${sme.programIndex ?? "0"}`;
+    const nextSaved = !sme.saved;
+
+    setSavingRows(prev => ({ ...prev, [rowKey]: true }));
+    setSavedOverrides(prev => ({ ...prev, [rowKey]: nextSaved }));
+    setSmes(prev => prev.map(s =>
+      rowKeyOf(s.id, s.programIndex) === rowKey ? { ...s, saved: nextSaved } : s
+    ));
+
+    try {
+      await setDoc(
+        doc(db, "catalystApplications", documentId),
+        { saved: nextSaved, savedAt: nextSaved ? serverTimestamp() : null },
+        { merge: true }
+      );
+      if (!isMountedRef.current) return;
+      setNotification({
+        type: "success",
+        message: nextSaved ? `${sme.name} saved` : `${sme.name} removed from saved`,
+      });
+    } catch (error) {
+      console.error("Save toggle error:", error);
+      if (!isMountedRef.current) return;
+      setSavedOverrides(prev => {
+        const { [rowKey]: _dropped, ...rest } = prev;
+        return rest;
+      });
+      setSmes(prev => prev.map(s =>
+        rowKeyOf(s.id, s.programIndex) === rowKey ? { ...s, saved: !nextSaved } : s
+      ));
+      setNotification({
+        type: "error",
+        message: `Couldn't ${nextSaved ? "save" : "remove"} ${sme.name}: ${error.message}`,
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setSavingRows(prev => {
+          const { [rowKey]: _done, ...rest } = prev;
+          return rest;
+        });
+      }
     }
   };
 
@@ -988,7 +1089,10 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       case 'bigScore': popupWidth = 380; popupHeight = 450; break;
       case 'match': popupWidth = 380; popupHeight = 420; break;
       case 'stage': popupWidth = 450; popupHeight = 500; break;
-      case 'quickActions': popupWidth = 200; popupHeight = 250; break;
+      // Grew as rows were added (BIG Score page, Save Match, View Saved), so
+      // the flip-upward calculation below still has a truthful height to work
+      // from on rows near the bottom of the viewport.
+      case 'quickActions': popupWidth = 230; popupHeight = 340; break;
       default: popupWidth = 300; popupHeight = 300;
     }
 
@@ -1421,6 +1525,22 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                 <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
               )}
             </span>
+            {/* Saved businesses. The bookmark on each row writes here; this is
+                where you get them back. */}
+            {(showSavedOnly || savedCount > 0) && (
+              <button
+                onClick={() => { setShowSavedOnly((v) => !v); setCurrentPage(1); }}
+                title={showSavedOnly ? "Show all businesses" : "Show only saved businesses"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                  showSavedOnly
+                    ? "bg-[#a67c52] text-white border-[#a67c52]"
+                    : "bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]"
+                }`}
+              >
+                <Bookmark size={12} fill={showSavedOnly ? "#ffffff" : "none"} />
+                {showSavedOnly ? "Showing saved only" : "Saved"} ({savedCount})
+              </button>
+            )}
             {activeFilterCount > 0 && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
                 <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
@@ -1747,11 +1867,29 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                     <tr>
                       <td colSpan={visibleColumns.length + 2} className="text-center py-20 border-b border-[#e6d7c3]">
                         <div className="flex flex-col items-center gap-4">
-                          <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
-                          <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
-                          <p className="text-sm text-[#7d5a50] max-w-xs">
-                            {activeFilterCount > 0 ? "Clear a filter to widen the list." : "Matched businesses will appear here as your programme criteria are applied."}
+                          <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center">
+                            {showSavedOnly
+                              ? <Bookmark size={32} className="text-[#7d5a50] opacity-50" />
+                              : <Users size={32} className="text-[#7d5a50] opacity-50" />}
+                          </div>
+                          <p className="text-lg font-semibold text-[#4a352f]">
+                            {showSavedOnly ? "No Saved Businesses" : "No Businesses Found"}
                           </p>
+                          <p className="text-sm text-[#7d5a50] max-w-xs">
+                            {showSavedOnly
+                              ? "Bookmark a row to keep it here."
+                              : activeFilterCount > 0
+                                ? "Clear a filter to widen the list."
+                                : "Matched businesses will appear here as your programme criteria are applied."}
+                          </p>
+                          {showSavedOnly && (
+                            <button
+                              onClick={() => setShowSavedOnly(false)}
+                              className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold hover:bg-[#4a352f] transition-all"
+                            >
+                              Show all businesses
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1764,6 +1902,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       const nextStageLabel = sme.nextStage || "—";
                       const smeKey = rowKeyOf(sme.id, sme.programIndex);
                       const isSyncing = !!syncingRows[smeKey];
+                      const isSaving = !!savingRows[smeKey];
                       const rowBg = hoveredRowKey === smeKey ? '#fdf8f4' : '#ffffff';
                       const cellCls = `${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top`;
 
@@ -1895,11 +2034,27 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                                   ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
                                   : "text-white hover:shadow-md hover:brightness-105"
                                   }`}
-                                style={{ width: `${Math.max(100, actionWidth - 62)}px`, height: '34px', backgroundColor: isTerminalNegative ? undefined : "#7d5a50" }}
+                                style={{ width: `${Math.max(100, actionWidth - 100)}px`, height: '34px', backgroundColor: isTerminalNegative ? undefined : "#7d5a50" }}
                               >
                                 {!isTerminalNegative && <ArrowRight size={13} className="flex-shrink-0" />}
                                 <span className="truncate">{isTerminalNegative ? statusStyle.stage.name : nextStageLabel}</span>
                               </button>
+
+                              {/* Save / bookmark — borderless so it reads as a
+                                  toggle rather than a third button, and dims
+                                  while the write is in flight. */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleSaved(sme); }}
+                                disabled={isSaving}
+                                aria-pressed={sme.saved}
+                                aria-label={sme.saved ? "Remove from saved" : "Save business"}
+                                title={sme.saved ? "Remove from saved" : "Save business"}
+                                className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-[#f5f0e1] flex-shrink-0 ${isSaving ? "opacity-50 cursor-wait" : ""}`}
+                                style={{ color: sme.saved ? "#a67c52" : "#c8b6a6" }}
+                              >
+                                <Bookmark size={14} fill={sme.saved ? "#a67c52" : "none"} />
+                              </button>
+
                               <button
                                 onClick={(e) => openPopupFromEvent('quickActions', sme, e)}
                                 className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
@@ -2184,6 +2339,15 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                   );
                 })
               )}
+
+              {/* Same destination as the quick-actions item — the summary here,
+                  the full evidence there. */}
+              <button
+                onClick={() => handleViewBigScorePage(selectedSMEForPopup)}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#7d5a50] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]"
+              >
+                <ExternalLink size={12} /> Open full BIG Score page
+              </button>
             </div>
           </div>
         </PopupPortal>
@@ -2383,7 +2547,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
           <div className="fixed z-[1001] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-hidden"
-            style={{ top: activePopup.position.y, left: activePopup.position.x, width: '200px' }}>
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: '230px' }}>
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
               <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
@@ -2392,6 +2556,31 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             <button onClick={() => { handleViewBigScorePage(selectedSMEForPopup); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
             <button onClick={() => openPopup('match', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
             <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
+            {/* Both entry points call the same toggleSaved, so the row bookmark
+                and this item can't drift apart. */}
+            <button
+              onClick={() => { const target = selectedSMEForPopup; closePopup(); toggleSaved(target); }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <Bookmark size={12} fill={selectedSMEForPopup.saved ? "#a67c52" : "none"} />
+              {selectedSMEForPopup.saved ? "Remove from Saved" : "Save Business"}
+            </button>
+            <button
+              onClick={() => {
+                closePopup();
+                setShowSavedOnly(true);
+                setCurrentPage(1);
+                setNotification({
+                  type: "success",
+                  message: savedCount > 0
+                    ? `Showing your ${savedCount} saved business${savedCount === 1 ? "" : "es"}.`
+                    : "You haven't saved any businesses yet — use the bookmark on a row.",
+                });
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <LayoutGrid size={12} /> View Saved ({savedCount})
+            </button>
             {mapStatusToStageId(selectedSMEForPopup.currentStatus, activeStages) === "evaluation" && !sentNDAs[rowKeyOf(selectedSMEForPopup.id, selectedSMEForPopup.programIndex)] && (
               <button onClick={() => handleShareNDA(selectedSMEForPopup)} disabled={isNDASharing[rowKeyOf(selectedSMEForPopup.id, selectedSMEForPopup.programIndex)]} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left disabled:opacity-50">
                 <Share2 size={12} /> Share NDA
