@@ -13,7 +13,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
-import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { serverTimestamp, doc, setDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -39,6 +39,16 @@ const MATCH_LABELS = {
   weak: { min: 20, label: "Weak Fit", color: "#ef4444" },
   poor: { min: 0, label: "Poor Fit", color: "#dc2626" }
 };
+
+// How long the "Update Stage" button waits for the server to acknowledge the
+// write before it hands control back to the user. Firestore persists the write
+// locally the moment it's issued and replays it when the connection recovers,
+// so past this point there is nothing useful left to block on — the old code
+// awaited the full server round-trip, which is why the spinner could sit there
+// for minutes on a slow link and only report success long after the popup was
+// dismissed.
+const STAGE_WRITE_GRACE_MS = 6000;
+const NOTIFICATION_TIMEOUT_MS = 6000;
 
 const getBigScoreLabel = (score) => {
   for (const value of Object.values(BIG_SCORE_LABELS)) {
@@ -80,6 +90,13 @@ const getNextStage = (currentStage, stages = DEFAULT_STAGES) => {
   const nextId = getNextStageId(stages, currentId);
   return getStageById(nextId, stages).name;
 };
+
+// Row identity. Built in exactly one place so the optimistic-update map, the
+// local setSmes patch and the mapping effect can never disagree about what a
+// row is called — the previous code coerced programIndex to a string in one
+// path and left it a number in another, so `s.programIndex === programIndex`
+// silently failed and the table never repainted.
+const rowKeyOf = (smeId, programIndex) => `${smeId}_${programIndex ?? "0"}`;
 
 const formatCurrency = (value) => {
   if (!value || value === "-" || value === "N/A") return value;
@@ -425,7 +442,24 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [pageSize, setPageSize] = useState(25);
   const [sentNDAs, setSentNDAs] = useState({});
   const [isNDASharing, setIsNDASharing] = useState({});
+
+  // Optimistic stage overrides, keyed by rowKeyOf(). These are now *read back*
+  // by the mapping effect below — without that, a PortfolioContext refresh
+  // would re-map `enriched` and quietly revert a stage the user had just
+  // moved, which looked like the update had failed.
   const [updatedStages, setUpdatedStages] = useState({});
+
+  // Rows whose write is still in flight with the server. Used to show a small
+  // "syncing" hint on the row rather than blocking the whole popup.
+  const [syncingRows, setSyncingRows] = useState({});
+
+  // Guards setState calls that resolve after unmount (a slow write can outlive
+  // the screen it was started from).
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // Column drag-to-reorder + resize state
   const [draggedColumn, setDraggedColumn] = useState(null);
@@ -456,6 +490,16 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   const { enriched, catalystFormData, loading } = usePortfolio();
+
+  // Notifications clear themselves. Previously a message raised by a write
+  // that resolved minutes later would just sit on screen indefinitely.
+  useEffect(() => {
+    if (!notification) return;
+    const timer = setTimeout(() => {
+      if (isMountedRef.current) setNotification(null);
+    }, NOTIFICATION_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [notification]);
 
   // ─── Programme-aware pipeline stages ───────────────────────────────────────
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
@@ -589,6 +633,11 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       const financials = a.profile?.financialOverview || {};
       const multiProgram = enriched.filter((e) => e.smeId === a.smeId).length > 1;
 
+      // An in-flight or recently-committed stage change wins over whatever the
+      // context is still reporting.
+      const override = updatedStages[rowKeyOf(a.smeId, a.programIndex)];
+      const resolvedStage = override?.stage || a.pipelineStage || a.status || "Matched";
+
       return {
         id: a.smeId, docId: a.docId, programIndex: a.programIndex,
         name: (entity.registeredName || a.smeName || "N/A") + (multiProgram ? ` (P${parseInt(a.programIndex || 0) + 1})` : ""),
@@ -609,9 +658,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         bigScore: a.bigScore || 0,
         compliance: a.compliance || 0, legitimacy: a.legitimacy || 0,
         fundability: a.fundability || 0, pis: a.pis || 0, leadership: a.leadership || 0,
-        currentStatus: a.pipelineStage || a.status || "Matched",
-        pipelineStage: a.pipelineStage || a.status || "Matched",
-        nextStage: a.nextStage || getNextStage(a.pipelineStage || a.status, activeStages),
+        currentStatus: resolvedStage,
+        pipelineStage: resolvedStage,
+        nextStage: override?.nextStage || a.nextStage || getNextStage(resolvedStage, activeStages),
         availableDates: a.availableDates || [],
         lastActivity: a.lastActiveDate || a.lastActivity || "N/A",
         assignedUser: a.assignedUser || "Unassigned",
@@ -637,7 +686,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     mapped.sort((a, b) => b.bigScore - a.bigScore);
     setSmes(mapped);
     onSMEsLoaded?.(mapped);
-  }, [enriched, stageFilter, catalystFormData, activeStages]);
+  }, [enriched, stageFilter, catalystFormData, activeStages, updatedStages]);
 
   // ─── Filtering & Sorting ────────────────────────────────────────────────────
   const filteredAndSortedSMEs = useMemo(() => {
@@ -952,7 +1001,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     if (y < 20) y = 20;
 
     setSelectedSMEForPopup(sme);
-    setActivePopup({ type, smeKey: `${sme.id}_${sme.programIndex}`, position: { x, y }, rect });
+    setActivePopup({ type, smeKey: rowKeyOf(sme.id, sme.programIndex), position: { x, y }, rect });
 
     if (type === 'bigScore') {
       setBigScoreLoading(true);
@@ -963,6 +1012,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       const userId = sme.userId || sme.id;
       getDoc(doc(db, "bigEvaluations", userId))
         .then((snap) => {
+          if (!isMountedRef.current) return;
           if (snap.exists()) {
             const s = snap.data().scores || {};
             setBigScoreData({
@@ -977,7 +1027,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
           }
         })
         .catch((err) => console.error("bigEvaluations fetch error:", err))
-        .finally(() => setBigScoreLoading(false));
+        .finally(() => { if (isMountedRef.current) setBigScoreLoading(false); });
     }
     if (type === 'match') {
       if (sme.matchBreakdown) {
@@ -1018,60 +1068,169 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     setShowCalendarPopup(false);
   };
 
+  // ─── Stage update ───────────────────────────────────────────────────────────
+  // Paints the new stage into local state straight away, so the table responds
+  // the instant the user confirms rather than after the server replies.
+  const applyLocalStage = useCallback((smeId, programIndex, stage, followingStage) => {
+    const key = rowKeyOf(smeId, programIndex);
+    setUpdatedStages(prev => ({ ...prev, [key]: { stage, nextStage: followingStage } }));
+    setSmes(prev => prev.map(s =>
+      rowKeyOf(s.id, s.programIndex) === key
+        ? { ...s, currentStatus: stage, pipelineStage: stage, nextStage: followingStage }
+        : s
+    ));
+  }, []);
+
+  // Puts the row back if the server ultimately rejects the write.
+  const revertLocalStage = useCallback((smeId, programIndex, previousStage, previousNextStage) => {
+    const key = rowKeyOf(smeId, programIndex);
+    setUpdatedStages(prev => {
+      const { [key]: _dropped, ...rest } = prev;
+      return rest;
+    });
+    setSmes(prev => prev.map(s =>
+      rowKeyOf(s.id, s.programIndex) === key
+        ? { ...s, currentStatus: previousStage, pipelineStage: previousStage, nextStage: previousNextStage }
+        : s
+    ));
+  }, []);
+
+  const markSyncing = useCallback((key, value) => {
+    setSyncingRows(prev => {
+      if (value) return { ...prev, [key]: true };
+      const { [key]: _dropped, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
   const handleStageUpdate = async () => {
+    const sme = selectedSMEForPopup;
+    if (!sme) return;
+
     const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
     const errors = {};
     if (!stageUpdateData.nextStage) errors.nextStage = "Please select a stage";
     if (stageFields.showMessage && !stageUpdateData.message.trim()) errors.message = "Please provide a message";
     if (Object.keys(errors).length > 0) { setStageFormErrors(errors); return; }
 
-    setIsStageSubmitting(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-
-      const smeId = selectedSMEForPopup.id;
-      const programIndex = selectedSMEForPopup.programIndex || "0";
-      const documentId = `${user.uid}_${smeId}_${programIndex}`;
-      const nextStage = getNextStage(stageUpdateData.nextStage, activeStages);
-      const updateData = {
-        status: stageUpdateData.nextStage,
-        pipelineStage: stageUpdateData.nextStage,
-        nextStage: nextStage,
-        updatedAt: serverTimestamp(),
-        lastMessage: stageUpdateData.message,
-        lastActivity: new Date().toISOString()
-      };
-
-      if (stageFields.showMeeting && stageUpdateData.meetingLocation && stageUpdateData.meetingPurpose) {
-        updateData.meetingDetails = {
-          time: stageUpdateData.meetingTime, location: stageUpdateData.meetingLocation,
-          purpose: stageUpdateData.meetingPurpose
-        };
-      }
-
-      await updateDoc(doc(db, "catalystApplications", documentId), updateData);
-
-      const stageKey = `${smeId}_${programIndex}`;
-      setUpdatedStages(prev => ({ ...prev, [stageKey]: stageUpdateData.nextStage }));
-      setSmes(prev => prev.map(s =>
-        s.id === smeId && s.programIndex === programIndex
-          ? { ...s, currentStatus: stageUpdateData.nextStage, pipelineStage: stageUpdateData.nextStage, nextStage: getNextStage(stageUpdateData.nextStage, activeStages) }
-          : s
-      ));
-
-      setNotification({ type: "success", message: `Application updated to ${stageUpdateData.nextStage} successfully` });
-      closePopup();
-    } catch (error) {
-      console.error("Stage update error:", error);
-      setNotification({ type: "error", message: `Failed to update status: ${error.message}` });
-    } finally {
-      setIsStageSubmitting(false);
+    const user = auth.currentUser;
+    if (!user) {
+      setNotification({ type: "error", message: "You've been signed out. Please sign in again." });
+      return;
     }
+
+    const smeId = sme.id;
+    const programIndex = sme.programIndex;          // raw — never coerced
+    const rowKey = rowKeyOf(smeId, programIndex);
+    const previousStage = sme.currentStatus;
+    const previousNextStage = sme.nextStage;
+    const chosenStage = stageUpdateData.nextStage;
+    const followingStage = getNextStage(chosenStage, activeStages);
+    const messageText = stageUpdateData.message;
+    const meetingSnapshot = {
+      time: stageUpdateData.meetingTime,
+      location: stageUpdateData.meetingLocation,
+      purpose: stageUpdateData.meetingPurpose,
+    };
+    const termSheetFile = stageUpdateData.termSheetFile;
+    const availabilitySnapshot = availabilities;
+
+    // Prefer the document id the context already resolved. Reconstructing it
+    // from parts is only a fallback — a mismatch there was silently pointing
+    // the write at a document that didn't exist.
+    const documentId = sme.docId || `${user.uid}_${smeId}_${programIndex ?? "0"}`;
+
+    setIsStageSubmitting(true);
+
+    const payload = {
+      status: chosenStage,
+      pipelineStage: chosenStage,
+      nextStage: followingStage,
+      updatedAt: serverTimestamp(),
+      lastMessage: messageText,
+      lastActivity: new Date().toISOString(),
+    };
+
+    if (stageFields.showMeeting && meetingSnapshot.location && meetingSnapshot.purpose) {
+      payload.meetingDetails = meetingSnapshot;
+    }
+    if (stageFields.showAvailability && availabilitySnapshot.length > 0) {
+      payload.availableDates = availabilitySnapshot.map(a => ({
+        date: a.date instanceof Date ? a.date.toISOString() : a.date,
+        timeSlots: a.timeSlots || [],
+        timeZone: a.timeZone || timeZone,
+        status: a.status || "available",
+      }));
+    }
+
+    // setDoc + merge instead of updateDoc: updateDoc rejects outright when the
+    // document doesn't exist yet, which surfaced as a silent failure.
+    const performWrite = async () => {
+      const finalPayload = { ...payload };
+      if (stageFields.showTermSheet && termSheetFile) {
+        const path = `termSheets/${user.uid}/${smeId}_${Date.now()}_${termSheetFile.name}`;
+        const fileRef = ref(storage, path);
+        await uploadBytes(fileRef, termSheetFile);
+        finalPayload.termSheetUrl = await getDownloadURL(fileRef);
+        finalPayload.termSheetName = termSheetFile.name;
+      }
+      await setDoc(doc(db, "catalystApplications", documentId), finalPayload, { merge: true });
+    };
+
+    const tracked = performWrite()
+      .then(() => ({ status: "ok" }))
+      .catch((error) => ({ status: "error", error }));
+
+    // Optimistic: the row moves now, not in six seconds and not in six minutes.
+    applyLocalStage(smeId, programIndex, chosenStage, followingStage);
+    markSyncing(rowKey, true);
+    onStageOverride?.({ smeId, programIndex, stage: chosenStage, nextStage: followingStage });
+
+    const outcome = await Promise.race([
+      tracked,
+      new Promise((resolve) => setTimeout(() => resolve({ status: "pending" }), STAGE_WRITE_GRACE_MS)),
+    ]);
+
+    if (!isMountedRef.current) return;
+
+    setIsStageSubmitting(false);
+    closePopup();
+
+    if (outcome.status === "ok") {
+      markSyncing(rowKey, false);
+      setNotification({ type: "success", message: `${sme.name} moved to ${chosenStage}` });
+      return;
+    }
+
+    if (outcome.status === "error") {
+      markSyncing(rowKey, false);
+      revertLocalStage(smeId, programIndex, previousStage, previousNextStage);
+      console.error("Stage update error:", outcome.error);
+      setNotification({ type: "error", message: `Couldn't update stage: ${outcome.error?.message || "unknown error"}` });
+      return;
+    }
+
+    // Still pending. Firestore has the write queued locally and will replay it
+    // as soon as the connection allows, so we let the user carry on and only
+    // come back to them if it eventually fails.
+    setNotification({
+      type: "info",
+      message: `${sme.name} moved to ${chosenStage} — still syncing to the server.`,
+    });
+
+    tracked.then((result) => {
+      if (!isMountedRef.current) return;
+      markSyncing(rowKey, false);
+      if (result.status === "error") {
+        revertLocalStage(smeId, programIndex, previousStage, previousNextStage);
+        console.error("Stage update error (deferred):", result.error);
+        setNotification({ type: "error", message: `${sme.name} couldn't be saved and has been put back to ${previousStage}.` });
+      }
+    });
   };
 
   const handleShareNDA = async (sme) => {
-    const smeKey = `${sme.id}_${sme.programIndex}`;
+    const smeKey = rowKeyOf(sme.id, sme.programIndex);
     try {
       setIsNDASharing(prev => ({ ...prev, [smeKey]: true }));
       const user = auth.currentUser;
@@ -1101,7 +1260,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     } catch (error) {
       setNotification({ type: "error", message: `Failed to share NDA: ${error.message}` });
     } finally {
-      setIsNDASharing(prev => ({ ...prev, [smeKey]: false }));
+      if (isMountedRef.current) setIsNDASharing(prev => ({ ...prev, [smeKey]: false }));
     }
   };
 
@@ -1197,8 +1356,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         if (!user) return;
         const snapshot = await getDocs(query(collection(db, "shared_nda"), where("catalystId", "==", user.uid), where("status", "==", "sent")));
         const sentMap = {};
-        snapshot.docs.forEach(doc => { const data = doc.data(); sentMap[`${data.smeId}_${data.programIndex}`] = true; });
-        setSentNDAs(sentMap);
+        snapshot.docs.forEach(doc => { const data = doc.data(); sentMap[rowKeyOf(data.smeId, data.programIndex)] = true; });
+        if (isMountedRef.current) setSentNDAs(sentMap);
       } catch (error) { console.error("Error loading sent NDAs:", error); }
     };
     if (auth.currentUser) loadSentNDAs();
@@ -1230,11 +1389,17 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const actionWidth = widthOf(ACTION_KEY);
   const totalWidth = nameWidth + actionWidth + visibleColumns.reduce((sum, key) => sum + widthOf(key), 0);
 
+  const notificationTone = notification?.type === "success"
+    ? "bg-green-50 text-green-800 border-green-200"
+    : notification?.type === "info"
+      ? "bg-[#fff8ed] text-[#8a5a12] border-[#e8c99a]"
+      : "bg-red-50 text-red-800 border-red-200";
+
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="w-full space-y-4 p-6">
       {notification && (
-        <div className={`px-4 py-3 rounded-xl text-sm font-medium border ${notification.type === "success" ? "bg-green-50 text-green-800 border-green-200" : "bg-red-50 text-red-800 border-red-200"}`}>
+        <div className={`px-4 py-3 rounded-xl text-sm font-medium border ${notificationTone}`}>
           <div className="flex items-center justify-between">
             <span>{notification.message}</span>
             <button onClick={() => setNotification(null)} className="ml-2 text-current opacity-50 hover:opacity-100"><X size={16} /></button>
@@ -1259,6 +1424,11 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             {activeFilterCount > 0 && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
                 <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+              </span>
+            )}
+            {Object.keys(syncingRows).length > 0 && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff8ed] text-[#8a5a12] border border-[#e8c99a]">
+                <RotateCcw size={12} className="animate-spin" /> Syncing {Object.keys(syncingRows).length} change{Object.keys(syncingRows).length > 1 ? "s" : ""}
               </span>
             )}
           </div>
@@ -1592,7 +1762,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       const statusStyle = getStatusStyle(sme.currentStatus, activeStages);
                       const isTerminalNegative = /declined|withdrawn/i.test(statusStyle.stage.name || "");
                       const nextStageLabel = sme.nextStage || "—";
-                      const smeKey = `${sme.id}_${sme.programIndex}`;
+                      const smeKey = rowKeyOf(sme.id, sme.programIndex);
+                      const isSyncing = !!syncingRows[smeKey];
                       const rowBg = hoveredRowKey === smeKey ? '#fdf8f4' : '#ffffff';
                       const cellCls = `${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top`;
 
@@ -1636,13 +1807,20 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           case 'status':
                             return (
                               <td key={key} className={`${ds.cell} border-r border-b border-[#e6d7c3] align-top`}>
-                                <span
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap"
-                                  style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
-                                  title={statusStyle.stage.tooltip}
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
-                                </span>
+                                <div className="flex flex-col items-start gap-1">
+                                  <span
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap"
+                                    style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
+                                    title={statusStyle.stage.tooltip}
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
+                                  </span>
+                                  {isSyncing && (
+                                    <span className="text-[10px] text-[#a89482] italic" title="Saved on this device — waiting for the server to confirm">
+                                      syncing…
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                             );
                           case 'applied':
@@ -2153,6 +2331,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                         <label className="block text-xs font-semibold text-[#4a352f] mb-1">Programme Offer Document (PDF/DOC)</label>
                         <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setStageUpdateData(prev => ({ ...prev, termSheetFile: e.target.files[0] }))}
                           className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-xs" />
+                        <p className="text-[10px] text-[#a89482] mt-1">Uploads in the background — you don't need to wait on this screen.</p>
                       </div>
                     )}
                   </>
@@ -2213,8 +2392,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             <button onClick={() => { handleViewBigScorePage(selectedSMEForPopup); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
             <button onClick={() => openPopup('match', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
             <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
-            {mapStatusToStageId(selectedSMEForPopup.currentStatus, activeStages) === "evaluation" && !sentNDAs[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`] && (
-              <button onClick={() => handleShareNDA(selectedSMEForPopup)} disabled={isNDASharing[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`]} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left disabled:opacity-50">
+            {mapStatusToStageId(selectedSMEForPopup.currentStatus, activeStages) === "evaluation" && !sentNDAs[rowKeyOf(selectedSMEForPopup.id, selectedSMEForPopup.programIndex)] && (
+              <button onClick={() => handleShareNDA(selectedSMEForPopup)} disabled={isNDASharing[rowKeyOf(selectedSMEForPopup.id, selectedSMEForPopup.programIndex)]} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left disabled:opacity-50">
                 <Share2 size={12} /> Share NDA
               </button>
             )}

@@ -392,7 +392,7 @@ const HowItWorksCorporates = () => {
           </div>
         </div>
 
-        {/* 🚀 REGISTER NOW CTA - BEFORE VIDEOS */}
+        {/* 🚀 REGISTER NOW CTA */}
         <section style={{
           marginBottom: '50px',
           padding: '40px',
@@ -446,124 +446,6 @@ const HowItWorksCorporates = () => {
           >
             Register Now <FaArrowRight size={14} />
           </button>
-        </section>
-
-        {/* Video Section - 3 videos for corporates */}
-        <section style={{
-          marginBottom: '50px',
-          padding: '40px 0',
-          borderTop: `1px solid ${colors.border}`,
-          borderBottom: `1px solid ${colors.border}`,
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-            <p style={{
-              color: colors.secondary,
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              marginBottom: '8px',
-            }}>
-              Watch & Learn
-            </p>
-            <h2 style={{
-              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-              fontWeight: 800,
-              color: colors.dark,
-              margin: 0,
-            }}>
-              How Corporates Make <span style={{ color: colors.primary }}>an Impact</span>
-            </h2>
-          </div>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '24px',
-          }}>
-            {[
-              {
-                title: 'Sponsor Accelerators',
-                description: 'Learn how corporates sponsor business accelerator programs through BIG.',
-                video: '/Corporate_Accelerators.mp4',
-                poster: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=225&fit=crop',
-              },
-              {
-                title: 'Supplier Development',
-                description: 'Discover how to develop your supply chain with vetted businesses.',
-                video: '/Corporate_Supplier.mp4',
-                poster: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=225&fit=crop',
-              },
-              {
-                title: 'Track Impact',
-                description: 'See how to track and report on your CSI and ESD impact.',
-                video: '/Corporate_Impact.mp4',
-                poster: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=225&fit=crop',
-              },
-            ].map((item, index) => (
-              <div
-                key={index}
-                style={{
-                  background: colors.white,
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-6px)';
-                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.12)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.06)';
-                }}
-              >
-                <div style={{
-                  backgroundColor: colors.primary,
-                  color: colors.white,
-                  padding: '15px',
-                  textAlign: 'center',
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                }}>
-                  {item.title}
-                </div>
-                <div style={{
-                  position: 'relative',
-                  paddingBottom: '56.25%',
-                  background: '#000',
-                }}>
-                  <video 
-                    controls 
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                      backgroundColor: '#000',
-                    }}
-                    poster={item.poster}
-                  >
-                    <source src={item.video} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
-                <div style={{ padding: '16px 20px' }}>
-                  <p style={{
-                    fontSize: '0.85rem',
-                    color: colors.muted,
-                    lineHeight: 1.5,
-                    margin: 0,
-                  }}>
-                    {item.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
         </section>
 
         {/* 🛡️ CORPORATE SECURITY SECTION - 4 blocks in one row */}
