@@ -158,7 +158,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
               value={safeData.instructionsForApplying || ""}
               onChange={handleChange}
               rows={4}
-              className={styles.input}
+              className={styles.formTextarea}
               placeholder="Enter application instructions and requirements..."
             />
           </FormField>
@@ -174,7 +174,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
                 name="estimatedReviewTime"
                 value={safeData.estimatedReviewTime || ""}
                 onChange={handleChange}
-                className={styles.input}
+                className={styles.formInput}
                 placeholder="e.g., 2-3 weeks"
                 required
               />
@@ -185,7 +185,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
                 name="programOnboardingTime"
                 value={safeData.programOnboardingTime || ""}
                 onChange={handleChange}
-                className={styles.input}
+                className={styles.formInput}
                 placeholder="e.g., 1-2 weeks after approval"
                 required
               />
@@ -197,7 +197,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
               name="applicationWindow"
               value={safeData.applicationWindow || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               placeholder="e.g., Rolling / Open until [Date] / Quarterly Intake"
               style={{ maxWidth: "400px" }}
               required
@@ -242,7 +242,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
                         name="coreDocumentsOther"
                         value={safeData.coreDocumentsOther || ""}
                         onChange={handleOtherTextChange}
-                        className={styles.input}
+                        className={styles.formInput}
                         placeholder="Please specify other core documents..."
                         style={{ width: "100%", maxWidth: "280px" }}
                       />
@@ -314,7 +314,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
                       name="otherAdditionalDocuments"
                       value={safeData.otherAdditionalDocuments || ""}
                       onChange={handleChange}
-                      className={styles.input}
+                      className={styles.formInput}
                       placeholder="Please specify any additional documents..."
                       style={{ width: "100%", maxWidth: "280px" }}
                     />
@@ -335,7 +335,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
               value={safeData.evaluationCriteria || ""}
               onChange={handleChange}
               rows={4}
-              className={styles.input}
+              className={styles.formTextarea}
               placeholder='e.g., "We prioritize entrepreneurs with innovative solutions, clear business potential, and commitment to social impact. Strong leadership and coachability are essential."'
             />
           </FormField>
@@ -350,7 +350,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
               value={safeData.impactAlignment || ""}
               onChange={handleChange}
               rows={3}
-              className={styles.input}
+              className={styles.formTextarea}
               placeholder='e.g., "We prioritize businesses that address social challenges, create jobs in underserved communities, or promote environmental sustainability. B-BBEE Level 2 or higher preferred."'
             />
           </FormField>

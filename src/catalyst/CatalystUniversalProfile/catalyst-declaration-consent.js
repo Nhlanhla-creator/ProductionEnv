@@ -11,6 +11,10 @@ export default function CatalystDeclarationConsent({ data = {}, updateData }) {
     updateData({ [name]: checked })
   }
 
+  const handleFileChange = (name, file) => {
+    updateData({ [name]: file })
+  }
+
   // Debug: Log when data changes
   useEffect(() => {
     console.log("DeclarationConsent data updated:", safeData)
@@ -71,6 +75,34 @@ export default function CatalystDeclarationConsent({ data = {}, updateData }) {
             </label>
           </div>
         </div>
+
+        {sessionStorage.getItem("isOnboarding") === "true" && (
+          <div className="bg-brown-50 p-6 rounded-lg mb-8" style={{ border: '1px solid #e8d8cf' }}>
+            <h3 className="text-lg font-semibold text-brown-700 mb-4">CMF Permission Agreement Form</h3>
+            <p className="text-brown-700 mb-4">
+              Please upload the signed permission agreement form confirming that the business/partner has granted permission to be onboarded by the Capital and Market Facilitator (CMF).
+            </p>
+            <div className="mt-4">
+              <input
+                type="file"
+                name="cmfPermissionAgreement"
+                onChange={(e) => handleFileChange("cmfPermissionAgreement", e.target.files[0])}
+                className="block w-full text-sm text-brown-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-brown-50 file:text-brown-700
+                  hover:file:bg-brown-100"
+                required
+              />
+              {safeData.cmfPermissionAgreement && (
+                <p className="text-sm text-green-600 mt-2 font-medium">
+                  ✓ Form attached: {safeData.cmfPermissionAgreement.name || "Permission Document"}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className={`${styles.card} mb-8`}>
           <h3 className={`${styles.subtitle} text-lg font-semibold mb-4`}>

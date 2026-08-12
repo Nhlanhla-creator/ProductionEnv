@@ -87,7 +87,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               name="businessTel"
               value={data.businessTel || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               required
             />
           </FormField>
@@ -99,7 +99,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               value={data.businessEmail || ""}
               onChange={handleChange}
               placeholder="info@company.com"
-              className={styles.input}
+              className={styles.formInput}
               required
             />
           </FormField>
@@ -110,7 +110,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               value={data.physicalAddress || ""}
               onChange={handlePhysicalAddressChange}
               rows={3}
-              className={styles.input}
+              className={styles.formTextarea}
               required
             ></textarea>
           </FormField>
@@ -154,7 +154,7 @@ export default function ContactDetails({ data = {}, updateData }) {
                 value={data.postalAddress || ""}
                 onChange={handleChange}
                 rows={3}
-                className={styles.input}
+                className={styles.formTextarea}
                 required
                 disabled={sameAsPhysical}
                 style={{
@@ -173,7 +173,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               value={data.website || ""}
               onChange={handleChange}
               placeholder="https://"
-              className={styles.input}
+              className={styles.formInput}
             />
           </FormField>
 
@@ -184,7 +184,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               value={data.linkedin || ""}
               onChange={handleChange}
               placeholder="https://linkedin.com/company/..."
-              className={styles.input}
+              className={styles.formInput}
             />
           </FormField>
         </div>
@@ -197,7 +197,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               name="primaryContactTitle"
               value={data.primaryContactTitle || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formSelect}
               required
             >
               <option value="">Select</option>
@@ -215,7 +215,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               name="primaryContactName"
               value={data.primaryContactName || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               required
             />
           </FormField>
@@ -226,7 +226,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               name="primaryContactSurname"
               value={data.primaryContactSurname || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               required
             />
           </FormField>
@@ -237,7 +237,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               name="primaryContactPosition"
               value={data.primaryContactPosition || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               required
             />
           </FormField>
@@ -248,7 +248,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               name="primaryContactMobile"
               value={data.primaryContactMobile || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               required
             />
           </FormField>
@@ -259,7 +259,7 @@ export default function ContactDetails({ data = {}, updateData }) {
               name="primaryContactEmail"
               value={data.primaryContactEmail || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               required
             />
           </FormField>
@@ -307,7 +307,7 @@ export default function ContactDetails({ data = {}, updateData }) {
                   name="secondaryContactTitle"
                   value={data.secondaryContactTitle || ""}
                   onChange={handleChange}
-                  className={styles.input}
+                  className={styles.formSelect}
                 >
                   <option value="">Select</option>
                   <option value="mr">Mr</option>
@@ -324,7 +324,7 @@ export default function ContactDetails({ data = {}, updateData }) {
                   name="secondaryContactName"
                   value={data.secondaryContactName || ""}
                   onChange={handleChange}
-                  className={styles.input}
+                  className={styles.formInput}
                 />
               </FormField>
 
@@ -334,7 +334,7 @@ export default function ContactDetails({ data = {}, updateData }) {
                   name="secondaryContactSurname"
                   value={data.secondaryContactSurname || ""}
                   onChange={handleChange}
-                  className={styles.input}
+                  className={styles.formInput}
                 />
               </FormField>
 
@@ -344,7 +344,7 @@ export default function ContactDetails({ data = {}, updateData }) {
                   name="secondaryContactPosition"
                   value={data.secondaryContactPosition || ""}
                   onChange={handleChange}
-                  className={styles.input}
+                  className={styles.formInput}
                 />
               </FormField>
 
@@ -354,7 +354,7 @@ export default function ContactDetails({ data = {}, updateData }) {
                   name="secondaryContactMobile"
                   value={data.secondaryContactMobile || ""}
                   onChange={handleChange}
-                  className={styles.input}
+                  className={styles.formInput}
                 />
               </FormField>
 
@@ -364,7 +364,7 @@ export default function ContactDetails({ data = {}, updateData }) {
                   name="secondaryContactEmail"
                   value={data.secondaryContactEmail || ""}
                   onChange={handleChange}
-                  className={styles.input}
+                  className={styles.formInput}
                 />
               </FormField>
             </div>

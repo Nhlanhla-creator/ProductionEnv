@@ -503,3 +503,55 @@
   padding: 0.3rem;
   font-size: 0.75rem;
 }
+
+/* ─── Form Field ───────────────────────────────────────────────────────────── */
+.formField {
+  margin-bottom: 0.75rem;
+}
+
+.labelContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--up-brown-800);
+}
+
+.required {
+  color: var(--up-red);
+  font-size: 0.8rem;
+}
+
+/* ─── Tooltip ──────────────────────────────────────────────────────────────── */
+.tooltipWrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.tooltipIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--up-brown-500);
+  cursor: pointer;
+}
+
+.tooltipBox {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  background-color: var(--up-brown-900);
+  color: var(--up-white);
+  font-size: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--up-border-radius);
+  white-space: nowrap;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}

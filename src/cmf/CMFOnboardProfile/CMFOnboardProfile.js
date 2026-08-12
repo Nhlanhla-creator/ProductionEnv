@@ -931,8 +931,69 @@ export default function CMFOnboardProfile() {
   const validateSection = useCallback((type, sectionId, sectionData) => {
     if (!sectionData) return false;
     
-    // Bypass instructions and documents by default
-    if (sectionId === "instructions" || sectionId === "documents" || sectionId === "documentUpload") return true;
+    // Bypass instructions
+    if (sectionId === "instructions") return true;
+
+    const hasFile = (val) => {
+      if (!val) return false;
+      if (val instanceof File) return true;
+      if (Array.isArray(val)) {
+        return val.length > 0 && val.some(item => hasFile(item));
+      }
+      if (typeof val === "object") {
+        return !!(val.name || val.url || val.path || val.downloadURL);
+      }
+      return false;
+    };
+
+    // Validate documents section
+    if (sectionId === "documents" || sectionId === "documentUpload") {
+      const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      if (isLocalhost) return true;
+
+      if (type === "Business") {
+        const requiredIds = [
+          "registrationCertificate",
+          "certifiedIds",
+          "shareRegister",
+          "proofOfAddress",
+          "taxClearanceCert",
+          "vatCertificate",
+          "bbbeeCert",
+          "otherCerts",
+          "industryAccreditationDocs",
+          "companyProfile",
+          "clientReferences"
+        ];
+        return requiredIds.every(id => hasFile(sectionData[id]));
+      }
+      if (type === "Funder") {
+        const requiredIds = ["registrationDocs", "idOffund", "fundMandate"];
+        return requiredIds.every(id => hasFile(sectionData[id]));
+      }
+      if (type === "Catalyst") {
+        const requiredIds = ["standardNda", "standardContract", "programBrochures"];
+        return requiredIds.every(id => hasFile(sectionData[id]));
+      }
+      if (type === "CMF") {
+        const requiredIds = ["cipcRegistration", "taxCompliancePin", "companyProfile", "logo", "proofOfAddress"];
+        return requiredIds.every(id => hasFile(sectionData[id]));
+      }
+      return true;
+    }
+
+    // Validate declarationConsent section
+    if (sectionId === "declarationConsent") {
+      const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
+      const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      
+      const baseValid = !!(sectionData.accuracy && sectionData.dataProcessing);
+      
+      if (isOnboarding && !isLocalhost) {
+        return baseValid && hasFile(sectionData.cmfPermissionAgreement);
+      }
+      return baseValid;
+    }
 
     if (type === "Business") {
       if (sectionId === "entityOverview") {
@@ -1075,8 +1136,25 @@ export default function CMFOnboardProfile() {
 
   // Form Submit Action
   const handleSubmit = async () => {
-    const isValid = validateSection(profileType, activeSection.id, formData[activeSection.id] || {})
-    setCompletedSections(prev => ({ ...prev, [activeSection.id]: isValid }))
+    // Validate all sections before submitting
+    const invalidSections = [];
+    const updatedCompleted = { ...completedSections };
+    
+    sections.forEach((sec) => {
+      const isValid = validateSection(profileType, sec.id, formData[sec.id] || {});
+      updatedCompleted[sec.id] = isValid;
+      if (!isValid) {
+        invalidSections.push(sec.label);
+      }
+    });
+    
+    setCompletedSections(updatedCompleted);
+
+    if (invalidSections.length > 0) {
+      alert(`Cannot submit profile. Please complete all required fields. Incomplete sections:\n- ${invalidSections.join("\n- ")}`);
+      setSaving(false);
+      return;
+    }
 
     if (emailConflictWarning) {
       if (!window.confirm(`${emailConflictWarning}\nDo you still want to proceed?`)) {
