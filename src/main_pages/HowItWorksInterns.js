@@ -402,7 +402,7 @@ const HowItWorksInterns = () => {
           </div>
         </div>
 
-        {/* 🚀 REGISTER NOW CTA - BEFORE VIDEOS */}
+        {/* 🚀 REGISTER NOW CTA */}
         <section style={{
           marginBottom: '50px',
           padding: '40px',
@@ -456,66 +456,6 @@ const HowItWorksInterns = () => {
           >
             Register Now <FaArrowRight size={14} />
           </button>
-        </section>
-
-        {/* Video Section */}
-        <section style={{
-          marginBottom: '50px',
-          padding: '40px 0',
-          borderTop: `1px solid ${colors.border}`,
-          borderBottom: `1px solid ${colors.border}`,
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-            <p style={{
-              color: colors.secondary,
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              marginBottom: '8px',
-            }}>
-              Watch & Learn
-            </p>
-            <h2 style={{
-              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-              fontWeight: 800,
-              color: colors.dark,
-              margin: 0,
-            }}>
-              How Our <span style={{ color: colors.primary }}>Interns Grow</span>
-            </h2>
-          </div>
-
-          <div style={{
-            maxWidth: '700px',
-            margin: '0 auto',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-          }}>
-            <div style={{
-              position: 'relative',
-              paddingBottom: '56.25%',
-              background: '#000',
-            }}>
-              <video 
-                controls 
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
-                  backgroundColor: '#000',
-                }}
-                poster="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=600&h=400&fit=crop&crop=center"
-              >
-                <source src="/Interns.mp4" type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            </div>
-          </div>
         </section>
 
         {/* 🛡️ INTERN SECURITY SECTION - 4 blocks in one row */}
