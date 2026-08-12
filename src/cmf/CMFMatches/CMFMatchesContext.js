@@ -358,6 +358,7 @@ export const CMFMatchesProvider = ({ children }) => {
 
       // 4. Fetch profiles
       const universalProfilesSnap = await getDocs(collection(db, "universalProfiles"))
+      const funderProfilesSnap = await getDocs(collection(db, "MyuniversalProfiles"))
       const catalystProfilesSnap = await getDocs(collection(db, "catalystProfiles"))
 
       const finalSmeMatches = []
@@ -372,7 +373,8 @@ export const CMFMatchesProvider = ({ children }) => {
         const profileData = docSnap.data()
 
         // Detect type using getNestedField
-        const entityType1 = (getNestedField(profileData, "entityOverview.entityType") || "").toUpperCase()
+        const entityType1 = (getNestedField(profileData, "entityOverview.entityType") || 
+                             getNestedField(profileData, "fundManageOverview.entityType") || "").toUpperCase()
         const entityType2 = (getNestedField(profileData, "productsServices.entityType") || "").toUpperCase()
 
         const isSME = entityType1 === "SME" || entityType1 === "SMSE" || entityType1 === "BUSINESS" ||
@@ -467,6 +469,41 @@ export const CMFMatchesProvider = ({ children }) => {
             finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileData, matchRecord))
             catalystIds.add(profileId)
           }
+        }
+      }
+
+      // Process funderProfiles from MyuniversalProfiles
+      for (const docSnap of funderProfilesSnap.docs) {
+        const profileId = docSnap.id
+        if (finalFunderMatches.some(f => f.id === profileId)) continue
+
+        const profileData = docSnap.data()
+        const completeness = calculateCompleteness(profileData)
+        if (completeness < 90) continue
+
+        let matchRecord = existingFunderMatchesMap[profileId]
+        if (!matchRecord) {
+          const matchPct = calculateMatchPercentage(profileData, cmfPref)
+          if (matchPct >= 50) {
+            const reason = getMatchReason(profileData, matchPct)
+            const matchDocId = `${user.uid}_${profileId}`
+            const matchDocRef = doc(db, "cmfFunderMatches", matchDocId)
+            matchRecord = {
+              id: matchDocId,
+              facilitatorId: user.uid,
+              funderId: profileId,
+              pipelineStage: "Matched",
+              currentStatus: "Matched",
+              matchPercentage: matchPct,
+              reason: reason,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            }
+            await setDoc(matchDocRef, matchRecord)
+          }
+        }
+        if (matchRecord) {
+          finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileData, matchRecord))
         }
       }
 
