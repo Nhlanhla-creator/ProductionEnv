@@ -1,5 +1,6 @@
 "use client"
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react'
 import FormField from "./form-field"
 import './UniversalProfile.css';
@@ -48,9 +49,11 @@ const categoryOptions = [
 const industryOptions = categoryOptions
 
 // MultiSelect component - Fixed sizing
-// MultiSelect component - Fixed scrolling and sizing
+// MultiSelect component - Fixed scrolling and sizing using React Portal
 function MultiSelect({ options, selected = [], onChange, label, placeholder }) {
   const [isOpen, setIsOpen] = useState(false)
+  const triggerRef = useRef(null)
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
 
   const toggleDropdown = () => setIsOpen(!isOpen)
   const closeDropdown = () => setIsOpen(false)
@@ -62,8 +65,55 @@ function MultiSelect({ options, selected = [], onChange, label, placeholder }) {
     onChange(newSelected)
   }
 
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setCoords({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      })
+    }
+  }, [isOpen])
+
+  // Recalculate coordinates on window resize or scroll
+  useEffect(() => {
+    const updateCoords = () => {
+      if (isOpen && triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect()
+        setCoords({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: rect.width
+        })
+      }
+    }
+    window.addEventListener('resize', updateCoords)
+    window.addEventListener('scroll', updateCoords, true)
+    return () => {
+      window.removeEventListener('resize', updateCoords)
+      window.removeEventListener('scroll', updateCoords, true)
+    }
+  }, [isOpen])
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isOpen && triggerRef.current && !triggerRef.current.contains(event.target)) {
+        if (event.target.closest('[data-multiselect-portal="true"]')) {
+          return
+        }
+        closeDropdown()
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isOpen])
+
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div ref={triggerRef} style={{ position: 'relative', width: '100%' }}>
       <div
         onClick={toggleDropdown}
         style={{
@@ -109,22 +159,24 @@ function MultiSelect({ options, selected = [], onChange, label, placeholder }) {
         {isOpen ? <ChevronUp size={20} color="#5c3a1e" /> : <ChevronDown size={20} color="#5c3a1e" />}
       </div>
 
-      {isOpen && (
-        <div style={{
-          position: 'absolute', 
-          top: 'calc(100% + 4px)', 
-          left: 0, 
-          right: 0,
-          backgroundColor: 'white', 
-          border: '1px solid #d6c4a8', 
-          borderRadius: '6px',
-          marginTop: '4px', 
-          zIndex: 9999, 
-          maxHeight: '280px',  // Increased to show more items
-          overflow: 'auto',    // Enables scrolling
-          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-          minWidth: '250px'
-        }}>
+      {isOpen && createPortal(
+        <div 
+          data-multiselect-portal="true"
+          style={{
+            position: 'absolute', 
+            top: `${coords.top + 4}px`, 
+            left: `${coords.left}px`, 
+            width: `${coords.width}px`,
+            backgroundColor: 'white', 
+            border: '1px solid #d6c4a8', 
+            borderRadius: '6px',
+            zIndex: 99999, 
+            maxHeight: '280px',  
+            overflow: 'auto',    
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+            minWidth: '250px'
+          }}
+        >
           <div style={{ padding: '4px' }}>
             {options.map((option) => (
               <div
@@ -201,7 +253,8 @@ function MultiSelect({ options, selected = [], onChange, label, placeholder }) {
               Done
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -119,7 +119,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
               value={data.overviewObjectives || ""}
               onChange={handleChange}
               rows={4}
-              className={styles.input}
+              className={styles.formTextarea}
               placeholder="Enter your fund's overview and objectives..."
             />
           </FormField>
@@ -134,7 +134,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
               value={data.instructionsForApplying || ""}
               onChange={handleChange}
               rows={4}
-              className={styles.input}
+              className={styles.formTextarea}
               placeholder="Enter application instructions..."
             />
           </FormField>
@@ -151,7 +151,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
                 name="estimatedReviewTime"
                 value={data.estimatedReviewTime || ""}
                 onChange={handleChange}
-                className={styles.input}
+                className={styles.formInput}
                 placeholder="e.g., 3-4 weeks"
                 required
               />
@@ -163,7 +163,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
                 name="typicalDealClosingTime"
                 value={data.typicalDealClosingTime || ""}
                 onChange={handleChange}
-                className={styles.input}
+                className={styles.formInput}
                 placeholder="e.g., 6-8 weeks after final approval"
                 required
               />
@@ -176,7 +176,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
               name="applicationWindow"
               value={data.applicationWindow || ""}
               onChange={handleChange}
-              className={styles.input}
+              className={styles.formInput}
               placeholder="e.g., Rolling / Open until [Date]"
               style={{ maxWidth: '400px' }}
               required
@@ -229,7 +229,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
                           name="coreDocumentsOther"
                           value={data.coreDocumentsOther || ""}
                           onChange={handleChange}
-                          className={styles.input}
+                          className={styles.formInput}
                           placeholder="Please specify other core documents..."
                           style={{ width: '100%', maxWidth: '280px' }}
                         />
@@ -325,7 +325,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
                         name="otherConditionalDocuments"
                         value={data.otherConditionalDocuments || ""}
                         onChange={handleChange}
-                        className={styles.input}
+                        className={styles.formInput}
                         placeholder="Please specify any additional documents..."
                         style={{ width: '100%', maxWidth: '280px' }}
                       />
@@ -346,7 +346,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
               value={data.evaluationCriteria || ""}
               onChange={handleChange}
               rows={4}
-              className={styles.input}
+              className={styles.formTextarea}
               placeholder='"We prioritize SMEs with scalable models, strong traction, and operational maturity. BIG Score above 70 required."'
             />
           </FormField>
@@ -361,7 +361,7 @@ export default function ApplicationDetails({ data = {}, updateData }) {
               value={data.impactAlignment || ""}
               onChange={handleChange}
               rows={3}
-              className={styles.input}
+              className={styles.formTextarea}
               placeholder='e.g. "We prioritise SMEs that address "ESG" or that are "B-BBEE level 2 maximum"'
             />
           </FormField>

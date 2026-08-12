@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Upload, X, FileText } from "lucide-react"
-import styles from "./SupportUniversalProfile.module.css";
+import styles from "./catalyst-universal-profile.module.css";
 
 export default function FileUpload({
   label,
