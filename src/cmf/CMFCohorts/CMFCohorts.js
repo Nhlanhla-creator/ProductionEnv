@@ -502,84 +502,107 @@ export default function CMFCohorts() {
     if (!smeMatches || smeMatches.length === 0) return []
     return smeMatches
       .filter((sme) => {
-        if (!onboardedUserIds.has(sme.id)) return false
+        const isDirectOnboarded = onboardedUserIds.has(sme.id)
         const status = (sme.currentStatus || sme.pipelineStage || "").toLowerCase()
-        return status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
+        const isMatchedCohort = status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
+        return isDirectOnboarded || isMatchedCohort
       })
-      .map((sme) => ({
-        id: sme.id,
-        docId: sme.id,
-        smeId: sme.id,
-        smeName: sme.name || "Unnamed Business",
-        dealAmount: sme.fundingRequired || "Not specified",
-        dealAmountRaw: sme.fundingAmount || toAmount(sme.fundingRequired),
-        dealType: sme.equityOffered ? `Equity (${sme.equityOffered})` : "Not specified",
-        completionDate: sme.applicationDate || null,
-        sector: formatLabel(sme.sector) || "Not specified",
-        location: formatLabel(sme.location) || "Not specified",
-        teamSize: sme.teamSize || "Not specified",
-        description: sme.supportRequired || sme.reason || "No description available",
-        currentStatus: sme.currentStatus || sme.pipelineStage || "Active Support",
-        lastUpdated: sme.lastActivity || null,
-        dealStructure: "Support Program",
-        dealDuration: "Ongoing",
-        supportProvided: sme.supportRequired || "Advisory and growth support",
-        roi: sme.roi || "Pending",
-        revenueGrowth: sme.revenueGrowth || "Pending",
-        exitStrategy: sme.exitStrategy || "To be determined",
-        guarantees: sme.guarantees || "Not specified",
-        servicesRequired: sme.servicesRequired || "Advisory",
-        applicationDate: sme.applicationDate || null,
-        applicationDateRaw: sme.applicationDate || null,
-        archived: sme.archived || false,
-        statusHistory: sme.statusHistory || [],
-      }))
+      .map((sme) => {
+        const isDirectOnboarded = onboardedUserIds.has(sme.id)
+        return {
+          id: sme.id,
+          docId: sme.id,
+          smeId: sme.id,
+          smeName: sme.name || "Unnamed Business",
+          dealAmount: sme.fundingRequired || "Not specified",
+          dealAmountRaw: sme.fundingAmount || toAmount(sme.fundingRequired),
+          dealType: sme.equityOffered ? `Equity (${sme.equityOffered})` : "Not specified",
+          completionDate: sme.applicationDate || null,
+          sector: formatLabel(sme.sector) || "Not specified",
+          location: formatLabel(sme.location) || "Not specified",
+          teamSize: sme.teamSize || "Not specified",
+          description: sme.supportRequired || sme.reason || "No description available",
+          currentStatus: sme.currentStatus || sme.pipelineStage || "Active Support",
+          lastUpdated: sme.lastActivity || null,
+          dealStructure: "Support Program",
+          dealDuration: "Ongoing",
+          supportProvided: sme.supportRequired || "Advisory and growth support",
+          roi: sme.roi || "Pending",
+          revenueGrowth: sme.revenueGrowth || "Pending",
+          exitStrategy: sme.exitStrategy || "To be determined",
+          guarantees: sme.guarantees || "Not specified",
+          servicesRequired: sme.servicesRequired || "Advisory",
+          applicationDate: sme.applicationDate || null,
+          applicationDateRaw: sme.applicationDate || null,
+          archived: sme.archived || false,
+          statusHistory: sme.statusHistory || [],
+          source: isDirectOnboarded ? "onboarded" : "matched"
+        }
+      })
   }, [smeMatches, onboardedUserIds])
 
   const fundersCohorts = useMemo(() => {
     if (!funderMatches || funderMatches.length === 0) return []
     return funderMatches
-      .filter((funder) => onboardedUserIds.has(funder.id))
-      .map((funder) => ({
-        id: funder.id,
-        docId: funder.id,
-        smeName: funder.name || "Unnamed Funder",
-        dealAmount: funder.fundingRange || "Not specified",
-        dealAmountRaw: toAmount(funder.fundingRange),
-        dealType: funder.type || "Funder",
-        completionDate: funder.createdAt || null,
-        sector: Array.isArray(funder.sectors) ? funder.sectors.join(", ") : funder.sectors || "Not specified",
-        location: funder.location || "Not specified",
-        teamSize: "N/A",
-        description: funder.description || "No description available",
-        currentStatus: funder.status || "Active",
-        lastUpdated: funder.lastActivity || null,
-        supportProvided: funder.contactPerson ? `${funder.contactPerson} (${funder.email})` : funder.email || "Not specified",
-        archived: funder.archived || false,
-      }))
+      .filter((funder) => {
+        const isDirectOnboarded = onboardedUserIds.has(funder.id)
+        const status = (funder.status || funder.currentStatus || "").toLowerCase()
+        const isMatchedCohort = status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
+        return isDirectOnboarded || isMatchedCohort
+      })
+      .map((funder) => {
+        const isDirectOnboarded = onboardedUserIds.has(funder.id)
+        return {
+          id: funder.id,
+          docId: funder.id,
+          smeName: funder.name || "Unnamed Funder",
+          dealAmount: funder.fundingRange || "Not specified",
+          dealAmountRaw: toAmount(funder.fundingRange),
+          dealType: funder.type || "Funder",
+          completionDate: funder.createdAt || null,
+          sector: Array.isArray(funder.sectors) ? funder.sectors.join(", ") : funder.sectors || "Not specified",
+          location: funder.location || "Not specified",
+          teamSize: "N/A",
+          description: funder.description || "No description available",
+          currentStatus: funder.status || "Active",
+          lastUpdated: funder.lastActivity || null,
+          supportProvided: funder.contactPerson ? `${funder.contactPerson} (${funder.email})` : funder.email || "Not specified",
+          archived: funder.archived || false,
+          source: isDirectOnboarded ? "onboarded" : "matched"
+        }
+      })
   }, [funderMatches, onboardedUserIds])
 
   const catalystsCohorts = useMemo(() => {
     if (!catalystMatches || catalystMatches.length === 0) return []
     return catalystMatches
-      .filter((cat) => onboardedUserIds.has(cat.id))
-      .map((cat) => ({
-        id: cat.id,
-        docId: cat.id,
-        smeName: cat.name || "Unnamed Catalyst",
-        dealAmount: cat.focus || "Not specified",
-        dealAmountRaw: 0,
-        dealType: cat.type || "Catalyst",
-        completionDate: cat.createdAt || null,
-        sector: Array.isArray(cat.sectors) ? cat.sectors.join(", ") : cat.sectors || "Not specified",
-        location: cat.location || "Not specified",
-        teamSize: "N/A",
-        description: cat.description || "No description available",
-        currentStatus: cat.status || "Active",
-        lastUpdated: cat.lastActivity || null,
-        supportProvided: cat.contactPerson ? `${cat.contactPerson} (${cat.email})` : cat.email || "Not specified",
-        archived: cat.archived || false,
-      }))
+      .filter((cat) => {
+        const isDirectOnboarded = onboardedUserIds.has(cat.id)
+        const status = (cat.status || cat.currentStatus || "").toLowerCase()
+        const isMatchedCohort = status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
+        return isDirectOnboarded || isMatchedCohort
+      })
+      .map((cat) => {
+        const isDirectOnboarded = onboardedUserIds.has(cat.id)
+        return {
+          id: cat.id,
+          docId: cat.id,
+          smeName: cat.name || "Unnamed Catalyst",
+          dealAmount: cat.focus || "Not specified",
+          dealAmountRaw: 0,
+          dealType: cat.type || "Catalyst",
+          completionDate: cat.createdAt || null,
+          sector: Array.isArray(cat.sectors) ? cat.sectors.join(", ") : cat.sectors || "Not specified",
+          location: cat.location || "Not specified",
+          teamSize: "N/A",
+          description: cat.description || "No description available",
+          currentStatus: cat.status || "Active",
+          lastUpdated: cat.lastActivity || null,
+          supportProvided: cat.contactPerson ? `${cat.contactPerson} (${cat.email})` : cat.email || "Not specified",
+          archived: cat.archived || false,
+          source: isDirectOnboarded ? "onboarded" : "matched"
+        }
+      })
   }, [catalystMatches, onboardedUserIds])
 
   const cmfCohortsMapped = useMemo(() => {
@@ -1665,8 +1688,17 @@ export default function CMFCohorts() {
                             className={`${rowPad} sticky left-0 z-10 border-r border-[#e6d7c3] transition-colors`}
                             style={{ ...widthStyle('__name__', '200px', '240px'), backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
                           >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-[#4a352f]">{cohort.smeName}</span>
+                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                              <span className="text-[#4a352f] font-semibold">{cohort.smeName}</span>
+                              {cohort.source && (
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider border flex-shrink-0 ${
+                                  cohort.source === "onboarded"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-blue-50 text-blue-700 border-blue-200"
+                                }`}>
+                                  {cohort.source === "onboarded" ? "Onboarded" : "Matched"}
+                                </span>
+                              )}
                               <button
                                 onClick={() => handleViewDetails(cohort)}
                                 className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0"

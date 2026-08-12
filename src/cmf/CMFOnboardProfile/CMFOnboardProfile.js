@@ -10,12 +10,11 @@ import {
 } from "lucide-react"
 
 // Firebase
-import { db, auth, storage, firebaseConfig } from "../../firebaseConfig"
-import { doc, setDoc, getDoc, getDocs, collection, query, where, deleteDoc } from "firebase/firestore"
-import { onAuthStateChanged } from "firebase/auth"
+import { firebaseConfig } from "../../firebaseConfig"
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, query, where, deleteDoc } from "firebase/firestore"
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword as createUserAuth } from "firebase/auth"
 import { initializeApp, deleteApp, getApp } from "firebase/app"
-import { getAuth, createUserWithEmailAndPassword as createUserAuth } from "firebase/auth"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 
 // Business Subcomponents
 import Instructions from "../../smses/UniversalProfile/instructions"
@@ -55,11 +54,517 @@ import CatalystDeclarationConsent from "../../catalyst/CatalystUniversalProfile/
 import CmfInstructions from "../CMFUniversalProfile/CMFInstructions"
 import CmfDocumentUpload from "../CMFUniversalProfile/CMFDocumentUpload"
 
+// --- DEVELOPER EASTER EGG MOCK ACCOUNTS DATA ---
+const mockBusinesses = [
+  {
+    entityOverview: {
+      entityType: "SMSE",
+      registeredName: "Apex Innovations Ltd",
+      tradingName: "Apex Solutions",
+      registrationNumber: "2023/123456/07",
+      legalStructure: "Private Company (Pty) Ltd",
+      entitySize: "Medium",
+      financialYearEnd: "February",
+      yearsInOperation: "3",
+      operationStage: "Growth",
+      economicSectors: ["Information Technology", "Professional Services"],
+      operatingCountries: ["South Africa"],
+      operatingProvinces: ["Gauteng"],
+      businessDescription: "Apex Innovations provides cloud-native solutions and IT consulting services to clients across Sub-Saharan Africa.",
+      sponsorName: "CMF Onboarded",
+      sponsorType: "CMF",
+      sponsorViewPermission: "yes"
+    },
+    contactDetails: {
+      contactTitle: "Mr",
+      contactName: "Thabo Mokoena",
+      position: "Director",
+      businessPhone: "+27115551234",
+      mobile: "+27825556789",
+      email: "thabo.test.apex@mailinator.com",
+      physicalAddress: "123 Main Road, Sandton, Johannesburg, 2196",
+      sameAsPhysical: true,
+      postalAddress: "123 Main Road, Sandton, Johannesburg, 2196"
+    },
+    ownershipManagement: {
+      shareholders: [
+        { name: "Thabo Mokoena", country: "South Africa", shareholding: "60", race: "African", gender: "Male", isYouth: true },
+        { name: "Naledi Dlamini", country: "South Africa", shareholding: "40", race: "African", gender: "Female", isYouth: true }
+      ],
+      directors: [
+        { name: "Thabo Mokoena", roles: ["Director"], nationality: "South African", execType: "Executive", race: "African", gender: "Male" }
+      ],
+      executives: [
+        { name: "Thabo Mokoena", position: "CEO", department: "Executive", nationality: "South African", race: "African", gender: "Male" }
+      ],
+      employees: [
+        { name: "John Doe", qualification: "BSc Computer Science", role: "Software Engineer" }
+      ],
+      totalAuthorisedShares: "1000",
+      totalIssuedShares: "100",
+      permanentEmployees: "12",
+      contractEmployees: "4",
+      internshipEmployees: "2",
+      temporaryEmployees: "1",
+      businessLeadership: { ownerLed: "yes", primaryMotivation: "Growth", growthAmbition: "High", founderFullTime: "yes" }
+    },
+    legalCompliance: {
+      taxNumber: "9876543210",
+      vatNumber: "4012345678",
+      bbbeeLevel: "Level 1",
+      payeNumber: "123456789",
+      uifStatus: "Registered",
+      uifNumber: "U12345678",
+      coidaNumber: "C1234567",
+      pendingLegalJudgments: "no"
+    },
+    operationsOverview: {
+      multipleSuppliers: "yes",
+      contingencyPlan: "yes",
+      trackPerformanceMetrics: "yes",
+      threeSuccessfulDeliveries: "yes",
+      hasCapacityToIncrease: "yes",
+      hasFormalProcedures: "yes",
+      hasMajorIncidents: "no"
+    },
+    financialOverview: {
+      annualRevenue: "R 5,000,000",
+      profitable: "yes",
+      fundingRequired: "yes",
+      fundingAmount: "R 2,000,000"
+    },
+    governance: {
+      boardOfDirectors: "yes",
+      hasAuditCommittee: "yes",
+      hasRiskCommittee: "yes"
+    },
+    productsServices: {
+      offeringType: "Services",
+      productCategories: [],
+      serviceCategories: ["Software Development", "IT Consulting"],
+      deliveryModes: ["Remote", "On-site"],
+      minLeadTime: "7",
+      minLeadTimeUnit: "days",
+      targetMarket: "Corporate Clients",
+      keyClients: ["Standard Bank", "MTN"]
+    },
+    howDidYouHear: {
+      source: "Referral"
+    },
+    documentsPlaceholder: {
+      cipcRegistration: [{ name: "cipc.pdf", type: "application/pdf" }],
+      taxCompliancePin: [{ name: "tax.pdf", type: "application/pdf" }],
+      companyProfile: [{ name: "profile.pdf", type: "application/pdf" }],
+      logo: [{ name: "logo.png", type: "image/png" }],
+      proofOfAddress: [{ name: "proof.pdf", type: "application/pdf" }]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "cmf_agreement.pdf", type: "application/pdf" }
+    }
+  },
+  {
+    entityOverview: {
+      entityType: "SMSE",
+      registeredName: "Blue Ocean Logistics Pty Ltd",
+      tradingName: "Blue Ocean Logistics",
+      registrationNumber: "2019/654321/07",
+      legalStructure: "Private Company (Pty) Ltd",
+      entitySize: "Large",
+      financialYearEnd: "February",
+      yearsInOperation: "7",
+      operationStage: "Expansion",
+      economicSectors: ["Transport and Logistics"],
+      operatingCountries: ["South Africa"],
+      operatingProvinces: ["Western Cape"],
+      businessDescription: "Blue Ocean Logistics specializes in national freight transport and warehousing services.",
+      sponsorName: "CMF Onboarded",
+      sponsorType: "CMF",
+      sponsorViewPermission: "yes"
+    },
+    contactDetails: {
+      contactTitle: "Ms",
+      contactName: "Sarah Jenkins",
+      position: "Managing Director",
+      businessPhone: "+27215559876",
+      mobile: "+27715554321",
+      email: "sarah.test.blueocean@mailinator.com",
+      physicalAddress: "45 Harbour View Drive, Cape Town, 8001",
+      sameAsPhysical: true,
+      postalAddress: "45 Harbour View Drive, Cape Town, 8001"
+    },
+    ownershipManagement: {
+      shareholders: [
+        { name: "Sarah Jenkins", country: "South Africa", shareholding: "60", race: "Coloured", gender: "Female" },
+        { name: "Global Transport Ltd", country: "United Kingdom", shareholding: "40", race: "N/A", gender: "N/A" }
+      ],
+      directors: [
+        { name: "Sarah Jenkins", roles: ["Director"], nationality: "South African", execType: "Executive", race: "Coloured", gender: "Female" }
+      ],
+      executives: [
+        { name: "Sarah Jenkins", position: "Managing Director", department: "Executive", nationality: "South African", race: "Coloured", gender: "Female" }
+      ],
+      employees: [
+        { name: "Peter Parker", qualification: "Diploma in Logistics", role: "Fleet Manager" }
+      ],
+      totalAuthorisedShares: "5000",
+      totalIssuedShares: "1000",
+      permanentEmployees: "45",
+      contractEmployees: "15",
+      internshipEmployees: "0",
+      temporaryEmployees: "5",
+      businessLeadership: { ownerLed: "yes", primaryMotivation: "Expansion", growthAmbition: "High", founderFullTime: "yes" }
+    },
+    legalCompliance: {
+      taxNumber: "9123456780",
+      vatNumber: "4987654321",
+      bbbeeLevel: "Level 2",
+      payeNumber: "987654321",
+      uifStatus: "Registered",
+      uifNumber: "U98765432",
+      coidaNumber: "C9876543",
+      pendingLegalJudgments: "no"
+    },
+    operationsOverview: {
+      multipleSuppliers: "yes",
+      contingencyPlan: "yes",
+      trackPerformanceMetrics: "yes",
+      threeSuccessfulDeliveries: "yes",
+      hasCapacityToIncrease: "yes",
+      hasFormalProcedures: "yes",
+      hasMajorIncidents: "no"
+    },
+    financialOverview: {
+      annualRevenue: "R 25,000,000",
+      profitable: "yes",
+      fundingRequired: "no"
+    },
+    governance: {
+      boardOfDirectors: "yes",
+      hasAuditCommittee: "no",
+      hasRiskCommittee: "yes"
+    },
+    productsServices: {
+      offeringType: "Services",
+      productCategories: [],
+      serviceCategories: ["Road Freight", "Warehousing"],
+      deliveryModes: ["Physical Delivery"],
+      minLeadTime: "24",
+      minLeadTimeUnit: "hours",
+      targetMarket: "Manufacturers and Retailers",
+      keyClients: ["Shoprite", "Woolworths"]
+    },
+    howDidYouHear: {
+      source: "Online Search"
+    },
+    documentsPlaceholder: {
+      cipcRegistration: [{ name: "cipc.pdf", type: "application/pdf" }],
+      taxCompliancePin: [{ name: "tax.pdf", type: "application/pdf" }],
+      companyProfile: [{ name: "profile.pdf", type: "application/pdf" }],
+      logo: [{ name: "logo.png", type: "image/png" }],
+      proofOfAddress: [{ name: "proof.pdf", type: "application/pdf" }]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "cmf_agreement.pdf", type: "application/pdf" }
+    }
+  }
+]
+
+const mockFunders = [
+  {
+    fundManageOverview: {
+      registeredName: "Vanguard Capital Partners",
+      tradingName: "Vanguard Capital",
+      registrationNumber: "2018/987654/07",
+      financialYearStart: "March",
+      regulatoryLicenseNumber: "FSP 998877",
+      legalEntityType: "Private Company",
+      firmType: "Venture Capital",
+      firmSubtype: ["Early Stage"],
+      investorRole: "Lead Investor",
+      yearsInOperation: "8",
+      numberOfInvestmentExecutives: "5",
+      taxNumber: "9000111222",
+      vatRegistrationNumbers: "4000111222",
+      briefDescription: "Vanguard Capital focuses on early stage technology startups in Southern Africa.",
+      portfolioCompanies: "12",
+      numberOfInvestments: "15",
+      valueDeployed: "R 50,000,000",
+      additionalSupport: ["Mentorship", "Governance support"],
+      howDidYouHear: "Industry Referral",
+      sponsorName: "CMF Onboarded",
+      sponsorType: "CMF",
+      sponsorViewPermission: "yes"
+    },
+    contactDetails: {
+      businessTel: "+27112223333",
+      businessEmail: "vanguard@mailinator.com",
+      physicalAddress: "15 Melrose Boulevard, Melrose Arch, Johannesburg, 2076",
+      postalAddress: "15 Melrose Boulevard, Melrose Arch, Johannesburg, 2076",
+      primaryContactTitle: "Mr",
+      primaryContactName: "David",
+      primaryContactSurname: "Kramer",
+      primaryContactPosition: "Investment Director",
+      primaryContactMobile: "+27821112222",
+      primaryContactEmail: "david.kramer.vanguard@mailinator.com"
+    },
+    investmentRequirements: {},
+    generalInvestmentPreference: {
+      minimumSupportTicket: "R 1,000,000",
+      maximumSupportTicket: "R 10,000,000",
+      sectorFocus: ["Technology", "Fintech"],
+      geographicFocus: ["South Africa"],
+      selectedProvinces: ["Gauteng", "Western Cape"],
+      legalEntity: ["Pty Ltd"],
+      businessLifecycleStage: ["Early Stage", "Growth Stage"],
+      ticketSize: "R 5,000,000"
+    },
+    fundDetails: {},
+    applicationBrief: {},
+    documentUploadPlaceholder: {
+      cipcRegistration: [{ name: "funder_cipc.pdf", type: "application/pdf" }],
+      taxCompliancePin: [{ name: "funder_tax.pdf", type: "application/pdf" }]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "funder_agreement.pdf", type: "application/pdf" }
+    }
+  }
+]
+
+const mockCatalysts = [
+  {
+    entityOverview: {
+      registeredName: "Impact Hub Africa Pty Ltd",
+      tradingName: "Impact Hub Africa",
+      legalEntityType: "Private Company (Pty) Ltd",
+      registrationNumber: "2020/223344/07",
+      industrySector: "Education & Enterprise Development",
+      companySize: "Small",
+      yearEstablished: "2020",
+      briefDescription: "Impact Hub Africa provides incubator and accelerator programs to social entrepreneurs.",
+      referralSource: "CMF Onboarded",
+      sponsorName: "CMF Onboarded",
+      sponsorType: "CMF",
+      sponsorViewPermission: "yes"
+    },
+    contactDetails: {
+      businessTel: "+27113334444",
+      businessEmail: "info.catalyst@mailinator.com",
+      physicalAddress: "88 Commissioner Street, Johannesburg, 2001",
+      postalAddress: "88 Commissioner Street, Johannesburg, 2001",
+      primaryContactName: "Lerato Molefe",
+      primaryContactMobile: "+27834445555",
+      primaryContactEmail: "lerato.molefe.hub@mailinator.com"
+    },
+    programBriefMatchingPreference: {
+      programName: "African Social Innovators Accelerator",
+      programDuration: "6 Months",
+      intangibleSupport: "Mentorship & Networking",
+      geographicFocus: ["South Africa"],
+      sectorFocus: ["Agriculture", "Education"],
+      selectedProvinces: ["Gauteng"],
+      selectedCountries: ["South Africa"]
+    },
+    applicationBrief: {},
+    documentUploadPlaceholder: {
+      cipcRegistration: [{ name: "catalyst_cipc.pdf", type: "application/pdf" }],
+      taxCompliancePin: [{ name: "catalyst_tax.pdf", type: "application/pdf" }]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "catalyst_agreement.pdf", type: "application/pdf" }
+    }
+  }
+]
+
+const mockCMFs = [
+  {
+    entityOverview: {
+      registeredName: "Capital Access Group Ltd",
+      tradingName: "Capital Access Group",
+      registrationNumber: "2015/334455/07",
+      entityType: "CMF",
+      legalStructure: "Public Company Ltd",
+      entitySize: "Large",
+      yearsInOperation: "11",
+      businessDescription: "Capital Access Group acts as a market maker and capital facilitator for SMEs in South Africa."
+    },
+    contactDetails: {
+      contactName: "Richard Bowes",
+      businessPhone: "+27116667777",
+      email: "richard.bowes.cmf@mailinator.com",
+      physicalAddress: "22 Alice Lane, Sandton, Johannesburg, 2196",
+      postalAddress: "22 Alice Lane, Sandton, Johannesburg, 2196"
+    },
+    productsServices: {},
+    ownershipManagement: {},
+    legalCompliance: {},
+    howDidYouHear: {},
+    documentsPlaceholder: {
+      cipcRegistration: [{ name: "cmf_cipc.pdf", type: "application/pdf" }],
+      taxCompliancePin: [{ name: "cmf_tax.pdf", type: "application/pdf" }]
+    },
+    fundDetails: {},
+    applicationBrief: {},
+    generalInvestmentPreference: {
+      minimumSupportTicket: "R 500,000",
+      maximumSupportTicket: "R 5,000,000",
+      sectorFocus: ["Manufacturing", "Services"],
+      geographicFocus: ["South Africa"]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "cmf_agreement.pdf", type: "application/pdf" }
+    }
+  }
+]
+
 export default function CMFOnboardProfile() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const typeParam = searchParams.get("type") || "Business"
   const draftIdParam = searchParams.get("draftId") || ""
+
+  // Modular Firebase instances
+  const db = getFirestore()
+  const storage = getStorage()
+  const auth = getAuth()
+
+  // Developer auto-fill egg state
+  const [showEasterEgg, setShowEasterEgg] = useState(false)
+
+  // Listen for Alt + T key listener to toggle visibility of developer auto-fill helper (explicitly supports AltRight)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const isAltPressed = e.altKey || e.code === "AltRight" || e.key === "AltGraph" || e.code === "AltGraph"
+      if (isAltPressed && e.code === "KeyT") {
+        e.preventDefault()
+        setShowEasterEgg(prev => !prev)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [])
+
+  const createMockFiles = (placeholderObj) => {
+    const result = {}
+    if (!placeholderObj) return result
+    for (const key in placeholderObj) {
+      const val = placeholderObj[key]
+      if (Array.isArray(val)) {
+        result[key] = val.map(item => new File([`mock_${key}`], item.name, { type: item.type }))
+      } else if (val && typeof val === "object") {
+        result[key] = new File([`mock_${key}`], val.name, { type: val.type })
+      }
+    }
+    return result
+  }
+
+  const handleAutoFill = () => {
+    const uniqueSuffix = Math.floor(Math.random() * 100000)
+    let selected = null
+
+    if (profileType === "Business") {
+      const idx = Math.floor(Math.random() * mockBusinesses.length)
+      selected = JSON.parse(JSON.stringify(mockBusinesses[idx]))
+      if (selected.contactDetails?.email) {
+        const parts = selected.contactDetails.email.split('@')
+        selected.contactDetails.email = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      selected.documents = createMockFiles(selected.documentsPlaceholder)
+      selected.declarationConsent = {
+        accuracy: true,
+        dataProcessing: true,
+        termsConditions: true,
+        ...createMockFiles(selected.declarationConsentPlaceholder)
+      }
+      delete selected.documentsPlaceholder
+      delete selected.declarationConsentPlaceholder
+
+    } else if (profileType === "Funder") {
+      const idx = Math.floor(Math.random() * mockFunders.length)
+      selected = JSON.parse(JSON.stringify(mockFunders[idx]))
+      if (selected.contactDetails?.primaryContactEmail) {
+        const parts = selected.contactDetails.primaryContactEmail.split('@')
+        selected.contactDetails.primaryContactEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      if (selected.contactDetails?.businessEmail) {
+        const parts = selected.contactDetails.businessEmail.split('@')
+        selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      selected.documentUpload = createMockFiles(selected.documentUploadPlaceholder)
+      selected.declarationConsent = {
+        accuracy: true,
+        dataProcessing: true,
+        termsConditions: true,
+        ...createMockFiles(selected.declarationConsentPlaceholder)
+      }
+      delete selected.documentUploadPlaceholder
+      delete selected.declarationConsentPlaceholder
+
+    } else if (profileType === "Catalyst") {
+      const idx = Math.floor(Math.random() * mockCatalysts.length)
+      selected = JSON.parse(JSON.stringify(mockCatalysts[idx]))
+      if (selected.contactDetails?.primaryContactEmail) {
+        const parts = selected.contactDetails.primaryContactEmail.split('@')
+        selected.contactDetails.primaryContactEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      if (selected.contactDetails?.businessEmail) {
+        const parts = selected.contactDetails.businessEmail.split('@')
+        selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      selected.documentUpload = createMockFiles(selected.documentUploadPlaceholder)
+      selected.declarationConsent = {
+        accuracy: true,
+        dataProcessing: true,
+        termsConditions: true,
+        ...createMockFiles(selected.declarationConsentPlaceholder)
+      }
+      delete selected.documentUploadPlaceholder
+      delete selected.declarationConsentPlaceholder
+
+    } else if (profileType === "CMF") {
+      const idx = Math.floor(Math.random() * mockCMFs.length)
+      selected = JSON.parse(JSON.stringify(mockCMFs[idx]))
+      if (selected.contactDetails?.email) {
+        const parts = selected.contactDetails.email.split('@')
+        selected.contactDetails.email = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      selected.documents = createMockFiles(selected.documentsPlaceholder)
+      selected.declarationConsent = {
+        accuracy: true,
+        dataProcessing: true,
+        termsConditions: true,
+        ...createMockFiles(selected.declarationConsentPlaceholder)
+      }
+      delete selected.documentsPlaceholder
+      delete selected.declarationConsentPlaceholder
+    }
+
+    if (selected) {
+      setFormData(selected)
+      const list = getSectionsList(profileType)
+      const completed = {}
+      list.forEach(s => {
+        completed[s.id] = true
+      })
+      setCompletedSections(completed)
+      // Navigate to the final step so user can review and click Onboard
+      setActiveStep(list.length)
+    }
+  }
 
   const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -126,6 +631,7 @@ export default function CMFOnboardProfile() {
       return {
         instructions: {},
         entityOverview: {
+          entityType: "SMSE",
           registeredName: "",
           tradingName: "",
           registrationNumber: "",
@@ -170,6 +676,7 @@ export default function CMFOnboardProfile() {
       return {
         instructions: {},
         fundManageOverview: {
+          entityType: "Investor",
           registeredName: "",
           tradingName: "",
           registrationNumber: "",
@@ -225,6 +732,7 @@ export default function CMFOnboardProfile() {
       return {
         instructions: {},
         entityOverview: {
+          entityType: "Catalyst",
           registeredName: "",
           tradingName: "",
           legalEntityType: "",
@@ -600,7 +1108,7 @@ export default function CMFOnboardProfile() {
       
       const userCredential = await createUserAuth(secondaryAuth, partnerEmail, tempPassword)
       const newEntityId = userCredential.user.uid
-      await secondaryApp.delete()
+      await deleteApp(secondaryApp)
       secondaryApp = null
 
       // 3. Process uploads for all sections containing files
@@ -616,6 +1124,7 @@ export default function CMFOnboardProfile() {
           roleName: "SMSE",
           payload: {
             ...cleanFormData,
+            completedSections,
             profileSubmitted: true,
             bigScore: calculateBaselineBigScore(cleanFormData),
             bigScoreUpdatedAt: new Date().toISOString()
@@ -626,6 +1135,7 @@ export default function CMFOnboardProfile() {
           roleName: "Investor",
           payload: {
             ...cleanFormData,
+            completedSections,
             profileSubmitted: true
           }
         },
@@ -634,6 +1144,7 @@ export default function CMFOnboardProfile() {
           roleName: "Catalyst",
           payload: {
             ...cleanFormData,
+            completedSections,
             profileSubmitted: true
           }
         },
@@ -642,6 +1153,7 @@ export default function CMFOnboardProfile() {
           roleName: "CMF",
           payload: {
             ...cleanFormData,
+            completedSections,
             profileSubmitted: true
           }
         }
@@ -755,7 +1267,7 @@ export default function CMFOnboardProfile() {
       alert(`Submission failed: ${err.message}`)
     } finally {
       if (secondaryApp) {
-        try { await secondaryApp.delete() } catch (e) {}
+        try { await deleteApp(secondaryApp) } catch (e) {}
       }
       setSaving(false)
     }
@@ -850,6 +1362,25 @@ export default function CMFOnboardProfile() {
 
   return (
     <div className="flex flex-col font-sans w-full p-4">
+      {showEasterEgg && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-[#faf7f2] to-[#f5ebd8] border border-[#e6d7c3] rounded-2xl flex items-center justify-between shadow-md transition-all">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🪄</span>
+            <div>
+              <h4 className="text-sm font-bold text-[#4a352f] m-0">Developer Easter Egg Auto-Fill</h4>
+              <p className="text-[11px] text-[#7d5a50] m-0">Click the button to fill all sections with randomized mock partner details and bypass document uploads.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleAutoFill}
+            className="bg-[#7d5a50] hover:bg-[#6b4c43] text-white rounded-xl px-4 py-2 text-xs font-semibold shadow-md transition-all border border-[#7d5a50]"
+          >
+            Auto-Fill Random {profileType}
+          </button>
+        </div>
+      )}
+
       {/* ─── PROGRESS & CONTROLS HEADER ────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-sm p-5 mb-6 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -883,6 +1414,16 @@ export default function CMFOnboardProfile() {
               <span className="text-xs font-bold text-[#4a352f]">{completionPercentage}%</span>
             </div>
           </div>
+          {window.location.hostname === "localhost" && (
+            <button
+              type="button"
+              onClick={() => setShowEasterEgg(prev => !prev)}
+              className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold shadow-sm transition-all"
+            >
+              <Settings size={14} className="animate-spin" style={{ animationDuration: '3s' }} />
+              Auto-Fill Tool
+            </button>
+          )}
           <button
             onClick={handleSaveDraft}
             disabled={saving}

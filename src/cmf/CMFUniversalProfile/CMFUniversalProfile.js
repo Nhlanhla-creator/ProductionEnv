@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight, Users } from "lucide-react"
-import { doc, setDoc, getDoc } from "firebase/firestore"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { auth, db, storage } from "../../firebaseConfig"
+import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore"
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import "../../smses/UniversalProfile/UniversalProfile.css"
 import Instructions from "./CMFInstructions"
 import EntityOverview from "../../smses/UniversalProfile/entity-overview"
@@ -18,7 +17,7 @@ import ApplicationBriefSection from "../../Investor/InvestorUniversalProfile/App
 import GeneralInvestmentPreferenceSection from "../../Investor/InvestorUniversalProfile/GeneralInvestmentPreference​"
 import DeclarationConsent from "../../smses/UniversalProfile/declaration-consent"
 import CMFProfileSummary from "./CMFProfileSummary"
-import { onAuthStateChanged } from "firebase/auth"
+import { getAuth, onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
 
 const sections = [
@@ -94,6 +93,11 @@ const onboardingSteps = [
 ]
 
 export default function CMFUniversalProfile() {
+  // Modular Firebase instances
+  const db = getFirestore()
+  const storage = getStorage()
+  const auth = getAuth()
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const navigate = useNavigate()
