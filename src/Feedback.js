@@ -1,28 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send } from 'react-feather';
-import emailjs from '@emailjs/browser';
-import { API_KEYS } from './API';
+import { MessageSquare, X, Send, Star } from 'react-feather';
 import { auth } from './firebaseConfig';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const Feedback = () => {
-  const emailjsConfig = {
-    serviceId: API_KEYS.SERVICE_ID_FEEDBACK,
-    templateId: API_KEYS.TEMPLATE_ID_FEEDBACK,
-    autoReplyTemplateId: API_KEYS.AUTORESPONSE_TEMPLATE_FEEDBACK,
-    publicKey: API_KEYS.PUBLIC_KEY_FEEDBACK
-  };
-
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [error, setError] = useState(null);
   const feedbackRef = useRef(null);
-  const [userEmail, setUserEmail] = useState('');
-
-  useEffect(() => {
-    emailjs.init(emailjsConfig.publicKey);
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -43,50 +32,68 @@ const Feedback = () => {
     setError(null);
 
     try {
-      const email = auth.currentUser?.email || 'anonymous@user.com';
-      setUserEmail(email);
+      const user = auth.currentUser;
+      const functions = getFunctions();
+      const sendFeedback = httpsCallable(functions, 'sendFeedback');
 
-      await emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.templateId,
-        {
-          from_email: email,
-          subject: 'Website Feedback',
-          message: feedbackMessage,
-          to_email: 'support@bigmarketplace.africa'
-        },
-        emailjsConfig.publicKey
-      );
+      const email = user?.email || 'anonymous@user.com';
+      const displayName = user?.displayName || 'Anonymous User';
+      const userUid = user?.uid || 'Not logged in';
 
-      if (email !== 'anonymous@user.com') {
-        await emailjs.send(
-          emailjsConfig.serviceId,
-          emailjsConfig.autoReplyTemplateId,
-          {
-            from_email: email,
-            subject: 'no-reply:Feedback Received'
-          },
-          emailjsConfig.publicKey
-        );
-      }
+      const result = await sendFeedback({
+        userEmail: email,
+        userName: displayName,
+        userUid: userUid,
+        message: feedbackMessage,
+        rating: feedbackRating,
+        url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
+        platform: 'BIG Marketplace'
+      });
+
+      console.log('Feedback sent:', result.data);
 
       setFeedbackSent(true);
       setFeedbackMessage('');
+      setFeedbackRating(0);
 
       setTimeout(() => {
         setFeedbackSent(false);
         setShowFeedback(false);
       }, 3000);
+
     } catch (err) {
       console.error('Feedback sending error:', err);
-      setError(err.response?.text || err.message || 'Failed to send feedback. Please try again.');
+      setError('Failed to send feedback. Please try again.');
     } finally {
       setFeedbackSending(false);
     }
   };
 
-  /* ========== EXACT STYLING FROM InvestorHeader ========== */
-  const styles = {
+  const renderStars = () => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      const filled = i <= (hoverRating || feedbackRating);
+      stars.push(
+        <Star
+          key={i}
+          size={20}
+          fill={filled ? '#F5A623' : 'none'}
+          stroke={filled ? '#F5A623' : '#D1C4B0'}
+          style={{
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            marginRight: '4px'
+          }}
+          onMouseEnter={() => setHoverRating(i)}
+          onMouseLeave={() => setHoverRating(0)}
+          onClick={() => setFeedbackRating(i)}
+        />
+      );
+    }
+    return stars;
+  };
+
+ const styles = {
     wrapper: { 
       position: 'relative',
       marginLeft: '20px'
@@ -240,8 +247,7 @@ const Feedback = () => {
       to { transform: rotate(360deg); }
     }
   `;
-  /* ========== END STYLING ========== */
-
+  
   return (
     <div style={styles.wrapper} ref={feedbackRef}>
       <style>{animations}</style>
@@ -273,6 +279,7 @@ const Feedback = () => {
                 setShowFeedback(false);
                 setFeedbackSent(false);
                 setError(null);
+                setFeedbackRating(0);
               }}
               onMouseEnter={(e) => Object.assign(e.target.style, styles.closeButtonHover)}
               onMouseLeave={(e) => {
@@ -292,6 +299,18 @@ const Feedback = () => {
               </div>
             ) : (
               <>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#624635', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+                    How would you rate your experience?
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    {renderStars()}
+                    <span style={{ fontSize: '0.75rem', color: '#AAA199', marginLeft: '8px' }}>
+                      {feedbackRating > 0 ? `${feedbackRating} / 5` : 'Tap to rate'}
+                    </span>
+                  </div>
+                </div>
+
                 <textarea
                   value={feedbackMessage}
                   onChange={(e) => setFeedbackMessage(e.target.value)}
