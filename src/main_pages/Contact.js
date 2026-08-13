@@ -753,10 +753,6 @@ const ContactFormPage = () => {
               <h3 style={isMobile ? {...styles.successTitle, fontSize: '1.2rem'} : styles.successTitle}>Message Sent! 🎉</h3>
               <p style={isMobile ? {...styles.successText, fontSize: '0.9rem'} : styles.successText}>{successMessage}</p>
               <div style={styles.emailNote}>
-                <FaEnvelope size={isMobile ? 14 : 16} color="#754A2D" />
-                <span style={isMobile ? {fontSize: '0.8rem'} : {}}>We've sent a confirmation to <strong>{formData.email}</strong></span>
-              </div>
-              <div style={styles.emailNote}>
                 <FiClock size={isMobile ? 14 : 16} color="#754A2D" />
                 <span style={isMobile ? {fontSize: '0.8rem'} : {}}>Our team will respond within 24 hours</span>
               </div>
