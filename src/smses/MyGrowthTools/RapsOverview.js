@@ -1,4 +1,3 @@
-// src/pages/RapsOverview.jsx
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
@@ -8,16 +7,16 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import {
   FaUsers, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaClipboardList,
-  FaArrowRight, FaArrowLeft, FaExclamationTriangle, FaCheckCircle, FaBell,
+  FaArrowRight, FaArrowLeft, FaExclamationTriangle, FaCheckCircle,
   FaEdit, FaSave, FaTimes, FaTimesCircle, FaInfoCircle, FaSyncAlt,
-  FaFolderOpen, FaFileAlt, FaBullseye, FaRegStar, FaShieldAlt, FaChartLine,
-  FaSearch, FaTasks, FaPlus, FaTrash, FaSort, FaSortUp, FaSortDown,
-  FaChevronDown, FaChevronUp, FaChevronLeft, FaChevronRight,
-  FaArchive, FaBoxOpen, FaUndo, FaRegSquare, FaExternalLinkAlt,
+  FaFolderOpen, FaFileAlt, FaBullseye, FaChartLine, FaSearch, FaTasks,
+  FaPlus, FaTrash, FaSort, FaSortUp, FaSortDown, FaChevronDown, FaChevronUp,
+  FaChevronLeft, FaChevronRight, FaArchive, FaBoxOpen, FaUndo, FaRegSquare,
+  FaExternalLinkAlt,
 } from "react-icons/fa";
 
-/* ─── Categories — the same vocabulary as the calendar and Integrated Actions.
-   "Overall Company Health" is gone; "General" is the catch-all. ─────────── */
+/* ─── Categories — the same vocabulary as the calendar and Integrated
+   Actions. "Overall Company Health" is gone; "General" is the catch-all. ── */
 const RAPS_CATEGORIES = [
   { name: "Strategy & Execution", color: "#2196F3", bg: "#E3F2FD" },
   { name: "Financial Performance", color: "#FF9800", bg: "#FFF3E0" },
@@ -33,22 +32,23 @@ const ACTION_STATUSES = ["Not Done", "In Progress", "Done"];
 /* ─── Helpers ───────────────────────────────────────────────────────────── */
 const formatDMY = (d) => {
   if (!d) return "";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+  const x = new Date(d);
+  if (Number.isNaN(x.getTime())) return "";
+  return `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}/${x.getFullYear()}`;
 };
 const toInputDate = (d) => {
   if (!d) return "";
-  const date = new Date(d);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().split("T")[0];
+  const x = new Date(d);
+  return Number.isNaN(x.getTime()) ? "" : x.toISOString().split("T")[0];
 };
-const generateId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-};
-/* Anything thrown is flattened before it can reach JSX — an Error object as a
-   React child is what produces "Objects are not valid as a React child". */
-const errText = (err) => String(err?.message ?? err ?? "Unknown error");
+const generateId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+/* Anything caught is flattened before it can reach state — an Error object
+   rendered as a React child throws "Objects are not valid as a React child". */
+const errText = (e) => String(e?.message ?? e ?? "Unknown error");
 
 /* Prefers the next instance still ahead — a recurring meeting's first
    instance is often months in the past. */
@@ -57,7 +57,7 @@ const getMeetingDate = (meeting) => {
     .map((i) => new Date(i.date))
     .filter((d) => !Number.isNaN(d.getTime()))
     .sort((a, b) => a - b);
-  if (dates.length === 0) return null;
+  if (!dates.length) return null;
   const now = new Date();
   return (dates.find((d) => d >= now) || dates[dates.length - 1]).toISOString();
 };
@@ -88,11 +88,145 @@ const statusBadge = (status) => {
   );
 };
 
-/* ─── Calendar picker for the date column filters ───────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   Looking Back / Looking Forward.
+
+   Two bands, each with a vertical spine, a brown caption block, a chevron and
+   a white content box. Stored as plain text, rendered one bullet per line.
+   ════════════════════════════════════════════════════════════════════════ */
+const KMS_BANDS = [
+  {
+    id: "back", spine: "Looking Back", border: "#5d4037", spineBg: "#5d4037", capBg: "#8d6e63",
+    rows: [
+      { field: "highlights", caption: "Highlights", sub: "\u201cWinners\u201d", placeholder: "What went well this period? One win per line." },
+      { field: "lowlights", caption: "Lowlights", sub: "\u201cLosers\u201d", placeholder: "What did not go well? One setback per line." },
+    ],
+  },
+  {
+    id: "forward", spine: "Looking Forward", border: "#b0a29b", spineBg: "#9e9e9e", capBg: "#5d4037",
+    rows: [
+      { field: "opportunities", caption: "Opportunities", sub: "", placeholder: "What could we take advantage of? One opportunity per line." },
+      { field: "priorities", caption: "Priorities for next Period", sub: "", placeholder: "What must happen before the next meeting? One priority per line." },
+    ],
+  },
+];
+
+const KmsOverview = ({ meeting, onSave, disabled }) => {
+  const [editing, setEditing] = useState(null);
+  const [temp, setTemp] = useState("");
+
+  const bullets = (value) => (value || "").split("\n").map((l) => l.trim()).filter(Boolean);
+
+  return (
+    <div>
+      {KMS_BANDS.map((band) => (
+        <div key={band.id} style={{
+          display: "flex", gap: "10px", padding: "12px",
+          border: `3px solid ${band.border}`, borderRadius: "14px",
+          marginBottom: "18px", backgroundColor: "#ffffff",
+        }}>
+          <div style={{
+            backgroundColor: band.spineBg, borderRadius: "8px", color: "white",
+            fontWeight: 700, fontSize: "13px", letterSpacing: "0.6px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "10px 4px", minWidth: "38px", flexShrink: 0,
+            writingMode: "vertical-rl", transform: "rotate(180deg)",
+          }}>
+            {band.spine}
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+            {band.rows.map((row) => {
+              const value = meeting?.[row.field] || "";
+              const isEditing = editing === row.field;
+              const lines = bullets(value);
+
+              return (
+                <div key={row.field} style={{ display: "flex", alignItems: "stretch" }}>
+                  <div style={{
+                    backgroundColor: band.capBg, color: "white", borderRadius: "10px",
+                    padding: "14px 12px", width: "150px", flexShrink: 0,
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    textAlign: "center", fontWeight: 700, fontSize: "13px", lineHeight: 1.35,
+                  }}>
+                    <span>{row.caption}</span>
+                    {row.sub && <span style={{ fontWeight: 600 }}>{row.sub}</span>}
+                  </div>
+
+                  <div style={{
+                    width: "22px", flexShrink: 0, alignSelf: "stretch",
+                    backgroundColor: band.capBg,
+                    clipPath: "polygon(0 0, 100% 50%, 0 100%)",
+                    marginLeft: "-2px", marginRight: "8px",
+                  }} />
+
+                  <div style={{
+                    flex: 1, minWidth: 0, backgroundColor: "#ffffff",
+                    border: `2px solid ${band.border}`, borderRadius: "10px",
+                    padding: "12px 14px", minHeight: "78px",
+                    display: "flex", flexDirection: "column", justifyContent: "center",
+                  }}>
+                    {isEditing ? (
+                      <div>
+                        <textarea autoFocus rows="4" value={temp}
+                          onChange={(e) => setTemp(e.target.value)} placeholder={row.placeholder}
+                          style={{
+                            width: "100%", backgroundColor: "#ffffff", border: "1px solid #e8ddd4",
+                            borderRadius: "6px", padding: "10px 12px", fontSize: "13.5px",
+                            color: "#4a352f", lineHeight: 1.6, fontFamily: "inherit",
+                            resize: "vertical", boxSizing: "border-box", outline: "none",
+                          }} />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
+                          <button onClick={async () => { await onSave(row.field, temp); setEditing(null); }}
+                            style={{ padding: "6px 14px", backgroundColor: "#7d5a50", color: "white", border: "none",
+                              borderRadius: "5px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600,
+                              display: "flex", alignItems: "center", gap: "6px" }}>
+                            <FaSave size={11} /> Save
+                          </button>
+                          <button onClick={() => setEditing(null)}
+                            style={{ padding: "6px 14px", backgroundColor: "#efeae7", color: "#4a352f", border: "none",
+                              borderRadius: "5px", cursor: "pointer", fontSize: "12.5px",
+                              display: "flex", alignItems: "center", gap: "6px" }}>
+                            <FaTimes size={11} /> Cancel
+                          </button>
+                          <span style={{ fontSize: "11.5px", color: "#8d6e63" }}>One point per line</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {lines.length ? (
+                            <ul style={{ margin: 0, paddingLeft: "16px", color: "#4a352f", fontSize: "13.5px", lineHeight: 1.7 }}>
+                              {lines.map((l, i) => <li key={i}>{l}</li>)}
+                            </ul>
+                          ) : (
+                            <span style={{ color: "#bdbdbd", fontSize: "13px", fontStyle: "italic" }}>{row.placeholder}</span>
+                          )}
+                        </div>
+                        {!disabled && (
+                          <button onClick={() => { setTemp(value); setEditing(row.field); }} title={`Edit ${row.caption}`}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#8d6e63", padding: "2px 4px", flexShrink: 0 }}>
+                            <FaEdit size={13} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* ─── Calendar picker for the action date filters ───────────────────────── */
 const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
   const [current, setCurrent] = useState(new Date());
-  const daysInMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
-  const firstDay = new Date(current.getFullYear(), current.getMonth(), 1).getDay();
+  const days = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
+  const first = new Date(current.getFullYear(), current.getMonth(), 1).getDay();
   const today = new Date();
   const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -105,27 +239,21 @@ const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
         <button onClick={() => setCurrent(new Date(current.getFullYear(), current.getMonth() - 1, 1))}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}>
-          <FaChevronLeft size={11} />
-        </button>
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}><FaChevronLeft size={11} /></button>
         <span style={{ fontWeight: 600, color: "#5d4037", fontSize: "13px" }}>
           {months[current.getMonth()]} {current.getFullYear()}
         </span>
         <button onClick={() => setCurrent(new Date(current.getFullYear(), current.getMonth() + 1, 1))}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}>
-          <FaChevronRight size={11} />
-        </button>
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}><FaChevronRight size={11} /></button>
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", marginBottom: "4px" }}>
         {["Su","Mo","Tu","We","Th","Fr","Sa"].map((d) => (
           <div key={d} style={{ textAlign: "center", fontSize: "10px", fontWeight: 600, color: "#8d6e63" }}>{d}</div>
         ))}
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
-        {Array.from({ length: firstDay }, (_, i) => <div key={`e${i}`} />)}
-        {Array.from({ length: daysInMonth }, (_, i) => {
+        {Array.from({ length: first }, (_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: days }, (_, i) => {
           const day = i + 1;
           const date = new Date(current.getFullYear(), current.getMonth(), day);
           const isToday = date.toDateString() === today.toDateString();
@@ -133,13 +261,10 @@ const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
             <div key={day} onClick={() => { onSelect(formatDMY(date.toISOString())); onClose(); }}
               style={{ textAlign: "center", padding: "5px 2px", cursor: "pointer", borderRadius: "4px",
                 backgroundColor: isToday ? "#f0e6d9" : "transparent", color: "#4a352f",
-                fontWeight: isToday ? 600 : 400, fontSize: "12px" }}>
-              {day}
-            </div>
+                fontWeight: isToday ? 600 : 400, fontSize: "12px" }}>{day}</div>
           );
         })}
       </div>
-
       <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #e8ddd4", display: "flex", gap: "8px" }}>
         <button onClick={() => { onSelect(noDateLabel); onClose(); }}
           style={{ flex: 1, padding: "4px 8px", backgroundColor: "#f5f5f5", border: "1px solid #e8ddd4", borderRadius: "4px", cursor: "pointer", fontSize: "11px", color: "#4a352f" }}>
@@ -154,11 +279,7 @@ const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
   );
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Meeting Actions table — same layout as Integrated Actions: header filters,
-   sort arrows, resizable columns, clickable stat chips, archive flow. Writes
-   back into meeting.actions, which is the array /raps-actions reads.
-   ════════════════════════════════════════════════════════════════════════ */
+/* ─── Meeting Actions table (matches Integrated Actions) ────────────────── */
 const ACTION_COLUMNS = [
   { key: "category", label: "Category", width: 165, sortable: true, filter: "list" },
   { key: "title", label: "Action", width: 250, sortable: true, filter: "list" },
@@ -170,7 +291,7 @@ const ACTION_COLUMNS = [
 const ACTIONS_COL_W = 150;
 const EMPTY_ACTION_FILTERS = { category: "all", title: "all", assignedTo: "all", dueDate: "all", revisedDate: "all", status: "all" };
 
-const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
+const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) => {
   const actions = useMemo(() => meeting?.actions || [], [meeting]);
 
   const [scope, setScope] = useState("active");
@@ -199,31 +320,26 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
 
   const allCategories = useMemo(() => {
     const seen = new Map();
-    [...RAPS_CATEGORIES, ...customCats].forEach((c) => seen.set(c.name, c));
+    [...(categories || RAPS_CATEGORIES), ...customCats].forEach((c) => seen.set(c.name, c));
     [meetingCategory, ...actions.map((a) => a.category)].forEach((n) => {
       if (n && !seen.has(n)) seen.set(n, { name: n, color: "#607D8B", bg: "#ECEFF1" });
     });
     return Array.from(seen.values());
-  }, [customCats, actions, meetingCategory]);
-
-  const catMeta = (name) => allCategories.find((c) => c.name === name) || { name, color: "#757575", bg: "#EEEEEE" };
+  }, [categories, customCats, actions, meetingCategory]);
+  const catMeta = (n) => allCategories.find((c) => c.name === n) || { name: n, color: "#757575", bg: "#EEEEEE" };
 
   const startResize = (e, key) => {
     e.preventDefault(); e.stopPropagation();
-    const startX = e.clientX;
-    const startWidth = widths[key];
+    const startX = e.clientX, startWidth = widths[key];
     resizing.current = key;
     const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(90, startWidth + (ev.clientX - startX)) }));
     const onUp = () => {
       resizing.current = null;
       document.body.style.cursor = ""; document.body.style.userSelect = "";
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp);
     };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
   };
 
   const stats = useMemo(() => {
@@ -259,7 +375,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
 
   const rows = useMemo(() => {
     let list = [...scopeRows];
-
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter((a) =>
@@ -267,7 +382,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
         (a.description || "").toLowerCase().includes(q) ||
         (a.assignedTo || "").toLowerCase().includes(q));
     }
-
     list = list.filter((a) => {
       const cat = a.category || meetingCategory;
       if (filters.category !== "all" && cat !== filters.category) return false;
@@ -284,7 +398,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
       }
       return true;
     });
-
     if (sortConfig.key) {
       const get = (a) => {
         switch (sortConfig.key) {
@@ -298,8 +411,7 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
         }
       };
       list.sort((a, b) => {
-        const av = get(a).toString().toLowerCase();
-        const bv = get(b).toString().toLowerCase();
+        const av = get(a).toString().toLowerCase(), bv = get(b).toString().toLowerCase();
         if (av < bv) return sortConfig.direction === "asc" ? -1 : 1;
         if (av > bv) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
@@ -311,8 +423,7 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
   const activeFilters = Object.values(filters).filter((v) => v !== "all").length + (search.trim() ? 1 : 0);
 
   /* Switching scope clears the column filters — the options come from the
-     scope, so a value picked under Active is usually absent from Archived and
-     would silently empty the table. */
+     scope, so a value picked under Active is usually absent from Archived. */
   const selectScope = (next) => {
     setScope((prev) => (prev === next && next !== "active" ? "active" : next));
     setFilters({ ...EMPTY_ACTION_FILTERS });
@@ -321,28 +432,17 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
 
   const persist = async (next) => { setBusy(true); await onSaveActions(next); setBusy(false); };
 
-  /* Category and due date pull from the meeting; By Whom is limited to its
-     participants. All three stay editable. */
   const openAdd = () => {
     setEditing(null); setShowCustomCat(false);
-    setForm({
-      title: "", description: "", category: meetingCategory,
-      assignedTo: "", dueDate: toInputDate(meetingDate), status: "In Progress",
-    });
+    setForm({ title: "", description: "", category: meetingCategory, assignedTo: "", dueDate: toInputDate(meetingDate), status: "In Progress" });
     setShowForm(true);
   };
-
-  const openEdit = (action) => {
-    setEditing(action); setShowCustomCat(false);
-    setForm({
-      title: action.title || "", description: action.description || "",
-      category: action.category || meetingCategory,
-      assignedTo: action.assignedTo || "", dueDate: action.dueDate || "",
-      status: action.status || "In Progress",
-    });
+  const openEdit = (a) => {
+    setEditing(a); setShowCustomCat(false);
+    setForm({ title: a.title || "", description: a.description || "", category: a.category || meetingCategory,
+      assignedTo: a.assignedTo || "", dueDate: a.dueDate || "", status: a.status || "In Progress" });
     setShowForm(true);
   };
-
   const addCustomCat = () => {
     const name = customCatName.trim();
     if (!name) return;
@@ -357,13 +457,10 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
       await persist(actions.map((a) => {
         if (a.id !== editing.id) return a;
         const dueChanged = (a.dueDate || "") !== (form.dueDate || "");
-        return {
-          ...a, title: form.title.trim(), description: form.description.trim(),
-          category: form.category, assignedTo: form.assignedTo, dueDate: form.dueDate,
-          status: form.status,
+        return { ...a, title: form.title.trim(), description: form.description.trim(),
+          category: form.category, assignedTo: form.assignedTo, dueDate: form.dueDate, status: form.status,
           revisedDate: dueChanged ? new Date().toISOString().split("T")[0] : a.revisedDate || null,
-          updatedAt: new Date().toISOString(),
-        };
+          updatedAt: new Date().toISOString() };
       }));
     } else {
       await persist([...actions, {
@@ -382,18 +479,13 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
     await persist(actions.filter((x) => x.id !== a.id));
   };
 
-  const th = {
-    padding: "10px 12px", textAlign: "left", backgroundColor: "#f0e6d9", color: "#4a352f",
+  const th = { padding: "10px 12px", textAlign: "left", backgroundColor: "#f0e6d9", color: "#4a352f",
     fontWeight: 600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px",
-    borderBottom: "2px solid #d7ccc8", borderRight: "1px solid #e0d5c8",
-    position: "relative", overflow: "visible",
-  };
-  const td = {
-    padding: "10px 12px", borderBottom: "1px solid #f0e6d9", borderRight: "1px solid #f7f3f0",
-    fontSize: "13px", color: "#4a352f", verticalAlign: "middle", overflow: "hidden",
-  };
+    borderBottom: "2px solid #d7ccc8", borderRight: "1px solid #e0d5c8", position: "relative", overflow: "visible" };
+  const td = { padding: "10px 12px", borderBottom: "1px solid #f0e6d9", borderRight: "1px solid #f7f3f0",
+    fontSize: "13px", color: "#4a352f", verticalAlign: "middle", overflow: "hidden" };
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px 5px", borderRadius: "4px", color: c, display: "inline-flex", alignItems: "center" });
-  const inp = (bad) => ({ width: "100%", padding: "10px 12px", border: bad ? "2px solid #f44336" : "2px solid #e8ddd4", borderRadius: "6px", fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box" });
+  const inp = (bad) => ({ width: "100%", padding: "10px 12px", border: bad ? "2px solid #f44336" : "2px solid #e8ddd4", borderRadius: "6px", fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box", backgroundColor: "white" });
   const lbl = { display: "block", fontSize: "13px", fontWeight: 600, color: "#4a352f", marginBottom: "6px" };
   const totalWidth = ACTION_COLUMNS.reduce((s, c) => s + widths[c.key], 0) + ACTIONS_COL_W;
 
@@ -406,7 +498,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
 
   return (
     <div>
-      {/* Clickable stat chips */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginBottom: "14px" }}>
         {CHIPS.map((chip) => {
           const on = scope === chip.key;
@@ -415,7 +506,7 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
               style={{ textAlign: "left", padding: "12px 14px", borderRadius: "8px", cursor: "pointer",
                 backgroundColor: chip.bg, border: on ? `2px solid ${chip.color}` : "2px solid transparent",
                 boxShadow: on ? `0 2px 8px ${chip.color}33` : "none",
-                display: "flex", alignItems: "center", gap: "12px", fontFamily: "inherit", transition: "all 0.15s ease" }}>
+                display: "flex", alignItems: "center", gap: "12px", fontFamily: "inherit" }}>
               <span style={{ color: chip.color, display: "flex" }}>{chip.icon}</span>
               <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                 <span style={{ fontSize: "20px", fontWeight: 700, color: chip.color, lineHeight: 1 }}>{chip.value}</span>
@@ -427,15 +518,13 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
         })}
       </div>
 
-      {/* Toolbar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "11px", color: "#8d6e63", backgroundColor: "#f7f3f0", border: "1px solid #e8ddd4", padding: "4px 10px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
             <FaClipboardList size={10} /> Showing {rows.length} {scope === "active" ? "active" : scope === "done" ? "completed" : scope === "overdue" ? "overdue" : "archived"}
           </span>
           {scope !== "active" && (
-            <button onClick={() => selectScope("active")}
-              style={{ fontSize: "11px", color: "#7d5a50", background: "none", border: "1px solid #e8ddd4", borderRadius: "12px", padding: "4px 10px", cursor: "pointer" }}>
+            <button onClick={() => selectScope("active")} style={{ fontSize: "11px", color: "#7d5a50", background: "none", border: "1px solid #e8ddd4", borderRadius: "12px", padding: "4px 10px", cursor: "pointer" }}>
               Back to all active
             </button>
           )}
@@ -446,7 +535,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
             </button>
           )}
         </div>
-
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: "white", border: "2px solid #e8ddd4", borderRadius: "6px", padding: "2px 10px" }}>
             <FaSearch size={12} color="#8d6e63" />
@@ -454,15 +542,13 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
               style={{ border: "none", outline: "none", padding: "6px 2px", fontSize: "13px", fontFamily: "inherit", width: "140px", backgroundColor: "transparent" }} />
           </div>
           {!readOnly && !showArchived && (
-            <button onClick={openAdd}
-              style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>
+            <button onClick={openAdd} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>
               <FaPlus size={12} /> New Action
             </button>
           )}
         </div>
       </div>
 
-      {/* Table */}
       <div style={{ overflowX: "auto", border: "1px solid #e8ddd4", borderRadius: "8px", backgroundColor: "white" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed", fontSize: "13px" }}>
           <thead>
@@ -489,19 +575,16 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
                         </button>
                       )}
                     </div>
-
                     {isOpen && col.filter === "date" && (
                       <CalendarPicker noDateLabel={col.key === "revisedDate" ? "No Revision" : "No Date"}
                         onSelect={(v) => setFilters((p) => ({ ...p, [col.key]: v }))} onClose={() => setOpenFilter(null)} />
                     )}
-
                     {isOpen && col.filter === "list" && (
                       <div onMouseLeave={() => setOpenFilter(null)} style={{
                         position: "absolute", top: "100%", left: 0, marginTop: "4px", backgroundColor: "white",
                         border: "2px solid #e8ddd4", borderRadius: "6px", minWidth: "190px", maxHeight: "240px",
                         overflowY: "auto", zIndex: 400, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", padding: "4px 0",
-                        textTransform: "none", letterSpacing: "normal", fontWeight: 400,
-                      }}>
+                        textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
                         {optionsFor(col.key).map((opt) => (
                           <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [col.key]: opt })); setOpenFilter(null); }}
                             style={{ padding: "7px 14px", cursor: "pointer", fontSize: "12px",
@@ -513,7 +596,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
                         ))}
                       </div>
                     )}
-
                     <div onMouseDown={(e) => startResize(e, col.key)} title="Drag to resize"
                       style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
                   </th>
@@ -522,7 +604,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
               <th style={{ ...th, width: ACTIONS_COL_W, textAlign: "center", borderRight: "none" }}>Actions</th>
             </tr>
           </thead>
-
           <tbody>
             {rows.length === 0 ? (
               <tr>
@@ -530,10 +611,8 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
                     {showArchived ? <FaBoxOpen size={26} color="#d7ccc8" /> : <FaClipboardList size={26} color="#d7ccc8" />}
                     <span style={{ fontWeight: 600, color: "#5d4037" }}>
-                      {showArchived ? "No archived actions"
-                        : scope === "done" ? "Nothing completed and unarchived"
-                        : scope === "overdue" ? "Nothing overdue"
-                        : "No actions yet"}
+                      {showArchived ? "No archived actions" : scope === "done" ? "Nothing completed and unarchived"
+                        : scope === "overdue" ? "Nothing overdue" : "No actions yet"}
                     </span>
                     <span style={{ fontSize: "12px" }}>
                       {showArchived ? "Completed actions you archive are kept here."
@@ -574,12 +653,9 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
                       </div>
                     )}
                   </td>
-                  <td style={{ ...td, width: widths.assignedTo }}>
-                    {a.assignedTo || <span style={{ color: "#bdbdbd" }}>Unassigned</span>}
-                  </td>
+                  <td style={{ ...td, width: widths.assignedTo }}>{a.assignedTo || <span style={{ color: "#bdbdbd" }}>Unassigned</span>}</td>
                   <td style={{ ...td, width: widths.dueDate }}>
-                    {a.dueDate ? <span style={{ color: dueDateColor(a.dueDate), fontWeight: 500 }}>{formatDMY(a.dueDate)}</span>
-                      : <span style={{ color: "#bdbdbd" }}>—</span>}
+                    {a.dueDate ? <span style={{ color: dueDateColor(a.dueDate), fontWeight: 500 }}>{formatDMY(a.dueDate)}</span> : <span style={{ color: "#bdbdbd" }}>—</span>}
                   </td>
                   <td style={{ ...td, width: widths.revisedDate }}>
                     {a.revisedDate ? formatDMY(a.revisedDate) : <span style={{ color: "#bdbdbd" }}>—</span>}
@@ -618,7 +694,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
         </table>
       </div>
 
-      {/* Add / edit modal */}
       {showForm && (
         <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1300, padding: "20px" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: "12px", width: "100%", maxWidth: "560px", maxHeight: "88vh", overflowY: "auto", padding: "24px", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}>
@@ -641,13 +716,11 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
               <input type="text" placeholder="What needs to be done?" value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })} style={inp(!form.title.trim())} />
             </div>
-
             <div style={{ marginBottom: "14px" }}>
               <label style={lbl}>Description</label>
               <textarea rows="2" placeholder="Add more detail..." value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inp(false), resize: "vertical" }} />
             </div>
-
             <div style={{ marginBottom: "14px" }}>
               <label style={lbl}>
                 Category
@@ -683,21 +756,17 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
                 )}
               </div>
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
               <div>
                 <label style={lbl}>By Whom</label>
-                <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
-                  style={{ ...inp(false), backgroundColor: "white", cursor: "pointer" }}>
+                <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={{ ...inp(false), cursor: "pointer" }}>
                   <option value="">Unassigned</option>
                   {participants.map((p, i) => {
                     const name = typeof p === "string" ? p : p.name || p.email || "Participant";
                     return <option key={i} value={name}>{name}</option>;
                   })}
                 </select>
-                {participants.length === 0 && (
-                  <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "4px" }}>No participants on this meeting yet.</div>
-                )}
+                {participants.length === 0 && <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "4px" }}>No participants on this meeting yet.</div>}
               </div>
               <div>
                 <label style={lbl}>
@@ -709,15 +778,12 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
                 <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inp(false)} />
               </div>
             </div>
-
             <div style={{ marginBottom: "20px" }}>
               <label style={lbl}>Status</label>
-              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
-                style={{ ...inp(false), backgroundColor: "white", cursor: "pointer" }}>
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={{ ...inp(false), cursor: "pointer" }}>
                 {ACTION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-
             <div style={{ display: "flex", gap: "12px" }}>
               <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "10px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 500 }}>Cancel</button>
               <button onClick={submit} disabled={busy || !form.title.trim()}
@@ -725,7 +791,6 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
                 {busy ? "Saving..." : editing ? "Update Action" : "Add Action"}
               </button>
             </div>
-
             <p style={{ fontSize: "11px", color: "#8d6e63", marginTop: "14px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
               <FaInfoCircle size={10} /> This action also appears in Integrated Actions.
             </p>
@@ -736,7 +801,7 @@ const MeetingActionsTable = ({ meeting, onSaveActions, readOnly }) => {
   );
 };
 
-/* ─── Inline editable field ─────────────────────────────────────────────── */
+/* ─── Inline editable field — white content box ─────────────────────────── */
 const EditableField = ({ icon, label, value, placeholder, onSave, disabled }) => {
   const [editing, setEditing] = useState(false);
   const [temp, setTemp] = useState(value || "");
@@ -753,11 +818,12 @@ const EditableField = ({ icon, label, value, placeholder, onSave, disabled }) =>
           </button>
         )}
       </div>
-
       {editing ? (
         <div>
           <textarea value={temp} onChange={(e) => setTemp(e.target.value)} rows="4" placeholder={placeholder}
-            style={{ backgroundColor: "#f7f3f0", padding: "12px 16px", borderRadius: "6px", border: "1px solid #e8ddd4", minHeight: "80px", fontSize: "14px", color: "#4a352f", lineHeight: 1.6, width: "100%", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
+            style={{ backgroundColor: "#ffffff", padding: "12px 16px", borderRadius: "6px", border: "1px solid #e8ddd4",
+              minHeight: "80px", fontSize: "14px", color: "#4a352f", lineHeight: 1.6, width: "100%",
+              fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", outline: "none" }} />
           <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
             <button onClick={async () => { await onSave(temp); setEditing(false); }}
               style={{ padding: "6px 16px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
@@ -770,7 +836,9 @@ const EditableField = ({ icon, label, value, placeholder, onSave, disabled }) =>
           </div>
         </div>
       ) : (
-        <div style={{ backgroundColor: "#f7f3f0", padding: "12px 16px", borderRadius: "6px", minHeight: "44px", border: "1px solid #e8ddd4", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.6, color: value ? "#4a352f" : "#bdbdbd", fontStyle: value ? "normal" : "italic" }}>
+        <div style={{ backgroundColor: "#ffffff", padding: "12px 16px", borderRadius: "6px", minHeight: "44px",
+          border: "1px solid #e8ddd4", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.6,
+          color: value ? "#4a352f" : "#bdbdbd", fontStyle: value ? "normal" : "italic" }}>
           {value || placeholder}
         </div>
       )}
@@ -804,15 +872,14 @@ const RapsOverview = () => {
 
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged((u) => setCurrentUser(u || null));
-    return () => unsubscribe();
+    const unsub = auth.onAuthStateChanged((u) => setCurrentUser(u || null));
+    return () => unsub();
   }, []);
 
   useEffect(() => {
     if (!currentUser) return;
     if (!meetingId) { setLoading(false); return; }
-
-    const load = async () => {
+    (async () => {
       setLoading(true);
       try {
         const snap = await getDoc(doc(db, "governanceCalendar", currentUser.uid));
@@ -822,21 +889,15 @@ const RapsOverview = () => {
       } catch (error) {
         console.error("Error loading meeting:", error);
         notify("error", `Failed to load meeting: ${errText(error)}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+      } finally { setLoading(false); }
+    })();
   }, [currentUser, meetingId]);
 
   const persist = async (updatedMeetings) => {
     setMeetings(updatedMeetings);
     setMeeting(updatedMeetings.find((m) => m.id === meetingId) || null);
-    await setDoc(
-      doc(db, "governanceCalendar", currentUser.uid),
-      { meetings: updatedMeetings, updatedAt: new Date().toISOString(), userId: currentUser.uid },
-      { merge: true }
-    );
+    await setDoc(doc(db, "governanceCalendar", currentUser.uid),
+      { meetings: updatedMeetings, updatedAt: new Date().toISOString(), userId: currentUser.uid }, { merge: true });
   };
 
   const saveField = async (field, value) => {
@@ -871,13 +932,12 @@ const RapsOverview = () => {
     return { label: "Past", color: "#9E9E9E" };
   };
 
-  /* ─── Styles ──────────────────────────────────────────────────────────── */
   const container = { padding: "40px", maxWidth: "1200px", margin: "0 auto", marginTop: "5px", backgroundColor: "#fdfcfb", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" };
   const card = { backgroundColor: "white", borderRadius: "8px", border: "1px solid #e8ddd4", padding: "22px", marginBottom: "18px" };
   const cardTitle = { fontSize: "13px", fontWeight: 600, color: "#8d6e63", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" };
-  const chip = { display: "inline-block", padding: "4px 12px", backgroundColor: "#f7f3f0", borderRadius: "16px", fontSize: "13px", color: "#4a352f", margin: "4px 4px 0 0", border: "1px solid #e8ddd4" };
+  const chip = { display: "inline-block", padding: "4px 12px", backgroundColor: "#ffffff", borderRadius: "16px", fontSize: "13px", color: "#4a352f", margin: "4px 4px 0 0", border: "1px solid #e8ddd4" };
   const tabStyle = (a) => ({ padding: "12px 22px", cursor: "pointer", fontSize: "14px", fontWeight: a ? 600 : 500, color: a ? "#7d5a50" : "#8d6e63", borderBottom: a ? "3px solid #7d5a50" : "3px solid transparent", background: "none", border: "none", display: "flex", alignItems: "center", gap: "8px" });
-  const quickBtn = { padding: "9px 16px", backgroundColor: "#f7f3f0", border: "1px solid #e8ddd4", borderRadius: "6px", cursor: "pointer", fontSize: "13px", color: "#4a352f", display: "inline-flex", alignItems: "center", gap: "7px" };
+  const quickBtn = { padding: "9px 16px", backgroundColor: "#ffffff", border: "1px solid #e8ddd4", borderRadius: "6px", cursor: "pointer", fontSize: "13px", color: "#4a352f", display: "inline-flex", alignItems: "center", gap: "7px" };
 
   if (loading) {
     return <div style={container}><div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>Loading meeting details...</div></div>;
@@ -932,7 +992,6 @@ const RapsOverview = () => {
         </div>
       )}
 
-      {/* Header */}
       <div style={{ marginBottom: "22px", paddingBottom: "18px", borderBottom: "2px solid #e8ddd4" }}>
         <button onClick={() => navigate("/governance-calendar")}
           style={{ padding: 0, background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "#7d5a50", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "7px", marginBottom: "10px" }}>
@@ -949,7 +1008,6 @@ const RapsOverview = () => {
         </div>
       </div>
 
-      {/* Tabs — the same three as the calendar popup */}
       <div style={{ display: "flex", borderBottom: "2px solid #e8ddd4", gap: "4px", marginBottom: "22px", flexWrap: "wrap" }}>
         <button style={tabStyle(activeTab === "overview")} onClick={() => setActiveTab("overview")}>
           <FaClipboardList size={13} /> Meeting Overview
@@ -962,7 +1020,6 @@ const RapsOverview = () => {
         </button>
       </div>
 
-      {/* ─── Meeting Overview ─── */}
       {activeTab === "overview" && (
         <>
           <div style={card}>
@@ -1025,7 +1082,6 @@ const RapsOverview = () => {
             )}
           </div>
 
-          {/* Meeting Details — Purpose, Agenda, Preparations only */}
           <div style={card}>
             <div style={cardTitle}><FaFileAlt size={12} /> Meeting Details</div>
             <EditableField icon={<FaBullseye size={11} />} label="Purpose" value={meeting.purpose}
@@ -1038,23 +1094,10 @@ const RapsOverview = () => {
         </>
       )}
 
-      {/* ─── Performance Overview — the placeholder cards are gone; these
-             four are what the team actually fills in. ─── */}
       {activeTab === "performance" && (
-        <div style={card}>
-          <div style={cardTitle}><FaChartLine size={12} /> Performance Overview</div>
-          <EditableField icon={<FaRegStar size={11} />} label="Highlights" value={meeting.highlights}
-            placeholder="What went well? Record the wins from this meeting." onSave={(v) => saveField("highlights", v)} />
-          <EditableField icon={<FaExclamationTriangle size={11} />} label="Lowlights" value={meeting.lowlights}
-            placeholder="What did not go well? Record the setbacks raised." onSave={(v) => saveField("lowlights", v)} />
-          <EditableField icon={<FaShieldAlt size={11} />} label="Risks" value={meeting.risks}
-            placeholder="Risks identified, their likely impact, and who owns them." onSave={(v) => saveField("risks", v)} />
-          <EditableField icon={<FaBell size={11} />} label="Heads-up" value={meeting.headsUp}
-            placeholder="Anything the team should know ahead of the next session." onSave={(v) => saveField("headsUp", v)} />
-        </div>
+        <KmsOverview meeting={meeting} onSave={(field, value) => saveField(field, value)} />
       )}
 
-      {/* ─── Meeting Actions ─── */}
       {activeTab === "actions" && (
         <div style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
@@ -1065,7 +1108,7 @@ const RapsOverview = () => {
             </button>
           </div>
 
-          <MeetingActionsTable meeting={meeting} onSaveActions={saveActions} />
+          <MeetingActionsTable meeting={meeting} categories={RAPS_CATEGORIES} onSaveActions={saveActions} />
 
           <button onClick={() => navigate(`/raps-actions?meeting=${meeting.id}`)}
             style={{ width: "100%", marginTop: "16px", padding: "10px", backgroundColor: "#7d5a50", color: "white",
@@ -1076,7 +1119,6 @@ const RapsOverview = () => {
         </div>
       )}
 
-      {/* Quick actions */}
       <div style={{ ...card, border: "2px solid #e8ddd4" }}>
         <div style={cardTitle}>Quick Actions</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
