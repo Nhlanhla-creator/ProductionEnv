@@ -4,10 +4,10 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   FaChevronLeft, FaChevronRight, FaEdit, FaSave, FaTimes, FaPlus, FaTrash,
   FaCalendarAlt, FaClock, FaUsers, FaSyncAlt, FaMapMarkerAlt, FaClipboardList,
-  FaChartLine, FaTasks, FaRegStar, FaExclamationTriangle, FaShieldAlt, FaBell,
-  FaCheckCircle, FaInfoCircle, FaTimesCircle, FaFolderOpen, FaLayerGroup,
-  FaExternalLinkAlt, FaFileAlt, FaBullseye, FaSearch, FaSort, FaSortUp, FaSortDown,
-  FaChevronDown, FaChevronUp, FaArchive, FaBoxOpen, FaUndo, FaRegSquare,
+  FaChartLine, FaTasks, FaCheckCircle, FaInfoCircle, FaTimesCircle, FaFolderOpen,
+  FaLayerGroup, FaExternalLinkAlt, FaFileAlt, FaBullseye, FaSearch, FaSort,
+  FaSortUp, FaSortDown, FaChevronDown, FaChevronUp, FaArchive, FaBoxOpen,
+  FaUndo, FaRegSquare, FaExclamationTriangle, FaBell,
 } from "react-icons/fa";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, collection } from "firebase/firestore";
@@ -17,11 +17,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 const functions = getFunctions();
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Categories — the same vocabulary Integrated Actions uses, so a category set
-   here reads identically there. "Overall Company Health" is gone; "General" is
-   the catch-all, and users can add their own.
-   ════════════════════════════════════════════════════════════════════════ */
+/* ─── Categories — the same vocabulary as Integrated Actions ─────────────── */
 const RAPS_CATEGORIES = [
   { name: "Strategy & Execution", color: "#2196F3", bg: "#E3F2FD" },
   { name: "Financial Performance", color: "#FF9800", bg: "#FFF3E0" },
@@ -50,20 +46,23 @@ const ACTION_STATUSES = ["Not Done", "In Progress", "Done"];
 /* ─── Helpers ───────────────────────────────────────────────────────────── */
 const formatDMY = (d) => {
   if (!d) return "";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+  const x = new Date(d);
+  if (Number.isNaN(x.getTime())) return "";
+  return `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}/${x.getFullYear()}`;
 };
 const toInputDate = (d) => {
   if (!d) return "";
-  const date = new Date(d);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().split("T")[0];
+  const x = new Date(d);
+  return Number.isNaN(x.getTime()) ? "" : x.toISOString().split("T")[0];
 };
-const generateId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-};
-const errText = (err) => String(err?.message ?? err ?? "Unknown error");
+const generateId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+/* Anything caught is flattened before it can reach state — an Error object
+   rendered as a React child throws "Objects are not valid as a React child". */
+const errText = (e) => String(e?.message ?? e ?? "Unknown error");
 
 /* Prefers the next instance still ahead — a recurring meeting's first
    instance is often months in the past. */
@@ -72,10 +71,11 @@ const getMeetingDate = (meeting) => {
     .map((i) => new Date(i.date))
     .filter((d) => !Number.isNaN(d.getTime()))
     .sort((a, b) => a - b);
-  if (dates.length === 0) return null;
+  if (!dates.length) return null;
   const now = new Date();
   return (dates.find((d) => d >= now) || dates[dates.length - 1]).toISOString();
 };
+
 const dueDateColor = (dueDate) => {
   if (!dueDate) return "#8d6e63";
   const diff = Math.ceil((new Date(dueDate) - new Date()) / 86400000);
@@ -84,6 +84,7 @@ const dueDateColor = (dueDate) => {
   if (diff <= 7) return "#ffc107";
   return "#4caf50";
 };
+
 const isOverdue = (a) =>
   !!a.dueDate && a.status !== "Done" && a.status !== "completed" && new Date(a.dueDate) < new Date();
 
@@ -101,11 +102,147 @@ const statusBadge = (status) => {
   );
 };
 
-/* ─── Calendar picker used by the date column filters ───────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   Looking Back / Looking Forward.
+
+   Replaces the old stack of Highlights / Lowlights / Risks / Heads-up fields.
+   Two bands, each with a vertical spine, a brown caption block, a chevron and
+   a white content box. Content is stored as plain text and rendered one
+   bullet per line.
+   ════════════════════════════════════════════════════════════════════════ */
+const KMS_BANDS = [
+  {
+    id: "back", spine: "Looking Back", border: "#5d4037", spineBg: "#5d4037", capBg: "#8d6e63",
+    rows: [
+      { field: "highlights", caption: "Highlights", sub: "\u201cWinners\u201d", placeholder: "What went well this period? One win per line." },
+      { field: "lowlights", caption: "Lowlights", sub: "\u201cLosers\u201d", placeholder: "What did not go well? One setback per line." },
+    ],
+  },
+  {
+    id: "forward", spine: "Looking Forward", border: "#b0a29b", spineBg: "#9e9e9e", capBg: "#5d4037",
+    rows: [
+      { field: "opportunities", caption: "Opportunities", sub: "", placeholder: "What could we take advantage of? One opportunity per line." },
+      { field: "priorities", caption: "Priorities for next Period", sub: "", placeholder: "What must happen before the next meeting? One priority per line." },
+    ],
+  },
+];
+
+const KmsOverview = ({ meeting, onSave, disabled }) => {
+  const [editing, setEditing] = useState(null);
+  const [temp, setTemp] = useState("");
+
+  const bullets = (value) => (value || "").split("\n").map((l) => l.trim()).filter(Boolean);
+
+  return (
+    <div>
+      {KMS_BANDS.map((band) => (
+        <div key={band.id} style={{
+          display: "flex", gap: "10px", padding: "12px",
+          border: `3px solid ${band.border}`, borderRadius: "14px",
+          marginBottom: "18px", backgroundColor: "#ffffff",
+        }}>
+          <div style={{
+            backgroundColor: band.spineBg, borderRadius: "8px", color: "white",
+            fontWeight: 700, fontSize: "13px", letterSpacing: "0.6px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "10px 4px", minWidth: "38px", flexShrink: 0,
+            writingMode: "vertical-rl", transform: "rotate(180deg)",
+          }}>
+            {band.spine}
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+            {band.rows.map((row) => {
+              const value = meeting?.[row.field] || "";
+              const isEditing = editing === row.field;
+              const lines = bullets(value);
+
+              return (
+                <div key={row.field} style={{ display: "flex", alignItems: "stretch" }}>
+                  <div style={{
+                    backgroundColor: band.capBg, color: "white", borderRadius: "10px",
+                    padding: "14px 12px", width: "150px", flexShrink: 0,
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    textAlign: "center", fontWeight: 700, fontSize: "13px", lineHeight: 1.35,
+                  }}>
+                    <span>{row.caption}</span>
+                    {row.sub && <span style={{ fontWeight: 600 }}>{row.sub}</span>}
+                  </div>
+
+                  <div style={{
+                    width: "22px", flexShrink: 0, alignSelf: "stretch",
+                    backgroundColor: band.capBg,
+                    clipPath: "polygon(0 0, 100% 50%, 0 100%)",
+                    marginLeft: "-2px", marginRight: "8px",
+                  }} />
+
+                  <div style={{
+                    flex: 1, minWidth: 0, backgroundColor: "#ffffff",
+                    border: `2px solid ${band.border}`, borderRadius: "10px",
+                    padding: "12px 14px", minHeight: "78px",
+                    display: "flex", flexDirection: "column", justifyContent: "center",
+                  }}>
+                    {isEditing ? (
+                      <div>
+                        <textarea autoFocus rows="4" value={temp}
+                          onChange={(e) => setTemp(e.target.value)} placeholder={row.placeholder}
+                          style={{
+                            width: "100%", backgroundColor: "#ffffff", border: "1px solid #e8ddd4",
+                            borderRadius: "6px", padding: "10px 12px", fontSize: "13.5px",
+                            color: "#4a352f", lineHeight: 1.6, fontFamily: "inherit",
+                            resize: "vertical", boxSizing: "border-box", outline: "none",
+                          }} />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
+                          <button onClick={async () => { await onSave(row.field, temp); setEditing(null); }}
+                            style={{ padding: "6px 14px", backgroundColor: "#7d5a50", color: "white", border: "none",
+                              borderRadius: "5px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600,
+                              display: "flex", alignItems: "center", gap: "6px" }}>
+                            <FaSave size={11} /> Save
+                          </button>
+                          <button onClick={() => setEditing(null)}
+                            style={{ padding: "6px 14px", backgroundColor: "#efeae7", color: "#4a352f", border: "none",
+                              borderRadius: "5px", cursor: "pointer", fontSize: "12.5px",
+                              display: "flex", alignItems: "center", gap: "6px" }}>
+                            <FaTimes size={11} /> Cancel
+                          </button>
+                          <span style={{ fontSize: "11.5px", color: "#8d6e63" }}>One point per line</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {lines.length ? (
+                            <ul style={{ margin: 0, paddingLeft: "16px", color: "#4a352f", fontSize: "13.5px", lineHeight: 1.7 }}>
+                              {lines.map((l, i) => <li key={i}>{l}</li>)}
+                            </ul>
+                          ) : (
+                            <span style={{ color: "#bdbdbd", fontSize: "13px", fontStyle: "italic" }}>{row.placeholder}</span>
+                          )}
+                        </div>
+                        {!disabled && (
+                          <button onClick={() => { setTemp(value); setEditing(row.field); }} title={`Edit ${row.caption}`}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#8d6e63", padding: "2px 4px", flexShrink: 0 }}>
+                            <FaEdit size={13} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* ─── Calendar picker for the action date filters ───────────────────────── */
 const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
   const [current, setCurrent] = useState(new Date());
-  const daysInMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
-  const firstDay = new Date(current.getFullYear(), current.getMonth(), 1).getDay();
+  const days = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
+  const first = new Date(current.getFullYear(), current.getMonth(), 1).getDay();
   const today = new Date();
   const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -118,16 +255,12 @@ const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
         <button onClick={() => setCurrent(new Date(current.getFullYear(), current.getMonth() - 1, 1))}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}>
-          <FaChevronLeft size={11} />
-        </button>
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}><FaChevronLeft size={11} /></button>
         <span style={{ fontWeight: 600, color: "#5d4037", fontSize: "13px" }}>
           {months[current.getMonth()]} {current.getFullYear()}
         </span>
         <button onClick={() => setCurrent(new Date(current.getFullYear(), current.getMonth() + 1, 1))}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}>
-          <FaChevronRight size={11} />
-        </button>
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#5d4037" }}><FaChevronRight size={11} /></button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", marginBottom: "4px" }}>
         {["Su","Mo","Tu","We","Th","Fr","Sa"].map((d) => (
@@ -135,8 +268,8 @@ const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
-        {Array.from({ length: firstDay }, (_, i) => <div key={`e${i}`} />)}
-        {Array.from({ length: daysInMonth }, (_, i) => {
+        {Array.from({ length: first }, (_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: days }, (_, i) => {
           const day = i + 1;
           const date = new Date(current.getFullYear(), current.getMonth(), day);
           const isToday = date.toDateString() === today.toDateString();
@@ -144,9 +277,7 @@ const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
             <div key={day} onClick={() => { onSelect(formatDMY(date.toISOString())); onClose(); }}
               style={{ textAlign: "center", padding: "5px 2px", cursor: "pointer", borderRadius: "4px",
                 backgroundColor: isToday ? "#f0e6d9" : "transparent", color: "#4a352f",
-                fontWeight: isToday ? 600 : 400, fontSize: "12px" }}>
-              {day}
-            </div>
+                fontWeight: isToday ? 600 : 400, fontSize: "12px" }}>{day}</div>
           );
         })}
       </div>
@@ -164,12 +295,7 @@ const CalendarPicker = ({ onSelect, onClose, noDateLabel }) => {
   );
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Meeting Actions table — inline, matching the Integrated Actions layout:
-   header filters, sort arrows, resizable columns, clickable stat chips and
-   the archive flow. Writes back into meeting.actions, which is the same array
-   /raps-actions reads, so nothing needs syncing between the two pages.
-   ════════════════════════════════════════════════════════════════════════ */
+/* ─── Meeting Actions table (matches Integrated Actions) ────────────────── */
 const ACTION_COLUMNS = [
   { key: "category", label: "Category", width: 165, sortable: true, filter: "list" },
   { key: "title", label: "Action", width: 250, sortable: true, filter: "list" },
@@ -216,25 +342,20 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
     });
     return Array.from(seen.values());
   }, [categories, customCats, actions, meetingCategory]);
-
-  const catMeta = (name) => allCategories.find((c) => c.name === name) || { name, color: "#757575", bg: "#EEEEEE" };
+  const catMeta = (n) => allCategories.find((c) => c.name === n) || { name: n, color: "#757575", bg: "#EEEEEE" };
 
   const startResize = (e, key) => {
     e.preventDefault(); e.stopPropagation();
-    const startX = e.clientX;
-    const startWidth = widths[key];
+    const startX = e.clientX, startWidth = widths[key];
     resizing.current = key;
     const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(90, startWidth + (ev.clientX - startX)) }));
     const onUp = () => {
       resizing.current = null;
       document.body.style.cursor = ""; document.body.style.userSelect = "";
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp);
     };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
   };
 
   const stats = useMemo(() => {
@@ -270,7 +391,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
 
   const rows = useMemo(() => {
     let list = [...scopeRows];
-
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter((a) =>
@@ -278,7 +398,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
         (a.description || "").toLowerCase().includes(q) ||
         (a.assignedTo || "").toLowerCase().includes(q));
     }
-
     list = list.filter((a) => {
       const cat = a.category || meetingCategory;
       if (filters.category !== "all" && cat !== filters.category) return false;
@@ -295,7 +414,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
       }
       return true;
     });
-
     if (sortConfig.key) {
       const get = (a) => {
         switch (sortConfig.key) {
@@ -309,8 +427,7 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
         }
       };
       list.sort((a, b) => {
-        const av = get(a).toString().toLowerCase();
-        const bv = get(b).toString().toLowerCase();
+        const av = get(a).toString().toLowerCase(), bv = get(b).toString().toLowerCase();
         if (av < bv) return sortConfig.direction === "asc" ? -1 : 1;
         if (av > bv) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
@@ -321,9 +438,8 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
 
   const activeFilters = Object.values(filters).filter((v) => v !== "all").length + (search.trim() ? 1 : 0);
 
-  /* Switching scope clears the column filters — the dropdown options come from
-     the scope, so a value picked under Active is usually absent from Archived
-     and would silently empty the table. */
+  /* Switching scope clears the column filters — the options come from the
+     scope, so a value picked under Active is usually absent from Archived. */
   const selectScope = (next) => {
     setScope((prev) => (prev === next && next !== "active" ? "active" : next));
     setFilters({ ...EMPTY_ACTION_FILTERS });
@@ -332,28 +448,17 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
 
   const persist = async (next) => { setBusy(true); await onSaveActions(next); setBusy(false); };
 
-  /* Category and due date come from the meeting; By Whom is limited to its
-     participants. All three stay editable. */
   const openAdd = () => {
     setEditing(null); setShowCustomCat(false);
-    setForm({
-      title: "", description: "", category: meetingCategory,
-      assignedTo: "", dueDate: toInputDate(meetingDate), status: "In Progress",
-    });
+    setForm({ title: "", description: "", category: meetingCategory, assignedTo: "", dueDate: toInputDate(meetingDate), status: "In Progress" });
     setShowForm(true);
   };
-
-  const openEdit = (action) => {
-    setEditing(action); setShowCustomCat(false);
-    setForm({
-      title: action.title || "", description: action.description || "",
-      category: action.category || meetingCategory,
-      assignedTo: action.assignedTo || "", dueDate: action.dueDate || "",
-      status: action.status || "In Progress",
-    });
+  const openEdit = (a) => {
+    setEditing(a); setShowCustomCat(false);
+    setForm({ title: a.title || "", description: a.description || "", category: a.category || meetingCategory,
+      assignedTo: a.assignedTo || "", dueDate: a.dueDate || "", status: a.status || "In Progress" });
     setShowForm(true);
   };
-
   const addCustomCat = () => {
     const name = customCatName.trim();
     if (!name) return;
@@ -368,13 +473,10 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
       await persist(actions.map((a) => {
         if (a.id !== editing.id) return a;
         const dueChanged = (a.dueDate || "") !== (form.dueDate || "");
-        return {
-          ...a, title: form.title.trim(), description: form.description.trim(),
-          category: form.category, assignedTo: form.assignedTo, dueDate: form.dueDate,
-          status: form.status,
+        return { ...a, title: form.title.trim(), description: form.description.trim(),
+          category: form.category, assignedTo: form.assignedTo, dueDate: form.dueDate, status: form.status,
           revisedDate: dueChanged ? new Date().toISOString().split("T")[0] : a.revisedDate || null,
-          updatedAt: new Date().toISOString(),
-        };
+          updatedAt: new Date().toISOString() };
       }));
     } else {
       await persist([...actions, {
@@ -393,18 +495,13 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
     await persist(actions.filter((x) => x.id !== a.id));
   };
 
-  const th = {
-    padding: "10px 12px", textAlign: "left", backgroundColor: "#f0e6d9", color: "#4a352f",
+  const th = { padding: "10px 12px", textAlign: "left", backgroundColor: "#f0e6d9", color: "#4a352f",
     fontWeight: 600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px",
-    borderBottom: "2px solid #d7ccc8", borderRight: "1px solid #e0d5c8",
-    position: "relative", overflow: "visible",
-  };
-  const td = {
-    padding: "10px 12px", borderBottom: "1px solid #f0e6d9", borderRight: "1px solid #f7f3f0",
-    fontSize: "13px", color: "#4a352f", verticalAlign: "middle", overflow: "hidden",
-  };
+    borderBottom: "2px solid #d7ccc8", borderRight: "1px solid #e0d5c8", position: "relative", overflow: "visible" };
+  const td = { padding: "10px 12px", borderBottom: "1px solid #f0e6d9", borderRight: "1px solid #f7f3f0",
+    fontSize: "13px", color: "#4a352f", verticalAlign: "middle", overflow: "hidden" };
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px 5px", borderRadius: "4px", color: c, display: "inline-flex", alignItems: "center" });
-  const inp = (bad) => ({ width: "100%", padding: "10px 12px", border: bad ? "2px solid #f44336" : "2px solid #e8ddd4", borderRadius: "6px", fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box" });
+  const inp = (bad) => ({ width: "100%", padding: "10px 12px", border: bad ? "2px solid #f44336" : "2px solid #e8ddd4", borderRadius: "6px", fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box", backgroundColor: "white" });
   const lbl = { display: "block", fontSize: "13px", fontWeight: 600, color: "#4a352f", marginBottom: "6px" };
   const totalWidth = ACTION_COLUMNS.reduce((s, c) => s + widths[c.key], 0) + ACTIONS_COL_W;
 
@@ -417,7 +514,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
 
   return (
     <div>
-      {/* Clickable stat chips */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginBottom: "14px" }}>
         {CHIPS.map((chip) => {
           const on = scope === chip.key;
@@ -426,7 +522,7 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
               style={{ textAlign: "left", padding: "12px 14px", borderRadius: "8px", cursor: "pointer",
                 backgroundColor: chip.bg, border: on ? `2px solid ${chip.color}` : "2px solid transparent",
                 boxShadow: on ? `0 2px 8px ${chip.color}33` : "none",
-                display: "flex", alignItems: "center", gap: "12px", fontFamily: "inherit", transition: "all 0.15s ease" }}>
+                display: "flex", alignItems: "center", gap: "12px", fontFamily: "inherit" }}>
               <span style={{ color: chip.color, display: "flex" }}>{chip.icon}</span>
               <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                 <span style={{ fontSize: "20px", fontWeight: 700, color: chip.color, lineHeight: 1 }}>{chip.value}</span>
@@ -438,15 +534,13 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
         })}
       </div>
 
-      {/* Toolbar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "11px", color: "#8d6e63", backgroundColor: "#f7f3f0", border: "1px solid #e8ddd4", padding: "4px 10px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
             <FaClipboardList size={10} /> Showing {rows.length} {scope === "active" ? "active" : scope === "done" ? "completed" : scope === "overdue" ? "overdue" : "archived"}
           </span>
           {scope !== "active" && (
-            <button onClick={() => selectScope("active")}
-              style={{ fontSize: "11px", color: "#7d5a50", background: "none", border: "1px solid #e8ddd4", borderRadius: "12px", padding: "4px 10px", cursor: "pointer" }}>
+            <button onClick={() => selectScope("active")} style={{ fontSize: "11px", color: "#7d5a50", background: "none", border: "1px solid #e8ddd4", borderRadius: "12px", padding: "4px 10px", cursor: "pointer" }}>
               Back to all active
             </button>
           )}
@@ -457,7 +551,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
             </button>
           )}
         </div>
-
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: "white", border: "2px solid #e8ddd4", borderRadius: "6px", padding: "2px 10px" }}>
             <FaSearch size={12} color="#8d6e63" />
@@ -465,15 +558,13 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
               style={{ border: "none", outline: "none", padding: "6px 2px", fontSize: "13px", fontFamily: "inherit", width: "140px", backgroundColor: "transparent" }} />
           </div>
           {!readOnly && !showArchived && (
-            <button onClick={openAdd}
-              style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>
+            <button onClick={openAdd} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>
               <FaPlus size={12} /> New Action
             </button>
           )}
         </div>
       </div>
 
-      {/* Table */}
       <div style={{ overflowX: "auto", border: "1px solid #e8ddd4", borderRadius: "8px", backgroundColor: "white" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed", fontSize: "13px" }}>
           <thead>
@@ -500,19 +591,16 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                         </button>
                       )}
                     </div>
-
                     {isOpen && col.filter === "date" && (
                       <CalendarPicker noDateLabel={col.key === "revisedDate" ? "No Revision" : "No Date"}
                         onSelect={(v) => setFilters((p) => ({ ...p, [col.key]: v }))} onClose={() => setOpenFilter(null)} />
                     )}
-
                     {isOpen && col.filter === "list" && (
                       <div onMouseLeave={() => setOpenFilter(null)} style={{
                         position: "absolute", top: "100%", left: 0, marginTop: "4px", backgroundColor: "white",
                         border: "2px solid #e8ddd4", borderRadius: "6px", minWidth: "190px", maxHeight: "240px",
                         overflowY: "auto", zIndex: 400, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", padding: "4px 0",
-                        textTransform: "none", letterSpacing: "normal", fontWeight: 400,
-                      }}>
+                        textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
                         {optionsFor(col.key).map((opt) => (
                           <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [col.key]: opt })); setOpenFilter(null); }}
                             style={{ padding: "7px 14px", cursor: "pointer", fontSize: "12px",
@@ -524,7 +612,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                         ))}
                       </div>
                     )}
-
                     <div onMouseDown={(e) => startResize(e, col.key)} title="Drag to resize"
                       style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
                   </th>
@@ -533,7 +620,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
               <th style={{ ...th, width: ACTIONS_COL_W, textAlign: "center", borderRight: "none" }}>Actions</th>
             </tr>
           </thead>
-
           <tbody>
             {rows.length === 0 ? (
               <tr>
@@ -541,10 +627,8 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
                     {showArchived ? <FaBoxOpen size={26} color="#d7ccc8" /> : <FaClipboardList size={26} color="#d7ccc8" />}
                     <span style={{ fontWeight: 600, color: "#5d4037" }}>
-                      {showArchived ? "No archived actions"
-                        : scope === "done" ? "Nothing completed and unarchived"
-                        : scope === "overdue" ? "Nothing overdue"
-                        : "No actions yet"}
+                      {showArchived ? "No archived actions" : scope === "done" ? "Nothing completed and unarchived"
+                        : scope === "overdue" ? "Nothing overdue" : "No actions yet"}
                     </span>
                     <span style={{ fontSize: "12px" }}>
                       {showArchived ? "Completed actions you archive are kept here."
@@ -585,12 +669,9 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                       </div>
                     )}
                   </td>
-                  <td style={{ ...td, width: widths.assignedTo }}>
-                    {a.assignedTo || <span style={{ color: "#bdbdbd" }}>Unassigned</span>}
-                  </td>
+                  <td style={{ ...td, width: widths.assignedTo }}>{a.assignedTo || <span style={{ color: "#bdbdbd" }}>Unassigned</span>}</td>
                   <td style={{ ...td, width: widths.dueDate }}>
-                    {a.dueDate ? <span style={{ color: dueDateColor(a.dueDate), fontWeight: 500 }}>{formatDMY(a.dueDate)}</span>
-                      : <span style={{ color: "#bdbdbd" }}>—</span>}
+                    {a.dueDate ? <span style={{ color: dueDateColor(a.dueDate), fontWeight: 500 }}>{formatDMY(a.dueDate)}</span> : <span style={{ color: "#bdbdbd" }}>—</span>}
                   </td>
                   <td style={{ ...td, width: widths.revisedDate }}>
                     {a.revisedDate ? formatDMY(a.revisedDate) : <span style={{ color: "#bdbdbd" }}>—</span>}
@@ -629,7 +710,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
         </table>
       </div>
 
-      {/* Add / edit modal */}
       {showForm && (
         <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1300, padding: "20px" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: "12px", width: "100%", maxWidth: "560px", maxHeight: "88vh", overflowY: "auto", padding: "24px", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}>
@@ -652,13 +732,11 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
               <input type="text" placeholder="What needs to be done?" value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })} style={inp(!form.title.trim())} />
             </div>
-
             <div style={{ marginBottom: "14px" }}>
               <label style={lbl}>Description</label>
               <textarea rows="2" placeholder="Add more detail..." value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inp(false), resize: "vertical" }} />
             </div>
-
             <div style={{ marginBottom: "14px" }}>
               <label style={lbl}>
                 Category
@@ -694,21 +772,17 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                 )}
               </div>
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
               <div>
                 <label style={lbl}>By Whom</label>
-                <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
-                  style={{ ...inp(false), backgroundColor: "white", cursor: "pointer" }}>
+                <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={{ ...inp(false), cursor: "pointer" }}>
                   <option value="">Unassigned</option>
                   {participants.map((p, i) => {
                     const name = typeof p === "string" ? p : p.name || p.email || "Participant";
                     return <option key={i} value={name}>{name}</option>;
                   })}
                 </select>
-                {participants.length === 0 && (
-                  <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "4px" }}>No participants on this meeting yet.</div>
-                )}
+                {participants.length === 0 && <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "4px" }}>No participants on this meeting yet.</div>}
               </div>
               <div>
                 <label style={lbl}>
@@ -720,15 +794,12 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                 <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inp(false)} />
               </div>
             </div>
-
             <div style={{ marginBottom: "20px" }}>
               <label style={lbl}>Status</label>
-              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
-                style={{ ...inp(false), backgroundColor: "white", cursor: "pointer" }}>
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={{ ...inp(false), cursor: "pointer" }}>
                 {ACTION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-
             <div style={{ display: "flex", gap: "12px" }}>
               <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "10px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 500 }}>Cancel</button>
               <button onClick={submit} disabled={busy || !form.title.trim()}
@@ -736,7 +807,6 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                 {busy ? "Saving..." : editing ? "Update Action" : "Add Action"}
               </button>
             </div>
-
             <p style={{ fontSize: "11px", color: "#8d6e63", marginTop: "14px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
               <FaInfoCircle size={10} /> This action also appears in Integrated Actions.
             </p>
@@ -747,7 +817,7 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
   );
 };
 
-/* ─── Inline editable field ─────────────────────────────────────────────── */
+/* ─── Inline editable field — white content box ─────────────────────────── */
 const EditableField = ({ icon, label, value, placeholder, onSave, disabled }) => {
   const [editing, setEditing] = useState(false);
   const [temp, setTemp] = useState(value || "");
@@ -767,7 +837,9 @@ const EditableField = ({ icon, label, value, placeholder, onSave, disabled }) =>
       {editing ? (
         <div>
           <textarea value={temp} onChange={(e) => setTemp(e.target.value)} rows="3" placeholder={placeholder}
-            style={{ backgroundColor: "#f7f3f0", padding: "12px 16px", borderRadius: "6px", border: "1px solid #e8ddd4", minHeight: "70px", fontSize: "14px", color: "#4a352f", lineHeight: 1.6, width: "100%", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
+            style={{ backgroundColor: "#ffffff", padding: "12px 16px", borderRadius: "6px", border: "1px solid #e8ddd4",
+              minHeight: "70px", fontSize: "14px", color: "#4a352f", lineHeight: 1.6, width: "100%",
+              fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", outline: "none" }} />
           <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
             <button onClick={async () => { await onSave(temp); setEditing(false); }}
               style={{ padding: "6px 16px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
@@ -780,7 +852,9 @@ const EditableField = ({ icon, label, value, placeholder, onSave, disabled }) =>
           </div>
         </div>
       ) : (
-        <div style={{ backgroundColor: "#f7f3f0", padding: "12px 16px", borderRadius: "6px", minHeight: "44px", border: "1px solid #e8ddd4", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.6, color: value ? "#4a352f" : "#bdbdbd", fontStyle: value ? "normal" : "italic" }}>
+        <div style={{ backgroundColor: "#ffffff", padding: "12px 16px", borderRadius: "6px", minHeight: "44px",
+          border: "1px solid #e8ddd4", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.6,
+          color: value ? "#4a352f" : "#bdbdbd", fontStyle: value ? "normal" : "italic" }}>
           {value || placeholder}
         </div>
       )}
@@ -821,8 +895,6 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   const [newDepartmentName, setNewDepartmentName] = useState("");
   const [newDepartmentColor, setNewDepartmentColor] = useState("#607D8B");
 
-  /* Upcoming Meetings department filter. "any" matches a meeting carrying at
-     least one selected department; "all" requires every one. */
   const [departmentFilter, setDepartmentFilter] = useState([]);
   const [deptFilterMode, setDeptFilterMode] = useState("any");
 
@@ -869,19 +941,18 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
 
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged((u) => setCurrentUser(u || null));
-    return () => unsubscribe();
+    const unsub = auth.onAuthStateChanged((u) => setCurrentUser(u || null));
+    return () => unsub();
   }, []);
 
   useEffect(() => {
     if (!currentUser) return;
-    const load = async () => {
+    (async () => {
       try {
         const snap = await getDoc(doc(db, "governanceCalendar", currentUser.uid));
         if (snap.exists()) setMeetings(snap.data().meetings || []);
       } catch (error) { console.error("Error loading meetings:", error); }
-    };
-    load();
+    })();
   }, [currentUser]);
 
   useEffect(() => {
@@ -919,7 +990,6 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
     const s = date.toDateString();
     return meetings.filter((m) => m.instances?.some((i) => new Date(i.date).toDateString() === s));
   };
-
   const meetingDotColors = (m) =>
     !m.departments?.length ? [m.categoryColor || m.departmentColor || "#757575"] : m.departments.map(getDepartmentColor);
 
@@ -931,15 +1001,13 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
     }));
     const filtered = departmentFilter.length === 0 ? list : list.filter((row) => {
       const depts = row.meeting.departments || [];
-      return deptFilterMode === "all"
-        ? departmentFilter.every((d) => depts.includes(d))
-        : departmentFilter.some((d) => depts.includes(d));
+      return deptFilterMode === "all" ? departmentFilter.every((d) => depts.includes(d)) : departmentFilter.some((d) => depts.includes(d));
     });
     return filtered.sort((a, b) => a.date - b.date).slice(0, 30);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meetings, departmentFilter, deptFilterMode]);
 
-  /* Counts are taken from every upcoming meeting, not the filtered list, so a
+  /* Counts come from every upcoming meeting, not the filtered list, so a
      department's number doesn't collapse to zero the moment you filter. */
   const upcomingAll = useMemo(() => {
     const list = [];
@@ -957,8 +1025,7 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
     const instances = [];
     const start = new Date(startDate);
     const end = endDate ? new Date(endDate) : null;
-    const maxEnd = new Date(start);
-    maxEnd.setFullYear(maxEnd.getFullYear() + 1);
+    const maxEnd = new Date(start); maxEnd.setFullYear(maxEnd.getFullYear() + 1);
     const actualEnd = end && end < maxEnd ? end : maxEnd;
     const push = (d) => instances.push({ instanceId: generateId(), date: d.toISOString(), time, status: "scheduled" });
 
@@ -968,8 +1035,7 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
       return instances;
     }
     const max = { weekly: 52, monthly: 12, quarterly: 4 };
-    let current = new Date(start);
-    let i = 0;
+    let current = new Date(start), i = 0;
     while ((!end || current <= actualEnd) && i < (max[repeatType] || 12)) {
       if (current >= today) push(new Date(current));
       if (repeatType === "weekly") current.setDate(current.getDate() + 7);
@@ -987,13 +1053,10 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
     list[i] = { ...list[i], [field]: value };
     return { ...p, participants: list };
   });
-
   const toggleDepartment = (n) => setFormData((p) => ({
-    ...p, departments: p.departments.includes(n) ? p.departments.filter((d) => d !== n) : [...p.departments, n],
-  }));
+    ...p, departments: p.departments.includes(n) ? p.departments.filter((d) => d !== n) : [...p.departments, n] }));
   const toggleEditDepartment = (n) => setEditFormData((p) => ({
-    ...p, departments: (p.departments || []).includes(n) ? p.departments.filter((d) => d !== n) : [...(p.departments || []), n],
-  }));
+    ...p, departments: (p.departments || []).includes(n) ? p.departments.filter((d) => d !== n) : [...(p.departments || []), n] }));
 
   const handleAddCustomCategory = () => {
     const name = newCategoryName.trim();
@@ -1002,7 +1065,6 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
     setFormData((p) => ({ ...p, category: name }));
     setNewCategoryName(""); setNewCategoryColor("#607D8B"); setShowAddCategory(false);
   };
-
   const handleAddCustomDepartment = () => {
     const name = newDepartmentName.trim();
     if (!name) return;
@@ -1039,9 +1101,10 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
         participants: formData.participants,
         isRecurring: formData.repeatType !== "none",
         recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
-        instances,
-        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-        highlights: "", lowlights: "", risks: "", headsUp: "", actions: [],
+        instances, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        // Looking Back / Looking Forward
+        highlights: "", lowlights: "", opportunities: "", priorities: "",
+        actions: [],
       };
 
       await persistMeetings([...meetings, newMeeting]);
@@ -1049,11 +1112,7 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
       const formattedDate = new Date(formData.startDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
       const isDoubleBooked = !!conflictingMeetingData?.length;
 
-      setFormData({
-        title: "", category: RAPS_CATEGORIES[0].name, departments: [],
-        purpose: "", agenda: "", preparations: "", participants: [],
-        repeatType: "none", startDate: "", endDate: "", time: "10:00",
-      });
+      setFormData({ title: "", category: RAPS_CATEGORIES[0].name, departments: [], purpose: "", agenda: "", preparations: "", participants: [], repeatType: "none", startDate: "", endDate: "", time: "10:00" });
       setErrors({}); setShowAddModal(false);
       setConflictingMeetingData(null); setPendingMeetingData(null);
 
@@ -1103,14 +1162,11 @@ BIG Marketplace Team`;
       if (userEmail) {
         try {
           const send = httpsCallable(functions, "sendGovernanceMeetingConfirmation");
-          await send({
-            to: currentUser.uid, useTestMode: false,
-            meetingTitle: newMeeting.title, meetingDate: formattedDate, meetingTime: formData.time,
-            department: newMeeting.category, participants: newMeeting.participants,
-            purpose: newMeeting.purpose, isRecurring: newMeeting.isRecurring,
-            recurrencePattern: newMeeting.recurrencePattern,
-            isDoubleBooked, conflictingMeetings: conflictingMeetingData || [],
-          });
+          await send({ to: currentUser.uid, useTestMode: false, meetingTitle: newMeeting.title,
+            meetingDate: formattedDate, meetingTime: formData.time, department: newMeeting.category,
+            participants: newMeeting.participants, purpose: newMeeting.purpose,
+            isRecurring: newMeeting.isRecurring, recurrencePattern: newMeeting.recurrencePattern,
+            isDoubleBooked, conflictingMeetings: conflictingMeetingData || [] });
         } catch (e) { console.error("Confirmation email failed:", e); }
       }
 
@@ -1123,9 +1179,7 @@ BIG Marketplace Team`;
     } catch (error) {
       console.error("Error booking meeting:", error);
       notify("error", `Failed to schedule meeting: ${errText(error)}`);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleSubmit = async () => {
@@ -1148,11 +1202,8 @@ BIG Marketplace Team`;
       m.instances?.some((i) => new Date(i.date).toDateString() === target.toDateString() && i.time === formData.time));
 
     if (conflicts.length > 0) {
-      setPendingMeetingData({
-        title: formData.title, category: formData.category,
-        categoryColor: getCategoryMeta(formData.category).color,
-        time: formData.time, purpose: formData.purpose,
-      });
+      setPendingMeetingData({ title: formData.title, category: formData.category,
+        categoryColor: getCategoryMeta(formData.category).color, time: formData.time, purpose: formData.purpose });
       setConflictingMeetingData(conflicts);
       setShowDoubleBookingWarning(true);
       return;
@@ -1166,10 +1217,9 @@ BIG Marketplace Team`;
     const d = first ? new Date(first.date) : new Date();
     setEditFormData({
       title: meeting.title || "", category: meeting.category || RAPS_CATEGORIES[0].name,
-      departments: meeting.departments || [],
-      purpose: meeting.purpose || "", agenda: meeting.agenda || "", preparations: meeting.preparations || "",
-      participants: meeting.participants || [],
-      repeatType: meeting.recurrencePattern || "none",
+      departments: meeting.departments || [], purpose: meeting.purpose || "",
+      agenda: meeting.agenda || "", preparations: meeting.preparations || "",
+      participants: meeting.participants || [], repeatType: meeting.recurrencePattern || "none",
       startDate: d.toISOString().split("T")[0], time: first?.time || "10:00",
     });
     setShowEditModal(true);
@@ -1199,18 +1249,13 @@ BIG Marketplace Team`;
         participants: editFormData.participants,
         isRecurring: editFormData.repeatType !== "none",
         recurrencePattern: editFormData.repeatType !== "none" ? editFormData.repeatType : null,
-        updatedAt: new Date().toISOString(),
-        instances: [...(editingMeeting.instances || [])],
+        updatedAt: new Date().toISOString(), instances: [...(editingMeeting.instances || [])],
       };
 
       const oldDate = editingMeeting.instances?.[0]?.date;
       const oldTime = editingMeeting.instances?.[0]?.time;
       if (updated.instances.length > 0) {
-        updated.instances[0] = {
-          ...updated.instances[0],
-          date: new Date(editFormData.startDate).toISOString(),
-          time: editFormData.time,
-        };
+        updated.instances[0] = { ...updated.instances[0], date: new Date(editFormData.startDate).toISOString(), time: editFormData.time };
       }
       const newDate = updated.instances?.[0]?.date;
       const newTime = updated.instances?.[0]?.time;
@@ -1235,8 +1280,7 @@ BIG Marketplace Team`;
       await persistMeetings(meetings.map((m) => (m.id === editingMeeting.id ? updated : m)));
 
       const formattedNewDate = newDate
-        ? new Date(newDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
-        : "TBD";
+        ? new Date(newDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "TBD";
       const summary = changes.join("; ");
 
       const recipients = [];
@@ -1251,20 +1295,17 @@ BIG Marketplace Team`;
       for (const r of recipients) {
         try {
           await addDoc(collection(db, "messages"), {
-            to: r.isOrganizer ? currentUser.uid : r.email,
-            toName: r.name, from: "system", fromName: "BIG Marketplace",
+            to: r.isOrganizer ? currentUser.uid : r.email, toName: r.name,
+            from: "system", fromName: "BIG Marketplace",
             subject: `Meeting Updated: ${updated.title}`,
             content: `Dear ${r.name},\n\nThe meeting "${updated.title}" has been updated.\n\nChanges:\n${summary}\n\nBest regards,\nBIG Marketplace Team`,
             date: new Date().toISOString(), read: false, type: "inbox",
             meetingId: updated.id, linkTo: "/governance-calendar",
           });
           const send = httpsCallable(functions, "sendGovernanceMeetingUpdateEmail");
-          await send({
-            to: r.email, name: r.name, meetingTitle: updated.title, changes: summary,
-            meetingDate: formattedNewDate, meetingTime: newTime || "TBD",
-            department: updated.category, isOrganizer: r.isOrganizer,
-            linkTo: "https://www.bigmarketplace.africa/governance-calendar",
-          });
+          await send({ to: r.email, name: r.name, meetingTitle: updated.title, changes: summary,
+            meetingDate: formattedNewDate, meetingTime: newTime || "TBD", department: updated.category,
+            isOrganizer: r.isOrganizer, linkTo: "https://www.bigmarketplace.africa/governance-calendar" });
         } catch (error) { console.error(`Notify ${r.email} failed:`, error); }
       }
 
@@ -1273,9 +1314,7 @@ BIG Marketplace Team`;
     } catch (error) {
       console.error("Error updating meeting:", error);
       notify("error", `Failed to update meeting: ${errText(error)}`);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleDeleteMeeting = async (meetingId) => {
@@ -1288,26 +1327,22 @@ BIG Marketplace Team`;
     setLoadingMessage("Deleting meeting...");
     try {
       await persistMeetings(meetings.filter((m) => m.id !== meetingId));
-      setShowDeleteConfirm(null); setShowDetailsModal(null);
+      setShowDeleteConfirm(null);
+      setShowDetailsModal(null);
 
       if (meeting) {
         const first = meeting.instances?.[0];
         const formattedDate = first
-          ? new Date(first.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
-          : "TBD";
+          ? new Date(first.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "TBD";
         try {
           const send = httpsCallable(functions, "sendGovernanceMeetingCancellation");
-          await send({
-            to: currentUser.uid, meetingTitle: meeting.title,
-            meetingDate: formattedDate, meetingTime: first?.time || "TBD",
-            department: meeting.category || meeting.department, purpose: meeting.purpose,
-            isRecurring: meeting.isRecurring || false, participants: meeting.participants || [],
-          });
+          await send({ to: currentUser.uid, meetingTitle: meeting.title, meetingDate: formattedDate,
+            meetingTime: first?.time || "TBD", department: meeting.category || meeting.department,
+            purpose: meeting.purpose, isRecurring: meeting.isRecurring || false, participants: meeting.participants || [] });
         } catch (e) { console.error("Cancellation email failed:", e); }
 
         await addDoc(collection(db, "messages"), {
-          to: currentUser.uid, from: "system",
-          subject: `Meeting Cancelled: ${meeting.title}`,
+          to: currentUser.uid, from: "system", subject: `Meeting Cancelled: ${meeting.title}`,
           content: `Dear ${currentUser.displayName || "User"},\n\nThe meeting "${meeting.title}" has been cancelled.\n\nOriginally scheduled: ${formattedDate} at ${first?.time || "TBD"}\nCategory: ${meeting.category || meeting.department}\n\nBest regards,\nBIG Marketplace Team`,
           date: new Date().toISOString(), read: false, type: "inbox",
           meetingId: meeting.id, linkTo: "/governance-calendar",
@@ -1317,9 +1352,7 @@ BIG Marketplace Team`;
     } catch (error) {
       console.error("Error deleting meeting:", error);
       notify("error", `Failed to delete meeting: ${errText(error)}`);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const saveMeetingField = async (meetingId, field, value) => {
@@ -1333,7 +1366,8 @@ BIG Marketplace Team`;
     }
   };
 
-  /* Actions live on the meeting — the same array /raps-actions reads. */
+  /* Actions live on the meeting — the same array /raps-actions reads, so
+     nothing needs syncing between the two pages. */
   const saveMeetingActions = async (meetingId, nextActions) => {
     if (!currentUser) return;
     try {
@@ -1378,7 +1412,7 @@ BIG Marketplace Team`;
     if (!showAddModal && date >= today) setFormData((p) => ({ ...p, startDate: date.toISOString().split("T")[0] }));
   };
 
-  /* The Add Meeting button now opens a modal that actually exists — the old
+  /* The Add Meeting button opens a modal that actually exists — the original
      file flipped the flag but never rendered anything. */
   const handleOpenAddModal = (date = null) => {
     const target = date instanceof Date ? date : selectedDate || new Date();
@@ -1406,9 +1440,9 @@ BIG Marketplace Team`;
   const modalBody = { padding: "24px" };
   const formGroup = { marginBottom: "20px" };
   const label = { display: "block", marginBottom: "8px", fontWeight: 600, color: "#4a352f", fontSize: "14px" };
-  const input = (bad) => ({ width: "100%", padding: "10px 12px", border: bad ? "2px solid #f44336" : "2px solid #e8ddd4", borderRadius: "6px", fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box" });
+  const input = (bad) => ({ width: "100%", padding: "10px 12px", border: bad ? "2px solid #f44336" : "2px solid #e8ddd4", borderRadius: "6px", fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box", backgroundColor: "white" });
   const textarea = (bad) => ({ ...input(bad), resize: "vertical" });
-  const select = (bad) => ({ ...input(bad), backgroundColor: "white", cursor: "pointer" });
+  const select = (bad) => ({ ...input(bad), cursor: "pointer" });
   const errStyle = { color: "#f44336", fontSize: "12px", marginTop: "4px" };
   const modalFooter = { padding: "16px 24px", borderTop: "2px solid #e8ddd4", display: "flex", justifyContent: "flex-end", gap: "12px", flexWrap: "wrap" };
   const cancelBtn = { padding: "10px 20px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 500, fontSize: "14px" };
@@ -1461,7 +1495,6 @@ BIG Marketplace Team`;
         </button>
       </div>
 
-      {/* Calendar (left) + Upcoming Meetings (right) */}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2.1fr) minmax(300px, 1fr)", gap: "20px", alignItems: "start" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", paddingBottom: "12px", borderBottom: "2px solid #e8ddd4", flexWrap: "wrap", gap: "10px" }}>
@@ -1511,7 +1544,6 @@ BIG Marketplace Team`;
             })}
           </div>
 
-          {/* Department Color Guide — also filters Upcoming Meetings */}
           <div style={{ backgroundColor: "#f7f3f0", padding: "12px 16px", borderRadius: "6px", marginTop: "18px", border: "1px solid #e8ddd4" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
               <span style={{ fontSize: "12px", fontWeight: 600, color: "#5d4037", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1542,7 +1574,6 @@ BIG Marketplace Team`;
             </div>
           </div>
 
-          {/* Selected date */}
           <div style={{ marginTop: "18px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px", border: "1px solid #e8ddd4" }}>
             <div style={{ fontSize: "15px", fontWeight: 600, color: "#5d4037", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
               <FaCalendarAlt size={13} />
@@ -1606,7 +1637,6 @@ BIG Marketplace Team`;
           </div>
         </div>
 
-        {/* Upcoming Meetings, with its own department filter */}
         <div style={{ backgroundColor: "#ffffff", border: "1px solid #e8ddd4", borderRadius: "8px", padding: "16px", position: "sticky", top: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", paddingBottom: "10px", borderBottom: "2px solid #e8ddd4" }}>
             <h3 style={{ margin: 0, fontSize: "16px", color: "#5d4037", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1635,8 +1665,7 @@ BIG Marketplace Team`;
                 const on = departmentFilter.includes(dept.name);
                 const count = upcomingAll.filter((m) => (m.departments || []).includes(dept.name)).length;
                 return (
-                  <button key={dept.name} onClick={() => toggleDepartmentFilter(dept.name)}
-                    title={`${dept.name} — ${count} upcoming`}
+                  <button key={dept.name} onClick={() => toggleDepartmentFilter(dept.name)} title={`${dept.name} — ${count} upcoming`}
                     style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10.5px",
                       color: on ? dept.color : "#4a352f", backgroundColor: on ? dept.bg : "#ffffff",
                       border: `1px solid ${on ? dept.color : "#e8ddd4"}`, borderRadius: "14px",
@@ -1716,7 +1745,6 @@ BIG Marketplace Team`;
         </div>
       </div>
 
-      {/* KPIs */}
       <div style={{ backgroundColor: "#f7f3f0", padding: "20px", borderRadius: "6px", marginTop: "20px" }}>
         <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
           <FaChartLine size={13} /> Governance Calendar KPIs
@@ -1736,7 +1764,6 @@ BIG Marketplace Team`;
         </div>
       </div>
 
-      {/* DETAILS MODAL */}
       {showDetailsModal && (
         <div style={overlay} onClick={() => setShowDetailsModal(null)}>
           <div style={detailsModal} onClick={(e) => e.stopPropagation()}>
@@ -1807,7 +1834,7 @@ BIG Marketplace Team`;
                     {showDetailsModal.participants?.length ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                         {showDetailsModal.participants.map((p, i) => (
-                          <span key={i} style={{ backgroundColor: "#f7f3f0", padding: "4px 12px", borderRadius: "20px", fontSize: "12px", color: "#5d4037", border: "1px solid #e8ddd4" }}>
+                          <span key={i} style={{ backgroundColor: "#ffffff", padding: "4px 12px", borderRadius: "20px", fontSize: "12px", color: "#5d4037", border: "1px solid #e8ddd4" }}>
                             {p.name || p.email || "Participant"}{p.email && p.name ? ` (${p.email})` : ""}
                           </span>
                         ))}
@@ -1833,32 +1860,15 @@ BIG Marketplace Team`;
               )}
 
               {activeTab === "performance" && (
-                <div>
-                  <div style={{ width: "100%", height: "4px", backgroundColor: showDetailsModal.categoryColor || "#757575", borderRadius: "2px", marginBottom: "18px" }} />
-                  <EditableField icon={<FaRegStar size={11} />} label="Highlights" value={showDetailsModal.highlights}
-                    placeholder="What went well? Record the wins from this meeting." disabled={isInvestorView}
-                    onSave={(v) => saveMeetingField(showDetailsModal.id, "highlights", v)} />
-                  <EditableField icon={<FaExclamationTriangle size={11} />} label="Lowlights" value={showDetailsModal.lowlights}
-                    placeholder="What did not go well? Record the setbacks raised." disabled={isInvestorView}
-                    onSave={(v) => saveMeetingField(showDetailsModal.id, "lowlights", v)} />
-                  <EditableField icon={<FaShieldAlt size={11} />} label="Risks" value={showDetailsModal.risks}
-                    placeholder="Risks identified, their likely impact, and who owns them." disabled={isInvestorView}
-                    onSave={(v) => saveMeetingField(showDetailsModal.id, "risks", v)} />
-                  <EditableField icon={<FaBell size={11} />} label="Heads-up" value={showDetailsModal.headsUp}
-                    placeholder="Anything the team should know ahead of the next session." disabled={isInvestorView}
-                    onSave={(v) => saveMeetingField(showDetailsModal.id, "headsUp", v)} />
-                </div>
+                <KmsOverview meeting={showDetailsModal} disabled={isInvestorView}
+                  onSave={(field, value) => saveMeetingField(showDetailsModal.id, field, value)} />
               )}
 
               {activeTab === "actions" && (
                 <div>
                   <div style={{ width: "100%", height: "4px", backgroundColor: showDetailsModal.categoryColor || "#757575", borderRadius: "2px", marginBottom: "18px" }} />
-                  <MeetingActionsTable
-                    meeting={showDetailsModal}
-                    categories={allCategories}
-                    readOnly={isInvestorView}
-                    onSaveActions={(next) => saveMeetingActions(showDetailsModal.id, next)}
-                  />
+                  <MeetingActionsTable meeting={showDetailsModal} categories={allCategories} readOnly={isInvestorView}
+                    onSaveActions={(next) => saveMeetingActions(showDetailsModal.id, next)} />
                   <button onClick={() => { const id = showDetailsModal.id; setShowDetailsModal(null); navigate(`/raps-actions?meeting=${id}`); }}
                     style={{ width: "100%", marginTop: "16px", padding: "10px", backgroundColor: "#7d5a50", color: "white",
                       border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: 500,
@@ -1900,7 +1910,6 @@ BIG Marketplace Team`;
         </div>
       )}
 
-      {/* ADD MEETING MODAL */}
       {showAddModal && (
         <div style={overlay} onClick={() => setShowAddModal(false)}>
           <div style={modal} onClick={(e) => e.stopPropagation()}>
@@ -2066,7 +2075,6 @@ BIG Marketplace Team`;
         </div>
       )}
 
-      {/* EDIT MEETING MODAL */}
       {showEditModal && editingMeeting && (
         <div style={overlay} onClick={() => setShowEditModal(false)}>
           <div style={modal} onClick={(e) => e.stopPropagation()}>
@@ -2178,7 +2186,6 @@ BIG Marketplace Team`;
         </div>
       )}
 
-      {/* Delete confirmation */}
       {showDeleteConfirm && (
         <div style={{ ...overlay, zIndex: 1100 }} onClick={() => setShowDeleteConfirm(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: "12px", width: "90%", maxWidth: "420px", padding: "24px", textAlign: "center" }}>
@@ -2198,7 +2205,6 @@ BIG Marketplace Team`;
         </div>
       )}
 
-      {/* Double booking warning */}
       {showDoubleBookingWarning && (
         <div style={{ ...overlay, zIndex: 1100 }} onClick={() => setShowDoubleBookingWarning(false)}>
           <div style={modal} onClick={(e) => e.stopPropagation()}>
