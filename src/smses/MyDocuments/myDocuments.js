@@ -197,7 +197,7 @@ const MyDocuments = () => {
   const [editNameValue, setEditNameValue] = useState("");
   // State for guidelines expand/collapse
   const [showFullGuidelines, setShowFullGuidelines] = useState(false);
-
+const [highlightedDoc, setHighlightedDoc] = useState(null);
  // Use the synchronization hook
  useDocumentSync(setSubmittedDocuments, setProfileData, null);
 
@@ -302,6 +302,73 @@ const MyDocuments = () => {
       }
     }
   }, []);
+
+  // Deep link from the score cards: /my-documents?doc=<id>&search=<label>
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const params = new URLSearchParams(window.location.search);
+  const docParam = params.get("doc");
+  const searchParam = params.get("search");
+  const filterParam = params.get("filter");
+  const statusParam = params.get("status");
+
+  if (filterParam) setFilter(filterParam);
+  if (statusParam) setStatusFilter(statusParam);
+
+  // Resolve whatever we were given to a real label in DOCUMENTS
+  let label = null;
+  if (docParam) {
+    label =
+      DOCUMENT_ID_TO_LABEL[docParam] ||
+      (DOCUMENTS.includes(docParam) ? docParam : null);
+  }
+  if (!label && searchParam) {
+    label =
+      DOCUMENTS.find((d) => d.toLowerCase() === searchParam.toLowerCase()) ||
+      null;
+  }
+
+  if (label) {
+    // The category filter lists don't contain every scored document
+    // (Share Register is under Governance, Industry Accreditations under
+    // Operations), so search by label and leave the category on "all".
+    if (!filterParam) setFilter("all");
+    if (!statusParam) setStatusFilter("all");
+    setSearchTerm(label);
+    setHighlightedDoc(label);
+
+    if (MULTI_UPLOAD_DOCUMENTS.includes(label)) {
+      const expanders = {
+        "IDs of Directors & Shareholders": setExpandedIDs,
+        "Client References & Support Letters": setExpandedClientReferences,
+        "Guarantee/Collateral": setExpandedGuarantees,
+        "Industry Accreditations": setExpandedAccreditations,
+        "Loan Agreements": setExpandedLoanAgreements,
+        "Financial Statements": setExpandedFinancialStatements,
+        "Funder/Catalyst Contract": setExpandedFunderContracts,
+        CV: setExpandedCVs,
+      };
+      expanders[label]?.(true);
+    }
+  } else if (searchParam) {
+    setSearchTerm(searchParam);
+  }
+
+  // Clear the params so a refresh doesn't re-trigger the jump
+  if (docParam || searchParam || filterParam || statusParam) {
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+}, []);
+ useEffect(() => {
+  if (!highlightedDoc || loading) return;
+  const id = getDocumentId(highlightedDoc);
+  const el = document.getElementById(`doc-row-${id}`);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const t = setTimeout(() => setHighlightedDoc(null), 6000);
+  return () => clearTimeout(t);
+}, [highlightedDoc, loading]);
+
 
   useEffect(() => {
     const auth = getAuth();
@@ -2210,7 +2277,7 @@ const badgeStyles = (status) => {
                  {filteredDocuments.map((docLabel, index) => {
                    const documentId = getDocumentId(docLabel);
                    const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
-                   
+                      const isHighlighted = highlightedDoc === docLabel;
                    let updatedAt = 
                      profileData?.documents?.[`${documentId}UpdatedAt`] || 
                      profileData?.documents?.[`${documentId}_multiple_updated`] ||
@@ -2235,15 +2302,30 @@ const badgeStyles = (status) => {
                    
                    return (
                      <React.Fragment key={docLabel}>
-                       <tr style={{
-                         backgroundColor: index % 2 === 0 ? "white" : "#faf8f6",
-                         borderBottom: "1px solid #e8d8cf",
-                         transition: "background-color 0.2s ease",
-                         height: "60px"
-                       }}
-                       onMouseEnter={(e) => e.target.closest('tr').style.backgroundColor = "#efebe9"}
-                       onMouseLeave={(e) => e.target.closest('tr').style.backgroundColor = index % 2 === 0 ? "white" : "#faf8f6"}
-                       >
+                                              <tr
+  id={`doc-row-${documentId}`}
+  style={{
+    backgroundColor: isHighlighted
+      ? "#fff8e1"
+      : index % 2 === 0
+      ? "white"
+      : "#faf8f6",
+    boxShadow: isHighlighted ? "inset 4px 0 0 #a67c52" : "none",
+    borderBottom: "1px solid #e8d8cf",
+    transition: "background-color 0.2s ease, box-shadow 0.2s ease",
+    height: "60px",
+  }}
+  onMouseEnter={(e) =>
+    (e.target.closest("tr").style.backgroundColor = "#efebe9")
+  }
+  onMouseLeave={(e) =>
+    (e.target.closest("tr").style.backgroundColor = isHighlighted
+      ? "#fff8e1"
+      : index % 2 === 0
+      ? "white"
+      : "#faf8f6")
+  }
+>
                          <td style={{ padding: "16px 20px", fontSize: "14px", color: "#5d4037", fontWeight: "600", verticalAlign: "middle" }}>
                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
                              <div>{docLabel.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</div>
