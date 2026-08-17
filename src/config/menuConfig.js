@@ -444,7 +444,6 @@ export const associatorMenuItems = [
         description: "Manage member subscriptions",
       },
     
-    
       {
         id: "dashboard-pilot",
         label: "Pilot & Case Studies",
@@ -677,12 +676,17 @@ export const smeMenuItems = [
         hasSubmenu: true,
         subItems: [
           {
+            id: "overall-health",
+            label: "Overall Company Health",
+            icon: <Heart size={16} />,
+            route: "/overall-company-health",
+          },
+          {
             id: "raps-calendar",
             label: "Governance Calendar",
             icon: <Calendar size={16} />,
             route: "/governance-calendar",
           },
-         
           {
             id: "raps-actions",
             label: "Integrated Actions",
@@ -690,12 +694,6 @@ export const smeMenuItems = [
             route: "/raps-actions",
           },
         ],
-      },
-      {
-        id: "overall-health",
-        label: "Overall Company Health",
-        icon: <Heart size={16} />,
-        route: "/overall-company-health",
       },
       {
         id: "strategy-execution",
