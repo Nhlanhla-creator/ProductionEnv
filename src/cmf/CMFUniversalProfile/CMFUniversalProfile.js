@@ -12,6 +12,7 @@ import LegalCompliance from "../../smses/UniversalProfile/legal-compliance"
 import ProductsServices from "../../smses/UniversalProfile/products-services"
 import HowDidYouHear from "../../smses/UniversalProfile/how-did-you-hear"
 import CMFDocumentUpload from "./CMFDocumentUpload"
+import CMFDocuments from "cmf/CMFDocuments/CMFDocuments"
 import FundDetailsSection from "../../Investor/InvestorUniversalProfile/FundDetails​"
 import ApplicationBriefSection from "../../Investor/InvestorUniversalProfile/ApplicationBrief​"
 import GeneralInvestmentPreferenceSection from "../../Investor/InvestorUniversalProfile/GeneralInvestmentPreference​"
@@ -341,7 +342,21 @@ export default function CMFUniversalProfile() {
       alert(`You don't have permission to edit the ${sections.find((s) => s.id === section)?.label.replace(/\n/g, " ")} section.`)
       setLoading(false); return
     }
-    const docRef = doc(db, FIRESTORE_COLLECTION, userId)
+      const docRef = doc(db, FIRESTORE_COLLECTION, userId)
+  const latestSnap = await getDoc(docRef)
+  if (latestSnap.exists()) {
+    const latestData = latestSnap.data()
+    if (latestData.documents) {
+      // Update formData with the latest documents
+      setFormData(prev => ({
+        ...prev,
+        documents: latestData.documents
+      }))
+    }
+  }
+  
+
+
     const sectionData = section ? formData[section] : formData
     const uploaded = section
       ? { ...(section !== "instructions" && { [section]: await uploadFilesAndReplaceWithURLs(sectionData, section) }) }
@@ -369,23 +384,36 @@ export default function CMFUniversalProfile() {
     setLoading(false)
   }
 
-  const handleSaveSection = async () => { await saveDataToFirebase(activeSection); alert("Section saved!") }
-
-  const handleSaveAndContinue = async () => {
-    const sectionData = formData[activeSection] || {}
-    const isValid = sectionValidations[activeSection]?.(sectionData)
-    if (!isValid) {
-      const errors = []
-      if (activeSection === "entityOverview") errors.push("Entity Overview section is incomplete. Please fill in all required fields.")
-      else if (activeSection === "contactDetails") errors.push("Contact Details section is incomplete. Please fill in all required fields.")
-      else errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`)
-      if (activeSection !== "instructions") setValidationModal({ open: true, title: "Please review the following issues:", messages: errors })
-      return
-    }
-    markSectionAsCompleted(activeSection)
-    await saveDataToFirebase(activeSection)
-    navigateToNextSection()
+const handleSaveSection = async () => {
+  if (activeSection === "documents") {
+    alert("Documents are saved automatically when uploaded.");
+    return;
   }
+  await saveDataToFirebase(activeSection);
+  alert("Section saved!");
+}
+  const handleSaveAndContinue = async () => {
+  // If on documents tab, just navigate to the next section
+  if (activeSection === "documents") {
+    markSectionAsCompleted("documents");
+    navigateToNextSection();
+    return;
+  }
+  
+  const sectionData = formData[activeSection] || {};
+  const isValid = sectionValidations[activeSection]?.(sectionData);
+  if (!isValid) {
+    const errors = [];
+    if (activeSection === "entityOverview") errors.push("Entity Overview section is incomplete. Please fill in all required fields.");
+    else if (activeSection === "contactDetails") errors.push("Contact Details section is incomplete. Please fill in all required fields.");
+    else errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`);
+    if (activeSection !== "instructions") setValidationModal({ open: true, title: "Please review the following issues:", messages: errors });
+    return;
+  }
+  markSectionAsCompleted(activeSection);
+  await saveDataToFirebase(activeSection);
+  navigateToNextSection();
+}
 
   const handleSubmitProfile = async () => {
     markSectionAsCompleted("declarationConsent")
@@ -431,8 +459,39 @@ export default function CMFUniversalProfile() {
       case "legalCompliance": return <LegalCompliance {...commonProps} />
       case "productsServices": return <ProductsServices {...commonProps} />
       case "howDidYouHear": return <HowDidYouHear {...commonProps} />
-      case "documents": return <CMFDocumentUpload {...commonProps} />
-      case "fundDetails": return <FundDetailsSection {...commonProps} />
+      case "documents": 
+        return (
+          <CMFDocuments 
+            onClose={async () => {
+              // Refresh profile data from Firestore
+              const userId = effectiveUserId || auth.currentUser?.uid;
+              if (userId) {
+                const docRef = doc(db, "cmfProfiles", userId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                  const data = docSnap.data();
+                  // Update formData with the latest data
+                  setFormData(prev => {
+                    const merged = { ...prev };
+                    // Update documents section
+                    if (data.documents) {
+                      merged.documents = data.documents;
+                    }
+                    // Also update other sections if they changed
+                    Object.keys(data).forEach(key => {
+                      if (key !== 'documents' && merged[key] && typeof merged[key] === 'object') {
+                        merged[key] = { ...merged[key], ...data[key] };
+                      }
+                    });
+                    return merged;
+                  });
+                }
+              }
+              setActiveSection("fundDetails");
+            }}
+          />
+        )
+        case "fundDetails": return <FundDetailsSection {...commonProps} />
       case "applicationBrief": return <ApplicationBriefSection {...commonProps} />
       case "generalInvestmentPreference": return <GeneralInvestmentPreferenceSection {...commonProps} />
       case "declarationConsent": return <DeclarationConsent {...commonProps} allFormData={formData} onComplete={() => navigate("/cmf-matches")} />
@@ -611,17 +670,44 @@ export default function CMFUniversalProfile() {
 
       <div className="content-card">
         {renderActiveSection()}
-        <div className="action-buttons">
-          {activeSection !== "instructions" && (<button type="button" onClick={navigateToPreviousSection} className="btn btn-secondary"><ChevronLeft size={16} /> Previous</button>)}
-          <button type="button" onClick={handleSaveSection} className="btn btn-secondary"><Save size={16} /> Save</button>
-          {activeSection !== "declarationConsent" ? (
-            <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">Save & Continue <ChevronRight size={16} /></button>
-          ) : (
-            <button type="button" onClick={handleSubmitProfile}
-              disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions}
-              className="btn btn-primary">Submit Profile</button>
-          )}
-        </div>
+      <div className="action-buttons">
+  {activeSection !== "instructions" && (
+    <button type="button" onClick={navigateToPreviousSection} className="btn btn-secondary">
+      <ChevronLeft size={16} /> Previous
+    </button>
+  )}
+  
+  {activeSection !== "documents" && (
+    <button type="button" onClick={handleSaveSection} className="btn btn-secondary">
+      <Save size={16} /> Save
+    </button>
+  )}
+  
+  {activeSection === "documents" && (
+    <span style={{ color: "#2e7d32", fontSize: "14px", fontWeight: "500" }}>
+      ✅ Documents are saved automatically
+    </span>
+  )}
+  
+  {activeSection !== "declarationConsent" ? (
+    activeSection === "documents" ? (
+      <button type="button" onClick={() => {
+        markSectionAsCompleted("documents");
+        navigateToNextSection();
+      }} className="btn btn-primary">
+        Continue <ChevronRight size={16} />
+      </button>
+    ) : (
+      <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">
+        Save & Continue <ChevronRight size={16} />
+      </button>
+    )
+  ) : (
+    <button type="button" onClick={handleSubmitProfile}
+      disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions}
+      className="btn btn-primary">Submit Profile</button>
+  )}
+</div>
       </div>
     </div>
   )
