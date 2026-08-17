@@ -16,6 +16,20 @@ import {
 import Upsell from "../../components/Upsell/Upsell"
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
+const BIG_SCORE_LABELS = {
+  excellent: { min: 80, label: "Excellent", color: "#22c55e" },
+  strong: { min: 60, label: "Strong", color: "#86efac" },
+  moderate: { min: 40, label: "Moderate", color: "#f59e0b" },
+  weak: { min: 20, label: "Weak", color: "#ef4444" },
+  critical: { min: 0, label: "Critical", color: "#dc2626" }
+};
+const getBigScoreLabel = (score) => {
+  for (const value of Object.values(BIG_SCORE_LABELS)) {
+    if (score >= value.min) return value;
+  }
+  return BIG_SCORE_LABELS.critical;
+};
+
 const formatLabel = (value) => {
   if (!value) return ""
   return value
@@ -254,6 +268,10 @@ const COLUMN_DEFS = {
     label: "Investment", minWidth: "112px", filterType: "investment",
     tooltip: "The amount approved for this deal. Sorting and range filtering use the underlying number, not the formatted label.",
   },
+  bigScore: {
+    label: "BIG Score", minWidth: "112px", filterType: "bigScore",
+    tooltip: "The Business Integrity & Growth compliance score.",
+  },
   startDate: {
     label: "Start Date", minWidth: "96px", filterType: "startDate",
     tooltip: "When the investment was made. Taken from the record's last update, so it moves if the record is re-stamped.",
@@ -286,7 +304,7 @@ const COLUMN_DEFS = {
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = {
-  investmentAmount: true, startDate: true, status: true, roi: true,
+  investmentAmount: true, bigScore: false, startDate: true, status: true, roi: true,
   sector: true, location: false, teamSize: false, dealType: false,
 }
 const DEFAULT_DENSITY = "comfortable"
@@ -307,6 +325,7 @@ const ACTION_TOOLTIP = "The most useful next step for this record — it changes
 const SORT_ACCESSORS = {
   [NAME_KEY]: (c) => (c.smeName || "").toLowerCase(),
   investmentAmount: (c) => toAmount(c.dealAmount),
+  bigScore: (c) => c.bigScore || 0,
   startDate: (c) => toDateSafe(c.completionDate)?.getTime() ?? -1,
   sector: (c) => (c.sector || "").toLowerCase(),
   location: (c) => (c.location || "").toLowerCase(),
@@ -331,6 +350,7 @@ const investmentSortRank = (cohort) => {
 const EMPTY_FILTERS = {
   name: "",
   investmentMin: null, investmentMax: null,
+  bigScoreMin: null, bigScoreMax: null,
   startFrom: "", startTo: "",
   sector: [], location: [], teamSize: [], status: [], dealType: [],
   roi: "",
@@ -529,6 +549,94 @@ function MyCohorts() {
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
   const [localFilters, setLocalFilters] = useState({ ...EMPTY_FILTERS })
 
+  const [bigScoreLoading, setBigScoreLoading] = useState(false)
+  const [bigScoreData, setBigScoreData] = useState({
+    compliance: 0,
+    legitimacy: 0,
+    fundability: 0,
+    leadership: 0,
+    pis: 0,
+    totalScore: 0,
+  })
+  const [activePopup, setActivePopup] = useState(null)
+  const [selectedRowForPopup, setSelectedRowForPopup] = useState(null)
+
+  const openPopup = (type, cohort, rect) => {
+    const popupWidth = 380
+    const popupHeight = 400
+    let x = rect.left + (rect.width / 2) - (popupWidth / 2)
+    let y = rect.bottom + 8
+    if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20
+    if (x < 20) x = 20
+    if (y + popupHeight > window.innerHeight - 20) y = rect.top - popupHeight - 8
+    if (y < 20) y = 20
+
+    setSelectedRowForPopup(cohort)
+    setActivePopup({ type, rowId: cohort.id, position: { x, y } })
+
+    if (type === "bigScore") {
+      setBigScoreLoading(true)
+      setBigScoreData({
+        compliance: 0,
+        legitimacy: 0,
+        fundability: 0,
+        leadership: 0,
+        pis: 0,
+        totalScore: 0,
+      })
+
+      const fetchBigData = async () => {
+        try {
+          const docSnap = await getDoc(doc(db, "bigEvaluations", cohort.smeId || cohort.id))
+          if (docSnap.exists()) {
+            const data = docSnap.data()
+            setBigScoreData({
+              compliance: data.complianceScore || 0,
+              legitimacy: data.legitimacyScore || 0,
+              fundability: data.fundabilityScore || 0,
+              leadership: data.leadershipScore || 0,
+              pis: data.publicInterestScore || 0,
+              totalScore: data.totalScore || 0,
+            })
+          } else {
+            setBigScoreData({
+              compliance: cohort.compliance || cohort.raw?.compliance || 0,
+              legitimacy: cohort.legitimacy || cohort.raw?.legitimacy || 0,
+              fundability: cohort.fundability || cohort.raw?.fundability || 0,
+              leadership: cohort.leadership || cohort.raw?.leadership || 0,
+              pis: cohort.pis || cohort.raw?.pis || 0,
+              totalScore: cohort.bigScore || cohort.raw?.bigScore || 0,
+            })
+          }
+        } catch (err) {
+          console.error("BIG score fetch error:", err)
+          setBigScoreData({
+            compliance: cohort.compliance || cohort.raw?.compliance || 0,
+            legitimacy: cohort.legitimacy || cohort.raw?.legitimacy || 0,
+            fundability: cohort.fundability || cohort.raw?.fundability || 0,
+            leadership: cohort.leadership || cohort.raw?.leadership || 0,
+            pis: cohort.pis || cohort.raw?.pis || 0,
+            totalScore: cohort.bigScore || cohort.raw?.bigScore || 0,
+          })
+        } finally {
+          setBigScoreLoading(false)
+        }
+      }
+      fetchBigData()
+    }
+  }
+
+  const openPopupFromEvent = (type, cohort, event) => {
+    event.stopPropagation()
+    openPopup(type, cohort, event.currentTarget.getBoundingClientRect())
+  }
+
+  const closePopup = () => {
+    setActivePopup(null)
+    setSelectedRowForPopup(null)
+    setBigScoreLoading(false)
+  }
+
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
   const navigate = useNavigate()
 
@@ -668,6 +776,13 @@ function MyCohorts() {
               statusHistory: data.statusHistory || [],
               applicationDate: data.createdAt ? formatDate(data.createdAt) : "Not recorded",
               applicationDateRaw: data.createdAt || null,
+              bigScore: profileData.bigScore || 0,
+              compliance: profileData.compliance || 0,
+              legitimacy: profileData.legitimacy || 0,
+              fundability: profileData.fundability || 0,
+              leadership: profileData.leadership || 0,
+              pis: profileData.pis || 0,
+              raw: profileData
             }
           } catch (error) {
             console.error("Error fetching profile:", error)
@@ -1024,6 +1139,7 @@ function MyCohorts() {
   const filterActiveFor = (filterType) => {
     switch (filterType) {
       case "investment": return localFilters.investmentMin != null || localFilters.investmentMax != null
+      case "bigScore": return localFilters.bigScoreMin != null || localFilters.bigScoreMax != null
       case "startDate": return !!(localFilters.startFrom || localFilters.startTo)
       case "sector": return localFilters.sector.length > 0
       case "location": return localFilters.location.length > 0
@@ -1095,6 +1211,7 @@ function MyCohorts() {
 
   const activeFilterCount = (localFilters.name.trim() ? 1 : 0)
     + (localFilters.investmentMin != null || localFilters.investmentMax != null ? 1 : 0)
+    + (localFilters.bigScoreMin != null || localFilters.bigScoreMax != null ? 1 : 0)
     + (localFilters.startFrom || localFilters.startTo ? 1 : 0)
     + localFilters.sector.length + localFilters.location.length
     + localFilters.teamSize.length + localFilters.status.length + localFilters.dealType.length
@@ -1118,6 +1235,9 @@ function MyCohorts() {
 
     if (localFilters.investmentMin != null) result = result.filter((c) => toAmount(c.dealAmount) >= localFilters.investmentMin)
     if (localFilters.investmentMax != null) result = result.filter((c) => toAmount(c.dealAmount) <= localFilters.investmentMax)
+
+    if (localFilters.bigScoreMin != null) result = result.filter((c) => (c.bigScore || 0) >= localFilters.bigScoreMin)
+    if (localFilters.bigScoreMax != null) result = result.filter((c) => (c.bigScore || 0) <= localFilters.bigScoreMax)
 
     if (localFilters.startFrom || localFilters.startTo) {
       result = result.filter((c) => {
@@ -1208,6 +1328,30 @@ function MyCohorts() {
         )
       case "dealType":
         return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}><span className="text-[#4a352f]">{cohort.dealType}</span></td>
+      case "bigScore": {
+        const score = Number(cohort.bigScore || cohort.raw?.bigScore) || 0
+        const label = getBigScoreLabel(score)
+        return (
+          <td
+            key={key}
+            className={`${rowPad} border-r border-[#e6d7c3] cursor-pointer hover:bg-[#faf7f2]/60 transition-colors`}
+            style={style}
+            onClick={(e) => openPopupFromEvent("bigScore", cohort, e)}
+            title="Click to see the BIG Score breakdown"
+          >
+            <div className="flex flex-col items-center gap-1">
+              <div className="relative w-11 h-11">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="14" fill="none" stroke={label.color} strokeWidth="3" strokeDasharray={`${score * 0.88} 88`} strokeLinecap="round" />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-xs font-semibold`} style={{ color: label.color }}>{score || "—"}</span>
+              </div>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${label.color}20`, color: label.color }}>{label.label}</span>
+            </div>
+          </td>
+        )
+      }
       default:
         return null
     }
@@ -1723,6 +1867,26 @@ function MyCohorts() {
               )
             })()}
 
+            {headerFilterOpen.type === 'bigScore' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">BIG Score range</label>
+                  {(localFilters.bigScoreMin != null || localFilters.bigScoreMax != null) && (
+                    <button onClick={() => setLocalFilters((p) => ({ ...p, bigScoreMin: null, bigScoreMax: null }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="number" placeholder="Min" value={localFilters.bigScoreMin ?? ""}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreMin: e.target.value === "" ? null : Number(e.target.value) }))}
+                    className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" placeholder="Max" value={localFilters.bigScoreMax ?? ""}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreMax: e.target.value === "" ? null : Number(e.target.value) }))}
+                    className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+              </>
+            )}
+
             {headerFilterOpen.type === 'roi' && (
               <>
                 <div className="flex items-center justify-between mb-2">
@@ -1996,6 +2160,60 @@ function MyCohorts() {
           onUpgrade={() => navigate('/subscription')}
           icon={<Trophy size={48} className="text-[#ffd700]" />}
         />
+      )}
+
+      {/* ─── BIG Score Breakdown Popup ────────────────────────────────────── */}
+      {activePopup?.type === "bigScore" && selectedRowForPopup && (
+        <Portal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px" }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score Breakdown</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedRowForPopup.smeName}</h3>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {bigScoreLoading ? "…" : `${bigScoreData.totalScore}`}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {bigScoreLoading ? (
+                <div className="space-y-3 animate-pulse">
+                  {[...Array(5)].map((_, i) => (<div key={i} className="h-12 bg-[#f5f0e1] rounded-xl" />))}
+                </div>
+              ) : (
+                <>
+                  {[
+                    { label: "Compliance & Governance", value: bigScoreData.compliance, color: "#4a352f" },
+                    { label: "Legitimacy & Legitimation", value: bigScoreData.legitimacy, color: "#7d5a50" },
+                    { label: "Fundability Readiness", value: bigScoreData.fundability, color: "#8d6e63" },
+                    { label: "Leadership & Human Capital", value: bigScoreData.leadership, color: "#a1887f" },
+                    { label: "Public Interest Score", value: bigScoreData.pis, color: "#bcaaa4" }
+                  ].map((item, idx) => (
+                    <div key={idx} className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                      <div className="flex items-center justify-between mb-1 gap-2">
+                        <span className="text-xs font-bold text-[#4a352f]">{item.label}</span>
+                        <span className="text-sm font-bold" style={{ color: item.color }}>{item.value}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${item.value}%`, backgroundColor: item.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </Portal>
       )}
 
       <style>{`

@@ -14,6 +14,8 @@ import CMFCatalystDetailsModal from "./CMFCatalystDetailsModal";
 import CMFFunderDetailsModal from "./CMFFunderDetailsModal";
 import CMFSMEDetailsModal from "./CMFSMEDetailsModal";
 import { mapStatusToStageId, getActiveStages, getStageColors } from "./cmfStageConfig";
+import { db, auth } from "../../firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const toDate = (value) => {
@@ -38,6 +40,20 @@ const MATCH_LABELS = [
   { min: 0, label: "Poor Fit", color: "#dc2626" },
 ];
 const getMatchLabel = (score) => MATCH_LABELS.find((m) => (score || 0) >= m.min) || MATCH_LABELS[4];
+
+const BIG_SCORE_LABELS = {
+  excellent: { min: 80, label: "Excellent", color: "#22c55e" },
+  strong: { min: 60, label: "Strong", color: "#86efac" },
+  moderate: { min: 40, label: "Moderate", color: "#f59e0b" },
+  weak: { min: 20, label: "Weak", color: "#ef4444" },
+  critical: { min: 0, label: "Critical", color: "#dc2626" }
+};
+const getBigScoreLabel = (score) => {
+  for (const value of Object.values(BIG_SCORE_LABELS)) {
+    if (score >= value.min) return value;
+  }
+  return BIG_SCORE_LABELS.critical;
+};
 
 // Renders straight to <body> so `position: fixed` popups can't be trapped by an
 // ancestor that establishes a containing block.
@@ -213,6 +229,249 @@ const CMFDataTable = ({
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [filters, setFilters] = useState({});
+
+  const [matchScoreLoading, setMatchScoreLoading] = useState(false);
+  const [matchScoreData, setMatchScoreData] = useState({
+    baseScore: 55,
+    sectorMatch: false,
+    sectorMatchedList: [],
+    sectorsRequired: [],
+    locationMatch: false,
+    provinceMatched: "",
+    geographicFocus: [],
+    totalScore: 55
+  });
+  const [bigScoreLoading, setBigScoreLoading] = useState(false);
+  const [bigScoreData, setBigScoreData] = useState({
+    compliance: 0,
+    legitimacy: 0,
+    fundability: 0,
+    leadership: 0,
+    pis: 0,
+    totalScore: 0,
+  });
+  const [activePopup, setActivePopup] = useState(null);
+  const [selectedRowForPopup, setSelectedRowForPopup] = useState(null);
+
+  const openPopup = (type, row, rect) => {
+    const popupWidth = 380;
+    const popupHeight = 400;
+    let x = rect.left + (rect.width / 2) - (popupWidth / 2);
+    let y = rect.bottom + 8;
+    if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20;
+    if (x < 20) x = 20;
+    if (y + popupHeight > window.innerHeight - 20) y = rect.top - popupHeight - 8;
+    if (y < 20) y = 20;
+
+    setSelectedRowForPopup(row);
+    setActivePopup({ type, rowId: row.id, position: { x, y } });
+
+    if (type === "bigScore") {
+      setBigScoreLoading(true);
+      setBigScoreData({
+        compliance: 0,
+        legitimacy: 0,
+        fundability: 0,
+        leadership: 0,
+        pis: 0,
+        totalScore: 0,
+      });
+
+      const fetchBigData = async () => {
+        try {
+          const docSnap = await getDoc(doc(db, "bigEvaluations", row.id));
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setBigScoreData({
+              compliance: data.complianceScore || 0,
+              legitimacy: data.legitimacyScore || 0,
+              fundability: data.fundabilityScore || 0,
+              leadership: data.leadershipScore || 0,
+              pis: data.publicInterestScore || 0,
+              totalScore: data.totalScore || 0,
+            });
+          } else {
+            setBigScoreData({
+              compliance: row.compliance || 0,
+              legitimacy: row.legitimacy || 0,
+              fundability: row.fundability || 0,
+              leadership: row.leadership || 0,
+              pis: row.pis || 0,
+              totalScore: row.bigScore || 0,
+            });
+          }
+        } catch (err) {
+          console.error("BIG score fetch error:", err);
+          setBigScoreData({
+            compliance: row.compliance || 0,
+            legitimacy: row.legitimacy || 0,
+            fundability: row.fundability || 0,
+            leadership: row.leadership || 0,
+            pis: row.pis || 0,
+            totalScore: row.bigScore || 0,
+          });
+        } finally {
+          setBigScoreLoading(false);
+        }
+      };
+      fetchBigData();
+    }
+
+    if (type === "match") {
+      setMatchScoreLoading(true);
+      setMatchScoreData({
+        baseScore: 55,
+        sectorMatch: false,
+        sectorMatchedList: [],
+        sectorsRequired: [],
+        locationMatch: false,
+        provinceMatched: "",
+        geographicFocus: [],
+        totalScore: 55
+      });
+
+      const user = auth.currentUser;
+      if (!user) {
+        setMatchScoreLoading(false);
+        return;
+      }
+
+      const entityId = row.id;
+      let currentEffectiveId = `${user.uid}_cmf`;
+
+      const getNestedFieldLocal = (data, pathStr) => {
+        if (!data) return undefined;
+        const keys = pathStr.split('.');
+        let val = data;
+        for (const key of keys) {
+          if (val == null) break;
+          val = val[key];
+        }
+        if (val !== undefined) return val;
+        val = data.formData;
+        for (const key of keys) {
+          if (val == null) break;
+          val = val[key];
+        }
+        return val;
+      };
+
+      const fetchProfileAndCmf = async () => {
+        try {
+          const userDocSnap = await getDoc(doc(db, "users", user.uid));
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            const companyId = userData.companyId;
+            if (companyId) {
+              const companyDocSnap = await getDoc(doc(db, "companies", companyId));
+              if (companyDocSnap.exists()) {
+                const companyData = companyDocSnap.data();
+                const ownerId = companyData.createdBy;
+                if (ownerId && ownerId !== user.uid) {
+                  currentEffectiveId = `${ownerId}_cmf`;
+                }
+              }
+            }
+          }
+
+          let profileDocSnap = await getDoc(doc(db, "MyuniversalProfiles", entityId));
+          if (!profileDocSnap.exists()) {
+            profileDocSnap = await getDoc(doc(db, "catalystProfiles", entityId));
+          }
+          if (!profileDocSnap.exists()) {
+            profileDocSnap = await getDoc(doc(db, "universalProfiles", entityId));
+          }
+          
+          const cmfDocSnap = await getDoc(doc(db, "cmfProfiles", currentEffectiveId));
+
+          const profileData = profileDocSnap.exists() ? profileDocSnap.data() : null;
+          const cmfData = cmfDocSnap.exists() ? cmfDocSnap.data() : null;
+          const cmfPref = cmfData?.generalInvestmentPreference;
+
+          let score = 55;
+          let sectorMatch = false;
+          let locationMatch = false;
+
+          const economicSectors = profileData ? (getNestedFieldLocal(profileData, "entityOverview.economicSectors") || 
+                                  getNestedFieldLocal(profileData, "programBriefMatchingPreference.sectorFocus") || 
+                                  (getNestedFieldLocal(profileData, "entityOverview.industrySector") ? [getNestedFieldLocal(profileData, "entityOverview.industrySector")] : [])) : [];
+          
+          const cmfSectors = cmfPref?.sectorFocus || ["Technology", "Logistics", "Retail", "Construction", "CleanTech"];
+          const sectorsArray = Array.isArray(economicSectors) ? economicSectors : (economicSectors ? [economicSectors] : []);
+          
+          const matchedSectors = [];
+          sectorsArray.forEach(s => {
+            cmfSectors.forEach(c => {
+              if (s.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(s.toLowerCase())) {
+                if (!matchedSectors.includes(s)) {
+                  matchedSectors.push(s);
+                }
+              }
+            });
+          });
+          if (matchedSectors.length > 0) {
+            sectorMatch = true;
+            score += 25;
+          }
+
+          let province = profileData ? (getNestedFieldLocal(profileData, "location") || 
+                         getNestedFieldLocal(profileData, "entityOverview.contactDetails.province") || 
+                         getNestedFieldLocal(profileData, "entityOverview.province") || 
+                         "") : "";
+          const provincesList = profileData ? getNestedFieldLocal(profileData, "programBriefMatchingPreference.selectedProvinces") : null;
+          if (Array.isArray(provincesList) && provincesList.length > 0) {
+            province = provincesList[0];
+          }
+          
+          const cmfLocations = cmfPref?.geographicFocus || ["Gauteng", "Western Cape", "Eastern Cape", "Limpopo", "National", "South Africa"];
+          const locationMatchedList = [];
+          cmfLocations.forEach(c => {
+            if (String(province).toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(String(province).toLowerCase())) {
+              if (!locationMatchedList.includes(c)) {
+                locationMatchedList.push(c);
+              }
+            }
+          });
+          if (locationMatchedList.length > 0 || String(province).toLowerCase() === "national") {
+            locationMatch = true;
+            score += 15;
+          }
+
+          const totalScore = Math.min(score, 98);
+
+          setMatchScoreData({
+            baseScore: 55,
+            sectorMatch,
+            sectorMatchedList: matchedSectors,
+            sectorsRequired: cmfSectors,
+            locationMatch,
+            provinceMatched: province,
+            geographicFocus: cmfLocations,
+            totalScore
+          });
+
+        } catch (err) {
+          console.error("Match score breakdown fetch error:", err);
+          setMatchScoreData(prev => ({ ...prev, _error: true }));
+        } finally {
+          setMatchScoreLoading(false);
+        }
+      };
+
+      fetchProfileAndCmf();
+    }
+  };
+
+  const openPopupFromEvent = (type, row, event) => {
+    event.stopPropagation();
+    openPopup(type, row, event.currentTarget.getBoundingClientRect());
+  };
+
+  const closePopup = () => {
+    setActivePopup(null);
+    setSelectedRowForPopup(null);
+    setMatchScoreLoading(false);
+  };
   const [notification, setNotification] = useState(null);
   const [hoveredRow, setHoveredRow] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -598,16 +857,35 @@ const CMFDataTable = ({
     const value = valueOf(row, col);
     if (col.render) return col.render(row, value);
     switch (col.type) {
+      case "bigScore": {
+        const score = Number(value) || 0;
+        const label = getBigScoreLabel(score);
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <div className="relative w-11 h-11">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                <circle cx="18" cy="18" r="14" fill="none" stroke={label.color} strokeWidth="3" strokeDasharray={`${score * 0.88} 88`} strokeLinecap="round" />
+              </svg>
+              <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-semibold`} style={{ color: label.color }}>{score || "—"}</span>
+            </div>
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${label.color}20`, color: label.color }}>{label.label}</span>
+          </div>
+        );
+      }
       case "match": {
         const score = Number(value) || 0;
         const label = getMatchLabel(score);
         return (
-          <div className="flex flex-col items-center gap-1 w-full">
-            <span className={`${ds.fontSize} font-semibold text-[#4a352f]`}>{score}%</span>
-            <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: label.color }}>{label.label}</span>
-            <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: label.color }} />
+          <div className="flex flex-col items-center gap-1">
+            <div className="relative w-11 h-11">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                <circle cx="18" cy="18" r="14" fill="none" stroke={label.color} strokeWidth="3" strokeDasharray={`${score * 0.88} 88`} strokeLinecap="round" />
+              </svg>
+              <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-semibold`} style={{ color: label.color }}>{score}%</span>
             </div>
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${label.color}20`, color: label.color }}>{label.label}</span>
           </div>
         );
       }
@@ -642,11 +920,20 @@ const CMFDataTable = ({
           boxShadow: offset.side === "left" ? "2px 0 0 #e6d7c3" : "-2px 0 0 #e6d7c3",
         }
       : {};
+
+    const isMatch = col.type === "match";
+    const isBig = col.type === "bigScore";
+    const cellClass = `${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top ${col.align === "center" ? "text-center" : ""} ${(isMatch || isBig) ? "cursor-pointer hover:bg-[#faf7f2]/60 transition-colors" : ""}`;
+    const clickHandler = isMatch ? (e) => openPopupFromEvent("match", row, e) : isBig ? (e) => openPopupFromEvent("bigScore", row, e) : undefined;
+    const titleText = isMatch ? "Click to see the Match Fit breakdown" : isBig ? "Click to see the BIG Score breakdown" : undefined;
+
     return (
       <td
         key={key}
-        className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-b border-[#e6d7c3] align-top ${col.align === "center" ? "text-center" : ""}`}
+        className={cellClass}
         style={stickyStyle}
+        onClick={clickHandler}
+        title={titleText}
       >
         {renderCellBody(row, col)}
       </td>
@@ -1070,6 +1357,165 @@ const CMFDataTable = ({
         )}
       </div>
 
+      {/* ─── Match Fit Breakdown Popup ────────────────────────────────────── */}
+      {activePopup?.type === "match" && selectedRowForPopup && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px", maxHeight: "480px", overflowY: "auto" }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Match Fit Breakdown</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{primaryValue(selectedRowForPopup)}</h3>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {matchScoreLoading ? "…" : `${matchScoreData.totalScore}%`}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {matchScoreLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (<div key={i} className="h-16 bg-[#f5f0e1] rounded-xl animate-pulse" />))}
+                </div>
+              ) : matchScoreData._error ? (
+                <p className="text-xs text-red-600 text-center py-6">Couldn't load the breakdown. Try again shortly.</p>
+              ) : (
+                <>
+                  {/* Base Alignment Score */}
+                  <div className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-[#4a352f]">Base Compatibility</span>
+                        <p className="text-[10px] text-[#7d5a50]">Ecosystem onboarding alignment</p>
+                      </div>
+                      <span className="text-sm font-bold text-[#7d5a50]">{matchScoreData.baseScore}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-[#7d5a50]" style={{ width: `${matchScoreData.baseScore}%` }} />
+                    </div>
+                  </div>
+
+                  {/* Sector Fit */}
+                  <div className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-[#4a352f]">Sector Fit</span>
+                        <p className="text-[10px] text-[#7d5a50]">
+                          {matchScoreData.sectorMatch 
+                            ? `Matches your focus: ${matchScoreData.sectorMatchedList.join(", ")}`
+                            : "No overlapping sectors with your focus list"}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: matchScoreData.sectorMatch ? "#22c55e" : "#dc2626" }}>
+                        {matchScoreData.sectorMatch ? "+25%" : "+0%"}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: matchScoreData.sectorMatch ? "100%" : "0%", backgroundColor: matchScoreData.sectorMatch ? "#22c55e" : "#dc2626" }} />
+                    </div>
+                    {matchScoreData.sectorsRequired && matchScoreData.sectorsRequired.length > 0 && (
+                      <p className="text-[9px] text-[#a89482] mt-1">Your focus sectors: {matchScoreData.sectorsRequired.join(", ")}</p>
+                    )}
+                  </div>
+
+                  {/* Geographic Fit */}
+                  <div className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-[#4a352f]">Geographic Fit</span>
+                        <p className="text-[10px] text-[#7d5a50]">
+                          {matchScoreData.locationMatch 
+                            ? `Location aligns: ${matchScoreData.provinceMatched || "National"}`
+                            : `Location (${matchScoreData.provinceMatched || "N/A"}) is outside your geographic focus`}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: matchScoreData.locationMatch ? "#22c55e" : "#dc2626" }}>
+                        {matchScoreData.locationMatch ? "+15%" : "+0%"}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: matchScoreData.locationMatch ? "100%" : "0%", backgroundColor: matchScoreData.locationMatch ? "#22c55e" : "#dc2626" }} />
+                    </div>
+                    {matchScoreData.geographicFocus && matchScoreData.geographicFocus.length > 0 && (
+                      <p className="text-[9px] text-[#a89482] mt-1">Your location focus: {matchScoreData.geographicFocus.join(", ")}</p>
+                    )}
+                  </div>
+
+                  {/* Capping Note */}
+                  {matchScoreData.totalScore === 98 && (
+                    <p className="text-[10px] text-[#a89482] italic text-center">
+                      * Maximum score is capped at 98%.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── BIG Score Breakdown Popup ────────────────────────────────────── */}
+      {activePopup?.type === "bigScore" && selectedRowForPopup && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px" }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score Breakdown</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{primaryValue(selectedRowForPopup)}</h3>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {bigScoreLoading ? "…" : `${bigScoreData.totalScore}`}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {bigScoreLoading ? (
+                <div className="space-y-3 animate-pulse">
+                  {[...Array(5)].map((_, i) => (<div key={i} className="h-12 bg-[#f5f0e1] rounded-xl" />))}
+                </div>
+              ) : (
+                <>
+                  {[
+                    { label: "Compliance & Governance", value: bigScoreData.compliance, color: "#4a352f" },
+                    { label: "Legitimacy & Legitimation", value: bigScoreData.legitimacy, color: "#7d5a50" },
+                    { label: "Fundability Readiness", value: bigScoreData.fundability, color: "#8d6e63" },
+                    { label: "Leadership & Human Capital", value: bigScoreData.leadership, color: "#a1887f" },
+                    { label: "Public Interest Score", value: bigScoreData.pis, color: "#bcaaa4" }
+                  ].map((item, idx) => (
+                    <div key={idx} className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                      <div className="flex items-center justify-between mb-1 gap-2">
+                        <span className="text-xs font-bold text-[#4a352f]">{item.label}</span>
+                        <span className="text-sm font-bold" style={{ color: item.color }}>{item.value}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${item.value}%`, backgroundColor: item.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </PopupPortal>
+      )}
+
       {dragHintRect && !draggedColumn && (
         <PopupPortal>
           <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
@@ -1380,6 +1826,8 @@ export default function CMFTabbedTables({
                   tooltip: "The named person to approach at this organisation." },
                 { key: "email", label: "Email", width: 180, filter: "text", defaultVisible: false, priority: 4,
                   tooltip: "The contact address for enquiries and submissions." },
+                { key: "bigScore", label: "BIG Score", width: 148, align: "center", filter: "range", type: "bigScore", priority: 3, defaultVisible: false,
+                  tooltip: "The Business Integrity & Growth compliance score." },
               ]}
               actions={(row) => <ViewButton onClick={() => setSelectedFunder(row)} />}
             />
@@ -1422,6 +1870,8 @@ export default function CMFTabbedTables({
                   tooltip: "The named person to approach at this organisation." },
                 { key: "email", label: "Email", width: 180, filter: "text", defaultVisible: false, priority: 4,
                   tooltip: "The contact address for enquiries and applications." },
+                { key: "bigScore", label: "BIG Score", width: 148, align: "center", filter: "range", type: "bigScore", priority: 3, defaultVisible: false,
+                  tooltip: "The Business Integrity & Growth compliance score." },
               ]}
               actions={(row) => <ViewButton onClick={() => setSelectedCatalyst(row)} />}
             />

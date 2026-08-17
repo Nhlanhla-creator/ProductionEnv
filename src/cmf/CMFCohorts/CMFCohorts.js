@@ -19,6 +19,20 @@ import { useCMFMatches } from "../CMFMatches/CMFMatchesContext"
 import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
 
+const BIG_SCORE_LABELS = {
+  excellent: { min: 80, label: "Excellent", color: "#22c55e" },
+  strong: { min: 60, label: "Strong", color: "#86efac" },
+  moderate: { min: 40, label: "Moderate", color: "#f59e0b" },
+  weak: { min: 20, label: "Weak", color: "#ef4444" },
+  critical: { min: 0, label: "Critical", color: "#dc2626" }
+};
+const getBigScoreLabel = (score) => {
+  for (const value of Object.values(BIG_SCORE_LABELS)) {
+    if (score >= value.min) return value;
+  }
+  return BIG_SCORE_LABELS.critical;
+};
+
 const formatLabel = (value) => {
   if (!value) return ""
   return value
@@ -170,6 +184,7 @@ const CMFStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
 // column has one — there's no separate filters panel.
 const COLUMN_DEFS = {
   supportValue: { label: "Support Value", minWidth: "112px", filterType: "supportValue" },
+  bigScore: { label: "BIG Score", minWidth: "112px", filterType: "bigScore" },
   startDate: { label: "Start Date", minWidth: "96px", filterType: "startDate" },
   sector: { label: "Sector", minWidth: "100px", filterType: "sector" },
   location: { label: "Location", minWidth: "92px", filterType: "location" },
@@ -181,7 +196,7 @@ const COLUMN_DEFS = {
 
 const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = {
-  supportValue: true, startDate: true, status: true, dealType: true,
+  supportValue: true, bigScore: false, startDate: true, status: true, dealType: true,
   sector: true, location: false, teamSize: false, supportProvided: false,
 }
 const DEFAULT_DENSITY = "comfortable"
@@ -189,6 +204,7 @@ const DEFAULT_DENSITY = "comfortable"
 const EMPTY_FILTERS = {
   name: "",
   supportMin: null, supportMax: null,
+  bigScoreMin: null, bigScoreMax: null,
   startFrom: "", startTo: "",
   sector: [], location: [], teamSize: [], status: [], dealType: [],
   supportProvided: "",
@@ -536,7 +552,14 @@ export default function CMFCohorts() {
           applicationDateRaw: sme.applicationDate || null,
           archived: sme.archived || false,
           statusHistory: sme.statusHistory || [],
-          source: isDirectOnboarded ? "onboarded" : "matched"
+          source: isDirectOnboarded ? "onboarded" : "matched",
+          bigScore: sme.bigScore || 0,
+          compliance: sme.compliance || 0,
+          legitimacy: sme.legitimacy || 0,
+          fundability: sme.fundability || 0,
+          leadership: sme.leadership || 0,
+          pis: sme.pis || 0,
+          raw: sme
         }
       })
   }, [smeMatches, onboardedUserIds])
@@ -568,7 +591,9 @@ export default function CMFCohorts() {
           lastUpdated: funder.lastActivity || null,
           supportProvided: funder.contactPerson ? `${funder.contactPerson} (${funder.email})` : funder.email || "Not specified",
           archived: funder.archived || false,
-          source: isDirectOnboarded ? "onboarded" : "matched"
+          source: isDirectOnboarded ? "onboarded" : "matched",
+          bigScore: funder.bigScore || 0,
+          raw: funder
         }
       })
   }, [funderMatches, onboardedUserIds])
@@ -600,7 +625,9 @@ export default function CMFCohorts() {
           lastUpdated: cat.lastActivity || null,
           supportProvided: cat.contactPerson ? `${cat.contactPerson} (${cat.email})` : cat.email || "Not specified",
           archived: cat.archived || false,
-          source: isDirectOnboarded ? "onboarded" : "matched"
+          source: isDirectOnboarded ? "onboarded" : "matched",
+          bigScore: cat.bigScore || 0,
+          raw: cat
         }
       })
   }, [catalystMatches, onboardedUserIds])
@@ -640,6 +667,94 @@ export default function CMFCohorts() {
   }, [activeCohortTab, businessesCohorts, fundersCohorts, catalystsCohorts, cmfCohortsMapped])
 
   const [cohorts, setCohorts] = useState([])
+
+  const [bigScoreLoading, setBigScoreLoading] = useState(false)
+  const [bigScoreData, setBigScoreData] = useState({
+    compliance: 0,
+    legitimacy: 0,
+    fundability: 0,
+    leadership: 0,
+    pis: 0,
+    totalScore: 0,
+  })
+  const [activePopup, setActivePopup] = useState(null)
+  const [selectedRowForPopup, setSelectedRowForPopup] = useState(null)
+
+  const openPopup = (type, cohort, rect) => {
+    const popupWidth = 380
+    const popupHeight = 400
+    let x = rect.left + (rect.width / 2) - (popupWidth / 2)
+    let y = rect.bottom + 8
+    if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20
+    if (x < 20) x = 20
+    if (y + popupHeight > window.innerHeight - 20) y = rect.top - popupHeight - 8
+    if (y < 20) y = 20
+
+    setSelectedRowForPopup(cohort)
+    setActivePopup({ type, rowId: cohort.id, position: { x, y } })
+
+    if (type === "bigScore") {
+      setBigScoreLoading(true)
+      setBigScoreData({
+        compliance: 0,
+        legitimacy: 0,
+        fundability: 0,
+        leadership: 0,
+        pis: 0,
+        totalScore: 0,
+      })
+
+      const fetchBigData = async () => {
+        try {
+          const docSnap = await getDoc(doc(db, "bigEvaluations", cohort.smeId || cohort.id))
+          if (docSnap.exists()) {
+            const data = docSnap.data()
+            setBigScoreData({
+              compliance: data.complianceScore || 0,
+              legitimacy: data.legitimacyScore || 0,
+              fundability: data.fundabilityScore || 0,
+              leadership: data.leadershipScore || 0,
+              pis: data.publicInterestScore || 0,
+              totalScore: data.totalScore || 0,
+            })
+          } else {
+            setBigScoreData({
+              compliance: cohort.compliance || cohort.raw?.compliance || 0,
+              legitimacy: cohort.legitimacy || cohort.raw?.legitimacy || 0,
+              fundability: cohort.fundability || cohort.raw?.fundability || 0,
+              leadership: cohort.leadership || cohort.raw?.leadership || 0,
+              pis: cohort.pis || cohort.raw?.pis || 0,
+              totalScore: cohort.bigScore || cohort.raw?.bigScore || 0,
+            })
+          }
+        } catch (err) {
+          console.error("BIG score fetch error:", err)
+          setBigScoreData({
+            compliance: cohort.compliance || cohort.raw?.compliance || 0,
+            legitimacy: cohort.legitimacy || cohort.raw?.legitimacy || 0,
+            fundability: cohort.fundability || cohort.raw?.fundability || 0,
+            leadership: cohort.leadership || cohort.raw?.leadership || 0,
+            pis: cohort.pis || cohort.raw?.pis || 0,
+            totalScore: cohort.bigScore || cohort.raw?.bigScore || 0,
+          })
+        } finally {
+          setBigScoreLoading(false)
+        }
+      }
+      fetchBigData()
+    }
+  }
+
+  const openPopupFromEvent = (type, cohort, event) => {
+    event.stopPropagation()
+    openPopup(type, cohort, event.currentTarget.getBoundingClientRect())
+  }
+
+  const closePopup = () => {
+    setActivePopup(null)
+    setSelectedRowForPopup(null)
+    setBigScoreLoading(false)
+  }
 
   useEffect(() => {
     setCohorts(cohortsFromContext)
@@ -970,6 +1085,7 @@ export default function CMFCohorts() {
   const filterActiveFor = (filterType) => {
     switch (filterType) {
       case "supportValue": return localFilters.supportMin != null || localFilters.supportMax != null
+      case "bigScore": return localFilters.bigScoreMin != null || localFilters.bigScoreMax != null
       case "startDate": return !!(localFilters.startFrom || localFilters.startTo)
       case "sector": return localFilters.sector.length > 0
       case "location": return localFilters.location.length > 0
@@ -1160,6 +1276,7 @@ export default function CMFCohorts() {
 
   const activeFilterCount = (localFilters.name.trim() ? 1 : 0)
     + (localFilters.supportMin != null || localFilters.supportMax != null ? 1 : 0)
+    + (localFilters.bigScoreMin != null || localFilters.bigScoreMax != null ? 1 : 0)
     + (localFilters.startFrom || localFilters.startTo ? 1 : 0)
     + localFilters.sector.length + localFilters.location.length
     + localFilters.teamSize.length + localFilters.status.length + localFilters.dealType.length
@@ -1183,6 +1300,9 @@ export default function CMFCohorts() {
 
     if (localFilters.supportMin != null) result = result.filter((c) => toAmount(c.dealAmount) >= localFilters.supportMin)
     if (localFilters.supportMax != null) result = result.filter((c) => toAmount(c.dealAmount) <= localFilters.supportMax)
+
+    if (localFilters.bigScoreMin != null) result = result.filter((c) => (c.bigScore || 0) >= localFilters.bigScoreMin)
+    if (localFilters.bigScoreMax != null) result = result.filter((c) => (c.bigScore || 0) <= localFilters.bigScoreMax)
 
     if (localFilters.startFrom || localFilters.startTo) {
       result = result.filter((c) => {
@@ -1256,6 +1376,30 @@ export default function CMFCohorts() {
         return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}><span className="text-[#4a352f]">{cohort.dealType}</span></td>
       case "supportProvided":
         return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}><span className="text-[#4a352f] line-clamp-1">{cohort.supportProvided}</span></td>
+      case "bigScore": {
+        const score = Number(cohort.bigScore || cohort.raw?.bigScore) || 0
+        const label = getBigScoreLabel(score)
+        return (
+          <td
+            key={key}
+            className={`${rowPad} border-r border-[#e6d7c3] cursor-pointer hover:bg-[#faf7f2]/60 transition-colors`}
+            style={style}
+            onClick={(e) => openPopupFromEvent("bigScore", cohort, e)}
+            title="Click to see the BIG Score breakdown"
+          >
+            <div className="flex flex-col items-center gap-1">
+              <div className="relative w-11 h-11">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="14" fill="none" stroke={label.color} strokeWidth="3" strokeDasharray={`${score * 0.88} 88`} strokeLinecap="round" />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-xs font-semibold`} style={{ color: label.color }}>{score || "—"}</span>
+              </div>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${label.color}20`, color: label.color }}>{label.label}</span>
+            </div>
+          </td>
+        )
+      }
       default:
         return null
     }
@@ -1912,6 +2056,26 @@ export default function CMFCohorts() {
               )
             })()}
 
+            {headerFilterOpen.type === 'bigScore' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">BIG Score range</label>
+                  {(localFilters.bigScoreMin != null || localFilters.bigScoreMax != null) && (
+                    <button onClick={() => setLocalFilters((p) => ({ ...p, bigScoreMin: null, bigScoreMax: null }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="number" placeholder="Min" value={localFilters.bigScoreMin ?? ""}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreMin: e.target.value === "" ? null : Number(e.target.value) }))}
+                    className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" placeholder="Max" value={localFilters.bigScoreMax ?? ""}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreMax: e.target.value === "" ? null : Number(e.target.value) }))}
+                    className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+              </>
+            )}
+
             {headerFilterOpen.type === 'supportProvided' && (
               <>
                 <div className="flex items-center justify-between mb-2">
@@ -2399,6 +2563,60 @@ export default function CMFCohorts() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ─── BIG Score Breakdown Popup ────────────────────────────────────── */}
+      {activePopup?.type === "bigScore" && selectedRowForPopup && (
+        <Portal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px" }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score Breakdown</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedRowForPopup.smeName}</h3>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {bigScoreLoading ? "…" : `${bigScoreData.totalScore}`}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {bigScoreLoading ? (
+                <div className="space-y-3 animate-pulse">
+                  {[...Array(5)].map((_, i) => (<div key={i} className="h-12 bg-[#f5f0e1] rounded-xl" />))}
+                </div>
+              ) : (
+                <>
+                  {[
+                    { label: "Compliance & Governance", value: bigScoreData.compliance, color: "#4a352f" },
+                    { label: "Legitimacy & Legitimation", value: bigScoreData.legitimacy, color: "#7d5a50" },
+                    { label: "Fundability Readiness", value: bigScoreData.fundability, color: "#8d6e63" },
+                    { label: "Leadership & Human Capital", value: bigScoreData.leadership, color: "#a1887f" },
+                    { label: "Public Interest Score", value: bigScoreData.pis, color: "#bcaaa4" }
+                  ].map((item, idx) => (
+                    <div key={idx} className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                      <div className="flex items-center justify-between mb-1 gap-2">
+                        <span className="text-xs font-bold text-[#4a352f]">{item.label}</span>
+                        <span className="text-sm font-bold" style={{ color: item.color }}>{item.value}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${item.value}%`, backgroundColor: item.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </Portal>
       )}
 
       <style>{`

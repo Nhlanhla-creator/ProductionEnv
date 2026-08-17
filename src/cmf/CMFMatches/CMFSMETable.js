@@ -16,7 +16,7 @@ import {
   getNextStageId, getStageActionConfig, loadPipelineSettings, getActiveStages,
   PIPELINE_SETTINGS_EVENT,
 } from "./cmfStageConfig";
-import { db } from "../../firebaseConfig";        // match the path used by SupportSMETable
+import { db, auth } from "../../firebaseConfig";        // match the path used by SupportSMETable
 import { doc, getDoc } from "firebase/firestore";
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
@@ -444,6 +444,23 @@ export function CMFSMETable({
   const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1440 : window.innerWidth);
 
   // Popups
+  const [bigScoreLoading, setBigScoreLoading] = useState(false);
+  const [bigScoreData, setBigScoreData] = useState({
+    compliance: { score: 0 }, legitimacy: { score: 0 },
+    fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
+  });
+
+  const [matchScoreLoading, setMatchScoreLoading] = useState(false);
+  const [matchScoreData, setMatchScoreData] = useState({
+    baseScore: 55,
+    sectorMatch: false,
+    sectorMatchedList: [],
+    sectorsRequired: [],
+    locationMatch: false,
+    provinceMatched: "",
+    geographicFocus: [],
+    totalScore: 55
+  });
   const [activePopup, setActivePopup] = useState(null);
   const [selectedSMEForPopup, setSelectedSMEForPopup] = useState(null);
   const [stageUpdateData, setStageUpdateData] = useState({
@@ -459,12 +476,6 @@ export function CMFSMETable({
 
   // ─── Programme-aware pipeline stages ──────────────────────────────────────
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
-
-const [bigScoreLoading, setBigScoreLoading] = useState(false);
-  const [bigScoreData, setBigScoreData] = useState({
-    compliance: { score: 0 }, legitimacy: { score: 0 },
-    fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
-  });
 
   useEffect(() => {
     const refresh = () => setPipelineSettings(loadPipelineSettings());
@@ -635,7 +646,24 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
   useEffect(() => { onSMEsLoaded?.(smes); }, [smes, onSMEsLoaded]);
 
   // ─── Filtering & Sorting ──────────────────────────────────────────────────
+  const lastSortedIdsRef = useRef([]);
+  const lastSortDepsRef = useRef({
+    sortConfig: null,
+    filters: null,
+    localFilters: null,
+    stageFilter: null,
+    idsString: "",
+  });
+
   const filteredAndSortedSMEs = useMemo(() => {
+    const idsString = smeMatches.map((s) => s.id).join(",");
+    const depsChanged =
+      JSON.stringify(sortConfig) !== JSON.stringify(lastSortDepsRef.current.sortConfig) ||
+      JSON.stringify(filters) !== JSON.stringify(lastSortDepsRef.current.filters) ||
+      JSON.stringify(localFilters) !== JSON.stringify(lastSortDepsRef.current.localFilters) ||
+      stageFilter !== lastSortDepsRef.current.stageFilter ||
+      idsString !== lastSortDepsRef.current.idsString;
+
     let result = [...smes];
 
     // Stage filter from the pipeline (a stage id, not a loose string).
@@ -707,28 +735,48 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     textFilter("supportRequired", "supportRequired");
     textFilter("servicesRequired", "servicesRequired");
 
-    if (sortConfig?.key === "attentionThenScore") {
+    // If sorting dependencies did NOT change (meaning this is just a stage update or other item value change),
+    // we keep the exact same order of rows as before.
+    if (!depsChanged && lastSortedIdsRef.current.length > 0) {
+      const orderMap = new Map(lastSortedIdsRef.current.map((id, index) => [id, index]));
       result.sort((a, b) => {
-        const aFlag = getAttentionReasons(a, activeStages).length > 0 ? 1 : 0;
-        const bFlag = getAttentionReasons(b, activeStages).length > 0 ? 1 : 0;
-        if (aFlag !== bFlag) return bFlag - aFlag;
-        return b.bigScore - a.bigScore;
+        const aIndex = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
+        const bIndex = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
+        return aIndex - bIndex;
       });
-    } else if (sortConfig?.key) {
-      const accessor = SORT_ACCESSORS[sortConfig.key] || ((r) => (r[sortConfig.key] ?? "").toString().toLowerCase());
-      result.sort((a, b) => {
-        const av = accessor(a);
-        const bv = accessor(b);
-        if (typeof av === "number" && typeof bv === "number") {
-          return sortConfig.direction === "asc" ? av - bv : bv - av;
-        }
-        const cmp = (av ?? "").toString().localeCompare((bv ?? "").toString());
-        return sortConfig.direction === "asc" ? cmp : -cmp;
-      });
+    } else {
+      if (sortConfig?.key === "attentionThenScore") {
+        result.sort((a, b) => {
+          const aFlag = getAttentionReasons(a, activeStages).length > 0 ? 1 : 0;
+          const bFlag = getAttentionReasons(b, activeStages).length > 0 ? 1 : 0;
+          if (aFlag !== bFlag) return bFlag - aFlag;
+          return b.bigScore - a.bigScore;
+        });
+      } else if (sortConfig?.key) {
+        const accessor = SORT_ACCESSORS[sortConfig.key] || ((r) => (r[sortConfig.key] ?? "").toString().toLowerCase());
+        result.sort((a, b) => {
+          const av = accessor(a);
+          const bv = accessor(b);
+          if (typeof av === "number" && typeof bv === "number") {
+            return sortConfig.direction === "asc" ? av - bv : bv - av;
+          }
+          const cmp = (av ?? "").toString().localeCompare((bv ?? "").toString());
+          return sortConfig.direction === "asc" ? cmp : -cmp;
+        });
+      }
+      // Save the new sorted order
+      lastSortedIdsRef.current = result.map((s) => s.id);
+      lastSortDepsRef.current = {
+        sortConfig: JSON.parse(JSON.stringify(sortConfig)),
+        filters: JSON.parse(JSON.stringify(filters)),
+        localFilters: JSON.parse(JSON.stringify(localFilters)),
+        stageFilter,
+        idsString,
+      };
     }
 
     return result;
-  }, [smes, stageFilter, filters, localFilters, sortConfig, activeStages]);
+  }, [smes, stageFilter, filters, localFilters, sortConfig, activeStages, smeMatches]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -929,6 +977,7 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     switch (type) {
       case "stage": popupWidth = 450; popupHeight = 500; break;
       case "bigScore": popupWidth = 380; popupHeight = 480; break;
+      case "match": popupWidth = 380; popupHeight = 400; break;
       case "quickActions": popupWidth = 210; popupHeight = 220; break;
       default: popupWidth = 300; popupHeight = 300;
     }
@@ -985,6 +1034,143 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
         })
         .finally(() => setBigScoreLoading(false));
     }
+
+    if (type === "match") {
+      setMatchScoreLoading(true);
+      setMatchScoreData({
+        baseScore: 55,
+        sectorMatch: false,
+        sectorMatchedList: [],
+        sectorsRequired: [],
+        locationMatch: false,
+        provinceMatched: "",
+        geographicFocus: [],
+        totalScore: 55
+      });
+
+      const user = auth.currentUser;
+      if (!user) {
+        setMatchScoreLoading(false);
+        return;
+      }
+
+      const smeId = sme.id;
+      let currentEffectiveId = `${user.uid}_cmf`;
+
+      const getNestedFieldLocal = (data, pathStr) => {
+        if (!data) return undefined;
+        const keys = pathStr.split('.');
+        let val = data;
+        for (const key of keys) {
+          if (val == null) break;
+          val = val[key];
+        }
+        if (val !== undefined) return val;
+        val = data.formData;
+        for (const key of keys) {
+          if (val == null) break;
+          val = val[key];
+        }
+        return val;
+      };
+
+      const fetchProfileAndCmf = async () => {
+        try {
+          const userDocSnap = await getDoc(doc(db, "users", user.uid));
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            const companyId = userData.companyId;
+            if (companyId) {
+              const companyDocSnap = await getDoc(doc(db, "companies", companyId));
+              if (companyDocSnap.exists()) {
+                const companyData = companyDocSnap.data();
+                const ownerId = companyData.createdBy;
+                if (ownerId && ownerId !== user.uid) {
+                  currentEffectiveId = `${ownerId}_cmf`;
+                }
+              }
+            }
+          }
+
+          const smeDocSnap = await getDoc(doc(db, "universalProfiles", smeId));
+          const cmfDocSnap = await getDoc(doc(db, "cmfProfiles", currentEffectiveId));
+
+          const profileData = smeDocSnap.exists() ? smeDocSnap.data() : null;
+          const cmfData = cmfDocSnap.exists() ? cmfDocSnap.data() : null;
+          const cmfPref = cmfData?.generalInvestmentPreference;
+
+          let score = 55;
+          let sectorMatch = false;
+          let locationMatch = false;
+
+          const economicSectors = profileData ? (getNestedFieldLocal(profileData, "entityOverview.economicSectors") || 
+                                  getNestedFieldLocal(profileData, "programBriefMatchingPreference.sectorFocus") || 
+                                  (getNestedFieldLocal(profileData, "entityOverview.industrySector") ? [getNestedFieldLocal(profileData, "entityOverview.industrySector")] : [])) : [];
+          
+          const cmfSectors = cmfPref?.sectorFocus || ["Technology", "Logistics", "Retail", "Construction", "CleanTech"];
+          const sectorsArray = Array.isArray(economicSectors) ? economicSectors : (economicSectors ? [economicSectors] : []);
+          
+          const matchedSectors = [];
+          sectorsArray.forEach(s => {
+            cmfSectors.forEach(c => {
+              if (s.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(s.toLowerCase())) {
+                if (!matchedSectors.includes(s)) {
+                  matchedSectors.push(s);
+                }
+              }
+            });
+          });
+          if (matchedSectors.length > 0) {
+            sectorMatch = true;
+            score += 25;
+          }
+
+          let province = profileData ? (getNestedFieldLocal(profileData, "location") || 
+                         getNestedFieldLocal(profileData, "entityOverview.contactDetails.province") || 
+                         getNestedFieldLocal(profileData, "entityOverview.province") || 
+                         "") : "";
+          const provincesList = profileData ? getNestedFieldLocal(profileData, "programBriefMatchingPreference.selectedProvinces") : null;
+          if (Array.isArray(provincesList) && provincesList.length > 0) {
+            province = provincesList[0];
+          }
+          
+          const cmfLocations = cmfPref?.geographicFocus || ["Gauteng", "Western Cape", "Eastern Cape", "Limpopo", "National", "South Africa"];
+          const locationMatchedList = [];
+          cmfLocations.forEach(c => {
+            if (String(province).toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(String(province).toLowerCase())) {
+              if (!locationMatchedList.includes(c)) {
+                locationMatchedList.push(c);
+              }
+            }
+          });
+          if (locationMatchedList.length > 0 || String(province).toLowerCase() === "national") {
+            locationMatch = true;
+            score += 15;
+          }
+
+          const totalScore = Math.min(score, 98);
+
+          setMatchScoreData({
+            baseScore: 55,
+            sectorMatch,
+            sectorMatchedList: matchedSectors,
+            sectorsRequired: cmfSectors,
+            locationMatch,
+            provinceMatched: province,
+            geographicFocus: cmfLocations,
+            totalScore
+          });
+
+        } catch (err) {
+          console.error("Match score breakdown fetch error:", err);
+          setMatchScoreData(prev => ({ ...prev, _error: true }));
+        } finally {
+          setMatchScoreLoading(false);
+        }
+      };
+
+      fetchProfileAndCmf();
+    }
   };
 
   const openPopupFromEvent = (type, sme, event, options) => {
@@ -992,11 +1178,12 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     openPopup(type, sme, event.currentTarget.getBoundingClientRect(), options);
   };
 
- const closePopup = () => {
+  const closePopup = () => {
     setActivePopup(null);
     setSelectedSMEForPopup(null);
     setShowCalendarPopup(false);
-    setBigScoreLoading(false);   // 👈 add
+    setBigScoreLoading(false);
+    setMatchScoreLoading(false);
   };
 
   // Forward-only through the live stages, with terminal outcomes always
@@ -1239,13 +1426,22 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
       case "match": {
         const label = getMatchLabel(sme.matchPercentage);
         return (
-          <td key={key} className={`${cellPad} text-center border-r border-b border-[#e6d7c3] align-top`} style={stickyStyle}>
-            <div className="flex flex-col items-center gap-1 w-full">
-              <span className={`${cellFont} font-semibold text-[#4a352f]`}>{sme.matchPercentage}%</span>
-              <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: label.color }}>{label.label}</span>
-              <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: label.color }} />
+          <td
+            key={key}
+            className={`${cellPad} text-center border-r border-b border-[#e6d7c3] align-top cursor-pointer hover:bg-[#faf7f2]/60 transition-colors`}
+            style={stickyStyle}
+            onClick={(e) => openPopupFromEvent("match", sme, e)}
+            title="Click to see the Match Fit breakdown"
+          >
+            <div className="flex flex-col items-center gap-1">
+              <div className="relative w-11 h-11">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="14" fill="none" stroke={label.color} strokeWidth="3" strokeDasharray={`${sme.matchPercentage * 0.88} 88`} strokeLinecap="round" />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center ${cellFont} font-semibold`} style={{ color: label.color }}>{sme.matchPercentage}%</span>
               </div>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${label.color}20`, color: label.color }}>{label.label}</span>
             </div>
           </td>
         );
@@ -2079,6 +2275,111 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
                     </div>
                   );
                 })
+              )}
+            </div>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Match Fit Breakdown Popup ────────────────────────────────────── */}
+      {activePopup?.type === "match" && selectedSMEForPopup && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
+          <div
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: "380px", maxHeight: "480px", overflowY: "auto" }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Match Fit Breakdown</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-xl font-bold">
+                    {matchScoreLoading ? "…" : `${matchScoreData.totalScore}%`}
+                  </div>
+                  <button onClick={closePopup} className="text-white/70 hover:text-white transition-colors p-1"><X size={18} /></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {matchScoreLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (<div key={i} className="h-16 bg-[#f5f0e1] rounded-xl animate-pulse" />))}
+                </div>
+              ) : matchScoreData._error ? (
+                <p className="text-xs text-red-600 text-center py-6">Couldn't load the breakdown. Try again shortly.</p>
+              ) : (
+                <>
+                  {/* Base Alignment Score */}
+                  <div className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-[#4a352f]">Base Compatibility</span>
+                        <p className="text-[10px] text-[#7d5a50]">Ecosystem onboarding alignment</p>
+                      </div>
+                      <span className="text-sm font-bold text-[#7d5a50]">{matchScoreData.baseScore}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-[#7d5a50]" style={{ width: `${matchScoreData.baseScore}%` }} />
+                    </div>
+                  </div>
+
+                  {/* Sector Fit */}
+                  <div className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-[#4a352f]">Sector Fit</span>
+                        <p className="text-[10px] text-[#7d5a50]">
+                          {matchScoreData.sectorMatch 
+                            ? `Matches your focus: ${matchScoreData.sectorMatchedList.join(", ")}`
+                            : "No overlapping sectors with your focus list"}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: matchScoreData.sectorMatch ? "#22c55e" : "#dc2626" }}>
+                        {matchScoreData.sectorMatch ? "+25%" : "+0%"}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: matchScoreData.sectorMatch ? "100%" : "0%", backgroundColor: matchScoreData.sectorMatch ? "#22c55e" : "#dc2626" }} />
+                    </div>
+                    {matchScoreData.sectorsRequired && matchScoreData.sectorsRequired.length > 0 && (
+                      <p className="text-[9px] text-[#a89482] mt-1">Your focus sectors: {matchScoreData.sectorsRequired.join(", ")}</p>
+                    )}
+                  </div>
+
+                  {/* Geographic Fit */}
+                  <div className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6d7c3]/40">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-[#4a352f]">Geographic Fit</span>
+                        <p className="text-[10px] text-[#7d5a50]">
+                          {matchScoreData.locationMatch 
+                            ? `Location aligns: ${matchScoreData.provinceMatched || "National"}`
+                            : `Location (${matchScoreData.provinceMatched || "N/A"}) is outside your geographic focus`}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: matchScoreData.locationMatch ? "#22c55e" : "#dc2626" }}>
+                        {matchScoreData.locationMatch ? "+15%" : "+0%"}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: matchScoreData.locationMatch ? "100%" : "0%", backgroundColor: matchScoreData.locationMatch ? "#22c55e" : "#dc2626" }} />
+                    </div>
+                    {matchScoreData.geographicFocus && matchScoreData.geographicFocus.length > 0 && (
+                      <p className="text-[9px] text-[#a89482] mt-1">Your location focus: {matchScoreData.geographicFocus.join(", ")}</p>
+                    )}
+                  </div>
+
+                  {/* Capping Note */}
+                  {matchScoreData.totalScore === 98 && (
+                    <p className="text-[10px] text-[#a89482] italic text-center">
+                      * Maximum score is capped at 98%.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
