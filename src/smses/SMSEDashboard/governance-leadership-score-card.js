@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronDown, RefreshCw, AlertCircle, Users, CheckCircle, TrendingUp, Shield } from "lucide-react"
+import { ChevronDown, RefreshCw, AlertCircle, Users, CheckCircle, TrendingUp, Target, Lock, Info } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc, collection, getDocs } from "firebase/firestore"
 import { getFunctions, httpsCallable } from "firebase/functions"
@@ -9,6 +9,12 @@ import {
   calculateGovernanceScore,
   buildGovernancePrompt,
 } from "./governance-improvements"
+import {
+  computeLeadershipQuality,
+  computeOwnershipStructure,
+  buildOpportunities,
+  fmtPts,
+} from "./governance-potential"
 
 // ─────────────────────────────────────────────────────────────────────────
 // Governance & Leadership — combined card.
@@ -37,6 +43,46 @@ const SECTION_WEIGHTS = {
   leadership: 40,
   maturity: 35,
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// TWO DOMAINS, NOT THREE PILLARS
+//
+// This card answers two separate questions and a funder treats them as
+// separate findings, so the breakdown groups them rather than listing three
+// pillars flat:
+//
+//   LEADERSHIP  — who is running this business, and are they any good at it?
+//                 Founder credentials, the depth of the operating team, and
+//                 how they behave. One pillar, 40%.
+//
+//   GOVERNANCE  — what structures hold them to account?
+//                 Who owns and directs the company, and how mature the
+//                 governance around that is. Two pillars, 60%.
+//
+// Ownership & Structure sits under GOVERNANCE deliberately. Directors,
+// shareholders and the exec / non-exec split describe the accountability
+// structure, not the calibre of the people in it — a strong founder with no
+// board is a leadership pass and a governance fail, and the card should be
+// able to say that.
+// ─────────────────────────────────────────────────────────────────────────
+const DOMAINS = [
+  {
+    key: "leadership",
+    label: "Leadership",
+    question: "Who is running this business, and are they any good at it?",
+    color: "#6D4C41",
+    accent: "#efe5e0",
+    pillarKeys: ["leadership"],
+  },
+  {
+    key: "governance",
+    label: "Governance",
+    question: "What structures hold them to account?",
+    color: "#A67C52",
+    accent: "#f3e8dc",
+    pillarKeys: ["ownership", "maturity"],
+  },
+]
 
 // ─────────────────────────────────────────────────────────────────────────
 // Critical role coverage — the operational roles a funder expects to see
@@ -1044,101 +1090,268 @@ const buildBoardAssessment = (pis, profileData, ctx) => {
   }
 }
 
-export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
+
+// ─────────────────────────────────────────────────────────────────────────
+// ONE SCORING PATH
+//
+// Everything below runs on a profile passed in as an argument rather than on
+// component state, so the same function can score the real profile and a
+// hypothetical one. That is what makes a "+4.2%" promise in Potential points
+// measurable rather than estimated: the figure is produced by re-running
+// this exact function with the action applied.
+// ─────────────────────────────────────────────────────────────────────────
+
+const pisOf = (profileData) => {
+  const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0
+  const turnover = parseFloat((profileData?.financialOverview?.annualRevenue || "0").toString().replace(/[R,\s]/g, "")) || 0
+  const liabilities = parseFloat((profileData?.financialOverview?.existingDebt || "0").toString().replace(/[R,\s]/g, "")) || 0
+  const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1
+  return {
+    employees, turnover, liabilities, shareholders,
+    turnoverComponent: parseFloat((turnover / 1e6).toFixed(2)),
+    liabilitiesComponent: parseFloat((liabilities / 1e6).toFixed(2)),
+    totalPIS: parseFloat((employees + turnover / 1e6 + liabilities / 1e6 + shareholders).toFixed(2)),
+  }
+}
+
+// Which critical operating functions are covered, and by whom. A person
+// covering two or more buckets, or holding three or more distinct FUNCTIONAL
+// board roles, is flagged as spread thin. Seat descriptors ("Chairman",
+// "Board of Directors") are excluded so a normal chairman does not trip it.
+const computeRoleCoveragePure = (validDirectors, validExecutives) => {
+  const bucketCoverage = {}
+  CRITICAL_ROLE_BUCKETS.forEach((b) => (bucketCoverage[b.key] = []))
+  const bucketsByPerson = {}
+
+  const registerRole = (name, roleLabel, source) => {
+    if (!name || !roleLabel) return
+    CRITICAL_ROLE_BUCKETS.forEach((b) => {
+      const list = source === "Director" ? b.directorRoles : b.execRoles
+      if (list.includes(roleLabel)) {
+        bucketCoverage[b.key].push({ name, source })
+        if (!bucketsByPerson[name]) bucketsByPerson[name] = new Set()
+        bucketsByPerson[name].add(b.label)
+      }
+    })
+  }
+
+  const directorRoleCounts = {}
+  ;(validDirectors || []).forEach((d) => {
+    const allRoles = (d.roles || []).map((r) => (r === "Other" ? d.customRole : r)).filter(Boolean)
+    const funcRoles = allRoles.filter((r) => !SEAT_DESCRIPTOR_ROLES.includes(r))
+    directorRoleCounts[d.name] = (directorRoleCounts[d.name] || 0) + funcRoles.length
+    allRoles.forEach((r) => registerRole(d.name, r, "Director"))
+  })
+  ;(validExecutives || []).forEach((e) => {
+    const position = e.position === "Other" ? e.customPosition : e.position
+    registerRole(e.name, position, "Executive")
+  })
+
+  const missingCriticalRoles = CRITICAL_ROLE_BUCKETS.filter((b) => bucketCoverage[b.key].length === 0)
+
+  const overloadedPeople = Object.entries(bucketsByPerson)
+    .filter(([, buckets]) => buckets.size >= 2)
+    .map(([name, buckets]) => ({ name, buckets: Array.from(buckets), directorRoleCount: directorRoleCounts[name] || 0 }))
+
+  Object.entries(directorRoleCounts).forEach(([name, count]) => {
+    if (count >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && !overloadedPeople.find((p) => p.name === name)) {
+      overloadedPeople.push({ name, buckets: [], directorRoleCount: count })
+    }
+  })
+
+  return { bucketCoverage, missingCriticalRoles, overloadedPeople }
+}
+
+const computeAll = (profileData, cvProfiles) => {
+  const om = profileData?.ownershipManagement || {}
+  const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
+  const validExecutives = (om.executives || []).filter((e) => e?.name && e.name.trim() !== "")
+  const validShareholders = (om.shareholders || []).filter((s) => s?.name && s.name.trim() !== "")
+
+  const execSplit = validDirectors.reduce((acc, d) => {
+    if (d.execType === "Executive") acc.exec++
+    else if (d.execType === "Non-Executive") acc.nonExec++
+    else acc.unspecified++
+    return acc
+  }, { exec: 0, nonExec: 0, unspecified: 0 })
+
+  const roleCoverage = computeRoleCoveragePure(validDirectors, validExecutives)
+  const pis = pisOf(profileData)
+
+  const board = buildBoardAssessment(pis.totalPIS, profileData, {
+    validDirectors,
+    execSplit,
+    advisorsMeetRegularly: !!profileData?.enterpriseReadiness?.advisorsMeetRegularly,
+    advisorsMeetingFrequency: profileData?.enterpriseReadiness?.advisorsMeetingFrequency,
+    overloadedPeople: roleCoverage.overloadedPeople,
+    boardSkills: computeBoardSkills(validDirectors, validExecutives, cvProfiles),
+    validExecutives,
+    cvProfiles,
+  })
+
+  const gov = calculateGovernanceScore({ ...profileData, ownershipManagement: { ...om, directors: validDirectors } })
+
+  let maturityCategories = (gov.categories || []).map((c) =>
+    /board/i.test(c.name) ? { ...c, score: board.score, boardOverride: true } : c
+  )
+  if (!maturityCategories.some((c) => /board/i.test(c.name))) {
+    maturityCategories = [...maturityCategories, { name: "Board Structure", score: board.score, weight: 25, color: "#6D4C41", boardOverride: true }]
+  }
+  const weightTotal = maturityCategories.reduce((s, c) => s + c.weight, 0) || 1
+  const maturityRaw = maturityCategories.reduce((s, c) => s + c.score * (c.weight / weightTotal), 0)
+  const maturityScore = clamp100(maturityRaw - board.maturityPenalty)
+
+  const ownership = computeOwnershipStructure(profileData)
+  const leadership = computeLeadershipQuality(profileData, cvProfiles, roleCoverage)
+
+  const overallRaw =
+    ownership.score * (SECTION_WEIGHTS.ownership / 100) +
+    leadership.totalScore * (SECTION_WEIGHTS.leadership / 100) +
+    maturityScore * (SECTION_WEIGHTS.maturity / 100)
+
+  const activeConflicts = (om.activeInterests || []).filter(
+    (i) => i?.assignedTo && i.businessStatus && i.businessStatus !== "Closed"
+  )
+
+  return {
+    overall: Math.round(overallRaw),
+    overallRaw,
+    ownership,
+    leadership,
+    maturityScore,
+    maturityCategories,
+    maturityPenalty: board.maturityPenalty,
+    board,
+    pis,
+    roleCoverage,
+    structureDetail: {
+      shareholderCount: validShareholders.length,
+      directorCount: validDirectors.length,
+      execDirectors: execSplit.exec,
+      nonExecDirectors: execSplit.nonExec,
+      unspecifiedDirectors: execSplit.unspecified,
+      executiveCount: validExecutives.length,
+      hasAdvisors: profileData?.enterpriseReadiness?.hasAdvisors === "yes",
+      advisorsMeetRegularly: !!profileData?.enterpriseReadiness?.advisorsMeetRegularly,
+      advisorsMeetingFrequency: profileData?.enterpriseReadiness?.advisorsMeetingFrequency || "Not specified",
+      activeConflictsCount: activeConflicts.length,
+      conflictSummary: activeConflicts.length
+        ? activeConflicts.map((i) => `${i.assignedTo} — active interest in ${i.companyName || "unnamed company"} (${i.businessStatus})`).join("; ")
+        : "None declared",
+      roleCoverage,
+    },
+  }
+}
+
+// The three pillars, in the same shape the Operational Strength card uses for
+// its four categories — so the breakdown renders identically on both.
+const buildPillars = (a) => [
+  {
+    key: "ownership",
+    domain: "governance",
+    label: "Ownership & Structure",
+    color: "#8D6E63",
+    weight: SECTION_WEIGHTS.ownership,
+    percent: a.ownership.score,
+    items: a.ownership.items,
+    source: "Ownership & Management",
+  },
+  {
+    key: "leadership",
+    domain: "leadership",
+    label: "Leadership Quality",
+    color: "#6D4C41",
+    weight: SECTION_WEIGHTS.leadership,
+    percent: a.leadership.totalScore,
+    subCategories: a.leadership.categories,
+    items: a.leadership.items,
+    source: "Ownership & Management, CVs",
+  },
+  {
+    key: "maturity",
+    domain: "governance",
+    label: "Governance Maturity",
+    color: "#A67C52",
+    weight: SECTION_WEIGHTS.maturity,
+    percent: a.maturityScore,
+    subCategories: a.maturityCategories,
+    source: "Governance, Board Structure",
+  },
+].map((p) => ({
+  ...p,
+  rawScore: Math.round((p.percent / 20) * 10) / 10,
+  weightedScore: Math.round(p.percent * (p.weight / 100) * 10) / 10,
+  headroom: Math.round((100 - p.percent) * (p.weight / 100) * 10) / 10,
+}))
+
+// Domain score is its pillars re-weighted against each other, so Leadership
+// reads 0-100 on its own terms rather than as a fraction of the whole card.
+const buildDomains = (pillars) =>
+  DOMAINS.map((d) => {
+    const members = pillars.filter((p) => d.pillarKeys.includes(p.key))
+    const weight = members.reduce((s, p) => s + p.weight, 0)
+    const percent = weight ? members.reduce((s, p) => s + p.percent * (p.weight / weight), 0) : 0
+    return {
+      ...d,
+      pillars: members,
+      weight,
+      percent: Math.round(percent),
+      contribution: Math.round(percent * (weight / 100) * 10) / 10,
+      headroom: Math.round((100 - percent) * (weight / 100) * 10) / 10,
+    }
+  })
+
+
+// ═════════════════════════════════════════════════════════════════════════
+
+export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey, onNavigate }) {
   const [showModal, setShowModal] = useState(false)
 
-  // ── Combined ──
+  // ── One assessment object drives everything, exactly as the Operational
+  //    Strength card does. No score is parsed out of AI text. ──
+  const [assessment, setAssessment] = useState(null)
+  const [potential, setPotential] = useState(null)
   const [overallScore, setOverallScore] = useState(0)
 
-  // ── A. Ownership & Structure ──
-  const [ownershipScore, setOwnershipScore] = useState(0)
-  const [ownershipDetail, setOwnershipDetail] = useState(null) // kept for backward compat, no longer rendered
+  // Derived views kept in state only because the AI prompt builders and the
+  // board panel read them directly.
   const [pisCalculation, setPisCalculation] = useState({
     employees: 0, turnover: 0, liabilities: 0, shareholders: 1,
     turnoverComponent: 0, liabilitiesComponent: 0, totalPIS: 1,
   })
   const [ownershipStructureDetail, setOwnershipStructureDetail] = useState({
-    shareholderCount: 0,
-    directorCount: 0,
-    execDirectors: 0,
-    nonExecDirectors: 0,
-    unspecifiedDirectors: 0,
-    executiveCount: 0,
-    hasAdvisors: false,
-    advisorsMeetRegularly: false,
-    advisorsMeetingFrequency: "",
-    activeConflictsCount: 0,
-    conflictSummary: "None declared",
-    roleCoverage: {
-      bucketCoverage: {}, // { finance: [{name, source}], tech: [...], ... }
-      missingCriticalRoles: [], // [{key, label}]
-      overloadedPeople: [], // [{name, buckets: [label,...], directorRoleCount}]
-    },
+    shareholderCount: 0, directorCount: 0, execDirectors: 0, nonExecDirectors: 0,
+    unspecifiedDirectors: 0, executiveCount: 0, hasAdvisors: false,
+    advisorsMeetRegularly: false, advisorsMeetingFrequency: "",
+    activeConflictsCount: 0, conflictSummary: "None declared",
+    roleCoverage: { bucketCoverage: {}, missingCriticalRoles: [], overloadedPeople: [] },
   })
-
-  // ── B. Leadership Quality ──
-  const [leadershipScore, setLeadershipScore] = useState(0)
-  const [leadershipBreakdown, setLeadershipBreakdown] = useState([])
-  const [leadershipAiResult, setLeadershipAiResult] = useState("")
-  const [confidenceScores, setConfidenceScores] = useState({})
-  const [evidenceTraceability, setEvidenceTraceability] = useState({})
-
-  // ── C. Governance Maturity ──
-  const [maturityScore, setMaturityScore] = useState(0)
-  const [maturityBreakdown, setMaturityBreakdown] = useState([])
+  const [boardAssessment, setBoardAssessment] = useState(null)
   const [governanceStage, setGovernanceStage] = useState("")
   const [governanceRecommendation, setGovernanceRecommendation] = useState("")
-  const [governanceAiResult, setGovernanceAiResult] = useState("")
-  const [boardAssessment, setBoardAssessment] = useState(null) // 5.1 / 5.2 / 5.3
-  const [cvProfiles, setCvProfiles] = useState([]) // uploaded CVs — evidence for board skills
+  const [cvProfiles, setCvProfiles] = useState([])
 
+  // ── AI narrative only. Never a score. ──
+  const [leadershipAiResult, setLeadershipAiResult] = useState("")
+  const [governanceAiResult, setGovernanceAiResult] = useState("")
   const [isEvaluating, setIsEvaluating] = useState(false)
   const [evaluationError, setEvaluationError] = useState("")
+
+  // ── Panels — same set and same default states as Operational Strength ──
+  const [showPotential, setShowPotential] = useState(true)
+  const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
   const [showAboutScore, setShowAboutScore] = useState(false)
-  const [openSection, setOpenSection] = useState("ownership") // which sub-section is expanded
-  const [triggeredByAuto, setTriggeredByAuto] = useState(false)
+  const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
+  const [openItem, setOpenItem] = useState(null)
+  const [openPillar, setOpenPillar] = useState("maturity")
 
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
     return () => (document.body.style.overflow = "")
   }, [showModal])
 
-  // ─────────────────────────────────────────────────────────────────────
-  // PIS calculation — same formula as the standalone PIS card:
-  //   PIS = Employees + (Turnover / R1m) + (Liabilities / R1m) + Shareholders
-  // Displayed at the TOP of Board Structure — it is the input to 5.1
-  // (does this business need a board at all?), so it has to be read first.
-  // ─────────────────────────────────────────────────────────────────────
-  const calculatePIS = () => {
-    const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0
-
-    const turnoverRaw = profileData?.financialOverview?.annualRevenue || "0"
-    const turnover = parseFloat(turnoverRaw.toString().replace(/[R,\s]/g, "")) || 0
-
-    const liabilitiesRaw = profileData?.financialOverview?.existingDebt || "0"
-    const liabilities = parseFloat(liabilitiesRaw.toString().replace(/[R,\s]/g, "")) || 0
-
-    const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1
-
-    const turnoverComponent = turnover / 1000000
-    const liabilitiesComponent = liabilities / 1000000
-    const totalPIS = employees + turnoverComponent + liabilitiesComponent + shareholders
-
-    return {
-      employees,
-      turnover,
-      liabilities,
-      shareholders,
-      turnoverComponent: parseFloat(turnoverComponent.toFixed(2)),
-      liabilitiesComponent: parseFloat(liabilitiesComponent.toFixed(2)),
-      totalPIS: parseFloat(totalPIS.toFixed(2)),
-    }
-  }
-
   // CVs are the strongest evidence of what skills sit on the board — a
   // director's title says what they do, their CV says what they can do.
-  // Loaded once so the deterministic skills matrix can use them without
-  // waiting for an AI run.
   useEffect(() => {
     const userId = auth?.currentUser?.uid
     if (!userId) return
@@ -1154,352 +1367,44 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     return () => { cancelled = true }
   }, [auth?.currentUser?.uid])
 
+  // ── Score — a pure function of (profile, CVs). The AI is not in this path. ──
   useEffect(() => {
     if (!profileData) return
-    setPisCalculation(calculatePIS())
-  }, [
-    profileData?.entityOverview?.employeeCount,
-    profileData?.financialOverview?.annualRevenue,
-    profileData?.financialOverview?.existingDebt,
-    profileData?.ownershipManagement?.shareholders?.length,
-  ])
-
-  // ─────────────────────────────────────────────────────────────────────
-  // Role coverage / concentration risk — takes the already-filtered valid
-  // directors and executives (name-bearing rows only) and works out which
-  // critical operational roles are covered, and by whom. A person covering
-  // 2+ critical buckets, or holding 3+ distinct board roles, comes back in
-  // overloadedPeople as a "spread thin / potential conflict" risk signal.
-  // Displayed under Leadership Quality — role coverage is a leadership
-  // structure concern, not just an ownership structure concern.
-  // ─────────────────────────────────────────────────────────────────────
-  const computeRoleCoverage = (validDirectors, validExecutives) => {
-    const bucketCoverage = {}
-    CRITICAL_ROLE_BUCKETS.forEach((b) => (bucketCoverage[b.key] = []))
-
-    const bucketsByPerson = {} // name -> Set(bucket label)
-
-    // Director roles and executive positions are matched against separate
-    // lists — the two dropdowns share almost no options.
-    const registerRole = (name, roleLabel, source) => {
-      if (!name || !roleLabel) return
-      CRITICAL_ROLE_BUCKETS.forEach((b) => {
-        const list = source === "Director" ? b.directorRoles : b.execRoles
-        if (list.includes(roleLabel)) {
-          bucketCoverage[b.key].push({ name, source })
-          if (!bucketsByPerson[name]) bucketsByPerson[name] = new Set()
-          bucketsByPerson[name].add(b.label)
-        }
-      })
+    try {
+      const a = computeAll(profileData, cvProfiles)
+      setAssessment(a)
+      setOverallScore(a.overall)
+      setPisCalculation(a.pis)
+      setBoardAssessment(a.board)
+      setGovernanceStage(a.board.requirement.stage)
+      setGovernanceRecommendation(a.board.requirement.label)
+      setOwnershipStructureDetail(a.structureDetail)
+      if (onScoreUpdate) onScoreUpdate(a.overall)
+    } catch (e) {
+      console.error("Governance scoring error:", e)
     }
+  }, [profileData, cvProfiles])
 
-    // Only FUNCTIONAL roles are counted towards concentration. "Chairman",
-    // "Board of Directors" and "Executive Director" describe one seat three
-    // ways and used to trip the overload threshold on a normal chairman.
-    const directorRoleCounts = {}
-    ;(validDirectors || []).forEach((d) => {
-      const allRoles = (d.roles || []).map((r) => (r === "Other" ? d.customRole : r)).filter(Boolean)
-      const funcRoles = allRoles.filter((r) => !SEAT_DESCRIPTOR_ROLES.includes(r))
-      directorRoleCounts[d.name] = (directorRoleCounts[d.name] || 0) + funcRoles.length
-      allRoles.forEach((r) => registerRole(d.name, r, "Director"))
-    })
-    ;(validExecutives || []).forEach((e) => {
-      const position = e.position === "Other" ? e.customPosition : e.position
-      registerRole(e.name, position, "Executive")
-    })
+  // ── Potential points — each figure measured by re-running computeAll with
+  //    the action applied. Deferred until the modal opens, because it runs
+  //    roughly fifteen full simulations. ──
+  useEffect(() => {
+    if (!showModal || !profileData || !assessment) return
+    try {
+      setPotential(
+        buildOpportunities(profileData, cvProfiles, (p, c) => computeAll(p, c).overall, assessment.leadership)
+      )
+    } catch (e) {
+      console.error("Potential points error:", e)
+    }
+  }, [showModal, profileData, cvProfiles, assessment])
 
-    const missingCriticalRoles = CRITICAL_ROLE_BUCKETS.filter((b) => bucketCoverage[b.key].length === 0)
-
-    const overloadedPeople = Object.entries(bucketsByPerson)
-      .filter(([, buckets]) => buckets.size >= 2)
-      .map(([name, buckets]) => ({
-        name,
-        buckets: Array.from(buckets),
-        directorRoleCount: directorRoleCounts[name] || 0,
-      }))
-
-    Object.entries(directorRoleCounts).forEach(([name, count]) => {
-      if (count >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && !overloadedPeople.find((p) => p.name === name)) {
-        overloadedPeople.push({ name, buckets: [], directorRoleCount: count })
-      }
-    })
-
-    return { bucketCoverage, missingCriticalRoles, overloadedPeople }
+  const goTo = (route) => {
+    if (!route) return
+    if (onNavigate) onNavigate(route)
+    else window.location.assign(route)
   }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // Deterministic scoring — runs on every profileData change, no AI needed.
-  //
-  // Ownership & Structure: structural completeness heuristic based on
-  // shareholder presence, director count/mix, executive presence, advisors,
-  // and conflict-of-interest signals.
-  //
-  // Governance Maturity: ALL calculateGovernanceScore() categories are
-  // included, re-normalised to 100%. The Board Structure category score is
-  // OVERRIDDEN with the 5.1/5.2/5.3 assessment below, so a business that
-  // needs a board and doesn't have one is penalised here rather than being
-  // quietly averaged out. The shortfall also applies a second penalty to
-  // the Governance Maturity total.
-  // ─────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!profileData) return
-
-    const om = profileData?.ownershipManagement || {}
-    const validShareholders = (om.shareholders || []).filter((s) => s?.name && s.name.trim() !== "")
-    const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
-    const validExecutives = (om.executives || []).filter((e) => e?.name && e.name.trim() !== "")
-
-    const execSplit = validDirectors.reduce(
-      (acc, d) => {
-        if (d.execType === "Executive") acc.exec++
-        else if (d.execType === "Non-Executive") acc.nonExec++
-        else acc.unspecified++
-        return acc
-      },
-      { exec: 0, nonExec: 0, unspecified: 0 }
-    )
-
-    const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
-
-    const cleanProfile = {
-      ...profileData,
-      ownershipManagement: { ...om, directors: validDirectors },
-    }
-
-    const gov = calculateGovernanceScore(cleanProfile)
-
-    // ── Board Structure: 5.1 → 5.2 → 5.3 ──
-    // PIS is taken from the locally displayed calculation so the number the
-    // user reads at the top of the section is the same number that drives
-    // the requirement in 5.1.
-    const pis = calculatePIS().totalPIS
-    const board = buildBoardAssessment(pis, profileData, {
-      validDirectors,
-      execSplit,
-      advisorsMeetRegularly: !!profileData?.enterpriseReadiness?.advisorsMeetRegularly,
-      advisorsMeetingFrequency: profileData?.enterpriseReadiness?.advisorsMeetingFrequency,
-      overloadedPeople: roleCoverage.overloadedPeople,
-      boardSkills: computeBoardSkills(validDirectors, validExecutives, cvProfiles),
-      validExecutives,
-      cvProfiles,
-    })
-    setBoardAssessment(board)
-
-    // ── Governance Maturity — Board Structure score replaced by ours ──
-    let categories = (gov.categories || []).map((c) =>
-      /board/i.test(c.name)
-        ? { ...c, score: board.score, boardOverride: true }
-        : c
-    )
-    if (!categories.some((c) => /board/i.test(c.name))) {
-      categories = [...categories, { name: "Board Structure", score: board.score, weight: 25, color: "#6D4C41", boardOverride: true }]
-    }
-
-    const allWeightTotal = categories.reduce((s, c) => s + c.weight, 0) || 1
-    const maturityRaw = categories.reduce((s, c) => s + c.score * (c.weight / allWeightTotal), 0)
-    const maturityOverall = clamp100(maturityRaw - board.maturityPenalty)
-
-    setMaturityScore(maturityOverall)
-    setMaturityBreakdown(categories)
-
-    // Stage and recommendation now come from the same PIS the user sees,
-    // rather than from two different sources that could disagree.
-    setGovernanceStage(board.requirement.stage)
-    setGovernanceRecommendation(board.requirement.label)
-
-    // ── Ownership & Structure display detail ──
-    const activeInterests = om.activeInterests || []
-    const previousInterests = om.previousInterests || []
-    const activeConflicts = activeInterests.filter(
-      (i) => i?.assignedTo && i.businessStatus && i.businessStatus !== "Closed"
-    )
-    const conflictSummary =
-      activeConflicts.length > 0
-        ? activeConflicts
-            .map((i) => `${i.assignedTo} — active interest in ${i.companyName || "unnamed company"} (${i.businessStatus})`)
-            .join("; ")
-        : "None declared"
-
-    // ── Ownership & Structure score — structural completeness heuristic ──
-    const shareholderScore = validShareholders.length >= 1
-      ? (validShareholders.length <= 8 ? 100 : 60)
-      : 0
-    const directorScore = validDirectors.length === 0
-      ? 0
-      : validDirectors.length === 1 ? 55
-      : validDirectors.length <= 6 ? 100
-      : 75
-    const executiveScore = validExecutives.length >= 1 ? 100 : 0
-    const advisorBonus = profileData?.enterpriseReadiness?.hasAdvisors === "yes" ? 100 : 0
-    // Active undisclosed conflicts carry a penalty; declared is better than hidden
-    const conflictPenalty = Math.min(activeConflicts.length * 15, 40)
-    const rawOwnershipScore = Math.round(
-      shareholderScore * 0.25 +
-      directorScore * 0.35 +
-      executiveScore * 0.20 +
-      advisorBonus * 0.15 +
-      5 // base points for having a profile at all
-    ) - conflictPenalty
-    setOwnershipScore(Math.min(Math.max(rawOwnershipScore, 0), 100))
-
-    setOwnershipStructureDetail({
-      shareholderCount: validShareholders.length,
-      directorCount: validDirectors.length,
-      execDirectors: execSplit.exec,
-      nonExecDirectors: execSplit.nonExec,
-      unspecifiedDirectors: execSplit.unspecified,
-      executiveCount: validExecutives.length,
-      hasAdvisors: profileData?.enterpriseReadiness?.hasAdvisors === "yes",
-      advisorsMeetRegularly: !!profileData?.enterpriseReadiness?.advisorsMeetRegularly,
-      advisorsMeetingFrequency: profileData?.enterpriseReadiness?.advisorsMeetingFrequency || "Not specified",
-      activeConflictsCount: activeConflicts.length,
-      conflictSummary,
-      roleCoverage,
-    })
-  }, [
-    profileData?.entityOverview?.operationStage,
-    profileData?.entityOverview?.employeeCount,
-    profileData?.governance,
-    profileData?.ownershipManagement?.directors,
-    profileData?.ownershipManagement?.businessLeadership?.decisionGovernance,
-    profileData?.ownershipManagement?.businessLeadership?.opennessToAdvice,
-    profileData?.enterpriseReadiness?.hasAdvisors,
-    profileData?.enterpriseReadiness?.advisorsMeetRegularly,
-    profileData?.enterpriseReadiness?.advisorsMeetingFrequency,
-    profileData?.financialOverview?.annualRevenue,
-    profileData?.financialOverview?.existingDebt,
-    profileData?.ownershipManagement?.shareholders?.length,
-    profileData?.ownershipManagement?.executives?.length,
-    profileData?.ownershipManagement?.activeInterests,
-    cvProfiles,
-  ])
-
-  // ─────────────────────────────────────────────────────────────────────
-  // Leadership Quality — parsed from AI text (credentials / structure /
-  // behaviour), same rubric as the old standalone LeadershipScoreCard.
-  // ─────────────────────────────────────────────────────────────────────
-  const parseLeadershipAiScores = (text) => {
-    const categories = {
-      leadership_credentials: ["Leadership Credentials"],
-      leadership_structure: ["Leadership Structure"],
-      leadership_behaviour: ["Leadership Behaviour"],
-    }
-
-    const cleanedText = text.replace(/\*\*(.*?)\*\*/g, "$1")
-    const scores = {}
-    const evidenceMap = {}
-    const confidenceMap = {}
-
-    // Split into ### chunks and search the WHOLE chunk (heading included),
-    // not just the text after the first line break. The model sometimes
-    // crams "Score: X/5   Confidence: ...   Evidence: ..." onto the same
-    // line as the "### N. Label" heading itself — a body-only search misses
-    // that entirely, which is why a section can show correctly in the
-    // detailed analysis text but still score 0 in the breakdown.
-    const chunks = cleanedText.split(/(?=###\s)/g)
-
-    Object.entries(categories).forEach(([key, labels]) => {
-      let found = null
-      let evidence = null
-      let confidence = "Medium"
-
-      for (const label of labels) {
-        const chunk = chunks.find((c) => new RegExp(`###\\s*\\d*\\.?\\s*${label}`, "i").test(c))
-        if (chunk) {
-          const evidencePatterns = [/Evidence:?\s*([^\n]+)/i, /Based on:?\s*([^\n]+)/i, /Supporting data:?\s*([^\n]+)/i]
-          for (const p of evidencePatterns) {
-            const mm = chunk.match(p)
-            if (mm) { evidence = mm[1].trim(); break }
-          }
-          const confidencePatterns = [/Confidence:?\s*(High|Medium|Low)/i, /Confidence level:?\s*(High|Medium|Low)/i]
-          for (const p of confidencePatterns) {
-            const mm = chunk.match(p)
-            if (mm) { confidence = mm[1]; break }
-          }
-          const scorePatterns = [
-            /Score\s*:\s*(\d(?:\.\d)?)\s*\/\s*5/i,
-            /Score\s*:\s*(\d(?:\.\d)?)/i,
-            /(\d(?:\.\d)?)\s*\/\s*5/i,
-            /(\d(?:\.\d)?)\s*out\s*of\s*5/i,
-            /(\d(?:\.\d)?)\s*\*\s*\d+%/i,
-          ]
-          for (const p of scorePatterns) {
-            const mm = chunk.match(p)
-            if (mm) { found = parseFloat(mm[1]); break }
-          }
-        }
-        if (found != null) break
-      }
-
-      if (found != null) {
-        scores[key] = Math.min(Math.max(found, 0), 5)
-        if (evidence) evidenceMap[key] = evidence
-        if (confidence) confidenceMap[key] = confidence
-      }
-    })
-
-    setConfidenceScores(confidenceMap)
-    setEvidenceTraceability(evidenceMap)
-    return scores
-  }
-
-  const calculateLeadershipQuality = (aiText) => {
-    const weightings = { credentials: 40, structure: 30, behaviour: 30 }
-    const ai = aiText ? parseLeadershipAiScores(aiText) : {}
-    const keyMap = {
-      credentials: ["leadership_credentials"],
-      structure: ["leadership_structure"],
-      behaviour: ["leadership_behaviour"],
-    }
-    const categoryNames = {
-      credentials: "Leadership Credentials",
-      structure: "Leadership Structure",
-      behaviour: "Leadership Behaviour",
-    }
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52"]
-
-    const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
-      const raw = keyMap[key].reduce((acc, k) => (ai[k] != null ? ai[k] : acc), null) ?? 0
-      const percent = (raw / 5) * 100
-      const weighted = percent * (weightings[key] / 100)
-      return {
-        name: label,
-        score: Math.round(percent),
-        weight: weightings[key],
-        weightedScore: Math.round(weighted),
-        color: colors[i],
-        rawScore: raw,
-        maxScore: 5,
-      }
-    })
-
-    const totalScore = Math.round(breakdown.reduce((s, x) => s + x.weightedScore, 0))
-    return { totalScore, breakdown }
-  }
-
-  useEffect(() => {
-    if (!leadershipAiResult) return
-    const result = calculateLeadershipQuality(leadershipAiResult)
-    setLeadershipScore(result.totalScore)
-    setLeadershipBreakdown(result.breakdown)
-  }, [leadershipAiResult])
-
-  // ─────────────────────────────────────────────────────────────────────
-  // Combined overall score
-  // ─────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const overall = Math.round(
-      ownershipScore * (SECTION_WEIGHTS.ownership / 100) +
-      leadershipScore * (SECTION_WEIGHTS.leadership / 100) +
-      maturityScore * (SECTION_WEIGHTS.maturity / 100)
-    )
-    setOverallScore(overall)
-    if (onScoreUpdate) onScoreUpdate(overall)
-  }, [ownershipScore, leadershipScore, maturityScore])
-
-  // ─────────────────────────────────────────────────────────────────────
-  // AI evaluation — fires the two backend prompts in parallel, then merges
-  // ─────────────────────────────────────────────────────────────────────
   const prepareLeadershipData = async (userId) => {
     let cvText = ""
     try {
@@ -1558,7 +1463,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     // ── Critical role coverage & role-concentration risk — feeds Leadership
     // Structure (coverage gaps) and Leadership Behaviour (one person spread
     // across multiple critical roles = succession/conflict-of-interest risk) ──
-    const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
+    const roleCoverage = computeRoleCoveragePure(validDirectors, validExecutives)
     const coverageLines = CRITICAL_ROLE_BUCKETS.map((b) => {
       const holders = roleCoverage.bucketCoverage[b.key] || []
       return holders.length > 0
@@ -1780,8 +1685,8 @@ HOW TO HANDLE MISSING EVIDENCE: where a director has NO CV on file, or a CV that
         },
         { exec: 0, nonExec: 0, unspecified: 0 }
       )
-      const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
-      const pisCalc = calculatePIS()
+      const roleCoverage = computeRoleCoveragePure(validDirectors, validExecutives)
+      const pisCalc = pisOf(profileData)
       const board = buildBoardAssessment(pisCalc.totalPIS, profileData, {
         validDirectors,
         execSplit,
@@ -1849,7 +1754,6 @@ HOW TO HANDLE MISSING EVIDENCE: where a director has NO CV on file, or a CV that
         const data = docSnap.data()
         const needsRun = data.triggerLeadershipEvaluation === true || data.triggerGovernanceEvaluation === true
         if (needsRun && !isEvaluating) {
-          setTriggeredByAuto(true)
           await runAiEvaluation()
           await updateDoc(profileRef, { triggerLeadershipEvaluation: false, triggerGovernanceEvaluation: false })
         }
@@ -1866,8 +1770,7 @@ HOW TO HANDLE MISSING EVIDENCE: where a director has NO CV on file, or a CV that
   }, [auth?.currentUser?.uid, apiKey])
 
   // ─────────────────────────────────────────────────────────────────────
-  // Presentation helpers
-  // ─────────────────────────────────────────────────────────────────────
+
   const getProgressBarColor = (score) => {
     if (score > 90) return "#1B5E20"
     if (score >= 81) return "#4CAF50"
@@ -2057,68 +1960,6 @@ HOW TO HANDLE MISSING EVIDENCE: where a director has NO CV on file, or a CV that
         </div>
       )
     }).filter(Boolean)
-  }
-
-  // ── Reusable collapsible sub-section ──
-  const SubSection = ({ id, title, score, breakdown, aiText, extra, aiInjections }) => {
-    const isOpen = openSection === id
-    const hasInjections = aiInjections && Object.keys(aiInjections).length > 0
-    // Show extra as fallback only: always for non-AI sections; only pre-load for AI sections
-    const showExtra = extra && (!hasInjections || !aiText)
-
-    return (
-      <div style={{ marginTop: "16px", border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden" }}>
-        <div
-          style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold" }}
-          onClick={() => setOpenSection(isOpen ? "" : id)}
-        >
-          <span>{title}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "13px", fontWeight: "700" }}>{score}%</span>
-            <ChevronDown size={18} style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
-          </div>
-        </div>
-        {isOpen && (
-          <div style={{ backgroundColor: "#f5f2f0", padding: "18px" }}>
-            {showExtra && extra}
-            {breakdown && breakdown.length > 0 && (
-              <div style={{ marginBottom: "10px" }}>
-                {breakdown.map((item, i) => (
-                  <div key={i} style={{ padding: "10px 14px", background: "white", marginBottom: "6px", borderRadius: "8px", border: "1px solid #f0e8e0" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
-                      <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: "140px" }}>
-                        <div style={{ backgroundColor: item.color, width: "10px", height: "10px", borderRadius: "50%", marginRight: "10px", flexShrink: 0 }} />
-                        <div>
-                          <div style={{ fontWeight: "600", color: "#5d4037", fontSize: "13px" }}>{item.name}</div>
-                          <div style={{ fontSize: "11px", color: "#8d6e63", fontStyle: "italic" }}>
-                            {item.rawScore != null ? `${item.rawScore}/${item.maxScore ?? 5} × ${item.weight}% weight = ${item.weightedScore}%` : `weight ${item.weight}%`}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div style={{ width: "60px", height: "7px", background: "#f3e8dc", borderRadius: "4px", overflow: "hidden", border: "1px solid #d6b88a" }}>
-                          <div style={{ width: `${item.score}%`, height: "100%", background: getProgressBarColor(item.score), borderRadius: "4px" }} />
-                        </div>
-                        <span style={{ fontWeight: "600", color: "#5d4037", fontSize: "13px", minWidth: "32px", textAlign: "right" }}>{item.score}%</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {aiText ? (
-              <div style={{ backgroundColor: "white", padding: "16px", borderRadius: "8px", border: "1px solid #e8d8cf", maxHeight: "420px", overflowY: "auto" }}>
-                {formatAiResult(aiText, aiInjections || {})}
-              </div>
-            ) : (
-              <div style={{ fontSize: "12px", color: "#8d6e63", fontStyle: "italic", display: "flex", alignItems: "center", gap: "6px" }}>
-                <AlertCircle size={14} /> No AI analysis yet — click "Load AI analysis" below.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    )
   }
 
   const o = ownershipStructureDetail
@@ -2472,30 +2313,288 @@ HOW TO HANDLE MISSING EVIDENCE: where a director has NO CV on file, or a CV that
     </div>
   )
 
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Presentation — same components, same styling and same panel order as
+  // the Operational Strength card.
+  // ─────────────────────────────────────────────────────────────────────
+  const barColor = getProgressBarColor
+
+  const a = assessment
+  const pillars = a ? buildPillars(a) : []
+  const domains = a ? buildDomains(pillars) : []
+
+  const STATE_STYLE = {
+    counted: { dot: "#4CAF50", label: "Counted in full", text: "#2E7D32" },
+    partial: { dot: "#FF9800", label: "Partly counted", text: "#EF6C00" },
+    missing: { dot: "#F44336", label: "Not answered", text: "#C62828" },
+  }
+
+  const Section = ({ title, right, open, onToggle, children }) => (
+    <div style={{ marginTop: "16px", border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden" }}>
+      <div
+        style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold" }}
+        onClick={onToggle}
+      >
+        <span>{title}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {right && <span style={{ fontSize: "13px", fontWeight: 700 }}>{right}</span>}
+          <ChevronDown size={18} style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+        </div>
+      </div>
+      {open && <div style={{ backgroundColor: "#f5f2f0", padding: "18px" }}>{children}</div>}
+    </div>
+  )
+
+  // ── One claimable action, expandable to a Now → With this done comparison ──
+  const PotentialItem = ({ item, index }) => {
+    const open = openItem === item.key
+    const chip = item.note || item.section
+
+    return (
+      <div style={{ border: `1px solid ${open ? "#c8e6c9" : "#f0e8e0"}`, background: "white", borderRadius: "10px", marginBottom: "8px", overflow: "hidden", transition: "border-color 0.2s ease" }}>
+        <div
+          onClick={() => setOpenItem(open ? null : item.key)}
+          style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", cursor: "pointer", background: open ? "#f7fbf7" : "white" }}
+        >
+          <span style={{ color: "#a1887f", fontWeight: 800, fontSize: "12px", minWidth: "18px" }}>{index + 1}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, color: "#4e342e", fontSize: "13px" }}>{item.label}</div>
+            <div style={{ fontSize: "11px", color: "#8d6e63" }}>{chip}</div>
+          </div>
+          <span style={{ backgroundColor: "#e8f5e9", color: "#1B5E20", border: "1px solid #c8e6c9", borderRadius: "4px", padding: "3px 8px", fontWeight: 800, fontSize: "11.5px", whiteSpace: "nowrap" }}>
+            {fmtPts(item.pointValue)}
+          </span>
+          <ChevronDown size={16} style={{ color: "#a1887f", flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+        </div>
+
+        {open && (
+          <div style={{ padding: "14px", borderTop: "1px dashed #e8d8cf", background: "#fcfbfa" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "14px", padding: "14px", background: "linear-gradient(135deg,#f1f8f1 0%,#e8f5e9 100%)", border: "1px solid #c8e6c9", borderRadius: "10px", marginBottom: "12px" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "9.5px", color: "#6d4c41", textTransform: "uppercase", letterSpacing: "0.6px", fontWeight: 700 }}>Now</div>
+                <div style={{ fontSize: "26px", fontWeight: 800, color: "#8d6e63", lineHeight: 1.1 }}>{overallScore}%</div>
+              </div>
+              <div style={{ fontSize: "22px", color: "#1B5E20", fontWeight: 800 }}>→</div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "9.5px", color: "#1B5E20", textTransform: "uppercase", letterSpacing: "0.6px", fontWeight: 700 }}>With this done</div>
+                <div style={{ fontSize: "30px", fontWeight: 800, color: "#1B5E20", lineHeight: 1.1 }}>{item.projected}%</div>
+                <div style={{ fontSize: "11px", color: "#2E7D32", fontWeight: 700 }}>{fmtPts(item.pointValue)}</div>
+              </div>
+            </div>
+
+            {item.importance && (
+              <>
+                <div style={{ fontSize: "10px", color: "#8d6e63", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>
+                  Why funders ask for it
+                </div>
+                <div style={{ fontSize: "12.5px", color: "#5d4037", marginBottom: "10px", lineHeight: 1.6 }}>{item.importance}</div>
+              </>
+            )}
+
+            <div style={{ fontSize: "10px", color: "#8d6e63", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>
+              What to do
+            </div>
+            <div style={{ fontSize: "12.5px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>{item.action}</div>
+
+            <button
+              onClick={() => goTo(item.route)}
+              disabled={!item.route}
+              style={{ padding: "9px 16px", background: "linear-gradient(135deg,#5d4037 0%,#4a2c20 100%)", color: "white", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "12px", cursor: item.route ? "pointer" : "not-allowed", opacity: item.route ? 1 : 0.55, display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              Go to {item.section} <span style={{ fontSize: "13px" }}>→</span>
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── One scored item inside the breakdown ──
+  const ItemRow = ({ item }) => {
+    const st = STATE_STYLE[item.state] || STATE_STYLE.missing
+    return (
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "9px" }}>
+        <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", marginTop: "6px", flexShrink: 0, backgroundColor: st.dot }} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <strong style={{ color: "#4e342e" }}>{item.label}</strong>
+          <span style={{ color: "#a1887f", fontSize: "11px" }}>
+            {" "}· {item.earned}/{item.points} item points · <span style={{ color: st.text, fontWeight: 700 }}>{st.label}</span>
+            {item.selfDeclared ? " · self-assessed" : ""}
+          </span>
+          <br />
+          {item.evidence && <span style={{ color: "#6d4c41" }}>{item.evidence}</span>}
+          {item.reason && <span style={{ display: "block", color: "#8d3a2e" }}>{item.reason}</span>}
+          {item.fix && <span style={{ display: "block", color: "#8d3a2e" }}>{item.fix}</span>}
+          {!item.reason && !item.fix && item.guidance && item.withheld > 0 && (
+            <span style={{ display: "block", color: "#8d6e63", fontStyle: "italic", fontSize: "11.5px" }}>{item.guidance}</span>
+          )}
+          {item.withheld > 0 && item.route && (
+            <button
+              onClick={() => goTo(item.route)}
+              style={{ marginTop: "6px", background: "none", border: "1px solid #d6b88a", color: "#5d4037", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
+            >
+              Go to {item.section} →
+            </button>
+          )}
+        </span>
+        {item.withheld > 0 && (
+          <span style={{ backgroundColor: "#f5f2f0", color: "#8d6e63", border: "1px solid #d7ccc8", borderRadius: "4px", padding: "2px 7px", fontWeight: 800, fontSize: "11.5px", whiteSpace: "nowrap", marginTop: "2px" }}>
+            {item.withheld} pts
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  // ── One pillar in the breakdown, same shape as an Operational Strength
+  //    category row. Governance Maturity carries the board panel. ──
+  const PillarBlock = ({ p }) => {
+    const open = openPillar === p.key
+    return (
+      <div style={{ background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", padding: "14px", marginBottom: "8px" }}>
+        <div
+          onClick={() => setOpenPillar(open ? "" : p.key)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", cursor: "pointer" }}
+        >
+          <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+            <div style={{ backgroundColor: p.color, width: "12px", height: "12px", borderRadius: "50%", marginRight: "12px", flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 600, color: "#5d4037", fontSize: "14px" }}>{p.label}</div>
+              <div style={{ fontSize: "11.5px", color: "#8d6e63", fontStyle: "italic" }}>
+                {p.rawScore}/5 → {p.percent}% × {p.weight}% weight = {p.weightedScore} points
+                {p.headroom > 0 ? ` · ${fmtPts(p.headroom)} unclaimed here` : " · fully claimed"}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ width: "80px", height: "8px", background: "#f3e8dc", borderRadius: "4px", overflow: "hidden", border: "1px solid #d6b88a" }}>
+              <div style={{ width: `${p.percent}%`, height: "100%", background: barColor(p.percent), borderRadius: "4px", transition: "width 0.3s ease" }} />
+            </div>
+            <span style={{ fontWeight: 600, color: "#5d4037", fontSize: "14px", minWidth: "35px", textAlign: "right" }}>{p.percent}%</span>
+            <ChevronDown size={16} style={{ color: "#a1887f", flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+          </div>
+        </div>
+
+        {open && (
+          <div style={{ borderTop: "1px dashed #e8d8cf", paddingTop: "10px", marginTop: "10px", fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
+            {/* Sub-categories, where the pillar has them */}
+            {p.subCategories && p.subCategories.map((c, i) => (
+              <div key={c.key || c.name || i} style={{ marginBottom: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "6px" }}>
+                  <span style={{ fontWeight: 700, color: "#4e342e", fontSize: "12.5px" }}>{c.name}</span>
+                  <span style={{ fontSize: "11.5px", color: "#8d6e63" }}>
+                    {c.score}% × {c.weight}% weight
+                    {c.boardOverride ? " · from the board assessment below" : ""}
+                  </span>
+                </div>
+                {c.items && c.items.map((it) => <ItemRow key={it.key} item={it} />)}
+              </div>
+            ))}
+
+            {/* Flat item list, where it has no sub-categories */}
+            {!p.subCategories && p.items && p.items.map((it) => <ItemRow key={it.key} item={it} />)}
+
+            {/* Governance Maturity carries the 5.1 → 5.2 → 5.3 board panel */}
+            {p.key === "maturity" && boardStructurePanel && (
+              <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px dashed #e8d8cf" }}>
+                <div style={{ fontWeight: 800, color: "#4e342e", marginBottom: "10px", fontSize: "12.5px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Board structure
+                </div>
+                {boardStructurePanel}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── A domain band: heading, its own 0-100 score, then its pillars ──
+  const DomainGroup = ({ domain }) => (
+    <div style={{ marginBottom: "20px" }}>
+      <div
+        style={{
+          background: `linear-gradient(135deg, ${domain.color} 0%, #4e342e 100%)`,
+          color: "white",
+          borderRadius: "10px 10px 0 0",
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "12px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: "13px", letterSpacing: "1px", textTransform: "uppercase" }}>
+            {domain.label}
+          </div>
+          <div style={{ fontSize: "11.5px", opacity: 0.9, fontStyle: "italic", marginTop: "2px" }}>
+            {domain.question}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "9.5px", opacity: 0.85, textTransform: "uppercase", letterSpacing: "0.6px", fontWeight: 700 }}>
+              {domain.weight}% of the score
+            </div>
+            <div style={{ fontSize: "20px", fontWeight: 800, lineHeight: 1.1 }}>{domain.percent}%</div>
+          </div>
+          <div style={{ width: "60px", height: "8px", background: "rgba(255,255,255,0.25)", borderRadius: "4px", overflow: "hidden" }}>
+            <div style={{ width: `${domain.percent}%`, height: "100%", background: "white", borderRadius: "4px", transition: "width 0.3s ease" }} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: domain.accent, border: `1px solid ${domain.color}33`, borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px" }}>
+        {domain.pillars.map((p) => <PillarBlock key={p.key} p={p} />)}
+        <div style={{ fontSize: "11px", color: "#6d4c41", padding: "2px 4px", lineHeight: 1.6 }}>
+          Contributes <strong>{domain.contribution}</strong> of the {overallScore}% overall
+          {domain.headroom > 0 ? ` · ${fmtPts(domain.headroom)} unclaimed in this domain` : " · fully claimed"}
+        </div>
+      </div>
+    </div>
+  )
+
+  const aiInjections = {
+    "board structure": { position: "top", content: boardStructurePanel },
+  }
+
+
   return (
     <>
-      {/* ── Score Card ── */}
-      <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
-        <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 20px 20px 20px", color: "white", position: "relative" }}>
+      {/* ── Card ── */}
+      <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141,110,99,0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
+        <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 30px 20px 30px", color: "white", position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership &amp; Governance</h2>
+            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership &amp; Governance</h2>
+            <Users size={24} style={{ opacity: 0.8 }} />
           </div>
           <p style={{ margin: 0, fontSize: "13px", opacity: 0.9 }}>Who's in charge, and can we trust them</p>
           <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "80px", height: "80px", background: "rgba(255,255,255,0.1)", borderRadius: "50%", opacity: 0.6 }} />
+          <div style={{ position: "absolute", bottom: "-10px", left: "-10px", width: "60px", height: "60px", background: "rgba(255,255,255,0.05)", borderRadius: "50%" }} />
         </div>
 
         <div style={{ padding: "24px", background: "white", textAlign: "center" }}>
           <div style={{ position: "relative", display: "inline-block", marginBottom: "24px" }}>
-            <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "110px", height: "110px", border: `4px solid ${scoreLevel.color}`, borderRadius: "50%", background: "linear-gradient(135deg, #ffffff 0%, #f8fff8 100%)", boxShadow: `0 6px 20px ${scoreLevel.color}30`, fontWeight: "bold" }}>
-              <span style={{ fontSize: "26px", fontWeight: "800", lineHeight: 1 }}>{overallScore}%</span>
+            <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "110px", height: "110px", border: `4px solid ${scoreLevel.color}`, borderRadius: "50%", background: "linear-gradient(135deg,#fff 0%,#f8fff8 100%)", boxShadow: `0 6px 20px ${scoreLevel.color}30`, fontWeight: "bold" }}>
+              <span style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1 }}>{overallScore}%</span>
               <div style={{ position: "absolute", top: "-6px", left: "-6px", right: "-6px", bottom: "-6px", border: `2px solid ${scoreLevel.color}20`, borderRadius: "50%", animation: "pulse 2s infinite" }} />
             </div>
-            <div style={{ position: "absolute", bottom: "-12px", left: "50%", transform: "translateX(-50%)", backgroundColor: scoreLevel.color, color: "white", padding: "6px 16px", borderRadius: "20px", fontSize: "10px", fontWeight: "600", letterSpacing: "0.5px", boxShadow: `0 4px 12px ${scoreLevel.color}40`, border: "2px solid white", whiteSpace: "nowrap" }}>
+            <div style={{ position: "absolute", bottom: "-12px", left: "50%", transform: "translateX(-50%)", backgroundColor: scoreLevel.color, color: "white", padding: "6px 16px", borderRadius: "20px", fontSize: "10px", fontWeight: 600, letterSpacing: "0.5px", boxShadow: `0 4px 12px ${scoreLevel.color}40`, border: "2px solid white", whiteSpace: "nowrap" }}>
               {scoreLevel.level}
             </div>
           </div>
 
-          <button onClick={() => setShowModal(true)} style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "linear-gradient(135deg, #5d4037 0%, #4a2c20 100%)", color: "white", marginTop: "15px", border: "none", fontWeight: "600", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", boxShadow: "0 4px 16px rgba(93,64,55,0.3)", whiteSpace: "nowrap" }}>
+
+        
+          <button
+            onClick={() => setShowModal(true)}
+            style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "linear-gradient(135deg,#5d4037 0%,#4a2c20 100%)", color: "white", marginTop: "15px", border: "none", fontWeight: 600, fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", transition: "all 0.3s ease", boxShadow: "0 4px 16px rgba(93,64,55,0.3)", whiteSpace: "nowrap" }}
+            onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(93,64,55,0.4)" }}
+            onMouseOut={(e) => { e.currentTarget.style.transform = "translateY(0px)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(93,64,55,0.3)" }}
+          >
             <span>Score breakdown</span>
             <ChevronDown size={16} />
           </button>
@@ -2506,251 +2605,366 @@ HOW TO HANDLE MISSING EVIDENCE: where a director has NO CV on file, or a CV that
 
       {/* ── Modal ── */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999999, padding: "20px" }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
-          <div style={{ position: "relative", backgroundColor: "#ffffff", borderRadius: "12px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", zIndex: 999999, maxHeight: "90vh", overflowY: "auto", width: "90%", maxWidth: "780px", border: "1px solid #ccc" }}
-            onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999999, padding: "20px" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}
+        >
+          <div
+            style={{ position: "relative", backgroundColor: "#ffffff", borderRadius: "12px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", maxHeight: "90vh", overflowY: "auto", width: "90%", maxWidth: "780px", border: "1px solid #ccc" }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setShowModal(false)}
-              style={{ position: "absolute", top: "15px", right: "15px", background: "#fff", border: "2px solid #ddd", fontSize: "20px", cursor: "pointer", color: "#666", zIndex: 999999, width: "35px", height: "35px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", fontWeight: "bold" }}
+              style={{ position: "absolute", top: "15px", right: "15px", background: "#fff", border: "2px solid #ddd", fontSize: "20px", cursor: "pointer", color: "#666", zIndex: 2, width: "35px", height: "35px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", fontWeight: "bold" }}
             >
               {"×"}
             </button>
+
             <div style={{ padding: "30px 20px 20px 20px" }}>
-              <h3 style={{ margin: "0 0 20px 0", fontSize: "24px", fontWeight: "600", color: "#5d4037", textAlign: "center" }}>
-                Leadership &amp; Governance Score breakdown
+              <h3 style={{ margin: "0 0 20px 0", fontSize: "24px", fontWeight: 600, color: "#5d4037", textAlign: "center" }}>
+                Leadership &amp; governance breakdown
               </h3>
 
-              <div style={{ textAlign: "center", marginBottom: "30px", padding: "20px", background: "linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)", borderRadius: "12px", border: "1px solid #d6b88a" }}>
-                <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "120px", height: "120px", border: `4px solid ${scoreLevel.color}`, borderRadius: "50%", background: "white", boxShadow: "0 4px 12px rgba(139,69,19,0.2)", marginBottom: "15px" }}>
-                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#5d4037", lineHeight: 1 }}>{overallScore}%</span>
-                  <span style={{ color: scoreLevel.color, fontSize: "12px", fontWeight: "600", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    {scoreLevel.level}
-                  </span>
+              {/* ── Header block ── */}
+              <div style={{ textAlign: "center", padding: "20px", background: "linear-gradient(135deg,#fdf8f6 0%,#f3e8dc 100%)", borderRadius: "12px", border: "1px solid #d6b88a" }}>
+                <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "120px", height: "120px", border: `4px solid ${scoreLevel.color}`, borderRadius: "50%", background: "white", boxShadow: "0 4px 12px rgba(139,69,19,0.2)", marginBottom: "12px" }}>
+                  <span style={{ fontSize: "28px", fontWeight: 700, color: "#5d4037", lineHeight: 1 }}>{overallScore}%</span>
+                  <span style={{ color: scoreLevel.color, fontSize: "12px", fontWeight: 600, marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{scoreLevel.level}</span>
                 </div>
+
                 {governanceStage && (
-                  <div style={{ marginTop: "6px" }}>
-                    <span style={{ display: "inline-block", padding: "6px 16px", background: "#fdecea", border: "1px solid #e6b8ac", borderRadius: "20px", color: "#8d6e63", fontWeight: "600", fontSize: "12px" }}>
-                      Business stage: {governanceStage}{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
-                    </span>
+                  <div style={{ fontSize: "14px", color: "#6d4c41" }}>
+                    Governance stage:{" "}
+                    <strong style={{ color: "#5d4037" }}>
+                      {governanceStage}{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
+                    </strong>
                   </div>
                 )}
+
+                {domains.length > 0 && (
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "14px", flexWrap: "wrap" }}>
+                    {domains.map((d) => (
+                      <div
+                        key={d.key}
+                        style={{
+                          flex: "1 1 180px",
+                          maxWidth: "260px",
+                          background: "white",
+                          border: `2px solid ${d.color}`,
+                          borderRadius: "10px",
+                          padding: "10px 12px",
+                          textAlign: "left",
+                        }}
+                      >
+                        <div style={{ fontSize: "10px", fontWeight: 800, color: d.color, textTransform: "uppercase", letterSpacing: "1px" }}>
+                          {d.label}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "2px" }}>
+                          <span style={{ fontSize: "22px", fontWeight: 800, color: "#4e342e", lineHeight: 1 }}>{d.percent}%</span>
+                          <span style={{ fontSize: "10.5px", color: "#8d6e63" }}>{d.weight}% of the score</span>
+                        </div>
+                        <div style={{ height: "6px", background: "#f3e8dc", borderRadius: "3px", overflow: "hidden", marginTop: "6px", border: "1px solid #e6d3c4" }}>
+                          <div style={{ width: `${d.percent}%`, height: "100%", background: d.color, borderRadius: "3px", transition: "width 0.3s ease" }} />
+                        </div>
+                        <div style={{ fontSize: "10.5px", color: "#8d6e63", marginTop: "5px", lineHeight: 1.5 }}>
+                          {d.pillars.map((x) => x.label).join(" · ")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "8px", fontStyle: "italic" }}>
+                  Two separate findings. A business can pass one and fail the other.
+                </div>
+
+                {potential && potential.availablePoints > 0 && (
+                  <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 16px", background: "#e8f5e9", border: "1px solid #c8e6c9", borderRadius: "20px", color: "#1B5E20", fontWeight: 700, fontSize: "12px" }}>
+                    <Target size={13} /> {fmtPts(potential.combinedPoints)} available · potential score {potential.ceiling}%
+                  </div>
+                )}
+
                 {b && b.gap > 0 && (
                   <div style={{ marginTop: "8px" }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 16px", background: "#B71C1C", borderRadius: "20px", color: "white", fontWeight: "700", fontSize: "11.5px" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 16px", background: "#B71C1C", borderRadius: "20px", color: "white", fontWeight: 700, fontSize: "11.5px" }}>
                       <AlertCircle size={13} /> Board required but not in place — {b.penalty}-point penalty
                     </span>
                   </div>
                 )}
-              </div>
 
-              {!leadershipAiResult && !governanceAiResult && (
-                <div style={{ marginBottom: "15px", textAlign: "center" }}>
-                  <button onClick={runAiEvaluation} disabled={isEvaluating || !apiKey}
-                    style={{ padding: "10px 20px", backgroundColor: isEvaluating ? "#8d6e63" : "#5d4037", color: "white", border: "none", borderRadius: "6px", fontWeight: "600", cursor: isEvaluating || !apiKey ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "14px", opacity: isEvaluating || !apiKey ? 0.7 : 1 }}>
-                    {isEvaluating ? (<><RefreshCw size={16} className="spin" />Loading...</>) : (<><RefreshCw size={16} />Load AI analysis</>)}
-                  </button>
-                </div>
-              )}
+                {potential && potential.earnByDoingPoints > 0 && (
+                  <div style={{ marginTop: "8px", fontSize: "11.5px", color: "#8d6e63", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <Lock size={11} /> A further {fmtPts(potential.earnByDoingPoints)} sits behind work rather than data entry.
+                  </div>
+                )}
 
-              {/* ── About Score ── */}
-              <div style={{ border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden", marginBottom: "8px" }}>
-                <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => setShowAboutScore(!showAboutScore)}>
-                  <span>About this score</span>
-                  <ChevronDown size={20} style={{ transform: showAboutScore ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
-                </div>
-                {showAboutScore && (
-                  <div style={{ backgroundColor: "#f5f2f0", padding: "20px", color: "#5d4037", fontSize: "13px", lineHeight: 1.6 }}>
-                    <p style={{ marginBottom: "14px" }}>
-                      Leadership &amp; Governance answers one question for a funder: <strong>can we trust the people and decision-making structures behind this business?</strong> It replaces the old separate Leadership and Governance/PIS cards with a single view across three weighted areas:
-                    </p>
-                    <ul style={{ margin: "0 0 14px 0", paddingLeft: "18px" }}>
-                      <li><strong>Ownership &amp; Structure ({SECTION_WEIGHTS.ownership}%)</strong> — shareholders, directors (exec/non-exec mix), executives, and advisor structure; structural completeness of the people behind the business</li>
-                      <li><strong>Leadership Quality ({SECTION_WEIGHTS.leadership}%)</strong> — founder experience, qualifications, industry expertise, execution capability, ambition, learning mindset, and critical role coverage across the operational team</li>
-                      <li><strong>Governance Maturity ({SECTION_WEIGHTS.maturity}%)</strong> — Public Interest Score (PIS) and governance stage, board structure, advisors, policies, reporting, risk management, integrity &amp; risk, sanctions, conflicts, legal, reputation</li>
-                    </ul>
-
-                    <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>How Board Structure is scored</p>
-                      <p style={{ marginBottom: "8px" }}>The Board Structure section under Governance Maturity works through three questions in order, starting from the Public Interest Score:</p>
-                      <ul style={{ margin: "0 0 10px 0", paddingLeft: "18px", color: "#6d4c41" }}>
-                        <li style={{ marginBottom: "4px" }}><strong>5.1 Does the business need a board?</strong> PIS &lt; {PIS_EMERGING_THRESHOLD}: advisors are sufficient. PIS {PIS_EMERGING_THRESHOLD}–{PIS_FULL_BOARD_THRESHOLD - 1}: an informal board is expected. PIS ≥ {PIS_FULL_BOARD_THRESHOLD}: a formal board is required.</li>
-                        <li style={{ marginBottom: "4px" }}><strong>5.2 Does it have one, and who sits on it?</strong> The named directors <em>are</em> the board, so this is answered by the director list rather than by a separate governance question. Only a profile with no directors captured at all counts as having no board.</li>
-                        <li style={{ marginBottom: "4px" }}><strong>5.3 Is it structured and skilled correctly?</strong> Led by the board skills matrix (22%) — whether financial, legal &amp; governance, industry, commercial, operational and people expertise actually sit at the table, drawn from director roles and uploaded CVs — then director qualification evidence (15%), independent presence (18%), size (10%), non-executive ratio (8%), meeting cadence (8%), committees (8%), role concentration (7%) and classification completeness (4%). A competency that sits in management but not on the board counts as partial: the skill exists, but not where oversight happens.</li>
-                        <li style={{ marginBottom: "4px" }}><strong>Evidence, not inference.</strong> Each director is checked against their uploaded CV for a formal qualification, years of experience and governance training. A missing CV is scored as neutral rather than as a failure — it means the seat is unverified, not that the person is unqualified — and is listed under "What is missing" with the specific action that would close it. Where the data cannot answer a check at all, that check is dropped from the calculation instead of scored as zero.</li>
-                        <li style={{ marginBottom: "4px" }}><strong>Non-executive is not the same as independent.</strong> A director linked to a shareholder row is a shareholder's nominee. They may sit as a non-executive, but they protect their own capital rather than the company's governance, so they are not counted towards independent representation.</li>
-                      </ul>
-                      <p style={{ margin: "0 0 10px 0" }}>
-                        If 5.1 says a board is needed and 5.2 says there isn't one, the score is <strong>penalised by {BOARD_GAP_PENALTY[1]}–{BOARD_GAP_PENALTY[3]} points</strong> depending on the size of the gap, and Governance Maturity takes a further deduction. A tidy set of policies does not compensate for a missing board.
+                {!leadershipAiResult && !governanceAiResult && (
+                  <div style={{ marginTop: "14px" }}>
+                    <button
+                      onClick={runAiEvaluation}
+                      disabled={isEvaluating || !apiKey}
+                      style={{ padding: "10px 20px", backgroundColor: isEvaluating ? "#8d6e63" : "#5d4037", color: "white", border: "none", borderRadius: "6px", fontWeight: 600, cursor: isEvaluating || !apiKey ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "14px", opacity: isEvaluating || !apiKey ? 0.7 : 1 }}
+                    >
+                      <RefreshCw size={16} className={isEvaluating ? "spin" : ""} />
+                      {isEvaluating ? "Loading analysis..." : "Load AI analysis"}
+                    </button>
+                    {!apiKey && (
+                      <p style={{ fontSize: "12px", color: "#f44336", marginTop: "8px" }}>
+                        <AlertCircle size={14} style={{ verticalAlign: "-2px" }} /> AI analysis requires API key configuration
                       </p>
-                      <p style={{ margin: 0, fontFamily: "monospace", fontSize: "12.5px", backgroundColor: "white", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0d5c8" }}>
-                        PIS = Employees + (Turnover ÷ R1m) + (Liabilities ÷ R1m) + Shareholders
-                      </p>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
+  {/* ── About ── */}
+              <Section title="About this score" open={showAboutScore} onToggle={() => setShowAboutScore(!showAboutScore)}>
+                <div style={{ color: "#5d4037", fontSize: "13px", lineHeight: 1.6 }}>
+                  <p style={{ marginBottom: "14px" }}>
+                    This card covers <strong>two separate questions</strong>, and a funder treats them as two separate findings. A capable founder with no board passes one and fails the other, so the breakdown keeps them apart rather than averaging them into a single verdict.
+                  </p>
 
-              <div style={{ fontSize: "11px", color: "#8d6e63", marginBottom: "6px", display: "flex", justifyContent: "space-around" }}>
-                <span>Ownership &amp; Structure {SECTION_WEIGHTS.ownership}%</span>
-                <span>Leadership Quality {SECTION_WEIGHTS.leadership}%</span>
-                <span>Governance Maturity {SECTION_WEIGHTS.maturity}%</span>
-              </div>
-
-              {/* ── A. Ownership & Structure ── */}
-              <SubSection
-                id="ownership"
-                title="Ownership & Structure"
-                score={ownershipScore}
-                breakdown={null}
-                aiText={null}
-                extra={
-                  <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
-                    <p style={{ margin: "0 0 12px 0" }}>
-                      Directors, shareholders and succession readiness — derived from your board composition, exec / non-exec mix, decision governance and advisory structure.
-                    </p>
-
-                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0" }}>
-                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Structure detail</div>
-                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.8 }}>
-                        <div>Shareholders: <strong>{o.shareholderCount}</strong>{o.shareholderCount > 8 ? " — high count for an SME; can signal fragmented decision-making and dilution risk" : ""}</div>
-                        <div>Conflict of interest signal: <strong>{o.activeConflictsCount > 0 ? `${o.activeConflictsCount} active` : "None declared"}</strong></div>
-                        {o.activeConflictsCount > 0 && (
-                          <div style={{ marginTop: "4px", fontStyle: "italic", color: "#8d6e63" }}>{o.conflictSummary}</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                }
-              />
-
-              {/* ── B. Leadership Quality ── */}
-              <SubSection
-                id="leadership"
-                title="Leadership Quality"
-                score={leadershipScore}
-                breakdown={leadershipBreakdown}
-                aiText={leadershipAiResult}
-                aiInjections={{
-                  "leadership structure": (
-                    <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.6 }}>
-                      <div style={{ marginBottom: o.roleCoverage?.overloadedPeople?.length > 0 ? "10px" : "0" }}>
-                        <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px" }}>Critical role coverage</div>
-                        <div style={{ lineHeight: 1.9 }}>
-                          {CRITICAL_ROLE_BUCKETS.map((bkt) => {
-                            const holders = o.roleCoverage?.bucketCoverage?.[bkt.key] || []
-                            const covered = holders.length > 0
-                            return (
-                              <div key={bkt.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-                                <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, backgroundColor: covered ? "#4CAF50" : "#F44336" }} />
-                                <span>
-                                  <strong>{bkt.label}:</strong>{" "}
-                                  {covered
-                                    ? holders.map((h) => `${h.name} (${h.source})`).join(", ")
-                                    : <span style={{ color: "#B71C1C", fontWeight: 600 }}>Not covered — risk</span>}
-                                </span>
-                              </div>
-                            )
-                          })}
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+                    {DOMAINS.map((d) => (
+                      <div key={d.key} style={{ flex: "1 1 220px", background: "white", border: `2px solid ${d.color}`, borderRadius: "8px", padding: "12px" }}>
+                        <div style={{ fontWeight: 800, fontSize: "11px", color: d.color, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>
+                          {d.label} — {d.pillarKeys.reduce((s2, k) => s2 + SECTION_WEIGHTS[k === "maturity" ? "maturity" : k], 0)}%
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#5d4037", fontStyle: "italic", marginBottom: "6px" }}>{d.question}</div>
+                        <div style={{ fontSize: "11.5px", color: "#6d4c41", lineHeight: 1.6 }}>
+                          {d.key === "leadership"
+                            ? `Leadership Quality (${SECTION_WEIGHTS.leadership}%) — founder credentials read from uploaded CVs, the depth of the operating team, and the six Business Leadership answers.`
+                            : `Ownership & Structure (${SECTION_WEIGHTS.ownership}%) and Governance Maturity (${SECTION_WEIGHTS.maturity}%) — who owns and directs the company, and how mature the governance around that is, including the board assessment.`}
                         </div>
                       </div>
-                      {o.roleCoverage?.overloadedPeople?.length > 0 && (
-                        <div style={{ padding: "10px 12px", background: "#fdecea", borderRadius: "6px", border: "1px solid #e6b8ac" }}>
-                          <div style={{ fontWeight: "700", color: "#B71C1C", marginBottom: "5px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
-                            <AlertCircle size={13} /> Role concentration risk
-                          </div>
-                          <div style={{ color: "#8d3a2e", lineHeight: 1.8 }}>
-                            {o.roleCoverage.overloadedPeople.map((p, i) => (
-                              <div key={i} style={{ marginBottom: "3px" }}>
-                                <strong>{p.name}</strong>
-                                {p.buckets.length > 0 && ` covers ${p.buckets.join(" + ")}`}
-                                {p.buckets.length > 0 && p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && "; "}
-                                {p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && `holds ${p.directorRoleCount} distinct board roles`}
-                                {" "}— spread too thin; a succession and conflict-of-interest risk.
-                              </div>
-                            ))}
-                          </div>
+                    ))}
+                  </div>
+
+                  <p style={{ marginBottom: "16px", fontSize: "12.5px", color: "#6d4c41" }}>
+                    Ownership &amp; Structure sits under Governance deliberately: directors, shareholders and the exec / non-executive split describe the accountability structure, not the calibre of the people in it.
+                  </p>
+
+                  <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
+                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>How a point value is worked out</p>
+                    <p style={{ margin: "0 0 8px 0" }}>
+                      Unlike the other cards, a point value here cannot be divided out of a table. The board shortfall penalty deducts twice, composition checks drop out of their own denominator when evidence is missing, and the Public Interest Score moves the requirement band — so adding one director can move the score by an amount no fixed table would predict.
+                    </p>
+                    <p style={{ margin: 0, fontFamily: "monospace", fontSize: "12px", backgroundColor: "white", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0d5c8" }}>
+                      value = score(profile + action) − score(profile)
+                    </p>
+                    <p style={{ margin: "8px 0 0 0" }}>
+                      Every figure is measured by applying the action to a copy of your profile and re-running the same scoring function the card uses. The score is calculated in code, never by the AI — the AI reads the finished numbers and explains them.
+                    </p>
+                  </div>
+
+                  {a && (
+                    <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
+                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Pillar weighting</p>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                        <thead>
+                          <tr style={{ color: "#6d4c41" }}>
+                            <th style={{ textAlign: "left", padding: "4px 6px" }}>Pillar</th>
+                            <th style={{ textAlign: "left", padding: "4px 6px" }}>Source</th>
+                            <th style={{ textAlign: "right", padding: "4px 6px" }}>Weight</th>
+                            <th style={{ textAlign: "right", padding: "4px 6px" }}>Now</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pillars.map((p) => (
+                            <tr key={p.key} style={{ color: "#5d4037" }}>
+                              <td style={{ padding: "4px 6px" }}>{p.label}</td>
+                              <td style={{ padding: "4px 6px" }}>{p.source}</td>
+                              <td style={{ padding: "4px 6px", textAlign: "right" }}>{p.weight}%</td>
+                              <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 700 }}>{p.percent}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
+                    <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>How Board Structure is scored</p>
+                    <ul style={{ margin: "0 0 10px 0", paddingLeft: "18px", color: "#6d4c41" }}>
+                      <li style={{ marginBottom: "4px" }}><strong>5.1 Does the business need a board?</strong> PIS below {PIS_EMERGING_THRESHOLD}: advisors are sufficient. PIS {PIS_EMERGING_THRESHOLD}–{PIS_FULL_BOARD_THRESHOLD - 1}: an informal board is expected. PIS {PIS_FULL_BOARD_THRESHOLD} or above: a formal board is required.</li>
+                      <li style={{ marginBottom: "4px" }}><strong>5.2 Does it have one, and who sits on it?</strong> The named directors <em>are</em> the board. Only a profile with no directors captured at all counts as having none.</li>
+                      <li style={{ marginBottom: "4px" }}><strong>5.3 Is it structured and skilled correctly?</strong> Board skills matrix (22%), qualification evidence (15%), independent presence (18%), size (10%), non-executive ratio (8%), cadence (8%), committees (8%), role concentration (7%), classification (4%).</li>
+                      <li style={{ marginBottom: "4px" }}><strong>Evidence, not inference.</strong> A missing CV means the seat is unverified, not that the person is unqualified — it scores neutral and is listed under "What is missing" instead. Where the data cannot answer a check, that check is dropped from the calculation rather than scored zero.</li>
+                      <li style={{ marginBottom: "4px" }}><strong>Non-executive is not independent.</strong> A director linked to a shareholder row protects their own capital, so they are not counted towards independent representation.</li>
+                    </ul>
+                    <p style={{ margin: "0 0 10px 0" }}>
+                      If 5.1 says a board is needed and 5.2 says there is not one, the score is penalised by <strong>{BOARD_GAP_PENALTY[1]}–{BOARD_GAP_PENALTY[3]} points</strong> and Governance Maturity takes a further deduction.
+                    </p>
+                    <p style={{ margin: 0, fontFamily: "monospace", fontSize: "12.5px", backgroundColor: "white", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0d5c8" }}>
+                      PIS = Employees + (Turnover ÷ R1m) + (Liabilities ÷ R1m) + Shareholders
+                    </p>
+                  </div>
+
+                  <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
+                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Declared versus evidenced</p>
+                    <p style={{ margin: 0 }}>
+                      Most governance questions are self-assessed dropdowns. An unanswered one scores zero and appears in Potential points, valued at the honest middle option — answering it truthfully is worth real marks. An answer already given but below the top option is not listed there, because paying you to reselect a dropdown would be paying for a claim rather than a change. It sits under "Earn by doing" with the artefact named.
+                    </p>
+                  </div>
+                </div>
+              </Section>
+
+              
+              {/* ── Potential points ── */}
+              <Section
+                title="Potential points"
+                right={potential ? (potential.combinedPoints > 0 ? `${fmtPts(potential.combinedPoints)} to claim` : "All claimed") : "…"}
+                open={showPotential}
+                onToggle={() => setShowPotential(!showPotential)}
+              >
+                {!potential ? (
+                  <div style={{ fontSize: "12.5px", color: "#8d6e63", fontStyle: "italic", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <RefreshCw size={14} className="spin" /> Measuring what each action is worth…
+                  </div>
+                ) : potential.opportunities.length === 0 ? (
+                  <div style={{ padding: "14px", background: "#f1f8f1", border: "1px solid #c8e6c9", borderRadius: "8px", color: "#2E7D32", lineHeight: 1.7 }}>
+                    <div style={{ fontWeight: 800, marginBottom: "4px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      <CheckCircle size={14} /> Nothing left to claim by capturing data
+                    </div>
+                    Everything the profile can record is recorded. What remains is under "Earn by doing" below.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ padding: "16px", background: "linear-gradient(135deg,#fdf8f6 0%,#e8f5e9 100%)", border: "1px solid #c8e6c9", borderRadius: "10px", marginBottom: "14px", textAlign: "center" }}>
+                      <div style={{ fontSize: "10px", color: "#1B5E20", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.7px" }}>
+                        Your score could reach
+                      </div>
+                      <div style={{ fontSize: "34px", fontWeight: 800, color: "#1B5E20", lineHeight: 1.2 }}>
+                        {potential.ceiling}%
+                      </div>
+                      <div style={{ fontSize: "12.5px", color: "#5d4037", lineHeight: 1.6 }}>
+                        {overallScore}% today · <strong style={{ color: "#1B5E20" }}>{fmtPts(potential.combinedPoints)}</strong> across {potential.opportunities.length} action{potential.opportunities.length === 1 ? "" : "s"} below
+                      </div>
+                      <div style={{ fontSize: "11.5px", color: "#8d6e63", marginTop: "6px", fontStyle: "italic" }}>
+                        Tap any item to see what it is worth and go straight to the form.
+                      </div>
+                      {Math.abs(potential.availablePoints - potential.combinedPoints) > 0.5 && (
+                        <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "6px", lineHeight: 1.6 }}>
+                          The individual figures below add up to {fmtPts(potential.availablePoints)}, but several actions move the same checks — appointing an independent director also fixes the non-executive ratio, for instance. {potential.ceiling}% is what you would actually score having done all of them, measured by applying every one of them at once.
                         </div>
                       )}
                     </div>
-                  ),
-                }}
-                extra={
-                  <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
-                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
-                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Critical role coverage</div>
-                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.9 }}>
-                        {CRITICAL_ROLE_BUCKETS.map((bkt) => {
-                          const holders = o.roleCoverage?.bucketCoverage?.[bkt.key] || []
-                          const covered = holders.length > 0
-                          return (
-                            <div key={bkt.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-                              <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, backgroundColor: covered ? "#4CAF50" : "#F44336" }} />
-                              <span>
-                                <strong>{bkt.label}:</strong>{" "}
-                                {covered
-                                  ? holders.map((h) => `${h.name} (${h.source})`).join(", ")
-                                  : <span style={{ color: "#B71C1C", fontWeight: 600 }}>Not covered — risk</span>}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    {o.roleCoverage?.overloadedPeople?.length > 0 && (
-                      <div style={{ padding: "12px 14px", background: "#fdecea", borderRadius: "8px", border: "1px solid #e6b8ac", marginBottom: "10px" }}>
-                        <div style={{ fontWeight: "700", color: "#B71C1C", marginBottom: "6px", fontSize: "12.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <AlertCircle size={14} /> Role concentration risk
+
+                    {potential.opportunities.map((item, i) => (
+                      <PotentialItem key={item.key} item={item} index={i} />
+                    ))}
+
+                    {potential.earnByDoing.length > 0 && (
+                      <div style={{ marginTop: "14px", padding: "12px", background: "#f5f2f0", border: "1px solid #d7ccc8", borderRadius: "8px" }}>
+                        <div style={{ fontWeight: 800, marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase", letterSpacing: "0.5px", fontSize: "10.5px", color: "#6d4c41" }}>
+                          <Lock size={12} /> Earn by doing — {fmtPts(potential.earnByDoingPoints)}
                         </div>
-                        <div style={{ fontSize: "12.5px", color: "#8d3a2e", lineHeight: 1.8 }}>
-                          {o.roleCoverage.overloadedPeople.map((p, i) => (
-                            <div key={i} style={{ marginBottom: "4px" }}>
-                              <strong>{p.name}</strong>
-                              {p.buckets.length > 0 && ` covers ${p.buckets.join(" + ")}`}
-                              {p.buckets.length > 0 && p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && "; "}
-                              {p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && `holds ${p.directorRoleCount} distinct board roles`}
-                              {" "}— spread too thin across functions that would normally be separated; a succession and conflict-of-interest risk if this person leaves or is unavailable.
-                            </div>
-                          ))}
+                        <div style={{ fontSize: "11.5px", color: "#6d4c41", lineHeight: 1.6, marginBottom: "8px" }}>
+                          These are self-assessed answers you have already given. The points are real, but they belong to the work rather than the dropdown — changing the answer without doing the thing is something a funder finds in five minutes of due diligence. Left out of the total above rather than dressed up as an action.
                         </div>
+                        {potential.earnByDoing.map((f) => (
+                          <div key={f.key} style={{ padding: "9px 11px", background: "white", border: "1px solid #f0e8e0", borderRadius: "8px", marginBottom: "6px", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, color: "#4e342e", fontSize: "12.5px" }}>{f.label}</div>
+                              <div style={{ fontSize: "11.5px", color: "#6d4c41", lineHeight: 1.6 }}>{f.action}</div>
+                            </div>
+                            <span style={{ backgroundColor: "#f5f2f0", color: "#8d6e63", border: "1px solid #d7ccc8", borderRadius: "4px", padding: "2px 7px", fontWeight: 800, fontSize: "11.5px", whiteSpace: "nowrap" }}>
+                              {fmtPts(f.pointValue)}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     )}
-                  </div>
-                }
-              />
 
-              {/* ── C. Governance Maturity ──
-                  Board Structure now leads with PIS, then 5.1 → 5.2 → 5.3.
-                  The panel is injected ABOVE the AI narrative so the numbers
-                  are read before the commentary, and shows as a fallback
-                  before AI loads. ── */}
-              <SubSection
-                id="maturity"
-                title="Governance Maturity"
-                score={maturityScore}
-                breakdown={maturityBreakdown}
-                aiText={governanceAiResult}
-                aiInjections={{
-                  "board structure": { position: "top", content: boardStructurePanel },
-                }}
-                extra={
-                  <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
-                    <div style={{ padding: "14px 16px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
-                      <div style={{ fontWeight: "800", color: "#4e342e", marginBottom: "12px", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        Board structure
+                    {potential.unreachable.length > 0 && (
+                      <div style={{ marginTop: "14px", padding: "12px", background: "#f5f2f0", border: "1px solid #d7ccc8", borderRadius: "8px" }}>
+                        <div style={{ fontWeight: 800, marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase", letterSpacing: "0.5px", fontSize: "10.5px", color: "#6d4c41" }}>
+                          <Info size={12} /> Why {potential.ceiling}% and not 100%
+                        </div>
+                        <div style={{ fontSize: "11.5px", color: "#6d4c41", lineHeight: 1.6, marginBottom: "8px" }}>
+                          The remaining {fmtPts(100 - potential.ceiling)} is not reachable by filling in this profile. Each reason below is a real one rather than a rounding artefact.
+                        </div>
+                        {potential.unreachable.map((u, i) => (
+                          <div key={i} style={{ padding: "9px 11px", background: "white", border: "1px solid #f0e8e0", borderRadius: "8px", marginBottom: "6px" }}>
+                            <div style={{ fontWeight: 700, color: "#4e342e", fontSize: "12px", marginBottom: "2px" }}>{u.what}</div>
+                            <div style={{ fontSize: "11.5px", color: "#6d4c41", lineHeight: 1.6 }}>{u.why}</div>
+                          </div>
+                        ))}
                       </div>
-                      {boardStructurePanel}
-                    </div>
-                  </div>
-                }
-              />
+                    )}
 
-              {evaluationError && (
-                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#f8d7da", color: "#721c24", border: "1px solid #f5c6cb", borderRadius: "6px", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <AlertCircle size={16} /> {evaluationError}
-                </div>
+                    <div style={{ marginTop: "10px", padding: "10px 12px", background: "#f9f5f0", border: "1px solid #e6d3c4", borderRadius: "8px", fontSize: "11.5px", color: "#6d4c41", lineHeight: 1.6 }}>
+                      Each figure was measured by re-running the score with that action applied — the same function promises it and awards it.
+                    </div>
+                  </>
+                )}
+              </Section>
+
+              {/* ── Score breakdown ── */}
+              {a && (
+                <Section
+                  title="Score breakdown"
+                  right={`${overallScore}%`}
+                  open={showScoreBreakdown}
+                  onToggle={() => setShowScoreBreakdown(!showScoreBreakdown)}
+                >
+                  {domains.map((d) => <DomainGroup key={d.key} domain={d} />)}
+
+                  {a.maturityPenalty > 0 && (
+                    <div style={{ marginTop: "4px", padding: "10px 12px", background: "#fdecea", border: "1px solid #e6b8ac", borderRadius: "8px", fontSize: "11.5px", color: "#8d3a2e", lineHeight: 1.6 }}>
+                      Governance Maturity carries a further {a.maturityPenalty}-point deduction on top of the weighted categories, because a business that needs a board and has not got one should not be rescued by a tidy set of policies.
+                    </div>
+                  )}
+                </Section>
               )}
+
+            
+
+              {/* ── Detailed analysis ── */}
+              <Section title="Detailed analysis" open={showDetailedAnalysis} onToggle={() => setShowDetailedAnalysis(!showDetailedAnalysis)}>
+                {leadershipAiResult || governanceAiResult ? (
+                  <div style={{ backgroundColor: "white", padding: "16px", borderRadius: "8px", border: "1px solid #e8d8cf", maxHeight: "460px", overflowY: "auto" }}>
+                    {leadershipAiResult && (
+                      <>
+                        <div style={{ background: "linear-gradient(135deg,#6D4C41 0%,#4e342e 100%)", color: "white", borderRadius: "8px", padding: "9px 14px", marginBottom: "12px" }}>
+                          <div style={{ fontWeight: 800, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase" }}>Leadership</div>
+                          <div style={{ fontSize: "11px", opacity: 0.9, fontStyle: "italic" }}>Who is running this business, and are they any good at it?</div>
+                        </div>
+                        {formatAiResult(leadershipAiResult)}
+                      </>
+                    )}
+                    {governanceAiResult && (
+                      <>
+                        <div style={{ background: "linear-gradient(135deg,#A67C52 0%,#4e342e 100%)", color: "white", borderRadius: "8px", padding: "9px 14px", margin: leadershipAiResult ? "22px 0 12px 0" : "0 0 12px 0" }}>
+                          <div style={{ fontWeight: 800, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase" }}>Governance</div>
+                          <div style={{ fontSize: "11px", opacity: 0.9, fontStyle: "italic" }}>What structures hold them to account?</div>
+                        </div>
+                        {formatAiResult(governanceAiResult, aiInjections)}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12.5px", color: "#8d6e63", fontStyle: "italic", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <AlertCircle size={14} /> No AI analysis yet — the score and point values above are already final and do not depend on it.
+                  </div>
+                )}
+                {(leadershipAiResult || governanceAiResult) && (
+                  <div style={{ marginTop: "12px", textAlign: "right" }}>
+                    <button
+                      onClick={runAiEvaluation}
+                      disabled={isEvaluating || !apiKey}
+                      style={{ padding: "8px 14px", backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", fontWeight: 600, fontSize: "12px", cursor: isEvaluating ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: isEvaluating ? 0.7 : 1 }}
+                    >
+                      <RefreshCw size={14} className={isEvaluating ? "spin" : ""} />
+                      {isEvaluating ? "Refreshing..." : "Refresh analysis"}
+                    </button>
+                  </div>
+                )}
+                {evaluationError && (
+                  <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "#f8d7da", color: "#721c24", border: "1px solid #f5c6cb", borderRadius: "6px", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <AlertCircle size={16} /> {evaluationError}
+                  </div>
+                )}
+              </Section>
             </div>
           </div>
         </div>

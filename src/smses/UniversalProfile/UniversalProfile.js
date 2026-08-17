@@ -101,6 +101,12 @@ const validateAllSections = (formData, completedSections) => {
   return { allValid, sectionStatus }
 }
 
+const readDeepLinkSection = () => {
+  if (typeof window === "undefined") return null
+  const requested = new URLSearchParams(window.location.search).get("section")
+  return sections.some((s) => s.id === requested) ? requested : null
+}
+
 const onboardingSteps = [
   { title: "Welcome to Universal Profile", content: "This profile will help us understand your business better and provide you with tailored services." },
   { title: "Step 1: Read Instructions", content: "Start by reading the instructions carefully to understand what information you'll need to provide." },
@@ -113,11 +119,11 @@ export default function UniversalProfile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const navigate = useNavigate()
-  const [activeSection, setActiveSection] = useState("instructions")
+
   const [profileSubmitted, setProfileSubmitted] = useState(false)
-  const [showSummary, setShowSummary] = useState(false)
+
   const [profileData, setProfileData] = useState(null)
-  const [isEditing, setIsEditing] = useState(false)
+
   const [companyOwnerId, setCompanyOwnerId] = useState(null)
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [effectiveUserId, setEffectiveUserId] = useState(null)
@@ -128,7 +134,10 @@ export default function UniversalProfile() {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
-
+  const [deepLinkSection] = useState(readDeepLinkSection)
+  const [activeSection, setActiveSection] = useState(deepLinkSection || "instructions")
+  const [showSummary, setShowSummary] = useState(false)
+  const [isEditing, setIsEditing] = useState(!!deepLinkSection)
   const ROLE_PERMISSIONS = {
     owner: { canEditAll: true, sections: ["instructions", "entityOverview", "ownershipManagement", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "howDidYouHear", "documents", "declarationConsent"] },
     companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "documents"] },
@@ -317,7 +326,10 @@ export default function UniversalProfile() {
             const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true"
             if (savedData) setFormData(JSON.parse(savedData))
             if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
-            if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
+           if (savedSubmissionStatus === "true") {
+            setProfileSubmitted(true)
+            if (!deepLinkSection) setShowSummary(true)
+          }
             if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true") }
           }
         } catch (error) {
@@ -329,6 +341,13 @@ export default function UniversalProfile() {
     })
     return () => unsubscribe()
   }, [])
+
+    useEffect(() => {
+    if (!deepLinkSection) return
+    window.scrollTo(0, 0)
+    window.history.replaceState({}, "", window.location.pathname)
+  }, [deepLinkSection])
+
 
   const getUserSpecificKey = (baseKey) => { const userId = effectiveUserId || auth.currentUser?.uid; return userId ? `${baseKey}_${userId}` : baseKey }
 
