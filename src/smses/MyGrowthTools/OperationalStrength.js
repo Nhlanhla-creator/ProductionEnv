@@ -8,11 +8,11 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { db, auth } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  Eye, LineChart as LineChartIcon, Lightbulb, Plus, StickyNote, X, Save, Pencil, Info,
+  Eye, EyeOff, LineChart as LineChartIcon, Lightbulb, Plus, StickyNote, X, Save, Pencil, Info,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   Check, CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
   ExternalLink, Square, CheckSquare, ArrowLeft, Calendar, Users, SlidersHorizontal,
-  Database, Sparkles, Sigma,
+  Database, Sparkles, Sigma, Trash2, Palette, Layers, BarChart3,
 } from "lucide-react";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -23,12 +23,15 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 
 const functions = getFunctions();
 
-/* Warm, darker greys — neutral greys washed out badly against white. */
+/* Warm, darker greys — neutral greys washed out badly against white.
+   `header` is deliberately near-black brown: the table header needed to sit
+   clearly above the accent used elsewhere. */
 const T = {
   ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", faint: "#8a7a74",
   line: "#ded8d4", lineSoft: "#e9e3df", lineStrong: "#b0a29b",
   bg: "#ffffff", panel: "#faf8f7", raised: "#f2eeec",
   accent: "#4a352f", accentSoft: "#6b4f47", accentTint: "#f4efec",
+  header: "#241713", headerLine: "rgba(255,255,255,0.16)",
   green: "#166534", greenBg: "#f0fdf4",
   amber: "#92400e", amberBg: "#fffbeb",
   red: "#991b1b", redBg: "#fef2f2",
@@ -119,7 +122,15 @@ const daysInMonth = (year, month) =>
 const currentWeekKey = () => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return `W:${isoDate(d)}`; };
 const currentMonthKey = () => { const d = new Date(); return `M:${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 
-/* ─── Formatting. en-US gives "R 125,000" and "1,250". ───────────────────── */
+/* ─── Formatting ─────────────────────────────────────────────────────────
+   fmtValue  — carries the unit. Tooltips, prose, the averages tiles.
+   fmtBare   — no unit. The table, where Units is already a column.
+   fmtChart  — no unit, always 2 decimals, thousands compacted to k/M so a
+               five-figure actual doesn't run into its neighbour. Full
+               precision stays one hover away in the tooltip.
+   Every one of these rounds. Raw floats like 0.8199999999999998 only appear
+   if something else is drawing on the canvas — see the datalabels note in
+   the chart options below.                                                 */
 const LOCALE = "en-US";
 const trimNum = (n) => {
   if (!Number.isFinite(n)) return "";
@@ -139,6 +150,31 @@ const fmtValue = (raw, kpi, { signed = false } = {}) => {
   const suffix = kpi?.units && !["#","%","R"].includes(kpi.units) ? ` ${kpi.units}` : "";
   return `${sign}${trimNum(n)}${suffix}`;
 };
+const fmtBare = (raw, kpi, { signed = false } = {}) => {
+  if (raw === null || raw === undefined || raw === "") return "—";
+  let n = Number(raw);
+  if (!Number.isFinite(n)) return "—";
+  if (kpi?.units === "%" && kpi.percentFormat === "fraction") n *= 100;
+  const sign = signed && n > 0 ? "+" : "";
+  if (kpi?.units === "R") {
+    const dp = Math.abs(n) >= 1000 ? 0 : 2;
+    return `${sign}${n.toLocaleString(LOCALE, { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
+  }
+  return `${sign}${trimNum(n)}`;
+};
+const fmtChart = (raw, kpi, { signed = false } = {}) => {
+  let n = Number(raw);
+  if (!Number.isFinite(n)) return "";
+  if (kpi?.units === "%" && kpi.percentFormat === "fraction") n *= 100;
+  // Round first, then sign — otherwise -0.004 prints as "-0.00".
+  const r = Math.round(n * 100) / 100;
+  const sign = r < 0 ? "-" : signed && r > 0 ? "+" : "";
+  const abs = Math.abs(r);
+  const two = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  if (abs >= 1000000) return `${sign}${(abs / 1000000).toLocaleString(LOCALE, two)}M`;
+  if (abs >= 10000) return `${sign}${(abs / 1000).toLocaleString(LOCALE, two)}k`;
+  return `${sign}${abs.toLocaleString(LOCALE, two)}`;
+};
 const parseNum = (v) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isNaN(n) ? null : n; };
 const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
 const errText = (e) => String(e?.message ?? e ?? "Unknown error");
@@ -149,15 +185,29 @@ const rollUp = (values, mode) => {
   const sum = nums.reduce((a, b) => a + b, 0);
   return mode === "sum" ? sum : sum / nums.length;
 };
+const hexA = (hex, a) => {
+  const h = String(hex || "#000000").replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  if (!Number.isFinite(n)) return `rgba(0,0,0,${a})`;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
 
 /* ─── KPI model ─────────────────────────────────────────────────────────── */
+const DEFAULT_CHART = {
+  actualType: "bar", budgetType: "line", varianceType: "bar",
+  actualColor: "#1e40af", budgetColor: "#4a352f",
+  favColor: "#166534", unfavColor: "#991b1b",
+  showLabels: true, showVariance: true, showLegend: true,
+};
+
 const mkKpi = (o) => ({
   id: uid(), name: o.name, units: o.units, frequency: o.frequency || "Monthly",
   direction: o.direction || "higher", aggregate: o.aggregate || "avg",
   percentFormat: o.percentFormat || "whole",
   meaning: o.meaning || "",      // What does this KPI mean?
   measured: o.measured || "",    // How is this KPI measured? (Excel terms)
-  notes: "", periodNotes: {}, entries: o.entries || {},
+  notes: "", periodNotes: {}, chartConfig: { ...DEFAULT_CHART }, entries: o.entries || {},
 });
 
 const seedEntries = (sy, sm, budget, base, swing, aggregate) => {
@@ -176,7 +226,7 @@ const seedEntries = (sy, sm, budget, base, swing, aggregate) => {
 /* Every calculation is written the way it would be built in Excel — named
    ranges, real functions, and the formula that produces the KPI. */
 const buildDefaultStructure = (sy, sm) => [
-  { id: "supply-chain", name: "Supply Chain", notes: "", subCategories: [
+  { id: "supply-chain", name: "Supply Chain", notes: "", hidden: false, subCategories: [
     { name: "Supplier Dependency", kpis: [
       mkKpi({ name: "Top 3 Supplier Spend", units: "%", frequency: "Monthly", direction: "lower", aggregate: "avg",
         meaning: "How much of your buying sits with your three biggest suppliers. The higher it is, the more exposed you are if one of them fails.",
@@ -206,7 +256,7 @@ const buildDefaultStructure = (sy, sm) => [
         entries: seedEntries(sy, sm, 20, 23, 3, "avg") }),
     ]},
   ]},
-  { id: "delivery", name: "Delivery", notes: "", subCategories: [
+  { id: "delivery", name: "Delivery", notes: "", hidden: false, subCategories: [
     { name: "Productivity", kpis: [
       mkKpi({ name: "Production Volume", units: "units", frequency: "Weekly", direction: "higher", aggregate: "sum",
         meaning: "Total good output produced and accepted in the period.",
@@ -240,7 +290,7 @@ const buildDefaultStructure = (sy, sm) => [
         entries: seedEntries(sy, sm, 1, 0.4, 0.2, "avg") }),
     ]},
   ]},
-  { id: "safety", name: "Safety", notes: "", subCategories: [
+  { id: "safety", name: "Safety", notes: "", hidden: false, subCategories: [
     { name: "Safety Risk", kpis: [
       mkKpi({ name: "Safety Incidents", units: "#", frequency: "Weekly", direction: "lower", aggregate: "sum",
         meaning: "Recordable incidents involving staff, contractors or visitors.",
@@ -348,7 +398,8 @@ const varianceFavourable = (kpi, v) => {
   if (kpi.direction === "match") return Math.abs(v) < 0.001;
   return kpi.direction === "higher" ? v >= 0 : v <= 0;
 };
-const StatusIcon = ({ status, size = 18 }) => {
+/* Bigger by default — at 18px the icons read as decoration rather than status. */
+const StatusIcon = ({ status, size = 24 }) => {
   const p = { size, color: status.color, strokeWidth: 2.2 };
   if (status.key === "green") return <CheckCircle2 {...p} />;
   if (status.key === "amber") return <AlertTriangle {...p} />;
@@ -360,12 +411,12 @@ const StatusIcon = ({ status, size = 18 }) => {
 const COLUMN_DEFS = {
   category:  { label: "Category", width: 168, tip: "The sub-category this KPI sits under.", filter: true, sort: true, hideable: true },
   kpi:       { label: "KPI", width: 258, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
-  units:     { label: "Units", width: 90, align: "center", tip: "The unit the value is expressed in.", filter: true, sort: true, hideable: true },
+  units:     { label: "Units", width: 90, align: "center", tip: "The unit every figure in this row is expressed in.", filter: true, sort: true, hideable: true },
   frequency: { label: "Frequency", width: 126, align: "center", tip: "How often this KPI is captured — daily, weekly, monthly or quarterly.", filter: true, sort: true, hideable: true },
-  budget:    { label: "Budget", width: 142, align: "right", tip: "What you planned for the selected period.", sort: true, hideable: true },
-  actual:    { label: "Actual", width: 142, align: "right", tip: "What was recorded for the selected period.", sort: true, hideable: true },
-  variance:  { label: "Variance", width: 142, align: "right", tip: "Actual minus Budget. Green means favourable for this KPI's direction.", sort: true, hideable: true },
-  status:    { label: "Status", width: 94, align: "center", tip: "Green: on budget. Amber: needs attention. Red: well outside budget.", filter: true, sort: true, hideable: true },
+  budget:    { label: "Budget", width: 138, align: "center", tip: "What you planned for the selected period. Read it against the Units column.", sort: true, hideable: true },
+  actual:    { label: "Actual", width: 138, align: "center", tip: "What was recorded for the selected period.", sort: true, hideable: true },
+  variance:  { label: "Variance", width: 138, align: "center", tip: "Actual minus Budget. Green means favourable for this KPI's direction.", sort: true, hideable: true },
+  status:    { label: "Status", width: 100, align: "center", tip: "Green: on budget. Amber: needs attention. Red: well outside budget.", filter: true, sort: true, hideable: true },
 };
 const COLUMN_ORDER = Object.keys(COLUMN_DEFS);
 const ACTIONS_KEY = "__actions__";
@@ -397,10 +448,36 @@ const btnBase = { padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", 
 const btnPrimary = { ...btnBase, background: T.accent, color: "#fff", border: `1px solid ${T.accent}`, fontWeight: 600 };
 const btnGhost = { ...btnBase, background: T.bg, color: T.body, border: `1px solid ${T.lineStrong}` };
 const btnQuiet = { ...btnBase, background: "transparent", color: T.accent, border: "1px solid transparent" };
+const btnDanger = { ...btnBase, background: T.redBg, color: T.red, border: `1px solid ${T.red}44` };
 const inputS = { width: "100%", padding: "9px 11px", border: `1px solid ${T.lineStrong}`, borderRadius: "8px",
   fontSize: "13.5px", fontFamily: "inherit", boxSizing: "border-box", color: T.ink, background: T.bg, outline: "none" };
 const selectS = { ...inputS, cursor: "pointer" };
 const labelS = { display: "block", fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "5px" };
+const cardS = { background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" };
+
+/* Auto-save: one debounced writer shared by notes, KPI text and chart config. */
+const useAutoSave = (value, onSave, { delay = 800, skipFirst = true } = {}) => {
+  const [state, setState] = useState("idle"); // idle | saving | saved
+  const saveRef = useRef(onSave);
+  const first = useRef(skipFirst);
+  saveRef.current = onSave;
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    setState("saving");
+    const t = setTimeout(async () => {
+      try { await saveRef.current(value); setState("saved"); }
+      catch { setState("idle"); }
+    }, delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return state;
+};
+
+const SaveState = ({ state, idleText = "" }) => {
+  if (state === "saving") return <span style={{ fontSize: "12px", color: T.muted, display: "inline-flex", alignItems: "center", gap: "5px" }}><RefreshCw size={11} /> Saving…</span>;
+  if (state === "saved") return <span style={{ fontSize: "12px", color: T.green, display: "inline-flex", alignItems: "center", gap: "5px" }}><Check size={12} /> Saved</span>;
+  return idleText ? <span style={{ fontSize: "12px", color: T.muted }}>{idleText}</span> : null;
+};
 
 const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,32,28,0.55)",
@@ -434,11 +511,12 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better", hint: "e.g. headcount to plan" },
 ];
 
-/* ─── KPI info popup ────────────────────────────────────────────────────── */
+/* ─── KPI info popup — edits save themselves ────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
-  const [editing, setEditing] = useState(false);
   const [meaning, setMeaning] = useState(kpi.meaning || "");
   const [measured, setMeasured] = useState(kpi.measured || "");
+  const payload = useMemo(() => ({ meaning, measured }), [meaning, measured]);
+  const saveState = useAutoSave(payload, (p) => { if (!readOnly) onSave(p); });
 
   const box = (v, empty, mono) => (
     <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "13px 15px",
@@ -451,17 +529,10 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
 
   return (
     <Modal title={kpi.name} subtitle="What it means and how it is measured" icon={<Eye size={17} />} onClose={onClose}
-      footer={editing ? (
-        <>
-          <button onClick={() => { setMeaning(kpi.meaning || ""); setMeasured(kpi.measured || ""); setEditing(false); }} style={btnGhost}>Cancel</button>
-          <button onClick={() => { onSave({ meaning, measured }); setEditing(false); }} style={btnPrimary}><Save size={13} /> Save</button>
-        </>
-      ) : (
-        <>
-          {!readOnly && <button onClick={() => setEditing(true)} style={btnGhost}><Pencil size={13} /> Edit</button>}
-          <button onClick={onClose} style={btnPrimary}>Close</button>
-        </>
-      )}>
+      footer={<>
+        <span style={{ flex: 1, textAlign: "left" }}><SaveState state={saveState} idleText={readOnly ? "Read only" : "Changes save automatically"} /></span>
+        <button onClick={onClose} style={btnPrimary}>Close</button>
+      </>}>
       <div style={{ display: "flex", gap: "7px", flexWrap: "wrap", marginBottom: "18px" }}>
         {[`Units: ${kpi.units}`, `Captured ${kpi.frequency.toLowerCase()}`,
           DIRECTIONS.find((d) => d.value === kpi.direction)?.label,
@@ -472,169 +543,35 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
 
       <div style={{ marginBottom: "18px" }}>
         <label style={labelS}>What does this KPI mean?</label>
-        {editing
-          ? <textarea rows="3" value={meaning} onChange={(e) => setMeaning(e.target.value)} style={{ ...inputS, resize: "vertical" }}
-              placeholder="In plain words — what is this number telling you?" />
-          : box(meaning, "Not captured yet.", false)}
+        {readOnly
+          ? box(meaning, "Not captured yet.", false)
+          : <textarea rows="3" value={meaning} onChange={(e) => setMeaning(e.target.value)} style={{ ...inputS, resize: "vertical" }}
+              placeholder="In plain words — what is this number telling you?" />}
       </div>
 
       <div>
         <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}>
           <Sigma size={13} /> How is this KPI measured?
         </label>
-        {editing
-          ? <textarea rows="6" value={measured} onChange={(e) => setMeasured(e.target.value)}
+        {readOnly
+          ? box(measured, "Not captured yet.", true)
+          : <textarea rows="6" value={measured} onChange={(e) => setMeasured(e.target.value)}
               style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }}
-              placeholder={"Write it the way you'd build it in Excel, e.g.\n\n=SUMIFS(Units, QCResult, \"Pass\") / SUM(Units) * 100"} />
-          : box(measured, "Not captured yet.", true)}
-        {!editing && (
-          <p style={{ fontSize: "12px", color: T.muted, marginTop: "8px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-            <Info size={12} /> Written in Excel terms so it can be rebuilt in a spreadsheet as-is.
-          </p>
-        )}
+              placeholder={"Write it the way you'd build it in Excel, e.g.\n\n=SUMIFS(Units, QCResult, \"Pass\") / SUM(Units) * 100"} />}
+        <p style={{ fontSize: "12px", color: T.muted, marginTop: "8px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Info size={12} /> Written in Excel terms so it can be rebuilt in a spreadsheet as-is.
+        </p>
       </div>
     </Modal>
   );
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Trend chart — Variance gets its own chart, stacked above the Budget vs
-   Actual chart, so it reads on its own scale instead of being flattened by
-   the bars.
+   Analysis — one engine, two scopes.
+   scope="period"  : reads only the selected timeframe (used under the chart)
+   scope="summary" : reads week, month, quarter and year together (table icon)
    ════════════════════════════════════════════════════════════════════════ */
-const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote }) => {
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [noteText, setNoteText] = useState("");
-
-  const { labels, actual, budget, noteKey, caption } = useMemo(() => {
-    const { startYear, startMonth } = fy;
-    if (period === "week") {
-      const weeks = fyWeeks(startYear, startMonth);
-      const idx = Math.max(weeks.findIndex((w) => w.key === currentWeekKey()), 0);
-      const slice = weeks.slice(Math.max(0, idx - 11), idx + 1);
-      return { labels: slice.map((w) => w.label),
-        actual: slice.map((w) => parseNum(kpi.entries?.[w.key]?.actual)),
-        budget: slice.map((w) => parseNum(kpi.entries?.[w.key]?.budget)),
-        noteKey: currentWeekKey(), caption: `Weeks of FY ${fyLabel(startYear, startMonth)}` };
-    }
-    if (period === "quarter") {
-      const qs = fyQuarters(startYear, startMonth);
-      const rows = qs.map((q) => {
-        const ms = q.months.map((m) => resolveMonth(kpi, m.year, m.month));
-        return { actual: rollUp(ms.map((r) => Number(r.actual)), kpi.aggregate),
-                 budget: rollUp(ms.map((r) => Number(r.budget)), kpi.aggregate) };
-      });
-      return { labels: qs.map((q) => `${q.label} ${fyLabel(startYear, startMonth)}`),
-        actual: rows.map((r) => r.actual), budget: rows.map((r) => r.budget),
-        noteKey: `Q:${startYear}`, caption: `Quarters of FY ${fyLabel(startYear, startMonth)}` };
-    }
-    const months = fyMonths(startYear, startMonth);
-    const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
-    return { labels: months.map((m) => m.label),
-      actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-      noteKey: currentMonthKey(), caption: `FY ${fyLabel(startYear, startMonth)} · ${months[0].long} → ${months[11].long}` };
-  }, [kpi, period, fy]);
-
-  const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
-  const existingNote = kpi.periodNotes?.[noteKey] || "";
-
-  /* Favourable bars green, unfavourable red — the sign alone doesn't tell you
-     which is which when lower is better. */
-  const varColors = variance.map((v) =>
-    v === null ? "rgba(138,122,116,0.3)" : varianceFavourable(kpi, v) ? "rgba(22,101,52,0.75)" : "rgba(153,27,27,0.75)");
-
-  const varianceChart = {
-    labels,
-    datasets: [{ type: "bar", label: "Variance", data: variance,
-      backgroundColor: varColors, borderWidth: 0, borderRadius: 3, barPercentage: 0.55, categoryPercentage: 0.8 }],
-  };
-  const varianceOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
-    plugins: {
-      datalabels: { display: false },
-      legend: { display: false },
-      tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
-        callbacks: { label: (c) => c.parsed.y === null ? "No data"
-          : `Variance: ${fmtValue(c.parsed.y, kpi, { signed: true })} (${varianceFavourable(kpi, c.parsed.y) ? "favourable" : "unfavourable"})` } },
-    },
-    scales: {
-      y: { grid: { color: T.lineSoft }, ticks: { color: T.body, font: { size: 10.5 }, maxTicksLimit: 5, callback: (v) => fmtValue(v, kpi, { signed: true }) } },
-      x: { grid: { display: false }, ticks: { display: false } },
-    },
-  };
-
-  const mainChart = {
-    labels,
-    datasets: [
-      { type: "line", label: "Budget", data: budget, borderColor: T.accent, borderWidth: 2.5,
-        pointRadius: 0, pointHoverRadius: 4, tension: 0.25, spanGaps: true, fill: false, order: 1 },
-      { type: "bar", label: "Actual", data: actual, backgroundColor: "rgba(30,64,175,0.72)",
-        borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.75, order: 2 },
-    ],
-  };
-  const mainOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
-    plugins: {
-      datalabels: { display: false },
-      legend: { position: "top", align: "end", labels: { color: T.body, font: { size: 12.5 }, padding: 14, usePointStyle: true, boxWidth: 8 } },
-      tooltip: { backgroundColor: T.ink, padding: 12, cornerRadius: 8,
-        callbacks: { label: (c) => c.parsed.y === null ? `${c.dataset.label}: no data` : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}` } },
-    },
-    scales: {
-      y: { grid: { color: T.lineSoft }, ticks: { color: T.body, font: { size: 11.5 }, callback: (v) => fmtValue(v, kpi) } },
-      x: { grid: { display: false }, ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
-    },
-  };
-
-  return (
-    <Modal title={`${kpi.name} — Trend`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={940}
-      footer={<>
-        <div style={{ flex: 1, fontSize: "12px", color: T.body, textAlign: "left", display: "flex", alignItems: "center", gap: "6px" }}>
-          <Info size={12} /> Green variance is favourable for this KPI's direction; red is not.
-        </div>
-        <button onClick={() => { setNoteText(existingNote); setNoteOpen((v) => !v); }} style={btnGhost}>
-          <StickyNote size={13} /> {existingNote ? "Edit note" : "Add note"}
-        </button>
-        <button onClick={onClose} style={btnPrimary}>Close</button>
-      </>}>
-      <div style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px 8px", marginBottom: "12px" }}>
-        <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Variance — Actual less Budget</div>
-        <div style={{ height: "130px" }}><Chart type="bar" data={varianceChart} options={varianceOptions} /></div>
-      </div>
-      <div style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" }}>
-        <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "4px" }}>Budget vs Actual</div>
-        <div style={{ height: "290px" }}><Chart type="bar" data={mainChart} options={mainOptions} /></div>
-      </div>
-
-      {(existingNote || noteOpen) && (
-        <div style={{ marginTop: "14px", background: T.panel, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "13px 15px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-              <StickyNote size={12} /> Note for this period
-            </span>
-            {!noteOpen && <button onClick={() => { setNoteText(existingNote); setNoteOpen(true); }} style={{ ...btnQuiet, padding: "2px 6px", fontSize: "12.5px" }}><Pencil size={11} /> Edit</button>}
-          </div>
-          {noteOpen ? (
-            <>
-              <textarea rows="3" value={noteText} onChange={(e) => setNoteText(e.target.value)}
-                placeholder="e.g. Production decreased this month due to scheduled maintenance."
-                style={{ ...inputS, resize: "vertical" }} />
-              <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
-                <button onClick={() => { onSaveNote(noteKey, noteText); setNoteOpen(false); }} style={{ ...btnPrimary, padding: "7px 14px" }}><Save size={12} /> Save note</button>
-                <button onClick={() => setNoteOpen(false)} style={{ ...btnGhost, padding: "7px 14px" }}>Cancel</button>
-              </div>
-            </>
-          ) : <p style={{ margin: 0, fontSize: "14px", color: T.body, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{existingNote}</p>}
-        </div>
-      )}
-    </Modal>
-  );
-};
-
-/* ─── Observations and Opportunities ────────────────────────────────────── */
-const localAnalysis = (kpi, period, v, fy) => {
+const localPeriodAnalysis = (kpi, period, v, fy) => {
   const status = getStatus(kpi, period, fy);
   const variance = getVariance(kpi, period, fy);
   const fav = varianceFavourable(kpi, variance);
@@ -669,7 +606,58 @@ const localAnalysis = (kpi, period, v, fy) => {
   };
 };
 
-const AnalysisModal = ({ kpi, period, fy, onClose }) => {
+const localSummaryAnalysis = (kpi, fy) => {
+  const rows = PERIODS.map((p) => ({
+    key: p.key, label: p.label,
+    status: getStatus(kpi, p.key, fy),
+    variance: getVariance(kpi, p.key, fy),
+    v: periodValues(kpi, p.key, fy),
+  }));
+  const withData = rows.filter((r) => r.status.key !== "none");
+  const reds = withData.filter((r) => r.status.key === "red");
+  const ambers = withData.filter((r) => r.status.key === "amber");
+  const greens = withData.filter((r) => r.status.key === "green");
+  const wk = rows.find((r) => r.key === "week"), yr = rows.find((r) => r.key === "year");
+
+  const observations = rows.map((r) => r.status.key === "none"
+    ? `${r.label}: not enough captured data to assess.`
+    : `${r.label}: ${fmtValue(r.v.actual, kpi)} against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}.`);
+  observations.push(`Across all four timeframes: ${greens.length} on budget, ${ambers.length} needing attention, ${reds.length} critical.`);
+
+  const trends = [];
+  if (wk?.status.key !== "none" && yr?.status.key !== "none") {
+    const wf = varianceFavourable(kpi, wk.variance), yf = varianceFavourable(kpi, yr.variance);
+    if (wf && !yf) trends.push("The short term is recovering ahead of the year — the recent weeks are stronger than the year-to-date picture.");
+    else if (!wf && yf) trends.push("The year-to-date position is still favourable but the most recent week is not. This is where deterioration usually shows first.");
+    else if (wf && yf) trends.push("Short and long timeframes agree and are both favourable — performance is consistent rather than lucky in one period.");
+    else trends.push("Both the week and the year are unfavourable, so this is a structural gap rather than a bad period.");
+  } else {
+    trends.push("Not every timeframe has data, so the short-versus-long comparison is partial.");
+  }
+  trends.push(reds.length >= 2
+    ? "Two or more timeframes are critical, which usually means the budget assumption itself needs revisiting."
+    : "Read the quarter as the honest middle ground — it absorbs weekly noise without hiding a bad month.");
+
+  const issues = reds.length || ambers.length
+    ? [
+        `Off budget on ${[...reds, ...ambers].map((r) => r.label.toLowerCase()).join(", ")}.`,
+        reds.length ? "At least one timeframe is critical and should carry a named owner and a dated action."
+          : "The drift is contained for now, but it is present at more than one timeframe.",
+      ]
+    : ["Nothing material across any timeframe. The exposure is complacency — budgets that are no longer stretching."];
+
+  const opportunities = reds.length || ambers.length
+    ? ["Raise a single action against this KPI rather than one per timeframe — the underlying cause is the same.",
+       kpi.direction === "higher" ? "Remove the largest constraint on output before adding capacity or targets."
+         : "Rank the contributors driving this number and address the largest one first.",
+       "Re-check the budget assumption: if every timeframe misses, the plan may be the problem, not the delivery."]
+    : ["Tighten the budget so it continues to stretch, and re-baseline at the next review.",
+       "Lift what is working here into the weaker KPIs in the same category."];
+
+  return { observations, trends, issues, opportunities };
+};
+
+const AnalysisPanel = ({ kpi, period, fy, scope = "period", embedded = false }) => {
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState(null);
   const [source, setSource] = useState("ai");
@@ -684,9 +672,16 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
         const res = await callable({
           kpiName: kpi.name, meaning: kpi.meaning, measured: kpi.measured,
           units: kpi.units, frequency: kpi.frequency, direction: kpi.direction,
-          timeframe: PERIOD_LABEL[period], financialYearStartMonth: fy.startMonth,
+          scope, // "period" or "summary"
+          timeframe: scope === "summary" ? "All timeframes" : PERIOD_LABEL[period],
+          financialYearStartMonth: fy.startMonth,
           budget: v.budget, actual: v.actual, variance: getVariance(kpi, period, fy),
-          status: getStatus(kpi, period, fy).label, notes: kpi.notes || "", entries: kpi.entries || {},
+          status: getStatus(kpi, period, fy).label,
+          allTimeframes: PERIODS.map((p) => ({
+            timeframe: p.label, ...periodValues(kpi, p.key, fy),
+            variance: getVariance(kpi, p.key, fy), status: getStatus(kpi, p.key, fy).label,
+          })),
+          notes: kpi.notes || "", entries: kpi.entries || {},
         });
         const d = res?.data;
         if (d?.observations && d?.opportunities) {
@@ -700,40 +695,51 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
         console.error("AI analysis unavailable:", err);
         setReason(err?.code === "functions/not-found" ? "The generateKpiAnalysis function isn't deployed yet." : errText(err));
         setSource("local");
-        setAnalysis(localAnalysis(kpi, period, v, fy));
+        setAnalysis(scope === "summary" ? localSummaryAnalysis(kpi, fy) : localPeriodAnalysis(kpi, period, v, fy));
       } finally { setLoading(false); }
     })();
-  }, [kpi, period, fy]);
+  }, [kpi, period, fy, scope]);
 
   useEffect(() => { build(); }, [build]);
 
-  const Section = ({ label, items, color }) => (
-    <div style={{ marginBottom: "18px" }}>
-      <div style={{ fontSize: "11.5px", fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color, marginBottom: "8px" }}>{label}</div>
-      <ul style={{ margin: 0, paddingLeft: "18px", color: T.body, fontSize: "14px", lineHeight: 1.7 }}>
+  const Section = ({ label, items, color }) => (!items || !items.length) ? null : (
+    <div style={{ marginBottom: "16px" }}>
+      <div style={{ fontSize: "11.5px", fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color, marginBottom: "7px" }}>{label}</div>
+      <ul style={{ margin: 0, paddingLeft: "18px", color: T.body, fontSize: "13.5px", lineHeight: 1.65 }}>
         {items.map((it, i) => <li key={i} style={{ marginBottom: "4px" }}>{it}</li>)}
       </ul>
     </div>
   );
 
   return (
-    <Modal title="Observations and Opportunities" subtitle={`${kpi.name} · ${PERIOD_LABEL[period]}`}
-      icon={<Lightbulb size={17} />} onClose={onClose} width={700}
-      footer={<>
-        <button onClick={build} disabled={loading} style={{ ...btnGhost, opacity: loading ? 0.6 : 1 }}><RefreshCw size={13} /> Regenerate</button>
-        <button onClick={onClose} style={btnPrimary}>Close</button>
-      </>}>
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "10px", flexWrap: "wrap" }}>
+        <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Lightbulb size={13} /> Observations and Opportunities
+          <span style={{ fontWeight: 500, color: T.muted }}>
+            · {scope === "summary" ? "all timeframes" : PERIOD_LABEL[period].toLowerCase()}
+          </span>
+        </span>
+        <button onClick={build} disabled={loading} style={{ ...btnGhost, padding: "5px 10px", fontSize: "12.5px", opacity: loading ? 0.6 : 1 }}>
+          <RefreshCw size={12} /> Regenerate
+        </button>
+      </div>
+
       {!loading && (
-        <div style={{ fontSize: "12px", color: source === "ai" ? T.body : T.amber, marginBottom: "16px",
+        <div style={{ fontSize: "12px", color: source === "ai" ? T.muted : T.amber, marginBottom: "12px",
           display: "flex", alignItems: "flex-start", gap: "6px", lineHeight: 1.5 }}>
           <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
-          {source === "ai" ? "Generated from your KPI data"
+          {source === "ai"
+            ? (scope === "summary"
+                ? "Generated from your figures across the week, month, quarter and year."
+                : `Generated from your ${PERIOD_PREFIX[period].toLowerCase()} figures — it changes when you change the timeframe.`)
             : <span>AI unavailable — showing a rules-based summary built from your figures.<br /><span style={{ color: T.muted }}>{reason}</span></span>}
         </div>
       )}
+
       {loading ? (
-        <div style={{ textAlign: "center", padding: "44px 0", color: T.body, fontSize: "14px" }}>
-          <RefreshCw size={22} color={T.faint} /><div style={{ marginTop: "14px" }}>Reviewing {kpi.name}...</div>
+        <div style={{ textAlign: "center", padding: embedded ? "26px 0" : "44px 0", color: T.body, fontSize: "13.5px" }}>
+          <RefreshCw size={20} color={T.faint} /><div style={{ marginTop: "12px" }}>Reviewing {kpi.name}...</div>
         </div>
       ) : analysis && (
         <>
@@ -743,11 +749,380 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
           <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
         </>
       )}
+    </div>
+  );
+};
+
+/* Table icon → the everything-considered version. */
+const AnalysisModal = ({ kpi, period, fy, onClose }) => (
+  <Modal title="Observations and Opportunities" subtitle={`${kpi.name} · summary across all timeframes`}
+    icon={<Lightbulb size={17} />} onClose={onClose} width={700}
+    footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+    <AnalysisPanel kpi={kpi} period={period} fy={fy} scope="summary" />
+  </Modal>
+);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Trend chart.
+
+   Variance sits in its own chart, above Budget vs Actual, on its own scale.
+   Values print on the series at two decimals, so the y-axis is switched off.
+   Everything below the charts — averages, note, analysis — is always visible.
+   ════════════════════════════════════════════════════════════════════════ */
+const CHART_TYPES = [
+  { value: "bar", label: "Bars" },
+  { value: "line", label: "Line" },
+  { value: "area", label: "Area" },
+];
+
+/* chartjs-plugin-datalabels is registered globally elsewhere in this app. If
+   it isn't switched off per-chart it draws every value again, unrounded —
+   which is where "0.8199999999999998" came from, layered on top of the
+   formatted labels. Both charts must carry this. */
+const NO_DATALABELS = { display: false };
+
+const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveConfig, readOnly }) => {
+  const [showCustomise, setShowCustomise] = useState(false);
+  const cfg = { ...DEFAULT_CHART, ...(kpi.chartConfig || {}) };
+  const setCfg = (patch) => { if (!readOnly) onSaveConfig({ ...cfg, ...patch }); };
+
+  const { labels, actual, budget, noteKey, caption } = useMemo(() => {
+    const { startYear, startMonth } = fy;
+    if (period === "week") {
+      const weeks = fyWeeks(startYear, startMonth);
+      const idx = Math.max(weeks.findIndex((w) => w.key === currentWeekKey()), 0);
+      const slice = weeks.slice(Math.max(0, idx - 11), idx + 1);
+      return { labels: slice.map((w) => w.label),
+        actual: slice.map((w) => parseNum(kpi.entries?.[w.key]?.actual)),
+        budget: slice.map((w) => parseNum(kpi.entries?.[w.key]?.budget)),
+        noteKey: currentWeekKey(), caption: `Weeks of FY ${fyLabel(startYear, startMonth)}` };
+    }
+    if (period === "quarter") {
+      const qs = fyQuarters(startYear, startMonth);
+      const rows = qs.map((q) => {
+        const ms = q.months.map((m) => resolveMonth(kpi, m.year, m.month));
+        return { actual: rollUp(ms.map((r) => Number(r.actual)), kpi.aggregate),
+                 budget: rollUp(ms.map((r) => Number(r.budget)), kpi.aggregate) };
+      });
+      return { labels: qs.map((q) => `${q.label} ${fyLabel(startYear, startMonth)}`),
+        actual: rows.map((r) => r.actual), budget: rows.map((r) => r.budget),
+        noteKey: `Q:${startYear}`, caption: `Quarters of FY ${fyLabel(startYear, startMonth)}` };
+    }
+    const months = fyMonths(startYear, startMonth);
+    const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
+    return { labels: months.map((m) => m.label),
+      actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
+      noteKey: currentMonthKey(), caption: `FY ${fyLabel(startYear, startMonth)} · ${months[0].long} → ${months[11].long}` };
+  }, [kpi, period, fy]);
+
+  const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
+
+  /* ── Note: always visible, auto-saved ─────────────────────────────────── */
+  const [noteText, setNoteText] = useState(kpi.periodNotes?.[noteKey] || "");
+  useEffect(() => { setNoteText(kpi.periodNotes?.[noteKey] || ""); /* eslint-disable-next-line */ }, [noteKey]);
+  const noteState = useAutoSave(noteText, (t) => { if (!readOnly) onSaveNote(noteKey, t); });
+
+  /* ── Averages ─────────────────────────────────────────────────────────── */
+  const stats = useMemo(() => {
+    const A = actual.filter(Number.isFinite), B = budget.filter(Number.isFinite), V = variance.filter(Number.isFinite);
+    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+    const sum = (a) => (a.length ? a.reduce((x, y) => x + y, 0) : null);
+    const score = (v) => (kpi.direction === "higher" ? v : kpi.direction === "lower" ? -v : -Math.abs(v));
+    let best = null, worst = null;
+    variance.forEach((v, i) => {
+      if (!Number.isFinite(v)) return;
+      if (best === null || score(v) > score(variance[best])) best = i;
+      if (worst === null || score(v) < score(variance[worst])) worst = i;
+    });
+    return {
+      avgActual: avg(A), avgBudget: avg(B), avgVariance: avg(V),
+      totalActual: sum(A), totalBudget: sum(B),
+      periods: A.length, ofPeriods: actual.length,
+      best: best === null ? null : { label: labels[best], v: variance[best] },
+      worst: worst === null ? null : { label: labels[worst], v: variance[worst] },
+    };
+  }, [actual, budget, variance, labels, kpi.direction]);
+
+  /* ── Series value labels ──────────────────────────────────────────────────
+     Two decimals throughout. Each label is measured before it is drawn, and
+     anything that would land on a label already placed is dropped rather than
+     stacked. Bar labels sit inside the bar where there is room, which keeps
+     them clear of the budget line crossing the same region.                 */
+  const showValues = cfg.showLabels;
+  const valueLabelPlugin = useMemo(() => ({
+    id: "opValueLabels",
+    afterDatasetsDraw(chart) {
+      if (!showValues) return;
+      const { ctx, chartArea } = chart;
+      if (!chartArea) return;
+      ctx.save();
+      ctx.font = "600 10.5px ui-sans-serif, system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const placed = [];
+      const clashes = (r) => placed.some((p) => !(r.x2 < p.x1 || r.x1 > p.x2 || r.y2 < p.y1 || r.y1 > p.y2));
+
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden) return;
+        meta.data.forEach((el, i) => {
+          const raw = ds.data[i];
+          if (!Number.isFinite(raw)) return;
+          const text = fmtChart(raw, kpi, { signed: !!ds.__signed });
+          if (!text) return;
+
+          const w = ctx.measureText(text).width;
+          const x = el.x;
+          let y, color = ds.__labelColor || T.body;
+
+          if (ds.type === "bar") {
+            const base = Number.isFinite(el.base) ? el.base : chartArea.bottom;
+            const height = Math.abs(base - el.y);
+            const upward = el.y <= base;
+            if (height >= 30) {
+              // Inside the bar, in white — always legible, and it can't
+              // collide with the budget line sitting at a similar height.
+              y = upward ? el.y + 13 : el.y - 13;
+              color = "#ffffff";
+            } else {
+              y = upward ? el.y - 11 : el.y + 11;
+            }
+          } else {
+            y = el.y - 13;
+          }
+
+          const rect = { x1: x - w / 2 - 4, x2: x + w / 2 + 4, y1: y - 8, y2: y + 8 };
+          if (rect.x1 < chartArea.left - 8 || rect.x2 > chartArea.right + 8) return;
+          if (rect.y1 < chartArea.top - 16 || rect.y2 > chartArea.bottom + 16) return;
+          if (clashes(rect)) return;
+
+          placed.push(rect);
+          ctx.fillStyle = color;
+          ctx.fillText(text, x, y);
+        });
+      });
+      ctx.restore();
+    },
+  }), [showValues, kpi]);
+
+  const mkDataset = (label, data, type, color, extra = {}) => {
+    const base = { label, data, order: extra.order ?? 1, __labelColor: extra.__labelColor || T.body, __signed: !!extra.__signed,
+      datalabels: NO_DATALABELS };
+    if (type === "bar") {
+      return { ...base, type: "bar", backgroundColor: extra.backgroundColor || hexA(color, 0.78),
+        borderColor: color, borderWidth: 0, borderRadius: 4, barPercentage: 0.58, categoryPercentage: 0.74 };
+    }
+    return { ...base, type: "line", borderColor: color, backgroundColor: hexA(color, 0.16),
+      borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, pointBackgroundColor: color,
+      tension: 0.25, spanGaps: true, fill: type === "area" };
+  };
+
+  const noAxes = {
+    y: { display: false, grace: "26%" },
+    x: { grid: { display: false }, border: { color: T.line },
+      ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+  };
+  const legendCfg = (show) => ({ display: show, position: "top", align: "end",
+    labels: { color: T.body, font: { size: 12.5 }, padding: 14, usePointStyle: true, boxWidth: 8 } });
+
+  /* Variance chart — favourable green, unfavourable red. */
+  const varColors = variance.map((v) =>
+    v === null ? hexA(T.faint, 0.3) : varianceFavourable(kpi, v) ? hexA(cfg.favColor, 0.8) : hexA(cfg.unfavColor, 0.8));
+
+  const varianceData = {
+    labels,
+    datasets: [mkDataset("Variance", variance, cfg.varianceType === "bar" ? "bar" : cfg.varianceType,
+      cfg.favColor, { backgroundColor: varColors, __signed: true, __labelColor: T.body })],
+  };
+  const varianceOptions = {
+    responsive: true, maintainAspectRatio: false,
+    layout: { padding: { top: 24, bottom: 8 } },
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      datalabels: NO_DATALABELS,   // silences the globally registered plugin
+      legend: legendCfg(false),
+      tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+        callbacks: { label: (c) => c.parsed.y === null ? "No data"
+          : `Variance: ${fmtValue(c.parsed.y, kpi, { signed: true })} (${varianceFavourable(kpi, c.parsed.y) ? "favourable" : "unfavourable"})` } },
+    },
+    scales: noAxes,
+  };
+
+  const mainData = {
+    labels,
+    datasets: [
+      mkDataset("Budget", budget, cfg.budgetType, cfg.budgetColor, { order: 1, __labelColor: cfg.budgetColor }),
+      mkDataset("Actual", actual, cfg.actualType, cfg.actualColor, { order: 2, __labelColor: cfg.actualColor }),
+    ],
+  };
+  const mainOptions = {
+    responsive: true, maintainAspectRatio: false,
+    layout: { padding: { top: 26, bottom: 4 } },
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      datalabels: NO_DATALABELS,   // silences the globally registered plugin
+      legend: legendCfg(cfg.showLegend),
+      tooltip: { backgroundColor: T.ink, padding: 12, cornerRadius: 8,
+        callbacks: { label: (c) => c.parsed.y === null ? `${c.dataset.label}: no data` : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}` } },
+    },
+    scales: noAxes,
+  };
+
+  const Tile = ({ label, value, color = T.ink, hint }) => (
+    <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: "9px", padding: "10px 12px" }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: T.muted }}>{label}</div>
+      <div style={{ fontSize: "16px", fontWeight: 700, color, marginTop: "3px", fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      {hint && <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "2px" }}>{hint}</div>}
+    </div>
+  );
+
+  const colorField = (label, key) => (
+    <div>
+      <label style={{ ...labelS, fontSize: "12px" }}>{label}</label>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <input type="color" value={cfg[key]} onChange={(e) => setCfg({ [key]: e.target.value })}
+          style={{ width: "38px", height: "32px", border: `1px solid ${T.lineStrong}`, borderRadius: "7px", background: T.bg, cursor: "pointer", padding: "2px" }} />
+        <span style={{ fontSize: "12px", color: T.muted, fontFamily: "ui-monospace, monospace" }}>{cfg[key]}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <Modal title={`${kpi.name} — Trend`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
+      footer={<>
+        <div style={{ flex: 1, fontSize: "12px", color: T.body, textAlign: "left", display: "flex", alignItems: "center", gap: "6px" }}>
+          <Info size={12} /> Green variance is favourable for this KPI's direction; red is not.
+        </div>
+        <button onClick={onClose} style={btnPrimary}>Close</button>
+      </>}>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "10px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "12.5px", color: T.muted }}>
+          {PERIOD_PREFIX[period]} view · values printed to 2 decimals; hover any point for the exact figure
+        </span>
+        {!readOnly && (
+          <button onClick={() => setShowCustomise((v) => !v)} style={{ ...btnGhost, padding: "6px 12px", fontSize: "12.5px" }}>
+            <Palette size={13} /> Customise chart {showCustomise ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        )}
+      </div>
+
+      {showCustomise && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={{ ...labelS, fontSize: "12px" }}>Actual as</label>
+              <select value={cfg.actualType} onChange={(e) => setCfg({ actualType: e.target.value })} style={selectS}>
+                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ ...labelS, fontSize: "12px" }}>Budget as</label>
+              <select value={cfg.budgetType} onChange={(e) => setCfg({ budgetType: e.target.value })} style={selectS}>
+                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ ...labelS, fontSize: "12px" }}>Variance as</label>
+              <select value={cfg.varianceType} onChange={(e) => setCfg({ varianceType: e.target.value })} style={selectS}>
+                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            {colorField("Actual colour", "actualColor")}
+            {colorField("Budget colour", "budgetColor")}
+            {colorField("Favourable", "favColor")}
+            {colorField("Unfavourable", "unfavColor")}
+          </div>
+          <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "center" }}>
+            {[
+              { key: "showLabels", label: "Show values on the series" },
+              { key: "showLegend", label: "Show legend" },
+              { key: "showVariance", label: "Show the variance chart" },
+            ].map((o) => (
+              <label key={o.key} onClick={() => setCfg({ [o.key]: !cfg[o.key] })}
+                style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: T.body, cursor: "pointer" }}>
+                {cfg[o.key] ? <CheckSquare size={15} color={T.accent} /> : <Square size={15} color={T.muted} />} {o.label}
+              </label>
+            ))}
+            <button onClick={() => setCfg({ ...DEFAULT_CHART })} style={{ ...btnQuiet, padding: "4px 8px", fontSize: "12.5px", marginLeft: "auto" }}>
+              <RefreshCw size={12} /> Reset to default
+            </button>
+          </div>
+          <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0", display: "flex", alignItems: "flex-start", gap: "6px", lineHeight: 1.55 }}>
+            <Check size={12} color={T.green} style={{ marginTop: "2px", flexShrink: 0 }} />
+            Chart settings save themselves against this KPI. Values print to 2 decimals; thousands show as k and millions as M, and any label that would sit on top of another is left out so the chart stays readable.
+          </p>
+        </div>
+      )}
+
+      {cfg.showVariance && (
+        <div style={{ ...cardS, padding: "14px 16px 10px", marginBottom: "12px" }}>
+          <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "6px" }}>
+            Variance — Actual less Budget
+            <span style={{ fontWeight: 400, color: T.muted, marginLeft: "8px" }}>own scale, own chart</span>
+          </div>
+          <div style={{ height: "210px" }}>
+            <Chart type="bar" data={varianceData} options={varianceOptions} plugins={[valueLabelPlugin]} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ ...cardS, marginBottom: "14px" }}>
+        <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "4px" }}>Budget vs Actual</div>
+        <div style={{ height: "330px" }}>
+          <Chart type="bar" data={mainData} options={mainOptions} plugins={[valueLabelPlugin]} />
+        </div>
+      </div>
+
+      {/* Averages, right under the chart */}
+      <div style={{ marginBottom: "14px" }}>
+        <div style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Sigma size={13} /> Averages across the {PERIOD_PREFIX[period].toLowerCase()} periods shown
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+          <Tile label="Average actual" value={fmtValue(stats.avgActual, kpi)} />
+          <Tile label="Average budget" value={fmtValue(stats.avgBudget, kpi)} />
+          <Tile label="Average variance" value={fmtValue(stats.avgVariance, kpi, { signed: true })}
+            color={stats.avgVariance === null ? T.faint : varianceFavourable(kpi, stats.avgVariance) ? T.green : T.red} />
+          {kpi.aggregate === "sum" && <Tile label="Total actual" value={fmtValue(stats.totalActual, kpi)} hint={`Budget ${fmtValue(stats.totalBudget, kpi)}`} />}
+          <Tile label="Best period" value={stats.best ? fmtValue(stats.best.v, kpi, { signed: true }) : "—"} color={T.green} hint={stats.best?.label} />
+          <Tile label="Worst period" value={stats.worst ? fmtValue(stats.worst.v, kpi, { signed: true }) : "—"} color={T.red} hint={stats.worst?.label} />
+          <Tile label="Periods with data" value={`${stats.periods} of ${stats.ofPeriods}`} />
+        </div>
+      </div>
+
+      {/* Note is always on screen and saves itself */}
+      <div style={{ ...cardS, background: T.panel, marginBottom: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", gap: "10px" }}>
+          <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+            <StickyNote size={12} /> Note for this period
+          </span>
+          <SaveState state={noteState} idleText={readOnly ? "Read only" : "Saves as you type"} />
+        </div>
+        {readOnly
+          ? <p style={{ margin: 0, fontSize: "14px", color: noteText ? T.body : T.faint, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{noteText || "No note for this period."}</p>
+          : <textarea rows="3" value={noteText} onChange={(e) => setNoteText(e.target.value)}
+              placeholder="e.g. Production decreased this month due to scheduled maintenance."
+              style={{ ...inputS, resize: "vertical", background: T.bg }} />}
+      </div>
+
+      {/* Analysis for this timeframe, always visible */}
+      <div style={cardS}>
+        <AnalysisPanel kpi={kpi} period={period} fy={fy} scope="period" embedded />
+      </div>
     </Modal>
   );
 };
 
-/* ─── Add Action ────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   Add Action.
+
+   One field: Action. It is what appears in the Action column on the
+   Integrated Actions page, so it is written as an instruction, not a
+   description of the problem. The KPI figures that prompted it are attached
+   automatically as context rather than typed by hand.
+   ════════════════════════════════════════════════════════════════════════ */
 const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId, onClose, onSaved }) => {
   const [meetings, setMeetings] = useState([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
@@ -759,10 +1134,13 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
   const variance = getVariance(kpi, period, fy);
   const v = periodValues(kpi, period, fy);
 
+  /* Generated, never typed — it travels with the action so the meeting can
+     see the figures behind it without the user restating them. */
+  const context = `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against budget ${fmtValue(v.budget, kpi)}${
+    variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${categoryName} · ${subCategoryName}.`;
+
   const [form, setForm] = useState({
-    title: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
-    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against budget ${fmtValue(v.budget, kpi)}${
-      variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${categoryName} · ${subCategoryName}.`,
+    action: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
     category: "Operational Performance", assignedTo: "", dueDate: "", status: "In Progress",
   });
 
@@ -808,13 +1186,15 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
   }, [meetingId, meetings.length]);
 
   const save = async () => {
-    if (!form.title.trim()) return;
+    if (!form.action.trim()) return;
     setSaving(true); setMessage("");
     try {
       const snap = await getDoc(doc(db, "governanceCalendar", userId));
       let list = snap.exists() ? snap.data().meetings || [] : [];
       const action = {
-        id: uid(), title: form.title.trim(), description: form.description.trim(),
+        // `title` is what the Integrated Actions page shows in its Action
+        // column, so the single Action field maps straight onto it.
+        id: uid(), title: form.action.trim(), description: context,
         category: form.category, assignedTo: form.assignedTo.trim(), dueDate: form.dueDate,
         status: form.status, archived: false,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), revisedDate: null,
@@ -851,25 +1231,33 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
     <Modal title="Add Action" subtitle={`${kpi.name} · ${PERIOD_LABEL[period]}`} icon={<Plus size={17} />} onClose={onClose} width={640}
       footer={<>
         <button onClick={onClose} style={btnGhost}>Cancel</button>
-        <button onClick={save} disabled={saving || !form.title.trim()} style={{ ...btnPrimary, opacity: saving || !form.title.trim() ? 0.6 : 1 }}>
+        <button onClick={save} disabled={saving || !form.action.trim()} style={{ ...btnPrimary, opacity: saving || !form.action.trim() ? 0.6 : 1 }}>
           {saving ? "Saving..." : "Save Action"}</button>
       </>}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", borderRadius: "10px",
         background: status.bg, border: `1px solid ${status.color}33`, marginBottom: "16px" }}>
-        <StatusIcon status={status} size={19} />
+        <StatusIcon status={status} size={22} />
         <div style={{ fontSize: "14px", color: T.body }}>
           <strong style={{ color: T.accent }}>{kpi.name}</strong> is {status.label.toLowerCase()} for {PERIOD_LABEL[period].toLowerCase()}.
           What action are you going to take?
         </div>
       </div>
 
-      <div style={{ marginBottom: "14px" }}>
+      <div style={{ marginBottom: "6px" }}>
         <label style={labelS}>Action *</label>
-        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={inputS} placeholder="What needs to be done?" />
+        <textarea rows="3" value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value })}
+          style={{ ...inputS, resize: "vertical" }}
+          placeholder="What needs to be done, by the time it is due?" />
+        <p style={{ fontSize: "12px", color: T.muted, margin: "7px 0 0", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+          <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
+          This is the wording that appears in the Action column on the Integrated Actions page.
+        </p>
       </div>
-      <div style={{ marginBottom: "14px" }}>
-        <label style={labelS}>Description</label>
-        <textarea rows="3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inputS, resize: "vertical" }} />
+
+      {/* The figures behind the action, attached automatically. */}
+      <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: "9px",
+        padding: "10px 13px", margin: "14px 0", fontSize: "12.5px", color: T.muted, lineHeight: 1.6 }}>
+        <span style={{ fontWeight: 600, color: T.accent }}>Attached context: </span>{context}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
@@ -921,17 +1309,16 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
   );
 };
 
-/* ─── KPI notes ─────────────────────────────────────────────────────────── */
+/* ─── KPI notes — auto-saved ────────────────────────────────────────────── */
 const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
+  const state = useAutoSave(notes, (n) => { if (!readOnly) onSave(n); });
   return (
     <Modal title={`Notes — ${kpi.name}`} icon={<StickyNote size={17} />} onClose={onClose}
-      footer={readOnly ? <button onClick={onClose} style={btnPrimary}>Close</button> : (
-        <>
-          <button onClick={onClose} style={btnGhost}>Cancel</button>
-          <button onClick={() => { onSave(notes); onClose(); }} style={btnPrimary}><Save size={13} /> Save Notes</button>
-        </>
-      )}>
+      footer={<>
+        <span style={{ flex: 1, textAlign: "left" }}><SaveState state={state} idleText={readOnly ? "Read only" : "Saves as you type"} /></span>
+        <button onClick={onClose} style={btnPrimary}>Close</button>
+      </>}>
       <label style={labelS}>Context, anomalies or anything worth remembering about this KPI</label>
       <textarea rows="9" value={notes} readOnly={readOnly} onChange={(e) => setNotes(e.target.value)}
         placeholder="e.g. Two suppliers were on shutdown for the first half of the period, which explains the dip."
@@ -940,12 +1327,78 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Add Data.
+/* ─── Manage categories — hide or delete ────────────────────────────────── */
+const ManageCategoriesModal = ({ structure, activeCategoryId, onClose, onToggleHidden, onRename, onDelete }) => {
+  const [confirmId, setConfirmId] = useState(null);
+  const [drafts, setDrafts] = useState({});
 
-   Frequency comes from the KPIs themselves, and picking the financial year
-   lays out every period in it — no week-by-week selecting. Periods run down
-   the page with Actual and Budget side by side, so nothing scrolls sideways.
+  const kpiCount = (c) => c.subCategories.reduce((s, sub) => s + sub.kpis.length, 0);
+
+  return (
+    <Modal title="Categories" subtitle="Hide a category to take it off the tabs, or delete it outright."
+      icon={<Layers size={17} />} onClose={onClose} width={640}
+      footer={<>
+        <span style={{ flex: 1, textAlign: "left", fontSize: "12px", color: T.muted, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Check size={12} color={T.green} /> Changes save themselves
+        </span>
+        <button onClick={onClose} style={btnPrimary}>Done</button>
+      </>}>
+      <div style={{ border: `1px solid ${T.line}`, borderRadius: "10px", overflow: "hidden" }}>
+        {structure.map((c, i) => {
+          const confirming = confirmId === c.id;
+          const name = drafts[c.id] !== undefined ? drafts[c.id] : c.name;
+          return (
+            <div key={c.id} style={{ padding: "12px 14px", background: i % 2 ? T.panel : T.bg,
+              borderBottom: i === structure.length - 1 ? "none" : `1px solid ${T.lineSoft}`,
+              opacity: c.hidden ? 0.62 : 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <input value={name}
+                  onChange={(e) => setDrafts((p) => ({ ...p, [c.id]: e.target.value }))}
+                  onBlur={() => { const v = (drafts[c.id] ?? c.name).trim(); if (v && v !== c.name) onRename(c.id, v); }}
+                  style={{ ...inputS, flex: 1, minWidth: "180px", fontWeight: 600, color: T.ink }} />
+                <span style={{ fontSize: "12px", color: T.muted, whiteSpace: "nowrap" }}>
+                  {c.subCategories.length} sub · {kpiCount(c)} KPIs
+                </span>
+                <button onClick={() => onToggleHidden(c.id)} style={{ ...btnGhost, padding: "7px 11px", fontSize: "12.5px" }}
+                  title={c.hidden ? "Show this category" : "Hide this category"}>
+                  {c.hidden ? <><EyeOff size={13} /> Hidden</> : <><Eye size={13} /> Visible</>}
+                </button>
+                <button onClick={() => setConfirmId(confirming ? null : c.id)} style={{ ...btnGhost, padding: "7px 11px", color: T.red, borderColor: `${T.red}44` }}
+                  title="Delete this category">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+
+              {confirming && (
+                <div style={{ marginTop: "10px", background: T.redBg, border: `1px solid ${T.red}33`, borderRadius: "9px", padding: "11px 13px" }}>
+                  <div style={{ fontSize: "13px", color: T.red, marginBottom: "9px", display: "flex", gap: "7px", alignItems: "flex-start" }}>
+                    <AlertTriangle size={14} style={{ marginTop: "2px", flexShrink: 0 }} />
+                    Deleting <strong style={{ margin: "0 3px" }}>{c.name}</strong> removes {kpiCount(c)} KPIs and every figure captured against them. This cannot be undone — hide it instead if you may want it back.
+                  </div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button onClick={() => { onDelete(c.id); setConfirmId(null); }} style={{ ...btnDanger, padding: "7px 13px", fontSize: "12.5px" }}>
+                      <Trash2 size={12} /> Delete permanently
+                    </button>
+                    <button onClick={() => { onToggleHidden(c.id, true); setConfirmId(null); }} style={{ ...btnGhost, padding: "7px 13px", fontSize: "12.5px" }}>
+                      <EyeOff size={12} /> Just hide it
+                    </button>
+                    <button onClick={() => setConfirmId(null)} style={{ ...btnQuiet, padding: "7px 13px", fontSize: "12.5px" }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: "12px", color: T.muted, marginTop: "12px", marginBottom: 0, display: "flex", alignItems: "flex-start", gap: "6px" }}>
+        <Info size={12} style={{ marginTop: "2px" }} /> Hidden categories keep all their data and stay out of the tabs and the CSV until you show them again.
+      </p>
+    </Modal>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Add Data — auto-saving.
    ════════════════════════════════════════════════════════════════════════ */
 const deriveFrequency = (category) => {
   const kpis = category?.subCategories.flatMap((s) => s.kpis) || [];
@@ -970,7 +1423,11 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   const [monthForDays, setMonthForDays] = useState(0);
   const [kpiIndex, setKpiIndex] = useState(0);
   const [draft, setDraft] = useState({});
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState("idle");
+
+  const structureRef = useRef(structure);
+  structureRef.current = structure;
+  const timer = useRef(null);
 
   const kpis = useMemo(() => category.subCategories.flatMap((s) => s.kpis.map((k) => ({ ...k, sub: s.name }))), [category]);
   const kpi = kpis[Math.min(kpiIndex, kpis.length - 1)];
@@ -986,7 +1443,6 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
   ];
 
-  /* Every period in the year, laid out automatically. */
   const periods = useMemo(() => {
     if (frequency === "Monthly") return fyMonths(startYear, fy.startMonth).map((m) => ({ key: m.key, label: m.long, hint: "" }));
     if (frequency === "Weekly") return fyWeeks(startYear, fy.startMonth).map((w) => ({ key: w.key, label: w.label, hint: w.short }));
@@ -1004,49 +1460,64 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
 
   const touchedCount = Object.values(draft).reduce((s, rows) => s + Object.keys(rows).length, 0);
 
-  const commit = async () => {
-    setSaving(true);
-    const next = structure.map((cat) => cat.id !== category.id ? cat : {
-      ...cat,
-      subCategories: cat.subCategories.map((sub) => ({
-        ...sub,
-        kpis: sub.kpis.map((k) => {
-          const rows = draft[k.id];
-          if (!rows) return k;
-          const entries = { ...(k.entries || {}) };
-          Object.entries(rows).forEach(([key, vals]) => {
-            const actual = parseNum(vals.actual ?? entries[key]?.actual);
-            const budget = parseNum(vals.budget ?? entries[key]?.budget);
-            if (actual === null && budget === null) delete entries[key];
-            else entries[key] = { actual, budget };
-          });
-          return { ...k, entries };
-        }),
-      })),
-    });
-    onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null });
-    await onSave(next);
-    setSaving(false);
+  const applyDraft = useCallback(() => structureRef.current.map((cat) => cat.id !== category.id ? cat : {
+    ...cat,
+    subCategories: cat.subCategories.map((sub) => ({
+      ...sub,
+      kpis: sub.kpis.map((k) => {
+        const rows = draft[k.id];
+        if (!rows) return k;
+        const entries = { ...(k.entries || {}) };
+        Object.entries(rows).forEach(([key, vals]) => {
+          const actual = parseNum(vals.actual !== undefined ? vals.actual : entries[key]?.actual);
+          const budget = parseNum(vals.budget !== undefined ? vals.budget : entries[key]?.budget);
+          if (actual === null && budget === null) delete entries[key];
+          else entries[key] = { actual, budget };
+        });
+        return { ...k, entries };
+      }),
+    })),
+  }), [draft, category.id]);
+
+  /* Auto-save: writes a short pause after the last keystroke. */
+  useEffect(() => {
+    if (!Object.keys(draft).length) return;
+    setSaveState("saving");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      await onSave(applyDraft(), { silent: true });
+      onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null });
+      setSaveState("saved");
+    }, 900);
+    return () => clearTimeout(timer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  const closeNow = async () => {
+    clearTimeout(timer.current);
+    if (Object.keys(draft).length) {
+      await onSave(applyDraft(), { silent: false });
+      onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null });
+    }
     onClose();
   };
 
   const cell = { ...inputS, padding: "7px 9px", textAlign: "right", fontSize: "13.5px", minHeight: "34px" };
   const th = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
-    letterSpacing: "0.5px", background: T.accent, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2 };
+    letterSpacing: "0.5px", background: T.header, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2, verticalAlign: "top" };
 
   return (
-    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]}`} icon={<Database size={17} />}
-      onClose={onClose} width={720}
+    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · figures save themselves`} icon={<Database size={17} />}
+      onClose={closeNow} width={720}
       footer={<>
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
-        <span style={{ flex: 1, fontSize: "12.5px", color: T.muted, textAlign: "left" }}>
-          {touchedCount > 0 ? `${touchedCount} cell${touchedCount === 1 ? "" : "s"} edited` : "Blank cells are left as they are"}
+        <span style={{ flex: 1, fontSize: "12.5px", color: T.muted, textAlign: "left", display: "flex", alignItems: "center", gap: "10px" }}>
+          <SaveState state={saveState} idleText="Blank cells are left as they are" />
+          {touchedCount > 0 && <span>{touchedCount} cell{touchedCount === 1 ? "" : "s"} edited</span>}
         </span>
-        <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
-          {saving ? "Saving..." : "Save data"}</button>
+        <button onClick={closeNow} style={btnPrimary}>Done</button>
       </>}>
 
-      {/* Everything that needs a choice is a dropdown, on one row. */}
       <div style={{ display: "grid", gridTemplateColumns: frequency === "Daily" ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "14px" }}>
         <div>
           <label style={labelS}>Financial year</label>
@@ -1057,7 +1528,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
         <div>
           <label style={labelS}>Category</label>
           <select value={catId} onChange={(e) => setCatId(e.target.value)} style={selectS}>
-            {structure.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {structure.map((c) => <option key={c.id} value={c.id}>{c.name}{c.hidden ? " (hidden)" : ""}</option>)}
           </select>
         </div>
         <div>
@@ -1080,7 +1551,6 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
         )}
       </div>
 
-      {/* One KPI at a time, with its periods running down the page. */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "10px" }}>
         <div style={{ flex: 1 }}>
           <label style={labelS}>KPI</label>
@@ -1099,7 +1569,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
       </div>
 
       <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-        <Info size={12} /> {periods.length} {frequency.toLowerCase().replace("ly", frequency === "Daily" ? "s" : frequency === "Weekly" ? "s" : "s")} in FY {fyLabel(startYear, fy.startMonth)} · KPI {kpiIndex + 1} of {kpis.length}
+        <Info size={12} /> {periods.length} {frequency === "Monthly" ? "months" : frequency === "Weekly" ? "weeks" : "days"} in FY {fyLabel(startYear, fy.startMonth)} · KPI {kpiIndex + 1} of {kpis.length} · values in {kpi?.units}
       </div>
 
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
@@ -1107,8 +1577,8 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
           <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
             <thead>
               <tr>
-                <th style={{ ...th, textAlign: "left", borderRight: `1px solid rgba(255,255,255,0.15)` }}>Period</th>
-                <th style={{ ...th, textAlign: "right", width: "27%", borderRight: `1px solid rgba(255,255,255,0.15)` }}>Actual</th>
+                <th style={{ ...th, textAlign: "left", borderRight: `1px solid ${T.headerLine}` }}>Period</th>
+                <th style={{ ...th, textAlign: "right", width: "27%", borderRight: `1px solid ${T.headerLine}` }}>Actual</th>
                 <th style={{ ...th, textAlign: "right", width: "27%" }}>Budget</th>
               </tr>
             </thead>
@@ -1138,7 +1608,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   );
 };
 
-/* ─── Add KPI — dropdowns, paired fields, asks in full every time ────────── */
+/* ─── Add KPI ───────────────────────────────────────────────────────────── */
 const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
   const [catId, setCatId] = useState(categoryId);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -1171,7 +1641,7 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
       meaning: form.meaning.trim(), measured: form.measured.trim(), entries: {},
     });
     const next = creatingCategory
-      ? [...structure, { id: `cat_${uid().slice(0,8)}`, name: newCategoryName.trim(), notes: "", subCategories: [{ name: subName, kpis: [kpi] }] }]
+      ? [...structure, { id: `cat_${uid().slice(0,8)}`, name: newCategoryName.trim(), notes: "", hidden: false, subCategories: [{ name: subName, kpis: [kpi] }] }]
       : structure.map((cat) => cat.id !== catId ? cat : {
           ...cat,
           subCategories: subs.some((s) => s.name === subName)
@@ -1197,7 +1667,7 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
         <div>
           <label style={labelS}>Category</label>
           <select value={catId} onChange={(e) => { setCatId(e.target.value); setSubChoice(""); }} style={selectS}>
-            {structure.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {structure.map((c) => <option key={c.id} value={c.id}>{c.name}{c.hidden ? " (hidden)" : ""}</option>)}
             <option value="__new__">＋ New category…</option>
           </select>
           {creatingCategory && (
@@ -1301,14 +1771,16 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
 const AddChooser = ({ onPick, onClose, prefs, fy, structure }) => {
   const cat = prefs ? structure.find((c) => c.id === prefs.catId) : null;
   return (
-    <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+    <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={720}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
         {[
           { key: "data", icon: <Database size={22} />, title: "Add Data",
             body: cat ? `Pick up where you left off — ${cat.name}, FY ${fyLabel(prefs.startYear, fy.startMonth)}.`
                       : "Capture actual and budget figures against the KPIs you already track." },
           { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI",
             body: "Create a new metric under an existing category, or start a category of your own." },
+          { key: "categories", icon: <Layers size={22} />, title: "Manage Categories",
+            body: "Rename a category, hide it from the tabs, or delete one you no longer track." },
         ].map((o) => (
           <button key={o.key} onClick={() => onPick(o.key)}
             style={{ padding: "22px 20px", borderRadius: "12px", border: `1px solid ${T.lineStrong}`, background: T.bg,
@@ -1361,6 +1833,7 @@ const OperationalPerformance = () => {
   const [actionKpi, setActionKpi] = useState(null);
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
+  const [showCategories, setShowCategories] = useState(false);
 
   const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
 
@@ -1431,8 +1904,34 @@ const OperationalPerformance = () => {
       subCategories: cat.subCategories.map((sub) => ({ ...sub,
         kpis: sub.kpis.map((k) => (k.id === kpiId ? { ...k, ...patch } : k)) })) })));
 
+  /* ── Category visibility and deletion ─────────────────────────────────── */
+  const visibleCategories = useMemo(() => (structure || []).filter((c) => !c.hidden), [structure]);
+
+  const toggleCategoryHidden = (id, forceHide = false) => {
+    const next = structure.map((c) => (c.id === id ? { ...c, hidden: forceHide ? true : !c.hidden } : c));
+    persist(next);
+    const cat = next.find((c) => c.id === id);
+    notify("success", `${cat.name} ${cat.hidden ? "hidden" : "shown"}.`);
+  };
+  const renameCategory = (id, name) => {
+    persist(structure.map((c) => (c.id === id ? { ...c, name } : c)));
+    notify("success", "Category renamed.");
+  };
+  const deleteCategory = (id) => {
+    const gone = structure.find((c) => c.id === id);
+    const next = structure.filter((c) => c.id !== id);
+    persist(next.length ? next : buildDefaultStructure(fy.startYear, fy.startMonth));
+    notify("success", `${gone?.name || "Category"} deleted.`);
+  };
+
+  useEffect(() => {
+    if (!structure) return;
+    if (!visibleCategories.length) return;
+    if (!visibleCategories.some((c) => c.id === activeCategoryId)) setActiveCategoryId(visibleCategories[0].id);
+  }, [structure, visibleCategories, activeCategoryId]);
+
   const activeCategory = useMemo(
-    () => (structure || []).find((c) => c.id === activeCategoryId) || (structure || [])[0], [structure, activeCategoryId]);
+    () => visibleCategories.find((c) => c.id === activeCategoryId) || visibleCategories[0], [visibleCategories, activeCategoryId]);
 
   const allRows = useMemo(() => {
     if (!activeCategory) return [];
@@ -1517,7 +2016,7 @@ const OperationalPerformance = () => {
   const downloadCSV = () => {
     const p = PERIOD_PREFIX[period];
     const lines = [["Category","Sub-Category","KPI","Units","Frequency", `${p} Budget`, `${p} Actual`, `${p} Variance`, "Status"]];
-    structure.forEach((cat) => cat.subCategories.forEach((sub) => sub.kpis.forEach((kpi) => {
+    visibleCategories.forEach((cat) => cat.subCategories.forEach((sub) => sub.kpis.forEach((kpi) => {
       const v = periodValues(kpi, period, fy);
       lines.push([cat.name, sub.name, `"${kpi.name}"`, kpi.units, kpi.frequency,
         v.budget ?? "", v.actual ?? "", getVariance(kpi, period, fy) ?? "", getStatus(kpi, period, fy).label]);
@@ -1535,9 +2034,9 @@ const OperationalPerformance = () => {
     window.location.href = origin === "cmf" ? "/cmf-cohorts" : origin === "catalyst" ? "/catalyst/cohorts" : "/my-cohorts";
   };
 
-  /* Dark brown header band, white type. */
-  const thS = { padding: 0, background: T.accent, borderBottom: `2px solid ${T.accent}`,
-    borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top" };
+  /* Near-black brown header band, white type, everything top-aligned. */
+  const thS = { padding: 0, background: T.header, borderBottom: `2px solid ${T.header}`,
+    borderRight: `1px solid ${T.headerLine}`, position: "relative", verticalAlign: "top" };
   const tdS = { padding: "13px 14px", color: T.body, fontSize: "14px", overflow: "hidden", borderRight: `1px solid ${T.lineSoft}` };
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "5px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
 
@@ -1596,17 +2095,17 @@ const OperationalPerformance = () => {
           <div>
             <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "14.5px", fontWeight: 600 }}>How to use it</h3>
             <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
-              <li>Pick a timeframe above the table — the column names follow it</li>
+              <li>Figures read against the Units column — no unit is repeated in the number cells</li>
               <li>Click the eye beside a KPI for what it means and how it is measured</li>
-              <li>Use the Actions column for the chart, insights, actions and notes</li>
-              <li>Add KPI/Data lays out the whole financial year for you</li>
+              <li>Charts print values to 2 decimals; hover a point for the exact figure</li>
+              <li>Categories can be renamed, hidden or deleted under Add KPI/Data</li>
             </ul>
           </div>
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "2px", borderBottom: `1px solid ${T.lineStrong}`, marginBottom: "18px", flexWrap: "wrap" }}>
-        {structure.map((cat) => {
+      <div style={{ display: "flex", gap: "2px", borderBottom: `1px solid ${T.lineStrong}`, marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
+        {visibleCategories.map((cat) => {
           const on = cat.id === activeCategory?.id;
           const counts = cat.subCategories.flatMap((s) => s.kpis).reduce((acc, k) => {
             const key = getStatus(k, period, fy).key; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
@@ -1624,6 +2123,17 @@ const OperationalPerformance = () => {
             </button>
           );
         })}
+        {!isInvestorView && (
+          <button onClick={() => setShowCategories(true)} title="Rename, hide or delete a category"
+            style={{ ...btnQuiet, marginLeft: "6px", padding: "8px 12px", fontSize: "13px", color: T.muted }}>
+            <Layers size={13} /> Categories
+            {structure.some((c) => c.hidden) && (
+              <span style={{ fontSize: "11px", padding: "1px 7px", borderRadius: "999px", background: T.raised, color: T.muted, fontWeight: 600 }}>
+                {structure.filter((c) => c.hidden).length} hidden
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
@@ -1686,7 +2196,7 @@ const OperationalPerformance = () => {
           })}
         </div>
         <span style={{ fontSize: "12.5px", color: T.muted }}>
-          Showing {PERIOD_PREFIX[period].toLowerCase()} budget, actual and variance
+          Showing {PERIOD_PREFIX[period].toLowerCase()} budget, actual and variance — read against the Units column
         </span>
       </div>
 
@@ -1705,12 +2215,12 @@ const OperationalPerformance = () => {
 
                   return (
                     <th key={key} style={{ ...thS, width: widths[key] }}>
-                      {/* Fixed two-line block, bottom-aligned, so single-line
-                          names sit on the same baseline as two-line ones. */}
-                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: align }}>
-                        <span style={{ display: "flex", alignItems: "flex-end", gap: "5px", minHeight: "34px" }}>
-                          <span style={{ display: "inline-flex", flexDirection: "column", justifyContent: "flex-end",
-                            alignItems: align, lineHeight: 1.3, minHeight: "34px" }}>
+                      {/* Every header starts at the top of the band — one- and
+                          two-line names share the same first baseline. */}
+                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column",
+                        justifyContent: "flex-start", gap: "5px", alignItems: align, minHeight: "66px" }}>
+                        <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                          <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
                             {lines.length > 1 && (
                               <span style={{ fontSize: "13px", fontWeight: 600, color: "rgba(255,255,255,0.82)", whiteSpace: "nowrap" }}>{lines[0]}</span>
                             )}
@@ -1718,9 +2228,9 @@ const OperationalPerformance = () => {
                               {lines[lines.length - 1]}
                             </span>
                           </span>
-                          <span style={{ paddingBottom: "2px" }}><InfoTip text={def.tip} light /></span>
+                          <span style={{ paddingTop: "1px" }}><InfoTip text={def.tip} light /></span>
                         </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: "2px", marginTop: "auto" }}>
                           {def.sort && (
                             <button onClick={() => toggleSort(key)} title="Sort" style={iconBtn(sorted ? "#fff" : "rgba(255,255,255,0.6)")}>
                               {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
@@ -1757,12 +2267,12 @@ const OperationalPerformance = () => {
                   );
                 })}
                 <th style={{ ...thS, width: widths[ACTIONS_KEY], borderRight: "none" }}>
-                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
-                    <span style={{ display: "flex", alignItems: "flex-end", gap: "5px", minHeight: "34px" }}>
-                      <span style={{ display: "inline-flex", alignItems: "flex-end", minHeight: "34px", fontSize: "13px", fontWeight: 600, color: "#ffffff" }}>Actions</span>
-                      <span style={{ paddingBottom: "2px" }}><InfoTip light text="Trend chart, observations and opportunities, add an action, and notes for this KPI." /></span>
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column",
+                    justifyContent: "flex-start", gap: "5px", alignItems: "center", minHeight: "66px" }}>
+                    <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff" }}>Actions</span>
+                      <span style={{ paddingTop: "1px" }}><InfoTip light text="Trend chart with averages, note and analysis; a summary analysis; raise an action; KPI notes." /></span>
                     </span>
-                    <span style={{ height: "23px" }} />
                   </div>
                   <div onMouseDown={(e) => startResize(e, ACTIONS_KEY)}
                     style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
@@ -1781,8 +2291,8 @@ const OperationalPerformance = () => {
                 const last = idx === group.items.length - 1;
                 // Heavy rule between sub-categories; light rule between KPIs.
                 const rowTd = { ...tdS, borderBottom: last ? `2px solid ${T.lineStrong}` : `1px solid ${T.lineSoft}` };
-                const cell = (key, content) => visibility[key] ? (
-                  <td key={key} style={{ ...rowTd, width: widths[key],
+                const cell = (key, content, title) => visibility[key] ? (
+                  <td key={key} title={title} style={{ ...rowTd, width: widths[key],
                     textAlign: COLUMN_DEFS[key].align === "right" ? "right" : COLUMN_DEFS[key].align === "center" ? "center" : "left" }}>
                     {content}
                   </td>
@@ -1806,20 +2316,21 @@ const OperationalPerformance = () => {
                         </div>
                       </td>
                     )}
-                    {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
+                    {cell("units", <span style={{ color: T.body, fontWeight: 600 }}>{kpi.units}</span>)}
                     {cell("frequency", <span style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "999px", background: T.raised, color: T.body, fontWeight: 500 }}>{kpi.frequency}</span>)}
-                    {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi)}</span>)}
-                    {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi)}</span>)}
+                    {/* Numbers carry no unit — the Units column already does. */}
+                    {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtBare(values.budget, kpi)}</span>, fmtValue(values.budget, kpi))}
+                    {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtBare(values.actual, kpi)}</span>, fmtValue(values.actual, kpi))}
                     {cell("variance", variance === null
                       ? <span style={{ color: T.faint }}>—</span>
                       : <span style={{ fontWeight: 700, color: fav ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>
-                          {fmtValue(variance, kpi, { signed: true })}</span>)}
-                    {cell("status", <StatusIcon status={status} />)}
+                          {fmtBare(variance, kpi, { signed: true })}</span>, fmtValue(variance, kpi, { signed: true }))}
+                    {cell("status", <span title={status.label} style={{ display: "inline-flex" }}><StatusIcon status={status} size={26} /></span>)}
 
                     <td style={{ ...rowTd, width: widths[ACTIONS_KEY], textAlign: "center", borderRight: "none" }}>
                       <div style={{ display: "flex", gap: "1px", justifyContent: "center", alignItems: "center" }}>
-                        <button onClick={() => setChartKpi(kpi)} style={iconBtn(T.body)} title="Trend chart"><LineChartIcon size={16} /></button>
-                        <button onClick={() => setAnalysisKpi(kpi)} style={iconBtn(T.body)} title="Observations and opportunities"><Lightbulb size={16} /></button>
+                        <button onClick={() => setChartKpi(kpi)} style={iconBtn(T.body)} title="Trend chart, averages, note and analysis"><LineChartIcon size={16} /></button>
+                        <button onClick={() => setAnalysisKpi(kpi)} style={iconBtn(T.body)} title="Summary analysis across all timeframes"><Lightbulb size={16} /></button>
                         {/* Always available; the colour follows the row's status. */}
                         {!isInvestorView && (
                           <button onClick={() => setActionKpi({ kpi, subCategoryName, categoryName })}
@@ -1837,26 +2348,26 @@ const OperationalPerformance = () => {
 
         <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.lineStrong}`, background: T.panel, fontSize: "12px",
           color: T.body, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
-          <span>{activeCategory?.subCategories.length} sub-categories</span>
+          <span>{activeCategory?.subCategories.length} sub-categories · figures in the units shown per row</span>
           <span style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><CheckCircle2 size={12} color={T.green} /> On budget</span>
-            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><AlertTriangle size={12} color={T.amber} /> Needs attention</span>
-            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><XCircle size={12} color={T.red} /> Critical</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><CheckCircle2 size={14} color={T.green} /> On budget</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><AlertTriangle size={14} color={T.amber} /> Needs attention</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><XCircle size={14} color={T.red} /> Critical</span>
           </span>
         </div>
       </div>
 
       {infoKpi && <KpiInfoModal kpi={infoKpi} readOnly={isInvestorView} onClose={() => setInfoKpi(null)}
-        onSave={(patch) => { updateKpi(infoKpi.id, patch); setInfoKpi({ ...infoKpi, ...patch }); notify("success", "KPI details updated."); }} />}
+        onSave={(patch) => { updateKpi(infoKpi.id, patch); setInfoKpi({ ...infoKpi, ...patch }); }} />}
 
-      {chartKpi && <TrendChartModal kpi={chartKpi} period={period} fy={fy} onClose={() => setChartKpi(null)}
+      {chartKpi && <TrendChartModal kpi={chartKpi} period={period} fy={fy} readOnly={isInvestorView} onClose={() => setChartKpi(null)}
         onSaveNote={(key, text) => {
           const notes = { ...(chartKpi.periodNotes || {}) };
           if (text.trim()) notes[key] = text.trim(); else delete notes[key];
           updateKpi(chartKpi.id, { periodNotes: notes });
           setChartKpi({ ...chartKpi, periodNotes: notes });
-          notify("success", "Note saved.");
-        }} />}
+        }}
+        onSaveConfig={(cfg) => { updateKpi(chartKpi.id, { chartConfig: cfg }); setChartKpi({ ...chartKpi, chartConfig: cfg }); }} />}
 
       {analysisKpi && <AnalysisModal kpi={analysisKpi} period={period} fy={fy} onClose={() => setAnalysisKpi(null)} />}
 
@@ -1866,15 +2377,20 @@ const OperationalPerformance = () => {
         onSaved={(m) => notify("success", `Action added to "${m}" and Integrated Actions.`)} />}
 
       {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)}
-        onSave={(notes) => { updateKpi(notesKpi.id, { notes }); notify("success", "Notes saved."); }} />}
+        onSave={(notes) => updateKpi(notesKpi.id, { notes })} />}
 
-      {addFlow === "choose" && <AddChooser onClose={() => setAddFlow(null)} onPick={(k) => setAddFlow(k)}
+      {showCategories && <ManageCategoriesModal structure={structure} activeCategoryId={activeCategoryId}
+        onClose={() => setShowCategories(false)}
+        onToggleHidden={toggleCategoryHidden} onRename={renameCategory} onDelete={deleteCategory} />}
+
+      {addFlow === "choose" && <AddChooser onClose={() => setAddFlow(null)}
+        onPick={(k) => { if (k === "categories") { setAddFlow(null); setShowCategories(true); } else setAddFlow(k); }}
         prefs={dataPrefs && structure.some((c) => c.id === dataPrefs.catId) ? dataPrefs : null} fy={fy} structure={structure} />}
 
       {addFlow === "data" && <AddDataWizard structure={structure} fy={fy}
         prefs={dataPrefs && structure.some((c) => c.id === dataPrefs.catId) ? dataPrefs : null}
         onSavePrefs={savePrefs} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
-        onSave={async (next) => { await persist(next); notify("success", "Data saved."); }} />}
+        onSave={async (next, opts) => { await persist(next); if (!opts?.silent) notify("success", "Data saved."); }} />}
 
       {addFlow === "kpi" && <AddKpiWizard structure={structure} categoryId={activeCategory?.id}
         onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}

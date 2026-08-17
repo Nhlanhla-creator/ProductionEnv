@@ -313,8 +313,12 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
   const participants = meeting?.participants || [];
   const showArchived = scope === "archived";
 
+  /* One field, `action`, maps onto the stored `title` — the Action column
+     here and on Integrated Actions. Any `description` an action already
+     carries (context attached when it was raised from a KPI, say) is shown
+     read-only and preserved verbatim. */
   const [form, setForm] = useState({
-    title: "", description: "", category: meetingCategory,
+    action: "", category: meetingCategory,
     assignedTo: "", dueDate: toInputDate(meetingDate), status: "In Progress",
   });
 
@@ -434,12 +438,12 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
 
   const openAdd = () => {
     setEditing(null); setShowCustomCat(false);
-    setForm({ title: "", description: "", category: meetingCategory, assignedTo: "", dueDate: toInputDate(meetingDate), status: "In Progress" });
+    setForm({ action: "", category: meetingCategory, assignedTo: "", dueDate: toInputDate(meetingDate), status: "In Progress" });
     setShowForm(true);
   };
   const openEdit = (a) => {
     setEditing(a); setShowCustomCat(false);
-    setForm({ title: a.title || "", description: a.description || "", category: a.category || meetingCategory,
+    setForm({ action: a.title || "", category: a.category || meetingCategory,
       assignedTo: a.assignedTo || "", dueDate: a.dueDate || "", status: a.status || "In Progress" });
     setShowForm(true);
   };
@@ -452,19 +456,21 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
   };
 
   const submit = async () => {
-    if (!form.title.trim()) return;
+    if (!form.action.trim()) return;
     if (editing) {
       await persist(actions.map((a) => {
         if (a.id !== editing.id) return a;
         const dueChanged = (a.dueDate || "") !== (form.dueDate || "");
-        return { ...a, title: form.title.trim(), description: form.description.trim(),
+        // `description` is left exactly as it was — context attached at
+        // source is not the user's to lose by editing the wording here.
+        return { ...a, title: form.action.trim(),
           category: form.category, assignedTo: form.assignedTo, dueDate: form.dueDate, status: form.status,
           revisedDate: dueChanged ? new Date().toISOString().split("T")[0] : a.revisedDate || null,
           updatedAt: new Date().toISOString() };
       }));
     } else {
       await persist([...actions, {
-        id: generateId(), title: form.title.trim(), description: form.description.trim(),
+        id: generateId(), title: form.action.trim(), description: "",
         category: form.category, assignedTo: form.assignedTo, dueDate: form.dueDate,
         status: form.status, archived: false, meetingId: meeting.id,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), revisedDate: null,
@@ -646,6 +652,7 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
                         </span>
                       )}
                     </div>
+                    {/* Context attached where the action was raised. */}
                     {a.description && <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "2px" }}>{a.description}</div>}
                     {a.sourceModule && (
                       <div style={{ fontSize: "10px", color: "#bdbdbd", marginTop: "2px" }}>
@@ -711,16 +718,26 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
               <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><FaInfoCircle size={10} /> Category and due date pre-filled from this meeting</span>
             </div>
 
+            {/* One field. It is the Action column, here and in Integrated Actions. */}
             <div style={{ marginBottom: "14px" }}>
-              <label style={lbl}>Action Title *</label>
-              <input type="text" placeholder="What needs to be done?" value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })} style={inp(!form.title.trim())} />
+              <label style={lbl}>Action *</label>
+              <textarea rows="3" placeholder="What needs to be done, by the time it is due?" value={form.action}
+                onChange={(e) => setForm({ ...form, action: e.target.value })}
+                style={{ ...inp(!form.action.trim()), resize: "vertical" }} />
+              <p style={{ fontSize: "11px", color: "#8d6e63", margin: "6px 0 0", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                <FaInfoCircle size={10} style={{ marginTop: "2px", flexShrink: 0 }} />
+                This is the wording that appears in the Action column.
+              </p>
             </div>
-            <div style={{ marginBottom: "14px" }}>
-              <label style={lbl}>Description</label>
-              <textarea rows="2" placeholder="Add more detail..." value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inp(false), resize: "vertical" }} />
-            </div>
+
+            {/* Context carried from wherever the action was raised — shown,
+                not editable, so editing the wording can't discard it. */}
+            {editing?.description && (
+              <div style={{ backgroundColor: "#f7f3f0", border: "1px solid #e8ddd4", borderRadius: "6px", padding: "10px 12px", marginBottom: "14px", fontSize: "12px", color: "#8d6e63", lineHeight: 1.6 }}>
+                <strong style={{ color: "#4a352f" }}>Attached context: </strong>{editing.description}
+              </div>
+            )}
+
             <div style={{ marginBottom: "14px" }}>
               <label style={lbl}>
                 Category
@@ -786,8 +803,8 @@ const MeetingActionsTable = ({ meeting, categories, onSaveActions, readOnly }) =
             </div>
             <div style={{ display: "flex", gap: "12px" }}>
               <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "10px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 500 }}>Cancel</button>
-              <button onClick={submit} disabled={busy || !form.title.trim()}
-                style={{ flex: 1, padding: "10px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "6px", cursor: busy ? "not-allowed" : "pointer", fontWeight: 500, opacity: busy || !form.title.trim() ? 0.6 : 1 }}>
+              <button onClick={submit} disabled={busy || !form.action.trim()}
+                style={{ flex: 1, padding: "10px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "6px", cursor: busy ? "not-allowed" : "pointer", fontWeight: 500, opacity: busy || !form.action.trim() ? 0.6 : 1 }}>
                 {busy ? "Saving..." : editing ? "Update Action" : "Add Action"}
               </button>
             </div>

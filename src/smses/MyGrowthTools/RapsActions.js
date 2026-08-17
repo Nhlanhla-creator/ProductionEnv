@@ -181,8 +181,11 @@ const RapsActions = () => {
   const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [customCategoryName, setCustomCategoryName] = useState("");
 
+  /* One field, `action`, maps onto the stored `title` — the Action column on
+     this page. Any description an action already carries (context attached
+     when it was raised from a KPI, say) is preserved untouched on edit. */
   const [form, setForm] = useState({
-    meetingId: "", title: "", description: "", category: "",
+    meetingId: "", action: "", category: "",
     assignedTo: "", dueDate: "", status: "In Progress",
   });
 
@@ -447,7 +450,7 @@ const RapsActions = () => {
     setEditing(null);
     setShowCustomCategory(false);
     setForm(applyMeetingDefaults(initialId, {
-      meetingId: "", title: "", description: "", category: "",
+      meetingId: "", action: "", category: "",
       assignedTo: "", dueDate: "", status: "In Progress",
     }, { force: true }));
     setShowModal(true);
@@ -457,7 +460,7 @@ const RapsActions = () => {
     setEditing({ meetingId: row.meetingId, action: row });
     setShowCustomCategory(false);
     setForm({
-      meetingId: row.meetingId, title: row.title || "", description: row.description || "",
+      meetingId: row.meetingId, action: row.title || "",
       category: row.category, assignedTo: row.assignedTo || "",
       dueDate: row.dueDate || "", status: row.status || "In Progress",
     });
@@ -477,8 +480,8 @@ const RapsActions = () => {
 
   /* ─── Save ────────────────────────────────────────────────────────────── */
   const submit = async () => {
-    if (!form.meetingId || !form.title.trim()) {
-      notify("error", "Please select a meeting and enter an action title.");
+    if (!form.meetingId || !form.action.trim()) {
+      notify("error", "Please select a meeting and write the action.");
       return;
     }
     setSubmitting(true);
@@ -490,7 +493,9 @@ const RapsActions = () => {
         const dueChanged = (action.dueDate || "") !== (form.dueDate || "");
         return {
           ...action,
-          title: form.title.trim(), description: form.description.trim(),
+          // `description` is left exactly as it was — context attached at
+          // source is not the user's to lose by editing the wording here.
+          title: form.action.trim(),
           category: form.category, assignedTo: form.assignedTo,
           dueDate: form.dueDate, status: form.status,
           revisedDate: dueChanged ? new Date().toISOString().split("T")[0] : action.revisedDate || null,
@@ -521,7 +526,7 @@ const RapsActions = () => {
       }
     } else {
       const newAction = {
-        id: generateId(), title: form.title.trim(), description: form.description.trim(),
+        id: generateId(), title: form.action.trim(), description: "",
         category: form.category, assignedTo: form.assignedTo, dueDate: form.dueDate,
         status: form.status, archived: false, meetingId: form.meetingId,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), revisedDate: null,
@@ -836,6 +841,7 @@ const RapsActions = () => {
                         </span>
                       )}
                     </div>
+                    {/* Context attached where the action was raised. */}
                     {row.description && <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "2px" }}>{row.description}</div>}
                     {row.sourceModule && (
                       <div style={{ fontSize: "10px", color: "#bdbdbd", marginTop: "2px" }}>
@@ -935,17 +941,25 @@ const RapsActions = () => {
               </div>
             )}
 
+            {/* One field. It is the Action column on this page. */}
             <div style={{ marginBottom: "14px" }}>
-              <label style={fieldLabel}>Action Title *</label>
-              <input type="text" placeholder="What needs to be done?" value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })} style={input(!form.title.trim())} />
+              <label style={fieldLabel}>Action *</label>
+              <textarea rows="3" placeholder="What needs to be done, by the time it is due?" value={form.action}
+                onChange={(e) => setForm({ ...form, action: e.target.value })}
+                style={{ ...input(!form.action.trim()), resize: "vertical" }} />
+              <p style={{ fontSize: "11px", color: "#8d6e63", margin: "6px 0 0", display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                <FaInfoCircle size={10} style={{ marginTop: "2px", flexShrink: 0 }} />
+                This is the wording that appears in the Action column.
+              </p>
             </div>
 
-            <div style={{ marginBottom: "14px" }}>
-              <label style={fieldLabel}>Description</label>
-              <textarea rows="2" placeholder="Add more detail..." value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...input(false), resize: "vertical" }} />
-            </div>
+            {/* Context carried from wherever the action was raised — shown,
+                not editable, so editing the wording can't discard it. */}
+            {editing?.action?.description && (
+              <div style={{ backgroundColor: "#f7f3f0", border: "1px solid #e8ddd4", borderRadius: "6px", padding: "10px 12px", marginBottom: "14px", fontSize: "12px", color: "#8d6e63", lineHeight: 1.6 }}>
+                <strong style={{ color: "#4a352f" }}>Attached context: </strong>{editing.action.description}
+              </div>
+            )}
 
             <div style={{ marginBottom: "14px" }}>
               <label style={fieldLabel}>
@@ -1024,8 +1038,8 @@ const RapsActions = () => {
 
             <div style={{ display: "flex", gap: "12px" }}>
               <button onClick={() => setShowModal(false)} style={{ ...btnGhost, flex: 1, justifyContent: "center" }}>Cancel</button>
-              <button onClick={submit} disabled={submitting || !form.title.trim() || !form.meetingId}
-                style={{ ...btnPrimary, flex: 1, justifyContent: "center", opacity: submitting || !form.title.trim() || !form.meetingId ? 0.6 : 1 }}>
+              <button onClick={submit} disabled={submitting || !form.action.trim() || !form.meetingId}
+                style={{ ...btnPrimary, flex: 1, justifyContent: "center", opacity: submitting || !form.action.trim() || !form.meetingId ? 0.6 : 1 }}>
                 {submitting ? "Saving..." : editing ? "Update Action" : "Add Action"}
               </button>
             </div>
