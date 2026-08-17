@@ -9,10 +9,10 @@ import { db, auth } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   Eye, LineChart as LineChartIcon, Lightbulb, Plus, StickyNote, X, Save, Pencil, Info,
-  ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, ChevronRight, Check,
-  CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
+  Check, CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
   ExternalLink, Square, CheckSquare, ArrowLeft, Calendar, Users, SlidersHorizontal,
-  Database, Sparkles,
+  Database, Sparkles, Sigma,
 } from "lucide-react";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -51,9 +51,9 @@ const CAPTURE_FREQUENCIES = ["Daily", "Weekly", "Monthly"];
 
 const PERIODS = [
   { key: "week", label: "This week" }, { key: "month", label: "This month" },
-  { key: "quarter", label: "Quarter" }, { key: "year", label: "This year" },
+  { key: "quarter", label: "This quarter" }, { key: "year", label: "This year" },
 ];
-const PERIOD_LABEL = { week: "This week", month: "This month", quarter: "Quarter", year: "This year" };
+const PERIOD_LABEL = { week: "This week", month: "This month", quarter: "This quarter", year: "This year" };
 const PERIOD_PREFIX = { week: "Weekly", month: "Monthly", quarter: "Quarterly", year: "Annual" };
 
 /* ─── Financial year, from Entity Overview's financialYearEnd ────────────── */
@@ -86,6 +86,11 @@ const fyQuarters = (sy, sm) => {
 
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
+/* Weeks read as the dates they cover — "27 Jul – 2 Aug" — because "W14" tells
+   nobody which week they're entering. */
+const weekRangeLabel = (start, end) =>
+  `${start.getDate()} ${MONTHS[start.getMonth()]} – ${end.getDate()} ${MONTHS[end.getMonth()]}`;
+
 const fyWeeks = (sy, sm) => {
   const start = new Date(sy, sm, 1), end = new Date(sy + 1, sm, 0);
   const cur = new Date(start);
@@ -93,9 +98,13 @@ const fyWeeks = (sy, sm) => {
   const out = []; let n = 1;
   while (cur <= end) {
     const wEnd = new Date(cur); wEnd.setDate(wEnd.getDate() + 6);
-    out.push({ key: `W:${isoDate(cur)}`, label: `W${n}`,
-      range: `${String(cur.getDate()).padStart(2,"0")} ${MONTHS[cur.getMonth()]} – ${String(wEnd.getDate()).padStart(2,"0")} ${MONTHS[wEnd.getMonth()]}`,
-      start: new Date(cur), end: wEnd, index: n - 1 });
+    out.push({
+      key: `W:${isoDate(cur)}`,
+      label: weekRangeLabel(cur, wEnd),
+      short: `W${n}`,
+      hint: `Week ${n} · ${cur.getFullYear()}`,
+      start: new Date(cur), end: wEnd, index: n - 1,
+    });
     cur.setDate(cur.getDate() + 7); n++;
   }
   return out;
@@ -104,14 +113,13 @@ const fyWeeks = (sy, sm) => {
 const daysInMonth = (year, month) =>
   Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, i) => {
     const d = new Date(year, month, i + 1);
-    return { key: `D:${isoDate(d)}`, label: `${String(d.getDate()).padStart(2,"0")} ${MONTHS[d.getMonth()]}`, date: d, index: i };
+    return { key: `D:${isoDate(d)}`, label: `${d.getDate()} ${MONTHS[d.getMonth()]}`, hint: "", date: d, index: i };
   });
 
 const currentWeekKey = () => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return `W:${isoDate(d)}`; };
 const currentMonthKey = () => { const d = new Date(); return `M:${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 
-/* ─── Formatting. en-US gives "R 125,000" and "1,250"; en-ZA gives
-   "125 000" and "0,3". ─────────────────────────────────────────────────── */
+/* ─── Formatting. en-US gives "R 125,000" and "1,250". ───────────────────── */
 const LOCALE = "en-US";
 const trimNum = (n) => {
   if (!Number.isFinite(n)) return "";
@@ -147,7 +155,8 @@ const mkKpi = (o) => ({
   id: uid(), name: o.name, units: o.units, frequency: o.frequency || "Monthly",
   direction: o.direction || "higher", aggregate: o.aggregate || "avg",
   percentFormat: o.percentFormat || "whole",
-  definition: o.definition || "", calculation: o.calculation || "",
+  meaning: o.meaning || "",      // What does this KPI mean?
+  measured: o.measured || "",    // How is this KPI measured? (Excel terms)
   notes: "", periodNotes: {}, entries: o.entries || {},
 });
 
@@ -164,98 +173,100 @@ const seedEntries = (sy, sm, budget, base, swing, aggregate) => {
   return out;
 };
 
+/* Every calculation is written the way it would be built in Excel — named
+   ranges, real functions, and the formula that produces the KPI. */
 const buildDefaultStructure = (sy, sm) => [
   { id: "supply-chain", name: "Supply Chain", notes: "", subCategories: [
     { name: "Supplier Dependency", kpis: [
       mkKpi({ name: "Top 3 Supplier Spend", units: "%", frequency: "Monthly", direction: "lower", aggregate: "avg",
-        definition: "Share of total procurement spend concentrated in the three largest suppliers.",
-        calculation: "(Spend with top 3 suppliers ÷ total supplier spend) × 100.",
+        meaning: "How much of your buying sits with your three biggest suppliers. The higher it is, the more exposed you are if one of them fails.",
+        measured: "Rank suppliers by spend, take the top three, divide by total spend.\n\n=SUMPRODUCT(LARGE(Spend,{1;2;3})) / SUM(Spend) * 100\n\nWhere Spend = the supplier spend column for the period. Format the result as Percentage (0 decimals).",
         entries: seedEntries(sy, sm, 70, 79, 3, "avg") }),
       mkKpi({ name: "Single Source Flags", units: "#", frequency: "Monthly", direction: "lower", aggregate: "sum",
-        definition: "Critical inputs available from only one qualified supplier.",
-        calculation: "Count of items where qualified supplier count = 1.",
+        meaning: "How many critical inputs you can only buy from one supplier.",
+        measured: "Count the items whose qualified-supplier count equals 1.\n\n=COUNTIF(SupplierCount, 1)\n\nWhere SupplierCount = the number of approved suppliers per item on the item register.",
         entries: seedEntries(sy, sm, 0, 1, 1, "sum") }),
       mkKpi({ name: "Critical Supplier Count", units: "#", frequency: "Monthly", direction: "lower", aggregate: "avg",
-        definition: "Suppliers whose failure would halt or materially disrupt delivery.",
-        calculation: "Count of suppliers tagged critical on the supplier register.",
+        meaning: "How many suppliers would stop or seriously disrupt delivery if they failed.",
+        measured: "Count the register rows flagged critical.\n\n=COUNTIF(CriticalFlag, \"Yes\")\n\nWhere CriticalFlag = the Yes/No column on the supplier register.",
         entries: seedEntries(sy, sm, 5, 16, 2, "avg") }),
     ]},
     { name: "Continuity Risk", kpis: [
       mkKpi({ name: "Lead Time Variance", units: "days", frequency: "Weekly", direction: "lower", aggregate: "avg",
-        definition: "Spread between promised and actual supplier lead times.",
-        calculation: "Actual lead time − quoted lead time, averaged across orders received.",
+        meaning: "How far suppliers drift from the delivery dates they quote you.",
+        measured: "Average the gap between actual and quoted lead time.\n\n=AVERAGE(ActualLeadDays - QuotedLeadDays)\n\nEntered as an array formula, or =AVERAGE(Variance) where Variance = ActualLeadDays − QuotedLeadDays per order line.",
         entries: seedEntries(sy, sm, 2, 2.3, 0.5, "avg") }),
       mkKpi({ name: "Stock Cover Days", units: "days", frequency: "Weekly", direction: "higher", aggregate: "avg",
-        definition: "How many days of demand current stock on hand can serve.",
-        calculation: "Closing stock ÷ average daily usage.",
+        meaning: "How many days of demand your current stock can serve before you run out.",
+        measured: "Divide closing stock by average daily usage.\n\n=ClosingStock / AVERAGE(DailyUsage)\n\nWhere DailyUsage = units consumed per day over the period.",
         entries: seedEntries(sy, sm, 30, 27, 4, "avg") }),
       mkKpi({ name: "Disruption Risk Index", units: "index", frequency: "Monthly", direction: "lower", aggregate: "avg",
-        definition: "Composite score of supplier, logistics and geographic exposure.",
-        calculation: "Weighted average of concentration, lead-time and geography sub-scores (0–100).",
+        meaning: "A single 0–100 score combining supplier, logistics and geographic exposure.",
+        measured: "Weighted average of the three sub-scores.\n\n=SUMPRODUCT(SubScores, Weights) / SUM(Weights)\n\nWhere SubScores = concentration, lead-time and geography scores (0–100) and Weights = their agreed weightings.",
         entries: seedEntries(sy, sm, 20, 23, 3, "avg") }),
     ]},
   ]},
   { id: "delivery", name: "Delivery", notes: "", subCategories: [
     { name: "Productivity", kpis: [
       mkKpi({ name: "Production Volume", units: "units", frequency: "Weekly", direction: "higher", aggregate: "sum",
-        definition: "Total sellable output produced in the period.",
-        calculation: "Sum of good units completed and accepted by QC.",
+        meaning: "Total good output produced and accepted in the period.",
+        measured: "Add up accepted units.\n\n=SUMIFS(UnitsProduced, QCResult, \"Pass\", Date, \">=\"&PeriodStart, Date, \"<=\"&PeriodEnd)",
         entries: seedEntries(sy, sm, 10000, 12800, 900, "sum") }),
       mkKpi({ name: "Availability", units: "%", frequency: "Weekly", direction: "higher", aggregate: "avg",
-        definition: "Share of planned production time equipment was available to run.",
-        calculation: "(Planned time − unplanned downtime) ÷ planned time × 100.",
+        meaning: "How much of your planned running time the equipment was actually available.",
+        measured: "Planned time less unplanned downtime, over planned time.\n\n=(SUM(PlannedTime) - SUM(UnplannedDowntime)) / SUM(PlannedTime) * 100",
         entries: seedEntries(sy, sm, 95, 93, 2, "avg") }),
       mkKpi({ name: "Utilization", units: "%", frequency: "Weekly", direction: "higher", aggregate: "avg",
-        definition: "Share of available capacity actually used.",
-        calculation: "Actual run time ÷ available time × 100.",
+        meaning: "How much of the capacity you had available you actually used.",
+        measured: "Run time over available time.\n\n=SUM(RunTime) / SUM(AvailableTime) * 100",
         entries: seedEntries(sy, sm, 85, 85, 3, "avg") }),
       mkKpi({ name: "Unit Cost", units: "R", frequency: "Monthly", direction: "lower", aggregate: "avg",
-        definition: "Fully loaded cost to produce one sellable unit.",
-        calculation: "Total production cost ÷ good units produced.",
+        meaning: "What it costs you, all in, to make one sellable unit.",
+        measured: "Total production cost over good units.\n\n=SUM(ProductionCost) / SUMIFS(Units, QCResult, \"Pass\")\n\nFormat as Currency (R, 2 decimals).",
         entries: seedEntries(sy, sm, 50, 41, 4, "avg") }),
     ]},
     { name: "Reliability", kpis: [
       mkKpi({ name: "On-time Delivery", units: "%", frequency: "Weekly", direction: "higher", aggregate: "avg",
-        definition: "Orders delivered on or before the promised date.",
-        calculation: "(On-time deliveries ÷ total deliveries) × 100.",
+        meaning: "The share of orders that reached the customer on or before the date you promised.",
+        measured: "Count on-time deliveries over all deliveries.\n\n=COUNTIFS(DeliveredDate, \"<=\"&PromisedDate) / COUNTA(DeliveredDate) * 100\n\nOr flag each line with =IF(DeliveredDate<=PromisedDate, 1, 0) and use =AVERAGE(OnTimeFlag)*100.",
         entries: seedEntries(sy, sm, 98, 96, 2, "avg") }),
       mkKpi({ name: "Rework Rate", units: "%", frequency: "Weekly", direction: "lower", aggregate: "avg",
-        definition: "Output requiring rework before it can be shipped.",
-        calculation: "(Units reworked ÷ units produced) × 100.",
+        meaning: "How much of what you make has to be fixed before it can ship.",
+        measured: "Reworked units over units produced.\n\n=SUM(UnitsReworked) / SUM(UnitsProduced) * 100",
         entries: seedEntries(sy, sm, 2, 1.1, 0.4, "avg") }),
       mkKpi({ name: "Defect Rate", units: "%", frequency: "Weekly", direction: "lower", aggregate: "avg",
-        definition: "Output rejected at final inspection or returned by customers.",
-        calculation: "(Defective units ÷ units produced) × 100.",
+        meaning: "How much of what you make is rejected at inspection or comes back from customers.",
+        measured: "Defective units over units produced.\n\n=(SUMIFS(Units, QCResult, \"Fail\") + SUM(CustomerReturns)) / SUM(UnitsProduced) * 100",
         entries: seedEntries(sy, sm, 1, 0.4, 0.2, "avg") }),
     ]},
   ]},
   { id: "safety", name: "Safety", notes: "", subCategories: [
     { name: "Safety Risk", kpis: [
       mkKpi({ name: "Safety Incidents", units: "#", frequency: "Weekly", direction: "lower", aggregate: "sum",
-        definition: "Recordable safety incidents involving staff, contractors or visitors.",
-        calculation: "Count of incidents logged on the incident register.",
+        meaning: "Recordable incidents involving staff, contractors or visitors.",
+        measured: "Count incident-register rows inside the period.\n\n=COUNTIFS(IncidentDate, \">=\"&PeriodStart, IncidentDate, \"<=\"&PeriodEnd)",
         entries: seedEntries(sy, sm, 0, 0.4, 0.4, "sum") }),
       mkKpi({ name: "Open Safety Actions", units: "#", frequency: "Weekly", direction: "lower", aggregate: "avg",
-        definition: "Corrective actions from incidents or inspections still outstanding.",
-        calculation: "Count of safety actions with status not equal to closed.",
+        meaning: "Corrective actions from incidents or inspections that are still outstanding.",
+        measured: "Count actions not yet closed.\n\n=COUNTIF(ActionStatus, \"<>Closed\")",
         entries: seedEntries(sy, sm, 5, 2, 1, "avg") }),
       mkKpi({ name: "Compliance Status", units: "%", frequency: "Monthly", direction: "higher", aggregate: "avg",
-        definition: "Share of mandatory safety requirements currently met.",
-        calculation: "(Requirements met ÷ total applicable requirements) × 100.",
+        meaning: "The share of mandatory safety requirements you currently meet.",
+        measured: "Requirements met over requirements that apply.\n\n=COUNTIF(RequirementMet, \"Yes\") / COUNTA(RequirementMet) * 100",
         entries: seedEntries(sy, sm, 100, 99, 1, "avg") }),
     ]},
     { name: "Regulatory Compliance", kpis: [
       mkKpi({ name: "Regulatory Gaps", units: "#", frequency: "Monthly", direction: "lower", aggregate: "sum",
-        definition: "Known areas of non-compliance with applicable regulation.",
-        calculation: "Count of open gaps on the compliance register.",
+        meaning: "Known areas where you are not compliant with the regulation that applies to you.",
+        measured: "Count open gaps on the compliance register.\n\n=COUNTIFS(GapStatus, \"Open\")",
         entries: seedEntries(sy, sm, 0, 0.3, 0.3, "sum") }),
       mkKpi({ name: "Audit Findings", units: "#", frequency: "Quarterly", direction: "lower", aggregate: "sum",
-        definition: "Findings raised at the most recent internal or external audit.",
-        calculation: "Count of findings not yet formally closed out.",
+        meaning: "Findings raised at your last internal or external audit that are still open.",
+        measured: "Count findings not yet closed out.\n\n=COUNTIFS(FindingStatus, \"<>Closed\", AuditDate, \">=\"&PeriodStart)",
         entries: seedEntries(sy, sm, 3, 0.6, 0.5, "sum") }),
       mkKpi({ name: "Certification Status", units: "%", frequency: "Monthly", direction: "higher", aggregate: "avg",
-        definition: "Share of required certifications that are current and valid.",
-        calculation: "(Valid certifications ÷ required certifications) × 100.",
+        meaning: "The share of certifications you need that are current and valid today.",
+        measured: "Valid certifications over required certifications.\n\n=COUNTIFS(ExpiryDate, \">\"&TODAY()) / COUNTA(CertificateName) * 100",
         entries: seedEntries(sy, sm, 100, 99, 1, "avg") }),
     ]},
   ]},
@@ -311,7 +322,6 @@ const S = {
   red: { key: "red", label: "Critical", color: T.red, bg: T.redBg },
   none: { key: "none", label: "No data", color: T.faint, bg: T.raised },
 };
-
 const getStatus = (kpi, period, fy) => {
   const { budget, actual } = periodValues(kpi, period, fy);
   const b = Number(budget), a = Number(actual);
@@ -328,7 +338,6 @@ const getStatus = (kpi, period, fy) => {
   const ratio = kpi.direction === "higher" ? a / b : b / (a || 0.0001);
   return ratio >= 0.98 ? S.green : ratio >= 0.85 ? S.amber : S.red;
 };
-
 const getVariance = (kpi, period, fy) => {
   const { budget, actual } = periodValues(kpi, period, fy);
   const b = Number(budget), a = Number(actual);
@@ -350,7 +359,7 @@ const StatusIcon = ({ status, size = 18 }) => {
 /* ─── Columns ───────────────────────────────────────────────────────────── */
 const COLUMN_DEFS = {
   category:  { label: "Category", width: 168, tip: "The sub-category this KPI sits under.", filter: true, sort: true, hideable: true },
-  kpi:       { label: "KPI", width: 258, tip: "The metric being tracked. Click the eye to read or edit its definition and calculation.", filter: true, sort: true, hideable: false },
+  kpi:       { label: "KPI", width: 258, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
   units:     { label: "Units", width: 90, align: "center", tip: "The unit the value is expressed in.", filter: true, sort: true, hideable: true },
   frequency: { label: "Frequency", width: 126, align: "center", tip: "How often this KPI is captured — daily, weekly, monthly or quarterly.", filter: true, sort: true, hideable: true },
   budget:    { label: "Budget", width: 142, align: "right", tip: "What you planned for the selected period.", sort: true, hideable: true },
@@ -360,20 +369,18 @@ const COLUMN_DEFS = {
 };
 const COLUMN_ORDER = Object.keys(COLUMN_DEFS);
 const ACTIONS_KEY = "__actions__";
-
-/* Budget, Actual and Variance take the timeframe into their name. */
 const columnLines = (key, period) =>
   ["budget","actual","variance"].includes(key) ? [PERIOD_PREFIX[period], COLUMN_DEFS[key].label] : [COLUMN_DEFS[key].label];
 
 /* ─── Shared UI ─────────────────────────────────────────────────────────── */
-const InfoTip = ({ text }) => {
+const InfoTip = ({ text, light = false }) => {
   const [rect, setRect] = useState(null);
   if (!text) return null;
   return (
     <span style={{ display: "inline-flex" }}
       onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
       onMouseLeave={() => setRect(null)}>
-      <Info size={13} strokeWidth={2} color={T.faint} style={{ cursor: "help" }} />
+      <Info size={13} strokeWidth={2} color={light ? "rgba(255,255,255,0.75)" : T.faint} style={{ cursor: "help" }} />
       {rect && typeof document !== "undefined" && createPortal(
         <div style={{ position: "fixed", top: rect.bottom + 8,
           left: Math.min(Math.max(rect.left - 110, 12), window.innerWidth - 250),
@@ -390,10 +397,10 @@ const btnBase = { padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", 
 const btnPrimary = { ...btnBase, background: T.accent, color: "#fff", border: `1px solid ${T.accent}`, fontWeight: 600 };
 const btnGhost = { ...btnBase, background: T.bg, color: T.body, border: `1px solid ${T.lineStrong}` };
 const btnQuiet = { ...btnBase, background: "transparent", color: T.accent, border: "1px solid transparent" };
-const inputS = { width: "100%", padding: "10px 12px", border: `1px solid ${T.lineStrong}`, borderRadius: "8px",
-  fontSize: "14px", fontFamily: "inherit", boxSizing: "border-box", color: T.ink, background: T.bg, outline: "none" };
-/* Every field label is dark brown — one voice across the section. */
-const labelS = { display: "block", fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "6px" };
+const inputS = { width: "100%", padding: "9px 11px", border: `1px solid ${T.lineStrong}`, borderRadius: "8px",
+  fontSize: "13.5px", fontFamily: "inherit", boxSizing: "border-box", color: T.ink, background: T.bg, outline: "none" };
+const selectS = { ...inputS, cursor: "pointer" };
+const labelS = { display: "block", fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "5px" };
 
 const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,32,28,0.55)",
@@ -401,7 +408,7 @@ const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }
     <div onClick={(e) => e.stopPropagation()} style={{ background: T.bg, borderRadius: "14px", width: "100%",
       maxWidth: `${width}px`, maxHeight: "92vh", display: "flex", flexDirection: "column",
       boxShadow: "0 24px 60px rgba(45,32,28,0.28)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 16px", borderBottom: `1px solid ${T.line}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "18px 22px 14px", borderBottom: `1px solid ${T.line}` }}>
         <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
           {icon && <span style={{ marginTop: "2px", color: T.accent }}>{icon}</span>}
           <div>
@@ -414,8 +421,8 @@ const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }
           <X size={15} />
         </button>
       </div>
-      <div style={{ padding: "22px 24px", overflowY: "auto", flex: 1 }}>{children}</div>
-      {footer && <div style={{ padding: "14px 24px", borderTop: `1px solid ${T.line}`, display: "flex",
+      <div style={{ padding: "18px 22px", overflowY: "auto", flex: 1 }}>{children}</div>
+      {footer && <div style={{ padding: "13px 22px", borderTop: `1px solid ${T.line}`, display: "flex",
         justifyContent: "flex-end", gap: "10px", alignItems: "center", background: T.panel, borderRadius: "0 0 14px 14px" }}>{footer}</div>}
     </div>
   </div>
@@ -427,21 +434,27 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better", hint: "e.g. headcount to plan" },
 ];
 
-/* ─── KPI definition popup ──────────────────────────────────────────────── */
+/* ─── KPI info popup ────────────────────────────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
-  const [definition, setDefinition] = useState(kpi.definition || "");
-  const [calculation, setCalculation] = useState(kpi.calculation || "");
-  const box = (v, empty) => (
+  const [meaning, setMeaning] = useState(kpi.meaning || "");
+  const [measured, setMeasured] = useState(kpi.measured || "");
+
+  const box = (v, empty, mono) => (
     <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "13px 15px",
-      fontSize: "14px", lineHeight: 1.65, color: v ? T.body : T.faint, fontStyle: v ? "normal" : "italic" }}>{v || empty}</div>
+      fontSize: mono ? "13px" : "14px", lineHeight: 1.65, color: v ? T.body : T.faint,
+      fontStyle: v ? "normal" : "italic", whiteSpace: "pre-wrap",
+      fontFamily: mono && v ? "ui-monospace, SFMono-Regular, Menlo, monospace" : "inherit" }}>
+      {v || empty}
+    </div>
   );
+
   return (
-    <Modal title={kpi.name} subtitle="Definition and calculation" icon={<Eye size={17} />} onClose={onClose}
+    <Modal title={kpi.name} subtitle="What it means and how it is measured" icon={<Eye size={17} />} onClose={onClose}
       footer={editing ? (
         <>
-          <button onClick={() => { setDefinition(kpi.definition || ""); setCalculation(kpi.calculation || ""); setEditing(false); }} style={btnGhost}>Cancel</button>
-          <button onClick={() => { onSave({ definition, calculation }); setEditing(false); }} style={btnPrimary}><Save size={13} /> Save</button>
+          <button onClick={() => { setMeaning(kpi.meaning || ""); setMeasured(kpi.measured || ""); setEditing(false); }} style={btnGhost}>Cancel</button>
+          <button onClick={() => { onSave({ meaning, measured }); setEditing(false); }} style={btnPrimary}><Save size={13} /> Save</button>
         </>
       ) : (
         <>
@@ -449,26 +462,46 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
           <button onClick={onClose} style={btnPrimary}>Close</button>
         </>
       )}>
-      <div style={{ display: "flex", gap: "7px", flexWrap: "wrap", marginBottom: "20px" }}>
+      <div style={{ display: "flex", gap: "7px", flexWrap: "wrap", marginBottom: "18px" }}>
         {[`Units: ${kpi.units}`, `Captured ${kpi.frequency.toLowerCase()}`,
           DIRECTIONS.find((d) => d.value === kpi.direction)?.label,
-          kpi.aggregate === "avg" ? "Averaged over the year" : "Summed over the year"].map((c) => (
+          kpi.aggregate === "avg" ? "AVERAGE across periods" : "SUM across periods"].map((c) => (
           <span key={c} style={{ fontSize: "12px", padding: "4px 11px", borderRadius: "999px", background: T.raised, color: T.body }}>{c}</span>
         ))}
       </div>
-      <div style={{ marginBottom: "20px" }}>
-        <label style={labelS}>Definition — what this KPI measures</label>
-        {editing ? <textarea rows="3" value={definition} onChange={(e) => setDefinition(e.target.value)} style={{ ...inputS, resize: "vertical" }} /> : box(definition, "No definition captured yet.")}
+
+      <div style={{ marginBottom: "18px" }}>
+        <label style={labelS}>What does this KPI mean?</label>
+        {editing
+          ? <textarea rows="3" value={meaning} onChange={(e) => setMeaning(e.target.value)} style={{ ...inputS, resize: "vertical" }}
+              placeholder="In plain words — what is this number telling you?" />
+          : box(meaning, "Not captured yet.", false)}
       </div>
+
       <div>
-        <label style={labelS}>Calculation — how it is worked out</label>
-        {editing ? <textarea rows="3" value={calculation} onChange={(e) => setCalculation(e.target.value)} style={{ ...inputS, resize: "vertical" }} /> : box(calculation, "No calculation captured yet.")}
+        <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Sigma size={13} /> How is this KPI measured?
+        </label>
+        {editing
+          ? <textarea rows="6" value={measured} onChange={(e) => setMeasured(e.target.value)}
+              style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }}
+              placeholder={"Write it the way you'd build it in Excel, e.g.\n\n=SUMIFS(Units, QCResult, \"Pass\") / SUM(Units) * 100"} />
+          : box(measured, "Not captured yet.", true)}
+        {!editing && (
+          <p style={{ fontSize: "12px", color: T.muted, marginTop: "8px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+            <Info size={12} /> Written in Excel terms so it can be rebuilt in a spreadsheet as-is.
+          </p>
+        )}
       </div>
     </Modal>
   );
 };
 
-/* ─── Trend chart ───────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   Trend chart — Variance gets its own chart, stacked above the Budget vs
+   Actual chart, so it reads on its own scale instead of being flattened by
+   the bars.
+   ════════════════════════════════════════════════════════════════════════ */
 const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote }) => {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
@@ -505,34 +538,53 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote }) => {
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
   const existingNote = kpi.periodNotes?.[noteKey] || "";
 
-  const data = { labels, datasets: [
-    { type: "line", label: "Variance", data: variance, yAxisID: "yVar", order: 0,
-      borderColor: "rgba(107,91,85,0.55)", borderWidth: 1.5, borderDash: [3,3],
-      pointStyle: "circle", pointRadius: 6, pointHoverRadius: 8, pointBorderWidth: 2,
-      pointBorderColor: T.ink, pointBackgroundColor: "transparent", tension: 0, spanGaps: true },
-    { type: "line", label: "Budget", data: budget, yAxisID: "y", order: 1,
-      borderColor: T.accent, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, spanGaps: true, fill: false },
-    { type: "bar", label: "Actual", data: actual, yAxisID: "y", order: 2,
-      backgroundColor: "rgba(30,64,175,0.72)", borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.75 },
-  ]};
+  /* Favourable bars green, unfavourable red — the sign alone doesn't tell you
+     which is which when lower is better. */
+  const varColors = variance.map((v) =>
+    v === null ? "rgba(138,122,116,0.3)" : varianceFavourable(kpi, v) ? "rgba(22,101,52,0.75)" : "rgba(153,27,27,0.75)");
 
-  const options = {
-    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+  const varianceChart = {
+    labels,
+    datasets: [{ type: "bar", label: "Variance", data: variance,
+      backgroundColor: varColors, borderWidth: 0, borderRadius: 3, barPercentage: 0.55, categoryPercentage: 0.8 }],
+  };
+  const varianceOptions = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
     plugins: {
       datalabels: { display: false },
-      legend: { position: "top", align: "end", labels: { color: T.body, font: { size: 12.5 }, padding: 16, usePointStyle: true, boxWidth: 8 } },
-      tooltip: { backgroundColor: T.ink, padding: 12, cornerRadius: 8,
-        callbacks: { label: (c) => c.parsed.y === null ? `${c.dataset.label}: no data`
-          : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi, { signed: c.dataset.label === "Variance" })}` } },
+      legend: { display: false },
+      tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+        callbacks: { label: (c) => c.parsed.y === null ? "No data"
+          : `Variance: ${fmtValue(c.parsed.y, kpi, { signed: true })} (${varianceFavourable(kpi, c.parsed.y) ? "favourable" : "unfavourable"})` } },
     },
     scales: {
-      yVar: { position: "right", grid: { display: false },
-        ticks: { color: T.muted, font: { size: 10.5 }, callback: (v) => fmtValue(v, kpi, { signed: true }) },
-        title: { display: true, text: "Variance", color: T.muted, font: { size: 10.5 } } },
-      y: { position: "left", grid: { color: T.lineSoft }, ticks: { color: T.body, font: { size: 11.5 }, callback: (v) => fmtValue(v, kpi) },
-        // Headroom so variance markers sit above the bars, not through them.
-        afterDataLimits: (a) => { a.max = a.max + (a.max - a.min) * 0.18; } },
-      x: { grid: { display: false }, ticks: { color: T.body, font: { size: 11.5 } } },
+      y: { grid: { color: T.lineSoft }, ticks: { color: T.body, font: { size: 10.5 }, maxTicksLimit: 5, callback: (v) => fmtValue(v, kpi, { signed: true }) } },
+      x: { grid: { display: false }, ticks: { display: false } },
+    },
+  };
+
+  const mainChart = {
+    labels,
+    datasets: [
+      { type: "line", label: "Budget", data: budget, borderColor: T.accent, borderWidth: 2.5,
+        pointRadius: 0, pointHoverRadius: 4, tension: 0.25, spanGaps: true, fill: false, order: 1 },
+      { type: "bar", label: "Actual", data: actual, backgroundColor: "rgba(30,64,175,0.72)",
+        borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.75, order: 2 },
+    ],
+  };
+  const mainOptions = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      datalabels: { display: false },
+      legend: { position: "top", align: "end", labels: { color: T.body, font: { size: 12.5 }, padding: 14, usePointStyle: true, boxWidth: 8 } },
+      tooltip: { backgroundColor: T.ink, padding: 12, cornerRadius: 8,
+        callbacks: { label: (c) => c.parsed.y === null ? `${c.dataset.label}: no data` : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}` } },
+    },
+    scales: {
+      y: { grid: { color: T.lineSoft }, ticks: { color: T.body, font: { size: 11.5 }, callback: (v) => fmtValue(v, kpi) } },
+      x: { grid: { display: false }, ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
     },
   };
 
@@ -540,18 +592,24 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote }) => {
     <Modal title={`${kpi.name} — Trend`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={940}
       footer={<>
         <div style={{ flex: 1, fontSize: "12px", color: T.body, textAlign: "left", display: "flex", alignItems: "center", gap: "6px" }}>
-          <Info size={12} /> Variance on top, Actual as bars, Budget as the line.
+          <Info size={12} /> Green variance is favourable for this KPI's direction; red is not.
         </div>
         <button onClick={() => { setNoteText(existingNote); setNoteOpen((v) => !v); }} style={btnGhost}>
           <StickyNote size={13} /> {existingNote ? "Edit note" : "Add note"}
         </button>
         <button onClick={onClose} style={btnPrimary}>Close</button>
       </>}>
-      <div style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "18px", height: "350px" }}>
-        <Chart type="bar" data={data} options={options} />
+      <div style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px 8px", marginBottom: "12px" }}>
+        <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Variance — Actual less Budget</div>
+        <div style={{ height: "130px" }}><Chart type="bar" data={varianceChart} options={varianceOptions} /></div>
       </div>
+      <div style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" }}>
+        <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "4px" }}>Budget vs Actual</div>
+        <div style={{ height: "290px" }}><Chart type="bar" data={mainChart} options={mainOptions} /></div>
+      </div>
+
       {(existingNote || noteOpen) && (
-        <div style={{ marginTop: "16px", background: T.panel, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" }}>
+        <div style={{ marginTop: "14px", background: T.panel, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "13px 15px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
             <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
               <StickyNote size={12} /> Note for this period
@@ -624,7 +682,7 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
       try {
         const callable = httpsCallable(functions, "generateKpiAnalysis");
         const res = await callable({
-          kpiName: kpi.name, definition: kpi.definition, calculation: kpi.calculation,
+          kpiName: kpi.name, meaning: kpi.meaning, measured: kpi.measured,
           units: kpi.units, frequency: kpi.frequency, direction: kpi.direction,
           timeframe: PERIOD_LABEL[period], financialYearStartMonth: fy.startMonth,
           budget: v.budget, actual: v.actual, variance: getVariance(kpi, period, fy),
@@ -637,8 +695,8 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
         }
         throw new Error("The function replied, but not in the expected shape.");
       } catch (err) {
-        // Naming the reason matters: "not-found" means the Cloud Function is
-        // not deployed, which is a different fix from a permissions error.
+        // "not-found" means the Cloud Function isn't deployed — a different
+        // fix from a permissions error, so name it.
         console.error("AI analysis unavailable:", err);
         setReason(err?.code === "functions/not-found" ? "The generateKpiAnalysis function isn't deployed yet." : errText(err));
         setSource("local");
@@ -650,7 +708,7 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
   useEffect(() => { build(); }, [build]);
 
   const Section = ({ label, items, color }) => (
-    <div style={{ marginBottom: "20px" }}>
+    <div style={{ marginBottom: "18px" }}>
       <div style={{ fontSize: "11.5px", fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color, marginBottom: "8px" }}>{label}</div>
       <ul style={{ margin: 0, paddingLeft: "18px", color: T.body, fontSize: "14px", lineHeight: 1.7 }}>
         {items.map((it, i) => <li key={i} style={{ marginBottom: "4px" }}>{it}</li>)}
@@ -666,7 +724,7 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
         <button onClick={onClose} style={btnPrimary}>Close</button>
       </>}>
       {!loading && (
-        <div style={{ fontSize: "12px", color: source === "ai" ? T.body : T.amber, marginBottom: "18px",
+        <div style={{ fontSize: "12px", color: source === "ai" ? T.body : T.amber, marginBottom: "16px",
           display: "flex", alignItems: "flex-start", gap: "6px", lineHeight: 1.5 }}>
           <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
           {source === "ai" ? "Generated from your KPI data"
@@ -674,7 +732,7 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => {
         </div>
       )}
       {loading ? (
-        <div style={{ textAlign: "center", padding: "48px 0", color: T.body, fontSize: "14px" }}>
+        <div style={{ textAlign: "center", padding: "44px 0", color: T.body, fontSize: "14px" }}>
           <RefreshCw size={22} color={T.faint} /><div style={{ marginTop: "14px" }}>Reviewing {kpi.name}...</div>
         </div>
       ) : analysis && (
@@ -774,7 +832,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
           agenda: "", preparations: "", participants: [], isRecurring: false, recurrencePattern: null,
           instances: [{ instanceId: uid(), date: new Date().toISOString(), time: "09:00", status: "scheduled" }],
           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-          highlights: "", lowlights: "", risks: "", headsUp: "", actions: [],
+          highlights: "", lowlights: "", opportunities: "", priorities: "", actions: [],
         };
         list = [...list, holder]; targetId = holder.id;
       }
@@ -796,56 +854,52 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
         <button onClick={save} disabled={saving || !form.title.trim()} style={{ ...btnPrimary, opacity: saving || !form.title.trim() ? 0.6 : 1 }}>
           {saving ? "Saving..." : "Save Action"}</button>
       </>}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "13px 15px", borderRadius: "10px",
-        background: status.bg, border: `1px solid ${status.color}33`, marginBottom: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", borderRadius: "10px",
+        background: status.bg, border: `1px solid ${status.color}33`, marginBottom: "16px" }}>
         <StatusIcon status={status} size={19} />
         <div style={{ fontSize: "14px", color: T.body }}>
           <strong style={{ color: T.accent }}>{kpi.name}</strong> is {status.label.toLowerCase()} for {PERIOD_LABEL[period].toLowerCase()}.
           What action are you going to take?
         </div>
       </div>
-      <div style={{ marginBottom: "16px" }}>
+
+      <div style={{ marginBottom: "14px" }}>
         <label style={labelS}>Action *</label>
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={inputS} placeholder="What needs to be done?" />
       </div>
-      <div style={{ marginBottom: "16px" }}>
+      <div style={{ marginBottom: "14px" }}>
         <label style={labelS}>Description</label>
         <textarea rows="3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inputS, resize: "vertical" }} />
       </div>
-      <div style={{ marginBottom: "16px" }}>
-        <label style={labelS}>Attach to meeting</label>
-        {loadingMeetings ? <div style={{ fontSize: "13.5px", color: T.body }}>Loading meetings...</div>
-          : meetings.length === 0 ? (
-            <div style={{ fontSize: "13px", color: T.body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "11px 13px" }}>
-              No governance meetings yet — this will be filed under "Operational Performance Actions" and still appears in Integrated Actions.
-            </div>
-          ) : (
-            <>
-              <select value={meetingId} onChange={(e) => { setMeetingId(e.target.value); setForm((p) => applyDefaults(e.target.value, p)); }} style={{ ...inputS, cursor: "pointer" }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+        <div>
+          <label style={labelS}>Attach to meeting</label>
+          {loadingMeetings ? <div style={{ fontSize: "13px", color: T.body }}>Loading...</div>
+            : meetings.length === 0 ? (
+              <div style={{ fontSize: "12.5px", color: T.body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "9px 11px" }}>
+                No meetings yet — filed under "Operational Performance Actions".
+              </div>
+            ) : (
+              <select value={meetingId} onChange={(e) => { setMeetingId(e.target.value); setForm((p) => applyDefaults(e.target.value, p)); }} style={selectS}>
                 {meetings.map((m) => { const d = meetingDate(m);
-                  return <option key={m.id} value={m.id}>{m.title} ({m.category || "Uncategorized"}){d ? ` — ${fmtDMY(d)}` : ""}</option>; })}
+                  return <option key={m.id} value={m.id}>{m.title}{d ? ` — ${fmtDMY(d)}` : ""}</option>; })}
               </select>
-              {selected && (
-                <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "12px", color: T.muted, marginTop: "8px" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><Calendar size={11} /> {meetingDate(selected) ? fmtDMY(meetingDate(selected)) : "No date"}</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><Users size={11} /> {(selected.participants || []).length} participants</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><Info size={11} /> Category and due date pre-filled from this meeting</span>
-                </div>
-              )}
-            </>
-          )}
+            )}
+        </div>
+        <div>
+          <label style={labelS}>Category</label>
+          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={selectS}>
+            {RAPS_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+            {form.category && !RAPS_CATEGORIES.some((c) => c.name === form.category) && <option value={form.category}>{form.category}</option>}
+          </select>
+        </div>
       </div>
-      <div style={{ marginBottom: "16px" }}>
-        <label style={labelS}>Category</label>
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={{ ...inputS, cursor: "pointer" }}>
-          {RAPS_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-          {form.category && !RAPS_CATEGORIES.some((c) => c.name === form.category) && <option value={form.category}>{form.category}</option>}
-        </select>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
         <div><label style={labelS}>By whom</label>
           {(selected?.participants || []).length > 0 ? (
-            <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={{ ...inputS, cursor: "pointer" }}>
+            <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={selectS}>
               <option value="">Unassigned</option>
               {selected.participants.map((p, i) => { const n = typeof p === "string" ? p : p.name || p.email || "Participant"; return <option key={i} value={n}>{n}</option>; })}
             </select>
@@ -854,12 +908,13 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
         <div><label style={labelS}>By when</label>
           <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inputS} /></div>
         <div><label style={labelS}>Status</label>
-          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={{ ...inputS, cursor: "pointer" }}>
+          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={selectS}>
             {ACTION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select></div>
       </div>
-      {message && <div style={{ color: T.red, fontSize: "13px", marginTop: "14px" }}>{message}</div>}
-      <p style={{ fontSize: "12px", color: T.muted, marginTop: "18px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+
+      {message && <div style={{ color: T.red, fontSize: "13px", marginTop: "12px" }}>{message}</div>}
+      <p style={{ fontSize: "12px", color: T.muted, marginTop: "16px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
         <Info size={11} /> Saved actions appear in Integrated Actions and in the meeting's Meeting Actions tab.
       </p>
     </Modal>
@@ -885,70 +940,12 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Progressive-disclosure shell ──────────────────────────────────────── */
-const StepBlock = ({ n, title, done, active, summary, onEdit, children }) => {
-  if (!active && !done) return (
-    <div style={{ display: "flex", gap: "12px", alignItems: "center", padding: "12px 14px", borderRadius: "10px",
-      border: `1px dashed ${T.lineStrong}`, marginBottom: "10px", opacity: 0.6 }}>
-      <span style={{ width: 24, height: 24, borderRadius: "50%", background: T.raised, color: T.muted,
-        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12.5px", fontWeight: 600, flexShrink: 0 }}>{n}</span>
-      <span style={{ fontSize: "14px", color: T.muted }}>{title}</span>
-    </div>
-  );
-  if (done && !active) return (
-    <div style={{ display: "flex", gap: "12px", alignItems: "center", padding: "12px 14px", borderRadius: "10px",
-      border: `1px solid ${T.line}`, background: T.panel, marginBottom: "10px" }}>
-      <span style={{ width: 24, height: 24, borderRadius: "50%", background: T.green, color: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Check size={13} /></span>
-      <span style={{ fontSize: "13.5px", color: T.body, flex: 1 }}>{title}</span>
-      <span style={{ fontSize: "13.5px", color: T.accent, fontWeight: 600 }}>{summary}</span>
-      <button onClick={onEdit} style={{ ...btnQuiet, padding: "3px 8px", fontSize: "12.5px" }}><Pencil size={11} /> Change</button>
-    </div>
-  );
-  return (
-    <div style={{ padding: "18px", borderRadius: "12px", border: `1px solid ${T.accent}33`, background: T.bg,
-      boxShadow: `0 0 0 3px ${T.accentTint}`, marginBottom: "14px" }}>
-      <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "14px" }}>
-        <span style={{ width: 24, height: 24, borderRadius: "50%", background: T.accent, color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12.5px", fontWeight: 600, flexShrink: 0 }}>{n}</span>
-        <span style={{ fontSize: "15.5px", color: T.accent, fontWeight: 600, letterSpacing: "-0.1px" }}>{title}</span>
-      </div>
-      {children}
-    </div>
-  );
-};
-
-const ChoiceGrid = ({ options, value, onSelect, min = 130 }) => (
-  <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: "10px" }}>
-    {options.map((o) => {
-      const on = value === o.value;
-      return (
-        <button key={String(o.value)} onClick={() => onSelect(o.value)}
-          style={{ padding: "14px 12px", borderRadius: "10px", cursor: "pointer", textAlign: "left",
-            background: on ? T.accentTint : T.bg, border: `1.5px solid ${on ? T.accent : T.lineStrong}`,
-            fontFamily: "inherit", display: "flex", flexDirection: "column", gap: "3px" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-            {o.badge && (
-              <span style={{ fontSize: "11.5px", fontWeight: 700, padding: "2px 7px", borderRadius: "5px",
-                background: on ? T.accent : T.raised, color: on ? "#fff" : T.accent, letterSpacing: "0.3px" }}>{o.badge}</span>
-            )}
-            <span style={{ fontSize: "14px", fontWeight: 600, color: T.accent }}>{o.label}</span>
-          </span>
-          {o.hint && <span style={{ fontSize: "12px", color: T.muted }}>{o.hint}</span>}
-        </button>
-      );
-    })}
-  </div>
-);
-
 /* ════════════════════════════════════════════════════════════════════════════
    Add Data.
 
-   The frequency was already declared when each KPI was created, so this flow
-   reads it off the category rather than asking again. Same for the year and
-   category, which are remembered from last time. Everything stays changeable
-   through the "Change" links — people do switch — but a returning user lands
-   straight on the period picker.
+   Frequency comes from the KPIs themselves, and picking the financial year
+   lays out every period in it — no week-by-week selecting. Periods run down
+   the page with Actual and Budget side by side, so nothing scrolls sideways.
    ════════════════════════════════════════════════════════════════════════ */
 const deriveFrequency = (category) => {
   const kpis = category?.subCategories.flatMap((s) => s.kpis) || [];
@@ -964,55 +961,48 @@ const deriveFrequency = (category) => {
 };
 
 const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onSave }) => {
-  const remembered = !!prefs;
   const [catId, setCatId] = useState(prefs?.catId || structure[0].id);
   const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
-
   const category = structure.find((c) => c.id === catId) || structure[0];
   const derived = useMemo(() => deriveFrequency(category), [category]);
   const [frequency, setFrequency] = useState(prefs?.frequency || derived.frequency);
   const [freqOverridden, setFreqOverridden] = useState(!!prefs?.frequency);
-
-  /* Returning users skip straight to picking a period. */
-  const [step, setStep] = useState(remembered ? 3 : 1);
-  const [showFreqPicker, setShowFreqPicker] = useState(false);
-  const [periodKeys, setPeriodKeys] = useState([]);
-  const [monthForDays, setMonthForDays] = useState(null);
+  const [monthForDays, setMonthForDays] = useState(0);
+  const [kpiIndex, setKpiIndex] = useState(0);
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState(false);
 
-  /* Changing category re-derives the frequency unless it was set by hand. */
+  const kpis = useMemo(() => category.subCategories.flatMap((s) => s.kpis.map((k) => ({ ...k, sub: s.name }))), [category]);
+  const kpi = kpis[Math.min(kpiIndex, kpis.length - 1)];
+
   useEffect(() => {
     if (!freqOverridden) setFrequency(derived.frequency);
-    setPeriodKeys([]); setMonthForDays(null);
+    setKpiIndex(0);
   }, [catId, derived.frequency, freqOverridden]);
 
-  const kpis = useMemo(() => category.subCategories.flatMap((s) => s.kpis.map((k) => ({ ...k, sub: s.name }))), [category]);
-
   const yearOptions = [
-    { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth), hint: "Previous financial year" },
-    { value: fy.startYear,     badge: "FY",  label: fyLabel(fy.startYear, fy.startMonth),     hint: "Current financial year" },
-    { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth), hint: "Next financial year" },
+    { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
+    { value: fy.startYear,     badge: "FY",  label: fyLabel(fy.startYear, fy.startMonth) },
+    { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
   ];
-  const yearBadge = startYear === fy.startYear ? "FY" : startYear === fy.startYear + 1 ? "FY+" : startYear === fy.startYear - 1 ? "FY−" : "FY";
 
-  const periodOptions = useMemo(() => {
-    if (frequency === "Monthly") return fyMonths(startYear, fy.startMonth).map((m) => ({ key: m.key, label: m.label, hint: m.long }));
-    if (frequency === "Weekly") return fyWeeks(startYear, fy.startMonth).map((w) => ({ key: w.key, label: w.label, hint: w.range }));
-    if (frequency === "Daily" && monthForDays !== null) {
-      const m = fyMonths(startYear, fy.startMonth)[monthForDays];
-      return daysInMonth(m.year, m.month).map((d) => ({ key: d.key, label: d.label, hint: "" }));
-    }
-    return [];
+  /* Every period in the year, laid out automatically. */
+  const periods = useMemo(() => {
+    if (frequency === "Monthly") return fyMonths(startYear, fy.startMonth).map((m) => ({ key: m.key, label: m.long, hint: "" }));
+    if (frequency === "Weekly") return fyWeeks(startYear, fy.startMonth).map((w) => ({ key: w.key, label: w.label, hint: w.short }));
+    const m = fyMonths(startYear, fy.startMonth)[monthForDays] || fyMonths(startYear, fy.startMonth)[0];
+    return daysInMonth(m.year, m.month).map((d) => ({ key: d.key, label: d.label, hint: "" }));
   }, [frequency, startYear, fy.startMonth, monthForDays]);
 
-  const value = (kpiId, key, field) => {
-    const d = draft[kpiId]?.[key];
+  const value = (key, field) => {
+    const d = draft[kpi?.id]?.[key];
     if (d && d[field] !== undefined) return d[field];
-    return kpis.find((k) => k.id === kpiId)?.entries?.[key]?.[field] ?? "";
+    return kpi?.entries?.[key]?.[field] ?? "";
   };
-  const setValue = (kpiId, key, field, raw) =>
-    setDraft((p) => ({ ...p, [kpiId]: { ...(p[kpiId] || {}), [key]: { ...(p[kpiId]?.[key] || {}), [field]: raw } } }));
+  const setValue = (key, field, raw) =>
+    setDraft((p) => ({ ...p, [kpi.id]: { ...(p[kpi.id] || {}), [key]: { ...(p[kpi.id]?.[key] || {}), [field]: raw } } }));
+
+  const touchedCount = Object.values(draft).reduce((s, rows) => s + Object.keys(rows).length, 0);
 
   const commit = async () => {
     setSaving(true);
@@ -1020,17 +1010,17 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
       ...cat,
       subCategories: cat.subCategories.map((sub) => ({
         ...sub,
-        kpis: sub.kpis.map((kpi) => {
-          const rows = draft[kpi.id];
-          if (!rows) return kpi;
-          const entries = { ...(kpi.entries || {}) };
+        kpis: sub.kpis.map((k) => {
+          const rows = draft[k.id];
+          if (!rows) return k;
+          const entries = { ...(k.entries || {}) };
           Object.entries(rows).forEach(([key, vals]) => {
             const actual = parseNum(vals.actual ?? entries[key]?.actual);
             const budget = parseNum(vals.budget ?? entries[key]?.budget);
             if (actual === null && budget === null) delete entries[key];
             else entries[key] = { actual, budget };
           });
-          return { ...kpi, entries };
+          return { ...k, entries };
         }),
       })),
     });
@@ -1040,183 +1030,116 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     onClose();
   };
 
-  const cellInput = { ...inputS, padding: "8px 10px", textAlign: "right", fontSize: "13.5px", minHeight: "36px" };
-  const th = { padding: "10px 12px", fontSize: "11.5px", fontWeight: 700, color: T.accent, textTransform: "uppercase",
-    letterSpacing: "0.5px", borderBottom: `1px solid ${T.lineStrong}`, background: T.panel, whiteSpace: "nowrap" };
+  const cell = { ...inputS, padding: "7px 9px", textAlign: "right", fontSize: "13.5px", minHeight: "34px" };
+  const th = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
+    letterSpacing: "0.5px", background: T.accent, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2 };
 
   return (
     <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]}`} icon={<Database size={17} />}
-      onClose={onClose} width={step >= 4 ? 1200 : 760}
+      onClose={onClose} width={720}
       footer={<>
-        <button onClick={step === 1 ? onBack : () => setStep(Math.max(1, step - 1))} style={btnGhost}><ArrowLeft size={13} /> Back</button>
-        <div style={{ flex: 1 }} />
-        {step >= 4 && <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
-          {saving ? "Saving..." : "Save data"}</button>}
+        <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+        <span style={{ flex: 1, fontSize: "12.5px", color: T.muted, textAlign: "left" }}>
+          {touchedCount > 0 ? `${touchedCount} cell${touchedCount === 1 ? "" : "s"} edited` : "Blank cells are left as they are"}
+        </span>
+        <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Saving..." : "Save data"}</button>
       </>}>
 
-      {/* Steps 1 and 2 collapse to a single settings strip once answered. */}
-      {step > 2 ? (
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "12px 14px",
-          borderRadius: "10px", background: T.panel, border: `1px solid ${T.line}`, marginBottom: "16px" }}>
-          <span style={{ fontSize: "12.5px", color: T.muted }}>Adding to</span>
-          {[
-            { text: `${yearBadge} ${fyLabel(startYear, fy.startMonth)}`, go: 1 },
-            { text: category.name, go: 1 },
-            { text: `${frequency}${freqOverridden ? "" : " · from your KPIs"}`, go: 2 },
-          ].map((chip) => (
-            <button key={chip.text} onClick={() => setStep(chip.go)}
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 12px", borderRadius: "999px",
-                background: T.bg, border: `1px solid ${T.lineStrong}`, cursor: "pointer", fontFamily: "inherit",
-                fontSize: "13px", fontWeight: 600, color: T.accent }}>
-              {chip.text} <Pencil size={11} color={T.muted} />
-            </button>
-          ))}
-        </div>
-      ) : (
-        <>
-          <StepBlock n={1} title="Which year and category?" active={step === 1} done={step > 1}
-            summary={`${yearBadge} ${fyLabel(startYear, fy.startMonth)} · ${category.name}`} onEdit={() => setStep(1)}>
-            <label style={labelS}>Financial year</label>
-            <ChoiceGrid options={yearOptions} value={startYear} onSelect={setStartYear} min={190} />
-            <label style={{ ...labelS, marginTop: "18px" }}>Category</label>
-            <ChoiceGrid options={structure.map((c) => ({ value: c.id, label: c.name }))} value={catId} onSelect={setCatId} />
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
-              <button onClick={() => setStep(3)} style={btnPrimary}>Continue <ChevronRight size={13} /></button>
-            </div>
-          </StepBlock>
-
-          <StepBlock n={2} title="How often are you entering this data?" active={step === 2} done={step > 2}
-            summary={frequency} onEdit={() => setStep(2)}>
-            <p style={{ fontSize: "13px", color: T.body, marginTop: 0, marginBottom: "12px" }}>
-              {derived.mixed
-                ? `The KPIs in ${category.name} are captured at different frequencies — ${derived.frequency} is the most common.`
-                : `The KPIs in ${category.name} are set to ${derived.frequency}.`} You can enter at a different frequency if you need to.
-            </p>
-            <ChoiceGrid min={200}
-              options={CAPTURE_FREQUENCIES.map((f) => ({ value: f, label: f,
-                hint: f === derived.frequency ? "Matches your KPIs" : `One figure per ${f.toLowerCase().replace("ly","")}` }))}
-              value={frequency}
-              onSelect={(f) => { setFrequency(f); setFreqOverridden(f !== derived.frequency); setPeriodKeys([]); setMonthForDays(null); setStep(3); }} />
-            <p style={{ fontSize: "12.5px", color: T.body, marginTop: "14px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-              <Info size={12} /> Quarterly and yearly figures roll up from what you enter — you don't capture them separately.
-            </p>
-          </StepBlock>
-        </>
-      )}
-
-      {step === 3 && (
-        <StepBlock n={1} title={`Which ${frequency.toLowerCase().replace("ly", "")} are you entering?`} active done={false} summary="" onEdit={() => {}}>
-          {frequency === "Daily" && (
-            <div style={{ marginBottom: "16px" }}>
-              <label style={labelS}>First pick a month</label>
-              <ChoiceGrid options={fyMonths(startYear, fy.startMonth).map((m, i) => ({ value: i, label: m.label }))}
-                value={monthForDays} onSelect={(i) => { setMonthForDays(i); setPeriodKeys([]); }} />
-            </div>
-          )}
-          {periodOptions.length > 0 && (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <label style={{ ...labelS, marginBottom: 0 }}>Select one or more</label>
-                <button onClick={() => setPeriodKeys(periodKeys.length === periodOptions.length ? [] : periodOptions.map((p) => p.key))}
-                  style={{ ...btnQuiet, padding: "3px 8px", fontSize: "12.5px" }}>
-                  {periodKeys.length === periodOptions.length ? "Clear all" : "Select all"}
-                </button>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", maxHeight: "240px", overflowY: "auto", padding: "2px" }}>
-                {periodOptions.map((p) => {
-                  const on = periodKeys.includes(p.key);
-                  return (
-                    <button key={p.key} title={p.hint}
-                      onClick={() => setPeriodKeys((prev) => on ? prev.filter((k) => k !== p.key) : [...prev, p.key])}
-                      style={{ padding: "8px 14px", borderRadius: "999px", cursor: "pointer", fontSize: "13px",
-                        background: on ? T.accent : T.bg, color: on ? "#fff" : T.accent,
-                        border: `1px solid ${on ? T.accent : T.lineStrong}`, fontWeight: on ? 600 : 500, fontFamily: "inherit" }}>
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
-                <button onClick={() => setStep(4)} disabled={!periodKeys.length} style={{ ...btnPrimary, opacity: periodKeys.length ? 1 : 0.5 }}>
-                  Enter data <ChevronRight size={13} />
-                </button>
-              </div>
-            </>
-          )}
-        </StepBlock>
-      )}
-
-      {step >= 4 && (
+      {/* Everything that needs a choice is a dropdown, on one row. */}
+      <div style={{ display: "grid", gridTemplateColumns: frequency === "Daily" ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "14px" }}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "13px", color: T.body, display: "flex", alignItems: "center", gap: "8px" }}>
-              <Info size={13} /> Enter the <strong style={{ color: T.accent }}>Actual</strong> and <strong style={{ color: T.accent }}>Budget</strong> for each KPI. Leave a cell blank to remove that figure.
-            </span>
-            <button onClick={() => setStep(3)} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px" }}>
-              <Pencil size={11} /> Change periods
-            </button>
-          </div>
-          <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-            <div style={{ overflowX: "auto", maxHeight: "48vh" }}>
-              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: `${340 + periodKeys.length * 240}px` }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: "270px", borderRight: `1px solid ${T.lineStrong}` }}>KPI</th>
-                    {periodKeys.map((k) => {
-                      const p = periodOptions.find((x) => x.key === k);
-                      return (
-                        <th key={k} colSpan={2} style={{ ...th, textAlign: "center", position: "sticky", top: 0, zIndex: 2, borderRight: `1px solid ${T.lineStrong}` }}>
-                          <div>{p?.label}</div>
-                          {p?.hint && <div style={{ fontSize: "10.5px", fontWeight: 400, textTransform: "none", letterSpacing: 0, color: T.muted }}>{p.hint}</div>}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                  <tr>
-                    <th style={{ ...th, position: "sticky", left: 0, zIndex: 2, borderRight: `1px solid ${T.lineStrong}` }} />
-                    {periodKeys.map((k) => (
-                      <React.Fragment key={k}>
-                        <th style={{ ...th, textAlign: "right", minWidth: "118px", borderRight: `1px solid ${T.line}` }}>Actual</th>
-                        <th style={{ ...th, textAlign: "right", minWidth: "118px", borderRight: `1px solid ${T.lineStrong}` }}>Budget</th>
-                      </React.Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {kpis.map((kpi, i) => (
-                    <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                      <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, position: "sticky", left: 0,
-                        background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineStrong}`, zIndex: 1 }}>
-                        <div style={{ fontWeight: 600 }}>{kpi.name}</div>
-                        <div style={{ fontSize: "11.5px", color: T.muted }}>{kpi.sub} · {kpi.units} · {kpi.frequency}</div>
-                      </td>
-                      {periodKeys.map((k) => (
-                        <React.Fragment key={k}>
-                          <td style={{ padding: "5px 8px", borderRight: `1px solid ${T.lineSoft}`, borderBottom: `1px solid ${T.lineSoft}` }}>
-                            <input type="number" step="any" value={value(kpi.id, k, "actual")} placeholder="—"
-                              onChange={(e) => setValue(kpi.id, k, "actual", e.target.value)} style={cellInput} />
-                          </td>
-                          <td style={{ padding: "5px 8px", borderRight: `1px solid ${T.lineStrong}`, borderBottom: `1px solid ${T.lineSoft}` }}>
-                            <input type="number" step="any" value={value(kpi.id, k, "budget")} placeholder="—"
-                              onChange={(e) => setValue(kpi.id, k, "budget", e.target.value)} style={cellInput} />
-                          </td>
-                        </React.Fragment>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <label style={labelS}>Financial year</label>
+          <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
+            {yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}
+          </select>
         </div>
-      )}
+        <div>
+          <label style={labelS}>Category</label>
+          <select value={catId} onChange={(e) => setCatId(e.target.value)} style={selectS}>
+            {structure.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Enter by</label>
+          <select value={frequency}
+            onChange={(e) => { setFrequency(e.target.value); setFreqOverridden(e.target.value !== derived.frequency); }}
+            style={selectS}>
+            {CAPTURE_FREQUENCIES.map((f) => (
+              <option key={f} value={f}>{f}{f === derived.frequency ? " (your KPIs)" : ""}</option>
+            ))}
+          </select>
+        </div>
+        {frequency === "Daily" && (
+          <div>
+            <label style={labelS}>Month</label>
+            <select value={monthForDays} onChange={(e) => setMonthForDays(Number(e.target.value))} style={selectS}>
+              {fyMonths(startYear, fy.startMonth).map((m, i) => <option key={m.key} value={i}>{m.long}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* One KPI at a time, with its periods running down the page. */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "10px" }}>
+        <div style={{ flex: 1 }}>
+          <label style={labelS}>KPI</label>
+          <select value={kpiIndex} onChange={(e) => setKpiIndex(Number(e.target.value))} style={selectS}>
+            {kpis.map((k, i) => <option key={k.id} value={i}>{k.sub} · {k.name} ({k.units})</option>)}
+          </select>
+        </div>
+        <button onClick={() => setKpiIndex((i) => Math.max(0, i - 1))} disabled={kpiIndex === 0}
+          style={{ ...btnGhost, padding: "9px 11px", opacity: kpiIndex === 0 ? 0.4 : 1 }} title="Previous KPI">
+          <ChevronLeft size={14} />
+        </button>
+        <button onClick={() => setKpiIndex((i) => Math.min(kpis.length - 1, i + 1))} disabled={kpiIndex >= kpis.length - 1}
+          style={{ ...btnGhost, padding: "9px 11px", opacity: kpiIndex >= kpis.length - 1 ? 0.4 : 1 }} title="Next KPI">
+          <ChevronRight size={14} />
+        </button>
+      </div>
+
+      <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+        <Info size={12} /> {periods.length} {frequency.toLowerCase().replace("ly", frequency === "Daily" ? "s" : frequency === "Weekly" ? "s" : "s")} in FY {fyLabel(startYear, fy.startMonth)} · KPI {kpiIndex + 1} of {kpis.length}
+      </div>
+
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={{ ...th, textAlign: "left", borderRight: `1px solid rgba(255,255,255,0.15)` }}>Period</th>
+                <th style={{ ...th, textAlign: "right", width: "27%", borderRight: `1px solid rgba(255,255,255,0.15)` }}>Actual</th>
+                <th style={{ ...th, textAlign: "right", width: "27%" }}>Budget</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periods.map((p, i) => (
+                <tr key={p.key} style={{ background: i % 2 ? T.panel : T.bg }}>
+                  <td style={{ padding: "6px 12px", fontSize: "13.5px", color: T.ink, fontWeight: 500,
+                    borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    {p.label}
+                    {p.hint && <span style={{ color: T.faint, fontWeight: 400, marginLeft: "7px", fontSize: "11.5px" }}>{p.hint}</span>}
+                  </td>
+                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    <input type="number" step="any" value={value(p.key, "actual")} placeholder="—"
+                      onChange={(e) => setValue(p.key, "actual", e.target.value)} style={cell} />
+                  </td>
+                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
+                    <input type="number" step="any" value={value(p.key, "budget")} placeholder="—"
+                      onChange={(e) => setValue(p.key, "budget", e.target.value)} style={cell} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </Modal>
   );
 };
 
-/* ─── Add KPI — always asks in full; a new metric has no history to reuse ── */
+/* ─── Add KPI — dropdowns, paired fields, asks in full every time ────────── */
 const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
-  const [step, setStep] = useState(1);
   const [catId, setCatId] = useState(categoryId);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [subChoice, setSubChoice] = useState("");
@@ -1224,7 +1147,7 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "", units: "%", percentFormat: "whole", frequency: "Monthly",
-    direction: "higher", aggregate: "avg", definition: "", calculation: "",
+    direction: "higher", aggregate: "avg", meaning: "", measured: "",
   });
 
   const creatingCategory = catId === "__new__";
@@ -1232,7 +1155,11 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
   const subs = category?.subCategories || [];
   const creatingSub = subChoice === "__new__" || creatingCategory;
   const subName = creatingSub ? newSubName.trim() : subChoice;
-  const canSave = form.name.trim() && subName && (!creatingCategory || newCategoryName.trim()) && form.definition.trim() && form.calculation.trim();
+
+  useEffect(() => { if (!creatingCategory && subs.length && !subChoice) setSubChoice(subs[0].name); }, [catId]); // eslint-disable-line
+
+  const canSave = form.name.trim() && subName && (!creatingCategory || newCategoryName.trim())
+    && form.meaning.trim() && form.measured.trim();
 
   const commit = async () => {
     if (!canSave) return;
@@ -1241,7 +1168,7 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
       name: form.name.trim(), units: form.units, frequency: form.frequency,
       direction: form.direction, aggregate: form.aggregate,
       percentFormat: form.units === "%" ? form.percentFormat : "whole",
-      definition: form.definition.trim(), calculation: form.calculation.trim(), entries: {},
+      meaning: form.meaning.trim(), measured: form.measured.trim(), entries: {},
     });
     const next = creatingCategory
       ? [...structure, { id: `cat_${uid().slice(0,8)}`, name: newCategoryName.trim(), notes: "", subCategories: [{ name: subName, kpis: [kpi] }] }]
@@ -1258,104 +1185,115 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
 
   return (
     <Modal title="Add KPI" subtitle="Tell the system enough to calculate and display it" icon={<Sparkles size={17} />}
-      onClose={onClose} width={760}
+      onClose={onClose} width={720}
       footer={<>
-        <button onClick={step === 1 ? onBack : () => setStep(step - 1)} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+        <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <div style={{ flex: 1 }} />
-        {step >= 3 && <button onClick={commit} disabled={!canSave || saving} style={{ ...btnPrimary, opacity: canSave && !saving ? 1 : 0.5 }}>
-          {saving ? "Saving..." : "Create KPI"}</button>}
+        <button onClick={commit} disabled={!canSave || saving} style={{ ...btnPrimary, opacity: canSave && !saving ? 1 : 0.5 }}>
+          {saving ? "Saving..." : "Create KPI"}</button>
       </>}>
 
-      <StepBlock n={1} title="Where does this KPI belong?" active={step === 1} done={step > 1}
-        summary={creatingCategory ? newCategoryName : category?.name} onEdit={() => setStep(1)}>
-        <label style={labelS}>Category</label>
-        {/* Only the categories that exist here, plus the option to create one —
-            listing the other RAPS categories would point at places a KPI can't
-            actually live on this dashboard. */}
-        <ChoiceGrid options={[...structure.map((c) => ({ value: c.id, label: c.name })),
-                              { value: "__new__", label: "＋ New category", hint: "Create your own" }]}
-          value={catId} onSelect={(v) => { setCatId(v); if (v !== "__new__") setNewCategoryName(""); setSubChoice(""); }} />
-        {creatingCategory && (
-          <div style={{ marginTop: "16px" }}>
-            <label style={labelS}>New category name *</label>
-            <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} style={inputS} placeholder="e.g. Customer Experience" />
-          </div>
-        )}
-        <div style={{ marginTop: "18px" }}>
-          <label style={labelS}>Sub-category</label>
-          {!creatingCategory && subs.length > 0 && (
-            <ChoiceGrid options={[...subs.map((s) => ({ value: s.name, label: s.name })), { value: "__new__", label: "＋ New sub-category" }]}
-              value={subChoice} onSelect={setSubChoice} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+        <div>
+          <label style={labelS}>Category</label>
+          <select value={catId} onChange={(e) => { setCatId(e.target.value); setSubChoice(""); }} style={selectS}>
+            {structure.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="__new__">＋ New category…</option>
+          </select>
+          {creatingCategory && (
+            <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)}
+              style={{ ...inputS, marginTop: "8px" }} placeholder="New category name" />
           )}
-          {creatingSub && <input value={newSubName} onChange={(e) => setNewSubName(e.target.value)} style={{ ...inputS, marginTop: "10px" }} placeholder="e.g. Service Levels" />}
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
-          <button onClick={() => setStep(2)} disabled={!subName || (creatingCategory && !newCategoryName.trim())}
-            style={{ ...btnPrimary, opacity: subName && (!creatingCategory || newCategoryName.trim()) ? 1 : 0.5 }}>
-            Continue <ChevronRight size={13} />
-          </button>
-        </div>
-      </StepBlock>
-
-      <StepBlock n={2} title="How is it measured?" active={step === 2} done={step > 2}
-        summary={`${form.name || "Unnamed"} · ${form.units} · ${form.frequency}`} onEdit={() => setStep(2)}>
-        <div style={{ marginBottom: "16px" }}>
-          <label style={labelS}>KPI name *</label>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputS} placeholder="e.g. First-time Fix Rate" />
-        </div>
-        <label style={labelS}>Units</label>
-        <ChoiceGrid options={[{ value: "%", label: "Percent", hint: "%" }, { value: "R", label: "Currency", hint: "R" },
-            { value: "#", label: "Count", hint: "#" }, { value: "days", label: "Days" },
-            { value: "hrs", label: "Hours" }, { value: "units", label: "Units" }, { value: "index", label: "Index" }]}
-          value={form.units} onSelect={(u) => setForm({ ...form, units: u })} />
-        {form.units === "%" && (
-          <div style={{ marginTop: "16px" }}>
-            <label style={labelS}>How do you capture this percentage?</label>
-            <ChoiceGrid min={200}
-              options={[{ value: "whole", label: "As 25", hint: "Whole numbers" }, { value: "fraction", label: "As 0.25", hint: "Decimal fractions" }]}
-              value={form.percentFormat} onSelect={(v) => setForm({ ...form, percentFormat: v })} />
-            <p style={{ fontSize: "12px", color: T.body, marginTop: "8px", marginBottom: 0 }}>
-              Either way it displays as 25%. This tells the system how to read what you type in.
-            </p>
-          </div>
-        )}
-        <div style={{ marginTop: "18px" }}>
-          <label style={labelS}>Measurement frequency</label>
-          <ChoiceGrid options={FREQUENCIES.map((f) => ({ value: f, label: f }))} value={form.frequency} onSelect={(f) => setForm({ ...form, frequency: f })} />
-        </div>
-        <div style={{ marginTop: "18px" }}>
-          <label style={labelS}>Direction — what counts as good?</label>
-          <ChoiceGrid min={200} options={DIRECTIONS} value={form.direction} onSelect={(d) => setForm({ ...form, direction: d })} />
-        </div>
-        <div style={{ marginTop: "18px" }}>
-          <label style={labelS}>Rolling up to quarters and years</label>
-          <ChoiceGrid min={200}
-            options={[{ value: "avg", label: "Average the periods", hint: "Rates, percentages, indices" },
-                      { value: "sum", label: "Add the periods up", hint: "Counts, volumes, rand totals" }]}
-            value={form.aggregate} onSelect={(a) => setForm({ ...form, aggregate: a })} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
-          <button onClick={() => setStep(3)} disabled={!form.name.trim()} style={{ ...btnPrimary, opacity: form.name.trim() ? 1 : 0.5 }}>
-            Continue <ChevronRight size={13} />
-          </button>
-        </div>
-      </StepBlock>
-
-      <StepBlock n={3} title="What does it mean?" active={step === 3} done={false} summary="" onEdit={() => setStep(3)}>
-        <div style={{ marginBottom: "16px" }}>
-          <label style={labelS}>Definition * — what this KPI measures</label>
-          <textarea rows="3" value={form.definition} onChange={(e) => setForm({ ...form, definition: e.target.value })}
-            style={{ ...inputS, resize: "vertical" }} placeholder="Anyone reading the dashboard should understand it from this sentence." />
         </div>
         <div>
-          <label style={labelS}>Calculation * — how it is worked out</label>
-          <textarea rows="3" value={form.calculation} onChange={(e) => setForm({ ...form, calculation: e.target.value })}
-            style={{ ...inputS, resize: "vertical" }} placeholder="e.g. (Jobs fixed on first visit ÷ total jobs) × 100." />
+          <label style={labelS}>Sub-category</label>
+          {creatingCategory ? (
+            <input value={newSubName} onChange={(e) => setNewSubName(e.target.value)} style={inputS} placeholder="e.g. Service Levels" />
+          ) : (
+            <>
+              <select value={subChoice} onChange={(e) => setSubChoice(e.target.value)} style={selectS}>
+                <option value="">Select…</option>
+                {subs.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                <option value="__new__">＋ New sub-category…</option>
+              </select>
+              {subChoice === "__new__" && (
+                <input value={newSubName} onChange={(e) => setNewSubName(e.target.value)}
+                  style={{ ...inputS, marginTop: "8px" }} placeholder="New sub-category name" />
+              )}
+            </>
+          )}
         </div>
-        <p style={{ fontSize: "12.5px", color: T.body, marginTop: "14px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-          <Info size={12} /> Both are required — without them the KPI can't be interpreted by anyone reading the dashboard later.
+      </div>
+
+      <div style={{ marginBottom: "14px" }}>
+        <label style={labelS}>KPI name *</label>
+        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputS} placeholder="e.g. First-time Fix Rate" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: form.units === "%" ? "1fr 1fr 1fr" : "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+        <div>
+          <label style={labelS}>Units</label>
+          <select value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} style={selectS}>
+            <option value="%">Percent (%)</option>
+            <option value="R">Currency (R)</option>
+            <option value="#">Count (#)</option>
+            <option value="days">Days</option>
+            <option value="hrs">Hours</option>
+            <option value="units">Units</option>
+            <option value="index">Index</option>
+          </select>
+        </div>
+        {form.units === "%" && (
+          <div>
+            <label style={labelS}>Captured as</label>
+            <select value={form.percentFormat} onChange={(e) => setForm({ ...form, percentFormat: e.target.value })} style={selectS}>
+              <option value="whole">Whole numbers (25)</option>
+              <option value="fraction">Decimals (0.25)</option>
+            </select>
+          </div>
+        )}
+        <div>
+          <label style={labelS}>Measurement frequency</label>
+          <select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })} style={selectS}>
+            {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+        <div>
+          <label style={labelS}>What counts as good?</label>
+          <select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })} style={selectS}>
+            {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Rolling up to quarters and years</label>
+          <select value={form.aggregate} onChange={(e) => setForm({ ...form, aggregate: e.target.value })} style={selectS}>
+            <option value="avg">AVERAGE the periods — rates, %, indices</option>
+            <option value="sum">SUM the periods — counts, volumes, rand</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "14px" }}>
+        <label style={labelS}>What does this KPI mean? *</label>
+        <textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })}
+          style={{ ...inputS, resize: "vertical" }}
+          placeholder="In plain words — anyone reading the dashboard should get it from this sentence." />
+      </div>
+
+      <div>
+        <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Sigma size={13} /> How is this KPI measured? *
+        </label>
+        <textarea rows="4" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })}
+          style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }}
+          placeholder={"Write it as you'd build it in Excel, e.g.\n\n=COUNTIFS(FirstVisitFix, \"Yes\") / COUNTA(JobID) * 100"} />
+        <p style={{ fontSize: "12px", color: T.muted, marginTop: "7px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Info size={12} /> Use Excel functions and named ranges — SUM, AVERAGE, COUNTIF, SUMIFS, SUMPRODUCT — so it can be rebuilt in a spreadsheet.
         </p>
-      </StepBlock>
+      </div>
     </Modal>
   );
 };
@@ -1431,7 +1369,6 @@ const OperationalPerformance = () => {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  /* Last Add Data setup, so a returning user isn't re-asked. */
   const savePrefs = (p) => {
     setDataPrefs(p);
     try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* private browsing — non-fatal */ }
@@ -1598,8 +1535,9 @@ const OperationalPerformance = () => {
     window.location.href = origin === "cmf" ? "/cmf-cohorts" : origin === "catalyst" ? "/catalyst/cohorts" : "/my-cohorts";
   };
 
-  const thS = { padding: 0, background: T.panel, borderBottom: `2px solid ${T.lineStrong}`,
-    borderRight: `1px solid ${T.line}`, position: "relative", verticalAlign: "top" };
+  /* Dark brown header band, white type. */
+  const thS = { padding: 0, background: T.accent, borderBottom: `2px solid ${T.accent}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top" };
   const tdS = { padding: "13px 14px", color: T.body, fontSize: "14px", overflow: "hidden", borderRight: `1px solid ${T.lineSoft}` };
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "5px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
 
@@ -1659,9 +1597,9 @@ const OperationalPerformance = () => {
             <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "14.5px", fontWeight: 600 }}>How to use it</h3>
             <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
               <li>Pick a timeframe above the table — the column names follow it</li>
-              <li>Click the eye beside a KPI for its definition and calculation</li>
+              <li>Click the eye beside a KPI for what it means and how it is measured</li>
               <li>Use the Actions column for the chart, insights, actions and notes</li>
-              <li>Add KPI/Data remembers your last setup and skips ahead</li>
+              <li>Add KPI/Data lays out the whole financial year for you</li>
             </ul>
           </div>
         </div>
@@ -1757,7 +1695,7 @@ const OperationalPerformance = () => {
           <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed" }}>
             <thead>
               <tr>
-                {visibleColumns.map((key, ci) => {
+                {visibleColumns.map((key) => {
                   const def = COLUMN_DEFS[key];
                   const isOpen = openFilter === key;
                   const sorted = sortConfig.key === key;
@@ -1767,31 +1705,30 @@ const OperationalPerformance = () => {
 
                   return (
                     <th key={key} style={{ ...thS, width: widths[key] }}>
-                      {/* The label block is a fixed two-line height and bottom-
-                          aligned, so a one-line name sits on the same baseline
-                          as the second line of a two-line one. */}
-                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "5px", alignItems: align }}>
+                      {/* Fixed two-line block, bottom-aligned, so single-line
+                          names sit on the same baseline as two-line ones. */}
+                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: align }}>
                         <span style={{ display: "flex", alignItems: "flex-end", gap: "5px", minHeight: "34px" }}>
                           <span style={{ display: "inline-flex", flexDirection: "column", justifyContent: "flex-end",
                             alignItems: align, lineHeight: 1.3, minHeight: "34px" }}>
                             {lines.length > 1 && (
-                              <span style={{ fontSize: "13px", fontWeight: 600, color: T.accent, whiteSpace: "nowrap" }}>{lines[0]}</span>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: "rgba(255,255,255,0.82)", whiteSpace: "nowrap" }}>{lines[0]}</span>
                             )}
-                            <span style={{ fontSize: "13px", fontWeight: 600, color: T.ink, whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", whiteSpace: "nowrap" }}>
                               {lines[lines.length - 1]}
                             </span>
                           </span>
-                          <span style={{ paddingBottom: "2px" }}><InfoTip text={def.tip} /></span>
+                          <span style={{ paddingBottom: "2px" }}><InfoTip text={def.tip} light /></span>
                         </span>
                         <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
                           {def.sort && (
-                            <button onClick={() => toggleSort(key)} title="Sort" style={iconBtn(sorted ? T.accent : T.muted)}>
+                            <button onClick={() => toggleSort(key)} title="Sort" style={iconBtn(sorted ? "#fff" : "rgba(255,255,255,0.6)")}>
                               {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
                             </button>
                           )}
                           {def.filter && (
                             <button onClick={() => setOpenFilter(isOpen ? null : key)} title="Filter"
-                              style={{ ...iconBtn(filtered ? T.accent : T.muted), background: filtered ? T.accentTint : "transparent" }}>
+                              style={{ ...iconBtn(filtered ? "#fff" : "rgba(255,255,255,0.6)"), background: filtered ? "rgba(255,255,255,0.16)" : "transparent" }}>
                               <SlidersHorizontal size={13} />
                             </button>
                           )}
@@ -1820,10 +1757,10 @@ const OperationalPerformance = () => {
                   );
                 })}
                 <th style={{ ...thS, width: widths[ACTIONS_KEY], borderRight: "none" }}>
-                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "5px", alignItems: "center" }}>
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
                     <span style={{ display: "flex", alignItems: "flex-end", gap: "5px", minHeight: "34px" }}>
-                      <span style={{ display: "inline-flex", alignItems: "flex-end", minHeight: "34px", fontSize: "13px", fontWeight: 600, color: T.ink }}>Actions</span>
-                      <span style={{ paddingBottom: "2px" }}><InfoTip text="Trend chart, observations and opportunities, add an action, and notes for this KPI." /></span>
+                      <span style={{ display: "inline-flex", alignItems: "flex-end", minHeight: "34px", fontSize: "13px", fontWeight: 600, color: "#ffffff" }}>Actions</span>
+                      <span style={{ paddingBottom: "2px" }}><InfoTip light text="Trend chart, observations and opportunities, add an action, and notes for this KPI." /></span>
                     </span>
                     <span style={{ height: "23px" }} />
                   </div>
@@ -1864,7 +1801,7 @@ const OperationalPerformance = () => {
                       <td style={{ ...rowTd, width: widths.kpi }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
                           <span style={{ fontWeight: 500, color: T.ink }}>{kpi.name}</span>
-                          <button onClick={() => setInfoKpi(kpi)} style={iconBtn(T.muted)} title="Definition and calculation"><Eye size={14} /></button>
+                          <button onClick={() => setInfoKpi(kpi)} style={iconBtn(T.muted)} title="What it means and how it is measured"><Eye size={14} /></button>
                           {kpi.notes && <StickyNote size={11} color={T.amber} />}
                         </div>
                       </td>
@@ -1910,7 +1847,7 @@ const OperationalPerformance = () => {
       </div>
 
       {infoKpi && <KpiInfoModal kpi={infoKpi} readOnly={isInvestorView} onClose={() => setInfoKpi(null)}
-        onSave={(patch) => { updateKpi(infoKpi.id, patch); setInfoKpi({ ...infoKpi, ...patch }); notify("success", "KPI definition updated."); }} />}
+        onSave={(patch) => { updateKpi(infoKpi.id, patch); setInfoKpi({ ...infoKpi, ...patch }); notify("success", "KPI details updated."); }} />}
 
       {chartKpi && <TrendChartModal kpi={chartKpi} period={period} fy={fy} onClose={() => setChartKpi(null)}
         onSaveNote={(key, text) => {
