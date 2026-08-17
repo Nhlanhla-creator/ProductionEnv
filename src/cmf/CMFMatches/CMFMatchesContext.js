@@ -126,7 +126,7 @@ export const CMFMatchesProvider = ({ children }) => {
     return `${pct}% match fit based on aligning with your focus in ${sectors} and operational presence in ${formatCustomTerm(location)}.`
   }
 
-  const mapSMEProfileToMatch = (smeId, smeData, matchRecord) => {
+  const mapSMEProfileToMatch = (smeId, smeData, matchRecord, cmfPref) => {
     const sector = getNestedField(smeData, "entityOverview.economicSectors")?.[0] || "Services"
     const score = smeData.bigScore || 45
     const name = getNestedField(smeData, "entityOverview.registeredName") || getNestedField(smeData, "entityOverview.tradingName") || "Unnamed Business"
@@ -146,7 +146,9 @@ export const CMFMatchesProvider = ({ children }) => {
       applicationDate: smeData.bigScoreUpdatedAt ? smeData.bigScoreUpdatedAt.split("T")[0] : new Date().toISOString().split("T")[0],
       pipelineStage: matchRecord?.pipelineStage || "Matched",
       currentStatus: matchRecord?.currentStatus || "Matched",
-      matchPercentage: matchRecord?.matchPercentage || calculateMatchPercentage(smeData, null),
+      matchPercentage: (matchRecord?.reason && matchRecord.reason.includes("Directly onboarded"))
+        ? (matchRecord.matchPercentage || 100)
+        : calculateMatchPercentage(smeData, cmfPref),
       bigScore: score,
       compliance: getNestedField(smeData, "legalCompliance.bbbeeLevel") ? 80 : 50,
       legitimacy: 60,
@@ -158,7 +160,7 @@ export const CMFMatchesProvider = ({ children }) => {
     }
   }
 
-  const mapFunderProfileToMatch = (funderId, data, matchRecord) => {
+  const mapFunderProfileToMatch = (funderId, data, matchRecord, cmfPref) => {
     let name = getNestedField(data, "entityOverview.registeredName") || 
                getNestedField(data, "entityOverview.tradingName") || 
                getNestedField(data, "registeredName") || 
@@ -211,15 +213,23 @@ export const CMFMatchesProvider = ({ children }) => {
       location: loc,
       fundingRange,
       sectors: formattedSectors,
-      matchPercentage: matchRecord?.matchPercentage || calculateMatchPercentage(data, null),
+      matchPercentage: (matchRecord?.reason && matchRecord.reason.includes("Directly onboarded"))
+        ? (matchRecord.matchPercentage || 100)
+        : calculateMatchPercentage(data, cmfPref),
       contactPerson: contactName,
       email,
       description,
-      status: matchRecord?.currentStatus || "Matched"
+      status: matchRecord?.currentStatus || "Matched",
+      bigScore: data.bigScore || 0,
+      compliance: data.compliance || 0,
+      legitimacy: data.legitimacy || 0,
+      fundability: data.fundability || 0,
+      leadership: data.leadership || 0,
+      pis: data.pis || 0
     }
   }
 
-  const mapCatalystProfileToMatch = (catalystId, data, matchRecord) => {
+  const mapCatalystProfileToMatch = (catalystId, data, matchRecord, cmfPref) => {
     let name = getNestedField(data, "entityOverview.registeredName") || 
                getNestedField(data, "entityOverview.tradingName") || 
                getNestedField(data, "registeredName") || 
@@ -271,11 +281,19 @@ export const CMFMatchesProvider = ({ children }) => {
       location: loc,
       focus,
       sectors: formattedSectors,
-      matchPercentage: matchRecord?.matchPercentage || calculateMatchPercentage(data, null),
+      matchPercentage: (matchRecord?.reason && matchRecord.reason.includes("Directly onboarded"))
+        ? (matchRecord.matchPercentage || 100)
+        : calculateMatchPercentage(data, cmfPref),
       contactPerson: contactName,
       email,
       description,
-      status: matchRecord?.currentStatus || "Matched"
+      status: matchRecord?.currentStatus || "Matched",
+      bigScore: data.bigScore || 0,
+      compliance: data.compliance || 0,
+      legitimacy: data.legitimacy || 0,
+      fundability: data.fundability || 0,
+      leadership: data.leadership || 0,
+      pis: data.pis || 0
     }
   }
 
@@ -412,7 +430,7 @@ export const CMFMatchesProvider = ({ children }) => {
             }
           }
           if (matchRecord) {
-            finalSmeMatches.push(mapSMEProfileToMatch(profileId, profileData, matchRecord))
+            finalSmeMatches.push(mapSMEProfileToMatch(profileId, profileData, matchRecord, cmfPref))
           }
         } 
         else if (isFunder) {
@@ -439,7 +457,7 @@ export const CMFMatchesProvider = ({ children }) => {
             }
           }
           if (matchRecord) {
-            finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileData, matchRecord))
+            finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileData, matchRecord, cmfPref))
           }
         }
         else if (isCatalyst) {
@@ -466,7 +484,7 @@ export const CMFMatchesProvider = ({ children }) => {
             }
           }
           if (matchRecord) {
-            finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileData, matchRecord))
+            finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileData, matchRecord, cmfPref))
             catalystIds.add(profileId)
           }
         }
@@ -503,7 +521,7 @@ export const CMFMatchesProvider = ({ children }) => {
           }
         }
         if (matchRecord) {
-          finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileData, matchRecord))
+          finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileData, matchRecord, cmfPref))
         }
       }
 
@@ -538,7 +556,7 @@ export const CMFMatchesProvider = ({ children }) => {
           }
         }
         if (matchRecord) {
-          finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileData, matchRecord))
+          finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileData, matchRecord, cmfPref))
           catalystIds.add(profileId)
         }
       }
