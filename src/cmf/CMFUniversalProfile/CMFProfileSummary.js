@@ -165,6 +165,8 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                     fontWeight: "800",
                     margin: "0 0 8px 0",
                     letterSpacing: "-0.02em",
+                    textDecoration: "none",
+                    borderBottom: "none",
                   }}
                 >
                   {entity.registeredName || "CMF Profile Summary"}
@@ -244,6 +246,8 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                       fontSize: "clamp(18px, 2vw, 20px)",
                       fontWeight: "700",
                       color: expandedSections.entityOverview ? "#faf7f2" : "#4a352f",
+                      textDecoration: "none",
+                      borderBottom: "none",
                     }}
                   >
                     Entity Overview
@@ -394,6 +398,8 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                       fontSize: "clamp(18px, 2vw, 20px)",
                       fontWeight: "700",
                       color: expandedSections.contactDetails ? "#faf7f2" : "#4a352f",
+                      textDecoration: "none",
+                      borderBottom: "none",
                     }}
                   >
                     Contact Details
@@ -503,6 +509,8 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                       fontSize: "clamp(18px, 2vw, 20px)",
                       fontWeight: "700",
                       color: expandedSections.facilitationOffering ? "#faf7f2" : "#4a352f",
+                      textDecoration: "none",
+                      borderBottom: "none",
                     }}
                   >
                     Facilitation Offering & Services
@@ -618,6 +626,8 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                       fontSize: "clamp(18px, 2vw, 20px)",
                       fontWeight: "700",
                       color: expandedSections.investmentPreference ? "#faf7f2" : "#4a352f",
+                      textDecoration: "none",
+                      borderBottom: "none",
                     }}
                   >
                     Fund & Investment Preferences
@@ -640,7 +650,7 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                   {/* Fund Details */}
                   {fundDetails.funds && fundDetails.funds.length > 0 && (
                     <div style={{ marginBottom: "24px" }}>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#7d5a50", marginBottom: "12px" }}>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#7d5a50", marginBottom: "12px", textDecoration: "none", borderBottom: "none" }}>
                         Active & Deployed Facilities
                       </h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
@@ -762,6 +772,8 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                       fontSize: "clamp(18px, 2vw, 20px)",
                       fontWeight: "700",
                       color: expandedSections.documentsStatus ? "#faf7f2" : "#4a352f",
+                      textDecoration: "none",
+                      borderBottom: "none",
                     }}
                   >
                     Document & Credential Status
