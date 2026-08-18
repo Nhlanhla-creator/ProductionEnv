@@ -81,22 +81,25 @@ export const CMFMatchesProvider = ({ children }) => {
   const [effectiveUserId, setEffectiveUserId] = useState(null)
 
   const calculateMatchPercentage = (profileData, cmfPref) => {
-    let score = 55 // Base score
+    const baseScore = 40
 
-    // Sector matching
+    // 1. Sector matching (20%)
     const economicSectors = getNestedField(profileData, "entityOverview.economicSectors") || 
                             getNestedField(profileData, "programBriefMatchingPreference.sectorFocus") || 
                             (getNestedField(profileData, "entityOverview.industrySector") ? [getNestedField(profileData, "entityOverview.industrySector")] : [])
-    
-    const cmfSectors = cmfPref?.sectorFocus || ["Technology", "Logistics", "Retail", "Construction", "CleanTech"]
-    
+    const cmfSectors = cmfPref?.sectorFocus || []
     const sectorsArray = Array.isArray(economicSectors) ? economicSectors : (economicSectors ? [economicSectors] : [])
-    const sectorMatch = sectorsArray.some(s => 
-      cmfSectors.some(c => s.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(s.toLowerCase()))
-    )
-    if (sectorMatch) score += 25
+    let sectorMatch = false
+    if (cmfSectors.length === 0) {
+      sectorMatch = true
+    } else {
+      sectorMatch = sectorsArray.some(s => 
+        cmfSectors.some(c => s.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(s.toLowerCase()))
+      )
+    }
+    const sectorScore = sectorMatch ? 20 : 0
 
-    // Location matching
+    // 2. Location matching (15%)
     let province = getNestedField(profileData, "location") || 
                    getNestedField(profileData, "entityOverview.contactDetails.province") || 
                    getNestedField(profileData, "entityOverview.province") || 
@@ -105,14 +108,52 @@ export const CMFMatchesProvider = ({ children }) => {
     if (Array.isArray(provincesList) && provincesList.length > 0) {
       province = provincesList[0]
     }
-    
-    const cmfLocations = cmfPref?.geographicFocus || ["Gauteng", "Western Cape", "Eastern Cape", "Limpopo", "National", "South Africa"]
-    const locationMatch = cmfLocations.some(c => 
-      String(province).toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(String(province).toLowerCase())
-    )
-    if (locationMatch) score += 15
+    const cmfLocations = cmfPref?.geographicFocus || []
+    let locationMatch = false
+    if (cmfLocations.length === 0) {
+      locationMatch = true
+    } else {
+      locationMatch = cmfLocations.some(c => 
+        String(province).toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(String(province).toLowerCase())
+      ) || String(province).toLowerCase() === "national"
+    }
+    const locationScore = locationMatch ? 15 : 0
 
-    return Math.min(score, 98)
+    // 3. Stage Focus matching (15%)
+    const operationStage = getNestedField(profileData, "entityOverview.operationStage")
+    const cmfStages = cmfPref?.investmentStage || []
+    let stageMatch = false
+    if (cmfStages.length === 0) {
+      stageMatch = true
+    } else if (operationStage) {
+      const normalizedOp = operationStage.toLowerCase().trim()
+      const mappedCmfStages = []
+      if (normalizedOp === "startup") mappedCmfStages.push("pre-seed", "seed")
+      else if (normalizedOp === "growth") mappedCmfStages.push("seed", "series a")
+      else if (normalizedOp === "scaling") mappedCmfStages.push("series a", "series b", "series c+")
+      else if (normalizedOp === "turnaround") mappedCmfStages.push("growth/pe", "series b")
+      else if (normalizedOp === "mature") mappedCmfStages.push("series c+", "growth/pe", "mbo", "mbi", "lbo")
+      
+      stageMatch = cmfStages.some(s => mappedCmfStages.includes(s.toLowerCase().trim()))
+    }
+    const stageScore = stageMatch ? 15 : 0
+
+    // 4. Legal Entity Fit matching (10%)
+    const legalStructure = getNestedField(profileData, "entityOverview.legalStructure")
+    const cmfLegalEntities = cmfPref?.legalEntityFit ? (Array.isArray(cmfPref.legalEntityFit) ? cmfPref.legalEntityFit : [cmfPref.legalEntityFit]) : []
+    let legalMatch = false
+    if (cmfLegalEntities.length === 0) {
+      legalMatch = true
+    } else if (legalStructure) {
+      const cleanSmeLegal = legalStructure.toLowerCase().replace(/[\(\)\s-\.]/g, "")
+      legalMatch = cmfLegalEntities.some(c => {
+        const cleanCmfLegal = c.toLowerCase().replace(/[\(\)\s-\.]/g, "")
+        return cleanSmeLegal.includes(cleanCmfLegal) || cleanCmfLegal.includes(cleanSmeLegal)
+      })
+    }
+    const legalScore = legalMatch ? 10 : 0
+
+    return Math.min(baseScore + sectorScore + locationScore + stageScore + legalScore, 98)
   }
 
   const getMatchReason = (profileData, pct) => {

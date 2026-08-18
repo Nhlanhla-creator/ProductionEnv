@@ -13,8 +13,6 @@ import ProductsServices from "../../smses/UniversalProfile/products-services"
 import HowDidYouHear from "../../smses/UniversalProfile/how-did-you-hear"
 import CMFDocumentUpload from "./CMFDocumentUpload"
 import CMFDocuments from "cmf/CMFDocuments/CMFDocuments"
-import FundDetailsSection from "../../Investor/InvestorUniversalProfile/FundDetails​"
-import ApplicationBriefSection from "../../Investor/InvestorUniversalProfile/ApplicationBrief​"
 import GeneralInvestmentPreferenceSection from "../../Investor/InvestorUniversalProfile/GeneralInvestmentPreference​"
 import DeclarationConsent from "../../smses/UniversalProfile/declaration-consent"
 import CMFProfileSummary from "./CMFProfileSummary"
@@ -30,9 +28,7 @@ const sections = [
   { id: "contactDetails", label: "Contact\nDetails" },
   { id: "howDidYouHear", label: "How Did\nYou Hear" },
   { id: "documents", label: "Document\nUpload" },
-  { id: "fundDetails", label: "Fund\nDetails" },
-  { id: "applicationBrief", label: "Application\nBrief" },
-  { id: "generalInvestmentPreference", label: "Investment\nPreferences" },
+  { id: "generalInvestmentPreference", label: "Matching\nPreferences" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
 ]
 
@@ -67,8 +63,6 @@ const sectionValidations = {
   productsServices: () => true,
   howDidYouHear: () => true,
   documents: () => true,
-  fundDetails: () => true,
-  applicationBrief: () => true,
   generalInvestmentPreference: () => true,
   declarationConsent: () => true,
 }
@@ -119,7 +113,7 @@ export default function CMFUniversalProfile() {
 
   const ROLE_PERMISSIONS = {
     owner: { canEditAll: true, sections: sections.map(s => s.id) },
-    companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "productsServices", "documents", "fundDetails", "applicationBrief", "generalInvestmentPreference"] },
+    companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "productsServices", "documents", "generalInvestmentPreference"] },
     manager: { canEditAll: false, sections: ["contactDetails", "productsServices", "documents"] },
     employee: { canEditAll: false, sections: ["contactDetails", "documents"] },
     viewer: { canEditAll: false, sections: [] },
@@ -135,8 +129,7 @@ export default function CMFUniversalProfile() {
   const [completedSections, setCompletedSections] = useState({
     instructions: true, entityOverview: false, ownershipManagement: false,
     contactDetails: false, legalCompliance: false, productsServices: false,
-    howDidYouHear: false, documents: false, fundDetails: false,
-    applicationBrief: false, generalInvestmentPreference: false, declarationConsent: false,
+    howDidYouHear: false, documents: false, generalInvestmentPreference: false, declarationConsent: false,
   })
 
   const [validationModal, setValidationModal] = useState({ open: false, title: "", messages: [] })
@@ -199,14 +192,6 @@ export default function CMFUniversalProfile() {
       brochure: [],
       serviceCatalogue: [],
     },
-    fundDetails: { funds: [] },
-    applicationBrief: {
-      overviewObjectives: "", instructionsForApplying: "",
-      estimatedReviewTime: "", typicalDealClosingTime: "",
-      applicationWindow: "", coreDocuments: [], coreDocumentsOther: "",
-      debtDocuments: [], equityDocuments: [], otherConditionalDocuments: "",
-      evaluationCriteria: "", impactAlignment: "",
-    },
     generalInvestmentPreference: {
       fundStructure: "", legalEntityFit: "", investmentStage: [],
       investmentFocus: [], investmentFocusSubtype: [], sectorFocus: [],
@@ -225,17 +210,13 @@ export default function CMFUniversalProfile() {
   const LOCAL_STORAGE_SECTIONS_KEY = "cmfProfileCompletedSections"
 
   useEffect(() => {
+    // Force subcomponents to use passed data props instead of fetching from universalProfiles
+    const prevOnboarding = sessionStorage.getItem("isOnboarding")
+    sessionStorage.setItem("isOnboarding", "true")
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-          if (isCmfView) {
-            const viewingId = sessionStorage.getItem("viewingSMEId")
-            setIsCompanyMember(false)
-            setEffectiveUserId(viewingId)
-            setUserRole("owner")
-            setEditPermissions(ROLE_PERMISSIONS.owner)
-          } else {
             const userDocRef = doc(db, "users", user.uid)
             const userDocSnap = await getDoc(userDocRef)
             if (userDocSnap.exists()) {
@@ -267,7 +248,6 @@ export default function CMFUniversalProfile() {
             if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
             if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
             if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("cmfHasSeenWelcomePopup"), "true") }
-          }
         } catch (error) {
           console.error("Error checking company membership:", error)
           setEffectiveUserId(`${user.uid}_cmf`); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
@@ -275,14 +255,19 @@ export default function CMFUniversalProfile() {
       } else { navigate("/auth") }
       setLoading(false)
     })
-    return () => unsubscribe()
+    return () => {
+      unsubscribe()
+      if (prevOnboarding !== null) {
+        sessionStorage.setItem("isOnboarding", prevOnboarding)
+      } else {
+        sessionStorage.removeItem("isOnboarding")
+      }
+    }
   }, [])
 
   const getUserSpecificKey = (baseKey) => { const userId = effectiveUserId || auth.currentUser?.uid; return userId ? `${baseKey}_${userId}` : baseKey }
 
   useEffect(() => {
-    const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-    if (isCmfView) return
     const userId = auth.currentUser?.uid; if (!userId) return
     localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_KEY_PREFIX), JSON.stringify(formData))
     localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(completedSections))
@@ -300,10 +285,7 @@ export default function CMFUniversalProfile() {
     if (userId) {
       const docRef = doc(db, FIRESTORE_COLLECTION, userId)
       await setDoc(docRef, { completedSections: updated }, { merge: true })
-      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-      if (!isCmfView) {
-        localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(updated))
-      }
+      localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(updated))
     }
   }
 
@@ -487,12 +469,10 @@ const handleSaveSection = async () => {
                   });
                 }
               }
-              setActiveSection("fundDetails");
+              setActiveSection("generalInvestmentPreference");
             }}
           />
         )
-        case "fundDetails": return <FundDetailsSection {...commonProps} />
-      case "applicationBrief": return <ApplicationBriefSection {...commonProps} />
       case "generalInvestmentPreference": return <GeneralInvestmentPreferenceSection {...commonProps} />
       case "declarationConsent": return <DeclarationConsent {...commonProps} allFormData={formData} onComplete={() => navigate("/cmf-matches")} />
       default: return <Instructions />
@@ -541,48 +521,9 @@ const handleSaveSection = async () => {
     )
   }
 
-  const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-  const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
-
-  const renderCmfBanner = () => {
-    if (!isCmfView) return null;
-    return (
-      <div style={{
-        backgroundColor: "#e8f5e9", padding: "16px 20px",
-        borderRadius: "8px", border: "2px solid #4caf50",
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "20px"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "20px" }}>👁️</span>
-          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-            Facilitator View: Managing {viewingSMEName}'s Profile
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            sessionStorage.removeItem("viewingSMEId");
-            sessionStorage.removeItem("viewingSMEName");
-            sessionStorage.removeItem("investorViewMode");
-            sessionStorage.removeItem("viewOrigin");
-            window.location.href = "/cmf-cohorts";
-          }}
-          style={{
-            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
-            border: "none", borderRadius: "6px", cursor: "pointer",
-            fontWeight: "600", fontSize: "14px",
-          }}
-        >
-          ← Back to My Cohorts
-        </button>
-      </div>
-    );
-  };
-
   if (showSummary && !isEditing) {
     return (
       <div className="universal-profile-container">
-        {renderCmfBanner()}
         <CMFProfileSummary data={profileData || formData} onEdit={handleEditProfile} />
       </div>
     )
@@ -590,7 +531,6 @@ const handleSaveSection = async () => {
 
   return (
     <div className="universal-profile-container">
-      {renderCmfBanner()}
       {validationModal.open && (
         <div className="popup-overlay">
           <div className="validation-popup">
@@ -639,7 +579,28 @@ const handleSaveSection = async () => {
         </div>
       )}
 
-      <h1>My CMF Profile — Capital and Market Facilitator</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <h1 style={{ margin: 0 }}>My CMF Profile — Capital and Market Facilitator</h1>
+        {profileSubmitted && (
+          <button
+            onClick={() => {
+              setIsEditing(false);
+              setShowSummary(true);
+            }}
+            className="btn btn-secondary"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 16px",
+              fontSize: "13px",
+              fontWeight: "600",
+            }}
+          >
+            ← Back to Profile Summary
+          </button>
+        )}
+      </div>
 
       <div className="profile-tracker">
         {isCompanyMember && (

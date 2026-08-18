@@ -1238,6 +1238,12 @@ export default function CMFOnboardProfile() {
       }
 
       const activeConfig = mapping[profileType]
+      const agreementFormUrl = "https://www.bigmarketplace.biz/terms-and-conditions"
+      activeConfig.payload.documents = {
+        ...(activeConfig.payload.documents || {}),
+        nda: agreementFormUrl,
+        ndaUpdatedAt: new Date().toISOString()
+      }
       await setDoc(doc(db, activeConfig.collectionName, newEntityId), activeConfig.payload)
 
       // 5. Create user profile matching role parameters
