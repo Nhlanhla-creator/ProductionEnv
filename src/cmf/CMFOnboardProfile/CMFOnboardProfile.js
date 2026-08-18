@@ -35,6 +35,9 @@ import FunderInstructions from "../../Investor/InvestorUniversalProfile/Instruct
 import FunderEntityOverview from "../../Investor/InvestorUniversalProfile/FundManageOverview"
 import FunderContactDetails from "../../Investor/InvestorUniversalProfile/ContactDetails"
 import FunderInvestmentRequirements from "../../Investor/InvestorUniversalProfile/InvestmentRequirements"
+import FunderGeneralInvestmentPreference from "../../Investor/InvestorUniversalProfile/GeneralInvestmentPreference​"
+import FunderFundDetails from "../../Investor/InvestorUniversalProfile/FundDetails​"
+import FunderApplicationBrief from "../../Investor/InvestorUniversalProfile/ApplicationBrief​"
 import FunderDocumentUpload from "../../Investor/InvestorUniversalProfile/DocumentUpload"
 import FunderDeclarationConsent from "../../Investor/InvestorUniversalProfile/DeclarationConsent"
 
@@ -43,6 +46,7 @@ import CatalystInstructions from "../../catalyst/CatalystUniversalProfile/cataly
 import CatalystEntityOverview from "../../catalyst/CatalystUniversalProfile/catalyst-entity-overview"
 import CatalystContactDetails from "../../catalyst/CatalystUniversalProfile/catalyst-contact-details"
 import CatalystProgramBriefMatchingPreference from "../../catalyst/CatalystUniversalProfile/CatalystProgramBriefMatchingPreference"
+import CatalystApplicationBrief from "../../catalyst/CatalystUniversalProfile/catalyst-application-brief"
 import CatalystDocumentUpload from "../../catalyst/CatalystUniversalProfile/catalyst-document-upload"
 import CatalystDeclarationConsent from "../../catalyst/CatalystUniversalProfile/catalyst-declaration-consent"
 
@@ -310,6 +314,18 @@ const mockFunders = [
       primaryContactEmail: "david.kramer.vanguard@mailinator.com"
     },
     investmentRequirements: {},
+    generalInvestmentPreference: {
+      minimumSupportTicket: "R 1,000,000",
+      maximumSupportTicket: "R 10,000,000",
+      sectorFocus: ["Technology", "Fintech"],
+      geographicFocus: ["South Africa"],
+      selectedProvinces: ["Gauteng", "Western Cape"],
+      legalEntity: ["Pty Ltd"],
+      businessLifecycleStage: ["Early Stage", "Growth Stage"],
+      ticketSize: "R 5,000,000"
+    },
+    fundDetails: {},
+    applicationBrief: {},
     documentUploadPlaceholder: {
       cipcRegistration: [{ name: "funder_cipc.pdf", type: "application/pdf" }],
       taxCompliancePin: [{ name: "funder_tax.pdf", type: "application/pdf" }]
@@ -357,6 +373,7 @@ const mockCatalysts = [
       selectedProvinces: ["Gauteng"],
       selectedCountries: ["South Africa"]
     },
+    applicationBrief: {},
     documentUploadPlaceholder: {
       cipcRegistration: [{ name: "catalyst_cipc.pdf", type: "application/pdf" }],
       taxCompliancePin: [{ name: "catalyst_tax.pdf", type: "application/pdf" }]
@@ -396,6 +413,14 @@ const mockCMFs = [
     documentsPlaceholder: {
       cipcRegistration: [{ name: "cmf_cipc.pdf", type: "application/pdf" }],
       taxCompliancePin: [{ name: "cmf_tax.pdf", type: "application/pdf" }]
+    },
+    fundDetails: {},
+    applicationBrief: {},
+    generalInvestmentPreference: {
+      minimumSupportTicket: "R 500,000",
+      maximumSupportTicket: "R 5,000,000",
+      sectorFocus: ["Manufacturing", "Services"],
+      geographicFocus: ["South Africa"]
     },
     declarationConsentPlaceholder: {
       accuracy: true,
@@ -688,6 +713,18 @@ export default function CMFOnboardProfile() {
           primaryContactEmail: ""
         },
         investmentRequirements: {},
+        generalInvestmentPreference: {
+          minimumSupportTicket: "",
+          maximumSupportTicket: "",
+          sectorFocus: [],
+          geographicFocus: [],
+          selectedProvinces: [],
+          legalEntity: [],
+          businessLifecycleStage: [],
+          ticketSize: ""
+        },
+        fundDetails: {},
+        applicationBrief: {},
         documentUpload: {},
         declarationConsent: {}
       }
@@ -727,6 +764,7 @@ export default function CMFOnboardProfile() {
           selectedProvinces: [],
           selectedCountries: ["South Africa"]
         },
+        applicationBrief: {},
         documentUpload: {},
         declarationConsent: {}
       }
@@ -755,6 +793,14 @@ export default function CMFOnboardProfile() {
         legalCompliance: {},
         howDidYouHear: {},
         documents: {},
+        fundDetails: {},
+        applicationBrief: {},
+        generalInvestmentPreference: {
+          minimumSupportTicket: "",
+          maximumSupportTicket: "",
+          sectorFocus: [],
+          geographicFocus: []
+        },
         declarationConsent: {}
       }
     }
@@ -794,6 +840,9 @@ export default function CMFOnboardProfile() {
         { id: "fundManageOverview", label: "Fund Manage Overview" },
         { id: "contactDetails", label: "Contact Details" },
         { id: "investmentRequirements", label: "Investment Requirements" },
+        { id: "generalInvestmentPreference", label: "Investment Preferences" },
+        { id: "fundDetails", label: "Fund Details" },
+        { id: "applicationBrief", label: "Application Brief" },
         { id: "documentUpload", label: "Document Upload" },
         { id: "declarationConsent", label: "Declaration & Consent" }
       ]
@@ -803,6 +852,7 @@ export default function CMFOnboardProfile() {
         { id: "entityOverview", label: "Entity Overview" },
         { id: "contactDetails", label: "Contact Details" },
         { id: "programBriefMatchingPreference", label: "Program & Matching Preferences" },
+        { id: "applicationBrief", label: "Application Brief" },
         { id: "documentUpload", label: "Document Upload" },
         { id: "declarationConsent", label: "Declaration & Consent" }
       ]
@@ -816,6 +866,9 @@ export default function CMFOnboardProfile() {
         { id: "contactDetails", label: "Contact Details" },
         { id: "howDidYouHear", label: "How Did You Hear" },
         { id: "documents", label: "Document Upload" },
+        { id: "fundDetails", label: "Fund Details" },
+        { id: "applicationBrief", label: "Application Brief" },
+        { id: "generalInvestmentPreference", label: "Investment Preferences" },
         { id: "declarationConsent", label: "Declaration & Consent" }
       ]
     }
@@ -1338,6 +1391,9 @@ export default function CMFOnboardProfile() {
         case "fundManageOverview": return <FunderEntityOverview {...commonProps} />
         case "contactDetails": return <FunderContactDetails {...commonProps} />
         case "investmentRequirements": return <FunderInvestmentRequirements {...commonProps} />
+        case "generalInvestmentPreference": return <FunderGeneralInvestmentPreference {...commonProps} />
+        case "fundDetails": return <FunderFundDetails {...commonProps} />
+        case "applicationBrief": return <FunderApplicationBrief {...commonProps} />
         case "documentUpload": return <FunderDocumentUpload {...commonProps} />
         case "declarationConsent": return <FunderDeclarationConsent {...commonProps} />
         default: return <FunderInstructions />
@@ -1348,6 +1404,7 @@ export default function CMFOnboardProfile() {
         case "entityOverview": return <CatalystEntityOverview {...commonProps} />
         case "contactDetails": return <CatalystContactDetails {...commonProps} />
         case "programBriefMatchingPreference": return <CatalystProgramBriefMatchingPreference {...commonProps} />
+        case "applicationBrief": return <CatalystApplicationBrief {...commonProps} />
         case "documentUpload": return <CatalystDocumentUpload {...commonProps} />
         case "declarationConsent": return <CatalystDeclarationConsent {...commonProps} />
         default: return <CatalystInstructions />
@@ -1362,6 +1419,9 @@ export default function CMFOnboardProfile() {
         case "contactDetails": return <ContactDetails {...commonProps} />
         case "howDidYouHear": return <HowDidYouHear {...commonProps} />
         case "documents": return <CmfDocumentUpload {...commonProps} />
+        case "fundDetails": return <FunderFundDetails {...commonProps} />
+        case "applicationBrief": return <FunderApplicationBrief {...commonProps} />
+        case "generalInvestmentPreference": return <FunderGeneralInvestmentPreference {...commonProps} />
         case "declarationConsent": return <DeclarationConsent {...commonProps} allFormData={formData} onComplete={() => setCompletedSections(prev => ({ ...prev, declarationConsent: true }))} />
         default: return <CmfInstructions />
       }
