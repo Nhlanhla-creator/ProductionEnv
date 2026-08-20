@@ -248,6 +248,110 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
     }
   }, [selectedMessages, visibleMessages]);
 
+
+  const getCurrentUserName = async (uid) => {
+  // Try to get from users collection first
+  try {
+    const userDoc = await getDoc(doc(db, "users", uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      if (data?.displayName) return data.displayName;
+      if (data?.name) return data.name;
+    }
+  } catch (e) {}
+  
+  // Try MyuniversalProfiles
+  try {
+    const profileDoc = await getDoc(doc(db, "MyuniversalProfiles", uid));
+    if (profileDoc.exists()) {
+      const data = profileDoc.data();
+      // Try all possible name fields
+      const names = [
+        data?.formData?.contactDetails?.contactName,
+        data?.formData?.entityOverview?.tradingName,
+        data?.formData?.entityOverview?.registeredName,
+        data?.company,
+        data?.name,
+        data?.displayName
+      ];
+      for (const name of names) {
+        if (name && typeof name === 'string' && name.trim()) {
+          return name.trim();
+        }
+      }
+    }
+  } catch (e) {}
+  
+  // Try universalProfiles
+  try {
+    const profileDoc = await getDoc(doc(db, "universalProfiles", uid));
+    if (profileDoc.exists()) {
+      const data = profileDoc.data();
+      const names = [
+        data?.smeName,
+        data?.formData?.contactDetails?.contactName,
+        data?.formData?.entityOverview?.tradingName,
+        data?.formData?.entityOverview?.registeredName,
+        data?.name,
+        data?.displayName
+      ];
+      for (const name of names) {
+        if (name && typeof name === 'string' && name.trim()) {
+          return name.trim();
+        }
+      }
+    }
+  } catch (e) {}
+  
+  // Try catalystProfiles
+  try {
+    const profileDoc = await getDoc(doc(db, "catalystProfiles", uid));
+    if (profileDoc.exists()) {
+      const data = profileDoc.data();
+      const names = [
+        data?.catalystName,
+        data?.name,
+        data?.displayName
+      ];
+      for (const name of names) {
+        if (name && typeof name === 'string' && name.trim()) {
+          return name.trim();
+        }
+      }
+    }
+  } catch (e) {}
+  
+  // Try cmfProfiles
+  try {
+    const profileDoc = await getDoc(doc(db, "cmfProfiles", uid));
+    if (profileDoc.exists()) {
+      const data = profileDoc.data();
+      const names = [
+        data?.cmfName,
+        data?.name,
+        data?.displayName
+      ];
+      for (const name of names) {
+        if (name && typeof name === 'string' && name.trim()) {
+          return name.trim();
+        }
+      }
+    }
+  } catch (e) {}
+  
+  // If all else fails, use email prefix
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (user?.email) {
+      return user.email.split('@')[0] || "User";
+    }
+  } catch (e) {}
+  
+  return "User";
+};
+
+
   const handleMessageSelect = async (msg) => {
     if (selectMode) {
       setSelectedMessages((prev) => {
@@ -484,37 +588,36 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
     return urls;
   };
 
-  const handleReply = async () => {
-    if (!selectedMessage) return;
+ // Updated handleReply - use the stored name from the message
+const handleReply = async () => {
+  if (!selectedMessage) return;
 
-    let name = "Unknown SME";
+  // Use the stored fromName from the message
+  let name = selectedMessage.fromName || "Unknown";
+  
+  // If the stored name is missing, try to fetch it
+  if (name === "Unknown" || name === "Unknown SME") {
     try {
-      const docRef = await getDoc(
-        doc(db, "universalProfiles", selectedMessage.from)
-      );
-      if (docRef.exists()) {
-        const data = docRef.data();
-        name =
-          data?.smeName ||
-          data?.formData?.entityOverview?.tradingName ||
-          data?.formData?.entityOverview?.registeredName ||
-          selectedMessage.fromName ||
-          "Unknown SME";
+      const fetchedName = await getCurrentUserName(selectedMessage.from);
+      if (fetchedName && fetchedName !== "User") {
+        name = fetchedName;
       }
     } catch (error) {
       console.error("Error fetching recipient name:", error);
     }
+  }
 
-    setNewMessage({
-      to: selectedMessage.from,
-      toName: name,
-      subject: `Re: ${selectedMessage.subject}`,
-      content: "",
-      attachments: [],
-    });
-    setAttachmentFiles([]);
-    setIsComposing(true);
-  };
+  setNewMessage({
+    to: selectedMessage.from,
+    toName: name,
+    subject: `Re: ${selectedMessage.subject}`,
+    content: "",
+    attachments: [],
+  });
+  setAttachmentFiles([]);
+  setIsComposing(true);
+};
+
 
   const handleForward = () => {
     if (!selectedMessage) return;
@@ -531,78 +634,130 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
     setIsComposing(true);
   };
 
-  const handleSend = async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) return;
+ const handleSend = async () => {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) return;
 
-    if (!newMessage.subject || !newMessage.content.trim()) {
-      alert("Please fill in subject and message");
-      return;
-    }
+  if (!newMessage.subject || !newMessage.content.trim()) {
+    alert("Please fill in subject and message");
+    return;
+  }
 
-    let fromName = "Investment Team";
-    try {
-      const userDoc = await getDoc(doc(db, "MyuniversalProfiles", user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        fromName =
-          data?.formData?.entityOverview?.tradingName ||
-          data?.formData?.entityOverview?.registeredName ||
-          data?.company ||
-          "Investment Team";
+  // ─── GET SENDER'S NAME ──────────────────────────────────────────────────
+  let fromName = "Investment Team";
+  
+  try {
+   
+    
+    // 2. If not found, try MyuniversalProfiles (for SMEs)
+    if (!fromName || fromName === "SME") {
+      const profileDoc = await getDoc(doc(db, "universalProfiles", user.uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        fromName = data?.formData?.entityOverview?.tradingName || 
+                   data?.formData?.entityOverview?.registeredName || 
+                   data?.formData?.contactDetails?.contactName ||
+                   data?.company ||
+                   null;
       }
-    } catch (error) {
-      console.error("Error fetching sender profile:", error);
     }
-
-    let attachmentURLs = [];
-    if (supportAttachments && attachmentFiles.length > 0) {
-      attachmentURLs = await uploadFilesAndGetURLs(attachmentFiles, user.uid);
+    
+    // 3. If still not found, try universalProfiles
+    if (!fromName || fromName === "Funder") {
+      const profileDoc = await getDoc(doc(db, "MyuniversalProfiles", user.uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        fromName = data?.smeName || 
+                   data?.formData?.entityOverview?.tradingName ||
+                   data?.formData?.entityOverview?.registeredName ||
+                   data?.formData?.contactDetails?.contactName ||
+                   null;
+      }
     }
-
-    const messagePayload = {
-      from: user.uid,
-      fromName: fromName,
-      to: newMessage.to,
-      toName: newMessage.toName,
-      subject: newMessage.subject,
-      content: newMessage.content,
-      attachments: attachmentURLs,
-      date: new Date().toISOString(),
-    };
-
-    try {
-      await addDoc(collection(db, "messages"), {
-        ...messagePayload,
-        type: "inbox",
-        read: false,
-        sender: fromName,
-      });
-
-      await addDoc(collection(db, "messages"), {
-        ...messagePayload,
-        type: "sent",
-        read: true,
-        sender: "You",
-      });
-
-      setIsComposing(false);
-      setNewMessage({
-        to: "",
-        toName: "",
-        subject: "",
-        content: "",
-        attachments: [],
-      });
-      setAttachmentFiles([]);
-      setActiveTab("sent");
-      alert("Message sent!");
-    } catch (error) {
-      console.error("Send failed:", error);
-      alert("Failed to send message.");
+    
+    // 4. Try cmfProfiles (for CMFs)
+    if (!fromName || fromName === "CMF") {
+      const profileDoc = await getDoc(doc(db, "cmfProfiles", user.uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        fromName = data?.cmfName || data?.name || null;
+      }
     }
+    
+    // 5. Try catalystProfiles (for Catalysts)
+    if (!fromName || fromName === "Catalyst") {
+      const profileDoc = await getDoc(doc(db, "catalystProfiles", user.uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        fromName = data?.catalystName || data?.name || null;
+      }
+    }
+    
+    // 6. Final fallback - use email prefix or the current user's email
+    if (!fromName || fromName === "Investment Team") {
+      fromName = user.email?.split('@')[0] || "User";
+    }
+    
+  } catch (error) {
+    console.error("Error fetching sender profile:", error);
+    // Fallback
+    fromName = user.email?.split('@')[0] || "Investment Team";
+  }
+
+  // Make sure fromName is never empty
+  if (!fromName || fromName.trim() === "") {
+    fromName = "User";
+  }
+
+  // ─── SEND MESSAGE ──────────────────────────────────────────────────────
+  let attachmentURLs = [];
+  if (supportAttachments && attachmentFiles.length > 0) {
+    attachmentURLs = await uploadFilesAndGetURLs(attachmentFiles, user.uid);
+  }
+
+  const messagePayload = {
+    from: user.uid,
+    fromName: fromName,
+    to: newMessage.to,
+    toName: newMessage.toName,
+    subject: newMessage.subject,
+    content: newMessage.content,
+    attachments: attachmentURLs,
+    date: new Date().toISOString(),
   };
+
+  try {
+    await addDoc(collection(db, "messages"), {
+      ...messagePayload,
+      type: "inbox",
+      read: false,
+      sender: fromName,
+    });
+
+    await addDoc(collection(db, "messages"), {
+      ...messagePayload,
+      type: "sent",
+      read: true,
+      sender: "You",
+    });
+
+    setIsComposing(false);
+    setNewMessage({
+      to: "",
+      toName: "",
+      subject: "",
+      content: "",
+      attachments: [],
+    });
+    setAttachmentFiles([]);
+    setActiveTab("sent");
+    alert("Message sent!");
+  } catch (error) {
+    console.error("Send failed:", error);
+    alert("Failed to send message.");
+  }
+};
 
   const handleFileAttachment = (event) => {
     const files = Array.from(event.target.files);
@@ -1129,12 +1284,11 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
               {visibleMessages.length > 0 ? (
                 <>
                   {visibleMessages.map((message) => {
-                   const displayName =
-                    message.type === "inbox"
-                      ? message.from === "system" 
-                        ? "BIG Marketplace Team 🌍"
-                        : message.fromName || message.sender || "Investment Team"
-                      : message.toName || "Unknown SME";
+                   const displayName = message.type === "inbox"
+                ? message.from === "system" 
+                  ? "BIG Marketplace Team 🌍"
+                  : message.fromName || message.sender || "Investment Team"
+                : message.toName || message.recipient || message.recipientName || "Unknown SME";
                     const isSelected = selectedMessages.has(message.id);
 
                     return (

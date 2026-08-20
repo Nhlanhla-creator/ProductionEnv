@@ -17,7 +17,7 @@ import {
   PIPELINE_SETTINGS_EVENT,
 } from "./cmfStageConfig";
 import { db, auth } from "../../firebaseConfig";        // match the path used by SupportSMETable
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc } from "firebase/firestore";
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 const BIG_SCORE_LABELS = {
@@ -485,10 +485,17 @@ export function CMFSMETable({
   const [tempDates, setTempDates] = useState([]);
   const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" });
   const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
-
+  const [isUpdating, setIsUpdating] = useState(false);
   // ─── Programme-aware pipeline stages ──────────────────────────────────────
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
-
+// ─── Message Business Popup State ──────────────────────────────────────────
+const [messageBusinessPopup, setMessageBusinessPopup] = useState({
+  isOpen: false,
+  sme: null,
+  position: { x: 0, y: 0 }
+});
+const [customMessage, setCustomMessage] = useState("");
+const [isSendingCustomMessage, setIsSendingCustomMessage] = useState(false);
   useEffect(() => {
     const refresh = () => setPipelineSettings(loadPipelineSettings());
     window.addEventListener("storage", refresh);
@@ -1433,65 +1440,177 @@ export function CMFSMETable({
     return null;
   };
 
-  const handleStageUpdate = async () => {
-    const sme = selectedSMEForPopup;
-    if (!sme) return;
 
-    const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
-    const targetId = mapStatusToStageId(stageUpdateData.nextStage, activeStages);
-    const targetStage = activeStages.find((s) => s.id === targetId);
 
-    const errors = {};
-    if (!stageUpdateData.nextStage) errors.nextStage = "Please select a stage";
-    else {
-      const progressionError = getStageProgressionError(stageUpdateData.nextStage, sme);
-      if (progressionError) errors.nextStage = progressionError;
-    }
-    if (stageFields.showMessage && !stageUpdateData.message.trim()) errors.message = "Please provide a message";
-    if (stageFields.showMeeting) {
-      if (!stageUpdateData.meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location";
-      if (!stageUpdateData.meetingPurpose.trim()) errors.meetingPurpose = "Please provide a purpose for the meeting";
-    }
-    if (stageFields.showAvailability && availabilities.length === 0) {
-      errors.availabilities = "Please add at least one available date";
-    }
+// ─── handleStageUpdate ─────────────────────────────────────────────────────
+const handleStageUpdate = async () => {
+  if (isUpdating) {
+  console.log("🚫 Duplicate submission blocked");
+  return;
+}
+setIsUpdating(true);
+  const sme = selectedSMEForPopup;
+  if (!sme) return;
 
-    if (Object.keys(errors).length > 0) { setStageFormErrors(errors); return; }
+  const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
+  const targetId = mapStatusToStageId(stageUpdateData.nextStage, activeStages);
+  const targetStage = activeStages.find((s) => s.id === targetId);
 
-    setIsStageSubmitting(true);
+  const errors = {};
+  if (!stageUpdateData.nextStage) errors.nextStage = "Please select a stage";
+  else {
+    const progressionError = getStageProgressionError(stageUpdateData.nextStage, sme);
+    if (progressionError) errors.nextStage = progressionError;
+  }
+  if (stageFields.showMessage && !stageUpdateData.message.trim()) errors.message = "Please provide a message";
+  if (stageFields.showMeeting) {
+    if (!stageUpdateData.meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location";
+    if (!stageUpdateData.meetingPurpose.trim()) errors.meetingPurpose = "Please provide a purpose for the meeting";
+  }
+  if (stageFields.showAvailability && availabilities.length === 0) {
+    errors.availabilities = "Please add at least one available date";
+  }
+
+  if (Object.keys(errors).length > 0) { 
+    setStageFormErrors(errors); 
+    setIsUpdating(false);
+    return; 
+  }
+
+  setIsStageSubmitting(true);
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("User not authenticated");
+
+    // ─── 1. UPDATE THE STAGE ──────────────────────────────────────────────────
+    const newStageName = targetStage?.name || stageUpdateData.nextStage;
+    
+    await onUpdateStage?.(sme.id, newStageName, {
+      stageId: targetId,
+      message: stageUpdateData.message,
+      meeting: stageFields.showMeeting ? {
+        time: stageUpdateData.meetingTime,
+        location: stageUpdateData.meetingLocation,
+        purpose: stageUpdateData.meetingPurpose,
+      } : null,
+      availability: stageFields.showAvailability
+        ? availabilities.map((a) => ({
+            date: a.date instanceof Date ? a.date.toISOString() : a.date,
+            timeSlots: a.timeSlots,
+            timeZone: a.timeZone,
+          }))
+        : null,
+      agreementFile: stageUpdateData.agreementFile || null,
+    });
+
+    setUpdatedStages((prev) => ({ ...prev, [sme.id]: newStageName }));
+    onStageOverride?.(sme.id, newStageName);
+
+    // ─── 2. GET SENDER'S NAME ────────────────────────────────────────────────
+    let fromName = "Programme Team";
     try {
-      // The parent owns persistence. The extra payload argument is additive, so
-      // an existing `onUpdateStage(id, stage)` handler keeps working unchanged.
-      await onUpdateStage?.(sme.id, targetStage?.name || stageUpdateData.nextStage, {
-        stageId: targetId,
-        message: stageUpdateData.message,
-        meeting: stageFields.showMeeting ? {
-          time: stageUpdateData.meetingTime,
-          location: stageUpdateData.meetingLocation,
-          purpose: stageUpdateData.meetingPurpose,
-        } : null,
-        availability: stageFields.showAvailability
-          ? availabilities.map((a) => ({
-              date: a.date instanceof Date ? a.date.toISOString() : a.date,
-              timeSlots: a.timeSlots,
-              timeZone: a.timeZone,
-            }))
-          : null,
-        agreementFile: stageUpdateData.agreementFile || null,
-      });
-
-      const newStageName = targetStage?.name || stageUpdateData.nextStage;
-      setUpdatedStages((prev) => ({ ...prev, [sme.id]: newStageName }));
-      onStageOverride?.(sme.id, newStageName);
-      setNotification({ type: "success", message: `${sme.name} moved to ${newStageName}` });
-      closePopup();
+      const userDoc = await getDoc(doc(db, "MyuniversalProfiles", currentUser.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        fromName = data?.formData?.entityOverview?.tradingName || 
+                   data?.formData?.entityOverview?.registeredName || 
+                   data?.company || 
+                   "Programme Team";
+      }
     } catch (error) {
-      console.error("Stage update error:", error);
-      setNotification({ type: "error", message: `Failed to update stage: ${error.message}` });
-    } finally {
-      setIsStageSubmitting(false);
+      console.warn("Could not fetch sender profile, using default name:", error);
     }
-  };
+
+    // ─── 3. PREPARE THE MESSAGE CONTENT ──────────────────────────────────────
+    let content = stageUpdateData.message;
+
+    // Add meeting details if provided
+    if (stageFields.showMeeting && stageUpdateData.meetingLocation) {
+      content += `\n\nMeeting Details:\n`;
+      if (stageUpdateData.meetingTime) {
+        const meetingDate = new Date(stageUpdateData.meetingTime);
+        content += `Time: ${meetingDate.toLocaleString("en-ZA", { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })}\n`;
+      }
+      content += `Location: ${stageUpdateData.meetingLocation}\n`;
+      if (stageUpdateData.meetingPurpose) {
+        content += `Purpose: ${stageUpdateData.meetingPurpose}\n`;
+      }
+    }
+
+    // Add availability if provided
+    if (stageFields.showAvailability && availabilities.length > 0) {
+      content += `\n\nAvailable times for meeting:\n`;
+      availabilities.forEach((a, i) => {
+        const dateStr = a.date instanceof Date
+          ? a.date.toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+          : "Date unavailable";
+        const timeStr = a.timeSlots?.[0] ? `${a.timeSlots[0].start} – ${a.timeSlots[0].end} ${a.timeZone}` : "Time not specified";
+        content += `${i + 1}. ${dateStr} (${timeStr})\n`;
+      });
+      content += `\nPlease let us know your preferred time.`;
+    }
+
+    // Add agreement file info if provided
+    if (stageUpdateData.agreementFile) {
+      content += `\n\nAn agreement document has been attached for your review.`;
+    }
+
+    // ─── 4. CREATE THE MESSAGE PAYLOAD ──────────────────────────────────────
+    const subject = `Stage Update: ${newStageName}`;
+    const smeId = sme.smeId || sme.id;
+    
+    const messagePayload = {
+      to: smeId,
+      toName: sme.name,
+      from: currentUser.uid,
+      fromName: fromName,
+      subject: subject,
+      content: content,
+      attachments: [],
+      date: new Date().toISOString(),
+      read: false,
+      applicationId: sme.id || sme.applicationId,
+      relatedStage: newStageName,
+    };
+
+    // ─── 5. SEND TO BUSINESS (INBOX) ─────────────────────────────────────────
+    await addDoc(collection(db, "messages"), {
+      ...messagePayload,
+      type: "inbox",
+    });
+
+    // ─── 6. SAVE COPY TO CMF'S SENT FOLDER ──────────────────────────────────
+    await addDoc(collection(db, "messages"), {
+      ...messagePayload,
+      type: "sent",
+      read: true,
+      sender: "You",
+    });
+
+    // ─── 7. SHOW TOAST NOTIFICATION ─────────────────────────────────────────
+    setNotification({ 
+      type: "success", 
+      message: `✅ Message sent to ${sme.name} successfully` 
+    });
+
+    closePopup();
+
+  } catch (error) {
+    console.error("Stage update error:", error);
+    setNotification({ type: "error", message: `Failed to update stage: ${error.message}` });
+  } finally {
+    setIsUpdating(false);
+    setIsStageSubmitting(false);
+
+  }
+};
 
   // ─── Export ───────────────────────────────────────────────────────────────
   const handleExport = () => {
@@ -2896,7 +3015,7 @@ export function CMFSMETable({
         );
       })()}
 
-      {/* ─── Quick Actions Popup ──────────────────────────────────────────── */}
+      {/* ─── Quick Actions Popup ──────────────────────────────────────────────── */}
       {activePopup?.type === "quickActions" && selectedSMEForPopup && (() => {
         const sme = selectedSMEForPopup;
         const stage = getStatusStyle(sme.currentStatus, activeStages).stage;
@@ -2910,14 +3029,29 @@ export function CMFSMETable({
                 <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
                 <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
               </div>
-              <button onClick={() => { setSelectedSME(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
+              <button onClick={() => { setSelectedSME(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
+                <Eye size={12} /> View Profile
+              </button>
               {!stage.terminal && (
                 <button onClick={(e) => openPopupFromEvent("stage", sme, e)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
                   <ArrowRight size={12} /> Move to {sme.nextStage}
                 </button>
               )}
+              {/* ─── Message Business Button ────────────────────────────────── */}
               <button
-                onClick={() => { window.location.href = `/cmf-messages?smeId=${sme.id}`; }}
+                onClick={() => {
+                  closePopup();
+                  // Open the message business popup
+                  setMessageBusinessPopup({
+                    isOpen: true,
+                    sme: sme,
+                    position: { 
+                      x: Math.min(window.innerWidth / 2 - 200, window.innerWidth - 420), 
+                      y: Math.min(window.innerHeight / 2 - 150, window.innerHeight - 350) 
+                    }
+                  });
+                  setCustomMessage("");
+                }}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
               >
                 <MessageSquare size={12} /> Message Business
@@ -3091,6 +3225,135 @@ export function CMFSMETable({
         )
       })()}
 
+      {/* ─── Message Business Popup ────────────────────────────────────────────── */}
+      {messageBusinessPopup.isOpen && messageBusinessPopup.sme && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1000]" onClick={() => setMessageBusinessPopup({ isOpen: false, sme: null, position: { x: 0, y: 0 } })} />
+          <div 
+            className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden"
+            style={{ 
+              top: messageBusinessPopup.position.y, 
+              left: messageBusinessPopup.position.x, 
+              width: "420px",
+              maxHeight: "500px"
+            }}
+          >
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Message Business</p>
+                  <h3 className="text-sm font-bold mt-0.5 truncate max-w-[280px]">{messageBusinessPopup.sme.name}</h3>
+                </div>
+                <button 
+                  onClick={() => setMessageBusinessPopup({ isOpen: false, sme: null, position: { x: 0, y: 0 } })} 
+                  className="text-white/70 hover:text-white transition-colors flex-shrink-0 p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#4a352f] mb-1">Your Message *</label>
+                <textarea
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder="Type your message to the business..."
+                  rows={6}
+                  className="w-full px-3 py-2 border-2 border-[#c8b6a6] rounded-lg text-xs resize-y focus:border-[#7d5a50] focus:outline-none"
+                />
+                <p className="text-[11px] text-[#a89482] mt-1">This message will be sent directly to the business.</p>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <button 
+                  onClick={() => setMessageBusinessPopup({ isOpen: false, sme: null, position: { x: 0, y: 0 } })} 
+                  className="px-4 py-2 bg-[#faf7f2] text-[#7d5a50] rounded-lg text-xs font-medium hover:bg-[#f5f0e1] transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (!customMessage.trim()) {
+                      alert("Please enter a message");
+                      return;
+                    }
+                    
+                    setIsSendingCustomMessage(true);
+                    try {
+                      const currentUser = auth.currentUser;
+                      if (!currentUser) throw new Error("User not authenticated");
+
+                      // Get sender's name
+                      let fromName = "Programme Team";
+                      try {
+                        const userDoc = await getDoc(doc(db, "MyuniversalProfiles", currentUser.uid));
+                        if (userDoc.exists()) {
+                          const data = userDoc.data();
+                          fromName = data?.formData?.entityOverview?.tradingName || 
+                                    data?.formData?.entityOverview?.registeredName || 
+                                    data?.company || 
+                                    "Programme Team";
+                        }
+                      } catch (error) {
+                        console.warn("Could not fetch sender profile:", error);
+                      }
+
+                      const sme = messageBusinessPopup.sme;
+                      const smeId = sme.smeId || sme.id;
+                      
+                      const messagePayload = {
+                        to: smeId,
+                        toName: sme.name,
+                        from: currentUser.uid,
+                        fromName: fromName,
+                        subject: `Message from ${fromName}`,
+                        content: customMessage,
+                        attachments: [],
+                        date: new Date().toISOString(),
+                        read: false,
+                        type: "inbox",
+                        applicationId: sme.id || sme.applicationId,
+                      };
+
+                      // Send to business
+                      await addDoc(collection(db, "messages"), {
+                        ...messagePayload,
+                        type: "inbox",
+                      });
+
+                      // Save copy to CMF's sent folder
+                      await addDoc(collection(db, "messages"), {
+                        ...messagePayload,
+                        type: "sent",
+                        read: true,
+                        sender: "You",
+                      });
+
+                      setNotification({ 
+                        type: "success", 
+                        message: `✅ Message sent to ${sme.name} successfully` 
+                      });
+
+                      setMessageBusinessPopup({ isOpen: false, sme: null, position: { x: 0, y: 0 } });
+                    } catch (error) {
+                      console.error("Error sending message:", error);
+                      alert("Failed to send message. Please try again.");
+                    } finally {
+                      setIsSendingCustomMessage(false);
+                    }
+                  }}
+                  disabled={isSendingCustomMessage}
+                  className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold hover:bg-[#4a352f] transition-all disabled:opacity-50"
+                >
+                  {isSendingCustomMessage ? "Sending..." : "Send Message"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </PopupPortal>
+      )}
       {/* ─── Business Details Modal ───────────────────────────────────────── */}
       <CMFSMEDetailsModal
         sme={selectedSME}
