@@ -65,6 +65,9 @@ export const useAuth = () => {
     clearTimer();
     clearWarnTimer();
     
+    // Only schedule if user is currently logged in
+    if (!userRef.current) return;
+    
     // Schedule the actual logout
     timerRef.current = setTimeout(async () => {
       // Clean up UI state first
@@ -98,6 +101,9 @@ export const useAuth = () => {
   };
 
   const handleActivity = () => {
+    // Only track activity if user is currently logged in
+    if (!userRef.current) return;
+
     // If idle warning modal is visible, ignore activity
     // User must explicitly choose to stay signed in
     if (showIdleModalRef.current) return;

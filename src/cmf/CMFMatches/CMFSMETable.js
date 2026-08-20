@@ -17,7 +17,7 @@ import {
   PIPELINE_SETTINGS_EVENT,
 } from "./cmfStageConfig";
 import { db, auth } from "../../firebaseConfig";        // match the path used by SupportSMETable
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 const BIG_SCORE_LABELS = {
@@ -192,6 +192,11 @@ const COLUMN_DEFS = {
     visible: true, priority: 2, sortable: true,
     tooltip: "The amount of support the business has asked for. Sorting and filtering use the underlying number, not the formatted label.",
   },
+  applications: {
+    label: "Applications", width: 180, filterType: "applications",
+    visible: true, priority: 2, sortable: false,
+    tooltip: "The applications submitted by this business (Advisory, Supplier, Interns, Funding).",
+  },
   status: {
     label: "Status", width: 156, filterType: "status",
     visible: true, priority: 1, sortable: true,
@@ -279,6 +284,7 @@ const SORT_ACCESSORS = {
 const EXPORT_FIELD_MAP = {
   sme: "name", bigScore: "bigScore", match: "matchPercentage",
   fundingStage: "fundingStage", fundingRequired: "fundingRequired",
+  applications: "applicationsExport",
   status: "statusLabel", applied: "applicationDateLabel", daysInStage: "daysInStage",
   lastActivity: "lastActivityLabel", sector: "sector", location: "location",
   province: "province", supportRequired: "supportRequired", servicesRequired: "servicesRequired"
@@ -288,6 +294,7 @@ const EXPORT_FIELD_MAP = {
 const EXPORT_HEADERS = {
   sme: "Business Name", bigScore: "BIG Score", match: "Match %",
   fundingStage: "Funding Stage", fundingRequired: "Funding Required",
+  applications: "Applications",
   status: "Status", applied: "Applied Date", daysInStage: "Days in Stage",
   lastActivity: "Last Activity", sector: "Sector", location: "Location",
   province: "Province", supportRequired: "Support Required", servicesRequired: "Services Required"
@@ -401,6 +408,11 @@ export function CMFSMETable({
   onSMEsLoaded
 }) {
   const [selectedSME, setSelectedSME] = useState(null);
+  const [smeApps, setSmeApps] = useState({});
+  const [selectedAppPreview, setSelectedAppPreview] = useState(null);
+  const [activeAppTabIndex, setActiveAppTabIndex] = useState(0);
+  const [appMatches, setAppMatches] = useState([]);
+  const [loadingMatches, setLoadingMatches] = useState(false);
   const [updatedStages, setUpdatedStages] = useState({});
   const [notification, setNotification] = useState(null);
 
@@ -494,6 +506,154 @@ export function CMFSMETable({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  const fetchSmeApplications = useCallback(async (smeIds) => {
+    if (!smeIds || smeIds.length === 0) return;
+    try {
+      const tempApps = {};
+      smeIds.forEach((id) => { tempApps[id] = []; });
+
+      await Promise.all(
+        smeIds.map(async (smeId) => {
+          try {
+            // 1. Advisor Applications
+            const advisorySnap = await getDocs(
+              query(collection(db, "advisoryApplicationsV2"), where("userId", "==", smeId))
+            );
+            advisorySnap.forEach((docSnap) => {
+              const data = docSnap.data();
+              tempApps[smeId].push({
+                id: docSnap.id,
+                type: "Advisory",
+                label: "Advisory",
+                status: data.status || "submitted",
+                data: data,
+              });
+            });
+
+            // 2. Supplier Applications
+            const supplierSnap = await getDocs(
+              query(collection(db, "productApplications"), where("userId", "==", smeId))
+            );
+            supplierSnap.forEach((docSnap) => {
+              const data = docSnap.data();
+              tempApps[smeId].push({
+                id: docSnap.id,
+                type: "Supplier",
+                label: "Supplier",
+                status: data.status || "submitted",
+                data: data,
+              });
+            });
+
+            // 3. Intern Applications
+            const internSnap = await getDocs(
+              query(collection(db, "internApplicationsV2"), where("userId", "==", smeId))
+            );
+            internSnap.forEach((docSnap) => {
+              const data = docSnap.data();
+              tempApps[smeId].push({
+                id: docSnap.id,
+                type: "Interns",
+                label: "Interns",
+                status: data.status || "submitted",
+                data: data,
+              });
+            });
+
+            // 4. Funding Applications
+            const fundingSnap = await getDocs(
+              query(collection(db, "fundingApplicationsV2"), where("userId", "==", smeId))
+            );
+            fundingSnap.forEach((docSnap) => {
+              const data = docSnap.data();
+              tempApps[smeId].push({
+                id: docSnap.id,
+                type: "Funding",
+                label: "Funding",
+                status: data.status || "submitted",
+                data: data,
+              });
+            });
+          } catch (e) {
+            console.error(`Error loading apps for SME ${smeId}:`, e);
+          }
+        })
+      );
+      setSmeApps(tempApps);
+    } catch (e) {
+      console.error("Error in fetchSmeApplications:", e);
+    }
+  }, []);
+
+  const smeIdsStr = useMemo(() => {
+    return smeMatches.map((s) => s.id).sort().join(",");
+  }, [smeMatches]);
+
+  useEffect(() => {
+    if (!smeIdsStr) return;
+    const ids = smeIdsStr.split(",").filter(Boolean);
+    if (ids.length > 0) {
+      fetchSmeApplications(ids);
+    }
+  }, [smeIdsStr, fetchSmeApplications]);
+
+  const handleOpenAppPreview = useCallback((type, cohort) => {
+    const allApps = smeApps[cohort.id] || [];
+    const filtered = allApps.filter((a) => a.type === type);
+    if (filtered.length === 0) return;
+
+    setSelectedAppPreview({
+      type,
+      cohort,
+      appsOfActiveType: filtered,
+    });
+    setActiveAppTabIndex(0);
+  }, [smeApps]);
+
+  const fetchMatchesForApplication = useCallback(async (appType, cohortId, applicationId) => {
+    setLoadingMatches(true);
+    setAppMatches([]);
+
+    const matchColl = appType === "Advisory" ? "smseAdvisoryMatches"
+                    : appType === "Supplier" ? "SmeSupplierApplications"
+                    : appType === "Interns" ? "internMatchResults"
+                    : "smseFundingMatches";
+
+    try {
+      const q = query(collection(db, matchColl), where("smeId", "==", cohortId));
+      const snap = await getDocs(q);
+      const list = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        const recordAppId = d.applicationId || d.appId;
+        if (!recordAppId || recordAppId === applicationId) {
+          list.push({
+            id: docSnap.id,
+            name: d.advisorName || d.funderName || d.supplierName || d.name || d.registeredName || d.tradingName || d.companyName || "Match Partner",
+            matchPct: d.matchPct || d.matchScore || d.score || d.matchPercentage || d.finalScore || null,
+            status: d.status || "Matched",
+            ...d
+          });
+        }
+      });
+      list.sort((a, b) => (b.matchPct || 0) - (a.matchPct || 0));
+      setAppMatches(list);
+    } catch (err) {
+      console.error("Error loading matches for preview:", err);
+    } finally {
+      setLoadingMatches(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedAppPreview) {
+      const activeApp = selectedAppPreview.appsOfActiveType[activeAppTabIndex];
+      if (activeApp) {
+        fetchMatchesForApplication(selectedAppPreview.type, selectedAppPreview.cohort.id, activeApp.id);
+      }
+    }
+  }, [selectedAppPreview, activeAppTabIndex, fetchMatchesForApplication]);
 
   const activeProgrammeLabel = (PROGRAMME_TEMPLATES[pipelineSettings.programmeType] || PROGRAMME_TEMPLATES.default).label;
   const activeStages = useMemo(() => getActiveStages(pipelineSettings), [pipelineSettings]);
@@ -639,9 +799,10 @@ export function CMFSMETable({
         pipelineStage: currentStatus,
         statusLabel: getStatusStyle(currentStatus, activeStages).stage.name,
         nextStage: getNextStage(currentStatus, activeStages),
+        applicationsExport: (smeApps[item.id] || []).map((a) => a.type).join(", ") || "None",
       };
     });
-  }, [smeMatches, updatedStages, activeStages]);
+  }, [smeMatches, updatedStages, activeStages, smeApps]);
 
   useEffect(() => { onSMEsLoaded?.(smes); }, [smes, onSMEsLoaded]);
 
@@ -776,7 +937,7 @@ export function CMFSMETable({
     }
 
     return result;
-  }, [smes, stageFilter, filters, localFilters, sortConfig, activeStages, smeMatches]);
+  }, [smes, stageFilter, filters, localFilters, sortConfig, activeStages, smeMatches, smeApps]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -1530,6 +1691,44 @@ export function CMFSMETable({
         );
       case "fundingRequired":
         return <td key={key} className={cls} style={stickyStyle}><span className="font-medium">{sme.fundingRequired}</span></td>;
+      case "applications": {
+        const apps = smeApps[sme.id] || []
+        
+        const hasAdvisory = apps.some((a) => a.type === "Advisory")
+        const hasSupplier = apps.some((a) => a.type === "Supplier")
+        const hasInterns  = apps.some((a) => a.type === "Interns")
+        const hasFunding  = apps.some((a) => a.type === "Funding")
+
+        const renderedBadges = []
+        if (hasAdvisory) renderedBadges.push({ type: "Advisory", label: "Advisory", bg: "#7d5a50" })
+        if (hasSupplier) renderedBadges.push({ type: "Supplier", label: "Supplier", bg: "#c5a880" })
+        if (hasInterns)  renderedBadges.push({ type: "Interns", label: "Interns", bg: "#2e7d32" })
+        if (hasFunding)  renderedBadges.push({ type: "Funding", label: "Funding", bg: "#0277bd" })
+
+        return (
+          <td key={key} className={`${cellPad} border-r border-b border-[#e6d7c3] align-middle`} style={stickyStyle}>
+            <div className="flex flex-wrap gap-1.5 justify-center items-center">
+              {renderedBadges.length > 0 ? (
+                renderedBadges.map((badge) => (
+                  <button
+                    key={badge.type}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenAppPreview(badge.type, sme);
+                    }}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all transform hover:scale-105 active:scale-95 shadow-sm hover:shadow-md cursor-pointer text-white"
+                    style={{ backgroundColor: badge.bg }}
+                  >
+                    {badge.label}
+                  </button>
+                ))
+              ) : (
+                <span className="text-xs text-gray-400 italic">None</span>
+              )}
+            </div>
+          </td>
+        )
+      }
       case "status": {
         const statusStyle = getStatusStyle(sme.currentStatus, activeStages);
         return (
@@ -2734,6 +2933,162 @@ export function CMFSMETable({
             </div>
           </PopupPortal>
         );
+      })()}
+
+      {/* ─── Application Preview Modal ────────────────────────────────────── */}
+      {selectedAppPreview && (() => {
+        const activeApp = selectedAppPreview.appsOfActiveType[activeAppTabIndex]
+        const activeAppData = activeApp ? activeApp.data : {}
+        const updatedAtVal = activeAppData.updatedAt || activeAppData.lastUpdated
+
+        return (
+          <PopupPortal>
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedAppPreview(null)}>
+              <div 
+                className="bg-white rounded-3xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#e6d7c3] shadow-2xl mx-4 space-y-6 animate-slideUp"
+                style={{ animation: "slideUp 0.3s ease-out" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-[#e6d7c3]/80 pb-4">
+                  <div>
+                    <span className="bg-[#f5f0e1] text-[#7d5a50] text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      {selectedAppPreview.type} Application
+                    </span>
+                    <h3 className="text-xl font-extrabold text-[#4a352f] mt-2 mb-0">
+                      {selectedAppPreview.cohort.name || selectedAppPreview.cohort.smeName}
+                    </h3>
+                    <p className="text-[10px] text-[#7d5a50] mt-1 font-medium">
+                      Status: <span className="capitalize font-bold text-[#4a352f]">{activeAppData.status || "Submitted"}</span>
+                      {updatedAtVal && ` · Last Updated: ${new Date(updatedAtVal.seconds ? updatedAtVal.seconds * 1000 : updatedAtVal).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedAppPreview(null)}
+                    className="p-1.5 hover:bg-[#f5f0e1] rounded-xl text-gray-400 hover:text-[#4a352f] transition-all cursor-pointer"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Tab Navigation if there are multiple applications */}
+                {selectedAppPreview.appsOfActiveType.length > 1 && (
+                  <div className="flex border-b border-[#e6d7c3]/60 pb-px gap-1.5 overflow-x-auto">
+                    {selectedAppPreview.appsOfActiveType.map((app, idx) => {
+                      const isActive = idx === activeAppTabIndex
+                      const label = `${selectedAppPreview.type} ${idx + 1}`
+                      const truncatedId = app.id.slice(0, 6)
+                      return (
+                        <button
+                          key={app.id}
+                          onClick={() => setActiveAppTabIndex(idx)}
+                          className={`px-4 py-2 border-b-2 font-bold text-xs transition-all uppercase tracking-wide cursor-pointer whitespace-nowrap ${
+                            isActive 
+                              ? "border-[#5d4037] text-[#5d4037] bg-[#faf7f2]" 
+                              : "border-transparent text-[#a89482] hover:text-[#5d4037] hover:bg-[#faf7f2]/50"
+                          }`}
+                          title={`Application ID: ${app.id}`}
+                        >
+                          {label} <span className="text-[9px] font-normal text-gray-400">({truncatedId})</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Preferences / Summary */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-extrabold text-[#4a352f] uppercase tracking-wider m-0">Requirements & Preferences</h4>
+                  <div className="bg-[#faf7f2] rounded-2xl p-4 border border-[#e6d7c3]/40 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    {selectedAppPreview.type === "Advisory" && (
+                      <>
+                        <div><strong>Advisory Roles Needed:</strong> {(activeAppData.advisoryRole || []).join(", ") || "None"}</div>
+                        <div><strong>Expertise Required:</strong> {(activeAppData.functionalExpertise || []).join(", ") || "None"}</div>
+                        <div><strong>Support Focus:</strong> {(activeAppData.supportFocus || []).join(", ") || "None"}</div>
+                        <div><strong>Compensation:</strong> {activeAppData.compensationType || "Not specified"}</div>
+                        <div><strong>Time Commitment:</strong> {activeAppData.timeCommitment || "Not specified"}</div>
+                        <div><strong>Meeting Format:</strong> {activeAppData.meetingFormat || "Not specified"} {activeAppData.location && `(${activeAppData.location})`}</div>
+                        <div><strong>Project Duration:</strong> {activeAppData.projectDuration || "Not specified"}</div>
+                        <div><strong>Target Start Date:</strong> {activeAppData.startDate || "Not specified"}</div>
+                      </>
+                    )}
+                    {selectedAppPreview.type === "Supplier" && (
+                      <>
+                        <div><strong>Purpose of Request:</strong> {activeAppData.requestOverview?.purpose || "Not specified"}</div>
+                        <div><strong>Categories Required:</strong> {(activeAppData.requestOverview?.categories || []).join(", ") || "None"}</div>
+                        <div><strong>Minimum BBEEE Level:</strong> {activeAppData.matchingPreferences?.bbeeLevel || "Not specified"}</div>
+                        <div><strong>Location Preferred:</strong> {activeAppData.matchingPreferences?.location || "Not specified"}</div>
+                        <div><strong>Budget Range:</strong> {activeAppData.matchingPreferences?.minBudget || activeAppData.matchingPreferences?.maxBudget ? `R ${activeAppData.matchingPreferences?.minBudget || 0} - R ${activeAppData.matchingPreferences?.maxBudget || 0}` : "Not specified"}</div>
+                        <div><strong>Engagement Types:</strong> {activeAppData.matchingPreferences?.engagementType || "Not specified"}</div>
+                      </>
+                    )}
+                    {selectedAppPreview.type === "Interns" && (
+                      <>
+                        <div><strong>Job Title:</strong> {activeAppData.jobOverview?.jobTitle || "Not specified"}</div>
+                        <div><strong>Interns Count:</strong> {activeAppData.internshipRequest?.numberOfInterns || "Not specified"}</div>
+                        <div><strong>Stipend:</strong> {activeAppData.internshipRequest?.stipendAmount ? `R ${activeAppData.internshipRequest.stipendAmount}` : "Not specified"}</div>
+                        <div><strong>Duration:</strong> {activeAppData.internshipRequest?.duration || "Not specified"}</div>
+                        <div><strong>Work Model:</strong> {activeAppData.internshipRequest?.workModel || "Not specified"}</div>
+                        <div><strong>Academic Requirements:</strong> {activeAppData.internshipRequest?.preferredQualifications || "Not specified"}</div>
+                      </>
+                    )}
+                    {selectedAppPreview.type === "Funding" && (
+                      <>
+                        <div><strong>Amount Requested:</strong> {formatCurrency(activeAppData.applicationOverview?.amountRequested || activeAppData.amountRequested)}</div>
+                        <div><strong>Funding Stage:</strong> {activeAppData.applicationOverview?.fundingStage || "Not specified"}</div>
+                        <div><strong>Funding Purpose:</strong> {activeAppData.applicationOverview?.fundingPurpose || "Not specified"}</div>
+                        <div><strong>Own Contribution:</strong> {activeAppData.applicationOverview?.ownContribution ? `R ${activeAppData.applicationOverview.ownContribution}` : "Not specified"}</div>
+                        <div><strong>Revenue Generates:</strong> {activeAppData.financialOverview?.generatesRevenue || "Not specified"}</div>
+                        <div><strong>Annual Revenue:</strong> {activeAppData.financialOverview?.annualRevenue ? `R ${activeAppData.financialOverview.annualRevenue}` : "Not specified"}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Match Results */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-extrabold text-[#4a352f] uppercase tracking-wider m-0">Matched Partners</h4>
+                  {loadingMatches ? (
+                    <div className="flex flex-col items-center justify-center py-8 space-y-2">
+                      <div className="w-8 h-8 border-4 border-[#e6d7c3] border-t-[#a67c52] rounded-full animate-spin" />
+                      <span className="text-xs text-[#7d5a50]">Finding match records...</span>
+                    </div>
+                  ) : appMatches.length > 0 ? (
+                    <div className="border border-[#e6d7c3] rounded-2xl overflow-hidden divide-y divide-[#e6d7c3]/80">
+                      {appMatches.map((m) => (
+                        <div key={m.id} className="flex justify-between items-center p-3 text-xs hover:bg-[#faf7f2]/50 transition-colors">
+                          <div>
+                            <div className="font-bold text-[#4a352f]">{m.name}</div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">Status: <span className="capitalize">{m.status}</span></div>
+                          </div>
+                          {m.matchPct && (
+                            <span className="px-2 py-0.5 rounded-full font-bold text-white text-[10px]" style={{ backgroundColor: m.matchPct >= 75 ? "#2e7d32" : m.matchPct >= 50 ? "#f57c00" : "#d32f2f" }}>
+                              {m.matchPct}% Fit
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-[#faf7f2]/40 border border-dashed border-[#e6d7c3] rounded-2xl p-6 text-center text-xs text-[#7d5a50] italic">
+                      No matching partner results generated or connected yet.
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions Footer */}
+                <div className="flex justify-end pt-2 border-t border-[#e6d7c3]/60">
+                  <button 
+                    onClick={() => setSelectedAppPreview(null)}
+                    className="px-5 py-2.5 bg-[#5d4037] hover:bg-[#4a352f] text-white font-bold text-sm rounded-xl cursor-pointer transition-all"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </PopupPortal>
+        )
       })()}
 
       {/* ─── Business Details Modal ───────────────────────────────────────── */}
