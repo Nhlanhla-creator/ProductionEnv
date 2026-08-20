@@ -1,7 +1,8 @@
-import React, { useState } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import CMFDealFlowPipeline from "./CMFDealFlowPipeline"
 import CMFTabbedTables from "./CMFTabbedTables"
-
+import { db } from "../../firebaseConfig"
+import { collection, query, where, getDocs } from "firebase/firestore"
 import { useCMFMatches } from "./CMFMatchesContext"
 
 // (Keep INITIAL_MOCK_SMES, INITIAL_MOCK_FUNDERS, INITIAL_MOCK_CATALYSTS)
@@ -293,6 +294,7 @@ export default function CMFMatches() {
   const { smeMatches, funderMatches, catalystMatches, loading, updateMatchStage } = useCMFMatches()
   const [stageFilter, setStageFilter] = useState(null)
   const [stageOverrides, setStageOverrides] = useState([])
+  const [appliedSmeIds, setAppliedSmeIds] = useState(null)
 
   const [filters, setFilters] = useState({
     location: "",
@@ -311,7 +313,81 @@ export default function CMFMatches() {
     setFilters(prev => ({ ...prev, ...newFilters }))
   }
 
-  const displaySMEs = smeMatches || []
+  const smeIdsStr = useMemo(() => {
+    return (smeMatches || []).map((s) => s.id).sort().join(",")
+  }, [smeMatches])
+
+  useEffect(() => {
+    if (!smeIdsStr) {
+      setAppliedSmeIds(new Set())
+      return
+    }
+
+    let active = true
+    const checkApplications = async () => {
+      const ids = smeIdsStr.split(",").filter(Boolean)
+      const idsWithApps = new Set()
+
+      await Promise.all(
+        ids.map(async (smeId) => {
+          try {
+            // Check Advisor Applications
+            const advisorySnap = await getDocs(
+              query(collection(db, "advisoryApplicationsV2"), where("userId", "==", smeId))
+            )
+            if (!advisorySnap.empty) {
+              idsWithApps.add(smeId)
+              return
+            }
+
+            // Check Supplier Applications
+            const supplierSnap = await getDocs(
+              query(collection(db, "productApplications"), where("userId", "==", smeId))
+            )
+            if (!supplierSnap.empty) {
+              idsWithApps.add(smeId)
+              return
+            }
+
+            // Check Intern Applications
+            const internSnap = await getDocs(
+              query(collection(db, "internApplicationsV2"), where("userId", "==", smeId))
+            )
+            if (!internSnap.empty) {
+              idsWithApps.add(smeId)
+              return
+            }
+
+            // Check Funding Applications
+            const fundingSnap = await getDocs(
+              query(collection(db, "fundingApplicationsV2"), where("userId", "==", smeId))
+            )
+            if (!fundingSnap.empty) {
+              idsWithApps.add(smeId)
+              return
+            }
+          } catch (e) {
+            console.error("Error checking applications for SME", smeId, e)
+          }
+        })
+      )
+
+      if (active) {
+        setAppliedSmeIds(idsWithApps)
+      }
+    }
+
+    checkApplications()
+    return () => { active = false }
+  }, [smeIdsStr])
+
+  const filteredMatches = useMemo(() => {
+    if (!appliedSmeIds) return []
+    return (smeMatches || []).filter((sme) => appliedSmeIds.has(sme.id))
+  }, [smeMatches, appliedSmeIds])
+
+  const displaySMEs = filteredMatches
+  const isMatchesLoading = loading || !appliedSmeIds
 
   return (
     <div
@@ -329,7 +405,7 @@ export default function CMFMatches() {
         <div className="w-full max-w-full mb-6">
           <CMFDealFlowPipeline 
             smeMatches={displaySMEs} 
-            loading={loading} 
+            loading={isMatchesLoading} 
             onStageClick={setStageFilter} 
           />
         </div>
@@ -344,7 +420,7 @@ export default function CMFMatches() {
             smeMatches={displaySMEs}
             funderMatches={funderMatches}
             catalystMatches={catalystMatches}
-            loading={loading}
+            loading={isMatchesLoading}
             onUpdateStage={updateMatchStage}
             onStageOverride={setStageOverrides}
           />

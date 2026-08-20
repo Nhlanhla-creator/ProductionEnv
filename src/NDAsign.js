@@ -1,16 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./signuppop.css";
-import { initializeApp } from "firebase/app";
 import {
-  getStorage,
   ref,
   uploadString,
   getDownloadURL,
   uploadBytes,
 } from "firebase/storage";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "./firebaseConfig";
+import { doc, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { auth, db, storage } from "./firebaseConfig";
 // Import jsPDF for PDF generation
 import { jsPDF } from "jspdf";
 import { Canvas as FabricCanvas, PencilBrush } from "fabric";
@@ -38,23 +36,7 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
   const ndaContentRef = useRef(null);
   const [isCurrentlyDrawing, setIsCurrentlyDrawing] = useState(false);
 
-  // Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyDfcXO4GbNdPFY7qGbjwH1z3A78FwXiFAE",
-    authDomain: "tuts-7ea8c.firebaseapp.com",
-    projectId: "tuts-7ea8c",
-    storageBucket: "tuts-7ea8c.appspot.com",
-    messagingSenderId: "546514581101",
-    appId: "1:546514581101:web:a34e661b6cad46f01db164",
-    measurementId: "G-LK13NE8TBS",
-  };
 
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const storage = getStorage(app);
-  const db = getFirestore(app);
-  const firebaseAuth = getAuth(app);
 
   useEffect(() => {
     if (registrationData && Object.keys(registrationData).length > 0) {
@@ -192,7 +174,7 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
       if (!userId && userInfo.email && userInfo.password) {
         try {
           const userCredential = await createUserWithEmailAndPassword(
-            firebaseAuth,
+            auth,
             userInfo.email,
             userInfo.password
           );

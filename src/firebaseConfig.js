@@ -8,8 +8,8 @@ import 'firebase/compat/functions';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { initializeApp } from 'firebase/app';
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
+// Your web app's Firebase configurations
+const devConfig = {
   apiKey: "AIzaSyDfcXO4GbNdPFY7qGbjwH1z3A78FwXiFAE",
   authDomain: "tuts-7ea8c.firebaseapp.com",
   projectId: "tuts-7ea8c",
@@ -18,6 +18,26 @@ const firebaseConfig = {
   appId: "1:546514581101:web:a34e661b6cad46f01db164",
   measurementId: "G-LK13NE8TBS"
 };
+
+const prodConfig = {
+  apiKey: "AIzaSyBeidLheVERNRY4ZCzzw4NiQVjj9y2nIUU",
+  authDomain: "production-environment-cf7da.firebaseapp.com",
+  projectId: "production-environment-cf7da",
+  storageBucket: "production-environment-cf7da.firebasestorage.app",
+  messagingSenderId: "231695604224",
+  appId: "1:231695604224:web:3bc3f9ef8acd92a5f8d6e5",
+  measurementId: "G-QR0VH648XY"
+};
+
+// Select config dynamically based on current browser hostname
+const isProdDomain = 
+  typeof window !== 'undefined' && 
+  (window.location.hostname === 'www.bigmarketplace.africa' || 
+   window.location.hostname === 'bigmarketplace.africa' || 
+   window.location.hostname === 'production-environment-cf7da.firebaseapp.com' ||
+   window.location.hostname.endsWith('.africa'));
+
+const firebaseConfig = isProdDomain ? prodConfig : devConfig;
 
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
