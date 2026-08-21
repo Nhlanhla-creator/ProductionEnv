@@ -484,49 +484,48 @@ const validateDocumentWithAI = async (docLabel, file, registeredName, downloadUr
   }
 };
  
-  const getMultipleDocumentData = (docLabel, profileData) => {
-      if (docLabel === "CV") {
-    const cvDocs = profileData.documents?.cv_multiple || [];
-    return cvDocs;
-  }
-    const documentId = getDocumentId(docLabel);
+ const getMultipleDocumentData = (docLabel, profileData) => {
+  const documentId = getDocumentId(docLabel);
+  
+  // Use the same pattern for ALL multi-upload documents including CVs
+  if (MULTI_UPLOAD_DOCUMENTS.includes(docLabel) || docLabel === "CV") {
+    const multipleDocs = profileData.documents?.[`${documentId}_multiple`] || [];
     
-    if (MULTI_UPLOAD_DOCUMENTS.includes(docLabel) || docLabel === "CV"){
-      const multipleDocs = profileData.documents?.[`${documentId}_multiple`] || [];
-      
-      if (multipleDocs.length === 0) {
-        const singleUrl = getDocumentUrlFromAnyLocation(docLabel, profileData);
-        if (singleUrl) {
-          return [{
-            url: singleUrl,
-            status: "verified",
-            message: "Document verified",
-            uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
-              new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
-              new Date().toISOString(),
-            customName: null
-          }];
-        }
+    // If no documents in the multiple array, check for legacy single document
+    if (multipleDocs.length === 0) {
+      const singleUrl = getDocumentUrlFromAnyLocation(docLabel, profileData);
+      if (singleUrl) {
+        return [{
+          url: singleUrl,
+          status: "verified",
+          message: "Document verified",
+          uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
+            new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
+            new Date().toISOString(),
+          customName: null
+        }];
       }
-      
-      return multipleDocs;
     }
     
-    const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
-    if (url) {
-      return [{
-        url: url,
-        status: "verified",
-        message: "Document verified",
-        uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
-          new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
-          new Date().toISOString(),
-        customName: null
-      }];
-    }
-    
-    return [];
-  };
+    return multipleDocs;
+  }
+  
+  // For single documents
+  const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
+  if (url) {
+    return [{
+      url: url,
+      status: "verified",
+      message: "Document verified",
+      uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
+        new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
+        new Date().toISOString(),
+      customName: null
+    }];
+  }
+  
+  return [];
+};
 
 const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
   const auth = getAuth();
@@ -560,8 +559,8 @@ const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
 
     const newDocData = {
       url: downloadURL,
-      status: validationResult.status,
-      message: validationResult.message,
+      status: validationResult.status || "verified",
+      message: validationResult.message || "Document uploaded successfully",
       uploadedAt: new Date().toISOString(),
       customName: null
     };
@@ -577,6 +576,7 @@ const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
       updatedDocs = [...existingDocs, newDocData];
     }
 
+    // USE THE SAME PATTERN FOR ALL DOCUMENTS INCLUDING CVs
     const updateData = {
       [`documents.${documentId}_multiple`]: updatedDocs,
       [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
@@ -607,6 +607,8 @@ const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
     }, 300);
   }
 };
+
+
 const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
   const auth = getAuth();
   const user = auth.currentUser;
@@ -627,27 +629,33 @@ const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
       return;
     }
 
-    // If this is a CV, also delete from userCVData subcollection
+    // For CVs - delete from userCVData subcollection if the document has a URL
     if (docLabel === "CV" && docToDelete.url) {
       try {
-        // Find and delete the CV data from userCVData subcollection
         const cvDataRef = collection(db, 'userCVData', user.uid, 'cvs');
         const querySnapshot = await getDocs(cvDataRef);
         
-        querySnapshot.forEach(async (cvDoc) => {
+        // Find and delete the CV data entry that matches this document URL
+        const deletePromises = [];
+        querySnapshot.forEach((cvDoc) => {
           const cvData = cvDoc.data();
           if (cvData.documentUrl === docToDelete.url) {
-            await deleteDoc(doc(db, 'userCVData', user.uid, 'cvs', cvDoc.id));
-            console.log(`Deleted CV data for: ${cvDoc.id}`);
+            deletePromises.push(deleteDoc(doc(db, 'userCVData', user.uid, 'cvs', cvDoc.id)));
+            console.log(`Found matching CV data for: ${cvDoc.id}`);
           }
         });
+        
+        if (deletePromises.length > 0) {
+          await Promise.all(deletePromises);
+          console.log(`Deleted ${deletePromises.length} CV data entries`);
+        }
       } catch (cvError) {
         console.error("Error deleting CV data:", cvError);
         // Don't block the main delete if CV data deletion fails
       }
     }
 
-    // Delete from the main documents array
+    // Delete from the main documents array - USE SAME PATTERN FOR ALL DOCUMENTS
     const updatedDocs = currentDocs.filter((_, i) => i !== displayIndex);
 
     const updateData = {
