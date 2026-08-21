@@ -298,7 +298,14 @@ function Header({
   }
 
   const handleLogout = () => {
-    auth.signOut().then(() => navigate("/auth"))
+    auth.signOut().then(() => {
+      sessionStorage.clear()
+      navigate("/")
+    }).catch((err) => {
+      console.error("Sign out error:", err)
+      sessionStorage.clear()
+      navigate("/")
+    })
   }
 
   // Mark all messages as read

@@ -1350,6 +1350,10 @@ useEffect(() => {
         setEffectiveUserId(user.uid);
         setUserRole('owner');
       }
+    } else {
+      setIsAuthenticated(false);
+      setEffectiveUserId(null);
+      setUserRole(null);
     }
     setAuthChecked(true);
   });
