@@ -1,8385 +1,2678 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Bar, Line, Pie } from "react-chartjs-2";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { Chart, Pie, Bar } from "react-chartjs-2";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { db, auth } from "../../firebaseConfig";
-import {
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-  query,
-  where,
-  setDoc,
-  addDoc,
-  deleteDoc,
-  orderBy,
-} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import ChartDataLabels from "chartjs-plugin-datalabels";
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import {
-  Info,
-  ChevronDown,
-  ChevronUp,
-  Upload,
-  X,
-  Calendar,
-  TrendingUp,
-  TrendingDown,
+  Eye, LineChart as LineChartIcon, Lightbulb, Plus, StickyNote, X, Save, Pencil, Info,
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
+  CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
+  ExternalLink, Square, CheckSquare, ArrowLeft, Calendar, SlidersHorizontal,
+  Database, Sparkles, Sigma, Settings2, EyeOff, Palette, Check, Users, Trash2,
 } from "lucide-react";
-import PeopleAnalysisModal from "../hooks/PeopleAnalysisModal";
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
+  PointElement, ArcElement, Title, Tooltip, Legend, Filler,
+} from "chart.js";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler);
 
-// ==================== HELPER FUNCTIONS ====================
+const functions = getFunctions();
 
-const getMonthsForYear = (year, viewMode = "month") => {
-  if (viewMode === "year") return [`FY ${year}`];
-  if (viewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"];
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return months;
+/* ════════════════════════════════════════════════════════════════════════════
+   Tokens — shared with Operational and Financial Performance.
+   ════════════════════════════════════════════════════════════════════════ */
+const T = {
+  ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", faint: "#8a7a74",
+  line: "#ded8d4", lineSoft: "#e9e3df", lineStrong: "#b0a29b",
+  bg: "#ffffff", panel: "#faf8f7", raised: "#f2eeec",
+  accent: "#4a352f", accentSoft: "#6b4f47", accentTint: "#f4efec",
+  header: "#33231e",
+  green: "#166534", greenBg: "#f0fdf4",
+  amber: "#92400e", amberBg: "#fffbeb",
+  red: "#991b1b", redBg: "#fef2f2",
+  blue: "#1e40af",
 };
 
-const formatCurrency = (value, unit = "zar_million") => {
-  const num = Number.parseFloat(value) || 0;
-  switch (unit) {
-    case "zar":
-      return `R${num.toLocaleString()}`;
-    case "zar_thousand":
-      return `R${(num * 1000).toLocaleString()}`;
-    case "zar_million":
-      return `R${num.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
-    case "zar_billion":
-      return `R${(num / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    default:
-      return `R${num.toLocaleString()}`;
+const RAPS_CATEGORIES = [
+  { name: "Strategy & Execution", color: "#2563eb" },
+  { name: "Financial Performance", color: "#c2410c" },
+  { name: "Operational Performance", color: "#6d28d9" },
+  { name: "People", color: "#be185d" },
+  { name: "ESG Impact", color: "#4d7c0f" },
+  { name: "Marketing & Sales", color: "#0e7490" },
+  { name: "General", color: "#57534e" },
+];
+const ACTION_STATUSES = ["Not Done", "In Progress", "Done"];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+const PERIODS = [
+  { key: "month", label: "This month" },
+  { key: "quarter", label: "This quarter" },
+  { key: "year", label: "This year" },
+];
+const PERIOD_LABEL = { month: "This month", quarter: "This quarter", year: "This year" };
+const PERIOD_PREFIX = { month: "Monthly", quarter: "Quarterly", year: "Annual" };
+
+/* ─── Financial year, from Entity Overview's financialYearEnd ────────────── */
+const fyStartMonthFromEnd = (end) => {
+  if (!end) return 0;
+  const m = Number(String(end).split("-")[1]);
+  return Number.isFinite(m) && m >= 1 && m <= 12 ? m % 12 : 0;
+};
+const fyStartYearOf = (date, sm) => (date.getMonth() >= sm ? date.getFullYear() : date.getFullYear() - 1);
+const fyLabel = (sy, sm) => (sm === 0 ? `${sy}` : `${sy}/${String(sy + 1).slice(2)}`);
+
+const fyMonths = (sy, sm) =>
+  Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(sy, sm + i, 1);
+    return {
+      key: `M:${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: `${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,
+      long: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+      year: d.getFullYear(), month: d.getMonth(), index: i,
+    };
+  });
+
+const fyQuarters = (sy, sm) => {
+  const months = fyMonths(sy, sm);
+  return [0,1,2,3].map((q) => {
+    const s = months.slice(q * 3, q * 3 + 3);
+    return { key: `Q${q + 1}`, label: `Q${q + 1}`, range: `${s[0].label} – ${s[2].label}`, months: s, index: q };
+  });
+};
+const currentMonthKey = () => { const d = new Date(); return `M:${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
+
+/* ─── Formatting ────────────────────────────────────────────────────────── */
+const LOCALE = "en-US";
+const trimNum = (n) => {
+  if (!Number.isFinite(n)) return "";
+  const abs = Math.abs(n), dp = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+  return Number(n.toFixed(dp)).toLocaleString(LOCALE, { maximumFractionDigits: dp });
+};
+
+/* `bare` drops the unit marker — the table has its own Units column. */
+const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
+  if (raw === null || raw === undefined || raw === "") return "—";
+  if (kpi?.options) {
+    const found = kpi.options.find((o) => String(o.value) === String(Math.round(Number(raw))));
+    return found ? found.label : "—";
   }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return "—";
+  const sign = signed && n > 0 ? "+" : "";
+  if (kpi?.units === "%") return `${sign}${trimNum(n)}${bare ? "" : "%"}`;
+  if (kpi?.units === "R") {
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000) return `${sign}${bare ? "" : "R "}${(n / 1_000_000).toLocaleString(LOCALE, { maximumFractionDigits: 2 })}m`;
+    if (abs >= 1_000) return `${sign}${bare ? "" : "R "}${(n / 1_000).toLocaleString(LOCALE, { maximumFractionDigits: 1 })}k`;
+    return `${sign}${bare ? "" : "R "}${n.toLocaleString(LOCALE, { maximumFractionDigits: 0 })}`;
+  }
+  const suffix = !bare && kpi?.units && !["#","%","R"].includes(kpi.units) ? ` ${kpi.units}` : "";
+  return `${sign}${trimNum(n)}${suffix}`;
 };
 
-const formatPercentage = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  return `${num.toFixed(1)}%`;
+const parseNum = (v) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isNaN(n) ? null : n; };
+const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
+const errText = (e) => String(e?.message ?? e ?? "Unknown error");
+const fmtDMY = (d) => { if (!d) return ""; const x = new Date(d); return Number.isNaN(x.getTime()) ? "" : `${String(x.getDate()).padStart(2,"0")}/${String(x.getMonth()+1).padStart(2,"0")}/${x.getFullYear()}`; };
+const rollUp = (values, mode) => {
+  const nums = values.filter((v) => Number.isFinite(v));
+  if (!nums.length) return null;
+  const sum = nums.reduce((a, b) => a + b, 0);
+  return mode === "sum" ? sum : sum / nums.length;
+};
+const mean = (arr) => { const n = arr.filter((v) => Number.isFinite(v)); return n.length ? n.reduce((a,b)=>a+b,0) / n.length : null; };
+const div = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? a / b : null);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Source documents — the same peopleData docs the old sections wrote to, so
+   existing data appears immediately.
+
+   People figures are stored as twelve calendar-month slots with no year on
+   the document, so the same twelve slots serve every financial year. The FY
+   selector reorders them; it doesn't separate them.
+   ════════════════════════════════════════════════════════════════════════ */
+const DOC = {
+  prod: "_productivity",
+  cap: "_capabilityTraining",
+  exec: "_executionCapacity",
+  stab: "_stabilityContinuity",
+  comp: "_employeeComposition",
+  track: "_employeeTracking",
+  term: "_terminationData",
+  hire: "_newHireData",
+  pnl: "_pnlManual",
+  bs: "_capitalStructure",
 };
 
-const getMonthIndex = (month) => {
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return months.indexOf(month);
+const atPath = (obj, path) => path.reduce((o, k) => (o == null ? undefined : o[k]), obj);
+const numAt = (docs, src, path, mi) => {
+  const arr = atPath(docs[src], path);
+  if (!Array.isArray(arr)) return null;
+  const n = parseFloat(arr[mi]);
+  return Number.isFinite(n) ? n : null;
+};
+const scalarAt = (docs, src, path) => {
+  const v = atPath(docs[src], path);
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : null;
 };
 
-const calculateAverage = (arr) => {
-  if (!arr || arr.length === 0) return 0;
-  const valid = arr.filter((v) => v !== "" && !isNaN(Number.parseFloat(v)));
-  if (valid.length === 0) return 0;
-  return valid.reduce((sum, v) => sum + Number.parseFloat(v), 0) / valid.length;
+/* Everything a KPI might need for one month, in one object. */
+const buildContext = (docs, mi) => ({
+  // Productivity
+  revenuePerEmployee: numAt(docs, "prod", ["productivityData","revenuePerEmployee","actual"], mi),
+  revenuePerEmployeeB: numAt(docs, "prod", ["productivityData","revenuePerEmployee","budget"], mi),
+  laborCostPercentage: numAt(docs, "prod", ["productivityData","laborCostPercentage","actual"], mi),
+  laborCostPercentageB: numAt(docs, "prod", ["productivityData","laborCostPercentage","budget"], mi),
+  salesVolumePerEmployee: numAt(docs, "prod", ["productivityData","salesVolumePerEmployee","actual"], mi),
+  salesVolumePerEmployeeB: numAt(docs, "prod", ["productivityData","salesVolumePerEmployee","budget"], mi),
+  overtimeHours: numAt(docs, "prod", ["productivityData","overtimeHours","actual"], mi),
+  overtimeHoursB: numAt(docs, "prod", ["productivityData","overtimeHours","budget"], mi),
+  // Capability
+  trainingSpendAmount: numAt(docs, "cap", ["capabilityData","trainingSpendAmount","actual"], mi),
+  trainingSpendAmountB: numAt(docs, "cap", ["capabilityData","trainingSpendAmount","budget"], mi),
+  trainingSpendPercentage: numAt(docs, "cap", ["capabilityData","trainingSpendPercentage","actual"], mi),
+  trainingSpendPercentageB: numAt(docs, "cap", ["capabilityData","trainingSpendPercentage","budget"], mi),
+  trainingFocus: numAt(docs, "cap", ["capabilityData","trainingFocus","actual"], mi),
+  trainingFocusB: numAt(docs, "cap", ["capabilityData","trainingFocus","budget"], mi),
+  // Composition — scalars, so the same figure stands for every month
+  headCount: scalarAt(docs, "comp", ["employeeData","headCount"]),
+  targetHeadCount: scalarAt(docs, "comp", ["employeeData","targetHeadCount"]),
+  // Execution capacity
+  criticalFunctionsSinglePoint: numAt(docs, "exec", ["executionData","criticalFunctionsSinglePoint"], mi),
+  criticalRolesWith2IC: numAt(docs, "exec", ["executionData","criticalRolesWith2IC"], mi),
+  // Stability
+  overallTurnover: numAt(docs, "stab", ["stabilityData","overallTurnover"], mi),
+  criticalRoleTurnover: numAt(docs, "stab", ["stabilityData","criticalRoleTurnover"], mi),
+  workforceMovements: numAt(docs, "stab", ["stabilityData","workforceMovements"], mi),
+  contractorDependence: numAt(docs, "stab", ["stabilityData","contractorDependence"], mi),
+});
+
+/* ════════════════════════════════════════════════════════════════════════════
+   The KPI registry — tabs, categories, KPIs.
+
+   `benchmark` is the fallback the status uses when nobody has captured a
+   target, so a KPI without a budget still says something rather than nothing.
+   ════════════════════════════════════════════════════════════════════════ */
+const K = (o) => ({
+  id: o.id, name: o.name, units: o.units, direction: o.direction || "higher",
+  aggregate: o.aggregate || "avg", meaning: o.meaning, measured: o.measured,
+  actual: o.actual, budget: o.budget || (() => null),
+  benchmark: o.benchmark ?? null, options: o.options || null, field: o.field || null,
+});
+
+const FOCUS_OPTIONS = [
+  { value: 1, label: "Technical" },
+  { value: 2, label: "Leadership" },
+  { value: 3, label: "Compliance" },
+];
+
+const TAB_DEFS = [
+  {
+    id: "productivity", name: "Productivity",
+    categories: [
+      { name: "Output & Efficiency", kpis: [
+        K({ id: "revenuePerEmployee", name: "Revenue per Employee", units: "R", direction: "higher", aggregate: "avg",
+          benchmark: 500000,
+          field: { src: "prod", a: ["productivityData","revenuePerEmployee","actual"], b: ["productivityData","revenuePerEmployee","budget"] },
+          meaning: "How much revenue each person on the payroll brings in. The cleanest single read on whether output is scaling with headcount.",
+          measured: "=SUM(Revenue) / AVERAGE(Headcount)\n\nWhere Revenue comes from the P&L and Headcount from the Balance Sheet's additional metrics. Format as Currency (R, 0 decimals).",
+          actual: (c) => c.revenuePerEmployee, budget: (c) => c.revenuePerEmployeeB }),
+        K({ id: "laborCostPercentage", name: "Labour Cost % of Revenue", units: "%", direction: "lower", aggregate: "avg",
+          benchmark: 35,
+          field: { src: "prod", a: ["productivityData","laborCostPercentage","actual"], b: ["productivityData","laborCostPercentage","budget"] },
+          meaning: "The share of every rand of revenue that goes to paying people. Rises when hiring outpaces output.",
+          measured: "=SUM(Salaries) / SUM(Revenue) * 100\n\nBoth from the P&L. Format as Percentage (1 decimal).",
+          actual: (c) => c.laborCostPercentage, budget: (c) => c.laborCostPercentageB }),
+        K({ id: "salesVolumePerEmployee", name: "Sales Volume per Employee", units: "units", direction: "higher", aggregate: "avg",
+          benchmark: 100,
+          field: { src: "prod", a: ["productivityData","salesVolumePerEmployee","actual"], b: ["productivityData","salesVolumePerEmployee","budget"] },
+          meaning: "Units shifted per person. Useful where revenue is distorted by pricing changes.",
+          measured: "=SUM(UnitsSold) / AVERAGE(Headcount)",
+          actual: (c) => c.salesVolumePerEmployee, budget: (c) => c.salesVolumePerEmployeeB }),
+        K({ id: "overtimeHours", name: "Overtime Hours", units: "hrs", direction: "lower", aggregate: "sum",
+          benchmark: 10,
+          field: { src: "prod", a: ["productivityData","overtimeHours","actual"], b: ["productivityData","overtimeHours","budget"] },
+          meaning: "Hours worked beyond contract. Persistent overtime usually means understaffing or a process that isn't working.",
+          measured: "=SUM(OvertimeHours)\n\nFrom the timekeeping register for the month.",
+          actual: (c) => c.overtimeHours, budget: (c) => c.overtimeHoursB }),
+      ]},
+    ],
+  },
+  {
+    id: "capability", name: "Capability",
+    categories: [
+      { name: "Capability & Training", panel: "tracking", kpis: [
+        K({ id: "trainingSpendAmount", name: "Training Spend (R)", units: "R", direction: "higher", aggregate: "sum",
+          benchmark: 50000,
+          field: { src: "cap", a: ["capabilityData","trainingSpendAmount","actual"], b: ["capabilityData","trainingSpendAmount","budget"] },
+          meaning: "What the business actually put into developing its people this month, in rand.",
+          measured: "=SUM(TrainingSpend)\n\nFrom the Balance Sheet's additional metrics, or entered directly.",
+          actual: (c) => c.trainingSpendAmount, budget: (c) => c.trainingSpendAmountB }),
+        K({ id: "trainingSpendPercentage", name: "Training Spend (% of payroll)", units: "%", direction: "higher", aggregate: "avg",
+          benchmark: 3,
+          field: { src: "cap", a: ["capabilityData","trainingSpendPercentage","actual"], b: ["capabilityData","trainingSpendPercentage","budget"] },
+          meaning: "Training spend measured against the wage bill — the fair way to compare year on year as you grow.",
+          measured: "=SUM(TrainingSpend) / SUM(Payroll) * 100\n\nUnder 1% is under-investing; 3% and above is a business building capability.",
+          actual: (c) => c.trainingSpendPercentage, budget: (c) => c.trainingSpendPercentageB }),
+        K({ id: "trainingFocus", name: "Training Focus", units: "focus", direction: "match", aggregate: "avg",
+          options: FOCUS_OPTIONS,
+          field: { src: "cap", a: ["capabilityData","trainingFocus","actual"], b: ["capabilityData","trainingFocus","budget"] },
+          meaning: "Where the training effort went this month — technical skills, leadership, or compliance.",
+          measured: "Captured as a category rather than calculated.\n\n=INDEX({\"Technical\";\"Leadership\";\"Compliance\"}, FocusCode)\n\nRotate the focus so no one area is neglected across a year.",
+          actual: (c) => c.trainingFocus, budget: (c) => c.trainingFocusB }),
+      ]},
+      { name: "Employee Composition", panel: "composition", kpis: [
+        K({ id: "headCount", name: "Head Count", units: "#", direction: "match", aggregate: "avg",
+          field: { src: "comp", scalar: true, a: ["employeeData","headCount"], b: ["employeeData","targetHeadCount"] },
+          meaning: "How many people are on the books, against the target you set. The gap is your open vacancies.",
+          measured: "=COUNTA(EmployeeRegister)\n\nTarget head count is the planned establishment. Vacancies = Target − Actual.",
+          actual: (c) => c.headCount, budget: (c) => c.targetHeadCount }),
+      ]},
+    ],
+  },
+  {
+    id: "capacity", name: "Capacity",
+    categories: [
+      { name: "Execution Capacity", panel: "capacity", kpis: [
+        K({ id: "criticalFunctionsSinglePoint", name: "% Critical Functions Dependent on 1 Person", units: "%", direction: "lower", aggregate: "avg",
+          benchmark: 20,
+          field: { src: "exec", a: ["executionData","criticalFunctionsSinglePoint"] },
+          meaning: "How much of the business would stop if one particular person didn't come in. This is key-person risk in a single number.",
+          measured: "=COUNTIF(SinglePointFlag, \"Yes\") / COUNTA(CriticalFunctions) * 100\n\nUnder 20% is where you want to be.",
+          actual: (c) => c.criticalFunctionsSinglePoint }),
+        K({ id: "criticalRolesWith2IC", name: "% Critical Roles with 2IC", units: "%", direction: "higher", aggregate: "avg",
+          benchmark: 80,
+          field: { src: "exec", a: ["executionData","criticalRolesWith2IC"] },
+          meaning: "The share of critical roles with a named, capable second-in-command. Your succession cover, measured.",
+          measured: "=COUNTIF(HasSecond, \"Yes\") / COUNTA(CriticalRoles) * 100\n\nAbove 80% is a resilient organisation.",
+          actual: (c) => c.criticalRolesWith2IC }),
+      ]},
+    ],
+  },
+  {
+    id: "stability", name: "Stability & Continuity",
+    categories: [
+      { name: "Stability", panel: "records", kpis: [
+        K({ id: "overallTurnover", name: "Overall Turnover (% Annually)", units: "%", direction: "lower", aggregate: "avg",
+          benchmark: 15,
+          field: { src: "stab", a: ["stabilityData","overallTurnover"] },
+          meaning: "The share of your people who leave in a year. Replacing someone costs between half and twice their salary, so this is a cost line as much as a culture signal.",
+          measured: "=COUNTA(Terminations) / AVERAGE(Headcount) * 100\n\nUnder 15% overall, under 10% voluntary.",
+          actual: (c) => c.overallTurnover }),
+        K({ id: "criticalRoleTurnover", name: "Critical Role Turnover", units: "%", direction: "lower", aggregate: "avg",
+          benchmark: 10,
+          field: { src: "stab", a: ["stabilityData","criticalRoleTurnover"] },
+          meaning: "Turnover in the roles that are hardest to replace. Far more damaging than the headline turnover figure.",
+          measured: "=COUNTIFS(Terminations, CriticalFlag=\"Yes\") / COUNTA(CriticalRoles) * 100\n\nUnder 10% annually.",
+          actual: (c) => c.criticalRoleTurnover }),
+        K({ id: "workforceMovements", name: "Workforce Movements", units: "#", direction: "higher", aggregate: "sum",
+          field: { src: "stab", a: ["stabilityData","workforceMovements"] },
+          meaning: "Net change in headcount — hires less exits. Positive is growth; large swings either way point to unstable planning.",
+          measured: "=COUNTA(NewHires) - COUNTA(Terminations)",
+          actual: (c) => c.workforceMovements }),
+        K({ id: "contractorDependence", name: "Contractor Dependence", units: "%", direction: "lower", aggregate: "avg",
+          benchmark: 20,
+          field: { src: "stab", a: ["stabilityData","contractorDependence"] },
+          meaning: "How much of the workforce sits outside permanent employment. Flexible, but knowledge walks out with them.",
+          measured: "=COUNTIF(ContractType, \"Contract\") / COUNTA(Workforce) * 100\n\nOver 30% is worth a conversion plan.",
+          actual: (c) => c.contractorDependence }),
+      ]},
+    ],
+  },
+];
+
+/* ─── Status ────────────────────────────────────────────────────────────── */
+const S = {
+  green: { key: "green", label: "On target", color: T.green, bg: T.greenBg },
+  amber: { key: "amber", label: "Needs attention", color: T.amber, bg: T.amberBg },
+  red: { key: "red", label: "Critical", color: T.red, bg: T.redBg },
+  none: { key: "none", label: "No target", color: T.faint, bg: T.raised },
+};
+const statusFromPair = (kpi, budget, actual) => {
+  const b = Number(budget), a = Number(actual);
+  if (!Number.isFinite(b) || !Number.isFinite(a)) return S.none;
+  if (kpi.direction === "match") {
+    if (b === 0) return Math.abs(a) < 0.001 ? S.green : Math.abs(a) <= 1 ? S.amber : S.red;
+    const drift = Math.abs(a - b) / Math.abs(b);
+    return drift <= 0.05 ? S.green : drift <= 0.20 ? S.amber : S.red;
+  }
+  if (b === 0) {
+    if (kpi.direction === "higher") return S.none;
+    return a <= 0 ? S.green : S.amber;
+  }
+  const ratio = kpi.direction === "higher" ? a / b : b / (a || 0.0001);
+  return ratio >= 0.98 ? S.green : ratio >= 0.85 ? S.amber : S.red;
+};
+const varianceFavourable = (kpi, v) => {
+  if (v === null) return null;
+  if (kpi.direction === "match") return Math.abs(v) < 0.001;
+  return kpi.direction === "higher" ? v >= 0 : v <= 0;
+};
+const StatusIcon = ({ status, size = 22 }) => {
+  const p = { size, color: status.color, strokeWidth: 2.2 };
+  if (status.key === "green") return <CheckCircle2 {...p} />;
+  if (status.key === "amber") return <AlertTriangle {...p} />;
+  if (status.key === "red") return <XCircle {...p} />;
+  return <Info {...p} />;
 };
 
-const calculateTotal = (items, monthIndex) => {
-  if (!items || monthIndex < 0 || monthIndex >= 12) return 0;
-  return Object.values(items).reduce((sum, arr) => {
-    if (!Array.isArray(arr) || arr.length <= monthIndex) return sum;
-    const val = Number.parseFloat(arr[monthIndex]) || 0;
-    return sum + val;
-  }, 0);
+/* ─── Period resolution ─────────────────────────────────────────────────── */
+const monthEntry = (kpi, year, mi) => kpi.entries?.[`M:${year}-${String(mi + 1).padStart(2, "0")}`] || { actual: null, budget: null };
+
+const periodValues = (kpi, period, fy) => {
+  const now = new Date();
+  if (period === "month") return monthEntry(kpi, now.getFullYear(), now.getMonth());
+  const months = fyMonths(fy.startYear, fy.startMonth);
+  const elapsed = (list) => list.filter((m) => new Date(m.year, m.month, 1) <= new Date(now.getFullYear(), now.getMonth(), 1));
+  const rows = (list) => list.map((m) => monthEntry(kpi, m.year, m.month));
+  if (period === "quarter") {
+    const qs = fyQuarters(fy.startYear, fy.startMonth);
+    const q = qs.find((qq) => qq.months.some((m) => m.year === now.getFullYear() && m.month === now.getMonth())) || qs[0];
+    const r = rows(elapsed(q.months));
+    return { actual: rollUp(r.map((x) => Number(x.actual)), kpi.aggregate), budget: rollUp(r.map((x) => Number(x.budget)), kpi.aggregate) };
+  }
+  const r = rows(elapsed(months));
+  return { actual: rollUp(r.map((x) => Number(x.actual)), kpi.aggregate), budget: rollUp(r.map((x) => Number(x.budget)), kpi.aggregate) };
+};
+const getStatus = (kpi, period, fy) => { const v = periodValues(kpi, period, fy); return statusFromPair(kpi, v.budget, v.actual); };
+const getVariance = (kpi, period, fy) => {
+  const { budget, actual } = periodValues(kpi, period, fy);
+  const b = Number(budget), a = Number(actual);
+  return Number.isFinite(b) && Number.isFinite(a) ? a - b : null;
 };
 
-// ==================== COMPONENTS ====================
+/* ─── Columns ───────────────────────────────────────────────────────────── */
+const COLUMN_DEFS = {
+  category:  { label: "Category", width: 178, tip: "The category this KPI sits under.", filter: true, sort: true, hideable: true },
+  kpi:       { label: "KPI", width: 288, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
+  units:     { label: "Units", width: 90, align: "center", tip: "The unit every figure in this row is expressed in.", filter: true, sort: true, hideable: true },
+  source:    { label: "Target", width: 118, align: "center", tip: "Whether the target beside this KPI is one you set, or the recommended benchmark used in its place.", filter: true, sort: true, hideable: true },
+  budget:    { label: "Target", width: 132, align: "center", tip: "Your captured target, or the recommended benchmark where none is set.", sort: true, hideable: true },
+  actual:    { label: "Actual", width: 132, align: "center", tip: "What was recorded for the selected period.", sort: true, hideable: true },
+  variance:  { label: "Variance", width: 132, align: "center", tip: "Actual minus Target. Green means favourable for this KPI's direction.", sort: true, hideable: true },
+  status:    { label: "Status", width: 104, align: "center", tip: "Green: on target. Amber: needs attention. Red: well outside target.", filter: true, sort: true, hideable: true },
+};
+const COLUMN_ORDER = Object.keys(COLUMN_DEFS);
+const ACTIONS_KEY = "__actions__";
+const columnLines = (key, period) =>
+  ["budget","actual","variance"].includes(key) ? [PERIOD_PREFIX[period], COLUMN_DEFS[key].label] : [COLUMN_DEFS[key].label];
 
-const EyeIcon = ({ onClick, title }) => (
-  <div
-    onClick={onClick}
-    style={{
-      position: "absolute",
-      top: "10px",
-      right: "10px",
-      cursor: "pointer",
-      width: "32px",
-      height: "32px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      borderRadius: "50%",
-      backgroundColor: "#fdfcfb",
-      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-      transition: "all 0.2s ease",
-      zIndex: 10,
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.backgroundColor = "#e8ddd4";
-      e.currentTarget.style.transform = "scale(1.1)";
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.backgroundColor = "#fdfcfb";
-      e.currentTarget.style.transform = "scale(1)";
-    }}
-  >
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#5d4037"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="3"></circle>
-      <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
-    </svg>
-    {title && (
-      <span
-        style={{
-          position: "absolute",
-          top: "40px",
-          right: "0",
-          fontSize: "11px",
-          color: "#5d4037",
-          whiteSpace: "nowrap",
-          backgroundColor: "#fdfcfb",
-          padding: "4px 8px",
-          borderRadius: "4px",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          display: "none",
-        }}
-      >
-        {title}
-      </span>
-    )}
-  </div>
-);
-
-const CalculationModal = ({ isOpen, onClose, title, calculation }) => {
-  if (!isOpen) return null;
-
+/* ─── Shared UI ─────────────────────────────────────────────────────────── */
+const InfoTip = ({ text, light = false }) => {
+  const [rect, setRect] = useState(null);
+  if (!text) return null;
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 2000,
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "30px",
-          borderRadius: "8px",
-          maxWidth: "500px",
-          width: "90%",
-          maxHeight: "80vh",
-          overflow: "auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", margin: 0 }}>{title} - Calculation</h3>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "24px",
-              color: "#5d4037",
-              cursor: "pointer",
-              padding: "0",
-              lineHeight: "1",
-            }}
-          >
-            ×
-          </button>
-        </div>
-        <div
-          style={{
-            backgroundColor: "#f5f0eb",
-            padding: "20px",
-            borderRadius: "6px",
-          }}
-        >
-          <p
-            style={{
-              color: "#5d4037",
-              fontSize: "14px",
-              lineHeight: "1.6",
-              margin: 0,
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {calculation}
-          </p>
-        </div>
-      </div>
-    </div>
+    <span style={{ display: "inline-flex" }}
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}>
+      <Info size={13} strokeWidth={2} color={light ? "rgba(255,255,255,0.75)" : T.faint} style={{ cursor: "help" }} />
+      {rect && typeof document !== "undefined" && createPortal(
+        <div style={{ position: "fixed", top: rect.bottom + 8,
+          left: Math.min(Math.max(rect.left - 110, 12), window.innerWidth - 250),
+          width: "236px", background: T.ink, color: "#fff", fontSize: "12.5px",
+          padding: "10px 12px", borderRadius: "8px", lineHeight: 1.5, zIndex: 3000,
+          pointerEvents: "none", fontWeight: 400, letterSpacing: "normal", textTransform: "none",
+          boxShadow: "0 10px 30px rgba(45,32,28,0.3)" }}>{text}</div>, document.body)}
+    </span>
   );
 };
 
-const KeyQuestionBox = ({ question, signals, decisions, section }) => {
-  const [showMore, setShowMore] = useState(false);
+const btnBase = { padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 500,
+  cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "7px", fontFamily: "inherit" };
+const btnPrimary = { ...btnBase, background: T.accent, color: "#fff", border: `1px solid ${T.accent}`, fontWeight: 600 };
+const btnGhost = { ...btnBase, background: T.bg, color: T.body, border: `1px solid ${T.lineStrong}` };
+const btnQuiet = { ...btnBase, background: "transparent", color: T.accent, border: "1px solid transparent" };
+const inputS = { width: "100%", padding: "9px 11px", border: `1px solid ${T.lineStrong}`, borderRadius: "8px",
+  fontSize: "13.5px", fontFamily: "inherit", boxSizing: "border-box", color: T.ink, background: T.bg, outline: "none" };
+const selectS = { ...inputS, cursor: "pointer" };
+const labelS = { display: "block", fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "5px" };
+const cardS = { background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" };
+const panelTh = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
+  letterSpacing: "0.5px", background: T.header, whiteSpace: "nowrap" };
 
-  const getFirstSentence = (text) => {
-    const match = text.match(/^[^.!?]+[.!?]/);
-    return match ? match[0] : text.split(".")[0] + ".";
+const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }) => (
+  <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,32,28,0.55)",
+    display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1400, padding: "20px" }}>
+    <div onClick={(e) => e.stopPropagation()} style={{ background: T.bg, borderRadius: "14px", width: "100%",
+      maxWidth: `${width}px`, maxHeight: "92vh", display: "flex", flexDirection: "column",
+      boxShadow: "0 24px 60px rgba(45,32,28,0.28)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "18px 22px 14px", borderBottom: `1px solid ${T.line}` }}>
+        <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
+          {icon && <span style={{ marginTop: "2px", color: T.accent }}>{icon}</span>}
+          <div>
+            <h3 style={{ margin: 0, fontSize: "17px", color: T.accent, fontWeight: 600, letterSpacing: "-0.2px" }}>{title}</h3>
+            {subtitle && <p style={{ margin: "3px 0 0", fontSize: "13px", color: T.body }}>{subtitle}</p>}
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: T.raised, border: "none", cursor: "pointer", color: T.body,
+          width: 30, height: 30, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <X size={15} />
+        </button>
+      </div>
+      <div style={{ padding: "18px 22px", overflowY: "auto", flex: 1 }}>{children}</div>
+      {footer && <div style={{ padding: "13px 22px", borderTop: `1px solid ${T.line}`, display: "flex",
+        justifyContent: "flex-end", gap: "10px", alignItems: "center", background: T.panel, borderRadius: "0 0 14px 14px" }}>{footer}</div>}
+    </div>
+  </div>
+);
+
+const DIRECTIONS = [
+  { value: "higher", label: "Higher is better" },
+  { value: "lower", label: "Lower is better" },
+  { value: "match", label: "Matching is better" },
+];
+
+const makeValueLabelPlugin = (kpi, enabled) => ({
+  id: "seriesValueLabels",
+  afterDatasetsDraw(chart) {
+    if (!enabled) return;
+    const { ctx } = chart;
+    ctx.save();
+    ctx.font = "600 10.5px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((el, i) => {
+        const raw = ds.data[i];
+        if (raw === null || raw === undefined) return;
+        ctx.fillStyle = ds.__labelColor || T.body;
+        ctx.fillText(fmtValue(raw, kpi, { signed: !!ds.__signed, bare: true }), el.x, el.y - 8);
+      });
+    });
+    ctx.restore();
+  },
+});
+
+/* ─── KPI info popup ────────────────────────────────────────────────────── */
+const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
+  const [editing, setEditing] = useState(false);
+  const [meaning, setMeaning] = useState(kpi.meaning || "");
+  const [measured, setMeasured] = useState(kpi.measured || "");
+  const box = (v, empty, mono) => (
+    <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "13px 15px",
+      fontSize: mono ? "13px" : "14px", lineHeight: 1.65, color: v ? T.body : T.faint,
+      fontStyle: v ? "normal" : "italic", whiteSpace: "pre-wrap",
+      fontFamily: mono && v ? "ui-monospace, SFMono-Regular, Menlo, monospace" : "inherit" }}>{v || empty}</div>
+  );
+  return (
+    <Modal title={kpi.name} subtitle="What it means and how it is measured" icon={<Eye size={17} />} onClose={onClose}
+      footer={editing ? (
+        <>
+          <button onClick={() => { setMeaning(kpi.meaning || ""); setMeasured(kpi.measured || ""); setEditing(false); }} style={btnGhost}>Cancel</button>
+          <button onClick={() => { onSave({ meaning, measured }); setEditing(false); }} style={btnPrimary}><Save size={13} /> Save</button>
+        </>
+      ) : (
+        <>
+          {!readOnly && <button onClick={() => setEditing(true)} style={btnGhost}><Pencil size={13} /> Edit</button>}
+          <button onClick={onClose} style={btnPrimary}>Close</button>
+        </>
+      )}>
+      <div style={{ display: "flex", gap: "7px", flexWrap: "wrap", marginBottom: "18px" }}>
+        {[`Units: ${kpi.units}`,
+          DIRECTIONS.find((d) => d.value === kpi.direction)?.label,
+          kpi.aggregate === "avg" ? "AVERAGE across periods" : "SUM across periods",
+          kpi.benchmark !== null ? `Benchmark: ${fmtValue(kpi.benchmark, kpi)}` : null,
+        ].filter(Boolean).map((c) => (
+          <span key={c} style={{ fontSize: "12px", padding: "4px 11px", borderRadius: "999px", background: T.raised, color: T.body }}>{c}</span>
+        ))}
+      </div>
+      <div style={{ marginBottom: "18px" }}>
+        <label style={labelS}>What does this KPI mean?</label>
+        {editing ? <textarea rows="3" value={meaning} onChange={(e) => setMeaning(e.target.value)} style={{ ...inputS, resize: "vertical" }} />
+          : box(meaning, "Not captured yet.", false)}
+      </div>
+      <div>
+        <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}><Sigma size={13} /> How is this KPI measured?</label>
+        {editing ? <textarea rows="6" value={measured} onChange={(e) => setMeasured(e.target.value)}
+            style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }} />
+          : box(measured, "Not captured yet.", true)}
+      </div>
+    </Modal>
+  );
+};
+
+/* ─── Analysis ──────────────────────────────────────────────────────────── */
+const localAnalysis = (kpi, period, v, fy) => {
+  const status = statusFromPair(kpi, v.budget, v.actual);
+  const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
+  const fav = varianceFavourable(kpi, variance);
+  return {
+    observations: [
+      `${PERIOD_LABEL[period]} actual sits at ${fmtValue(v.actual, kpi)}${v.budget === null ? " with no target captured." : ` against a target of ${fmtValue(v.budget, kpi)}.`}`,
+      variance === null ? "Variance cannot be computed until a target exists for this period."
+        : `That is a ${fav ? "favourable" : "unfavourable"} variance of ${fmtValue(Math.abs(variance), kpi)}.`,
+      kpi.benchmark !== null ? `The recommended benchmark for this measure is ${fmtValue(kpi.benchmark, kpi)}.` : "No published benchmark for this measure — judge it against your own history.",
+      `${DIRECTIONS.find((d) => d.value === kpi.direction)?.label} for this KPI.`,
+    ],
+    trends: status.key === "green"
+      ? ["Holding inside tolerance, which points to a stable people position.",
+         "Watch the month-to-month spread rather than the headline."]
+      : status.key === "amber"
+        ? ["Drifted outside tolerance but not far — this reads as drift rather than a break.",
+           "Two or three more months at this level would move it into critical territory."]
+        : status.key === "red"
+          ? ["The gap is wide enough that a single-month correction is unlikely to close it.",
+             "Treat the trend as broken until two consecutive months recover."]
+          : ["No target captured for this period, so there is nothing to measure the actual against."],
+    issues: status.key === "green" ? ["No material issue at this timeframe."]
+      : status.key === "none" ? ["Capture a target so performance can be judged rather than just reported."]
+      : [`Target is not being met${variance === null ? "" : ` — off by ${fmtValue(Math.abs(variance), kpi)}`}.`,
+         status.key === "red" ? "Severity warrants a named owner and a dated action." : "Unattended, this compounds quietly across periods."],
+    opportunities: status.key === "green"
+      ? ["Consider tightening the target — the current one may no longer be stretching.",
+         "Document what is working and apply it to the weaker measures in this category."]
+      : ["Raise an action against this KPI so it carries into the next governance meeting.",
+         kpi.direction === "higher" ? "Find the largest single constraint and remove it before adding anything."
+           : "Trace the biggest contributors to this number and address the largest one first."],
   };
+};
+
+const summaryAnalysis = (kpi, fy) => {
+  const rows = PERIODS.map((p) => {
+    const v = periodValues(kpi, p.key, fy);
+    return { key: p.key, label: p.label, v, status: statusFromPair(kpi, v.budget, v.actual),
+      variance: Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null };
+  });
+  const withData = rows.filter((r) => r.status.key !== "none");
+  const reds = withData.filter((r) => r.status.key === "red");
+  const greens = withData.filter((r) => r.status.key === "green");
+  const mth = rows.find((r) => r.key === "month"), yr = rows.find((r) => r.key === "year");
+  return {
+    observations: [
+      ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no target)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
+      `${withData.length} of ${rows.length} timeframes have both an actual and a target.`,
+    ],
+    trends: withData.length < 2 ? ["Not enough timeframes with a target to compare the short term against the long."]
+      : [ mth?.status.key !== "none" && yr?.status.key !== "none" && mth.status.key !== yr.status.key
+            ? `The month and the year disagree — ${mth.status.label.toLowerCase()} this month against ${yr.status.label.toLowerCase()} for the year, so treat one as the outlier.`
+            : "Short and long timeframes tell the same story, which makes the signal more trustworthy.",
+          greens.length === withData.length ? "Every timeframe is inside tolerance."
+            : reds.length === withData.length ? "Every timeframe is critical — this is structural, not a bad month."
+            : "The picture is mixed; the shorter timeframe moves first, so watch it for the turn." ],
+    issues: reds.length === 0 && withData.every((r) => r.status.key === "green") ? ["No timeframe is outside tolerance."]
+      : [...reds.map((r) => `${r.label} is critical${r.variance === null ? "" : ` — off by ${fmtValue(Math.abs(r.variance), kpi)}`}.`),
+         ...withData.filter((r) => r.status.key === "amber").map((r) => `${r.label} needs attention.`)],
+    opportunities: reds.length > 0
+      ? ["Raise a dated action — more than one timeframe shows the same gap.",
+         "Check whether the target is still realistic before chasing the actual."]
+      : ["Focus on the timeframe drifting first; the others usually follow.",
+         "Keep the target under review as the team grows."],
+  };
+};
+
+const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) => {
+  const [loading, setLoading] = useState(true);
+  const [analysis, setAnalysis] = useState(null);
+  const [source, setSource] = useState("ai");
+  const [reason, setReason] = useState("");
+
+  const build = useCallback(() => {
+    setLoading(true);
+    const v = periodValues(kpi, period, fy);
+    (async () => {
+      try {
+        const callable = httpsCallable(functions, "generateKpiAnalysis");
+        const res = await callable({
+          module: "People Performance",
+          kpiName: kpi.name, meaning: kpi.meaning, measured: kpi.measured,
+          units: kpi.units, direction: kpi.direction, benchmark: kpi.benchmark, scope,
+          timeframe: scope === "summary" ? "All timeframes" : PERIOD_LABEL[period],
+          financialYearStartMonth: fy.startMonth,
+          budget: v.budget, actual: v.actual, variance: getVariance(kpi, period, fy),
+          status: getStatus(kpi, period, fy).label, notes: kpi.notes || "", entries: kpi.entries || {},
+        });
+        const d = res?.data;
+        if (d?.observations && d?.opportunities) {
+          setAnalysis({ observations: d.observations || [], trends: d.trends || [], issues: d.issues || [], opportunities: d.opportunities || [] });
+          setSource("ai"); return;
+        }
+        throw new Error("The function replied, but not in the expected shape.");
+      } catch (err) {
+        // "not-found" means the Cloud Function is not deployed — a different fix
+        // from a permissions error, so name it.
+        console.error("AI analysis unavailable:", err);
+        setReason(err?.code === "functions/not-found" ? "The generateKpiAnalysis function isn't deployed yet." : errText(err));
+        setSource("local");
+        setAnalysis(scope === "summary" ? summaryAnalysis(kpi, fy) : localAnalysis(kpi, period, v, fy));
+      } finally { setLoading(false); }
+    })();
+  }, [kpi, period, fy, scope]);
+
+  useEffect(() => { build(); }, [build]);
+
+  const Section = ({ label, items, color }) => (
+    <div style={{ marginBottom: compact ? "12px" : "18px" }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color, marginBottom: "6px" }}>{label}</div>
+      <ul style={{ margin: 0, paddingLeft: "18px", color: T.body, fontSize: compact ? "13px" : "14px", lineHeight: 1.65 }}>
+        {items.map((it, i) => <li key={i} style={{ marginBottom: "3px" }}>{it}</li>)}
+      </ul>
+    </div>
+  );
 
   return (
-    <div
-      style={{
-        backgroundColor: "#DCDCDC",
-        padding: "15px 20px",
-        borderRadius: "8px",
-        marginBottom: "20px",
-        border: "1px solid #5d4037",
-      }}
-    >
-      <div style={{ marginBottom: "8px" }}>
-        <strong style={{ color: "#5d4037", fontSize: "14px" }}>
-          Key Question:
-        </strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-          {showMore ? question : getFirstSentence(question)}
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "12px", color: source === "ai" ? T.muted : T.amber, display: "flex", alignItems: "flex-start", gap: "6px", lineHeight: 1.5 }}>
+          <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
+          {loading ? "Reviewing…" : source === "ai" ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}`
+            : <span>Rules-based summary built from your figures. <span style={{ color: T.faint }}>{reason}</span></span>}
         </span>
-        {!showMore &&
-          (question.length > getFirstSentence(question).length ||
-            signals ||
-            decisions) && (
-            <button
-              onClick={() => setShowMore(true)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#5d4037",
-                fontWeight: "600",
-                cursor: "pointer",
-                marginLeft: "5px",
-                textDecoration: "underline",
-              }}
-            >
-              See more
-            </button>
-          )}
+        <button onClick={build} disabled={loading} style={{ ...btnQuiet, padding: "3px 9px", fontSize: "12.5px", opacity: loading ? 0.5 : 1 }}>
+          <RefreshCw size={12} /> Regenerate
+        </button>
       </div>
-
-      {showMore && (
+      {loading ? <div style={{ padding: "22px 0", color: T.muted, fontSize: "13.5px", textAlign: "center" }}>Reviewing {kpi.name}…</div>
+        : analysis && (
         <>
-          <div style={{ marginBottom: "8px" }}>
-            <strong style={{ color: "#5d4037", fontSize: "14px" }}>
-              Key Signals:
-            </strong>
-            <span
-              style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}
-            >
-              {signals}
-            </span>
-          </div>
-          <div>
-            <strong style={{ color: "#5d4037", fontSize: "14px" }}>
-              Key Decisions:
-            </strong>
-            <span
-              style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}
-            >
-              {decisions}
-            </span>
-          </div>
-          <button
-            onClick={() => setShowMore(false)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              fontWeight: "600",
-              cursor: "pointer",
-              marginTop: "10px",
-              textDecoration: "underline",
-            }}
-          >
-            See less
-          </button>
+          <Section label="Observations" items={analysis.observations} color={T.accent} />
+          <Section label="Trends" items={analysis.trends} color={T.blue} />
+          <Section label="Issues" items={analysis.issues} color={T.red} />
+          <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
         </>
       )}
     </div>
   );
 };
 
-// ==================== TREND MODAL COMPONENT ====================
+const AnalysisModal = ({ kpi, period, fy, onClose }) => (
+  <Modal title="Observations and Opportunities" subtitle={`${kpi.name} · across all timeframes`}
+    icon={<Lightbulb size={17} />} onClose={onClose} width={700}
+    footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+    <AnalysisBody kpi={kpi} period={period} fy={fy} scope="summary" />
+  </Modal>
+);
 
-const TrendModal = ({ isOpen, onClose, item, currencyUnit, formatValue }) => {
-  if (!isOpen || !item) return null;
+/* ─── Trend chart ───────────────────────────────────────────────────────── */
+const CHART_VERSION = 2;
+const DEFAULT_CHART = {
+  v: CHART_VERSION,
+  actualType: "bar", budgetType: "scatter", varianceType: "scatter",
+  actualColor: "#1e40af", budgetColor: "#4a352f", showValues: true, showAxis: false,
+};
+const CHART_TYPES = [
+  { value: "bar", label: "Bars" }, { value: "line", label: "Line" },
+  { value: "area", label: "Area" }, { value: "scatter", label: "Circles" },
+];
+const SWATCHES = ["#1e40af", "#4a352f", "#166534", "#991b1b", "#92400e", "#6d28d9", "#0e7490", "#be185d"];
 
-  // Generate labels with month and year (last 11 months + current month)
-  const currentDate = new Date();
-  const currentMonth = currentDate.getMonth();
-  const currentYear = currentDate.getFullYear();
+const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, readOnly }) => {
+  const [noteText, setNoteText] = useState("");
+  const [noteState, setNoteState] = useState("idle");
+  const [showCustomise, setShowCustomise] = useState(false);
+  const noteTimer = useRef(null);
+  const prefs = kpi.chart?.v === CHART_VERSION ? { ...DEFAULT_CHART, ...kpi.chart } : { ...DEFAULT_CHART };
 
-  const labels = [];
-  for (let i = 11; i >= 0; i--) {
-    const date = new Date(currentYear, currentMonth - i, 1);
-    const month = date.toLocaleString("default", { month: "short" });
-    const year = date.getFullYear();
-    labels.push(`${month} ${year}`);
-  }
+  const { labels, actual, budget, noteKey, caption } = useMemo(() => {
+    if (period === "quarter") {
+      const qs = fyQuarters(fy.startYear, fy.startMonth);
+      const rows = qs.map((q) => {
+        const ms = q.months.map((m) => monthEntry(kpi, m.year, m.month));
+        return { actual: rollUp(ms.map((r) => Number(r.actual)), kpi.aggregate),
+                 budget: rollUp(ms.map((r) => Number(r.budget)), kpi.aggregate) };
+      });
+      return { labels: qs.map((q) => `${q.label} ${fyLabel(fy.startYear, fy.startMonth)}`),
+        actual: rows.map((r) => r.actual), budget: rows.map((r) => r.budget),
+        noteKey: `Q:${fy.startYear}`, caption: `Quarters of FY ${fyLabel(fy.startYear, fy.startMonth)}` };
+    }
+    const months = fyMonths(fy.startYear, fy.startMonth);
+    const rows = months.map((m) => monthEntry(kpi, m.year, m.month));
+    return { labels: months.map((m) => m.label),
+      actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
+      noteKey: currentMonthKey(), caption: `FY ${fyLabel(fy.startYear, fy.startMonth)} · ${months[0].long} → ${months[11].long}` };
+  }, [kpi, period, fy]);
 
-  // Ensure we have 12 data points (fill with zeros if needed)
-  const actualData = [...(item.actual || [])];
-  while (actualData.length < 12) actualData.unshift(0);
-  const last12Months = actualData.slice(-12);
+  const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
 
-  const chartData = {
-    labels,
-    datasets: [
-      {
-        label: `${item.name} - Actual`,
-        data: last12Months,
-        borderColor: "#5d4037",
-        backgroundColor: "rgba(93, 64, 55, 0.1)",
-        borderWidth: 3,
-        fill: true,
-        tension: 0.3,
-      },
-    ],
+  useEffect(() => { setNoteText(kpi.periodNotes?.[noteKey] || ""); setNoteState("idle"); }, [noteKey, kpi.id]); // eslint-disable-line
+
+  const onNoteChange = (text) => {
+    setNoteText(text); setNoteState("saving");
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => {
+      onSaveNote(noteKey, text); setNoteState("saved");
+      setTimeout(() => setNoteState("idle"), 1800);
+    }, 700);
+  };
+  useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); }, []);
+
+  const setPref = (patch) => onSaveChart({ ...prefs, ...patch, v: CHART_VERSION });
+  const varColors = variance.map((v) => v === null ? "rgba(138,122,116,0.4)" : varianceFavourable(kpi, v) ? T.green : T.red);
+
+  const buildSeries = (type, data, color, extra = {}) => {
+    if (type === "scatter") {
+      return { type: "scatter", data, showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
+        pointBackgroundColor: Array.isArray(color) ? color.map((c) => `${c}22`) : "#ffffff",
+        pointBorderColor: color, pointBorderWidth: 2.4, ...extra };
+    }
+    if (type === "line" || type === "area") {
+      return { type: "line", data, borderColor: color, backgroundColor: type === "area" ? `${color}22` : "transparent",
+        borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: true,
+        pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
+        pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, ...extra };
+    }
+    return { type: "bar", data, backgroundColor: Array.isArray(color) ? color.map((c) => `${c}b3`) : `${color}b3`,
+      borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.78, ...extra };
   };
 
-  // Calculate statistics
-  const validActualData = last12Months.filter(
-    (v) => !isNaN(parseFloat(v)) && parseFloat(v) !== 0,
-  );
-  const currentValue =
-    validActualData.length > 0
-      ? validActualData[validActualData.length - 1]
-      : 0;
-  const averageValue =
-    validActualData.length > 0
-      ? validActualData.reduce((a, b) => a + parseFloat(b), 0) /
-        validActualData.length
-      : 0;
-  const minValue =
-    validActualData.length > 0 ? Math.min(...validActualData) : 0;
-  const maxValue =
-    validActualData.length > 0 ? Math.max(...validActualData) : 0;
+  /* The variance band has no axes and no legend — it floats above the plot so
+     it reads as a top layer rather than a competing chart. */
+  const varianceData = { labels, datasets: [
+    { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors), __signed: true, __labelColor: T.body }] };
+  const varianceOptions = {
+    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: prefs.showValues ? 20 : 6, bottom: 0 } },
+    plugins: {
+      legend: { display: false }, datalabels: { display: false },
+      tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+        callbacks: { title: (items) => labels[items[0].dataIndex],
+          label: (c) => c.parsed.y === null || c.parsed.y === undefined ? "Variance: no data"
+            : `Variance: ${fmtValue(c.parsed.y, kpi, { signed: true })} (${varianceFavourable(kpi, c.parsed.y) ? "favourable" : "unfavourable"})` } } },
+    scales: { y: { display: false, grid: { display: false } },
+      x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
+  };
 
-  let trend = "N/A";
-  if (validActualData.length >= 2) {
-    const last = parseFloat(validActualData[validActualData.length - 1]);
-    const prev = parseFloat(validActualData[validActualData.length - 2]);
-    if (last > prev) trend = "↗ Increasing";
-    else if (last < prev) trend = "↘ Decreasing";
-    else trend = "→ Stable";
-  }
+  const mainData = { labels, datasets: [
+    { label: "Target", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1, __labelColor: prefs.budgetColor },
+    { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2, __labelColor: prefs.actualColor }] };
+  const mainOptions = {
+    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: prefs.showValues ? 20 : 6 } },
+    plugins: { legend: { display: false }, datalabels: { display: false },
+      tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
+        callbacks: { label: (c) => c.parsed.y === null || c.parsed.y === undefined ? `${c.dataset.label}: no data`
+          : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}` } } },
+    scales: {
+      y: { display: prefs.showAxis, grid: { display: prefs.showAxis, color: T.lineSoft },
+        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
+      x: { display: true, grid: { display: false },
+        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+    },
+  };
 
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1001,
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "30px",
-          borderRadius: "8px",
-          maxWidth: "900px",
-          width: "95%",
-          maxHeight: "90vh",
-          overflow: "auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", margin: 0 }}>
-            {item.name} - Trend Analysis (Last 12 Months)
-          </h3>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "24px",
-              color: "#5d4037",
-              cursor: "pointer",
-              padding: "0",
-              lineHeight: "1",
-            }}
-          >
-            ×
-          </button>
-        </div>
+  const avgBudget = mean(budget), avgActual = mean(actual), avgVar = mean(variance);
+  const onTarget = variance.filter((v) => v !== null && varianceFavourable(kpi, v)).length;
+  const counted = variance.filter((v) => v !== null).length;
 
-        <div style={{ height: "400px", marginBottom: "20px" }}>
-          <Line
-            data={chartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                datalabels: {
-                  display: false,
-                },
-                legend: {
-                  display: true,
-                  position: "top",
-                },
-                title: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: (context) => {
-                      const value = context.raw;
-                      return item.isPercentage
-                        ? `${context.dataset.label}: ${parseFloat(value).toFixed(2)}%`
-                        : `${context.dataset.label}: ${formatValue ? formatValue(value, currencyUnit) : value}`;
-                    },
-                  },
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: item.isPercentage ? "Percentage (%)" : `Value`,
-                    color: "#5d4037",
-                  },
-                },
-                x: {
-                  title: {
-                    display: true,
-                    text: "Time Period",
-                    color: "#5d4037",
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-
-        {/* Trend Statistics */}
-        <div
-          style={{
-            backgroundColor: "#f5f0eb",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h4
-            style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}
-          >
-            Trend Statistics
-          </h4>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: "15px",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#8d6e63",
-                  marginBottom: "5px",
-                }}
-              >
-                Current Value
-              </div>
-              <div
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  color: "#5d4037",
-                }}
-              >
-                {item.isPercentage
-                  ? `${parseFloat(currentValue).toFixed(1)}%`
-                  : formatValue
-                    ? formatValue(currentValue, currencyUnit)
-                    : currentValue}
-              </div>
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#8d6e63",
-                  marginBottom: "5px",
-                }}
-              >
-                Average (12 Months)
-              </div>
-              <div
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  color: "#5d4037",
-                }}
-              >
-                {item.isPercentage
-                  ? `${parseFloat(averageValue).toFixed(1)}%`
-                  : formatValue
-                    ? formatValue(averageValue, currencyUnit)
-                    : averageValue}
-              </div>
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#8d6e63",
-                  marginBottom: "5px",
-                }}
-              >
-                Min / Max
-              </div>
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  color: "#5d4037",
-                }}
-              >
-                {item.isPercentage
-                  ? `${parseFloat(minValue).toFixed(1)}% / ${parseFloat(maxValue).toFixed(1)}%`
-                  : `${formatValue ? formatValue(minValue, currencyUnit) : minValue} / ${formatValue ? formatValue(maxValue, currencyUnit) : maxValue}`}
-              </div>
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#8d6e63",
-                  marginBottom: "5px",
-                }}
-              >
-                Trend
-              </div>
-              <div
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  color: "#5d4037",
-                }}
-              >
-                {trend}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            Close
-          </button>
-        </div>
-      </div>
+  const stat = (label, value, color) => (
+    <div key={label} style={{ ...cardS, padding: "11px 14px", flex: "1 1 150px" }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{label}</div>
+      <div style={{ fontSize: "18px", fontWeight: 700, color: color || T.ink, marginTop: "3px", fontVariantNumeric: "tabular-nums" }}>{value}</div>
     </div>
   );
-};
+  const dot = (color, filled) => (<span style={{ width: 11, height: 11, borderRadius: "50%", border: `2.4px solid ${color}`, background: filled ? color : "#ffffff", display: "inline-block" }} />);
+  const barChip = (color) => (<span style={{ width: 11, height: 11, borderRadius: "3px", background: `${color}b3`, display: "inline-block" }} />);
+  const key = (label, swatch) => (<span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: T.body }}>{swatch}{label}</span>);
 
-// ==================== FINANCIAL DATA PULL HELPER ====================
+  return (
+    <Modal title={`${kpi.name} — Trend`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
+      footer={<>
+        <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onClose} style={btnPrimary}>Close</button>
+      </>}>
 
-// This function pulls financial data from the financial performance module
-const pullFinancialData = async (userId) => {
-  try {
-    // Pull P&L data for revenue, labor costs, training spend
-    const pnlDoc = await getDoc(
-      doc(db, "financialData", `${userId}_pnlManual`),
-    );
-    let revenueData = Array(12).fill(0);
-    let laborCostData = Array(12).fill(0);
-    let trainingSpendData = Array(12).fill(0);
-    let marketingSpendData = Array(12).fill(0);
-    let rAndDSpendData = Array(12).fill(0);
+      {showCustomise && (
+        <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+            {[["actualType","Actual as"],["budgetType","Target as"],["varianceType","Variance as"]].map(([k, l]) => (
+              <div key={k}>
+                <label style={labelS}>{l}</label>
+                <select value={prefs[k]} onChange={(e) => setPref({ [k]: e.target.value })} style={selectS}>
+                  {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+            ))}
+            <div>
+              <label style={labelS}>Show</label>
+              <select value={`${prefs.showValues}|${prefs.showAxis}`}
+                onChange={(e) => { const [v, a] = e.target.value.split("|"); setPref({ showValues: v === "true", showAxis: a === "true" }); }} style={selectS}>
+                <option value="true|false">Value labels, no axis</option>
+                <option value="false|true">Axis, no value labels</option>
+                <option value="true|true">Both</option>
+                <option value="false|false">Neither</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "22px", flexWrap: "wrap", marginTop: "12px" }}>
+            {[{ k: "actualColor", l: "Actual colour" }, { k: "budgetColor", l: "Target colour" }].map((c) => (
+              <div key={c.k}>
+                <label style={labelS}>{c.l}</label>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {SWATCHES.map((s) => (
+                    <button key={s} onClick={() => setPref({ [c.k]: s })} title={s}
+                      style={{ width: 22, height: 22, borderRadius: "6px", background: s, cursor: "pointer",
+                        border: prefs[c.k] === s ? `2px solid ${T.ink}` : `1px solid ${T.line}`,
+                        display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {prefs[c.k] === s && <Check size={12} color="#fff" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-    if (pnlDoc.exists()) {
-      const data = pnlDoc.data();
-      revenueData =
-        data.sales?.map((v) => Number.parseFloat(v) || 0) || Array(12).fill(0);
-      laborCostData =
-        data.salaries?.map((v) => Number.parseFloat(v) || 0) ||
-        Array(12).fill(0);
-    }
+      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "2px" }}>
+          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Target vs Actual</span>
+          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {key("Variance", <span style={{ display: "inline-flex", gap: "3px" }}>{dot(T.green)}{dot(T.red)}</span>)}
+            {key("Target", prefs.budgetType === "bar" ? barChip(prefs.budgetColor) : dot(prefs.budgetColor))}
+            {key("Actual", prefs.actualType === "bar" ? barChip(prefs.actualColor) : dot(prefs.actualColor, true))}
+          </span>
+        </div>
+        <div style={{ height: "112px", marginBottom: "-16px" }}>
+          <Chart type="bar" data={varianceData} options={varianceOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+        </div>
+        <div style={{ height: "300px" }}>
+          <Chart type="bar" data={mainData} options={mainOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+        </div>
+      </div>
 
-    // Pull balance sheet data for employee counts and training metrics
-    const capitalDoc = await getDoc(
-      doc(db, "financialData", `${userId}_capitalStructure`),
-    );
-    let employeeCountData = Array(12).fill(0);
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "14px" }}>
+        {stat("Average target", fmtValue(avgBudget, kpi))}
+        {stat("Average actual", fmtValue(avgActual, kpi))}
+        {stat("Average variance", fmtValue(avgVar, kpi, { signed: true }), avgVar === null ? T.ink : varianceFavourable(kpi, avgVar) ? T.green : T.red)}
+        {stat("Periods on target", counted ? `${onTarget} of ${counted}` : "—")}
+      </div>
 
-    if (capitalDoc.exists()) {
-      const data = capitalDoc.data();
-      if (data.balanceSheetData?.assets?.additionalMetrics) {
-        employeeCountData =
-          data.balanceSheetData.assets.additionalMetrics.numberOfEmployees?.map(
-            (v) => Number.parseFloat(v) || 0,
-          ) || Array(12).fill(0);
-        trainingSpendData =
-          data.balanceSheetData.assets.additionalMetrics.trainingSpend?.map(
-            (v) => Number.parseFloat(v) || 0,
-          ) || Array(12).fill(0);
-        marketingSpendData =
-          data.balanceSheetData.assets.additionalMetrics.marketingSpend?.map(
-            (v) => Number.parseFloat(v) || 0,
-          ) || Array(12).fill(0);
-        rAndDSpendData =
-          data.balanceSheetData.assets.additionalMetrics.rAndDSpend?.map(
-            (v) => Number.parseFloat(v) || 0,
-          ) || Array(12).fill(0);
-      }
-    }
+      <div style={{ ...cardS, marginBottom: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+            <StickyNote size={13} /> Note for {PERIOD_LABEL[period].toLowerCase()}
+          </span>
+          <span style={{ fontSize: "11.5px", color: noteState === "saved" ? T.green : T.muted }}>
+            {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved" : "Saves automatically"}
+          </span>
+        </div>
+        <textarea rows="3" value={noteText} readOnly={readOnly} onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="e.g. Overtime spiked in March because two people were on extended leave."
+          style={{ ...inputS, resize: "vertical" }} />
+      </div>
 
-    return {
-      revenue: revenueData,
-      laborCost: laborCostData,
-      employeeCount: employeeCountData,
-      trainingSpend: trainingSpendData,
-      marketingSpend: marketingSpendData,
-      rAndDSpend: rAndDSpendData,
-    };
-  } catch (error) {
-    console.error("Error pulling financial data:", error);
-    return {
-      revenue: Array(12).fill(0),
-      laborCost: Array(12).fill(0),
-      employeeCount: Array(12).fill(0),
-      trainingSpend: Array(12).fill(0),
-      marketingSpend: Array(12).fill(0),
-      rAndDSpend: Array(12).fill(0),
-    };
-  }
-};
-
-// ==================== UNIFIED DATA ENTRY MODAL ====================
-
-const UnifiedDataEntryModal = ({
-  isOpen,
-  onClose,
-  currentTab,
-  user,
-  onSave,
-  loading,
-}) => {
-  const [activeModalTab, setActiveModalTab] = useState(currentTab);
-  const [localData, setLocalData] = useState({});
-  const [capabilityTrainingData, setCapabilityTrainingData] = useState({
-    trainingSpendAmount: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    trainingSpendPercentage: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    trainingFocus: { actual: Array(12).fill(""), budget: Array(12).fill("") },
-  });
-  const [productivityData, setProductivityData] = useState({
-    salesVolumePerEmployee: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    revenuePerEmployee: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    laborCostPercentage: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    overtimeHours: { actual: Array(12).fill(""), budget: Array(12).fill("") },
-  });
-  const [employeeTrackingData, setEmployeeTrackingData] = useState([]);
-  const [stabilityData, setStabilityData] = useState({
-    overallTurnover: Array(12).fill(""),
-    workforceMovements: Array(12).fill(""),
-    criticalRoleTurnover: Array(12).fill(""),
-    contractorDependence: Array(12).fill(""),
-  });
-  const [terminationEntries, setTerminationEntries] = useState([]);
-  const [newTermination, setNewTermination] = useState({
-    name: "",
-    dateStarted: "",
-    dateEnded: "",
-    reason: "",
-    customReason: "",
-  });
-  const [newHireEntries, setNewHireEntries] = useState([]);
-  const [newHireForm, setNewHireForm] = useState({
-    name: "",
-    dateStarted: "",
-    contractType: "Permanent",
-    endDate: "",
-  });
-
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const years = Array.from(
-    { length: 5 },
-    (_, i) => new Date().getFullYear() - 2 + i,
+      <div style={cardS}>
+        <div style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+          <Lightbulb size={13} /> Observations and Opportunities — {PERIOD_LABEL[period].toLowerCase()}
+        </div>
+        <AnalysisBody kpi={kpi} period={period} fy={fy} scope="period" compact />
+      </div>
+    </Modal>
   );
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+};
 
-  // Predefined reasons for terminations
-  const predefinedReasons = [
-    "Performance",
-    "Resignation",
-    "Redundancy",
-    "Misconduct",
-    "Retirement",
-    "Other",
-  ];
+/* ─── Add Action ────────────────────────────────────────────────────────── */
+const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClose, onSaved }) => {
+  const [meetings, setMeetings] = useState([]);
+  const [loadingMeetings, setLoadingMeetings] = useState(true);
+  const [meetingId, setMeetingId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
 
-  // Contract types for new hires
-  const contractTypes = ["Permanent", "Contract", "Internship"];
+  const status = getStatus(kpi, period, fy);
+  const variance = getVariance(kpi, period, fy);
+  const v = periodValues(kpi, period, fy);
 
-  // Tab structure for the modal
-  const modalTabs = [
-    { id: "employee-composition", label: "Employee Composition" },
-    { id: "execution-capacity", label: "Execution Capacity" },
-    { id: "productivity", label: "Productivity" },
-    { id: "capability-training", label: "Capability & Training" },
-    { id: "stability-continuity", label: "Stability & Continuity" },
-  ];
+  const [form, setForm] = useState({
+    title: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
+    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against target ${fmtValue(v.budget, kpi)}${
+      variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${tabName} · ${categoryName}.`,
+    category: "People", assignedTo: "", dueDate: "", status: "In Progress",
+  });
 
-  // Fields for each tab
-  const tabFields = {
-    "execution-capacity": [
-      {
-        id: "founderLoad",
-        label: "Founder operational load (1=low, 2=med, 3=high, 4=critical)",
-        type: "select",
-        options: [
-          { value: "1", label: "Low" },
-          { value: "2", label: "Medium" },
-          { value: "3", label: "High" },
-          { value: "4", label: "Critical" },
-        ],
-      },
-      {
-        id: "criticalFunctionsSinglePoint",
-        label: "% of critical functions dependent on 1 person",
-        type: "number",
-        step: "0.1",
-      },
-      {
-        id: "criticalRolesWith2IC",
-        label: "% Critical roles/functions with 2IC",
-        type: "number",
-        step: "0.1",
-      },
-      {
-        id: "spanOfControl",
-        label: "Average span of control",
-        type: "number",
-        step: "0.01",
-      },
-    ],
-    "stability-continuity": [
-      {
-        id: "overallTurnover",
-        label: "Overall turnover (% Annually)",
-        type: "number",
-        step: "0.01",
-      },
-      {
-        id: "workforceMovements",
-        label: "Workforce movements (number)",
-        type: "number",
-        step: "1",
-      },
-      {
-        id: "criticalRoleTurnover",
-        label: "Critical Role Turnover (%)",
-        type: "number",
-        step: "0.01",
-      },
-      {
-        id: "contractorDependence",
-        label: "Contractor dependence (%)",
-        type: "number",
-        step: "0.01",
-      },
-    ],
+  const meetingDate = (m) => {
+    const dates = (m.instances || []).map((i) => new Date(i.date)).filter((d) => !Number.isNaN(d.getTime())).sort((a, b) => a - b);
+    if (!dates.length) return null;
+    const now = new Date();
+    return (dates.find((d) => d >= now) || dates[dates.length - 1]).toISOString();
+  };
+  const selected = meetings.find((m) => m.id === meetingId) || null;
+
+  const applyDefaults = (id, prev, force = false) => {
+    const m = meetings.find((x) => x.id === id);
+    if (!m) return prev;
+    const d = meetingDate(m);
+    const names = (m.participants || []).map((p) => (typeof p === "string" ? p : p.name || p.email || ""));
+    return { ...prev,
+      category: force || !prev.dueDate ? (m.category || m.department || "People") : prev.category,
+      dueDate: force || !prev.dueDate ? (d ? new Date(d).toISOString().split("T")[0] : "") : prev.dueDate,
+      assignedTo: names.includes(prev.assignedTo) ? prev.assignedTo : "" };
   };
 
   useEffect(() => {
-    if (isOpen && user) {
-      setActiveModalTab(currentTab);
-      loadDataForTab(currentTab);
-    }
-  }, [isOpen, currentTab, user]);
+    (async () => {
+      if (!userId) { setLoadingMeetings(false); return; }
+      try {
+        const snap = await getDoc(doc(db, "governanceCalendar", userId));
+        const list = snap.exists() ? snap.data().meetings || [] : [];
+        setMeetings(list);
+        const dated = list.map((m) => ({ m, d: meetingDate(m) })).filter((x) => x.d);
+        const now = new Date();
+        const up = dated.filter((x) => new Date(x.d) >= now).sort((a, b) => new Date(a.d) - new Date(b.d))[0];
+        const latest = dated.sort((a, b) => new Date(b.d) - new Date(a.d))[0];
+        setMeetingId(up?.m.id || latest?.m.id || list[0]?.id || "");
+      } catch (err) {
+        console.error("Failed to load meetings:", err);
+        setMessage(`Could not load your meetings: ${errText(err)}`);
+      } finally { setLoadingMeetings(false); }
+    })();
+  }, [userId]);
 
-  const loadDataForTab = async (tabId) => {
-    if (!user) return;
+  useEffect(() => { if (meetingId) setForm((p) => applyDefaults(meetingId, p, true)); // eslint-disable-next-line
+  }, [meetingId, meetings.length]);
 
+  const save = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true); setMessage("");
     try {
-      switch (tabId) {
-        case "execution-capacity":
-          const execDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_executionCapacity`),
-          );
-          if (execDoc.exists()) {
-            const data = execDoc.data();
-            if (data.executionData) setLocalData(data.executionData);
-          }
-          break;
-        case "productivity":
-          const prodDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_productivity`),
-          );
-          if (prodDoc.exists()) {
-            const data = prodDoc.data();
-            if (data.productivityData) {
-              setProductivityData({
-                salesVolumePerEmployee: data.productivityData
-                  .salesVolumePerEmployee || {
-                  actual: Array(12).fill(""),
-                  budget: Array(12).fill(""),
-                },
-                revenuePerEmployee: data.productivityData
-                  .revenuePerEmployee || {
-                  actual: Array(12).fill(""),
-                  budget: Array(12).fill(""),
-                },
-                laborCostPercentage: data.productivityData
-                  .laborCostPercentage || {
-                  actual: Array(12).fill(""),
-                  budget: Array(12).fill(""),
-                },
-                overtimeHours: data.productivityData.overtimeHours || {
-                  actual: Array(12).fill(""),
-                  budget: Array(12).fill(""),
-                },
-              });
-            }
-          }
-          break;
-        case "capability-training":
-          const capDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_capabilityTraining`),
-          );
-          if (capDoc.exists()) {
-            const data = capDoc.data();
-            if (data.capabilityData) {
-              setCapabilityTrainingData({
-                trainingSpendAmount: data.capabilityData
-                  .trainingSpendAmount || {
-                  actual: Array(12).fill(""),
-                  budget: Array(12).fill(""),
-                },
-                trainingSpendPercentage: data.capabilityData
-                  .trainingSpendPercentage || {
-                  actual: Array(12).fill(""),
-                  budget: Array(12).fill(""),
-                },
-                trainingFocus: data.capabilityData.trainingFocus || {
-                  actual: Array(12).fill(""),
-                  budget: Array(12).fill(""),
-                },
-              });
-            }
-          }
-
-          const empDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_employeeTracking`),
-          );
-          if (empDoc.exists()) {
-            const data = empDoc.data();
-            if (data.employees) setEmployeeTrackingData(data.employees);
-          }
-          break;
-        case "stability-continuity":
-          const stabDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_stabilityContinuity`),
-          );
-          if (stabDoc.exists()) {
-            const data = stabDoc.data();
-            if (data.stabilityData) setStabilityData(data.stabilityData);
-          }
-
-          const termDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_terminationData`),
-          );
-          if (termDoc.exists()) {
-            const data = termDoc.data();
-            if (data.entries) setTerminationEntries(data.entries);
-          }
-
-          const hireDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_newHireData`),
-          );
-          if (hireDoc.exists()) {
-            const data = hireDoc.data();
-            if (data.entries) setNewHireEntries(data.entries);
-          }
-          break;
-        case "employee-composition":
-          const compDoc = await getDoc(
-            doc(db, "peopleData", `${user.uid}_employeeComposition`),
-          );
-          if (compDoc.exists()) {
-            const data = compDoc.data();
-            if (data.employeeData) {
-              setLocalData(data.employeeData);
-            }
-          }
-          break;
+      const snap = await getDoc(doc(db, "governanceCalendar", userId));
+      let list = snap.exists() ? snap.data().meetings || [] : [];
+      const action = {
+        id: uid(), title: form.title.trim(), description: form.description.trim(),
+        category: form.category, assignedTo: form.assignedTo.trim(), dueDate: form.dueDate,
+        status: form.status, archived: false,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), revisedDate: null,
+        sourceModule: "People Performance", sourceKpi: kpi.name, sourceCategory: `${tabName} · ${categoryName}`,
+      };
+      let targetId = meetingId;
+      if (!targetId) {
+        const meta = RAPS_CATEGORIES.find((c) => c.name === "People");
+        const holder = {
+          id: uid(), title: "People Performance Actions",
+          category: "People", department: "People",
+          categoryColor: meta.color, categoryBg: "#FCE4EC", departmentColor: meta.color, departmentBg: "#FCE4EC",
+          departments: [], purpose: "Actions raised from People Performance.",
+          agenda: "", preparations: "", participants: [], isRecurring: false, recurrencePattern: null,
+          instances: [{ instanceId: uid(), date: new Date().toISOString(), time: "09:00", status: "scheduled" }],
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          highlights: "", lowlights: "", opportunities: "", priorities: "", actions: [],
+        };
+        list = [...list, holder]; targetId = holder.id;
       }
-    } catch (error) {
-      console.error(`Error loading data for ${tabId}:`, error);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!user) {
-      alert("Please log in to save data");
-      return;
-    }
-
-    try {
-      switch (activeModalTab) {
-        case "execution-capacity":
-          await setDoc(doc(db, "peopleData", `${user.uid}_executionCapacity`), {
-            userId: user.uid,
-            executionData: localData,
-            lastUpdated: new Date().toISOString(),
-          });
-          break;
-        case "productivity":
-          await setDoc(doc(db, "peopleData", `${user.uid}_productivity`), {
-            userId: user.uid,
-            productivityData: productivityData,
-            lastUpdated: new Date().toISOString(),
-          });
-          break;
-        case "capability-training":
-          await setDoc(
-            doc(db, "peopleData", `${user.uid}_capabilityTraining`),
-            {
-              userId: user.uid,
-              capabilityData: capabilityTrainingData,
-              lastUpdated: new Date().toISOString(),
-            },
-          );
-
-          await setDoc(doc(db, "peopleData", `${user.uid}_employeeTracking`), {
-            userId: user.uid,
-            employees: employeeTrackingData,
-            lastUpdated: new Date().toISOString(),
-          });
-          break;
-        case "stability-continuity":
-          await setDoc(
-            doc(db, "peopleData", `${user.uid}_stabilityContinuity`),
-            {
-              userId: user.uid,
-              stabilityData: stabilityData,
-              lastUpdated: new Date().toISOString(),
-            },
-          );
-
-          await setDoc(doc(db, "peopleData", `${user.uid}_terminationData`), {
-            userId: user.uid,
-            entries: terminationEntries,
-            lastUpdated: new Date().toISOString(),
-          });
-
-          await setDoc(doc(db, "peopleData", `${user.uid}_newHireData`), {
-            userId: user.uid,
-            entries: newHireEntries,
-            lastUpdated: new Date().toISOString(),
-          });
-          break;
-        case "employee-composition":
-          await setDoc(
-            doc(db, "peopleData", `${user.uid}_employeeComposition`),
-            {
-              userId: user.uid,
-              employeeData: localData,
-              lastUpdated: new Date().toISOString(),
-            },
-          );
-          break;
-      }
-
-      onSave();
+      const updated = list.map((m) => m.id === targetId
+        ? { ...m, actions: [...(m.actions || []), { ...action, meetingId: m.id }], updatedAt: new Date().toISOString() } : m);
+      await setDoc(doc(db, "governanceCalendar", userId), { meetings: updated, updatedAt: new Date().toISOString(), userId }, { merge: true });
+      onSaved(updated.find((m) => m.id === targetId)?.title || "your calendar");
       onClose();
-      alert("Data saved successfully!");
-    } catch (error) {
-      console.error("Error saving data:", error);
-      alert("Error saving data. Please try again.");
-    }
+    } catch (err) {
+      console.error("Failed to save action:", err);
+      setMessage(`Could not save the action: ${errText(err)}`);
+    } finally { setSaving(false); }
   };
-
-  const addTerminationEntry = () => {
-    if (
-      !newTermination.name ||
-      !newTermination.reason ||
-      !newTermination.dateStarted ||
-      !newTermination.dateEnded
-    ) {
-      alert(
-        "Please fill in all fields: Employee Name, Date Started, Date Ended, and Reason",
-      );
-      return;
-    }
-
-    const reasonToSave =
-      newTermination.reason === "Other"
-        ? newTermination.customReason
-        : newTermination.reason;
-
-    if (!reasonToSave.trim()) {
-      alert("Please specify the reason");
-      return;
-    }
-
-    const newEntry = {
-      id: Date.now(),
-      name: newTermination.name,
-      dateStarted: newTermination.dateStarted,
-      dateEnded: newTermination.dateEnded,
-      reason: reasonToSave,
-      dateAdded: new Date().toISOString(),
-    };
-
-    setTerminationEntries([...terminationEntries, newEntry]);
-
-    // Reset form
-    setNewTermination({
-      name: "",
-      dateStarted: "",
-      dateEnded: "",
-      reason: "",
-      customReason: "",
-    });
-  };
-
-  const removeTerminationEntry = (id) => {
-    setTerminationEntries(
-      terminationEntries.filter((entry) => entry.id !== id),
-    );
-  };
-
-  const addNewHireEntry = () => {
-    if (
-      !newHireForm.name ||
-      !newHireForm.dateStarted ||
-      !newHireForm.contractType
-    ) {
-      alert("Please enter name, start date, and contract type");
-      return;
-    }
-
-    const newEntry = {
-      id: Date.now(),
-      name: newHireForm.name,
-      dateStarted: newHireForm.dateStarted,
-      contractType: newHireForm.contractType,
-      endDate: newHireForm.endDate || null,
-      dateAdded: new Date().toISOString(),
-    };
-
-    setNewHireEntries([...newHireEntries, newEntry]);
-
-    // Reset form
-    setNewHireForm({
-      name: "",
-      dateStarted: "",
-      contractType: "Permanent",
-      endDate: "",
-    });
-  };
-
-  const removeNewHireEntry = (id) => {
-    setNewHireEntries(newHireEntries.filter((entry) => entry.id !== id));
-  };
-
-  const addEmployeeTrackingEntry = () => {
-    const newEntry = {
-      id: employeeTrackingData.length + 1,
-      employee: `Employee ${employeeTrackingData.length + 1}`,
-      skillsGap: { date: "", status: "No" },
-      idp: { date: "", status: "No" },
-      midTermReview: { date: "", status: "No" },
-      annualReview: { date: "", status: "No" },
-    };
-
-    setEmployeeTrackingData([...employeeTrackingData, newEntry]);
-  };
-
-  const removeEmployeeTrackingEntry = (index) => {
-    const newData = employeeTrackingData.filter((_, i) => i !== index);
-    setEmployeeTrackingData(newData);
-  };
-
-  const renderMonthlyInputsWithBudget = (
-    label,
-    dataObj,
-    setDataObj,
-    field,
-    options = {},
-  ) => {
-    const { step = "0.01", unit = "" } = options;
-
-    return (
-      <div
-        style={{
-          marginBottom: "25px",
-          padding: "15px",
-          backgroundColor: "#fff",
-          borderRadius: "6px",
-          border: "1px solid #e8ddd4",
-        }}
-      >
-        <h5
-          style={{
-            color: "#5d4037",
-            marginBottom: "15px",
-            fontSize: "14px",
-            fontWeight: "600",
-          }}
-        >
-          {label}
-        </h5>
-
-        {/* Actual Row */}
-        <div style={{ marginBottom: "15px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "8px",
-            }}
-          >
-            <div
-              style={{
-                width: "60px",
-                height: "20px",
-                backgroundColor: "#FFB347",
-                borderRadius: "4px",
-                marginRight: "10px",
-              }}
-            ></div>
-            <label
-              style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}
-            >
-              Actual
-            </label>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(12, 1fr)",
-              gap: "5px",
-            }}
-          >
-            {months.map((month, idx) => (
-              <div key={`actual-${month}`}>
-                <label
-                  style={{
-                    fontSize: "10px",
-                    color: "#8d6e63",
-                    display: "block",
-                    marginBottom: "2px",
-                  }}
-                >
-                  {month}
-                </label>
-                <input
-                  type="number"
-                  step={step}
-                  value={dataObj[field]?.actual?.[idx] || ""}
-                  onChange={(e) => {
-                    const newData = { ...dataObj };
-                    if (!newData[field])
-                      newData[field] = {
-                        actual: Array(12).fill(""),
-                        budget: Array(12).fill(""),
-                      };
-                    if (!newData[field].actual)
-                      newData[field].actual = Array(12).fill("");
-                    newData[field].actual[idx] = e.target.value;
-                    setDataObj(newData);
-                  }}
-                  placeholder="0"
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    borderRadius: "4px",
-                    border: "1px solid #FFB347",
-                    fontSize: "12px",
-                    backgroundColor: "#fff9c4",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Budget Row */}
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "8px",
-            }}
-          >
-            <div
-              style={{
-                width: "60px",
-                height: "20px",
-                backgroundColor: "#90EE90",
-                borderRadius: "4px",
-                marginRight: "10px",
-              }}
-            ></div>
-            <label
-              style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}
-            >
-              Budget
-            </label>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(12, 1fr)",
-              gap: "5px",
-            }}
-          >
-            {months.map((month, idx) => (
-              <div key={`budget-${month}`}>
-                <label
-                  style={{
-                    fontSize: "10px",
-                    color: "#8d6e63",
-                    display: "block",
-                    marginBottom: "2px",
-                  }}
-                >
-                  {month}
-                </label>
-                <input
-                  type="number"
-                  step={step}
-                  value={dataObj[field]?.budget?.[idx] || ""}
-                  onChange={(e) => {
-                    const newData = { ...dataObj };
-                    if (!newData[field])
-                      newData[field] = {
-                        actual: Array(12).fill(""),
-                        budget: Array(12).fill(""),
-                      };
-                    if (!newData[field].budget)
-                      newData[field].budget = Array(12).fill("");
-                    newData[field].budget[idx] = e.target.value;
-                    setDataObj(newData);
-                  }}
-                  placeholder="0"
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    borderRadius: "4px",
-                    border: "1px solid #32CD32",
-                    fontSize: "12px",
-                    backgroundColor: "#f0fff0",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderMonthlyInputsWithBudgetForSelect = (
-    label,
-    dataObj,
-    setDataObj,
-    field,
-    options = [],
-  ) => {
-    return (
-      <div
-        style={{
-          marginBottom: "25px",
-          padding: "15px",
-          backgroundColor: "#fff",
-          borderRadius: "6px",
-          border: "1px solid #e8ddd4",
-        }}
-      >
-        <h5
-          style={{
-            color: "#5d4037",
-            marginBottom: "15px",
-            fontSize: "14px",
-            fontWeight: "600",
-          }}
-        >
-          {label}
-        </h5>
-
-        {/* Actual Row */}
-        <div style={{ marginBottom: "15px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "8px",
-            }}
-          >
-            <div
-              style={{
-                width: "60px",
-                height: "20px",
-                backgroundColor: "#FFB347",
-                borderRadius: "4px",
-                marginRight: "10px",
-              }}
-            ></div>
-            <label
-              style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}
-            >
-              Actual
-            </label>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(12, 1fr)",
-              gap: "5px",
-            }}
-          >
-            {months.map((month, idx) => (
-              <div key={`actual-${month}`}>
-                <label
-                  style={{
-                    fontSize: "10px",
-                    color: "#8d6e63",
-                    display: "block",
-                    marginBottom: "2px",
-                  }}
-                >
-                  {month}
-                </label>
-                <select
-                  value={dataObj[field]?.actual?.[idx] || ""}
-                  onChange={(e) => {
-                    const newData = { ...dataObj };
-                    if (!newData[field])
-                      newData[field] = {
-                        actual: Array(12).fill(""),
-                        budget: Array(12).fill(""),
-                      };
-                    if (!newData[field].actual)
-                      newData[field].actual = Array(12).fill("");
-                    newData[field].actual[idx] = e.target.value;
-                    setDataObj(newData);
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    borderRadius: "4px",
-                    border: "1px solid #FFB347",
-                    fontSize: "12px",
-                    backgroundColor: "#fff9c4",
-                  }}
-                >
-                  <option value="">Select</option>
-                  {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Budget Row */}
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "8px",
-            }}
-          >
-            <div
-              style={{
-                width: "60px",
-                height: "20px",
-                backgroundColor: "#90EE90",
-                borderRadius: "4px",
-                marginRight: "10px",
-              }}
-            ></div>
-            <label
-              style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}
-            >
-              Budget
-            </label>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(12, 1fr)",
-              gap: "5px",
-            }}
-          >
-            {months.map((month, idx) => (
-              <div key={`budget-${month}`}>
-                <label
-                  style={{
-                    fontSize: "10px",
-                    color: "#8d6e63",
-                    display: "block",
-                    marginBottom: "2px",
-                  }}
-                >
-                  {month}
-                </label>
-                <select
-                  value={dataObj[field]?.budget?.[idx] || ""}
-                  onChange={(e) => {
-                    const newData = { ...dataObj };
-                    if (!newData[field])
-                      newData[field] = {
-                        actual: Array(12).fill(""),
-                        budget: Array(12).fill(""),
-                      };
-                    if (!newData[field].budget)
-                      newData[field].budget = Array(12).fill("");
-                    newData[field].budget[idx] = e.target.value;
-                    setDataObj(newData);
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    borderRadius: "4px",
-                    border: "1px solid #32CD32",
-                    fontSize: "12px",
-                    backgroundColor: "#f0fff0",
-                  }}
-                >
-                  <option value="">Select</option>
-                  {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  if (!isOpen) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          maxWidth: "1400px",
-          maxHeight: "90vh",
-          overflow: "auto",
-          width: "95%",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#5d4037" }}>Add People Data</h3>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "24px",
-              color: "#5d4037",
-              cursor: "pointer",
-              padding: "0",
-              lineHeight: "1",
-            }}
-          >
-            ×
-          </button>
+    <Modal title="Add Action" subtitle={`${kpi.name} · ${PERIOD_LABEL[period]}`} icon={<Plus size={17} />} onClose={onClose} width={640}
+      footer={<>
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={save} disabled={saving || !form.title.trim()} style={{ ...btnPrimary, opacity: saving || !form.title.trim() ? 0.6 : 1 }}>
+          {saving ? "Saving..." : "Save Action"}</button>
+      </>}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", borderRadius: "10px",
+        background: status.bg, border: `1px solid ${status.color}33`, marginBottom: "16px" }}>
+        <StatusIcon status={status} size={20} />
+        <div style={{ fontSize: "14px", color: T.body }}>
+          <strong style={{ color: T.accent }}>{kpi.name}</strong> is {status.label.toLowerCase()} for {PERIOD_LABEL[period].toLowerCase()}.
         </div>
-
-        {/* Tab Navigation inside Modal */}
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            marginBottom: "20px",
-            flexWrap: "wrap",
-          }}
-        >
-          {modalTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveModalTab(tab.id);
-                loadDataForTab(tab.id);
-              }}
-              style={{
-                padding: "10px 20px",
-                backgroundColor:
-                  activeModalTab === tab.id ? "#5d4037" : "#e8ddd4",
-                color: activeModalTab === tab.id ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "20px",
-            marginBottom: "20px",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-            <span style={{ color: "#5d4037", fontSize: "14px" }}>
-              Select Year:
-            </span>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                minWidth: "100px",
-              }}
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        <div style={{ marginBottom: "30px" }}>
-          {/* Employee Composition Tab */}
-          {activeModalTab === "employee-composition" && (
-            <div style={{ marginBottom: "30px" }}>
-              <div
-                style={{
-                  marginBottom: "20px",
-                  padding: "15px",
-                  backgroundColor: "#f5f0eb",
-                  borderRadius: "8px",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                  Head Count
-                </h4>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "20px",
-                  }}
-                >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Current Head Count:
-                    </label>
-                    <input
-                      type="number"
-                      value={localData.headCount || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          headCount: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Target Head Count:
-                    </label>
-                    <input
-                      type="number"
-                      value={localData.targetHeadCount || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          targetHeadCount: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                </div>
+      </div>
+      <div style={{ marginBottom: "14px" }}>
+        <label style={labelS}>Action *</label>
+        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={inputS} />
+      </div>
+      <div style={{ marginBottom: "14px" }}>
+        <label style={labelS}>Description</label>
+        <textarea rows="3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inputS, resize: "vertical" }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+        <div>
+          <label style={labelS}>Attach to meeting</label>
+          {loadingMeetings ? <div style={{ fontSize: "13px", color: T.body }}>Loading...</div>
+            : meetings.length === 0 ? (
+              <div style={{ fontSize: "12.5px", color: T.body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "9px 11px" }}>
+                No meetings yet — filed under "People Performance Actions".
               </div>
-
-              <div
-                style={{
-                  marginBottom: "20px",
-                  padding: "15px",
-                  backgroundColor: "#f5f0eb",
-                  borderRadius: "8px",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                  Contract Type Distribution
-                </h4>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: "20px",
-                  }}
-                >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Permanent:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.permanent || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          permanent: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Contract:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.contract || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          contract: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Internship:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.internship || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          internship: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginBottom: "20px",
-                  padding: "15px",
-                  backgroundColor: "#f5f0eb",
-                  borderRadius: "8px",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                  Occupational Levels
-                </h4>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: "20px",
-                  }}
-                >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Unskilled:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.unskilled || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          unskilled: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Semi-Skilled:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.semiSkilled || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          semiSkilled: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Skilled Jnr:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.skilledJnr || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          skilledJnr: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Prof Mid:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.profMid || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          profMid: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Snr Mgt:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.snrMgt || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          snrMgt: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        marginBottom: "5px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Top Mgt:
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localData.topMgt || 0}
-                      onChange={(e) =>
-                        setLocalData({
-                          ...localData,
-                          topMgt: Number.parseInt(e.target.value) || 0,
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Execution Capacity & Stability Tabs */}
-          {["execution-capacity", "stability-continuity"].includes(
-            activeModalTab,
-          ) &&
-            tabFields[activeModalTab] && (
-              <div
-                style={{
-                  marginBottom: "30px",
-                  padding: "15px",
-                  backgroundColor: "#f5f0eb",
-                  borderRadius: "8px",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                  Monthly Values
-                </h4>
-                {tabFields[activeModalTab].map((field) => (
-                  <div key={field.id} style={{ marginBottom: "15px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        fontWeight: "600",
-                        marginBottom: "8px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      {field.label}
-                    </label>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(12, 1fr)",
-                        gap: "5px",
-                      }}
-                    >
-                      {months.map((month, idx) => (
-                        <div key={month}>
-                          <label
-                            style={{
-                              fontSize: "10px",
-                              color: "#8d6e63",
-                              display: "block",
-                              marginBottom: "2px",
-                            }}
-                          >
-                            {month}
-                          </label>
-                          {field.type === "select" ? (
-                            <select
-                              value={localData[field.id]?.[idx] || ""}
-                              onChange={(e) => {
-                                const newData = { ...localData };
-                                if (!newData[field.id])
-                                  newData[field.id] = Array(12).fill("");
-                                newData[field.id][idx] = e.target.value;
-                                setLocalData(newData);
-                              }}
-                              style={{
-                                width: "100%",
-                                padding: "6px",
-                                borderRadius: "4px",
-                                border: "1px solid #e8ddd4",
-                                fontSize: "12px",
-                                backgroundColor: "#fff",
-                              }}
-                            >
-                              <option value="">Select</option>
-                              {field.options.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              type="number"
-                              step={field.step || "0.01"}
-                              value={localData[field.id]?.[idx] || ""}
-                              onChange={(e) => {
-                                const newData = { ...localData };
-                                if (!newData[field.id])
-                                  newData[field.id] = Array(12).fill("");
-                                newData[field.id][idx] = e.target.value;
-                                setLocalData(newData);
-                              }}
-                              style={{
-                                width: "100%",
-                                padding: "6px",
-                                borderRadius: "4px",
-                                border: "1px solid #e8ddd4",
-                                fontSize: "12px",
-                              }}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            ) : (
+              <select value={meetingId} onChange={(e) => { setMeetingId(e.target.value); setForm((p) => applyDefaults(e.target.value, p)); }} style={selectS}>
+                {meetings.map((m) => { const d = meetingDate(m);
+                  return <option key={m.id} value={m.id}>{m.title}{d ? ` — ${fmtDMY(d)}` : ""}</option>; })}
+              </select>
             )}
-
-          {/* Productivity Tab - With Actual & Budget */}
-          {activeModalTab === "productivity" && (
-            <div style={{ marginBottom: "30px" }}>
-              {renderMonthlyInputsWithBudget(
-                "Sales Volume per Employee",
-                productivityData,
-                setProductivityData,
-                "salesVolumePerEmployee",
-                { step: "1", unit: "units" },
-              )}
-
-              {renderMonthlyInputsWithBudget(
-                "Revenue per Employee (R)",
-                productivityData,
-                setProductivityData,
-                "revenuePerEmployee",
-                { step: "1000", unit: "currency" },
-              )}
-
-              {renderMonthlyInputsWithBudget(
-                "Labour Cost % of Revenue",
-                productivityData,
-                setProductivityData,
-                "laborCostPercentage",
-                { step: "0.1", unit: "percentage" },
-              )}
-
-              {renderMonthlyInputsWithBudget(
-                "Overtime Hours",
-                productivityData,
-                setProductivityData,
-                "overtimeHours",
-                { step: "1", unit: "hours" },
-              )}
-            </div>
-          )}
-
-          {/* Capability & Training Tab - With Actual & Budget */}
-          {activeModalTab === "capability-training" && (
-            <>
-              {/* Training Data */}
-              <div style={{ marginBottom: "30px" }}>
-                {renderMonthlyInputsWithBudget(
-                  "Training Spend (R)",
-                  capabilityTrainingData,
-                  setCapabilityTrainingData,
-                  "trainingSpendAmount",
-                  { step: "1000", unit: "currency" },
-                )}
-
-                {renderMonthlyInputsWithBudget(
-                  "Training Spend (% of payroll)",
-                  capabilityTrainingData,
-                  setCapabilityTrainingData,
-                  "trainingSpendPercentage",
-                  { step: "0.1", unit: "percentage" },
-                )}
-
-                {renderMonthlyInputsWithBudgetForSelect(
-                  "Training Focus",
-                  capabilityTrainingData,
-                  setCapabilityTrainingData,
-                  "trainingFocus",
-                  [
-                    { value: "1", label: "Technical" },
-                    { value: "2", label: "Leadership" },
-                    { value: "3", label: "Compliance" },
-                  ],
-                )}
-              </div>
-
-              {/* Employee Tracking */}
-              <div
-                style={{
-                  marginBottom: "30px",
-                  padding: "15px",
-                  backgroundColor: "#f5f0eb",
-                  borderRadius: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "15px",
-                  }}
-                >
-                  <h4 style={{ color: "#5d4037", margin: 0 }}>
-                    Employee Development Tracking
-                  </h4>
-                  <button
-                    onClick={addEmployeeTrackingEntry}
-                    style={{
-                      padding: "8px 16px",
-                      backgroundColor: "#5d4037",
-                      color: "#fdfcfb",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      fontSize: "13px",
-                    }}
-                  >
-                    + Add Employee
-                  </button>
-                </div>
-
-                {employeeTrackingData.map((employee, index) => (
-                  <div
-                    key={employee.id || index}
-                    style={{
-                      marginBottom: "30px",
-                      padding: "20px",
-                      backgroundColor: "#fff",
-                      borderRadius: "8px",
-                      border: "1px solid #e8ddd4",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "15px",
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={employee.employee}
-                        onChange={(e) => {
-                          const newData = [...employeeTrackingData];
-                          newData[index].employee = e.target.value;
-                          setEmployeeTrackingData(newData);
-                        }}
-                        placeholder="Employee Name"
-                        style={{
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "16px",
-                          fontWeight: "600",
-                          color: "#5d4037",
-                          width: "300px",
-                        }}
-                      />
-                      <button
-                        onClick={() => removeEmployeeTrackingEntry(index)}
-                        style={{
-                          padding: "8px 16px",
-                          backgroundColor: "#f44336",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontWeight: "600",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(4, 1fr)",
-                        gap: "20px",
-                      }}
-                    >
-                      {/* Skills Gap Assessment */}
-                      <div>
-                        <h5
-                          style={{
-                            color: "#5d4037",
-                            marginBottom: "10px",
-                            fontSize: "14px",
-                          }}
-                        >
-                          Skills Gap Assessment
-                        </h5>
-                        <input
-                          type="date"
-                          value={employee.skillsGap?.date || ""}
-                          onChange={(e) => {
-                            const newData = [...employeeTrackingData];
-                            if (!newData[index].skillsGap)
-                              newData[index].skillsGap = {};
-                            newData[index].skillsGap.date = e.target.value;
-                            setEmployeeTrackingData(newData);
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            borderRadius: "4px",
-                            border: "1px solid #e8ddd4",
-                            marginBottom: "10px",
-                          }}
-                        />
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].skillsGap)
-                                newData[index].skillsGap = {};
-                              newData[index].skillsGap.status = "Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.skillsGap?.status === "Done"
-                                  ? "#4caf50"
-                                  : "#e8e8e8",
-                              color:
-                                employee.skillsGap?.status === "Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Done
-                          </button>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].skillsGap)
-                                newData[index].skillsGap = {};
-                              newData[index].skillsGap.status = "Not Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.skillsGap?.status === "Not Done"
-                                  ? "#f44336"
-                                  : "#e8e8e8",
-                              color:
-                                employee.skillsGap?.status === "Not Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Not Done
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* IDP */}
-                      <div>
-                        <h5
-                          style={{
-                            color: "#5d4037",
-                            marginBottom: "10px",
-                            fontSize: "14px",
-                          }}
-                        >
-                          Individual Development Plan
-                        </h5>
-                        <input
-                          type="date"
-                          value={employee.idp?.date || ""}
-                          onChange={(e) => {
-                            const newData = [...employeeTrackingData];
-                            if (!newData[index].idp) newData[index].idp = {};
-                            newData[index].idp.date = e.target.value;
-                            setEmployeeTrackingData(newData);
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            borderRadius: "4px",
-                            border: "1px solid #e8ddd4",
-                            marginBottom: "10px",
-                          }}
-                        />
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].idp) newData[index].idp = {};
-                              newData[index].idp.status = "Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.idp?.status === "Done"
-                                  ? "#4caf50"
-                                  : "#e8e8e8",
-                              color:
-                                employee.idp?.status === "Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Done
-                          </button>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].idp) newData[index].idp = {};
-                              newData[index].idp.status = "Not Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.idp?.status === "Not Done"
-                                  ? "#f44336"
-                                  : "#e8e8e8",
-                              color:
-                                employee.idp?.status === "Not Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Not Done
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Mid-Term Review */}
-                      <div>
-                        <h5
-                          style={{
-                            color: "#5d4037",
-                            marginBottom: "10px",
-                            fontSize: "14px",
-                          }}
-                        >
-                          Mid-Term Performance Review
-                        </h5>
-                        <input
-                          type="date"
-                          value={employee.midTermReview?.date || ""}
-                          onChange={(e) => {
-                            const newData = [...employeeTrackingData];
-                            if (!newData[index].midTermReview)
-                              newData[index].midTermReview = {};
-                            newData[index].midTermReview.date = e.target.value;
-                            setEmployeeTrackingData(newData);
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            borderRadius: "4px",
-                            border: "1px solid #e8ddd4",
-                            marginBottom: "10px",
-                          }}
-                        />
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].midTermReview)
-                                newData[index].midTermReview = {};
-                              newData[index].midTermReview.status = "Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.midTermReview?.status === "Done"
-                                  ? "#4caf50"
-                                  : "#e8e8e8",
-                              color:
-                                employee.midTermReview?.status === "Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Done
-                          </button>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].midTermReview)
-                                newData[index].midTermReview = {};
-                              newData[index].midTermReview.status = "Not Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.midTermReview?.status === "Not Done"
-                                  ? "#f44336"
-                                  : "#e8e8e8",
-                              color:
-                                employee.midTermReview?.status === "Not Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Not Done
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Annual Review */}
-                      <div>
-                        <h5
-                          style={{
-                            color: "#5d4037",
-                            marginBottom: "10px",
-                            fontSize: "14px",
-                          }}
-                        >
-                          Annual Performance Review
-                        </h5>
-                        <input
-                          type="date"
-                          value={employee.annualReview?.date || ""}
-                          onChange={(e) => {
-                            const newData = [...employeeTrackingData];
-                            if (!newData[index].annualReview)
-                              newData[index].annualReview = {};
-                            newData[index].annualReview.date = e.target.value;
-                            setEmployeeTrackingData(newData);
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            borderRadius: "4px",
-                            border: "1px solid #e8ddd4",
-                            marginBottom: "10px",
-                          }}
-                        />
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].annualReview)
-                                newData[index].annualReview = {};
-                              newData[index].annualReview.status = "Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.annualReview?.status === "Done"
-                                  ? "#4caf50"
-                                  : "#e8e8e8",
-                              color:
-                                employee.annualReview?.status === "Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Done
-                          </button>
-                          <button
-                            onClick={() => {
-                              const newData = [...employeeTrackingData];
-                              if (!newData[index].annualReview)
-                                newData[index].annualReview = {};
-                              newData[index].annualReview.status = "Not Done";
-                              setEmployeeTrackingData(newData);
-                            }}
-                            style={{
-                              flex: "1",
-                              padding: "8px",
-                              backgroundColor:
-                                employee.annualReview?.status === "Not Done"
-                                  ? "#f44336"
-                                  : "#e8e8e8",
-                              color:
-                                employee.annualReview?.status === "Not Done"
-                                  ? "#fff"
-                                  : "#5d4037",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Not Done
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Termination and New Hire Data for Stability & Continuity */}
-          {activeModalTab === "stability-continuity" && (
-            <>
-              {/* Termination Records */}
-              <div
-                style={{
-                  marginBottom: "30px",
-                  padding: "15px",
-                  backgroundColor: "#f5f0eb",
-                  borderRadius: "8px",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                  Termination Records
-                </h4>
-
-                {/* Add New Termination Form */}
-                <div
-                  style={{
-                    marginBottom: "20px",
-                    padding: "15px",
-                    backgroundColor: "#fff",
-                    borderRadius: "6px",
-                    border: "1px solid #e8ddd4",
-                  }}
-                >
-                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                    Add New Termination Record
-                  </h5>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "15px",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    {/* Employee Name */}
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Employee Name
-                      </label>
-                      <input
-                        type="text"
-                        value={newTermination.name}
-                        onChange={(e) =>
-                          setNewTermination({
-                            ...newTermination,
-                            name: e.target.value,
-                          })
-                        }
-                        placeholder="John Doe"
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      />
-                    </div>
-
-                    {/* Reason Selection */}
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Reason for Termination
-                      </label>
-                      <select
-                        value={newTermination.reason}
-                        onChange={(e) =>
-                          setNewTermination({
-                            ...newTermination,
-                            reason: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      >
-                        <option value="">Select a reason</option>
-                        {predefinedReasons.map((reason) => (
-                          <option key={reason} value={reason}>
-                            {reason}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "15px",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    {/* Date Started */}
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Date Started
-                      </label>
-                      <input
-                        type="date"
-                        value={newTermination.dateStarted}
-                        onChange={(e) =>
-                          setNewTermination({
-                            ...newTermination,
-                            dateStarted: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      />
-                    </div>
-
-                    {/* Date Ended */}
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Date Ended
-                      </label>
-                      <input
-                        type="date"
-                        value={newTermination.dateEnded}
-                        onChange={(e) =>
-                          setNewTermination({
-                            ...newTermination,
-                            dateEnded: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Custom Reason (if Other is selected) */}
-                  {newTermination.reason === "Other" && (
-                    <div style={{ marginBottom: "15px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Specify Reason
-                      </label>
-                      <input
-                        type="text"
-                        value={newTermination.customReason}
-                        onChange={(e) =>
-                          setNewTermination({
-                            ...newTermination,
-                            customReason: e.target.value,
-                          })
-                        }
-                        placeholder="Enter custom reason..."
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  <button
-                    onClick={addTerminationEntry}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "#5d4037",
-                      color: "#fdfcfb",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      fontSize: "14px",
-                    }}
-                  >
-                    + Add Termination Record
-                  </button>
-                </div>
-
-                {/* Current Termination Entries */}
-                <div>
-                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                    Current Termination Records ({terminationEntries.length})
-                  </h5>
-
-                  {terminationEntries.length > 0 ? (
-                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-                      <table
-                        style={{
-                          width: "100%",
-                          borderCollapse: "collapse",
-                          fontSize: "13px",
-                        }}
-                      >
-                        <thead>
-                          <tr style={{ backgroundColor: "#e8ddd4" }}>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Employee Name
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Date Started
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Date Ended
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Reason
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "center",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {terminationEntries.map((entry, index) => (
-                            <tr
-                              key={entry.id || index}
-                              style={{ borderBottom: "1px solid #e8ddd4" }}
-                            >
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                {entry.name || "-"}
-                              </td>
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                {entry.dateStarted || "-"}
-                              </td>
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                {entry.dateEnded || "-"}
-                              </td>
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                <span
-                                  style={{
-                                    padding: "4px 8px",
-                                    backgroundColor: "#ffebee",
-                                    color: "#c62828",
-                                    borderRadius: "12px",
-                                    fontSize: "11px",
-                                    fontWeight: "600",
-                                  }}
-                                >
-                                  {entry.reason}
-                                </span>
-                              </td>
-                              <td
-                                style={{ padding: "10px", textAlign: "center" }}
-                              >
-                                <button
-                                  onClick={() =>
-                                    removeTerminationEntry(entry.id)
-                                  }
-                                  style={{
-                                    padding: "4px 8px",
-                                    backgroundColor: "#f44336",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                    fontSize: "11px",
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        padding: "20px",
-                        textAlign: "center",
-                        color: "#8d6e63",
-                        backgroundColor: "#fff",
-                        borderRadius: "6px",
-                      }}
-                    >
-                      No termination records added yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* New Hire Records */}
-              <div
-                style={{
-                  marginBottom: "30px",
-                  padding: "15px",
-                  backgroundColor: "#f5f0eb",
-                  borderRadius: "8px",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                  New Hire Records
-                </h4>
-
-                {/* Add New Hire Form */}
-                <div
-                  style={{
-                    marginBottom: "20px",
-                    padding: "15px",
-                    backgroundColor: "#fff",
-                    borderRadius: "6px",
-                    border: "1px solid #e8ddd4",
-                  }}
-                >
-                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                    Add New Hire
-                  </h5>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr 1fr",
-                      gap: "15px",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    {/* Name */}
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Employee Name
-                      </label>
-                      <input
-                        type="text"
-                        value={newHireForm.name}
-                        onChange={(e) =>
-                          setNewHireForm({
-                            ...newHireForm,
-                            name: e.target.value,
-                          })
-                        }
-                        placeholder="John Doe"
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      />
-                    </div>
-
-                    {/* Date Started */}
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Date Started
-                      </label>
-                      <input
-                        type="date"
-                        value={newHireForm.dateStarted}
-                        onChange={(e) =>
-                          setNewHireForm({
-                            ...newHireForm,
-                            dateStarted: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      />
-                    </div>
-
-                    {/* Contract Type */}
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Contract Type
-                      </label>
-                      <select
-                        value={newHireForm.contractType}
-                        onChange={(e) =>
-                          setNewHireForm({
-                            ...newHireForm,
-                            contractType: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      >
-                        {contractTypes.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* End Date (for non-permanent contracts) */}
-                  {newHireForm.contractType !== "Permanent" && (
-                    <div style={{ marginBottom: "15px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          color: "#5d4037",
-                          marginBottom: "5px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        End Date (if applicable)
-                      </label>
-                      <input
-                        type="date"
-                        value={newHireForm.endDate}
-                        onChange={(e) =>
-                          setNewHireForm({
-                            ...newHireForm,
-                            endDate: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          borderRadius: "4px",
-                          border: "1px solid #e8ddd4",
-                          fontSize: "13px",
-                          color: "#5d4037",
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  <button
-                    onClick={addNewHireEntry}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "#5d4037",
-                      color: "#fdfcfb",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      fontSize: "14px",
-                    }}
-                  >
-                    + Add New Hire
-                  </button>
-                </div>
-
-                {/* Current New Hire Entries */}
-                <div>
-                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>
-                    Current New Hire Records ({newHireEntries.length})
-                  </h5>
-
-                  {newHireEntries.length > 0 ? (
-                    <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-                      <table
-                        style={{
-                          width: "100%",
-                          borderCollapse: "collapse",
-                          fontSize: "13px",
-                        }}
-                      >
-                        <thead>
-                          <tr style={{ backgroundColor: "#e8ddd4" }}>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Employee Name
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Date Started
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Contract Type
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "left",
-                                color: "#5d4037",
-                              }}
-                            >
-                              End Date
-                            </th>
-                            <th
-                              style={{
-                                padding: "10px",
-                                textAlign: "center",
-                                color: "#5d4037",
-                              }}
-                            >
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {newHireEntries.map((entry, index) => (
-                            <tr
-                              key={entry.id || index}
-                              style={{ borderBottom: "1px solid #e8ddd4" }}
-                            >
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                {entry.name}
-                              </td>
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                {entry.dateStarted}
-                              </td>
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                <span
-                                  style={{
-                                    padding: "4px 8px",
-                                    backgroundColor:
-                                      entry.contractType === "Permanent"
-                                        ? "#e8f5e9"
-                                        : entry.contractType === "Contract"
-                                          ? "#fff3e0"
-                                          : "#f3e5f5",
-                                    color:
-                                      entry.contractType === "Permanent"
-                                        ? "#2e7d32"
-                                        : entry.contractType === "Contract"
-                                          ? "#f57c00"
-                                          : "#7b1fa2",
-                                    borderRadius: "12px",
-                                    fontSize: "11px",
-                                    fontWeight: "600",
-                                  }}
-                                >
-                                  {entry.contractType}
-                                </span>
-                              </td>
-                              <td style={{ padding: "10px", color: "#5d4037" }}>
-                                {entry.endDate || "-"}
-                              </td>
-                              <td
-                                style={{ padding: "10px", textAlign: "center" }}
-                              >
-                                <button
-                                  onClick={() => removeNewHireEntry(entry.id)}
-                                  style={{
-                                    padding: "4px 8px",
-                                    backgroundColor: "#f44336",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                    fontSize: "11px",
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        padding: "20px",
-                        textAlign: "center",
-                        color: "#8d6e63",
-                        backgroundColor: "#fff",
-                        borderRadius: "6px",
-                      }}
-                    >
-                      No new hire records added yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
         </div>
-
-        <div
-          style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            {loading ? "Saving..." : "Save Data"}
-          </button>
+        <div>
+          <label style={labelS}>Category</label>
+          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={selectS}>
+            {RAPS_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          </select>
         </div>
       </div>
-    </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+        <div><label style={labelS}>By whom</label>
+          {(selected?.participants || []).length > 0 ? (
+            <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={selectS}>
+              <option value="">Unassigned</option>
+              {selected.participants.map((p, i) => { const n = typeof p === "string" ? p : p.name || p.email || "Participant"; return <option key={i} value={n}>{n}</option>; })}
+            </select>
+          ) : <input value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={inputS} placeholder="Owner" />}
+        </div>
+        <div><label style={labelS}>By when</label>
+          <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inputS} /></div>
+        <div><label style={labelS}>Status</label>
+          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={selectS}>
+            {ACTION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select></div>
+      </div>
+      {message && <div style={{ color: T.red, fontSize: "13px", marginTop: "12px" }}>{message}</div>}
+    </Modal>
   );
 };
 
-// ==================== EMPLOYEE COMPOSITION COMPONENT ====================
-
-const DARK_BROWN_COLORS = {
-  primary: "#3E2723",
-  secondary: "#5D4037",
-  tertiary: "#795548",
-  accent1: "#8D6E63",
-  accent2: "#A1887F",
-  accent3: "#BCAAA4",
-  accent4: "#D7CCC8",
-  accent5: "#EFEBE9",
-  warning: "#F9A825",
-  success: "#2E7D32",
-  error: "#C62828",
-};
-
-const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
-  if (activeSection !== "employee-composition") return null;
-
-  const defaultData = {
-    headCount: 0,
-    targetHeadCount: 0,
-    permanent: 0,
-    contract: 0,
-    internship: 0,
-    unskilled: 0,
-    semiSkilled: 0,
-    skilledJnr: 0,
-    profMid: 0,
-    snrMgt: 0,
-    topMgt: 0,
-    femalePercent: 0,
-    malePercent: 0,
-    otherPercent: 0,
-    femaleLeadershipPercent: 0,
-    youthLeadershipPercent: 0,
-    hdiOwnershipPercent: 0,
+/* ─── KPI notes — autosaving ────────────────────────────────────────────── */
+const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
+  const [notes, setNotes] = useState(kpi.notes || "");
+  const [state, setState] = useState("idle");
+  const timer = useRef(null);
+  const change = (t) => {
+    setNotes(t); setState("saving");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { onSave(t); setState("saved"); setTimeout(() => setState("idle"), 1800); }, 700);
   };
-
-  const data = { ...defaultData, ...userData };
-  const vacancies = Math.max(0, data.targetHeadCount - data.headCount);
-
-  // Calculate totals for percentages
-  const totalContract =
-    (data.permanent || 0) + (data.contract || 0) + (data.internship || 0);
-  const totalOccupational =
-    (data.unskilled || 0) +
-    (data.semiSkilled || 0) +
-    (data.skilledJnr || 0) +
-    (data.profMid || 0) +
-    (data.snrMgt || 0) +
-    (data.topMgt || 0);
-
-  // Contract type data
-  const contractData = {
-    labels: ["Permanent", "Contract", "Internship"],
-    datasets: [
-      {
-        data: [data.permanent || 0, data.contract || 0, data.internship || 0],
-        backgroundColor: [
-          DARK_BROWN_COLORS.primary,
-          DARK_BROWN_COLORS.accent1,
-          DARK_BROWN_COLORS.accent3,
-        ],
-        borderColor: DARK_BROWN_COLORS.primary,
-        borderWidth: 2,
-      },
-    ],
-  };
-
-  // Occupational levels data
-  const occupationalData = {
-    labels: [
-      "Unskilled",
-      "Semi-skilled",
-      "Skilled Jnr",
-      "Prof Mid",
-      "Snr Mgt",
-      "Top Mgt",
-    ],
-    datasets: [
-      {
-        label: "Count",
-        data: [
-          data.unskilled || 0,
-          data.semiSkilled || 0,
-          data.skilledJnr || 0,
-          data.profMid || 0,
-          data.snrMgt || 0,
-          data.topMgt || 0,
-        ],
-        backgroundColor: [
-          DARK_BROWN_COLORS.primary,
-          DARK_BROWN_COLORS.secondary,
-          DARK_BROWN_COLORS.tertiary,
-          DARK_BROWN_COLORS.accent1,
-          DARK_BROWN_COLORS.accent2,
-          DARK_BROWN_COLORS.accent3,
-        ],
-        borderColor: DARK_BROWN_COLORS.primary,
-        borderWidth: 2,
-      },
-    ],
-  };
-
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "25px",
-        margin: "20px 0",
-        borderRadius: "12px",
-        boxShadow: `0 4px 12px rgba(62, 39, 35, 0.15)`,
-        border: `1px solid ${DARK_BROWN_COLORS.accent4}`,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <h2
-          style={{
-            color: DARK_BROWN_COLORS.secondary,
-            margin: 0,
-            fontSize: "28px",
-          }}
-        >
-          Employee Composition
-        </h2>
-        <button
-          onClick={() => onOpenModal("employee-composition")}
-          style={{
-            padding: "12px 20px",
-            backgroundColor: DARK_BROWN_COLORS.secondary,
-            color: "#fdfcfb",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "14px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-          }}
-        >
-          Add Data
-        </button>
-      </div>
-
-      {/* ESG-N NOTE - VISIBLE ON FRONTEND */}
-      <div
-        style={{
-          backgroundColor: "#f5f0eb",
-          padding: "12px 15px",
-          marginBottom: "25px",
-          borderRadius: "8px",
-          borderLeft: `4px solid ${DARK_BROWN_COLORS.primary}`,
-          fontSize: "14px",
-          color: DARK_BROWN_COLORS.secondary,
-        }}
-      >
-        <strong>ESG Note:</strong> All other demographics (female%, male%,
-        other%, female leadership%, youth leadership%, HDI ownership%) are
-        tracked and reported under ESG Impact.
-      </div>
-
-      {/* Top Row - Head Count, Contract Type, Occupational Levels */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "20px",
-          marginBottom: "40px",
-        }}
-      >
-        {/* Head Count with Target and Vacancies */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "12px",
-            textAlign: "center",
-            border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
-          }}
-        >
-          <h3
-            style={{
-              color: DARK_BROWN_COLORS.tertiary,
-              margin: "0 0 15px 0",
-              fontSize: "16px",
-            }}
-          >
-            Head Count
-          </h3>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              background: `linear-gradient(135deg, ${DARK_BROWN_COLORS.secondary}, ${DARK_BROWN_COLORS.tertiary})`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 15px auto",
-              color: "#fdfcfb",
-              fontSize: "28px",
-              fontWeight: "bold",
-              boxShadow: "0 4px 8px rgba(62, 39, 35, 0.3)",
-            }}
-          >
-            {data.headCount}
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "10px",
-              marginTop: "10px",
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: "#fff",
-                padding: "8px",
-                borderRadius: "6px",
-                border: `1px solid ${DARK_BROWN_COLORS.accent3}`,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "11px",
-                  color: DARK_BROWN_COLORS.tertiary,
-                  marginBottom: "3px",
-                }}
-              >
-                Target
-              </div>
-              <div
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "bold",
-                  color: DARK_BROWN_COLORS.secondary,
-                }}
-              >
-                {data.targetHeadCount}
-              </div>
-            </div>
-            <div
-              style={{
-                backgroundColor: "#fff",
-                padding: "8px",
-                borderRadius: "6px",
-                border: `1px solid ${DARK_BROWN_COLORS.accent3}`,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "11px",
-                  color: DARK_BROWN_COLORS.tertiary,
-                  marginBottom: "3px",
-                }}
-              >
-                Vacancies
-              </div>
-              <div
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "bold",
-                  color:
-                    vacancies > 0
-                      ? DARK_BROWN_COLORS.warning
-                      : DARK_BROWN_COLORS.success,
-                }}
-              >
-                {vacancies}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Contract Type - WITH WHITE NUMBERS */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "12px",
-            textAlign: "center",
-            border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
-          }}
-        >
-          <h3
-            style={{
-              color: DARK_BROWN_COLORS.tertiary,
-              margin: "0 0 15px 0",
-              fontSize: "16px",
-            }}
-          >
-            Contract Type
-          </h3>
-          <div style={{ height: "150px" }}>
-            <Pie
-              data={contractData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: {
-                      color: DARK_BROWN_COLORS.secondary,
-                      font: {
-                        size: 10,
-                        weight: "bold",
-                      },
-                    },
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => {
-                        const label = context.label || "";
-                        const value = context.raw || 0;
-                        const percentage =
-                          totalContract > 0
-                            ? ((value / totalContract) * 100).toFixed(1)
-                            : 0;
-                        return `${label}: ${value} (${percentage}%)`;
-                      },
-                    },
-                  },
-                  // WHITE NUMBERS on pie chart
-                  datalabels: {
-                    display: true,
-                    color: "#ffffff",
-                    font: {
-                      weight: "bold",
-                      size: 12,
-                    },
-                    formatter: (value, context) => {
-                      return value > 0 ? value : "";
-                    },
-                    anchor: "center",
-                    align: "center",
-                    offset: 0,
-                  },
-                },
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Occupational Levels */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "12px",
-            textAlign: "center",
-            border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
-          }}
-        >
-          <h3
-            style={{
-              color: DARK_BROWN_COLORS.tertiary,
-              margin: "0 0 15px 0",
-              fontSize: "16px",
-            }}
-          >
-            Occupational Levels
-          </h3>
-          <div style={{ height: "150px" }}>
-            <Bar
-              data={occupationalData}
-              options={{
-                indexAxis: "y",
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => {
-                        const value = context.raw || 0;
-                        const percentage =
-                          totalOccupational > 0
-                            ? ((value / totalOccupational) * 100).toFixed(1)
-                            : 0;
-                        return `Count: ${value} (${percentage}%)`;
-                      },
-                    },
-                  },
-                  // NO datalabels on bar chart
-                  datalabels: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  x: {
-                    beginAtZero: true,
-                    grid: {
-                      color: DARK_BROWN_COLORS.accent4,
-                      drawBorder: false,
-                    },
-                    ticks: {
-                      color: DARK_BROWN_COLORS.secondary,
-                      font: {
-                        size: 10,
-                      },
-                    },
-                  },
-                  y: {
-                    grid: {
-                      display: false,
-                    },
-                    ticks: {
-                      color: DARK_BROWN_COLORS.secondary,
-                      font: {
-                        size: 10,
-                        weight: "bold",
-                      },
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Second Row - Leadership & Ownership Metrics */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "20px",
-          marginBottom: "20px",
-        }}
-      >
-        {/* These fields are under ESG-N reporting */}
-      </div>
-    </div>
+    <Modal title={`Notes — ${kpi.name}`} icon={<StickyNote size={17} />} onClose={onClose}
+      footer={<>
+        <span style={{ flex: 1, fontSize: "12.5px", color: state === "saved" ? T.green : T.muted, textAlign: "left" }}>
+          {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Saves automatically"}
+        </span>
+        <button onClick={onClose} style={btnPrimary}>Close</button>
+      </>}>
+      <label style={labelS}>Context, anomalies or anything worth remembering about this KPI</label>
+      <textarea rows="9" value={notes} readOnly={readOnly} onChange={(e) => change(e.target.value)} style={{ ...inputS, resize: "vertical" }} />
+    </Modal>
   );
 };
 
-// ==================== EXECUTION CAPACITY COMPONENT ====================
+/* ════════════════════════════════════════════════════════════════════════════
+   Add Data — writes back into the same peopleData docs the old sections used.
+   ════════════════════════════════════════════════════════════════════════ */
+const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, onPullFinancials, currentTabId }) => {
+  const editableTabs = tabs.filter((t) => t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
+  const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId
+    : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
+  const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
+  const [periodKey, setPeriodKey] = useState(null);
+  const [draft, setDraft] = useState({});
+  const [saveState, setSaveState] = useState("idle");
+  const [pulling, setPulling] = useState(false);
+  const timer = useRef(null);
 
-const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [expandedNotes, setExpandedNotes] = useState({});
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [kpiAnalysis, setKpiAnalysis] = useState({});
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-
-  // Data structure for execution capacity KPIs
-  const [executionData, setExecutionData] = useState({
-    founderLoad: Array(12).fill(""), // low=1, med=2, high=3, critical=4
-    criticalFunctionsSinglePoint: Array(12).fill(""), // percentage
-    criticalRolesWith2IC: Array(12).fill(""), // percentage
-    spanOfControl: Array(12).fill(""), // average number
-  });
-
-  // Get months for trend view - last 11 months plus current month
-  const getTrendMonths = () => {
-    const months = [];
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-
-    // Start from 11 months ago and go to current month
-    for (let i = 11; i >= 0; i--) {
-      const monthIndex = (currentMonth - i + 12) % 12;
-      months.push(monthNames[monthIndex]);
-    }
-    return months;
-  };
-
-  const months = getMonthsForYear(selectedYear, "month");
-  const trendMonths = getTrendMonths(); // Last 11 months + current month
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i);
+  const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
+  const months = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
 
   useEffect(() => {
-    if (user) {
-      loadExecutionData();
-    }
-  }, [user]);
+    if (!months.length) return;
+    if (months.some((m) => m.key === periodKey)) return;
+    setPeriodKey(months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [months]);
 
-  const loadExecutionData = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const executionDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_executionCapacity`),
-      );
-      if (executionDoc.exists()) {
-        const data = executionDoc.data();
-        if (data.executionData) setExecutionData(data.executionData);
-        if (data.kpiNotes) setKpiNotes(data.kpiNotes);
-        if (data.kpiAnalysis) setKpiAnalysis(data.kpiAnalysis);
-      }
-    } catch (error) {
-      console.error("Error loading execution capacity data:", error);
-    } finally {
-      setLoading(false);
-    }
+  const monthMeta = months.find((m) => m.key === periodKey) || months[0];
+  const monthIndex = months.findIndex((m) => m.key === periodKey);
+
+  const rows = useMemo(() => {
+    if (!tab) return [];
+    const out = [];
+    tab.categories.forEach((cat) => (cat.kpis || []).forEach((k) => out.push({ kpi: k, category: cat.name })));
+    return out;
+  }, [tab]);
+
+  const draftKey = (kpiId, which) => `${monthMeta?.month}|${kpiId}|${which}`;
+
+  const value = (kpi, which) => {
+    const dk = draftKey(kpi.id, which);
+    if (draft[dk] !== undefined) return draft[dk];
+    if (!kpi.field) return "";
+    const path = which === "actual" ? kpi.field.a : kpi.field.b;
+    if (!path) return "";
+    const raw = kpi.field.scalar
+      ? atPath(docs[kpi.field.src], path)
+      : atPath(docs[kpi.field.src], path)?.[monthMeta.month];
+    return raw === undefined || raw === null ? "" : String(raw);
   };
 
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
-  // Helper functions
-  const formatValue = (value) => {
-    const num = Number.parseFloat(value) || 0;
-    return num.toFixed(1);
+  /* Typing saves itself — stepping to the next month can't silently drop it. */
+  const setValue = (kpi, which, raw) => {
+    const dk = draftKey(kpi.id, which);
+    setDraft((p) => ({ ...p, [dk]: raw }));
+    setSaveState("saving");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      await onSaveField({ kpi, which, raw, monthIndex: monthMeta.month });
+      onSavePrefs({ tabId, startYear });
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 1800);
+    }, 800);
   };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  // Status calculation based on values
-  const getStatus = (value, type) => {
-    if (!value && value !== 0)
-      return { text: "Not Set", color: "#f5f5f5", textColor: "#5d4037" };
+  const cell = { ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" };
+  const th = { ...panelTh, position: "sticky", top: 0, zIndex: 2, verticalAlign: "top" };
+  const yearOptions = [
+    { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
+    { value: fy.startYear,     badge: "FY",  label: fyLabel(fy.startYear, fy.startMonth) },
+    { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
+  ];
 
-    const numValue = Number.parseFloat(value);
-
-    switch (type) {
-      case "founderLoad":
-        if (value === "1")
-          return { text: "Low", color: "#4caf50", textColor: "#fff" };
-        if (value === "2")
-          return { text: "Medium", color: "#ff9800", textColor: "#fff" };
-        if (value === "3")
-          return { text: "High", color: "#f44336", textColor: "#fff" };
-        if (value === "4")
-          return { text: "Critical", color: "#d32f2f", textColor: "#fff" };
-        return { text: "Not Set", color: "#f5f5f5", textColor: "#5d4037" };
-
-      case "criticalFunctionsSinglePoint":
-        if (numValue < 20)
-          return { text: "Low Risk", color: "#4caf50", textColor: "#fff" };
-        if (numValue <= 40)
-          return { text: "Medium Risk", color: "#ff9800", textColor: "#fff" };
-        if (numValue <= 60)
-          return { text: "High Risk", color: "#f44336", textColor: "#fff" };
-        return { text: "Critical Risk", color: "#d32f2f", textColor: "#fff" };
-
-      case "criticalRolesWith2IC":
-        if (numValue >= 80)
-          return { text: "Strong", color: "#4caf50", textColor: "#fff" };
-        if (numValue >= 60)
-          return { text: "Adequate", color: "#ff9800", textColor: "#fff" };
-        if (numValue >= 40)
-          return { text: "Weak", color: "#f44336", textColor: "#fff" };
-        return { text: "Critical", color: "#d32f2f", textColor: "#fff" };
-
-      case "spanOfControl":
-        if (numValue >= 5 && numValue <= 8)
-          return { text: "Optimal", color: "#4caf50", textColor: "#fff" };
-        if (numValue < 3 || numValue > 12)
-          return { text: "Critical", color: "#d32f2f", textColor: "#fff" };
-        if (numValue < 5 || numValue > 8)
-          return { text: "Review", color: "#ff9800", textColor: "#fff" };
-        return { text: "Not Set", color: "#f5f5f5", textColor: "#5d4037" };
-
-      default:
-        return { text: "Not Set", color: "#f5f5f5", textColor: "#5d4037" };
-    }
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation });
-    setShowCalculationModal(true);
-  };
-
-  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    // Get last 12 months of data (last 11 + current)
-    const actualData = Array.isArray(dataArray)
-      ? dataArray.slice(-12).map((v) => parseFloat(v) || 0)
-      : Array(12).fill(0);
-
-    setSelectedTrendItem({
-      name: itemName,
-      actual: actualData,
-      budget: null,
-      isPercentage,
-      labels: trendMonths, // Use the last 11 + current month labels
-    });
-    setShowTrendModal(true);
-  };
-
-  const renderKPICard = (
-  title,
-  data,
-  kpiKey,
-  unit = "",
-  isPercentage = false,
-  calculation = "",
-) => {
-  const monthIndex = 11;
-  const currentValue = Number.parseFloat(data[monthIndex >= 0 ? monthIndex : 0]) || 0;
-  const status = getStatus(currentValue.toString(), kpiKey);
-
-  const handleAIAnalysis = () => {
-    setSelectedMetricForAnalysis({
-      title: title,
-      key: kpiKey,
-      value: currentValue,
-      contextData: {
-        unit: isPercentage ? "percentage" : "number",
-        benchmark: kpiKey === "founderLoad" ? 2 : 
-                   kpiKey === "criticalFunctionsSinglePoint" ? 20 :
-                   kpiKey === "criticalRolesWith2IC" ? 80 :
-                   kpiKey === "spanOfControl" ? 6.5 : 50,
-        status: status.text,
-        timeRange: "Current Period",
-      },
-    });
-    setShowAnalysisModal(true);
-  };
+  if (!tab) {
+    return (
+      <Modal title="Add Data" icon={<Database size={17} />} onClose={onClose} width={520}
+        footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+        <p style={{ fontSize: "14px", color: T.body, margin: 0 }}>Nothing here takes direct input.</p>
+      </Modal>
+    );
+  }
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        marginBottom: "20px",
-        position: "relative",
-      }}
-    >
-      <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
+    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />}
+      onClose={onClose} width={800}
+      footer={<>
+        <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+        <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
+          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}
+        </span>
+        <button onClick={onClose} style={btnPrimary}>Done</button>
+      </>}>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          marginBottom: "15px",
-        }}
-      >
-        <div
-          style={{
-            width: "100px",
-            height: "100px",
-            borderRadius: "50%",
-            border: "5px solid #f9a825",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: "20px",
-            backgroundColor: "#fff9c4",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "16px",
-                fontWeight: "700",
-                color: "#5d4037",
-              }}
-            >
-              {isPercentage
-                ? `${currentValue.toFixed(1)}%`
-                : kpiKey === "spanOfControl"
-                  ? currentValue.toFixed(1)
-                  : kpiKey === "founderLoad"
-                    ? currentValue === 1
-                      ? "Low"
-                      : currentValue === 2
-                        ? "Med"
-                        : currentValue === 3
-                          ? "High"
-                          : currentValue === 4
-                            ? "Critical"
-                            : "Not Set"
-                    : currentValue.toFixed(1)}
-            </div>
-            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
-          </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+        <div>
+          <label style={labelS}>Financial year</label>
+          <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
+            {yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}
+          </select>
         </div>
+        <div>
+          <label style={labelS}>Section</label>
+          <select value={tabId} onChange={(e) => setTabId(e.target.value)} style={selectS}>
+            {editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
         <div style={{ flex: 1 }}>
-          <h4
-            style={{
-              color: "#5d4037",
-              marginBottom: "5px",
-              fontSize: "16px",
-            }}
-          >
-            {title}
-          </h4>
-          <div
-            style={{
-              display: "inline-block",
-              padding: "4px 8px",
-              backgroundColor: status.color,
-              color: status.textColor,
-              borderRadius: "4px",
-              fontSize: "11px",
-              fontWeight: "600",
-              marginTop: "5px",
-            }}
-          >
-            {status.text}
-          </div>
+          <label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label>
+          <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
+            {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
+          </select>
         </div>
+        <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
+          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
+        <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
+          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
       </div>
 
-      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-        <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-          <button
-            onClick={() =>
-              setExpandedNotes((prev) => ({
-                ...prev,
-                [kpiKey]: !prev[kpiKey],
-              }))
-            }
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "12px",
-            }}
-          >
-            Add notes
-          </button>
-          <button
-            onClick={handleAIAnalysis}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "12px",
-            }}
-          >
-            AI analysis
-          </button>
-          <button
-            onClick={() => openTrendModal(title, data, isPercentage)}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "12px",
-            }}
-          >
-            View trend
+      {(tabId === "productivity" || tabId === "capability") && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex",
+          alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <Info size={16} color={T.accentSoft} />
+          <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
+            Revenue per employee, labour cost % and training spend can be computed from Financial Performance rather than typed.
+          </span>
+          <button onClick={async () => { setPulling(true); await onPullFinancials(); setPulling(false); }}
+            disabled={pulling} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: pulling ? 0.6 : 1 }}>
+            <RefreshCw size={12} /> {pulling ? "Pulling…" : "Pull from Financials"}
           </button>
         </div>
-
-        {expandedNotes[kpiKey] && (
-          <div style={{ marginBottom: "10px" }}>
-            <label
-              style={{
-                fontSize: "12px",
-                color: "#5d4037",
-                fontWeight: "600",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Notes / Comments:
-            </label>
-            <textarea
-              value={kpiNotes[kpiKey] || ""}
-              onChange={(e) =>
-                setKpiNotes((prev) => ({ ...prev, [kpiKey]: e.target.value }))
-              }
-              placeholder="Add notes or comments..."
-              style={{
-                width: "100%",
-                padding: "10px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                minHeight: "60px",
-                fontSize: "13px",
-              }}
-            />
-          </div>
-        )}
-
-        {expandedNotes[`${kpiKey}_analysis`] && (
-          <div
-            style={{
-              backgroundColor: "#e3f2fd",
-              padding: "15px",
-              borderRadius: "6px",
-              border: "1px solid #90caf9",
-            }}
-          >
-            <label
-              style={{
-                fontSize: "12px",
-                color: "#1565c0",
-                fontWeight: "600",
-                display: "block",
-                marginBottom: "8px",
-              }}
-            >
-              AI Analysis:
-            </label>
-            <p
-              style={{
-                fontSize: "13px",
-                color: "#1565c0",
-                lineHeight: "1.5",
-                margin: 0,
-              }}
-            >
-              {kpiAnalysis[kpiKey] ||
-                `Based on current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : currentValue.toFixed(1)}:
-                  \n\nThis metric indicates your ${title.toLowerCase()} position. ${status.text === "Critical" || status.text === "High Risk" ? "Immediate attention required." : "Monitor regularly."}
-                  \n\nRecommended actions:
-                  \n• ${
-                    kpiKey === "founderLoad"
-                      ? "Consider delegating responsibilities or hiring leadership"
-                      : kpiKey === "criticalFunctionsSinglePoint"
-                        ? "Develop backup plans for single-point dependencies"
-                        : kpiKey === "criticalRolesWith2IC"
-                          ? "Invest in developing successors for key roles"
-                          : kpiKey === "spanOfControl"
-                            ? "Review organizational structure and reporting lines"
-                            : "Review and optimize this metric"
-                  }
-                  \n• Set improvement targets
-                  \n• Track progress monthly`}
-            </p>
-            <button
-              onClick={handleAIAnalysis}
-              style={{
-                marginTop: "10px",
-                padding: "6px 12px",
-                backgroundColor: "#1565c0",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "12px",
-              }}
-            >
-              Get Detailed AI Analysis →
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* People Analysis Modal */}
-      {showAnalysisModal && selectedMetricForAnalysis && (
-        <PeopleAnalysisModal
-          isOpen={showAnalysisModal}
-          onClose={() => {
-            setShowAnalysisModal(false);
-            setSelectedMetricForAnalysis(null);
-          }}
-          kpiTitle={selectedMetricForAnalysis.title}
-          kpiKey={selectedMetricForAnalysis.key}
-          kpiValue={selectedMetricForAnalysis.value}
-          contextData={selectedMetricForAnalysis.contextData}
-          company={{
-            name: "Your Business",
-            stage: "Growth Stage",
-            industry: "General",
-          }}
-          currentUser={user}
-          section="execution-capacity"
-        />
       )}
-    </div>
-  );
-};
 
-
-  const renderFounderLoadTable = () => {
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h4
-            style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}
-          >
-            Founder Operational Load - Last 12 Months
-          </h4>
-          <EyeIcon
-            onClick={() =>
-              handleCalculationClick(
-                "Founder Operational Load",
-                "Founder Operational Load measures the level of dependency on founders for daily operations.\n\n" +
-                  "Scale:\n• 1 = Low: Founder focused on strategy, operations delegated\n" +
-                  "• 2 = Medium: Founder involved in key decisions\n" +
-                  "• 3 = High: Founder critical to daily operations\n" +
-                  "• 4 = Critical: Business cannot operate without founder\n\n" +
-                  "Target: Maintain at Level 1-2 to ensure scalability.",
-              )
-            }
-          />
-        </div>
-
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
             <thead>
-              <tr style={{ backgroundColor: "#e8ddd4" }}>
-                <th
-                  style={{
-                    padding: "10px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Month
-                </th>
-                {trendMonths.map((month, idx) => (
-                  <th
-                    key={month}
-                    style={{
-                      padding: "10px",
-                      textAlign: "center",
-                      color: "#5d4037",
-                      fontSize: "12px",
-                    }}
-                  >
-                    {month}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
               <tr>
-                <td
-                  style={{
-                    padding: "10px",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                    fontWeight: "600",
-                  }}
-                >
-                  Load Level
-                </td>
-                {executionData.founderLoad.slice(-12).map((value, idx) => {
-                  const status = getStatus(value, "founderLoad");
-
-                  return (
-                    <td
-                      key={idx}
-                      style={{ padding: "10px", textAlign: "center" }}
-                    >
-                      <div
-                        style={{
-                          padding: "8px 4px",
-                          backgroundColor: status.color,
-                          color: status.textColor,
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          minWidth: "60px",
-                        }}
-                      >
-                        {status.text}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ marginTop: "15px", color: "#8d6e63", fontSize: "12px" }}>
-          <strong>Calculation:</strong> Founder Operational Load is assessed on
-          a scale of 1-4 based on founder involvement in daily operations.
-          <br />
-          <strong>Target:</strong> Low to Medium (1-2) for scalable businesses.
-        </div>
-      </div>
-    );
-  };
-
-  const renderSpanOfControlTable = () => {
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h4
-            style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}
-          >
-            Average Span of Control - Last 12 Months
-          </h4>
-          <EyeIcon
-            onClick={() =>
-              handleCalculationClick(
-                "Span of Control",
-                "Span of Control measures the number of direct reports per manager.\n\n" +
-                  "Calculation: Total number of non-manager employees ÷ Total number of managers\n\n" +
-                  "Guidelines:\n• Optimal: 5-8 direct reports\n• Review: <3 or >8 direct reports\n• Critical: <3 or >12 direct reports\n\n" +
-                  "Too narrow (<3): Top-heavy structure, high management costs\n" +
-                  "Too wide (>8): Managers may be overstretched\n" +
-                  "Optimal range: Balance of supervision and efficiency",
-              )
-            }
-          />
-        </div>
-
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ backgroundColor: "#e8ddd4" }}>
-                <th
-                  style={{
-                    padding: "10px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Month
-                </th>
-                {trendMonths.map((month, idx) => (
-                  <th
-                    key={month}
-                    style={{
-                      padding: "10px",
-                      textAlign: "center",
-                      color: "#5d4037",
-                      fontSize: "12px",
-                    }}
-                  >
-                    {month}
-                  </th>
-                ))}
+                <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
+                <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
+                <th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td
-                  style={{
-                    padding: "10px",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                    fontWeight: "600",
-                  }}
-                >
-                  Average Number
-                </td>
-                {executionData.spanOfControl.slice(-12).map((value, idx) => {
-                  const status = getStatus(value, "spanOfControl");
-
-                  return (
-                    <td
-                      key={idx}
-                      style={{ padding: "10px", textAlign: "center" }}
-                    >
-                      <div
-                        style={{
-                          padding: "8px 4px",
-                          backgroundColor: status.color,
-                          color: status.textColor,
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          minWidth: "60px",
-                        }}
-                      >
-                        {value
-                          ? `${Number.parseFloat(value).toFixed(1)}`
-                          : "Not Set"}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ marginTop: "15px", color: "#8d6e63", fontSize: "12px" }}>
-          <strong>Guidelines:</strong> Optimal: 5-8 | Review: &lt;3 or &gt;8 |
-          Critical: &lt;3 or &gt;12
-        </div>
-      </div>
-    );
-  };
-
-  if (activeSection !== "execution-capacity") return null;
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      <KeyQuestionBox
-        question="Is leadership overstretched? Is the current team sufficient to deliver the existing and near-term workload?"
-        signals="Founder bottleneck, capacity strain, single points of failure"
-        decisions="Redesign organization, de-risk key roles, hire leadership"
-        section="execution-capacity"
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-          gap: "10px",
-        }}
-      >
-        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>
-          Execution Capacity & Scalability
-        </h2>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                minWidth: "100px",
-              }}
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Add Data
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* CRITICAL CHARTS - First Row - 2 per row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {renderKPICard(
-          "% Critical Functions Dependent on 1 Person",
-          executionData.criticalFunctionsSinglePoint,
-          "criticalFunctionsSinglePoint",
-          "",
-          true,
-          "Critical Functions Single Point of Failure measures the percentage of key business functions that rely on a single individual.\n\n" +
-            "Calculation: (Number of critical functions dependent on 1 person ÷ Total critical functions) × 100%\n\n" +
-            "Risk Levels:\n• <20%: Low Risk - Adequate redundancy\n• 20-40%: Medium Risk - Some vulnerability\n• 40-60%: High Risk - Significant vulnerability\n• >60%: Critical Risk - Business continuity at risk\n\n" +
-            "Target: <20% to ensure business continuity.",
-        )}
-        {renderKPICard(
-          "% Critical Roles with 2IC",
-          executionData.criticalRolesWith2IC,
-          "criticalRolesWith2IC",
-          "",
-          true,
-          "Critical Roles with Second-in-Command measures leadership succession readiness.\n\n" +
-            "Calculation: (Number of critical roles with identified successor ÷ Total critical roles) × 100%\n\n" +
-            "Health Levels:\n• >80%: Strong - Good succession planning\n• 60-80%: Adequate - Some coverage\n• 40-60%: Weak - Significant gaps\n• <40%: Critical - No succession plan\n\n" +
-            "Target: >80% for organizational resilience.",
-        )}
-      </div>
-
-      {/* LONG TABLES - Only the original two tables with last 11 + current month data */}
-      {renderFounderLoadTable()}
-      {renderSpanOfControlTable()}
-
-      {/* Unified Data Entry Modal */}
-      <UnifiedDataEntryModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        currentTab="execution-capacity"
-        user={user}
-        onSave={loadExecutionData}
-        loading={loading}
-      />
-
-      {/* Calculation Modal */}
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-
-      {/* Trend Modal */}
-      {showTrendModal && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => setShowTrendModal(false)}
-          item={selectedTrendItem}
-          currencyUnit="zar"
-          formatValue={formatValue}
-        />
-      )}
-    </div>
-  );
-};
-
-// ==================== PRODUCTIVITY COMPONENT ====================
-
-const Productivity = ({ activeSection, user, isInvestorView }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [expandedNotes, setExpandedNotes] = useState({});
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [kpiAnalysis, setKpiAnalysis] = useState({});
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-  const [currencyUnit, setCurrencyUnit] = useState("zar_million");
-
-  // Data structure for productivity KPIs with Actual & Budget
-  const [productivityData, setProductivityData] = useState({
-    salesVolumePerEmployee: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    revenuePerEmployee: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    laborCostPercentage: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    overtimeHours: { actual: Array(12).fill(""), budget: Array(12).fill("") },
-  });
-
-  // Financial data pulled from Financial Performance
-  const [financialData, setFinancialData] = useState({
-    revenue: Array(12).fill(0),
-    laborCost: Array(12).fill(0),
-    employeeCount: Array(12).fill(1),
-  });
-
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i);
-
-  useEffect(() => {
-    if (user) {
-      loadProductivityData();
-      loadFinancialData();
-    }
-  }, [user]);
-
-  const loadProductivityData = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const productivityDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_productivity`),
-      );
-      if (productivityDoc.exists()) {
-        const data = productivityDoc.data();
-        if (data.productivityData) setProductivityData(data.productivityData);
-        if (data.kpiNotes) setKpiNotes(data.kpiNotes);
-        if (data.kpiAnalysis) setKpiAnalysis(data.kpiAnalysis);
-      }
-    } catch (error) {
-      console.error("Error loading productivity data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadFinancialData = async () => {
-    if (!user) return;
-    const data = await pullFinancialData(user.uid);
-    setFinancialData(data);
-
-    // Calculate revenue per employee from financial data
-    const revenuePerEmployee = data.revenue.map((rev, i) => {
-      const empCount = data.employeeCount[i] || 1;
-      return rev / empCount;
-    });
-
-    // Calculate labor cost percentage
-    const laborCostPercentage = data.revenue.map((rev, i) => {
-      if (rev === 0) return 0;
-      return (data.laborCost[i] / rev) * 100;
-    });
-
-    setProductivityData((prev) => ({
-      ...prev,
-      revenuePerEmployee: {
-        actual: revenuePerEmployee.map((v) => v.toString()),
-        budget: prev.revenuePerEmployee?.budget || Array(12).fill(""),
-      },
-      laborCostPercentage: {
-        actual: laborCostPercentage.map((v) => v.toFixed(2).toString()),
-        budget: prev.laborCostPercentage?.budget || Array(12).fill(""),
-      },
-    }));
-  };
-
-  const formatValue = (value, unit = currencyUnit) => {
-    const num = Number.parseFloat(value) || 0;
-    switch (unit) {
-      case "zar":
-        return `R${num.toLocaleString()}`;
-      case "zar_thousand":
-        return `R${(num * 1000).toLocaleString()}`;
-      case "zar_million":
-        return `R${num.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
-      case "zar_billion":
-        return `R${(num / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      default:
-        return `R${num.toLocaleString()}`;
-    }
-  };
-
-  const formatNumber = (value) => {
-    const num = Number.parseFloat(value) || 0;
-    return num.toFixed(1);
-  };
-
-  const formatPercentage = (value) => {
-    const num = Number.parseFloat(value) || 0;
-    return `${num.toFixed(1)}%`;
-  };
-
-  const formatHours = (value) => {
-    const num = Number.parseFloat(value) || 0;
-    return `${num.toFixed(0)} hrs`;
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation });
-    setShowCalculationModal(true);
-  };
-
-  const openTrendModal = (itemName, dataArray, unit = "number") => {
-    if (!dataArray) return;
-
-    const trendData = dataArray.map((v) => parseFloat(v) || 0);
-    const trendLabels = months;
-
-    setSelectedTrendItem({
-      name: itemName,
-      data: trendData,
-      labels: trendLabels,
-      unit,
-    });
-    setShowTrendModal(true);
-  };
-
-  // Circle colors
-  const circleColors = [
-    { border: "#FF8C00", background: "#FFB347", text: "#663d00" },
-    { border: "#32CD32", background: "#90EE90", text: "#1e4d1e" },
-    { border: "#FFA500", background: "#FFD700", text: "#664d00" },
-  ];
-
-  const TrendArrow = ({ value, goodDirection = "up" }) => {
-    const isPositive = value > 0;
-    const isGood =
-      (goodDirection === "up" && isPositive) ||
-      (goodDirection === "down" && !isPositive);
-
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-          justifyContent: "center",
-        }}
-      >
-        {isPositive ? (
-          <TrendingUp size={16} color={isGood ? "#16a34a" : "#dc2626"} />
-        ) : (
-          <TrendingDown size={16} color={isGood ? "#16a34a" : "#dc2626"} />
-        )}
-        <span
-          style={{
-            color: isGood ? "#16a34a" : "#dc2626",
-            fontSize: "12px",
-            fontWeight: "600",
-          }}
-        >
-          {Math.abs(value).toFixed(1)}%
-        </span>
-      </div>
-    );
-  };
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
-
-const renderTripleCard = (
-  title,
-  dataKey,
-  unit = "number",
-  goodDirection = "up",
-  calculation = "",
-) => {
-  const monthIndex = new Date().getMonth();
-
-  let actualValue = 0;
-  let budgetValue = 0;
-  let formatFn = formatNumber;
-
-  if (dataKey === "revenuePerEmployee") {
-    actualValue = parseFloat(productivityData.revenuePerEmployee?.actual?.[monthIndex]) || 0;
-    budgetValue = parseFloat(productivityData.revenuePerEmployee?.budget?.[monthIndex]) || 0;
-    formatFn = formatValue;
-    unit = "currency";
-  } else if (dataKey === "laborCostPercentage") {
-    actualValue = parseFloat(productivityData.laborCostPercentage?.actual?.[monthIndex]) || 0;
-    budgetValue = parseFloat(productivityData.laborCostPercentage?.budget?.[monthIndex]) || 0;
-    formatFn = formatPercentage;
-    unit = "percentage";
-  } else if (dataKey === "salesVolumePerEmployee") {
-    actualValue = parseFloat(productivityData.salesVolumePerEmployee?.actual?.[monthIndex]) || 0;
-    budgetValue = parseFloat(productivityData.salesVolumePerEmployee?.budget?.[monthIndex]) || 0;
-    formatFn = formatNumber;
-  } else if (dataKey === "overtimeHours") {
-    actualValue = parseFloat(productivityData.overtimeHours?.actual?.[monthIndex]) || 0;
-    budgetValue = parseFloat(productivityData.overtimeHours?.budget?.[monthIndex]) || 0;
-    formatFn = formatHours;
-  }
-
-  const variance = actualValue - budgetValue;
-  const variancePercent = budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
-
-  const handleAIAnalysis = () => {
-    setSelectedMetricForAnalysis({
-      title: title,
-      key: dataKey,
-      value: actualValue,
-      contextData: {
-        unit: unit,
-        budgetValue: budgetValue,
-        variancePercent: variancePercent,
-        benchmark: dataKey === "revenuePerEmployee" ? 500000 :
-                   dataKey === "laborCostPercentage" ? 35 :
-                   dataKey === "salesVolumePerEmployee" ? 100 :
-                   dataKey === "overtimeHours" ? 10 : 50,
-        timeRange: "Current Month",
-      },
-    });
-    setShowAnalysisModal(true);
-  };
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        marginBottom: "20px",
-        position: "relative",
-        border: "1px solid #e8ddd4",
-      }}
-    >
-      {/* Eye Icon */}
-      <div
-        onClick={() => handleCalculationClick(title, calculation)}
-        style={{
-          position: "absolute",
-          top: "10px",
-          right: "10px",
-          cursor: "pointer",
-          width: "32px",
-          height: "32px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: "50%",
-          backgroundColor: "#fdfcfb",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          zIndex: 10,
-          border: `2px solid ${circleColors[0].border}`,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = "#e8ddd4";
-          e.currentTarget.style.transform = "scale(1.1)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = "#fdfcfb";
-          e.currentTarget.style.transform = "scale(1)";
-        }}
-      >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={circleColors[0].border}
-          strokeWidth="2"
-        >
-          <circle cx="12" cy="12" r="2"></circle>
-          <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
-          <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
-        </svg>
-      </div>
-
-      {/* Title */}
-      <h4
-        style={{
-          color: "#5d4037",
-          marginBottom: "20px",
-          fontSize: "16px",
-          textAlign: "center",
-          fontWeight: "600",
-        }}
-      >
-        {title}
-      </h4>
-
-      {/* Three Circles */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-around",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        {/* Actual Circle */}
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              width: "80px",
-              height: "80px",
-              borderRadius: "50%",
-              border: `4px solid ${circleColors[0].border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 8px",
-              backgroundColor: circleColors[0].background,
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  color: circleColors[0].text,
-                }}
-              >
-                {formatFn(actualValue)}
-              </div>
-            </div>
-          </div>
-          <div
-            style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-          >
-            Actual
-          </div>
-        </div>
-
-        {/* Budget Circle */}
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              width: "80px",
-              height: "80px",
-              borderRadius: "50%",
-              border: `4px solid ${circleColors[1].border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 8px",
-              backgroundColor: circleColors[1].background,
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  color: circleColors[1].text,
-                }}
-              >
-                {formatFn(budgetValue)}
-              </div>
-            </div>
-          </div>
-          <div
-            style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-          >
-            Budget
-          </div>
-        </div>
-
-        {/* Variance Circle */}
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              width: "80px",
-              height: "80px",
-              borderRadius: "50%",
-              border: `4px solid ${circleColors[2].border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 8px",
-              backgroundColor: circleColors[2].background,
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <TrendArrow
-                value={variancePercent}
-                goodDirection={goodDirection}
-              />
-            </div>
-          </div>
-          <div
-            style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-          >
-            Variance
-          </div>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            justifyContent: "center",
-            marginBottom: "10px",
-          }}
-        >
-          <button
-            onClick={() =>
-              setExpandedNotes((prev) => ({
-                ...prev,
-                [dataKey]: !prev[dataKey],
-              }))
-            }
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "12px",
-            }}
-          >
-            Add notes
-          </button>
-          <button
-            onClick={handleAIAnalysis}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "12px",
-            }}
-          >
-            AI analysis
-          </button>
-          <button
-            onClick={() => {
-              let dataArray = [];
-              if (dataKey === "revenuePerEmployee")
-                dataArray = productivityData.revenuePerEmployee?.actual || [];
-              else if (dataKey === "laborCostPercentage")
-                dataArray = productivityData.laborCostPercentage?.actual || [];
-              else if (dataKey === "salesVolumePerEmployee")
-                dataArray = productivityData.salesVolumePerEmployee?.actual || [];
-              else if (dataKey === "overtimeHours")
-                dataArray = productivityData.overtimeHours?.actual || [];
-              openTrendModal(title, dataArray, unit);
-            }}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "12px",
-            }}
-          >
-            View trend
-          </button>
-        </div>
-
-        {expandedNotes[dataKey] && (
-          <div style={{ marginBottom: "10px" }}>
-            <label
-              style={{
-                fontSize: "12px",
-                color: "#5d4037",
-                fontWeight: "600",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Notes / Comments:
-            </label>
-            <textarea
-              value={kpiNotes[dataKey] || ""}
-              onChange={(e) =>
-                setKpiNotes((prev) => ({
-                  ...prev,
-                  [dataKey]: e.target.value,
-                }))
-              }
-              placeholder="Add notes or comments..."
-              style={{
-                width: "100%",
-                padding: "10px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                minHeight: "60px",
-                fontSize: "13px",
-              }}
-            />
-          </div>
-        )}
-
-        {expandedNotes[`${dataKey}_analysis`] && (
-          <div
-            style={{
-              backgroundColor: "#e3f2fd",
-              padding: "15px",
-              borderRadius: "6px",
-              border: "1px solid #90caf9",
-            }}
-          >
-            <label
-              style={{
-                fontSize: "12px",
-                color: "#1565c0",
-                fontWeight: "600",
-                display: "block",
-                marginBottom: "8px",
-              }}
-            >
-              AI Analysis:
-            </label>
-            <p
-              style={{
-                fontSize: "13px",
-                color: "#1565c0",
-                lineHeight: "1.5",
-                margin: 0,
-              }}
-            >
-              {kpiAnalysis[dataKey] ||
-                `Based on current ${title.toLowerCase()}:
-                  \n\nActual: ${formatFn(actualValue)} vs Budget: ${formatFn(budgetValue)}
-                  \nVariance: ${variancePercent > 0 ? "+" : ""}${variancePercent.toFixed(1)}%
-                  \n\nRecommended actions:
-                  \n• ${variancePercent > 0 ? "Exceeding budget - analyze what's working well" : "Below budget - investigate causes and adjust plans"}
-                  \n• Review trends over past months
-                  \n• Set improvement targets for next period`}
-            </p>
-            <button
-              onClick={handleAIAnalysis}
-              style={{
-                marginTop: "10px",
-                padding: "6px 12px",
-                backgroundColor: "#1565c0",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "12px",
-              }}
-            >
-              Get Detailed AI Analysis →
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* People Analysis Modal */}
-      {showAnalysisModal && selectedMetricForAnalysis && (
-        <PeopleAnalysisModal
-          isOpen={showAnalysisModal}
-          onClose={() => {
-            setShowAnalysisModal(false);
-            setSelectedMetricForAnalysis(null);
-          }}
-          kpiTitle={selectedMetricForAnalysis.title}
-          kpiKey={selectedMetricForAnalysis.key}
-          kpiValue={selectedMetricForAnalysis.value}
-          contextData={selectedMetricForAnalysis.contextData}
-          company={{
-            name: "Your Business",
-            stage: "Growth Stage",
-            industry: "General",
-          }}
-          currentUser={user}
-          section="productivity"
-        />
-      )}
-    </div>
-  );
-};
-  if (activeSection !== "productivity") return null;
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      <KeyQuestionBox
-        question="Is output scaling with people? Are we getting efficient returns on our human capital investment?"
-        signals="Efficiency trend, revenue per employee, labor cost ratio"
-        decisions="Slow hiring, fix execution processes, invest in automation"
-        section="productivity"
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-          gap: "10px",
-        }}
-      >
-        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>
-          Productivity
-        </h2>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                minWidth: "100px",
-              }}
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Add Data
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Productivity Triple Cards - 2 per row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {renderTripleCard(
-          "Revenue per Employee",
-          "revenuePerEmployee",
-          "currency",
-          "up",
-          "Revenue per Employee measures the average revenue generated per employee.\n\n" +
-            "Calculation: Total Revenue ÷ Total Number of Employees\n\n" +
-            "This metric is automatically calculated from Financial Performance data:\n" +
-            "• Revenue: Pulled from P&L Statement\n" +
-            "• Employee Count: Pulled from Balance Sheet - Additional Metrics\n\n" +
-            "Higher values indicate better productivity and efficiency.\n" +
-            "Compare against industry benchmarks and track trends over time.",
-        )}
-        {renderTripleCard(
-          "Labour Cost % of Revenue",
-          "laborCostPercentage",
-          "percentage",
-          "down",
-          "Labour Cost as Percentage of Revenue measures the proportion of revenue spent on employee compensation.\n\n" +
-            "Calculation: (Total Employee Compensation ÷ Total Revenue) × 100%\n\n" +
-            "This metric is automatically calculated from Financial Performance data:\n" +
-            "• Labour Cost: Pulled from P&L Statement (Salaries & Wages)\n" +
-            "• Revenue: Pulled from P&L Statement\n\n" +
-            "Target ranges by industry:\n" +
-            "• Service businesses: 30-50%\n" +
-            "• Manufacturing: 20-35%\n" +
-            "• Retail: 10-20%\n" +
-            "• Tech/SaaS: 40-60%",
-        )}
-        {renderTripleCard(
-          "Sales Volume per Employee",
-          "salesVolumePerEmployee",
-          "number",
-          "up",
-          "Sales Volume per Employee measures the average number of units sold per employee.\n\n" +
-            "Calculation: Total Units Sold ÷ Total Number of Employees\n\n" +
-            "This metric helps assess operational efficiency and sales productivity.\n" +
-            "Enter monthly sales volume data manually in the Add Data modal.\n\n" +
-            "Track this metric to:\n" +
-            "• Identify top-performing periods\n" +
-            "• Plan seasonal staffing needs\n" +
-            "• Benchmark sales team performance",
-        )}
-        {renderTripleCard(
-          "Overtime Hours",
-          "overtimeHours",
-          "hours",
-          "down",
-          "Overtime Hours measures the average overtime hours worked per period.\n\n" +
-            "Calculation: Total overtime hours recorded\n\n" +
-            "High or increasing overtime may indicate:\n" +
-            "• Understaffing\n" +
-            "• Inefficient processes\n" +
-            "• Imbalanced workload distribution\n" +
-            "• Potential burnout risk\n\n" +
-            "Target: Minimize overtime through proper staffing and process improvement.",
-        )}
-      </div>
-
-      {/* Unified Data Entry Modal */}
-      <UnifiedDataEntryModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        currentTab="productivity"
-        user={user}
-        onSave={() => {
-          loadProductivityData();
-          loadFinancialData();
-        }}
-        loading={loading}
-      />
-
-      {/* Calculation Modal */}
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-
-      {/* Trend Modal */}
-      {showTrendModal && selectedTrendItem && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => setShowTrendModal(false)}
-          title={selectedTrendItem.name}
-          data={selectedTrendItem.data}
-          labels={selectedTrendItem.labels}
-          unit={selectedTrendItem.unit}
-        />
-      )}
-    </div>
-  );
-};
-// ==================== CAPABILITY & TRAINING COMPONENT ====================
-
-const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [expandedNotes, setExpandedNotes] = useState({});
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [kpiAnalysis, setKpiAnalysis] = useState({});
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-  const [currencyUnit, setCurrencyUnit] = useState("zar_million");
-
-  // Data structure for detailed employee tracking
-  const [employeeTrackingData, setEmployeeTrackingData] = useState([]);
-
-  // Data structure for capability & training KPIs with Actual & Budget
-  const [capabilityData, setCapabilityData] = useState({
-    trainingSpendAmount: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    trainingSpendPercentage: {
-      actual: Array(12).fill(""),
-      budget: Array(12).fill(""),
-    },
-    trainingFocus: { actual: Array(12).fill(""), budget: Array(12).fill("") },
-  });
-
-  // Financial data pulled from Financial Performance
-  const [financialData, setFinancialData] = useState({
-    laborCost: Array(12).fill(1),
-    trainingSpend: Array(12).fill(0),
-  });
-
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i);
-
-  useEffect(() => {
-    if (user) {
-      loadCapabilityData();
-      loadEmployeeTrackingData();
-      loadFinancialData();
-    }
-  }, [user]);
-
-  const loadCapabilityData = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const capabilityDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_capabilityTraining`),
-      );
-      if (capabilityDoc.exists()) {
-        const data = capabilityDoc.data();
-        if (data.capabilityData) setCapabilityData(data.capabilityData);
-        if (data.kpiNotes) setKpiNotes(data.kpiNotes);
-        if (data.kpiAnalysis) setKpiAnalysis(data.kpiAnalysis);
-      }
-    } catch (error) {
-      console.error("Error loading capability data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadEmployeeTrackingData = async () => {
-    if (!user) return;
-    try {
-      const employeeDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_employeeTracking`),
-      );
-      if (employeeDoc.exists()) {
-        const data = employeeDoc.data();
-        if (data.employees) setEmployeeTrackingData(data.employees);
-      }
-    } catch (error) {
-      console.error("Error loading employee tracking data:", error);
-    }
-  };
-
-  const loadFinancialData = async () => {
-    if (!user) return;
-    const data = await pullFinancialData(user.uid);
-    setFinancialData({
-      laborCost: data.laborCost,
-      trainingSpend: data.trainingSpend,
-    });
-
-    // Calculate training spend percentage
-    const trainingSpendPercentage = data.trainingSpend.map((spend, i) => {
-      const labor = data.laborCost[i] || 1;
-      return (spend / labor) * 100;
-    });
-
-    setCapabilityData((prev) => ({
-      ...prev,
-      trainingSpendAmount: {
-        actual: data.trainingSpend.map((v) => v.toString()),
-        budget: prev.trainingSpendAmount?.budget || Array(12).fill(""),
-      },
-      trainingSpendPercentage: {
-        actual: trainingSpendPercentage.map((v) => v.toFixed(2).toString()),
-        budget: prev.trainingSpendPercentage?.budget || Array(12).fill(""),
-      },
-    }));
-  };
-
-  const formatValue = (value, unit = currencyUnit) => {
-    const num = Number.parseFloat(value) || 0;
-    switch (unit) {
-      case "zar":
-        return `R${num.toLocaleString()}`;
-      case "zar_thousand":
-        return `R${(num * 1000).toLocaleString()}`;
-      case "zar_million":
-        return `R${num.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
-      case "zar_billion":
-        return `R${(num / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      default:
-        return `R${num.toLocaleString()}`;
-    }
-  };
-
-  const formatPercentage = (value) => {
-    const num = Number.parseFloat(value) || 0;
-    return `${num.toFixed(1)}%`;
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation });
-    setShowCalculationModal(true);
-  };
-
-  const openTrendModal = (itemName, dataArray, unit = "number") => {
-    if (!dataArray) return;
-
-    const trendData = dataArray.map((v) => parseFloat(v) || 0);
-    const trendLabels = months;
-
-    setSelectedTrendItem({
-      name: itemName,
-      data: trendData,
-      labels: trendLabels,
-      unit,
-    });
-    setShowTrendModal(true);
-  };
-
-  // Circle colors
-  const circleColors = [
-    { border: "#FF8C00", background: "#FFB347", text: "#663d00" },
-    { border: "#32CD32", background: "#90EE90", text: "#1e4d1e" },
-    { border: "#FFA500", background: "#FFD700", text: "#664d00" },
-  ];
-
-  const TrendArrow = ({ value, goodDirection = "up" }) => {
-    const isPositive = value > 0;
-    const isGood =
-      (goodDirection === "up" && isPositive) ||
-      (goodDirection === "down" && !isPositive);
-
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-          justifyContent: "center",
-        }}
-      >
-        {isPositive ? (
-          <TrendingUp size={16} color={isGood ? "#16a34a" : "#dc2626"} />
-        ) : (
-          <TrendingDown size={16} color={isGood ? "#16a34a" : "#dc2626"} />
-        )}
-        <span
-          style={{
-            color: isGood ? "#16a34a" : "#dc2626",
-            fontSize: "12px",
-            fontWeight: "600",
-          }}
-        >
-          {Math.abs(value).toFixed(1)}%
-        </span>
-      </div>
-    );
-  };
-
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
-
-
-
- const renderTripleCard = (
-  title,
-  dataKey,
-  unit = "number",
-  goodDirection = "up",
-  calculation = "",
-) => {
-  const monthIndex = new Date().getMonth();
-
-  let actualValue = 0;
-  let budgetValue = 0;
-  let formatFn = formatValue;
-
-  if (dataKey === "trainingSpendAmount") {
-    actualValue = parseFloat(capabilityData.trainingSpendAmount?.actual?.[monthIndex]) || 0;
-    budgetValue = parseFloat(capabilityData.trainingSpendAmount?.budget?.[monthIndex]) || 0;
-    formatFn = (val) => formatValue(val, "zar_million");
-    unit = "currency";
-  } else if (dataKey === "trainingSpendPercentage") {
-    actualValue = parseFloat(capabilityData.trainingSpendPercentage?.actual?.[monthIndex]) || 0;
-    budgetValue = parseFloat(capabilityData.trainingSpendPercentage?.budget?.[monthIndex]) || 0;
-    formatFn = formatPercentage;
-    unit = "percentage";
-  } else if (dataKey === "trainingFocus") {
-    const actualVal = capabilityData.trainingFocus?.actual?.[monthIndex] || "";
-    const budgetVal = capabilityData.trainingFocus?.budget?.[monthIndex] || "";
-
-    const getFocusLabel = (val) => {
-      if (val === "1") return "Technical";
-      if (val === "2") return "Leadership";
-      if (val === "3") return "Compliance";
-      return "Not Set";
-    };
-
-    actualValue = getFocusLabel(actualVal);
-    budgetValue = getFocusLabel(budgetVal);
-    formatFn = (val) => val;
-  }
-
-  const showVariance = dataKey !== "trainingFocus";
-  const variance = showVariance ? actualValue - budgetValue : 0;
-  const variancePercent = showVariance && budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
-
-  // FIXED: handleAIAnalysis function now uses the parameters correctly
-  const handleAIAnalysis = () => {
-    setSelectedMetricForAnalysis({
-      title: title,
-      key: dataKey,
-      value: actualValue,
-      contextData: {
-        unit: unit,
-        budgetValue: budgetValue,
-        variancePercent: variancePercent,
-        benchmark: dataKey === "trainingSpendAmount" ? 50000 :
-                   dataKey === "trainingSpendPercentage" ? 3 :
-                   dataKey === "trainingFocus" ? 2 : 50,
-        timeRange: "Current Month",
-      },
-    });
-    setShowAnalysisModal(true);
-  };
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        marginBottom: "20px",
-        position: "relative",
-        border: "1px solid #e8ddd4",
-      }}
-    >
-      {/* Eye Icon */}
-      <div
-        onClick={() => handleCalculationClick(title, calculation)}
-        style={{
-          position: "absolute",
-          top: "10px",
-          right: "10px",
-          cursor: "pointer",
-          width: "32px",
-          height: "32px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: "50%",
-          backgroundColor: "#fdfcfb",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          zIndex: 10,
-          border: `2px solid ${circleColors[0].border}`,
-        }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={circleColors[0].border} strokeWidth="2">
-          <circle cx="12" cy="12" r="2"></circle>
-          <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
-          <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
-        </svg>
-      </div>
-
-      {/* Title */}
-      <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px", textAlign: "center", fontWeight: "600" }}>
-        {title}
-      </h4>
-
-      {/* Three Circles */}
-      <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", marginBottom: "20px" }}>
-        {/* Actual Circle */}
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            width: "80px", height: "80px", borderRadius: "50%",
-            border: `4px solid ${circleColors[0].border}`, display: "flex",
-            alignItems: "center", justifyContent: "center", margin: "0 auto 8px",
-            backgroundColor: circleColors[0].background,
-          }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[0].text }}>
-                {formatFn(actualValue)}
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Actual</div>
-        </div>
-
-        {/* Budget Circle */}
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            width: "80px", height: "80px", borderRadius: "50%",
-            border: `4px solid ${circleColors[1].border}`, display: "flex",
-            alignItems: "center", justifyContent: "center", margin: "0 auto 8px",
-            backgroundColor: circleColors[1].background,
-          }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[1].text }}>
-                {formatFn(budgetValue)}
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Budget</div>
-        </div>
-
-        {/* Variance Circle */}
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            width: "80px", height: "80px", borderRadius: "50%",
-            border: `4px solid ${circleColors[2].border}`, display: "flex",
-            alignItems: "center", justifyContent: "center", margin: "0 auto 8px",
-            backgroundColor: circleColors[2].background,
-          }}>
-            <div style={{ textAlign: "center" }}>
-              {showVariance ? (
-                <TrendArrow value={variancePercent} goodDirection={goodDirection} />
-              ) : (
-                <span style={{ fontSize: "12px", color: circleColors[2].text }}>N/A</span>
-              )}
-            </div>
-          </div>
-          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Variance</div>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-        <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "10px" }}>
-          <button onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-            style={{ padding: "6px 12px", backgroundColor: "#e8ddd4", color: "#5d4037", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}>
-            Add notes
-          </button>
-          <button onClick={handleAIAnalysis}
-            style={{ padding: "6px 12px", backgroundColor: "#e8ddd4", color: "#5d4037", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}>
-            AI analysis
-          </button>
-          <button onClick={() => {
-            let dataArray = [];
-            if (dataKey === "trainingSpendAmount") dataArray = capabilityData.trainingSpendAmount?.actual || [];
-            else if (dataKey === "trainingSpendPercentage") dataArray = capabilityData.trainingSpendPercentage?.actual || [];
-            else if (dataKey === "trainingFocus") dataArray = capabilityData.trainingFocus?.actual || [];
-            openTrendModal(title, dataArray, unit);
-          }} style={{ padding: "6px 12px", backgroundColor: "#e8ddd4", color: "#5d4037", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}>
-            View trend
-          </button>
-        </div>
-
-        {expandedNotes[dataKey] && (
-          <div style={{ marginBottom: "10px" }}>
-            <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "5px" }}>Notes / Comments:</label>
-            <textarea value={kpiNotes[dataKey] || ""} onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-              placeholder="Add notes or comments..." style={{ width: "100%", padding: "10px", borderRadius: "4px", border: "1px solid #e8ddd4", minHeight: "60px", fontSize: "13px" }} />
-          </div>
-        )}
-
-        {expandedNotes[`${dataKey}_analysis`] && (
-          <div style={{ backgroundColor: "#e3f2fd", padding: "15px", borderRadius: "6px", border: "1px solid #90caf9" }}>
-            <label style={{ fontSize: "12px", color: "#1565c0", fontWeight: "600", display: "block", marginBottom: "8px" }}>AI Analysis:</label>
-            <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-              {kpiAnalysis[dataKey] || `Based on current ${title.toLowerCase()}:
-                \n\nActual: ${formatFn(actualValue)} vs Budget: ${formatFn(budgetValue)}
-                \n${showVariance ? `Variance: ${variancePercent > 0 ? "+" : ""}${variancePercent.toFixed(1)}%` : ""}
-                \n\nRecommended actions:
-                \n• ${variancePercent > 0 ? "Exceeding budget - consider reallocating excess" : "Below budget - identify barriers to investment"}
-                \n• Compare against industry benchmarks
-                \n• Link training outcomes to business results`}
-            </p>
-            <button onClick={handleAIAnalysis} style={{ marginTop: "10px", padding: "6px 12px", backgroundColor: "#1565c0", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}>
-              Get Detailed AI Analysis →
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* People Analysis Modal */}
-      {showAnalysisModal && selectedMetricForAnalysis && (
-        <PeopleAnalysisModal
-          isOpen={showAnalysisModal}
-          onClose={() => { setShowAnalysisModal(false); setSelectedMetricForAnalysis(null); }}
-          kpiTitle={selectedMetricForAnalysis.title}
-          kpiKey={selectedMetricForAnalysis.key}
-          kpiValue={selectedMetricForAnalysis.value}
-          contextData={selectedMetricForAnalysis.contextData}
-          company={{ name: "Your Business", stage: "Growth Stage", industry: "General" }}
-          currentUser={user}
-          section="capability-training"
-        />
-      )}
-    </div>
-  );
-};
-
-  const renderEmployeeTrackingTable = () => {
-    // Calculate summary statistics
-    const totalEmployees = employeeTrackingData.length;
-    const skillsGapDone = employeeTrackingData.filter(
-      (e) => e.skillsGap?.status === "Done",
-    ).length;
-    const idpDone = employeeTrackingData.filter(
-      (e) => e.idp?.status === "Done",
-    ).length;
-    const midTermReviewDone = employeeTrackingData.filter(
-      (e) => e.midTermReview?.status === "Done",
-    ).length;
-    const annualReviewDone = employeeTrackingData.filter(
-      (e) => e.annualReview?.status === "Done",
-    ).length;
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h4
-            style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}
-          >
-            Employee Development Tracking
-          </h4>
-          <EyeIcon
-            onClick={() =>
-              handleCalculationClick(
-                "Employee Development Tracking",
-                "Employee Development Tracking measures the completion of key development activities.\n\n" +
-                  "Metrics tracked:\n\n" +
-                  "1. Skills Gap Assessment:\n" +
-                  "   • Identifies gaps between current and required skills\n" +
-                  "   • Should be conducted annually per employee\n" +
-                  "   • Target: 100% completion\n\n" +
-                  "2. Individual Development Plan (IDP):\n" +
-                  "   • Formal plan for employee growth and skill building\n" +
-                  "   • Should be created annually for each employee\n" +
-                  "   • Target: 100% completion\n\n" +
-                  "3. Mid-Term Performance Review:\n" +
-                  "   • Interim feedback and performance discussion\n" +
-                  "   • Should be conducted mid-year\n" +
-                  "   • Target: 100% completion\n\n" +
-                  "4. Annual Performance Review:\n" +
-                  "   • Comprehensive yearly performance evaluation\n" +
-                  "   • Should be conducted for all employees\n" +
-                  "   • Target: 100% completion\n\n" +
-                  "Completion rates below 80% indicate development process gaps.",
-              )
-            }
-          />
-        </div>
-
-        {/* Summary Statistics */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(5, 1fr)",
-            gap: "15px",
-            marginBottom: "20px",
-            padding: "15px",
-            backgroundColor: "#f5f0eb",
-            borderRadius: "6px",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}
-            >
-              {totalEmployees}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Total Employees
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "700",
-                color: skillsGapDone > 0 ? "#4caf50" : "#f44336",
-              }}
-            >
-              {skillsGapDone}/{totalEmployees}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Skills Gap Done
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "700",
-                color: idpDone > 0 ? "#4caf50" : "#f44336",
-              }}
-            >
-              {idpDone}/{totalEmployees}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>IDP Done</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "700",
-                color: midTermReviewDone > 0 ? "#4caf50" : "#f44336",
-              }}
-            >
-              {midTermReviewDone}/{totalEmployees}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Mid-Term Review Done
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "700",
-                color: annualReviewDone > 0 ? "#4caf50" : "#f44336",
-              }}
-            >
-              {annualReviewDone}/{totalEmployees}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Annual Review Done
-            </div>
-          </div>
-        </div>
-
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "13px",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#e8ddd4" }}>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                    borderBottom: "2px solid #5d4037",
-                  }}
-                >
-                  Employee
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    borderBottom: "2px solid #5d4037",
-                  }}
-                  colSpan="2"
-                >
-                  Skills Gap
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    borderBottom: "2px solid #5d4037",
-                  }}
-                  colSpan="2"
-                >
-                  IDP
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    borderBottom: "2px solid #5d4037",
-                  }}
-                  colSpan="2"
-                >
-                  Mid-Term Review
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    borderBottom: "2px solid #5d4037",
-                  }}
-                  colSpan="2"
-                >
-                  Annual Review
-                </th>
-              </tr>
-              <tr style={{ backgroundColor: "#f5f0eb" }}>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                ></th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Date
-                </th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Status
-                </th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Date
-                </th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Status
-                </th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Date
-                </th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Status
-                </th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Date
-                </th>
-                <th
-                  style={{
-                    padding: "8px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                    fontSize: "12px",
-                  }}
-                >
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {employeeTrackingData.length > 0 ? (
-                employeeTrackingData.map((employee, index) => (
-                  <tr
-                    key={employee.id || index}
-                    style={{ borderBottom: "1px solid #e8ddd4" }}
-                  >
-                    <td
-                      style={{
-                        padding: "12px",
-                        color: "#5d4037",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {employee.employee}
-                    </td>
-
-                    {/* Skills Gap */}
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "center",
-                        color: "#5d4037",
-                      }}
-                    >
-                      {employee.skillsGap?.date
-                        ? new Date(employee.skillsGap.date).toLocaleDateString()
-                        : "-"}
-                    </td>
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          backgroundColor:
-                            employee.skillsGap?.status === "Done"
-                              ? "#4caf50"
-                              : "#f44336",
-                          color: "#fff",
-                        }}
-                      >
-                        {employee.skillsGap?.status === "Done"
-                          ? "Done"
-                          : "Not Done"}
-                      </span>
-                    </td>
-
-                    {/* IDP */}
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "center",
-                        color: "#5d4037",
-                      }}
-                    >
-                      {employee.idp?.date
-                        ? new Date(employee.idp.date).toLocaleDateString()
-                        : "-"}
-                    </td>
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          backgroundColor:
-                            employee.idp?.status === "Done"
-                              ? "#4caf50"
-                              : "#f44336",
-                          color: "#fff",
-                        }}
-                      >
-                        {employee.idp?.status === "Done" ? "Done" : "Not Done"}
-                      </span>
-                    </td>
-
-                    {/* Mid-Term Review */}
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "center",
-                        color: "#5d4037",
-                      }}
-                    >
-                      {employee.midTermReview?.date
-                        ? new Date(
-                            employee.midTermReview.date,
-                          ).toLocaleDateString()
-                        : "-"}
-                    </td>
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          backgroundColor:
-                            employee.midTermReview?.status === "Done"
-                              ? "#4caf50"
-                              : "#f44336",
-                          color: "#fff",
-                        }}
-                      >
-                        {employee.midTermReview?.status === "Done"
-                          ? "Done"
-                          : "Not Done"}
-                      </span>
-                    </td>
-
-                    {/* Annual Review */}
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "center",
-                        color: "#5d4037",
-                      }}
-                    >
-                      {employee.annualReview?.date
-                        ? new Date(
-                            employee.annualReview.date,
-                          ).toLocaleDateString()
-                        : "-"}
-                    </td>
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          backgroundColor:
-                            employee.annualReview?.status === "Done"
-                              ? "#4caf50"
-                              : "#f44336",
-                          color: "#fff",
-                        }}
-                      >
-                        {employee.annualReview?.status === "Done"
-                          ? "Done"
-                          : "Not Done"}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan="9"
-                    style={{
-                      padding: "20px",
-                      textAlign: "center",
-                      color: "#8d6e63",
-                    }}
-                  >
-                    No employee data found. Add employees in the Add Data modal.
+              {rows.map(({ kpi, category }, i) => (
+                <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
+                  <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
+                    borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    <div style={{ fontWeight: 600 }}>{kpi.name}</div>
+                    <div style={{ fontSize: "11.5px", color: T.muted }}>
+                      {category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}
+                    </div>
                   </td>
+                  {["actual", "budget"].map((which) => {
+                    const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+                    return (
+                      <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`,
+                        borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
+                        {!path ? (
+                          <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>
+                            {which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}
+                          </div>
+                        ) : kpi.options ? (
+                          <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}>
+                            <option value="">—</option>
+                            {kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        ) : (
+                          <input type="number" step="any" value={value(kpi, which)} placeholder="—"
+                            onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
+      </div>
+    </Modal>
+  );
+};
 
-        <div
-          style={{
-            marginTop: "15px",
-            color: "#8d6e63",
-            fontSize: "12px",
-            display: "flex",
-            gap: "20px",
-          }}
-        >
+/* ─── Add KPI ───────────────────────────────────────────────────────────── */
+const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
+  const [tabId, setTabId] = useState(tabs.some((t) => t.id === currentTabId) ? currentTabId : tabs[0]?.id);
+  const [catChoice, setCatChoice] = useState("");
+  const [newCat, setNewCat] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: "", units: "#", direction: "higher", aggregate: "avg", meaning: "", measured: "" });
+
+  const tab = tabs.find((t) => t.id === tabId);
+  const cats = tab?.categories || [];
+  useEffect(() => { if (cats.length && !catChoice) setCatChoice(cats[0].name); }, [tabId]); // eslint-disable-line
+  const creatingCat = catChoice === "__new__";
+  const catName = creatingCat ? newCat.trim() : catChoice;
+  const canSave = form.name.trim() && catName && form.meaning.trim() && form.measured.trim();
+
+  const commit = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    await onSave({
+      id: `custom_${uid().slice(0, 8)}`, tabId, category: catName,
+      name: form.name.trim(), units: form.units, direction: form.direction, aggregate: form.aggregate,
+      meaning: form.meaning.trim(), measured: form.measured.trim(),
+    });
+    setSaving(false); onClose();
+  };
+
+  return (
+    <Modal title="Add KPI" subtitle="A custom people metric you capture by hand each month" icon={<Sparkles size={17} />}
+      onClose={onClose} width={720}
+      footer={<>
+        <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={commit} disabled={!canSave || saving} style={{ ...btnPrimary, opacity: canSave && !saving ? 1 : 0.5 }}>
+          {saving ? "Saving..." : "Create KPI"}</button>
+      </>}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+        <div>
+          <label style={labelS}>Section</label>
+          <select value={tabId} onChange={(e) => { setTabId(e.target.value); setCatChoice(""); }} style={selectS}>
+            {tabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Category</label>
+          <select value={catChoice} onChange={(e) => setCatChoice(e.target.value)} style={selectS}>
+            <option value="">Select…</option>
+            {cats.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+            <option value="__new__">＋ New category…</option>
+          </select>
+          {creatingCat && <input value={newCat} onChange={(e) => setNewCat(e.target.value)} style={{ ...inputS, marginTop: "8px" }} placeholder="New category name" />}
+        </div>
+      </div>
+      <div style={{ marginBottom: "14px" }}>
+        <label style={labelS}>KPI name *</label>
+        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputS} placeholder="e.g. Absenteeism Rate" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+        <div>
+          <label style={labelS}>Units</label>
+          <select value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} style={selectS}>
+            <option value="#">Count (#)</option><option value="%">Percent (%)</option>
+            <option value="R">Currency (R)</option><option value="hrs">Hours</option>
+            <option value="days">Days</option><option value="units">Units</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>What counts as good?</label>
+          <select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })} style={selectS}>
+            {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Rolling up</label>
+          <select value={form.aggregate} onChange={(e) => setForm({ ...form, aggregate: e.target.value })} style={selectS}>
+            <option value="avg">AVERAGE the months — rates, ratios</option>
+            <option value="sum">SUM the months — counts, hours, rand</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ marginBottom: "14px" }}>
+        <label style={labelS}>What does this KPI mean? *</label>
+        <textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })}
+          style={{ ...inputS, resize: "vertical" }} placeholder="In plain words — anyone reading the dashboard should get it from this sentence." />
+      </div>
+      <div>
+        <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}><Sigma size={13} /> How is this KPI measured? *</label>
+        <textarea rows="4" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })}
+          style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }}
+          placeholder={"=SUM(DaysAbsent) / SUM(WorkingDays) * 100"} />
+        <p style={{ fontSize: "12px", color: T.muted, marginTop: "7px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Info size={12} /> Use Excel functions and named ranges — SUM, AVERAGE, COUNTIF, COUNTIFS.
+        </p>
+      </div>
+    </Modal>
+  );
+};
+
+const AddChooser = ({ onPick, onClose }) => (
+  <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+      {[
+        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and target figures against the KPIs you already track." },
+        { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI", body: "Create a custom people metric under any section or category." },
+      ].map((o) => (
+        <button key={o.key} onClick={() => onPick(o.key)}
+          style={{ padding: "22px 20px", borderRadius: "12px", border: `1px solid ${T.lineStrong}`, background: T.bg,
+            cursor: "pointer", textAlign: "left", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: "10px" }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.accentTint; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.lineStrong; e.currentTarget.style.background = T.bg; }}>
+          <span style={{ color: T.accent }}>{o.icon}</span>
+          <span style={{ fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{o.title}</span>
+          <span style={{ fontSize: "13px", color: T.body, lineHeight: 1.5 }}>{o.body}</span>
+        </button>
+      ))}
+    </div>
+  </Modal>
+);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Panels — the parts of People Performance that aren't KPI rows.
+   ════════════════════════════════════════════════════════════════════════ */
+const BROWN = ["#3E2723", "#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"];
+
+const CompositionPanel = ({ docs, onEdit, readOnly }) => {
+  const d = docs.comp?.employeeData || {};
+  const totalContract = (d.permanent || 0) + (d.contract || 0) + (d.internship || 0);
+  const occLabels = ["Unskilled","Semi-skilled","Skilled Jnr","Prof Mid","Snr Mgt","Top Mgt"];
+  const occValues = [d.unskilled || 0, d.semiSkilled || 0, d.skilledJnr || 0, d.profMid || 0, d.snrMgt || 0, d.topMgt || 0];
+  const totalOcc = occValues.reduce((s, v) => s + v, 0);
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Workforce Breakdown</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>Contract types and occupational levels behind the head count</div>
+        </div>
+        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit breakdown</button>}
+      </div>
+
+      <div style={{ ...cardS, background: T.panel, marginBottom: "16px", fontSize: "12.5px", color: T.body,
+        display: "flex", alignItems: "flex-start", gap: "8px" }}>
+        <Info size={14} color={T.accentSoft} style={{ marginTop: "1px", flexShrink: 0 }} />
+        <span>Demographic splits — gender, youth, HDI ownership — are tracked and reported under ESG Impact, not here.</span>
+      </div>
+
+      {totalContract === 0 && totalOcc === 0 ? (
+        <div style={{ textAlign: "center", padding: "30px 20px", color: T.muted, fontSize: "13.5px" }}>
+          No breakdown captured yet. Use Edit breakdown to add contract types and occupational levels.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
           <div>
-            <strong>Target:</strong> 100% completion for all development
-            activities
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  if (activeSection !== "capability-training") return null;
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      <KeyQuestionBox
-        question="Are we future-ready? Is the business investing enough in skills development to remain capable as it grows?"
-        signals="Training investment, skills gap closure rate, development plan completion"
-        decisions="Increase training budget, implement development programs, hire for capability gaps"
-        section="capability-training"
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-          gap: "10px",
-        }}
-      >
-        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>
-          Capability & Training
-        </h2>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                minWidth: "100px",
-              }}
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Add Data
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Employee Tracking Table */}
-      {renderEmployeeTrackingTable()}
-
-      {/* Capability Triple Cards - 3 per row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {renderTripleCard(
-          "Training Spend (R)",
-          "trainingSpendAmount",
-          "currency",
-          "up",
-          "Training Spend measures the total investment in employee training and development.\n\n" +
-            "This metric is automatically pulled from Financial Performance:\n" +
-            "• Source: Balance Sheet - Additional Metrics\n\n" +
-            "Industry benchmarks:\n" +
-            "• Average companies: 1-2% of payroll\n" +
-            "• Best-in-class: 3-5% of payroll\n" +
-            "• High-growth tech: 4-7% of payroll\n\n" +
-            "Investment levels correlate with:\n" +
-            "• Employee retention\n" +
-            "• Innovation capability\n" +
-            "• Time-to-productivity for new hires",
-        )}
-        {renderTripleCard(
-          "Training Spend (% of payroll)",
-          "trainingSpendPercentage",
-          "percentage",
-          "up",
-          "Training Spend as Percentage of Payroll measures training investment relative to total compensation.\n\n" +
-            "Calculation: (Training Spend ÷ Total Payroll) × 100%\n\n" +
-            "This metric is automatically calculated from Financial Performance data:\n" +
-            "• Training Spend: Pulled from Balance Sheet\n" +
-            "• Payroll: Pulled from P&L Statement (Salaries & Wages)\n\n" +
-            "Target ranges:\n" +
-            "• <1%: Under-investing - Risk of skills gaps\n" +
-            "• 1-2%: Adequate - Maintenance level\n" +
-            "• 2-5%: Strategic investment - Building capability\n" +
-            "• >5%: High investment - Transformation phase\n\n" +
-            "Target: 3%+ for organizations prioritizing capability building",
-        )}
-        {renderTripleCard(
-          "Training Focus",
-          "trainingFocus",
-          "text",
-          "up",
-          "Training Focus indicates the primary area of training investment.\n\n" +
-            "Categories:\n" +
-            "• Technical: Job-specific skills, tools, and methodologies\n" +
-            "• Leadership: Management, communication, strategic thinking\n" +
-            "• Compliance: Regulatory, safety, mandatory training\n\n" +
-            "Optimal mix varies by organization stage:\n" +
-            "• Early stage: 70% Technical, 20% Leadership, 10% Compliance\n" +
-            "• Growth stage: 50% Technical, 30% Leadership, 20% Compliance\n" +
-            "• Mature: 40% Technical, 40% Leadership, 20% Compliance\n\n" +
-            "Consider rotating focus quarterly to address different needs.",
-        )}
-      </div>
-
-      {/* Unified Data Entry Modal */}
-      <UnifiedDataEntryModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        currentTab="capability-training"
-        user={user}
-        onSave={() => {
-          loadCapabilityData();
-          loadEmployeeTrackingData();
-          loadFinancialData();
-        }}
-        loading={loading}
-      />
-
-      {/* Calculation Modal */}
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-
-      {/* Trend Modal */}
-      {showTrendModal && selectedTrendItem && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => setShowTrendModal(false)}
-          title={selectedTrendItem.name}
-          data={selectedTrendItem.data}
-          labels={selectedTrendItem.labels}
-          unit={selectedTrendItem.unit}
-        />
-      )}
-    </div>
-  );
-};
-
-// ==================== STABILITY & CONTINUITY COMPONENT ====================
-
-const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [expandedNotes, setExpandedNotes] = useState({});
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [kpiAnalysis, setKpiAnalysis] = useState({});
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-
-  // Data structure for stability & continuity KPIs
-  const [stabilityData, setStabilityData] = useState({
-    overallTurnover: Array(12).fill(""),
-    workforceMovements: Array(12).fill(""),
-    criticalRoleTurnover: Array(12).fill(""),
-    contractorDependence: Array(12).fill(""),
-  });
-
-  // Data structure for termination and new hire entries
-  const [terminationEntries, setTerminationEntries] = useState([]);
-  const [newHireEntries, setNewHireEntries] = useState([]);
-
-  // Get months for trend view - last 11 months plus current month
-  const getTrendMonths = () => {
-    const months = [];
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-
-    // Start from 11 months ago and go to current month
-    for (let i = 11; i >= 0; i--) {
-      const monthIndex = (currentMonth - i + 12) % 12;
-      months.push(monthNames[monthIndex]);
-    }
-    return months;
-  };
-
-  const months = getMonthsForYear(selectedYear, "month");
-  const trendMonths = getTrendMonths(); // Last 11 months + current month
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i);
-
-  useEffect(() => {
-    if (user) {
-      loadStabilityData();
-      loadTerminationData();
-      loadNewHireData();
-    }
-  }, [user]);
-
-  const loadStabilityData = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const stabilityDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_stabilityContinuity`),
-      );
-      if (stabilityDoc.exists()) {
-        const data = stabilityDoc.data();
-        if (data.stabilityData) setStabilityData(data.stabilityData);
-        if (data.kpiNotes) setKpiNotes(data.kpiNotes);
-        if (data.kpiAnalysis) setKpiAnalysis(data.kpiAnalysis);
-      }
-    } catch (error) {
-      console.error("Error loading stability data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTerminationData = async () => {
-    if (!user) return;
-    try {
-      const terminationDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_terminationData`),
-      );
-      if (terminationDoc.exists()) {
-        const data = terminationDoc.data();
-        if (data.entries) setTerminationEntries(data.entries);
-      }
-    } catch (error) {
-      console.error("Error loading termination data:", error);
-    }
-  };
-
-  const loadNewHireData = async () => {
-    if (!user) return;
-    try {
-      const hireDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_newHireData`),
-      );
-      if (hireDoc.exists()) {
-        const data = hireDoc.data();
-        if (data.entries) setNewHireEntries(data.entries);
-      }
-    } catch (error) {
-      console.error("Error loading new hire data:", error);
-    }
-  };
-
-  // Calculate summary statistics from termination entries
-  const calculateTerminationSummary = () => {
-    const summary = {
-      total: terminationEntries.length,
-      byReason: {},
-    };
-
-    terminationEntries.forEach((entry) => {
-      summary.byReason[entry.reason] =
-        (summary.byReason[entry.reason] || 0) + 1;
-    });
-
-    return summary;
-  };
-
-  const calculateNewHireSummary = () => {
-    const summary = {
-      total: newHireEntries.length,
-      byType: {
-        Permanent: newHireEntries.filter((e) => e.contractType === "Permanent")
-          .length,
-        Contract: newHireEntries.filter((e) => e.contractType === "Contract")
-          .length,
-        Internship: newHireEntries.filter(
-          (e) => e.contractType === "Internship",
-        ).length,
-      },
-      byMonth: {},
-    };
-
-    newHireEntries.forEach((entry) => {
-      const date = new Date(entry.dateStarted);
-      const month = date.toLocaleString("default", { month: "short" });
-      summary.byMonth[month] = (summary.byMonth[month] || 0) + 1;
-    });
-
-    return summary;
-  };
-
-  const formatValue = (value) => {
-    const num = Number.parseFloat(value) || 0;
-    return num.toFixed(1);
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation });
-    setShowCalculationModal(true);
-  };
-
-  const openTrendModal = (itemName, dataKey, isPercentage = false) => {
-    let actualData = [];
-
-    if (dataKey === "overallTurnover") {
-      actualData =
-        stabilityData.overallTurnover?.map((v) => parseFloat(v) || 0) || [];
-    } else if (dataKey === "workforceMovements") {
-      actualData =
-        stabilityData.workforceMovements?.map((v) => parseFloat(v) || 0) || [];
-    } else if (dataKey === "criticalRoleTurnover") {
-      actualData =
-        stabilityData.criticalRoleTurnover?.map((v) => parseFloat(v) || 0) ||
-        [];
-    } else if (dataKey === "contractorDependence") {
-      actualData =
-        stabilityData.contractorDependence?.map((v) => parseFloat(v) || 0) ||
-        [];
-    }
-
-    setSelectedTrendItem({
-      name: itemName,
-      actual: actualData.slice(-12), // Last 12 months
-      budget: null,
-      isPercentage,
-      labels: trendMonths,
-    });
-    setShowTrendModal(true);
-  };
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
-
-
-
-  const renderTerminationTable = () => {
-    const summary = calculateTerminationSummary();
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h4
-            style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}
-          >
-            Termination Records
-          </h4>
-          <EyeIcon
-            onClick={() =>
-              handleCalculationClick(
-                "Termination Analysis",
-                "Termination Analysis tracks employee exits by employee.\n\n" +
-                  "Common termination reasons and implications:\n\n" +
-                  "• Performance: May indicate hiring quality or management issues\n" +
-                  "• Resignation: Voluntary exits - conduct exit interviews to identify patterns\n" +
-                  "• Redundancy: Role elimination - ensure fair process and communication\n" +
-                  "• Misconduct: Policy violations - review training and communication\n" +
-                  "• Retirement: Natural attrition - plan for knowledge transfer\n\n" +
-                  "Key metrics:\n" +
-                  "• Total terminations: Monitor trend over time\n" +
-                  "• Top reasons: Address root causes\n\n" +
-                  "Target: Voluntary turnover <15% annually, involuntary turnover <5% annually",
-              )
-            }
-          />
-        </div>
-
-        {/* Summary Statistics */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: "15px",
-            marginBottom: "20px",
-            padding: "15px",
-            backgroundColor: "#f5f0eb",
-            borderRadius: "6px",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}
-            >
-              {summary.total}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Total Terminations
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}
-            >
-              {Object.keys(summary.byReason).length}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Unique Reasons
-            </div>
-          </div>
-        </div>
-
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "13px",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#e8ddd4" }}>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  Employee Name
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  Date Started
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  Date Ended
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  Reason
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                  }}
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {terminationEntries.length > 0 ? (
-                terminationEntries.map((entry, index) => (
-                  <tr
-                    key={entry.id || index}
-                    style={{ borderBottom: "1px solid #e8ddd4" }}
-                  >
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      {entry.name || "-"}
-                    </td>
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      {entry.dateStarted || "-"}
-                    </td>
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      {entry.dateEnded || "-"}
-                    </td>
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          backgroundColor: "#ffebee",
-                          color: "#c62828",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        {entry.reason}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <button
-                        onClick={() => {
-                          const newEntries = terminationEntries.filter(
-                            (e) => e.id !== entry.id,
-                          );
-                          setTerminationEntries(newEntries);
-                        }}
-                        style={{
-                          padding: "4px 8px",
-                          backgroundColor: "#f44336",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "11px",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan="5"
-                    style={{
-                      padding: "20px",
-                      textAlign: "center",
-                      color: "#8d6e63",
-                    }}
-                  >
-                    No termination records found. Click "Add Data" to add
-                    termination records.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  const renderNewHireTable = () => {
-    const summary = calculateNewHireSummary();
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h4
-            style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}
-          >
-            New Hire Records
-          </h4>
-          <EyeIcon
-            onClick={() =>
-              handleCalculationClick(
-                "New Hire Analysis",
-                "New Hire Analysis tracks new employee additions by type and date.\n\n" +
-                  "Contract types and implications:\n\n" +
-                  "• Permanent: Core team members, long-term investment\n" +
-                  "• Contract: Project-based or temporary, flexible capacity\n" +
-                  "• Internship: Pipeline for future talent, development opportunity\n\n" +
-                  "Key metrics:\n" +
-                  "• Total new hires: Monitor growth rate\n" +
-                  "• Contract type mix: Indicates workforce strategy\n" +
-                  "• Seasonal patterns: Plan recruitment cycles\n\n" +
-                  "Track against termination data to understand net headcount growth.",
-              )
-            }
-          />
-        </div>
-
-        {/* Summary Statistics */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "15px",
-            marginBottom: "20px",
-            padding: "15px",
-            backgroundColor: "#f5f0eb",
-            borderRadius: "6px",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}
-            >
-              {summary.total}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Total New Hires
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{ fontSize: "20px", fontWeight: "700", color: "#2e7d32" }}
-            >
-              {summary.byType.Permanent}
-            </div>
-            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Permanent</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{ fontSize: "20px", fontWeight: "700", color: "#f57c00" }}
-            >
-              {summary.byType.Contract}
-            </div>
-            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Contract</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{ fontSize: "20px", fontWeight: "700", color: "#7b1fa2" }}
-            >
-              {summary.byType.Internship}
-            </div>
-            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Internship</div>
-          </div>
-        </div>
-
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "13px",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#e8ddd4" }}>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  Employee Name
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  Date Started
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  Contract Type
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    color: "#5d4037",
-                  }}
-                >
-                  End Date
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "center",
-                    color: "#5d4037",
-                  }}
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {newHireEntries.length > 0 ? (
-                newHireEntries.map((entry, index) => (
-                  <tr
-                    key={entry.id || index}
-                    style={{ borderBottom: "1px solid #e8ddd4" }}
-                  >
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      {entry.name}
-                    </td>
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      {entry.dateStarted}
-                    </td>
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          backgroundColor:
-                            entry.contractType === "Permanent"
-                              ? "#e8f5e9"
-                              : entry.contractType === "Contract"
-                                ? "#fff3e0"
-                                : "#f3e5f5",
-                          color:
-                            entry.contractType === "Permanent"
-                              ? "#2e7d32"
-                              : entry.contractType === "Contract"
-                                ? "#f57c00"
-                                : "#7b1fa2",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        {entry.contractType}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px", color: "#5d4037" }}>
-                      {entry.endDate || "-"}
-                    </td>
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <button
-                        onClick={() => {
-                          const newEntries = newHireEntries.filter(
-                            (e) => e.id !== entry.id,
-                          );
-                          setNewHireEntries(newEntries);
-                        }}
-                        style={{
-                          padding: "4px 8px",
-                          backgroundColor: "#f44336",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "11px",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan="5"
-                    style={{
-                      padding: "20px",
-                      textAlign: "center",
-                      color: "#8d6e63",
-                    }}
-                  >
-                    No new hire records found. Click "Add Data" to add new hire
-                    records.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  const renderTerminationPieChart = () => {
-    const summary = calculateTerminationSummary();
-    const reasons = Object.keys(summary.byReason);
-    const values = reasons.map((r) => summary.byReason[r]);
-
-    if (reasons.length === 0) return null;
-
-    const colors = [
-      "#3E2723",
-      "#5D4037",
-      "#795548",
-      "#8D6E63",
-      "#A1887F",
-      "#BCAAA4",
-    ];
-
-    const data = {
-      labels: reasons,
-      datasets: [
-        {
-          data: values,
-          backgroundColor: colors.slice(0, reasons.length),
-          borderColor: "#ffffff",
-          borderWidth: 2,
-        },
-      ],
-    };
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
-        <h4
-          style={{
-            color: "#5d4037",
-            marginBottom: "15px",
-            fontSize: "16px",
-            textAlign: "center",
-          }}
-        >
-          Reasons for Termination
-        </h4>
-        <div style={{ height: "250px" }}>
-          <Pie
-            data={data}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "bottom",
-                  labels: {
-                    color: "#5d4037",
-                    font: {
-                      size: 11,
-                    },
-                  },
-                },
-                tooltip: {
-                  callbacks: {
-                    label: (context) => {
-                      const label = context.label || "";
-                      const value = context.raw || 0;
-                      const total = context.dataset.data.reduce(
-                        (a, b) => a + b,
-                        0,
-                      );
-                      const percentage = ((value / total) * 100).toFixed(1);
-                      return `${label}: ${value} (${percentage}%)`;
-                    },
-                  },
-                },
-                // WHITE NUMBERS on pie chart
-                datalabels: {
-                  display: true,
-                  color: "#ffffff",
-                  font: {
-                    weight: "bold",
-                    size: 12,
-                  },
-                  formatter: (value, context) => {
-                    return value > 0 ? value : "";
-                  },
-                  anchor: "center",
-                  align: "center",
-                  offset: 0,
-                },
-              },
-            }}
-          />
-        </div>
-      </div>
-    );
-  };
-
-  const renderNewHirePieChart = () => {
-    const summary = calculateNewHireSummary();
-    const types = Object.keys(summary.byType).filter(
-      (type) => summary.byType[type] > 0,
-    );
-    const values = types.map((t) => summary.byType[t]);
-
-    if (types.length === 0 || summary.total === 0) return null;
-
-    const colors = ["#2e7d32", "#f57c00", "#7b1fa2"];
-
-    const data = {
-      labels: types,
-      datasets: [
-        {
-          data: values,
-          backgroundColor: colors.slice(0, types.length),
-          borderColor: "#ffffff",
-          borderWidth: 2,
-        },
-      ],
-    };
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
-        <h4
-          style={{
-            color: "#5d4037",
-            marginBottom: "15px",
-            fontSize: "16px",
-            textAlign: "center",
-          }}
-        >
-          New Hires by Contract Type
-        </h4>
-        <div style={{ height: "250px" }}>
-          <Pie
-            data={data}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "bottom",
-                  labels: {
-                    color: "#5d4037",
-                    font: {
-                      size: 11,
-                    },
-                  },
-                },
-                tooltip: {
-                  callbacks: {
-                    label: (context) => {
-                      const label = context.label || "";
-                      const value = context.raw || 0;
-                      const percentage = (
-                        (value / summary.total) *
-                        100
-                      ).toFixed(1);
-                      return `${label}: ${value} (${percentage}%)`;
-                    },
-                  },
-                },
-                // WHITE NUMBERS on pie chart
-                datalabels: {
-                  display: true,
-                  color: "#ffffff",
-                  font: {
-                    weight: "bold",
-                    size: 12,
-                  },
-                  formatter: (value, context) => {
-                    return value > 0 ? value : "";
-                  },
-                  anchor: "center",
-                  align: "center",
-                  offset: 0,
-                },
-              },
-            }}
-          />
-        </div>
-      </div>
-    );
-  };
-
-const renderKPICard = (
-  title,
-  dataKey,
-  isPercentage = false,
-  calculation = "",
-) => {
-  let data = [];
-  let currentValue = 0;
-
-  if (dataKey === "overallTurnover") {
-    data = stabilityData.overallTurnover || [];
-    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-  } else if (dataKey === "workforceMovements") {
-    data = stabilityData.workforceMovements || [];
-    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-  } else if (dataKey === "criticalRoleTurnover") {
-    data = stabilityData.criticalRoleTurnover || [];
-    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-  } else if (dataKey === "contractorDependence") {
-    data = stabilityData.contractorDependence || [];
-    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-  }
-
-  // FIXED: handleAIAnalysis function now uses the parameters correctly
-  const handleAIAnalysis = () => {
-    setSelectedMetricForAnalysis({
-      title: title,
-      key: dataKey,
-      value: currentValue,
-      contextData: {
-        unit: "percentage",
-        benchmark: dataKey === "overallTurnover" ? 15 :
-                   dataKey === "criticalRoleTurnover" ? 10 :
-                   dataKey === "contractorDependence" ? 20 : 50,
-        timeRange: "Annual",
-      },
-    });
-    setShowAnalysisModal(true);
-  };
-
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "700",
-                  color: "#5d4037",
-                }}
-              >
-                {isPercentage
-                  ? `${currentValue.toFixed(1)}%`
-                  : currentValue.toFixed(1)}
-              </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4
-              style={{
-                color: "#5d4037",
-                marginBottom: "5px",
-                fontSize: "16px",
-              }}
-            >
-              {title}
-            </h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [dataKey]: !prev[dataKey],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-          <button
-  onClick={handleAIAnalysis}
-  style={{
-    padding: "6px 12px",
-    backgroundColor: "#e8ddd4",
-    color: "#5d4037",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    fontWeight: "600",
-    fontSize: "12px",
-  }}
->
-  AI analysis
-</button>
-            <button
-              onClick={() => openTrendModal(title, dataKey, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) =>
-                  setKpiNotes((prev) => ({
-                    ...prev,
-                    [dataKey]: e.target.value,
-                  }))
-                }
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Contract type</div>
+            <div style={{ height: "220px" }}>
+              <Pie
+                data={{ labels: ["Permanent","Contract","Internship"],
+                  datasets: [{ data: [d.permanent || 0, d.contract || 0, d.internship || 0],
+                    backgroundColor: [BROWN[0], BROWN[3], BROWN[5]], borderWidth: 0 }] }}
+                options={{ responsive: true, maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+                    datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
+                    tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+                      callbacks: { label: (c) => `${c.label}: ${c.raw} (${totalContract ? ((c.raw / totalContract) * 100).toFixed(1) : 0}%)` } },
+                  } }}
+                plugins={[ChartDataLabels]}
               />
             </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "#1565c0",
-                  lineHeight: "1.5",
-                  margin: 0,
-                }}
-              >
-                {kpiAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : currentValue.toFixed(1)}:
-                  \n\n${
-                    dataKey === "overallTurnover"
-                      ? currentValue > 25
-                        ? "⚠️ Critical: Turnover is very high. Conduct exit interviews and address root causes immediately."
-                        : currentValue > 15
-                          ? "⚠️ High: Turnover exceeds target. Review compensation, culture, and career paths."
-                          : currentValue > 10
-                            ? "ℹ️ Moderate: Within acceptable range but monitor trends."
-                            : "✅ Good: Turnover is healthy."
-                      : dataKey === "criticalRoleTurnover"
-                        ? currentValue > 20
-                          ? "⚠️ Critical: Losing key talent. Implement retention plans immediately."
-                          : currentValue > 10
-                            ? "⚠️ High: Critical role turnover exceeds target. Review succession planning."
-                            : "✅ Good: Critical role retention is strong."
-                        : dataKey === "contractorDependence"
-                          ? currentValue > 30
-                            ? "⚠️ High contractor dependence. Consider converting key roles to permanent."
-                            : currentValue > 20
-                              ? "ℹ️ Moderate contractor dependence. Monitor knowledge retention."
-                              : "✅ Healthy balance of permanent vs contractor staff."
-                          : "Monitor this metric for trends."
-                  }
-                  \n\nRecommended actions:
-                  \n• ${
-                    dataKey === "overallTurnover"
-                      ? currentValue > 15
-                        ? "Conduct pulse surveys and exit interviews"
-                        : "Maintain retention programs"
-                      : dataKey === "workforceMovements"
-                        ? "Analyze hiring vs termination patterns"
-                        : dataKey === "criticalRoleTurnover"
-                          ? currentValue > 10
-                            ? "Implement retention bonuses and succession planning"
-                            : "Document knowledge transfer processes"
-                          : dataKey === "contractorDependence"
-                            ? currentValue > 30
-                              ? "Develop conversion plan for critical contractor roles"
-                              : "Review contractor vs permanent cost-benefit"
-                            : "Review and optimize"
-                  }
-                  \n• Set quarterly improvement targets
-                  \n• Track progress monthly`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  if (activeSection !== "stability-continuity") return null;
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      <KeyQuestionBox
-        question="Is talent leakage threatening continuity or execution? Are we at risk of losing critical capabilities?"
-        signals="Critical role churn, overall turnover trends, contractor dependence"
-        decisions="Implement retention strategy, strengthen succession planning, convert critical contractors"
-        section="stability-continuity"
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-          gap: "10px",
-        }}
-      >
-        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>
-          Stability & Continuity
-        </h2>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                minWidth: "100px",
-              }}
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
           </div>
-
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Add Data
-            </button>
-          )}
+          <div>
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Occupational levels</div>
+            <div style={{ height: "220px" }}>
+              <Bar
+                data={{ labels: occLabels, datasets: [{ label: "Count", data: occValues, backgroundColor: BROWN, borderWidth: 0, borderRadius: 4 }] }}
+                options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { display: false }, datalabels: { display: false },
+                    tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+                      callbacks: { label: (c) => `${c.raw} (${totalOcc ? ((c.raw / totalOcc) * 100).toFixed(1) : 0}%)` } } },
+                  scales: { x: { beginAtZero: true, grid: { color: T.lineSoft }, ticks: { color: T.body, font: { size: 11 } } },
+                    y: { grid: { display: false }, ticks: { color: T.body, font: { size: 11 } } } } }}
+              />
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Row 1: Termination Table and Pie Chart */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "20px",
-          marginBottom: "20px",
-        }}
-      >
-        {renderTerminationTable()}
-        {renderTerminationPieChart()}
-      </div>
-
-      {/* Row 2: New Hires Table and Pie Chart */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "20px",
-          marginBottom: "20px",
-        }}
-      >
-        {renderNewHireTable()}
-        {renderNewHirePieChart()}
-      </div>
-
-      {/* Row 3: KPI Cards - 4 per row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {renderKPICard(
-          "Overall Turnover (% Annually)",
-          "overallTurnover",
-          true,
-          "Overall Turnover measures the percentage of employees who leave the organization annually.\n\n" +
-            "Calculation: (Total terminations ÷ Average headcount) × 100%\n\n" +
-            "Industry benchmarks:\n" +
-            "• Overall average: 15-20%\n" +
-            "• High-performing companies: <10%\n" +
-            "• High-turnover industries: >30%\n\n" +
-            "Components:\n" +
-            "• Voluntary turnover (employee-initiated)\n" +
-            "• Involuntary turnover (employer-initiated)\n\n" +
-            "Cost of turnover: 50-200% of annual salary per role\n\n" +
-            "Target: <15% overall, <10% voluntary",
-        )}
-        {renderKPICard(
-          "Critical Role Turnover",
-          "criticalRoleTurnover",
-          true,
-          "Critical Role Turnover measures turnover specifically in roles that are essential to business operations.\n\n" +
-            "Critical roles are those that:\n" +
-            "• Are difficult to replace (specialized skills)\n" +
-            "• Have significant impact on revenue/operations\n" +
-            "• Take >3 months to recruit and onboard\n" +
-            "• Represent key intellectual property holders\n\n" +
-            "Calculation: (Critical role terminations ÷ Total critical roles) × 100%\n\n" +
-            "Target: <10% annually\n\n" +
-            "High critical role turnover indicates:\n" +
-            "• Succession planning gaps\n" +
-            "• Competitive compensation issues\n" +
-            "• Leadership or culture problems",
-        )}
-        {renderKPICard(
-          "Workforce Movements",
-          "workforceMovements",
-          false,
-          "Workforce Movements tracks net headcount change through hires and terminations.\n\n" +
-            "Calculation: New hires - Terminations\n\n" +
-            "Positive value = Net growth\n" +
-            "Negative value = Net reduction\n" +
-            "Zero = Stable headcount\n\n" +
-            "Analyze in context of:\n" +
-            "• Business growth phase\n" +
-            "• Seasonal patterns\n" +
-            "• Budget constraints\n\n" +
-            "Rapid changes (positive or negative) can indicate:\n" +
-            "• Aggressive expansion\n" +
-            "• Downsizing/restructuring\n" +
-            "• Instability in workforce planning",
-        )}
-        {renderKPICard(
-          "Contractor Dependence",
-          "contractorDependence",
-          true,
-          "Contractor Dependence measures the percentage of the workforce that are contractors/freelancers.\n\n" +
-            "Calculation: (Contractor headcount ÷ Total workforce) × 100%\n\n" +
-            "Benefits of contractors:\n" +
-            "• Flexibility for variable workload\n" +
-            "• Access to specialized skills\n" +
-            "• Lower fixed costs\n\n" +
-            "Risks of high contractor dependence:\n" +
-            "• Knowledge retention\n" +
-            "• Cultural integration\n" +
-            "• IP protection\n" +
-            "• Continuity risk\n\n" +
-            "Target ranges:\n" +
-            "• Stable operations: 10-20%\n" +
-            "• Project-based: 20-30%\n" +
-            "• High dependence: >30% - review conversion strategy",
-        )}
-      </div>
-
-      {/* Unified Data Entry Modal */}
-      <UnifiedDataEntryModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        currentTab="stability-continuity"
-        user={user}
-        onSave={() => {
-          loadStabilityData();
-          loadTerminationData();
-          loadNewHireData();
-        }}
-        loading={loading}
-      />
-
-      {/* Calculation Modal */}
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-
-      {/* Trend Modal */}
-      {showTrendModal && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => setShowTrendModal(false)}
-          item={selectedTrendItem}
-          currencyUnit="zar"
-          formatValue={formatValue}
-        />
       )}
     </div>
   );
 };
 
-// ==================== MAIN PEOPLE PERFORMANCE COMPONENT ====================
+const TrackingPanel = ({ docs, onEdit, readOnly }) => {
+  const employees = docs.track?.employees || [];
+  const doneCount = (k) => employees.filter((e) => e[k]?.status === "Done").length;
+  const stages = [
+    { key: "skillsGap", label: "Skills gap" },
+    { key: "idp", label: "IDP" },
+    { key: "midTermReview", label: "Mid-term review" },
+    { key: "annualReview", label: "Annual review" },
+  ];
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Employee Development Tracking</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>Skills gap, IDP and reviews — target is 100% completion</div>
+        </div>
+        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit tracking</button>}
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div style={{ ...cardS, padding: "11px 14px", flex: "1 1 130px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Employees</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, marginTop: "3px" }}>{employees.length}</div>
+        </div>
+        {stages.map((s) => {
+          const n = doneCount(s.key);
+          const all = employees.length > 0 && n === employees.length;
+          return (
+            <div key={s.key} style={{ ...cardS, padding: "11px 14px", flex: "1 1 130px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{s.label}</div>
+              <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "3px", color: employees.length === 0 ? T.faint : all ? T.green : T.amber }}>
+                {employees.length ? `${n} of ${employees.length}` : "—"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "760px" }}>
+            <thead>
+              <tr>
+                <th style={{ ...panelTh, textAlign: "left" }}>Employee</th>
+                {stages.map((s) => <th key={s.key} style={{ ...panelTh, textAlign: "center" }}>{s.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {employees.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding: "28px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>
+                  No employees tracked yet.
+                </td></tr>
+              ) : employees.map((e, i) => (
+                <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
+                  <td style={{ padding: "9px 12px", fontSize: "13.5px", fontWeight: 600, color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>
+                    {e.employee || "—"}
+                  </td>
+                  {stages.map((s) => {
+                    const done = e[s.key]?.status === "Done";
+                    return (
+                      <td key={s.key} style={{ padding: "9px 12px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px",
+                          color: done ? T.green : T.red }}>
+                          {done ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                          {e[s.key]?.date ? fmtDMY(e[s.key].date) : done ? "Done" : "Not done"}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CapacityPanel = ({ docs, fy }) => {
+  const exec = docs.exec?.executionData || {};
+  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+
+  const loadStatus = (v) => {
+    if (v === "1" || v === 1) return { text: "Low", color: T.green, bg: T.greenBg };
+    if (v === "2" || v === 2) return { text: "Medium", color: T.amber, bg: T.amberBg };
+    if (v === "3" || v === 3) return { text: "High", color: T.red, bg: T.redBg };
+    if (v === "4" || v === 4) return { text: "Critical", color: T.red, bg: T.redBg };
+    return { text: "—", color: T.faint, bg: T.raised };
+  };
+  const spanStatus = (v) => {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return { text: "—", color: T.faint, bg: T.raised };
+    if (n >= 5 && n <= 8) return { text: n.toFixed(1), color: T.green, bg: T.greenBg };
+    if (n < 3 || n > 12) return { text: n.toFixed(1), color: T.red, bg: T.redBg };
+    return { text: n.toFixed(1), color: T.amber, bg: T.amberBg };
+  };
+
+  const row = (title, arr, styler, footnote) => (
+    <div style={{ ...cardS, marginBottom: "14px" }}>
+      <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent, marginBottom: "2px" }}>{title}</div>
+      <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "10px" }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "760px" }}>
+          <thead>
+            <tr>{months.map((m) => (
+              <th key={m.key} style={{ ...panelTh, textAlign: "center", fontSize: "11px", padding: "7px 4px" }}>{m.label}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            <tr>{months.map((m) => {
+              const s = styler(arr?.[m.month]);
+              return (
+                <td key={m.key} style={{ padding: "6px 4px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
+                  <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color,
+                    fontSize: "11.5px", fontWeight: 700 }}>{s.text}</div>
+                </td>
+              );
+            })}</tr>
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>{footnote}</p>
+    </div>
+  );
+
+  return (
+    <div>
+      {row("Founder Operational Load", exec.founderLoad, loadStatus,
+        "Low means the founder is on strategy and operations run without them. Critical means the business stops when they do. Aim for Low to Medium.")}
+      {row("Average Span of Control", exec.spanOfControl, spanStatus,
+        "Five to eight direct reports is the working range. Below three is top-heavy; above twelve and supervision stops being real.")}
+    </div>
+  );
+};
+
+const RecordsPanel = ({ docs, onEdit, readOnly }) => {
+  const terms = docs.term?.entries || [];
+  const hires = docs.hire?.entries || [];
+
+  const byReason = terms.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
+  const reasons = Object.keys(byReason);
+  const byType = {
+    Permanent: hires.filter((e) => e.contractType === "Permanent").length,
+    Contract: hires.filter((e) => e.contractType === "Contract").length,
+    Internship: hires.filter((e) => e.contractType === "Internship").length,
+  };
+  const types = Object.keys(byType).filter((t) => byType[t] > 0);
+
+  const pie = (labels, values, colors, total) => (
+    <div style={{ height: "230px" }}>
+      <Pie data={{ labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] }}
+        options={{ responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+            datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
+            tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+              callbacks: { label: (c) => `${c.label}: ${c.raw} (${total ? ((c.raw / total) * 100).toFixed(1) : 0}%)` } },
+          } }}
+        plugins={[ChartDataLabels]} />
+    </div>
+  );
+
+  const table = (title, headers, rows, empty) => (
+    <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "460px" }}>
+          <thead><tr>{headers.map((h) => <th key={h} style={{ ...panelTh, textAlign: "left" }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={headers.length} style={{ padding: "26px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>{empty}</td></tr>
+            ) : rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ ...cardS, marginBottom: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Termination Records</div>
+            <div style={{ fontSize: "12.5px", color: T.muted }}>{terms.length} exits recorded · {reasons.length} distinct reasons</div>
+          </div>
+          {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
+          {table("Terminations", ["Employee", "Started", "Ended", "Reason"],
+            terms.map((e, i) => (
+              <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
+                <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name || "—"}</td>
+                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted || "—"}</td>
+                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateEnded || "—"}</td>
+                <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
+                  <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{e.reason}</span>
+                </td>
+              </tr>
+            )), "No termination records yet.")}
+          {reasons.length > 0 && (
+            <div>
+              <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Reasons for leaving</div>
+              {pie(reasons, reasons.map((r) => byReason[r]), BROWN, terms.length)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={cardS}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>New Hire Records</div>
+            <div style={{ fontSize: "12.5px", color: T.muted }}>
+              {hires.length} hires · {byType.Permanent} permanent, {byType.Contract} contract, {byType.Internship} internship
+            </div>
+          </div>
+          {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
+          {table("New hires", ["Employee", "Started", "Contract", "Ends"],
+            hires.map((e, i) => (
+              <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
+                <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name}</td>
+                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted}</td>
+                <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
+                  <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{e.contractType}</span>
+                </td>
+                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.endDate || "—"}</td>
+              </tr>
+            )), "No new hire records yet.")}
+          {types.length > 0 && (
+            <div>
+              <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Hires by contract type</div>
+              {pie(types, types.map((t) => byType[t]), [T.green, T.amber, "#6d28d9"], hires.length)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Records editor — the register-style data the KPI wizard can't hold ──── */
+const REASONS = ["Performance","Resignation","Redundancy","Misconduct","Retirement","Other"];
+const CONTRACT_TYPES = ["Permanent","Contract","Internship"];
+
+const RecordsModal = ({ mode, docs, onClose, onSave }) => {
+  const [comp, setComp] = useState(() => ({ ...(docs.comp?.employeeData || {}) }));
+  const [employees, setEmployees] = useState(() => [...(docs.track?.employees || [])]);
+  const [terms, setTerms] = useState(() => [...(docs.term?.entries || [])]);
+  const [hires, setHires] = useState(() => [...(docs.hire?.entries || [])]);
+  const [saving, setSaving] = useState(false);
+  const [newTerm, setNewTerm] = useState({ name: "", dateStarted: "", dateEnded: "", reason: "", customReason: "" });
+  const [newHire, setNewHire] = useState({ name: "", dateStarted: "", contractType: "Permanent", endDate: "" });
+
+  const title = mode === "composition" ? "Workforce breakdown" : mode === "tracking" ? "Employee development tracking" : "People records";
+
+  const commit = async () => {
+    setSaving(true);
+    if (mode === "composition") await onSave("comp", { employeeData: comp });
+    if (mode === "tracking") await onSave("track", { employees });
+    if (mode === "records") { await onSave("term", { entries: terms }); await onSave("hire", { entries: hires }); }
+    setSaving(false); onClose();
+  };
+
+  const numField = (label, key) => (
+    <div key={key}>
+      <label style={labelS}>{label}</label>
+      <input type="number" min="0" value={comp[key] ?? ""} placeholder="0"
+        onChange={(e) => setComp({ ...comp, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
+    </div>
+  );
+
+  return (
+    <Modal title={title} icon={<Users size={17} />} onClose={onClose} width={860}
+      footer={<>
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Saving…" : "Save"}</button>
+      </>}>
+
+      {mode === "composition" && (
+        <>
+          <div style={{ ...cardS, background: T.panel, marginBottom: "14px", fontSize: "12.5px", color: T.body }}>
+            Head count and target are edited under Add Data — they're KPIs. This is the breakdown behind them.
+          </div>
+          <div style={{ marginBottom: "18px" }}>
+            <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Contract type</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+              {numField("Permanent", "permanent")}{numField("Contract", "contract")}{numField("Internship", "internship")}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Occupational levels</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+              {numField("Unskilled", "unskilled")}{numField("Semi-skilled", "semiSkilled")}{numField("Skilled Jnr", "skilledJnr")}
+              {numField("Prof Mid", "profMid")}{numField("Snr Mgt", "snrMgt")}{numField("Top Mgt", "topMgt")}
+            </div>
+          </div>
+        </>
+      )}
+
+      {mode === "tracking" && (
+        <>
+          <button onClick={() => setEmployees([...employees, { id: uid(), employee: `Employee ${employees.length + 1}`,
+            skillsGap: { date: "", status: "Not Done" }, idp: { date: "", status: "Not Done" },
+            midTermReview: { date: "", status: "Not Done" }, annualReview: { date: "", status: "Not Done" } }])}
+            style={{ ...btnGhost, marginBottom: "14px" }}><Plus size={13} /> Add employee</button>
+
+          {employees.length === 0 && <div style={{ textAlign: "center", padding: "24px", color: T.muted, fontSize: "13.5px" }}>No employees yet.</div>}
+
+          {employees.map((emp, i) => (
+            <div key={emp.id || i} style={{ ...cardS, marginBottom: "12px" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "12px" }}>
+                <input value={emp.employee} placeholder="Employee name"
+                  onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], employee: e.target.value }; setEmployees(n); }}
+                  style={{ ...inputS, flex: 1, fontWeight: 600 }} />
+                <button onClick={() => setEmployees(employees.filter((_, x) => x !== i))}
+                  style={{ ...btnGhost, padding: "9px 11px", color: T.red, borderColor: `${T.red}55` }}><Trash2 size={13} /></button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" }}>
+                {[["skillsGap","Skills gap"],["idp","IDP"],["midTermReview","Mid-term review"],["annualReview","Annual review"]].map(([k, l]) => (
+                  <div key={k}>
+                    <label style={labelS}>{l}</label>
+                    <input type="date" value={emp[k]?.date || ""}
+                      onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], [k]: { ...(n[i][k] || {}), date: e.target.value } }; setEmployees(n); }}
+                      style={{ ...inputS, marginBottom: "6px" }} />
+                    <select value={emp[k]?.status || "Not Done"}
+                      onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], [k]: { ...(n[i][k] || {}), status: e.target.value } }; setEmployees(n); }}
+                      style={selectS}>
+                      <option value="Done">Done</option><option value="Not Done">Not done</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {mode === "records" && (
+        <>
+          <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Terminations</div>
+          <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+              <div><label style={labelS}>Employee</label>
+                <input value={newTerm.name} onChange={(e) => setNewTerm({ ...newTerm, name: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Started</label>
+                <input type="date" value={newTerm.dateStarted} onChange={(e) => setNewTerm({ ...newTerm, dateStarted: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Ended</label>
+                <input type="date" value={newTerm.dateEnded} onChange={(e) => setNewTerm({ ...newTerm, dateEnded: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Reason</label>
+                <select value={newTerm.reason} onChange={(e) => setNewTerm({ ...newTerm, reason: e.target.value })} style={selectS}>
+                  <option value="">Select…</option>
+                  {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select></div>
+              {newTerm.reason === "Other" && (
+                <div><label style={labelS}>Specify</label>
+                  <input value={newTerm.customReason} onChange={(e) => setNewTerm({ ...newTerm, customReason: e.target.value })} style={inputS} /></div>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                const reason = newTerm.reason === "Other" ? newTerm.customReason.trim() : newTerm.reason;
+                if (!newTerm.name.trim() || !reason || !newTerm.dateEnded) return;
+                setTerms([...terms, { id: uid(), name: newTerm.name.trim(), dateStarted: newTerm.dateStarted,
+                  dateEnded: newTerm.dateEnded, reason, dateAdded: new Date().toISOString() }]);
+                setNewTerm({ name: "", dateStarted: "", dateEnded: "", reason: "", customReason: "" });
+              }}
+              style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Plus size={13} /> Add termination</button>
+          </div>
+          {terms.map((e, i) => (
+            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px",
+              borderBottom: `1px solid ${T.lineSoft}`, fontSize: "13.5px", color: T.body }}>
+              <span style={{ flex: 1, color: T.ink }}>{e.name}</span>
+              <span style={{ color: T.muted, fontSize: "12.5px" }}>{e.dateEnded}</span>
+              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{e.reason}</span>
+              <button onClick={() => setTerms(terms.filter((_, x) => x !== i))}
+                style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "4px" }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+
+          <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, margin: "22px 0 10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>New hires</div>
+          <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+              <div><label style={labelS}>Employee</label>
+                <input value={newHire.name} onChange={(e) => setNewHire({ ...newHire, name: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Started</label>
+                <input type="date" value={newHire.dateStarted} onChange={(e) => setNewHire({ ...newHire, dateStarted: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Contract type</label>
+                <select value={newHire.contractType} onChange={(e) => setNewHire({ ...newHire, contractType: e.target.value })} style={selectS}>
+                  {CONTRACT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select></div>
+              {newHire.contractType !== "Permanent" && (
+                <div><label style={labelS}>Ends</label>
+                  <input type="date" value={newHire.endDate} onChange={(e) => setNewHire({ ...newHire, endDate: e.target.value })} style={inputS} /></div>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                if (!newHire.name.trim() || !newHire.dateStarted) return;
+                setHires([...hires, { id: uid(), name: newHire.name.trim(), dateStarted: newHire.dateStarted,
+                  contractType: newHire.contractType, endDate: newHire.endDate || null, dateAdded: new Date().toISOString() }]);
+                setNewHire({ name: "", dateStarted: "", contractType: "Permanent", endDate: "" });
+              }}
+              style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Plus size={13} /> Add hire</button>
+          </div>
+          {hires.map((e, i) => (
+            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px",
+              borderBottom: `1px solid ${T.lineSoft}`, fontSize: "13.5px", color: T.body }}>
+              <span style={{ flex: 1, color: T.ink }}>{e.name}</span>
+              <span style={{ color: T.muted, fontSize: "12.5px" }}>{e.dateStarted}</span>
+              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{e.contractType}</span>
+              <button onClick={() => setHires(hires.filter((_, x) => x !== i))}
+                style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "4px" }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </>
+      )}
+    </Modal>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Main
+   ════════════════════════════════════════════════════════════════════════ */
+const PREFS_KEY = "peoplePerf.addData.prefs";
+const META_DOC = "peopleKpiMeta";
 
 const PeoplePerformance = () => {
-  const [activeSection, setActiveSection] = useState("employee-composition"); // Changed default to employee-composition
   const [user, setUser] = useState(null);
-  const [showFullDescription, setShowFullDescription] = useState(false);
-  const [showDataEntryModal, setShowDataEntryModal] = useState(false);
-  const [userData, setUserData] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [fyStartMonth, setFyStartMonth] = useState(0);
+  const [docs, setDocs] = useState({});
+  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [] });
+  const [loading, setLoading] = useState(true);
+  const [notification, setNotification] = useState(null);
+  const [showAbout, setShowAbout] = useState(false);
+  const [dataPrefs, setDataPrefs] = useState(null);
 
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
-  const [viewOrigin, setViewOrigin] = useState("investor"); // ADD THIS LINE
+  const [viewOrigin, setViewOrigin] = useState("investor");
+
+  const [activeTabId, setActiveTabId] = useState(TAB_DEFS[0].id);
+  const [period, setPeriod] = useState("month");
+
+  const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", source: "all", status: "all" });
+  const [openFilter, setOpenFilter] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [widths, setWidths] = useState(() => ({ ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])), [ACTIONS_KEY]: 166 }));
+  const [visibility, setVisibility] = useState(() => Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])));
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const resizing = useRef(null);
+
+  const [infoKpi, setInfoKpi] = useState(null);
+  const [chartKpi, setChartKpi] = useState(null);
+  const [analysisKpi, setAnalysisKpi] = useState(null);
+  const [actionKpi, setActionKpi] = useState(null);
+  const [notesKpi, setNotesKpi] = useState(null);
+  const [addFlow, setAddFlow] = useState(null);
+  const [manageTabs, setManageTabs] = useState(false);
+  const [recordsMode, setRecordsMode] = useState(null);
+
+  const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
+
+  const notify = (type, message) => {
+    setNotification({ type, message: String(message) });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const savePrefs = (p) => {
+    setDataPrefs(p);
+    try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* private browsing — non-fatal */ }
+  };
+  useEffect(() => {
+    try { const raw = window.localStorage.getItem(PREFS_KEY); if (raw) setDataPrefs(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode");
+    const mode = sessionStorage.getItem("investorViewMode");
     const smeId = sessionStorage.getItem("viewingSMEId");
-    const smeName = sessionStorage.getItem("viewingSMEName");
-    const origin = sessionStorage.getItem("viewOrigin"); // ADD THIS
-
-    if (investorViewMode === "true" && smeId) {
-      setIsInvestorView(true);
-      setViewingSMEId(smeId);
-      setViewingSMEName(smeName || "SME");
-      setViewOrigin(origin || "investor"); // ADD THIS
+    if (mode === "true" && smeId) {
+      setIsInvestorView(true); setViewingSMEId(smeId);
+      setViewingSMEName(sessionStorage.getItem("viewingSMEName") || "SME");
+      setViewOrigin(sessionStorage.getItem("viewOrigin") || "investor");
     }
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (isInvestorView && viewingSMEId) {
-        setUser({ uid: viewingSMEId });
-      } else {
-        setUser(currentUser);
-      }
-    });
-
-    return () => unsubscribe();
+    const unsub = onAuthStateChanged(auth, (cu) => setUser(isInvestorView && viewingSMEId ? { uid: viewingSMEId } : cu));
+    return () => unsub();
   }, [isInvestorView, viewingSMEId]);
 
+  const loadAll = useCallback(async (uid_) => {
+    const out = {};
+    const peopleKeys = ["prod","cap","exec","stab","comp","track","term","hire"];
+    await Promise.all(peopleKeys.map(async (k) => {
+      try {
+        const snap = await getDoc(doc(db, "peopleData", `${uid_}${DOC[k]}`));
+        if (snap.exists()) out[k] = snap.data();
+      } catch (err) { console.error(`Could not load ${k}:`, err); }
+    }));
+    // Financial docs are read-only here — they only feed the Pull button.
+    await Promise.all([["pnl", DOC.pnl], ["bs", DOC.bs]].map(async ([k, id]) => {
+      try {
+        const snap = await getDoc(doc(db, "financialData", `${uid_}${id}`));
+        if (snap.exists()) out[k] = snap.data();
+      } catch (err) { console.error(`Could not load ${k}:`, err); }
+    }));
+    return out;
+  }, []);
+
   useEffect(() => {
-    if (user && activeSection === "employee-composition") {
-      loadEmployeeData();
-    }
-  }, [user, activeSection]);
+    (async () => {
+      if (!user?.uid) { setLoading(false); return; }
+      try {
+        const profile = await getDoc(doc(db, "universalProfiles", user.uid));
+        setFyStartMonth(fyStartMonthFromEnd(profile.exists() ? profile.data()?.entityOverview?.financialYearEnd : null));
+        const [loaded, metaSnap] = await Promise.all([
+          loadAll(user.uid),
+          getDoc(doc(db, "peopleData", `${user.uid}_${META_DOC}`)),
+        ]);
+        setDocs(loaded);
+        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], ...metaSnap.data() });
+      } catch (err) {
+        console.error("Error loading people data:", err);
+        notify("error", `Could not load your people data: ${errText(err)}`);
+      } finally { setLoading(false); }
+    })();
+  }, [user, loadAll]);
 
-  const loadEmployeeData = async () => {
-    if (!user) return;
-    setLoading(true);
+  const persistMeta = async (next) => {
+    setMeta(next);
+    if (!user?.uid || isInvestorView) return;
     try {
-      const employeeDoc = await getDoc(
-        doc(db, "peopleData", `${user.uid}_employeeComposition`),
-      );
-      if (employeeDoc.exists()) {
-        const data = employeeDoc.data();
-        if (data.employeeData) {
-          setUserData(data.employeeData);
-        } else {
-          setUserData({});
-        }
-      } else {
-        setUserData({});
-      }
-    } catch (error) {
-      console.error("Error loading employee composition data:", error);
-      setUserData({});
-    } finally {
-      setLoading(false);
+      await setDoc(doc(db, "peopleData", `${user.uid}_${META_DOC}`),
+        { ...next, userId: user.uid, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+      console.error("Error saving KPI meta:", err);
+      notify("error", `Changes could not be saved: ${errText(err)}`);
     }
   };
 
-  const getContentStyles = () => ({
-    width: "100%",
-    marginLeft: "0",
-    minHeight: "100vh",
-    transition: "padding 0.3s ease",
-    boxSizing: "border-box",
-  });
+  /* Writes into a nested path inside one peopleData doc, creating the shape
+     as it goes so a first entry doesn't get dropped. */
+  const writeDoc = async (src, mutate) => {
+    if (!user?.uid || isInvestorView) return;
+    const next = JSON.parse(JSON.stringify(docs[src] || {}));
+    mutate(next);
+    next.userId = user.uid;
+    next.lastUpdated = new Date().toISOString();
+    setDocs((p) => ({ ...p, [src]: next }));
+    try {
+      await setDoc(doc(db, "peopleData", `${user.uid}${DOC[src]}`), next, { merge: true });
+    } catch (err) {
+      console.error(`Error saving ${src}:`, err);
+      notify("error", `Could not save: ${errText(err)}`);
+    }
+  };
 
-  const sectionButtons = [
-    { id: "employee-composition", label: "Employee Composition" },
-    { id: "execution-capacity", label: "Execution Capacity" },
-    { id: "productivity", label: "Productivity" },
-    { id: "capability-training", label: "Capability & Training" },
-    { id: "stability-continuity", label: "Stability & Continuity" },
-  ];
+  const setAtPath = (root, path, value, { scalar = false, monthIndex = 0 } = {}) => {
+    let node = root;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (node[path[i]] === undefined || node[path[i]] === null) node[path[i]] = {};
+      node = node[path[i]];
+    }
+    const leaf = path[path.length - 1];
+    if (scalar) { node[leaf] = value; return; }
+    const arr = Array.isArray(node[leaf]) ? [...node[leaf]] : Array(12).fill("");
+    while (arr.length < 12) arr.push("");
+    arr[monthIndex] = value;
+    node[leaf] = arr;
+  };
 
-  const handleExitInvestorView = () => {
-    // Clear all session storage items
+  const saveKpiField = async ({ kpi, which, raw, monthIndex }) => {
+    if (kpi.custom) {
+      const key = `M:${monthIndex}`;
+      const entries = { ...(meta.kpis[kpi.id]?.entries || {}) };
+      entries[key] = { ...(entries[key] || {}), [which]: parseNum(raw) };
+      await persistMeta({ ...meta, kpis: { ...meta.kpis, [kpi.id]: { ...(meta.kpis[kpi.id] || {}), entries } } });
+      return;
+    }
+    const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+    if (!path) return;
+    await writeDoc(kpi.field.src, (d) => setAtPath(d, path, raw, { scalar: !!kpi.field.scalar, monthIndex }));
+  };
+
+  /* Revenue per employee, labour cost % and training spend can all be derived
+     from what Financial Performance already holds. */
+  const pullFromFinancials = async () => {
+    const pnl = docs.pnl, bs = docs.bs;
+    const arr = (a) => (Array.isArray(a) ? a.map((v) => parseFloat(v) || 0) : Array(12).fill(0));
+    const revenue = arr(pnl?.sales), salaries = arr(pnl?.salaries);
+    const extra = bs?.balanceSheetData?.assets?.additionalMetrics || {};
+    const heads = arr(extra.numberOfEmployees), training = arr(extra.trainingSpend);
+
+    const revPer = revenue.map((r, i) => (heads[i] ? String(Math.round(r / heads[i])) : ""));
+    const labPct = revenue.map((r, i) => (r ? (salaries[i] / r * 100).toFixed(2) : ""));
+    const trainAmt = training.map((v) => (v ? String(v) : ""));
+    const trainPct = training.map((v, i) => (salaries[i] ? (v / salaries[i] * 100).toFixed(2) : ""));
+
+    await writeDoc("prod", (d) => {
+      setAtPath(d, ["productivityData","revenuePerEmployee","actual"], "", {});
+      d.productivityData.revenuePerEmployee.actual = revPer;
+      setAtPath(d, ["productivityData","laborCostPercentage","actual"], "", {});
+      d.productivityData.laborCostPercentage.actual = labPct;
+    });
+    await writeDoc("cap", (d) => {
+      setAtPath(d, ["capabilityData","trainingSpendAmount","actual"], "", {});
+      d.capabilityData.trainingSpendAmount.actual = trainAmt;
+      setAtPath(d, ["capabilityData","trainingSpendPercentage","actual"], "", {});
+      d.capabilityData.trainingSpendPercentage.actual = trainPct;
+    });
+    notify("success", "Pulled revenue, labour cost and training figures from Financial Performance.");
+  };
+
+  const saveRecords = async (src, payload) => writeDoc(src, (d) => Object.assign(d, payload));
+
+  /* ─── Assemble tabs and hydrate every KPI with a financial year ─────────── */
+  const tabs = useMemo(() => {
+    const withCustom = TAB_DEFS.map((tab) => {
+      const cats = tab.categories.map((c) => ({ ...c, kpis: [...(c.kpis || [])] }));
+      (meta.custom || []).filter((c) => c.tabId === tab.id).forEach((c) => {
+        const kpi = K({ ...c, actual: () => null });
+        kpi.custom = true; kpi.field = { src: "custom" };
+        const found = cats.find((x) => x.name === c.category);
+        if (found) found.kpis.push(kpi);
+        else cats.push({ name: c.category, kpis: [kpi] });
+      });
+      return { ...tab, categories: cats };
+    });
+
+    const months = fyMonths(fy.startYear, fy.startMonth);
+    return withCustom.map((tab) => ({
+      ...tab,
+      categories: tab.categories.map((cat) => ({
+        ...cat,
+        kpis: (cat.kpis || []).map((kpi) => {
+          const entries = {};
+          months.forEach((m) => {
+            if (kpi.custom) {
+              const saved = meta.kpis[kpi.id]?.entries?.[`M:${m.month}`];
+              entries[m.key] = { actual: saved?.actual ?? null, budget: saved?.budget ?? null };
+            } else {
+              const ctx = buildContext(docs, m.month);
+              const b = kpi.budget ? kpi.budget(ctx) : null;
+              entries[m.key] = {
+                actual: kpi.actual ? kpi.actual(ctx) : null,
+                // Fall back to the published benchmark so a KPI without a
+                // captured target still says something.
+                budget: b !== null && b !== undefined ? b : kpi.benchmark,
+              };
+            }
+          });
+          const saved = meta.kpis[kpi.id] || {};
+          return { ...kpi, entries,
+            meaning: saved.meaning ?? kpi.meaning, measured: saved.measured ?? kpi.measured,
+            notes: saved.notes || "", periodNotes: saved.periodNotes || {}, chart: saved.chart || null };
+        }),
+      })),
+    }));
+  }, [docs, meta, fy]);
+
+  const visibleTabs = useMemo(() => tabs.filter((t) => !(meta.hiddenTabs || []).includes(t.id)), [tabs, meta.hiddenTabs]);
+
+  useEffect(() => {
+    if (!visibleTabs.length) return;
+    if (!visibleTabs.some((t) => t.id === activeTabId)) setActiveTabId(visibleTabs[0].id);
+  }, [visibleTabs, activeTabId]);
+
+  const activeTab = visibleTabs.find((t) => t.id === activeTabId) || visibleTabs[0];
+
+  const updateKpiMeta = (kpiId, patch) =>
+    persistMeta({ ...meta, kpis: { ...meta.kpis, [kpiId]: { ...(meta.kpis[kpiId] || {}), ...patch } } });
+
+  /* A KPI's target is "Set" when someone captured one, "Benchmark" when the
+     published figure is standing in for it. */
+  const targetSource = (kpi, period) => {
+    const months = fyMonths(fy.startYear, fy.startMonth);
+    const anyCaptured = months.some((m) => {
+      if (kpi.custom) return meta.kpis[kpi.id]?.entries?.[`M:${m.month}`]?.budget != null;
+      const ctx = buildContext(docs, m.month);
+      const b = kpi.budget ? kpi.budget(ctx) : null;
+      return b !== null && b !== undefined;
+    });
+    return anyCaptured ? "Set" : kpi.benchmark !== null ? "Benchmark" : "None";
+  };
+
+  const allRows = useMemo(() => {
+    if (!activeTab) return [];
+    const rows = [];
+    activeTab.categories.forEach((cat) => {
+      (cat.kpis || []).forEach((kpi) => rows.push({
+        kpi, categoryName: cat.name, tabName: activeTab.name,
+        status: getStatus(kpi, period, fy), variance: getVariance(kpi, period, fy),
+        values: periodValues(kpi, period, fy), source: targetSource(kpi, period),
+      }));
+    });
+    return rows;
+  }, [activeTab, period, fy, docs, meta]); // eslint-disable-line
+
+  const optionsFor = (key) => {
+    const set = new Set();
+    allRows.forEach((r) => {
+      if (key === "category") set.add(r.categoryName);
+      else if (key === "kpi") set.add(r.kpi.name);
+      else if (key === "units") set.add(r.kpi.units);
+      else if (key === "source") set.add(r.source);
+      else if (key === "status") set.add(r.status.label);
+    });
+    return ["all", ...Array.from(set).sort()];
+  };
+
+  const rows = useMemo(() => {
+    const list = allRows.filter((r) =>
+      (filters.category === "all" || r.categoryName === filters.category) &&
+      (filters.kpi === "all" || r.kpi.name === filters.kpi) &&
+      (filters.units === "all" || r.kpi.units === filters.units) &&
+      (filters.source === "all" || r.source === filters.source) &&
+      (filters.status === "all" || r.status.label === filters.status));
+
+    const get = {
+      category: (r) => r.categoryName, kpi: (r) => r.kpi.name,
+      units: (r) => r.kpi.units, source: (r) => r.source,
+      budget: (r) => Number(r.values.budget) || 0, actual: (r) => Number(r.values.actual) || 0,
+      variance: (r) => Number(r.variance) || 0,
+      status: (r) => ({ green: 0, amber: 1, red: 2, none: 3 }[r.status.key]),
+    }[sortConfig.key];
+
+    return [...list].sort((a, b) => {
+      // Category leads so the merged Category cell stays contiguous.
+      if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName);
+      if (!get) return 0;
+      const av = get(a), bv = get(b);
+      if (typeof av === "number" && typeof bv === "number") return sortConfig.direction === "asc" ? av - bv : bv - av;
+      const cmp = String(av).localeCompare(String(bv));
+      return sortConfig.direction === "asc" ? cmp : -cmp;
+    });
+  }, [allRows, filters, sortConfig]);
+
+  const groupedRows = useMemo(() => {
+    const groups = [];
+    rows.forEach((r) => {
+      const last = groups[groups.length - 1];
+      if (last && last.name === r.categoryName) last.items.push(r);
+      else groups.push({ name: r.categoryName, items: [r] });
+    });
+    return groups;
+  }, [rows]);
+
+  const visibleColumns = COLUMN_ORDER.filter((k) => visibility[k]);
+  const totalWidth = visibleColumns.reduce((s, k) => s + widths[k], 0) + widths[ACTIONS_KEY];
+  const activeFilterCount = Object.values(filters).filter((v) => v !== "all").length;
+
+  const startResize = (e, key) => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX, startWidth = widths[key];
+    resizing.current = key;
+    const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
+    const onUp = () => {
+      resizing.current = null;
+      document.body.style.cursor = ""; document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+  };
+
+  const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
+  const clearFilters = () => { setFilters({ category: "all", kpi: "all", units: "all", source: "all", status: "all" }); setSortConfig({ key: null, direction: "asc" }); };
+
+  const downloadCSV = () => {
+    const p = PERIOD_PREFIX[period];
+    const lines = [["Section","Category","KPI","Units","Target source", `${p} Target`, `${p} Actual`, `${p} Variance`, "Status"]];
+    tabs.forEach((tab) => tab.categories.forEach((cat) => (cat.kpis || []).forEach((kpi) => {
+      const v = periodValues(kpi, period, fy);
+      lines.push([tab.name, cat.name, `"${kpi.name}"`, kpi.units, targetSource(kpi, period),
+        v.budget ?? "", v.actual ?? "", getVariance(kpi, period, fy) ?? "", getStatus(kpi, period, fy).label]);
+    })));
+    const blob = new Blob([lines.map((r) => r.join(",")).join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `people-performance-${period}-FY${fyLabel(fy.startYear, fy.startMonth).replace("/","-")}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exitInvestorView = () => {
     const origin = sessionStorage.getItem("viewOrigin");
-    sessionStorage.removeItem("viewingSMEId");
-    sessionStorage.removeItem("viewingSMEName");
-    sessionStorage.removeItem("investorViewMode");
-    sessionStorage.removeItem("viewOrigin");
-
-    // Navigate based on origin
-    if (origin === "cmf") {
-      window.location.href = "/cmf-cohorts";
-    } else if (origin === "catalyst") {
-      window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
-    } else {
-      window.location.href = "/my-cohorts"; // Go back to Investor cohorts
-    }
+    ["viewingSMEId","viewingSMEName","investorViewMode","viewOrigin"].forEach((k) => sessionStorage.removeItem(k));
+    window.location.href = origin === "cmf" ? "/cmf-cohorts" : origin === "catalyst" ? "/catalyst/cohorts" : "/my-cohorts";
   };
 
-  const handleOpenModal = (tabId) => {
-    setShowDataEntryModal(true);
-  };
+  const thS = { padding: 0, background: T.header, borderBottom: `2px solid ${T.header}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top" };
+  const tdS = { padding: "13px 14px", color: T.body, fontSize: "14px", overflow: "hidden", borderRight: `1px solid ${T.lineSoft}` };
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "5px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+
+  if (loading) {
+    return <div style={{ padding: "80px", textAlign: "center", color: T.body, fontSize: "14px" }}>Loading people performance…</div>;
+  }
+
+  const panels = (activeTab?.categories || []).map((c) => c.panel).filter(Boolean);
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <div style={getContentStyles()}>
-        {isInvestorView && (
-          <div
-            style={{
-              backgroundColor: "#e8f5e9",
-              padding: "16px 20px",
-              margin: "50px 0 20px 0",
-              borderRadius: "8px",
-              border: "2px solid #4caf50",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "20px" }}>👁️</span>
-              <span
-                style={{
-                  color: "#2e7d32",
-                  fontWeight: "600",
-                  fontSize: "15px",
-                }}
-              >
-                {viewOrigin === "catalyst"
-                  ? `Catalyst View: Viewing ${viewingSMEName}'s Operational Performance`
-                  : viewOrigin === "cmf"
-                  ? `Facilitator View: Viewing ${viewingSMEName}'s Operational Performance`
-                  : `Investor View: Viewing ${viewingSMEName}'s Operational Performance`}
+    <div style={{ minHeight: "100vh", padding: "28px", boxSizing: "border-box", background: T.bg, color: T.body }}>
+      {isInvestorView && (
+        <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderLeft: `3px solid ${T.accent}`, padding: "13px 18px",
+          borderRadius: "10px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "10px", color: T.accent, fontWeight: 500, fontSize: "14px" }}>
+            <Eye size={15} />
+            {viewOrigin === "catalyst" ? "Catalyst view" : viewOrigin === "cmf" ? "Facilitator view" : "Investor view"}: {viewingSMEName}'s People Performance
+          </span>
+          <button onClick={exitInvestorView} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+        </div>
+      )}
+
+      {notification && (
+        <div style={{ padding: "12px 16px", borderRadius: "10px", marginBottom: "16px", fontSize: "14px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: notification.type === "error" ? T.redBg : T.greenBg,
+          border: `1px solid ${notification.type === "error" ? T.red : T.green}33`,
+          color: notification.type === "error" ? T.red : T.green }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {notification.type === "error" ? <XCircle size={14} /> : <CheckCircle2 size={14} />} {notification.message}
+          </span>
+          <button onClick={() => setNotification(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={14} /></button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "12px" }}>
+        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>People Performance Summary</h1>
+        <button onClick={() => setShowAbout((v) => !v)} style={btnQuiet}>
+          {showAbout ? "See less" : "See more"} {showAbout ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+      </div>
+      <p style={{ fontSize: "13.5px", color: T.body, margin: "0 0 20px", display: "flex", alignItems: "center", gap: "7px" }}>
+        <Calendar size={13} /> Financial year {fyLabel(fy.startYear, fy.startMonth)} · {MONTHS[fy.startMonth]} → {MONTHS[(fy.startMonth + 11) % 12]}
+      </p>
+
+      {showAbout && (
+        <div style={{ background: T.panel, border: `1px solid ${T.line}`, padding: "22px", borderRadius: "12px", marginBottom: "22px",
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
+          <div>
+            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "14.5px", fontWeight: 600 }}>What this dashboard does</h3>
+            <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
+              <li>Tracks Target, Actual and Variance for every people KPI</li>
+              <li>Falls back to published benchmarks where you haven't set a target</li>
+              <li>Keeps the registers — development, terminations, hires — alongside</li>
+              <li>Raises actions straight into your governance meetings</li>
+            </ul>
+          </div>
+          <div>
+            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "14.5px", fontWeight: 600 }}>What it doesn't do</h3>
+            <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
+              <li>Payroll, leave or attendance processing</li>
+              <li>Performance review administration</li>
+              <li>Recruitment and onboarding workflows</li>
+              <li>Demographic reporting — that sits under ESG Impact</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "2px", borderBottom: `1px solid ${T.lineStrong}`, marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
+        {visibleTabs.map((tab) => {
+          const on = tab.id === activeTab?.id;
+          const counts = tab.categories.flatMap((c) => c.kpis || []).reduce((acc, k) => {
+            const key = getStatus(k, period, fy).key; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
+          return (
+            <button key={tab.id} onClick={() => { setActiveTabId(tab.id); clearFilters(); }}
+              style={{ padding: "12px 20px", background: "none", border: "none", cursor: "pointer", fontSize: "14.5px",
+                fontWeight: on ? 600 : 500, color: on ? T.accent : T.body,
+                borderBottom: on ? `2px solid ${T.accent}` : "2px solid transparent",
+                display: "flex", alignItems: "center", gap: "9px", fontFamily: "inherit", marginBottom: "-1px" }}>
+              {tab.name}
+              <span style={{ display: "inline-flex", gap: "4px" }}>
+                {counts.red > 0 && <span style={{ fontSize: "11px", padding: "1px 7px", borderRadius: "999px", background: T.redBg, color: T.red, fontWeight: 700 }}>{counts.red}</span>}
+                {counts.amber > 0 && <span style={{ fontSize: "11px", padding: "1px 7px", borderRadius: "999px", background: T.amberBg, color: T.amber, fontWeight: 700 }}>{counts.amber}</span>}
               </span>
-            </div>
-            <button
-              onClick={handleExitInvestorView}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4caf50",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "14px",
-                transition: "background-color 0.3s ease",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = "#45a049";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = "#4caf50";
-              }}
-            >
-              <span>←</span>
-              {viewOrigin === "catalyst"
-                ? "Back to Catalyst Cohorts"
-                : "Back to My Cohorts"}
             </button>
-          </div>
+          );
+        })}
+        {!isInvestorView && (
+          <button onClick={() => setManageTabs(true)} title="Hide or show a section"
+            style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
+            <Settings2 size={13} /> Sections
+          </button>
         )}
+      </div>
 
-        <div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-            }}
-          >
-            <h1
-              style={{
-                color: "#5d4037",
-                fontSize: "32px",
-                fontWeight: "700",
-                margin: 0,
-              }}
-            >
-              People Performance
-            </h1>
-
-            <button
-              onClick={() => setShowFullDescription(!showFullDescription)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {showFullDescription ? "See less" : "See more"}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{activeTab?.name}</h3>
+          <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
+          {activeFilterCount > 0 && (
+            <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
+              Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
             </button>
-          </div>
-
-          {/* People Performance Description */}
-          {showFullDescription && (
-            <div
-              style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "8px",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-                marginBottom: "30px",
-              }}
-            >
-              <div style={{ padding: "50px", paddingTop: "100px" }}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "20px",
-                    marginTop: "-80px",
-                  }}
-                >
-                  <div>
-                    <h3
-                      style={{
-                        color: "#7d5a50",
-                        marginTop: 0,
-                        marginBottom: "12px",
-                        fontSize: "16px",
-                      }}
-                    >
-                      What this dashboard DOES
-                    </h3>
-                    <ul
-                      style={{
-                        color: "#4a352f",
-                        fontSize: "14px",
-                        lineHeight: "1.7",
-                        margin: 0,
-                        paddingLeft: "20px",
-                      }}
-                    >
-                      <li>
-                        Assesses organisational resilience and execution
-                        capacity
-                      </li>
-                      <li>Evaluates continuity risk and talent retention</li>
-                      <li>
-                        Monitors productivity scaling with headcount growth
-                      </li>
-                      <li>
-                        Measures capability development and skills investment
-                      </li>
-                      <li>
-                        Analyzes workforce demographics and representation
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h3
-                      style={{
-                        color: "#7d5a50",
-                        marginTop: 0,
-                        marginBottom: "12px",
-                        fontSize: "16px",
-                      }}
-                    >
-                      What this dashboard does NOT do
-                    </h3>
-                    <ul
-                      style={{
-                        color: "#4a352f",
-                        fontSize: "14px",
-                        lineHeight: "1.7",
-                        margin: 0,
-                        paddingLeft: "20px",
-                      }}
-                    >
-                      <li>Payroll processing or salary management</li>
-                      <li>Leave and attendance tracking</li>
-                      <li>Performance review administration</li>
-                      <li>HR compliance and policy management</li>
-                      <li>Recruitment and onboarding workflows</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
           )}
         </div>
 
-        {/* Main Tab Buttons */}
-        <div
-          style={{
-            display: "flex",
-            gap: "15px",
-            marginBottom: "30px",
-            backgroundColor: "#fdfcfb",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-            flexWrap: "wrap",
-          }}
-        >
-          {sectionButtons.map((button) => (
-            <button
-              key={button.id}
-              onClick={() => setActiveSection(button.id)}
-              style={{
-                padding: "12px 24px",
-                backgroundColor:
-                  activeSection === button.id ? "#5d4037" : "#e8ddd4",
-                color: activeSection === button.id ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "15px",
-                transition: "all 0.3s ease",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                minWidth: "180px",
-                textAlign: "center",
-              }}
-            >
-              {button.label}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div
-            style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}
-          >
-            Loading data...
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
+            {showColumnMenu && (
+              <>
+                <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
+                <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg,
+                  border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
+                  {COLUMN_ORDER.map((key) => {
+                    const def = COLUMN_DEFS[key];
+                    return (
+                      <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))}
+                        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px",
+                          cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
+                        {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
+                        <span style={{ flex: 1 }}>{key === "source" ? "Target source" : def.label}</span>
+                      </div>
+                    );
+                  })}
+                  <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))}
+                    style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
+                </div>
+              </>
+            )}
           </div>
-        ) : (
-          <>
-            <EmployeeComposition
-              activeSection={activeSection}
-              userData={userData}
-              onOpenModal={handleOpenModal}
-            />
-
-            <ExecutionCapacity
-              activeSection={activeSection}
-              user={user}
-              isInvestorView={isInvestorView}
-            />
-
-            <Productivity
-              activeSection={activeSection}
-              user={user}
-              isInvestorView={isInvestorView}
-            />
-
-            <CapabilityTraining
-              activeSection={activeSection}
-              user={user}
-              isInvestorView={isInvestorView}
-            />
-
-            <StabilityContinuity
-              activeSection={activeSection}
-              user={user}
-              isInvestorView={isInvestorView}
-            />
-          </>
-        )}
-
-        <UnifiedDataEntryModal
-          isOpen={showDataEntryModal}
-          onClose={() => setShowDataEntryModal(false)}
-          currentTab={activeSection}
-          user={user}
-          onSave={() => {
-            if (activeSection === "employee-composition") {
-              loadEmployeeData();
-            }
-          }}
-          loading={loading}
-        />
+          <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
+          <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
+            <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
+          </button>
+          {!isInvestorView && <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add KPI/Data</button>}
+        </div>
       </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
+          {PERIODS.map((p) => {
+            const on = p.key === period;
+            return (
+              <button key={p.key} onClick={() => setPeriod(p.key)}
+                style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px",
+                  fontWeight: 600, border: "none", fontFamily: "inherit",
+                  background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
+                  boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <span style={{ fontSize: "12.5px", color: T.muted }}>
+          Showing {PERIOD_PREFIX[period].toLowerCase()} target, actual and variance
+        </span>
+      </div>
+
+      {allRows.length > 0 && (
+        <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "12px", overflow: "hidden", background: T.bg, marginBottom: "22px" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed" }}>
+              <thead>
+                <tr>
+                  {visibleColumns.map((key) => {
+                    const def = COLUMN_DEFS[key];
+                    const isOpen = openFilter === key;
+                    const sorted = sortConfig.key === key;
+                    const filtered = def.filter && filters[key] !== "all";
+                    const align = def.align === "center" ? "center" : "flex-start";
+                    const lines = key === "source" ? ["Target", "source"] : columnLines(key, period);
+
+                    return (
+                      <th key={key} style={{ ...thS, width: widths[key] }}>
+                        {/* Every header starts at the top; two-line ones run
+                            further down rather than pushing the rest around. */}
+                        <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: align }}>
+                          <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                            <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
+                              {lines.map((l, i) => (
+                                <span key={i} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap",
+                                  color: i < lines.length - 1 ? "rgba(255,255,255,0.82)" : "#ffffff" }}>{l}</span>
+                              ))}
+                            </span>
+                            <InfoTip text={def.tip} light />
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                            {def.sort && (
+                              <button onClick={() => toggleSort(key)} title="Sort" style={iconBtn(sorted ? "#fff" : "rgba(255,255,255,0.6)")}>
+                                {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                              </button>
+                            )}
+                            {def.filter && (
+                              <button onClick={() => setOpenFilter(isOpen ? null : key)} title="Filter"
+                                style={{ ...iconBtn(filtered ? "#fff" : "rgba(255,255,255,0.6)"), background: filtered ? "rgba(255,255,255,0.16)" : "transparent" }}>
+                                <SlidersHorizontal size={13} />
+                              </button>
+                            )}
+                          </span>
+                        </div>
+
+                        {isOpen && def.filter && (
+                          <div onMouseLeave={() => setOpenFilter(null)}
+                            style={{ position: "absolute", top: "100%", left: 0, marginTop: "2px", background: T.bg,
+                              border: `1px solid ${T.lineStrong}`, borderRadius: "10px", minWidth: "215px", maxHeight: "260px",
+                              overflowY: "auto", zIndex: 600, boxShadow: "0 12px 30px rgba(45,32,28,0.18)", padding: "6px" }}>
+                            {optionsFor(key).map((opt) => (
+                              <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setOpenFilter(null); }}
+                                style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px",
+                                  background: filters[key] === opt ? T.accentTint : "transparent",
+                                  color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
+                                {opt === "all" ? `All ${(key === "source" ? "target sources" : def.label.toLowerCase())}` : opt}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize"
+                          style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                      </th>
+                    );
+                  })}
+                  <th style={{ ...thS, width: widths[ACTIONS_KEY], borderRight: "none" }}>
+                    <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
+                      <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>Actions</span>
+                        <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, and notes for this KPI." />
+                      </span>
+                      <span style={{ height: "23px" }} />
+                    </div>
+                    <div onMouseDown={(e) => startResize(e, ACTIONS_KEY)}
+                      style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {groupedRows.length === 0 ? (
+                  <tr><td colSpan={visibleColumns.length + 1} style={{ ...tdS, textAlign: "center", padding: "56px 16px", color: T.muted, borderRight: "none" }}>
+                    No KPIs match the current filters.
+                  </td></tr>
+                ) : groupedRows.map((group) => group.items.map((row, idx) => {
+                  const { kpi, categoryName, tabName, status, variance, values, source } = row;
+                  const fav = varianceFavourable(kpi, variance);
+                  const last = idx === group.items.length - 1;
+                  const rowTd = { ...tdS, borderBottom: last ? `2px solid ${T.lineStrong}` : `1px solid ${T.lineSoft}` };
+                  const cell = (key, content) => visibility[key] ? (
+                    <td key={key} style={{ ...rowTd, width: widths[key],
+                      textAlign: COLUMN_DEFS[key].align === "center" ? "center" : "left" }}>{content}</td>
+                  ) : null;
+
+                  return (
+                    <tr key={kpi.id}>
+                      {visibility.category && idx === 0 && (
+                        <td rowSpan={group.items.length} style={{ ...tdS, width: widths.category, background: T.panel,
+                          fontWeight: 700, color: T.accent, verticalAlign: "middle",
+                          borderBottom: `2px solid ${T.lineStrong}`, borderRight: `1px solid ${T.lineStrong}`, fontSize: "13.5px" }}>
+                          {group.name}
+                        </td>
+                      )}
+                      {visibility.kpi && (
+                        <td style={{ ...rowTd, width: widths.kpi }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                            <span style={{ fontWeight: 500, color: T.ink }}>{kpi.name}</span>
+                            <button onClick={() => setInfoKpi(kpi)} style={iconBtn(T.muted)} title="What it means and how it is measured"><Eye size={14} /></button>
+                            {kpi.notes && <StickyNote size={11} color={T.amber} />}
+                          </div>
+                        </td>
+                      )}
+                      {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
+                      {cell("source", (
+                        <span style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "999px",
+                          background: source === "Set" ? T.accentTint : T.raised, color: source === "Set" ? T.accent : T.body, fontWeight: 500 }}>
+                          {source}
+                        </span>
+                      ))}
+                      {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
+                      {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi, { bare: true })}</span>)}
+                      {cell("variance", variance === null || kpi.options
+                        ? <span style={{ color: T.faint }}>—</span>
+                        : <span style={{ fontWeight: 700, color: fav ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>
+                            {fmtValue(variance, kpi, { signed: true, bare: true })}</span>)}
+                      {cell("status", <span style={{ display: "inline-flex" }} title={status.label}><StatusIcon status={status} size={22} /></span>)}
+
+                      <td style={{ ...rowTd, width: widths[ACTIONS_KEY], textAlign: "center", borderRight: "none" }}>
+                        <div style={{ display: "flex", gap: "1px", justifyContent: "center", alignItems: "center" }}>
+                          <button onClick={() => setChartKpi(kpi)} style={iconBtn(T.body)} title="Trend chart"><LineChartIcon size={16} /></button>
+                          <button onClick={() => setAnalysisKpi(kpi)} style={iconBtn(T.body)} title="Summary analysis across all timeframes"><Lightbulb size={16} /></button>
+                          {!isInvestorView && (
+                            <button onClick={() => setActionKpi({ kpi, categoryName, tabName })}
+                              style={iconBtn(status.color)} title={`Add action (${status.label})`}><Plus size={16} /></button>
+                          )}
+                          <button onClick={() => setNotesKpi(kpi)} style={iconBtn(kpi.notes ? T.amber : T.body)} title="Notes"><StickyNote size={16} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.lineStrong}`, background: T.panel, fontSize: "12px",
+            color: T.body, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+            <span>{activeTab?.categories.length} categories · a "Benchmark" target is the published figure, not one you set</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><CheckCircle2 size={13} color={T.green} /> On target</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><AlertTriangle size={13} color={T.amber} /> Needs attention</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><XCircle size={13} color={T.red} /> Critical</span>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Categories that carry more than a KPI row keep their panel below. */}
+      {panels.includes("tracking") && (
+        <div style={{ marginBottom: "20px" }}>
+          <TrackingPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("tracking")} />
+        </div>
+      )}
+      {panels.includes("composition") && (
+        <div style={{ marginBottom: "20px" }}>
+          <CompositionPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("composition")} />
+        </div>
+      )}
+      {panels.includes("capacity") && (
+        <div style={{ marginBottom: "20px" }}><CapacityPanel docs={docs} fy={fy} /></div>
+      )}
+      {panels.includes("records") && (
+        <div style={{ marginBottom: "20px" }}>
+          <RecordsPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("records")} />
+        </div>
+      )}
+
+      {infoKpi && <KpiInfoModal kpi={infoKpi} readOnly={isInvestorView} onClose={() => setInfoKpi(null)}
+        onSave={(patch) => { updateKpiMeta(infoKpi.id, patch); setInfoKpi({ ...infoKpi, ...patch }); notify("success", "KPI details updated."); }} />}
+
+      {chartKpi && <TrendChartModal kpi={chartKpi} period={period} fy={fy} readOnly={isInvestorView} onClose={() => setChartKpi(null)}
+        onSaveNote={(key, text) => {
+          const notes = { ...(chartKpi.periodNotes || {}) };
+          if (text.trim()) notes[key] = text.trim(); else delete notes[key];
+          updateKpiMeta(chartKpi.id, { periodNotes: notes });
+          setChartKpi({ ...chartKpi, periodNotes: notes });
+        }}
+        onSaveChart={(chart) => { updateKpiMeta(chartKpi.id, { chart }); setChartKpi({ ...chartKpi, chart }); }} />}
+
+      {analysisKpi && <AnalysisModal kpi={analysisKpi} period={period} fy={fy} onClose={() => setAnalysisKpi(null)} />}
+
+      {actionKpi && <AddActionModal kpi={actionKpi.kpi} period={period} fy={fy}
+        categoryName={actionKpi.categoryName} tabName={actionKpi.tabName}
+        userId={user?.uid} onClose={() => setActionKpi(null)}
+        onSaved={(m) => notify("success", `Action added to "${m}" and Integrated Actions.`)} />}
+
+      {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)}
+        onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
+
+      {recordsMode && <RecordsModal mode={recordsMode} docs={docs} onClose={() => setRecordsMode(null)}
+        onSave={async (src, payload) => { await saveRecords(src, payload); notify("success", "Records saved."); }} />}
+
+      {manageTabs && (
+        <Modal title="Sections" subtitle="Hide a section to take it off the dashboard" icon={<Settings2 size={17} />}
+          onClose={() => setManageTabs(false)} width={560}
+          footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
+          {tabs.map((t) => {
+            const hidden = (meta.hiddenTabs || []).includes(t.id);
+            const count = t.categories.flatMap((c) => c.kpis || []).length;
+            return (
+              <div key={t.id} style={{ ...cardS, marginBottom: "10px", opacity: hidden ? 0.6 : 1,
+                display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: "180px" }}>
+                  <div style={{ fontSize: "14.5px", fontWeight: 600, color: T.accent }}>
+                    {t.name} {hidden && <span style={{ fontSize: "11.5px", fontWeight: 500, color: T.muted }}>· hidden</span>}
+                  </div>
+                  <div style={{ fontSize: "12.5px", color: T.muted }}>{t.categories.length} categories · {count} KPIs</div>
+                </div>
+                <button
+                  onClick={() => persistMeta({ ...meta,
+                    hiddenTabs: hidden ? (meta.hiddenTabs || []).filter((x) => x !== t.id) : [...(meta.hiddenTabs || []), t.id] })}
+                  disabled={!hidden && visibleTabs.length <= 1}
+                  style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: !hidden && visibleTabs.length <= 1 ? 0.4 : 1 }}>
+                  {hidden ? <><Eye size={13} /> Show</> : <><EyeOff size={13} /> Hide</>}
+                </button>
+              </div>
+            );
+          })}
+          <p style={{ fontSize: "12.5px", color: T.muted, marginTop: "10px", marginBottom: 0, display: "flex", alignItems: "flex-start", gap: "6px" }}>
+            <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
+            Sections are built in, so they hide rather than delete — the underlying people data is shared with the rest of the platform.
+          </p>
+        </Modal>
+      )}
+
+      {addFlow === "choose" && <AddChooser onClose={() => setAddFlow(null)} onPick={(k) => setAddFlow(k)} />}
+
+      {addFlow === "data" && <AddDataWizard tabs={tabs} fy={fy} docs={docs} currentTabId={activeTabId}
+        prefs={dataPrefs} onSavePrefs={savePrefs} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
+        onSaveField={saveKpiField} onPullFinancials={pullFromFinancials} />}
+
+      {addFlow === "kpi" && <AddKpiWizard tabs={tabs} currentTabId={activeTabId}
+        onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
+        onSave={async (kpi) => { await persistMeta({ ...meta, custom: [...(meta.custom || []), kpi] }); notify("success", "KPI created."); }} />}
     </div>
   );
 };
