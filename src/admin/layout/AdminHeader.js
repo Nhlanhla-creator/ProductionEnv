@@ -318,10 +318,13 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
         } catch (prodErr) {
           console.warn("Background sign-out from Production Firebase failed:", prodErr);
         }
-        navigate("/login")
+        sessionStorage.clear()
+        navigate("/")
       })
       .catch((error) => {
         console.error("Error signing out: ", error)
+        sessionStorage.clear()
+        navigate("/")
       })
   }
 

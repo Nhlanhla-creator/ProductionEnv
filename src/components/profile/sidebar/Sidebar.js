@@ -12,6 +12,7 @@ import {
 import styles from "./Sidebar.module.css"
 import NeedHelp from "../../../NeedHelp2"
 import { useHeaderProfile } from "../../../hooks/useHeaderProfile"
+import { auth } from "../../../firebaseConfig"
 
 function Sidebar({ 
   menuItems, 
@@ -163,7 +164,14 @@ function Sidebar({
     if (onLogout) {
       onLogout()
     } else {
-      navigate("/auth")
+      auth.signOut().then(() => {
+        sessionStorage.clear()
+        navigate("/")
+      }).catch((err) => {
+        console.error("Sign out error:", err)
+        sessionStorage.clear()
+        navigate("/")
+      })
     }
   }, [onLogout, navigate])
 

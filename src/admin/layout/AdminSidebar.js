@@ -75,12 +75,12 @@ function AdminSidebar() {
       sessionStorage.clear();
       // Clear any local storage related to auth
       localStorage.removeItem("sidebarCollapsed");
-      // Navigate to login
-      navigate("/LoginRegister");
+      // Navigate to home page
+      navigate("/");
     } catch (error) {
       console.error("Error signing out: ", error);
-      // You might want to show a toast notification here
-      alert("Error signing out. Please try again.");
+      sessionStorage.clear();
+      navigate("/");
     }
   };
 
