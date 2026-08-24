@@ -443,10 +443,18 @@ export default function UniversalProfile() {
       if (legitimacySections.includes(section)) {
         triggerPayload.triggerLegitimacyEvaluation = true
       }
-      const fundabilitySections = ["financialOverview", "operationsOverview"]
-      if (fundabilitySections.includes(section)) {
-        triggerPayload.triggerFundabilityEvaluation = true
-      }
+      const fundabilitySections = ["financialOverview"]
+if (fundabilitySections.includes(section)) {
+  triggerPayload.triggerFundabilityEvaluation = true
+}
+
+// Operational Strength is scored entirely from Operations Overview, plus
+// entityOverview.economicSectors — used only to sanity-check whether the
+// declared premises type fits the declared business. Nothing else feeds it.
+const operationalSections = ["operationsOverview", "entityOverview"]
+if (operationalSections.includes(section)) {
+  triggerPayload.triggerOperationalEvaluation = true
+}
       const leadershipSections = ["ownershipManagement"]
       if (leadershipSections.includes(section)) {
         triggerPayload.triggerLeadershipEvaluation = true
