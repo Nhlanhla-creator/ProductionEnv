@@ -1,16 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  ChevronDown,
-  Check,
-  FileCheck,
-  CheckCircle,
-  TrendingUp,
-  AlertCircle,
-  Target,
-  Upload,
-} from "lucide-react";
+
+import { useState, useEffect, useMemo } from "react";
+import { ChevronDown, FileCheck, AlertCircle, RefreshCw } from "lucide-react";
+import ScoreExplorer from "./ScoreExplorer";
 import { getDocumentId } from "../../utils/documentMapping";
 import { getDocumentUrlFromAnyLocation } from "../../utils/documentSyncService";
 
@@ -269,6 +262,17 @@ const STAGE_LABELS = {
   growthStage: "Growth / scale-up",
   matureStage: "Mature",
 };
+
+// Presentation-only grouping — buildComplianceAssessment stays flat.
+// Regroup here if you'd rather split these differently; it changes nothing
+// about scoring, only how the 11 requirements are bucketed on screen.
+const COMPLIANCE_GROUPS = [
+  { key: "registrationTax", label: "Registration & Tax", items: ["companyReg", "taxClearance", "vat"] },
+  { key: "bbbeeLabour", label: "B-BBEE & Labour Compliance", items: ["bbbee", "coida"] },
+  { key: "financialOwnership", label: "Financial & Ownership", items: ["bankLetter", "shareRegister", "directorIds"] },
+  { key: "locationLicensing", label: "Location & Licensing", items: ["proofOfAddress", "accreditation"] },
+  { key: "profile", label: "Profile Completeness", items: ["profileCompletion"] },
+];
 
 const mapStageToWeightKey = (stageRaw) => {
   const s = cleanStr(stageRaw).toLowerCase();
@@ -573,6 +577,7 @@ export function ComplianceScoreCard({
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [openItem, setOpenItem] = useState(null);
 
+
   useEffect(() => {
     if (showModal) {
       document.body.classList.add("modal-open");
@@ -599,21 +604,13 @@ export function ComplianceScoreCard({
     }
   }, [profileData]);
 
-  const getScoreLevel = (score) => {
-    if (score > 90)
-      return { level: "Fully compliant", color: "#1B5E20", icon: CheckCircle };
-    if (score >= 81)
-      return { level: "Highly compliant", color: "#4CAF50", icon: CheckCircle };
-    if (score >= 61)
-      return { level: "Mostly compliant", color: "#FF9800", icon: TrendingUp };
-    if (score >= 41)
-      return {
-        level: "Partially compliant",
-        color: "#F44336",
-        icon: AlertCircle,
-      };
-    return { level: "Non-compliant", color: "#B71C1C", icon: AlertCircle };
-  };
+const getScoreLevel = (score) => {
+  if (score > 90) return { level: "Fully compliant", color: "#1B5E20" };
+  if (score >= 81) return { level: "Highly compliant", color: "#4CAF50" };
+  if (score >= 61) return { level: "Mostly compliant", color: "#FF9800" };
+  if (score >= 41) return { level: "Partially compliant", color: "#F44336" };
+  return { level: "Non-compliant", color: "#B71C1C" };
+};
 
   const scoreLevel = getScoreLevel(complianceScore);
   const barColor = (s) =>
@@ -621,888 +618,218 @@ export function ComplianceScoreCard({
 
   const a = assessment;
 
-  const goTo = (route) => {
-    if (!route) return;
-    if (onNavigate) onNavigate(route);
-    else window.location.assign(route);
-  };
+const goTo = (route) => {
+  if (!route) return;
+  if (onNavigate) onNavigate(route);
+  else window.location.assign(route);
+};
 
-  // ── One outstanding item, expandable, with the exact value and a way there ──
-  const PotentialItem = ({ item, index }) => {
-    const open = openItem === item.key;
+const explorer = useMemo(() => {
+  if (!a) return null;
+
+  const withRoute = (item) => {
     const { section, action, route } = parseWhere(item.where, item.documentId, item.docLabelResolved);
-    const projected = Math.round(a.totalRaw + item.pointValue);
-    const chip = !item.present
-      ? "Not uploaded yet"
-      : item.credit > 0
-      ? "Partly counted — worth more"
-      : "On file but not counting";
+    const points = item.weightPct;
+    const earned = Math.round(points * item.credit);
+    const displayState = ["verified", "captured"].includes(item.state)
+      ? "counted"
+      : item.state === "partial"
+      ? "partial"
+      : "missing";
+    return {
+      ...item,
+      label: `${item.displayName}${item.compulsory ? " (required)" : ""}`,
+      points,
+      earned,
+      withheld: points - earned,
+      state: displayState,
+      route,
+      section,
+      claimable: true,
+      fix: item.fix || action,
+    };
+  };
 
-    return (
-      <div
-        style={{
-          border: `1px solid ${open ? "#c8e6c9" : "#f0e8e0"}`,
-          background: "white",
-          borderRadius: "10px",
-          marginBottom: "8px",
-          overflow: "hidden",
-          transition: "border-color 0.2s ease",
-        }}
-      >
-        <div
-          onClick={() => setOpenItem(open ? null : item.key)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            padding: "12px 14px",
-            cursor: "pointer",
-            background: open ? "#f7fbf7" : "white",
-          }}
+  const elements = COMPLIANCE_GROUPS.map((g) => {
+    const items = a.documents.filter((d) => g.items.includes(d.key)).map(withRoute);
+    if (!items.length) return null;
+    const possible = items.reduce((s, i) => s + i.points, 0) || 1;
+    const earned = items.reduce((s, i) => s + i.earned, 0);
+    const percent = Math.round((earned / possible) * 100);
+    const weight = Math.round(possible); // this group's share of the 100-point score
+    return {
+      key: g.key,
+      label: g.label,
+      percent,
+      weight,
+      effectiveWeight: weight,
+      breakdown: items,
+      improvements: items.filter((i) => i.pointValue > 0.05),
+      sourceNote: `${earned} of ${possible} weighted points → ${percent}% of this group, worth ${weight} points of the final score.`,
+    };
+  }).filter(Boolean);
+
+  const attention = [];
+  if (a.blocked.length) {
+    attention.push({
+      key: "blockedDocs",
+      headline: `${a.blocked.length} uploaded document${a.blocked.length === 1 ? "" : "s"} on file but not counting`,
+      detail: `These were already uploaded but did not pass verification — worth ${fmtPts(a.blockedPoints)}. Fixing an existing upload is faster than sourcing a new document.`,
+      chips: a.blocked.map((i) => `${i.displayName} — ${i.reason || "not verified"}`),
+      cta: "Go to My Documents",
+      route: DOCUMENTS_ROUTE,
+    });
+  }
+
+  return {
+    blocks: [
+      {
+        key: "compliance",
+        label: "Compliance",
+        percent: a.score,
+        blockWeight: 100,
+        elements,
+      },
+    ],
+    attention,
+    about: {
+      definition:
+        "The compliance score measures whether your business meets the core legal and regulatory requirements needed to operate formally and access funding. Weightings shift with your business stage — a mature business is expected to hold more than an early-stage one.",
+      definitionNotes: [
+        {
+          title: "Uploaded documents",
+          body: "Every document was checked when you uploaded it in My Documents — the file itself was read and its type, company name and expiry date confirmed. A verified document counts in full. A document that was rejected or has expired counts for nothing, and the reason shown here is the same one on the My Documents page. Re-upload a corrected copy there and the points return.",
+        },
+      ],
+      assessmentAreas: a.documents.map((d) => ({
+        label: `${d.displayName}${d.compulsory ? " (required)" : ""}`,
+        weightLabel: `${d.weightPct}% at ${a.stageLabel.toLowerCase()}`,
+        detail: d.description,
+      })),
+      interpretation: [
+        { range: "91–100%", label: "Fully compliant", color: "#1B5E20", meaning: "Ready for all opportunities." },
+        { range: "81–90%", label: "Highly compliant", color: "#4CAF50", meaning: "Minor gaps to address." },
+        { range: "61–80%", label: "Mostly compliant", color: "#FF9800", meaning: "Some documentation needed." },
+        { range: "41–60%", label: "Partially compliant", color: "#F44336", meaning: "Significant gaps present." },
+        { range: "0–40%", label: "Non-compliant", color: "#B71C1C", meaning: "Substantial work required." },
+      ],
+      weighting: {
+        formula: "value = (weight withheld ÷ total applicable weight) × 100",
+        formulaNote: "Weightings shift by stage — items carrying no weight at this stage are not shown and cost nothing.",
+        tables: [
+          {
+            title: `What is scored for a ${a.stageLabel.toLowerCase()} business`,
+            firstColumn: "Requirement",
+            rows: a.documents.map((d) => ({
+              label: d.displayName,
+              weight: `${d.weightPct}%`,
+              now: d.credit >= 1 ? "met" : `${Math.round(d.credit * 100)}%`,
+            })),
+            note: `Business stage: ${a.rawStage} (${a.stageLabel} weighting).`,
+          },
+        ],
+      },
+    },
+    potential: {
+      available: a.availablePoints,
+      locked: 0,
+      current: a.totalRaw,
+      projected: Math.round(a.totalRaw + a.availablePoints),
+      items: a.outstanding.map((i) => {
+        const w = withRoute(i);
+        return {
+          ...w,
+          container: COMPLIANCE_GROUPS.find((g) => g.items.includes(i.key))?.label || "Compliance",
+          state: i.present ? (i.credit > 0 ? "partial" : "missing") : "missing",
+          importance: i.importance,
+        };
+      }),
+      lockedItems: [],
+    },
+    summary: null,
+  };
+}, [a]);
+
+  
+
+return (
+  <>
+    {/* ── Card ── */}
+    <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141,110,99,0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
+      <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 30px 20px 30px", color: "white", position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+          <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Compliance</h2>
+          <FileCheck size={24} style={{ opacity: 0.8 }} />
+        </div>
+        <p style={{ margin: 0, fontSize: "13px", opacity: 0.9 }}>Legal &amp; regulatory verification</p>
+        <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "80px", height: "80px", background: "rgba(255,255,255,0.1)", borderRadius: "50%", opacity: 0.6 }} />
+        <div style={{ position: "absolute", bottom: "-10px", left: "-10px", width: "60px", height: "60px", background: "rgba(255,255,255,0.05)", borderRadius: "50%" }} />
+      </div>
+
+      <div style={{ padding: "24px", background: "white", textAlign: "center" }}>
+        <div style={{ position: "relative", display: "inline-block", marginBottom: "24px" }}>
+          <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "110px", height: "110px", border: `4px solid ${scoreLevel.color}`, borderRadius: "50%", background: "linear-gradient(135deg,#fff 0%,#f8fff8 100%)", boxShadow: `0 6px 20px ${scoreLevel.color}30`, fontWeight: "bold" }}>
+            <span style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1 }}>{complianceScore}%</span>
+            <div style={{ position: "absolute", top: "-6px", left: "-6px", right: "-6px", bottom: "-6px", border: `2px solid ${scoreLevel.color}20`, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+          </div>
+          <div style={{ position: "absolute", bottom: "-12px", left: "50%", transform: "translateX(-50%)", backgroundColor: scoreLevel.color, color: "white", padding: "6px 16px", borderRadius: "20px", fontSize: "10px", fontWeight: 600, letterSpacing: "0.5px", boxShadow: `0 4px 12px ${scoreLevel.color}40`, border: "2px solid white", whiteSpace: "nowrap" }}>
+            {scoreLevel.level}
+          </div>
+        </div>
+
+        <button
+          onClick={() => setShowModal(true)}
+          style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "linear-gradient(135deg,#5d4037 0%,#4a2c20 100%)", color: "white", marginTop: "12px", border: "none", fontWeight: 600, fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", boxShadow: "0 4px 16px rgba(93,64,55,0.3)" }}
         >
-          <span style={{ color: "#a1887f", fontWeight: 800, fontSize: "12px", minWidth: "18px" }}>
-            {index + 1}
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, color: "#4e342e", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
-              {item.displayName}
-              {item.compulsory && (
-                <span
-                  style={{
-                    backgroundColor: "#F44336",
-                    color: "white",
-                    fontSize: "8px",
-                    padding: "2px 4px",
-                    borderRadius: "4px",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Required
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: "11px", color: "#8d6e63" }}>
-              {item.weightPct}% weight · {chip}
-            </div>
-          </div>
-          <span
-            style={{
-              backgroundColor: "#e8f5e9",
-              color: "#1B5E20",
-              border: "1px solid #c8e6c9",
-              borderRadius: "4px",
-              padding: "3px 8px",
-              fontWeight: 800,
-              fontSize: "11.5px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {fmtPts(item.pointValue)}
-          </span>
-          <ChevronDown
-            size={16}
-            style={{
-              color: "#a1887f",
-              flexShrink: 0,
-              transform: open ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.2s ease",
-            }}
-          />
-        </div>
-
-        {open && (
-          <div style={{ padding: "14px", borderTop: "1px dashed #e8d8cf", background: "#fcfbfa" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "14px",
-                padding: "14px",
-                background: "linear-gradient(135deg,#f1f8f1 0%,#e8f5e9 100%)",
-                border: "1px solid #c8e6c9",
-                borderRadius: "10px",
-                marginBottom: "12px",
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "9.5px", color: "#6d4c41", textTransform: "uppercase", letterSpacing: "0.6px", fontWeight: 700 }}>
-                  Now
-                </div>
-                <div style={{ fontSize: "26px", fontWeight: 800, color: "#8d6e63", lineHeight: 1.1 }}>
-                  {complianceScore}%
-                </div>
-              </div>
-              <div style={{ fontSize: "22px", color: "#1B5E20", fontWeight: 800 }}>→</div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "9.5px", color: "#1B5E20", textTransform: "uppercase", letterSpacing: "0.6px", fontWeight: 700 }}>
-                  Once this is verified
-                </div>
-                <div style={{ fontSize: "30px", fontWeight: 800, color: "#1B5E20", lineHeight: 1.1 }}>
-                  {projected}%
-                </div>
-                <div style={{ fontSize: "11px", color: "#2E7D32", fontWeight: 700 }}>
-                  {fmtPts(item.pointValue)}
-                </div>
-              </div>
-            </div>
-
-            {item.present && item.evidence && (
-              <div style={{ fontSize: "12px", color: "#6d4c41", marginBottom: "8px" }}>
-                <strong style={{ color: "#4e342e" }}>On file:</strong> {item.evidence}
-              </div>
-            )}
-
-            {item.reason && (
-              <div
-                style={{
-                  fontSize: "12.5px",
-                  color: "#8d3a2e",
-                  background: "#fdecea",
-                  border: "1px solid #e6b8ac",
-                  borderRadius: "8px",
-                  padding: "9px 11px",
-                  marginBottom: "10px",
-                  lineHeight: 1.6,
-                }}
-              >
-                {item.reason}
-              </div>
-            )}
-
-            {item.guidance && !item.reason && (
-              <div style={{ fontSize: "12px", color: "#8d6e63", fontStyle: "italic", marginBottom: "10px", lineHeight: 1.6 }}>
-                {item.guidance}
-              </div>
-            )}
-
-            <div style={{ fontSize: "10px", color: "#8d6e63", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>
-              Why funders ask for it
-            </div>
-            <div style={{ fontSize: "12.5px", color: "#5d4037", marginBottom: "10px", lineHeight: 1.6 }}>
-              {item.importance}
-            </div>
-
-            <div style={{ fontSize: "10px", color: "#8d6e63", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>
-              What to do
-            </div>
-            <div style={{ fontSize: "12.5px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
-              {item.fix || action}
-            </div>
-
-            <button
-              onClick={() => goTo(route)}
-              disabled={!route}
-              style={{
-                padding: "9px 16px",
-                background: "linear-gradient(135deg,#5d4037 0%,#4a2c20 100%)",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontWeight: 700,
-                fontSize: "12px",
-                cursor: route ? "pointer" : "not-allowed",
-                opacity: route ? 1 : 0.55,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              {section === "My Documents" ? <Upload size={13} /> : null}
-              Go to {section || "the form"} <span style={{ fontSize: "13px" }}>→</span>
-            </button>
-          </div>
-        )}
+          <span>Explore your score</span><ChevronDown size={16} />
+        </button>
       </div>
-    );
-  };
 
-  // ── One row in the full breakdown ──
-  const ItemRow = ({ item, last }) => {
-    const st = STATE_STYLE[item.state] || STATE_STYLE.missing;
-    const { section, route } = parseWhere(item.where, item.documentId, item.docLabelResolved);
-
-    return (
-      <div
-        style={{
-          padding: "13px 14px",
-          background: "white",
-          marginBottom: last ? 0 : "6px",
-          borderRadius: "8px",
-          border: "1px solid #f0e8e0",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-          <span
-            style={{
-              width: "22px",
-              height: "22px",
-              borderRadius: "50%",
-              backgroundColor: item.verified ? "#4CAF50" : "#f3e8dc",
-              border: `2px solid ${item.verified ? "#4CAF50" : "#d6b88a"}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              marginTop: "1px",
-            }}
-          >
-            {item.verified ? (
-              <Check size={12} color="white" />
-            ) : (
-              <span style={{ color: st.dot, fontSize: "14px", fontWeight: "bold", lineHeight: 1 }}>×</span>
-            )}
-          </span>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontWeight: 600,
-                color: "#5d4037",
-                fontSize: "13.5px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                flexWrap: "wrap",
-              }}
-            >
-              {item.displayName}
-              {item.compulsory && (
-                <span
-                  style={{
-                    backgroundColor: "#F44336",
-                    color: "white",
-                    fontSize: "8px",
-                    padding: "2px 4px",
-                    borderRadius: "4px",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Required
-                </span>
-              )}
-            </div>
-
-            <div style={{ fontSize: "11.5px", color: "#8d6e63", marginTop: "2px" }}>
-              {item.description} · weight {item.weightPct}% ·{" "}
-              <span style={{ color: st.text, fontWeight: 700 }}>{st.label}</span>
-            </div>
-
-            {item.present && item.evidence && (
-              <div style={{ fontSize: "11.5px", color: "#6d4c41", marginTop: "4px" }}>{item.evidence}</div>
-            )}
-            {item.reason && (
-              <div style={{ fontSize: "11.5px", color: "#8d3a2e", marginTop: "4px", lineHeight: 1.5 }}>{item.reason}</div>
-            )}
-            {item.pointValue > 0.05 && (
-              <div style={{ fontSize: "11.5px", color: "#8d3a2e", marginTop: "3px", lineHeight: 1.5 }}>
-                {item.fix || parseWhere(item.where, item.documentId, item.docLabelResolved).action}
-              </div>
-            )}
-            {item.note && (
-              <div style={{ fontSize: "11px", color: "#8d6e63", fontStyle: "italic", marginTop: "3px" }}>{item.note}</div>
-            )}
-
-            {item.pointValue > 0.05 && route && (
-              <button
-                onClick={() => goTo(route)}
-                style={{
-                  marginTop: "7px",
-                  background: "none",
-                  border: "1px solid #d6b88a",
-                  color: "#5d4037",
-                  borderRadius: "6px",
-                  padding: "4px 10px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                {section === "My Documents" ? <Upload size={11} /> : null}
-                Go to {section} →
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "5px", flexShrink: 0 }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: item.verified ? "#4CAF50" : "#FF5722" }}>
-              {item.verified ? "Verified" : item.credit > 0 ? "Partial" : "Missing"}
-            </span>
-            {item.pointValue > 0.05 && (
-              <span
-                style={{
-                  backgroundColor: "#e8f5e9",
-                  color: "#1B5E20",
-                  border: "1px solid #c8e6c9",
-                  borderRadius: "4px",
-                  padding: "2px 7px",
-                  fontWeight: 800,
-                  fontSize: "11.5px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {fmtPts(item.pointValue)}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const Section = ({ title, right, open, onToggle, children }) => (
-    <div style={{ marginTop: "16px", border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden" }}>
-      <div
-        style={{
-          backgroundColor: "#8d6e63",
-          color: "white",
-          padding: "12px 16px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          cursor: "pointer",
-          fontWeight: "bold",
-        }}
-        onClick={onToggle}
-      >
-        <span>{title}</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {right && <span style={{ fontSize: "13px", fontWeight: 700 }}>{right}</span>}
-          <ChevronDown size={18} style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
-        </div>
-      </div>
-      {open && <div style={{ backgroundColor: "#f5f2f0", padding: "18px" }}>{children}</div>}
+      <style>{`@keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.7; } }`}</style>
     </div>
-  );
 
-  return (
-    <>
-      {/* ── Card ── */}
+    {/* ── Modal — one screen at a time ── */}
+    {showModal && (
       <div
-        style={{
-          background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
-          borderRadius: "20px",
-          boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
-          border: "1px solid #e8ddd6",
-          overflow: "hidden",
-          position: "relative",
-          width: "100%",
-          minWidth: "210px",
-        }}
+        style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999999, padding: "20px" }}
+        onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
       >
         <div
-          style={{
-            background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)",
-            padding: "24px 30px 20px 30px",
-            color: "white",
-            position: "relative",
-          }}
+          style={{ position: "relative", backgroundColor: "#fff", borderRadius: "12px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", width: "100%", maxWidth: "620px", border: "1px solid #e8ddd6", overflow: "hidden" }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
-              Compliance
-            </h2>
-            <FileCheck size={24} style={{ opacity: 0.8 }} />
-          </div>
-          <p style={{ margin: 0, fontSize: "13px", opacity: 0.9, fontWeight: 400 }}>Legal &amp; regulatory verification</p>
-
-          <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "80px", height: "80px", background: "rgba(255,255,255,0.1)", borderRadius: "50%", opacity: 0.6 }} />
-          <div style={{ position: "absolute", bottom: "-10px", left: "-10px", width: "60px", height: "60px", background: "rgba(255,255,255,0.05)", borderRadius: "50%" }} />
+          {explorer ? (
+            <ScoreExplorer
+              title="Compliance"
+              score={complianceScore}
+              band={scoreLevel}
+              contextLine={
+                a && (
+                  <div style={{ fontSize: "11.5px", color: "#8d6e63" }}>
+                    {a.rawStage} ({a.stageLabel} weighting)
+                  </div>
+                )
+              }
+              about={explorer.about}
+              blocks={explorer.blocks}
+              potential={explorer.potential}
+              attention={explorer.attention}
+              summary={explorer.summary}
+              onNavigate={goTo}
+              onClose={() => setShowModal(false)}
+              fmtPts={fmtPts}
+            />
+          ) : (
+            <div style={{ padding: "40px", textAlign: "center", color: "#8d6e63", fontSize: "13px" }}>
+              <RefreshCw size={18} className="spin" style={{ marginBottom: "10px" }} />
+              <div>Working out your score…</div>
+            </div>
+          )}
         </div>
-
-        <div style={{ padding: "24px", background: "white", textAlign: "center" }}>
-          <div style={{ position: "relative", display: "inline-block", marginBottom: "24px" }}>
-            <div
-              style={{
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "110px",
-                height: "110px",
-                border: `4px solid ${scoreLevel.color}`,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #ffffff 0%, #f8fff8 100%)",
-                boxShadow: `0 6px 20px ${scoreLevel.color}30`,
-                color: "#2d2d2d",
-                fontWeight: "bold",
-              }}
-            >
-              <span style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1, marginBottom: "2px" }}>
-                {complianceScore}%
-              </span>
-              <div
-                style={{
-                  position: "absolute",
-                  top: "-6px",
-                  left: "-6px",
-                  right: "-6px",
-                  bottom: "-6px",
-                  border: `2px solid ${scoreLevel.color}20`,
-                  borderRadius: "50%",
-                  animation: "pulse 2s infinite",
-                }}
-              />
-            </div>
-
-            <div
-              style={{
-                position: "absolute",
-                bottom: "-12px",
-                left: "50%",
-                transform: "translateX(-50%)",
-                backgroundColor: scoreLevel.color,
-                color: "white",
-                padding: "6px 16px",
-                borderRadius: "20px",
-                fontSize: "10px",
-                fontWeight: 600,
-                textTransform: "capitalize",
-                letterSpacing: "0.5px",
-                boxShadow: `0 4px 12px ${scoreLevel.color}40`,
-                border: "2px solid white",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {scoreLevel.level}
-            </div>
-          </div>
-
-          {/* {a && a.availablePoints > 0 && (
-            <div
-              style={{
-                marginTop: "6px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "5px 12px",
-                background: "#e8f5e9",
-                border: "1px solid #c8e6c9",
-                borderRadius: "20px",
-                color: "#1B5E20",
-                fontWeight: 700,
-                fontSize: "11px",
-              }}
-            >
-              <Target size={12} /> {fmtPts(a.availablePoints)} available
-            </div>
-          )} */}
-
-          <button
-            onClick={() => setShowModal(true)}
-            style={{
-              width: "100%",
-              padding: "12px 16px",
-              borderRadius: "10px",
-              background: "linear-gradient(135deg, #5d4037 0%, #4a2c20 100%)",
-              color: "white",
-              border: "none",
-              marginTop: "15px",
-              fontWeight: 600,
-              fontSize: "12px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.3s ease",
-              boxShadow: "0 4px 16px rgba(93, 64, 55, 0.3)",
-              whiteSpace: "nowrap",
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 6px 20px rgba(93, 64, 55, 0.4)";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = "translateY(0px)";
-              e.currentTarget.style.boxShadow = "0 4px 16px rgba(93, 64, 55, 0.3)";
-            }}
-          >
-            <span>Score breakdown</span>
-            <ChevronDown size={16} />
-          </button>
-        </div>
-
-        <style>{`@keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.7; } }`}</style>
       </div>
+    )}
 
-      {/* ── Modal ── */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999999,
-            padding: "20px",
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowModal(false);
-          }}
-        >
-          <div
-            style={{
-              position: "relative",
-              backgroundColor: "#ffffff",
-              borderRadius: "12px",
-              boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              width: "90%",
-              maxWidth: "780px",
-              border: "1px solid #ccc",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                position: "absolute",
-                top: "15px",
-                right: "15px",
-                background: "#fff",
-                border: "2px solid #ddd",
-                fontSize: "20px",
-                cursor: "pointer",
-                color: "#666",
-                zIndex: 2,
-                width: "35px",
-                height: "35px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "50%",
-                fontWeight: "bold",
-              }}
-            >
-              ×
-            </button>
-
-            <div style={{ padding: "30px 20px 20px 20px" }}>
-              <h3 style={{ margin: "0 0 20px 0", fontSize: "24px", fontWeight: 600, color: "#5d4037", textAlign: "center" }}>
-                Compliance verification
-              </h3>
-
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "20px",
-                  background: "linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)",
-                  borderRadius: "12px",
-                  border: "1px solid #d6b88a",
-                }}
-              >
-                <div
-                  style={{
-                    display: "inline-flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "120px",
-                    height: "120px",
-                    border: `4px solid ${scoreLevel.color}`,
-                    borderRadius: "50%",
-                    background: "white",
-                    boxShadow: "0 4px 12px rgba(139, 69, 19, 0.2)",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <span style={{ fontSize: "28px", fontWeight: 700, color: "#5d4037", lineHeight: 1 }}>
-                    {complianceScore}%
-                  </span>
-                  <span
-                    style={{
-                      color: scoreLevel.color,
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      marginTop: "4px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    {scoreLevel.level}
-                  </span>
-                </div>
-
-                <div style={{ fontSize: "14px", color: "#6d4c41" }}>
-                  Business stage:{" "}
-                  <strong style={{ color: "#5d4037", textTransform: "capitalize" }}>
-                    {a ? `${a.rawStage} (${a.stageLabel} weighting)` : "Ideation"}
-                  </strong>
-                </div>
-
-                {a && a.availablePoints > 0 && (
-                  <div
-                    style={{
-                      marginTop: "10px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "6px 16px",
-                      background: "#e8f5e9",
-                      border: "1px solid #c8e6c9",
-                      borderRadius: "20px",
-                      color: "#1B5E20",
-                      fontWeight: 700,
-                      fontSize: "12px",
-                    }}
-                  >
-                    <Target size={13} /> {fmtPts(a.availablePoints)} available · potential score{" "}
-                    {Math.round(a.totalRaw + a.availablePoints)}%
-                  </div>
-                )}
-
-                {a && a.blockedPoints > 0 && (
-                  <div style={{ marginTop: "8px", fontSize: "11.5px", color: "#8d3a2e" }}>
-                    {fmtPts(a.blockedPoints)} of that sits on documents you already uploaded that are not counting.
-                  </div>
-                )}
-              </div>
-
-              
-              {/* ── About ── */}
-              <Section
-                title="About the compliance score"
-                open={showAboutScore}
-                onToggle={() => setShowAboutScore(!showAboutScore)}
-              >
-                <div style={{ color: "#5d4037", fontSize: "13px", lineHeight: 1.6 }}>
-                  <p style={{ marginBottom: "16px" }}>
-                    The compliance score measures whether your business meets the core legal and regulatory requirements
-                    needed to operate formally and access funding. Weightings shift with your business stage — a mature
-                    business is expected to hold more than an early-stage one.
-                  </p>
-
-                  <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
-                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>How a point value is worked out</p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontFamily: "monospace",
-                        fontSize: "12px",
-                        backgroundColor: "white",
-                        padding: "8px 10px",
-                        borderRadius: "6px",
-                        border: "1px solid #e0d5c8",
-                      }}
-                    >
-                      value = (weight withheld ÷ total applicable weight) × 100
-                    </p>
-                  </div>
-
-                  <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
-                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Uploaded documents</p>
-                    <p style={{ margin: 0 }}>
-                      Every document was checked when you uploaded it in My Documents — the file itself was read and its
-                      type, company name and expiry date confirmed. A <strong>verified</strong> document counts in full.
-                      A document that was rejected or has expired counts for nothing, and the reason shown here is the
-                      same one on the My Documents page. Re-upload a corrected copy there and the points return.
-                    </p>
-                  </div>
-
-                  {a && (
-                    <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>
-                        What is scored for a {a.stageLabel.toLowerCase()} business
-                      </p>
-                      <ul style={{ margin: 0, paddingLeft: "20px", color: "#5d4037" }}>
-                        {a.documents.map((d) => (
-                          <li key={d.key} style={{ marginBottom: "4px" }}>
-                            {d.displayName} — <strong>{d.weightPct}%</strong>
-                            {d.compulsory ? " (required)" : ""}
-                          </li>
-                        ))}
-                      </ul>
-                      <p style={{ margin: "10px 0 0 0", fontSize: "12px", fontStyle: "italic", color: "#6d4c41" }}>
-                        Items carrying no weight at this stage are not shown and cost you nothing.
-                      </p>
-                    </div>
-                  )}
-
-                  <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
-                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Score bands</p>
-                    <ul style={{ margin: 0, paddingLeft: "20px", color: "#5d4037" }}>
-                      <li style={{ marginBottom: "4px" }}>
-                        <strong>91–100%:</strong> Fully compliant — ready for all opportunities
-                      </li>
-                      <li style={{ marginBottom: "4px" }}>
-                        <strong>81–90%:</strong> Highly compliant — minor gaps to address
-                      </li>
-                      <li style={{ marginBottom: "4px" }}>
-                        <strong>61–80%:</strong> Mostly compliant — some documentation needed
-                      </li>
-                      <li style={{ marginBottom: "4px" }}>
-                        <strong>41–60%:</strong> Partially compliant — significant gaps present
-                      </li>
-                      <li style={{ marginBottom: "4px" }}>
-                        <strong>0–40%:</strong> Non-compliant — substantial work required
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </Section>
-
-              {/* ── Potential points ── */}
-              {a && (
-                <Section
-                  title="Potential points"
-                  right={a.availablePoints > 0 ? `${fmtPts(a.availablePoints)} to claim` : "All claimed"}
-                  open={showPotential}
-                  onToggle={() => setShowPotential(!showPotential)}
-                >
-                  {a.outstanding.length === 0 ? (
-                    <div
-                      style={{
-                        padding: "14px",
-                        background: "#f1f8f1",
-                        border: "1px solid #c8e6c9",
-                        borderRadius: "8px",
-                        color: "#2E7D32",
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 800,
-                          marginBottom: "4px",
-                          fontSize: "12px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        <CheckCircle size={14} /> Nothing left to claim
-                      </div>
-                      Every document required of a {a.stageLabel.toLowerCase()} business is on file and verified.
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          padding: "16px",
-                          background: "linear-gradient(135deg,#fdf8f6 0%,#e8f5e9 100%)",
-                          border: "1px solid #c8e6c9",
-                          borderRadius: "10px",
-                          marginBottom: "14px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <div style={{ fontSize: "10px", color: "#1B5E20", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.7px" }}>
-                          Your score could reach
-                        </div>
-                        <div style={{ fontSize: "34px", fontWeight: 800, color: "#1B5E20", lineHeight: 1.2 }}>
-                          {Math.round(a.totalRaw + a.availablePoints)}%
-                        </div>
-                        <div style={{ fontSize: "12.5px", color: "#5d4037", lineHeight: 1.6 }}>
-                          {complianceScore}% today ·{" "}
-                          <strong style={{ color: "#1B5E20" }}>{fmtPts(a.availablePoints)}</strong> sitting in{" "}
-                          {a.outstanding.length} item{a.outstanding.length === 1 ? "" : "s"} below
-                        </div>
-                        <div style={{ fontSize: "11.5px", color: "#8d6e63", marginTop: "6px", fontStyle: "italic" }}>
-                          Tap any item to see what it is worth and go straight to the upload.
-                        </div>
-                      </div>
-
-                      {a.blocked.length > 0 && (
-                        <div
-                          style={{
-                            padding: "10px 12px",
-                            background: "#fdecea",
-                            border: "1px solid #e6b8ac",
-                            borderRadius: "8px",
-                            fontSize: "11.5px",
-                            color: "#8d3a2e",
-                            lineHeight: 1.6,
-                            marginBottom: "12px",
-                          }}
-                        >
-                          <strong>Start here.</strong> {a.blocked.length} document
-                          {a.blocked.length === 1 ? " is" : "s are"} already uploaded but did not pass verification, worth{" "}
-                          {fmtPts(a.blockedPoints)}. Fixing an existing upload is faster than sourcing a new document.
-                        </div>
-                      )}
-
-                      {a.outstanding.map((item, i) => (
-                        <PotentialItem key={item.key} item={item} index={i} />
-                      ))}
-
-                      <div
-                        style={{
-                          marginTop: "10px",
-                          padding: "10px 12px",
-                          background: "#f9f5f0",
-                          border: "1px solid #e6d3c4",
-                          borderRadius: "8px",
-                          fontSize: "11.5px",
-                          color: "#6d4c41",
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        Each figure is the exact amount the score moves when that item is verified — the same function
-                        promises it and awards it.
-                      </div>
-                    </>
-                  )}
-                </Section>
-              )}
-
-              {/* ── Score breakdown ── */}
-              {a && (
-                <Section
-                  title="Score breakdown"
-                  right={`${complianceScore}%`}
-                  open={showScoreBreakdown}
-                  onToggle={() => setShowScoreBreakdown(!showScoreBreakdown)}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      marginBottom: "12px",
-                      padding: "10px 12px",
-                      background: "white",
-                      border: "1px solid #f0e8e0",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <div style={{ flex: 1, height: "10px", background: "#f3e8dc", borderRadius: "5px", overflow: "hidden", border: "1px solid #d6b88a" }}>
-                      <div
-                        style={{
-                          width: `${complianceScore}%`,
-                          height: "100%",
-                          background: barColor(complianceScore),
-                          borderRadius: "5px",
-                          transition: "width 0.3s ease",
-                        }}
-                      />
-                    </div>
-                    <span style={{ fontWeight: 700, color: "#5d4037", fontSize: "14px", minWidth: "42px", textAlign: "right" }}>
-                      {complianceScore}%
-                    </span>
-                  </div>
-
-                  {a.documents.map((item, i) => (
-                    <ItemRow key={item.key} item={item} last={i === a.documents.length - 1} />
-                  ))}
-                </Section>
-              )}
-
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+    <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+  </>
+);
 }
