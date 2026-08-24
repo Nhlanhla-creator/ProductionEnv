@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Bar, Pie } from "react-chartjs-2";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { Chart, Pie, Bar } from "react-chartjs-2";
 import {
   doc,
   getDoc,
@@ -17,292 +18,933 @@ import {
 import { auth, db } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 import {
+  Eye,
+  LineChart as LineChartIcon,
+  Lightbulb,
+  Plus,
+  StickyNote,
+  X,
+  Save,
+  Pencil,
   Info,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ChevronDown,
   ChevronUp,
-  Upload,
-  X,
+  ChevronRight,
+  ChevronLeft,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  ClipboardList,
+  Download,
+  RefreshCw,
+  Columns3,
+  ExternalLink,
+  Square,
+  CheckSquare,
+  ArrowLeft,
+  Calendar,
+  SlidersHorizontal,
+  Database,
+  Sparkles,
+  Sigma,
+  Settings2,
+  EyeOff,
+  Palette,
+  Check,
+  Users,
+  Trash2,
   TrendingUp,
   TrendingDown,
   Settings,
-  Check,
 } from "lucide-react";
-import {
-  DateRangePicker,
-  EyeIcon,
-  CalculationModal,
-  KeyQuestionBox,
-  TrendModal,
-  SectionControlsBar,
-  KpiGrid3,
-  KpiGrid2,
-} from "./financial/components/SharedComponents";
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
-  ArcElement,
-  PointElement,
   LineElement,
+  PointElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
-import MarketingAnalysisModal from "../hooks/MarketingAnalysisModal";
+import ChartDataLabels from "chartjs-plugin-datalabels";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
-  ArcElement,
-  PointElement,
   LineElement,
+  PointElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
+  Filler
 );
 
-// ==================== HELPER FUNCTIONS ====================
+const functions = getFunctions();
 
-const getMonthsForYear = (year, financialYearStart = "Jan") => {
-  const allMonths = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const startIndex = allMonths.indexOf(financialYearStart);
-  if (startIndex === -1) return allMonths;
-  return [...allMonths.slice(startIndex), ...allMonths.slice(0, startIndex)];
+/* ════════════════════════════════════════════════════════════════════════════
+   Tokens — shared with People Performance.
+   ════════════════════════════════════════════════════════════════════════ */
+const T = {
+  ink: "#2d201c",
+  body: "#3b2b26",
+  muted: "#6b5b55",
+  faint: "#8a7a74",
+  line: "#ded8d4",
+  lineSoft: "#e9e3df",
+  lineStrong: "#b0a29b",
+  bg: "#ffffff",
+  panel: "#faf8f7",
+  raised: "#f2eeec",
+  accent: "#4a352f",
+  accentSoft: "#6b4f47",
+  accentTint: "#f4efec",
+  header: "#33231e",
+  green: "#166534",
+  greenBg: "#f0fdf4",
+  amber: "#92400e",
+  amberBg: "#fffbeb",
+  red: "#991b1b",
+  redBg: "#fef2f2",
+  blue: "#1e40af",
 };
 
-const formatNumber = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
-  if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
-  if (num >= 1e3) return (num / 1e3).toFixed(2) + "K";
-  return num.toFixed(2);
-};
-
-const formatCurrency = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  if (num >= 1e9) return `R${(num / 1e9).toFixed(2)}B`;
-  if (num >= 1e6) return `R${(num / 1e6).toFixed(2)}M`;
-  if (num >= 1e3) return `R${(num / 1e3).toFixed(2)}K`;
-  return `R${num.toFixed(2)}`;
-};
-
-const formatPercentage = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  return `${num.toFixed(1)}%`;
-};
-
-const getMonthIndex = (month) => {
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return months.indexOf(month);
-};
-
-const getRangeMonths = (fromYM, toYM) => {
-  const SHORTS = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const result = [];
-  let [y, m] = fromYM.split("-").map(Number);
-  const [toY, toM] = toYM.split("-").map(Number);
-  while (y < toY || (y === toY && m <= toM)) {
-    result.push({ year: y, monthIdx: m - 1, label: `${SHORTS[m - 1]} ${y}` });
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-  }
-  return result;
-};
-
-const circleColors = [
-  { border: "#FF8C00", background: "#FFB347", text: "#663d00" },
-  { border: "#32CD32", background: "#90EE90", text: "#1e4d1e" },
-  { border: "#FFA500", background: "#FFD700", text: "#664d00" },
-  { border: "#228B22", background: "#98FB98", text: "#145214" },
-  { border: "#FF6347", background: "#FFA07A", text: "#8b3a2b" },
-  { border: "#2E8B57", background: "#66CDAA", text: "#1e4d33" },
-  { border: "#FF8C69", background: "#FFB6C1", text: "#8b4d39" },
-  { border: "#006400", background: "#ADFF2F", text: "#003300" },
+const RAPS_CATEGORIES = [
+  { name: "Strategy & Execution", color: "#2563eb" },
+  { name: "Financial Performance", color: "#c2410c" },
+  { name: "Operational Performance", color: "#6d28d9" },
+  { name: "People", color: "#be185d" },
+  { name: "ESG Impact", color: "#4d7c0f" },
+  { name: "Marketing & Sales", color: "#0e7490" },
+  { name: "General", color: "#57534e" },
 ];
 
-// ==================== AVAILABLE FIELDS FOR TABLE (added signedDate) ====================
+const ACTION_STATUSES = ["Not Done", "In Progress", "Done"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const PERIODS = [
+  { key: "month", label: "This month" },
+  { key: "quarter", label: "This quarter" },
+  { key: "year", label: "This year" },
+];
+const PERIOD_LABEL = { month: "This month", quarter: "This quarter", year: "This year" };
+const PERIOD_PREFIX = { month: "Monthly", quarter: "Quarterly", year: "Annual" };
+
+/* ─── Financial year ────────────────────────────────────────────────────── */
+const fyStartMonthFromEnd = (end) => {
+  if (!end) return 0;
+  const m = Number(String(end).split("-")[1]);
+  return Number.isFinite(m) && m >= 1 && m <= 12 ? m % 12 : 0;
+};
+const fyStartYearOf = (date, sm) => (date.getMonth() >= sm ? date.getFullYear() : date.getFullYear() - 1);
+const fyLabel = (sy, sm) => (sm === 0 ? `${sy}` : `${sy}/${String(sy + 1).slice(2)}`);
+
+const fyMonths = (sy, sm) =>
+  Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(sy, sm + i, 1);
+    return {
+      key: `M:${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: `${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,
+      long: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      index: i,
+    };
+  });
+
+const fyQuarters = (sy, sm) => {
+  const months = fyMonths(sy, sm);
+  return [0, 1, 2, 3].map((q) => {
+    const s = months.slice(q * 3, q * 3 + 3);
+    return {
+      key: `Q${q + 1}`,
+      label: `Q${q + 1}`,
+      range: `${s[0].label} – ${s[2].label}`,
+      months: s,
+      index: q,
+    };
+  });
+};
+const currentMonthKey = () => {
+  const d = new Date();
+  return `M:${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+/* ─── Formatting ────────────────────────────────────────────────────────── */
+const LOCALE = "en-US";
+const trimNum = (n) => {
+  if (!Number.isFinite(n)) return "";
+  const abs = Math.abs(n),
+    dp = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+  return Number(n.toFixed(dp)).toLocaleString(LOCALE, { maximumFractionDigits: dp });
+};
+
+const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
+  if (raw === null || raw === undefined || raw === "") return "—";
+  if (kpi?.options) {
+    const found = kpi.options.find((o) => String(o.value) === String(Math.round(Number(raw))));
+    return found ? found.label : "—";
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return "—";
+  const sign = signed && n > 0 ? "+" : "";
+  if (kpi?.units === "%") return `${sign}${trimNum(n)}${bare ? "" : "%"}`;
+  if (kpi?.units === "R") {
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000) return `${sign}${bare ? "" : "R "}${(n / 1_000_000).toLocaleString(LOCALE, { maximumFractionDigits: 2 })}m`;
+    if (abs >= 1_000) return `${sign}${bare ? "" : "R "}${(n / 1_000).toLocaleString(LOCALE, { maximumFractionDigits: 1 })}k`;
+    return `${sign}${bare ? "" : "R "}${n.toLocaleString(LOCALE, { maximumFractionDigits: 0 })}`;
+  }
+  const suffix = !bare && kpi?.units && !["#", "%", "R"].includes(kpi.units) ? ` ${kpi.units}` : "";
+  return `${sign}${trimNum(n)}${suffix}`;
+};
+
+const parseNum = (v) => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+};
+const uid = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+const errText = (e) => String(e?.message ?? e ?? "Unknown error");
+const fmtDMY = (d) => {
+  if (!d) return "";
+  const x = new Date(d);
+  return Number.isNaN(x.getTime()) ? "" : `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}/${x.getFullYear()}`;
+};
+const rollUp = (values, mode) => {
+  const nums = values.filter((v) => Number.isFinite(v));
+  if (!nums.length) return null;
+  const sum = nums.reduce((a, b) => a + b, 0);
+  return mode === "sum" ? sum : sum / nums.length;
+};
+const mean = (arr) => {
+  const n = arr.filter((v) => Number.isFinite(v));
+  return n.length ? n.reduce((a, b) => a + b, 0) / n.length : null;
+};
+
+/* ─── Status ────────────────────────────────────────────────────────────── */
+const S = {
+  green: { key: "green", label: "On target", color: T.green, bg: T.greenBg },
+  amber: { key: "amber", label: "Needs attention", color: T.amber, bg: T.amberBg },
+  red: { key: "red", label: "Critical", color: T.red, bg: T.redBg },
+  none: { key: "none", label: "No target", color: T.faint, bg: T.raised },
+};
+
+const statusFromPair = (kpi, budget, actual) => {
+  const b = Number(budget),
+    a = Number(actual);
+  if (!Number.isFinite(b) || !Number.isFinite(a)) return S.none;
+  if (kpi.direction === "match") {
+    if (b === 0) return Math.abs(a) < 0.001 ? S.green : Math.abs(a) <= 1 ? S.amber : S.red;
+    const drift = Math.abs(a - b) / Math.abs(b);
+    return drift <= 0.05 ? S.green : drift <= 0.20 ? S.amber : S.red;
+  }
+  if (b === 0) {
+    if (kpi.direction === "higher") return S.none;
+    return a <= 0 ? S.green : S.amber;
+  }
+  const ratio = kpi.direction === "higher" ? a / b : b / (a || 0.0001);
+  return ratio >= 0.98 ? S.green : ratio >= 0.85 ? S.amber : S.red;
+};
+
+const varianceFavourable = (kpi, v) => {
+  if (v === null) return null;
+  if (kpi.direction === "match") return Math.abs(v) < 0.001;
+  return kpi.direction === "higher" ? v >= 0 : v <= 0;
+};
+
+const StatusIcon = ({ status, size = 22 }) => {
+  const p = { size, color: status.color, strokeWidth: 2.2 };
+  if (status.key === "green") return <CheckCircle2 {...p} />;
+  if (status.key === "amber") return <AlertTriangle {...p} />;
+  if (status.key === "red") return <XCircle {...p} />;
+  return <Info {...p} />;
+};
+
+/* ─── Shared UI ─────────────────────────────────────────────────────────── */
+const InfoTip = ({ text, light = false }) => {
+  const [rect, setRect] = useState(null);
+  if (!text) return null;
+  return (
+    <span
+      style={{ display: "inline-flex" }}
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+    >
+      <Info size={13} strokeWidth={2} color={light ? "rgba(255,255,255,0.75)" : T.faint} style={{ cursor: "help" }} />
+      {rect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 110, 12), window.innerWidth - 250),
+              width: "236px",
+              background: T.ink,
+              color: "#fff",
+              fontSize: "12.5px",
+              padding: "10px 12px",
+              borderRadius: "8px",
+              lineHeight: 1.5,
+              zIndex: 3000,
+              pointerEvents: "none",
+              fontWeight: 400,
+              letterSpacing: "normal",
+              textTransform: "none",
+              boxShadow: "0 10px 30px rgba(45,32,28,0.3)",
+            }}
+          >
+            {text}
+          </div>,
+          document.body
+        )}
+    </span>
+  );
+};
+
+const btnBase = {
+  padding: "9px 16px",
+  borderRadius: "8px",
+  fontSize: "13.5px",
+  fontWeight: 500,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "7px",
+  fontFamily: "inherit",
+};
+const btnPrimary = { ...btnBase, background: T.accent, color: "#fff", border: `1px solid ${T.accent}`, fontWeight: 600 };
+const btnGhost = { ...btnBase, background: T.bg, color: T.body, border: `1px solid ${T.lineStrong}` };
+const btnQuiet = { ...btnBase, background: "transparent", color: T.accent, border: "1px solid transparent" };
+const inputS = {
+  width: "100%",
+  padding: "9px 11px",
+  border: `1px solid ${T.lineStrong}`,
+  borderRadius: "8px",
+  fontSize: "13.5px",
+  fontFamily: "inherit",
+  boxSizing: "border-box",
+  color: T.ink,
+  background: T.bg,
+  outline: "none",
+};
+const selectS = { ...inputS, cursor: "pointer" };
+const labelS = { display: "block", fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "5px" };
+const cardS = { background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" };
+const panelTh = {
+  padding: "9px 12px",
+  fontSize: "11.5px",
+  fontWeight: 700,
+  color: "#fff",
+  textTransform: "uppercase",
+  letterSpacing: "0.5px",
+  background: T.header,
+  whiteSpace: "nowrap",
+};
+
+const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }) => (
+  <div
+    onClick={onClose}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(45,32,28,0.55)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1400,
+      padding: "20px",
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: T.bg,
+        borderRadius: "14px",
+        width: "100%",
+        maxWidth: `${width}px`,
+        maxHeight: "92vh",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: "0 24px 60px rgba(45,32,28,0.28)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          padding: "18px 22px 14px",
+          borderBottom: `1px solid ${T.line}`,
+        }}
+      >
+        <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
+          {icon && <span style={{ marginTop: "2px", color: T.accent }}>{icon}</span>}
+          <div>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "17px",
+                color: T.accent,
+                fontWeight: 600,
+                letterSpacing: "-0.2px",
+              }}
+            >
+              {title}
+            </h3>
+            {subtitle && <p style={{ margin: "3px 0 0", fontSize: "13px", color: T.body }}>{subtitle}</p>}
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: T.raised,
+            border: "none",
+            cursor: "pointer",
+            color: T.body,
+            width: 30,
+            height: 30,
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <X size={15} />
+        </button>
+      </div>
+      <div style={{ padding: "18px 22px", overflowY: "auto", flex: 1 }}>{children}</div>
+      {footer && (
+        <div
+          style={{
+            padding: "13px 22px",
+            borderTop: `1px solid ${T.line}`,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "10px",
+            alignItems: "center",
+            background: T.panel,
+            borderRadius: "0 0 14px 14px",
+          }}
+        >
+          {footer}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const DIRECTIONS = [
+  { value: "higher", label: "Higher is better" },
+  { value: "lower", label: "Lower is better" },
+  { value: "match", label: "Matching is better" },
+];
+
+/* ─── KPI info popup ────────────────────────────────────────────────────── */
+const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
+  const [editing, setEditing] = useState(false);
+  const [meaning, setMeaning] = useState(kpi.meaning || "");
+  const [measured, setMeasured] = useState(kpi.measured || "");
+  const box = (v, empty, mono) => (
+    <div
+      style={{
+        background: T.panel,
+        border: `1px solid ${T.line}`,
+        borderRadius: "8px",
+        padding: "13px 15px",
+        fontSize: mono ? "13px" : "14px",
+        lineHeight: 1.65,
+        color: v ? T.body : T.faint,
+        fontStyle: v ? "normal" : "italic",
+        whiteSpace: "pre-wrap",
+        fontFamily: mono && v ? "ui-monospace, SFMono-Regular, Menlo, monospace" : "inherit",
+      }}
+    >
+      {v || empty}
+    </div>
+  );
+  return (
+    <Modal
+      title={kpi.name}
+      subtitle="What it means and how it is measured"
+      icon={<Eye size={17} />}
+      onClose={onClose}
+      footer={
+        editing ? (
+          <>
+            <button
+              onClick={() => {
+                setMeaning(kpi.meaning || "");
+                setMeasured(kpi.measured || "");
+                setEditing(false);
+              }}
+              style={btnGhost}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                onSave({ meaning, measured });
+                setEditing(false);
+              }}
+              style={btnPrimary}
+            >
+              <Save size={13} /> Save
+            </button>
+          </>
+        ) : (
+          <>
+            {!readOnly && (
+              <button onClick={() => setEditing(true)} style={btnGhost}>
+                <Pencil size={13} /> Edit
+              </button>
+            )}
+            <button onClick={onClose} style={btnPrimary}>
+              Close
+            </button>
+          </>
+        )
+      }
+    >
+      <div style={{ display: "flex", gap: "7px", flexWrap: "wrap", marginBottom: "18px" }}>
+        {[
+          `Units: ${kpi.units}`,
+          DIRECTIONS.find((d) => d.value === kpi.direction)?.label,
+          kpi.aggregate === "avg" ? "AVERAGE across periods" : "SUM across periods",
+          kpi.benchmark !== null ? `Benchmark: ${fmtValue(kpi.benchmark, kpi)}` : null,
+        ]
+          .filter(Boolean)
+          .map((c) => (
+            <span
+              key={c}
+              style={{
+                fontSize: "12px",
+                padding: "4px 11px",
+                borderRadius: "999px",
+                background: T.raised,
+                color: T.body,
+              }}
+            >
+              {c}
+            </span>
+          ))}
+      </div>
+      <div style={{ marginBottom: "18px" }}>
+        <label style={labelS}>What does this KPI mean?</label>
+        {editing ? (
+          <textarea rows="3" value={meaning} onChange={(e) => setMeaning(e.target.value)} style={{ ...inputS, resize: "vertical" }} />
+        ) : (
+          box(meaning, "Not captured yet.", false)
+        )}
+      </div>
+      <div>
+        <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Sigma size={13} /> How is this KPI measured?
+        </label>
+        {editing ? (
+          <textarea
+            rows="6"
+            value={measured}
+            onChange={(e) => setMeasured(e.target.value)}
+            style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }}
+          />
+        ) : (
+          box(measured, "Not captured yet.", true)
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+/* ─── Columns ───────────────────────────────────────────────────────────── */
+const COLUMN_DEFS = {
+  category: { label: "Category", width: 178, tip: "The category this KPI sits under.", filter: true, sort: true, hideable: true },
+  kpi: { label: "KPI", width: 288, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
+  units: { label: "Units", width: 90, align: "center", tip: "The unit every figure in this row is expressed in.", filter: true, sort: true, hideable: true },
+  source: { label: "Target", width: 118, align: "center", tip: "Whether the target beside this KPI is one you set, or the recommended benchmark used in its place.", filter: true, sort: true, hideable: true },
+  budget: { label: "Target", width: 132, align: "center", tip: "Your captured target, or the recommended benchmark where none is set.", sort: true, hideable: true },
+  actual: { label: "Actual", width: 132, align: "center", tip: "What was recorded for the selected period.", sort: true, hideable: true },
+  variance: { label: "Variance", width: 132, align: "center", tip: "Actual minus Target. Green means favourable for this KPI's direction.", sort: true, hideable: true },
+  status: { label: "Status", width: 104, align: "center", tip: "Green: on target. Amber: needs attention. Red: well outside target.", filter: true, sort: true, hideable: true },
+};
+const COLUMN_ORDER = Object.keys(COLUMN_DEFS);
+const ACTIONS_KEY = "__actions__";
+const columnLines = (key, period) =>
+  ["budget", "actual", "variance"].includes(key) ? [PERIOD_PREFIX[period], COLUMN_DEFS[key].label] : [COLUMN_DEFS[key].label];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Marketing & Sales KPI Registry
+   ════════════════════════════════════════════════════════════════════════ */
+const K = (o) => ({
+  id: o.id,
+  name: o.name,
+  units: o.units,
+  direction: o.direction || "higher",
+  aggregate: o.aggregate || "avg",
+  meaning: o.meaning,
+  measured: o.measured,
+  actual: o.actual,
+  budget: o.budget || (() => null),
+  benchmark: o.benchmark ?? null,
+  options: o.options || null,
+  field: o.field || null,
+});
+
+const TAB_DEFS = [
+  {
+    id: "pipeline-visibility",
+    name: "Pipeline Visibility",
+    categories: [
+      {
+        name: "Pipeline Visibility",
+        kpis: [
+          K({
+            id: "totalPipelineValue",
+            name: "Total Pipeline Value",
+            units: "R",
+            direction: "higher",
+            aggregate: "sum",
+            benchmark: 1000000,
+            meaning: "The total value of all opportunities in your pipeline.",
+            measured: "=SUM(Rev Potential) for all active opportunities",
+            actual: (c) => c.pipelineValue,
+            budget: (c) => c.pipelineBudget,
+          }),
+          K({
+            id: "riskAdjustedValue",
+            name: "Risk Adjusted Value",
+            units: "R",
+            direction: "higher",
+            aggregate: "sum",
+            benchmark: 500000,
+            meaning: "The value of opportunities weighted by their probability of closing.",
+            measured: "=SUM(Rev Potential × Probability %) for all active opportunities",
+            actual: (c) => c.riskValue,
+            budget: (c) => c.riskBudget,
+          }),
+          K({
+            id: "pipelineCoverage",
+            name: "Pipeline Coverage",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 200,
+            meaning: "The ratio of risk-adjusted pipeline value to target revenue.",
+            measured: "=Risk Adjusted Value ÷ Target Revenue × 100%",
+            actual: (c) => c.coverage,
+            budget: (c) => c.coverageBudget,
+          }),
+          K({
+            id: "newLeads",
+            name: "New Leads",
+            units: "#",
+            direction: "higher",
+            aggregate: "sum",
+            benchmark: 50,
+            meaning: "The number of new leads added to the pipeline in the period.",
+            measured: "=COUNT of new records in the period",
+            actual: (c) => c.newLeads,
+            budget: (c) => c.newLeadsBudget,
+          }),
+          K({
+            id: "conversionRate",
+            name: "Conversion Rate",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 30,
+            meaning: "The percentage of opportunities that convert to closed deals.",
+            measured: "=Converted Opportunities ÷ Total Opportunities × 100%",
+            actual: (c) => c.conversionRate,
+            budget: (c) => c.conversionBudget,
+          }),
+          K({
+            id: "salesVelocity",
+            name: "Sales Velocity",
+            units: "days",
+            direction: "lower",
+            aggregate: "avg",
+            benchmark: 30,
+            meaning: "The average number of days from lead creation to close.",
+            measured: "=AVERAGE(Days between Created At and Signed Date)",
+            actual: (c) => c.salesVelocity,
+            budget: (c) => c.velocityBudget,
+          }),
+        ],
+      },
+    ],
+  },
+  {
+    id: "pipeline-sufficiency",
+    name: "Pipeline Sufficiency",
+    categories: [
+      {
+        name: "Pipeline Sufficiency",
+        kpis: [
+          K({
+            id: "totalPipelineValue",
+            name: "Total Pipeline Value",
+            units: "R",
+            direction: "higher",
+            aggregate: "sum",
+            benchmark: 1000000,
+            meaning: "The total value of all opportunities in your pipeline.",
+            measured: "=SUM(Rev Potential) for all active opportunities",
+            actual: (c) => c.pipelineValue,
+            budget: (c) => c.pipelineBudget,
+          }),
+          K({
+            id: "riskAdjustedValue",
+            name: "Risk Adjusted Value",
+            units: "R",
+            direction: "higher",
+            aggregate: "sum",
+            benchmark: 500000,
+            meaning: "The value of opportunities weighted by their probability of closing.",
+            measured: "=SUM(Rev Potential × Probability %) for all active opportunities",
+            actual: (c) => c.riskValue,
+            budget: (c) => c.riskBudget,
+          }),
+          K({
+            id: "pipelineCoverage",
+            name: "Pipeline Coverage",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 200,
+            meaning: "The ratio of risk-adjusted pipeline value to target revenue.",
+            measured: "=Risk Adjusted Value ÷ Target Revenue × 100%",
+            actual: (c) => c.coverage,
+            budget: (c) => c.coverageBudget,
+          }),
+          K({
+            id: "newLeads",
+            name: "New Leads",
+            units: "#",
+            direction: "higher",
+            aggregate: "sum",
+            benchmark: 50,
+            meaning: "The number of new leads added to the pipeline in the period.",
+            measured: "=COUNT of new records in the period",
+            actual: (c) => c.newLeads,
+            budget: (c) => c.newLeadsBudget,
+          }),
+          K({
+            id: "conversionRate",
+            name: "Conversion Rate",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 30,
+            meaning: "The percentage of opportunities that convert to closed deals.",
+            measured: "=Converted Opportunities ÷ Total Opportunities × 100%",
+            actual: (c) => c.conversionRate,
+            budget: (c) => c.conversionBudget,
+          }),
+          K({
+            id: "salesVelocity",
+            name: "Sales Velocity",
+            units: "days",
+            direction: "lower",
+            aggregate: "avg",
+            benchmark: 30,
+            meaning: "The average number of days from lead creation to close.",
+            measured: "=AVERAGE(Days between Created At and Signed Date)",
+            actual: (c) => c.salesVelocity,
+            budget: (c) => c.velocityBudget,
+          }),
+        ],
+      },
+    ],
+  },
+  {
+    id: "revenue-concentration",
+    name: "Revenue Concentration",
+    categories: [
+      {
+        name: "Revenue Concentration",
+        kpis: [
+          K({
+            id: "totalMarketingSpend",
+            name: "Total Marketing Spend",
+            units: "R",
+            direction: "lower",
+            aggregate: "sum",
+            benchmark: 100000,
+            meaning: "The total amount spent on marketing across all channels.",
+            measured: "=SUM of all channel marketing spend",
+            actual: (c) => c.totalSpend,
+            budget: (c) => c.spendBudget,
+          }),
+          K({
+            id: "overallROI",
+            name: "Overall ROI",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 200,
+            meaning: "The return on investment from marketing activities.",
+            measured: "=(Total Revenue - Total Spend) ÷ Total Spend × 100%",
+            actual: (c) => c.totalROI,
+            budget: (c) => c.roiBudget,
+          }),
+        ],
+      },
+    ],
+  },
+  {
+    id: "demand-sustainability",
+    name: "Demand Sustainability",
+    categories: [
+      {
+        name: "Demand Sustainability",
+        kpis: [
+          K({
+            id: "repeatCustomerRate",
+            name: "Repeat Customer Rate",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 40,
+            meaning: "The percentage of customers who make repeat purchases.",
+            measured: "=Repeat Customers ÷ Total Customers × 100%",
+            actual: (c) => c.repeatRate,
+            budget: (c) => c.repeatBudget,
+          }),
+          K({
+            id: "netRetention",
+            name: "Net Retention",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 30,
+            meaning: "The net customer retention rate (repeat rate minus churn rate).",
+            measured: "=Repeat Customer Rate - Churn Rate",
+            actual: (c) => c.netRetention,
+            budget: (c) => c.netRetentionBudget,
+          }),
+          K({
+            id: "campaignROI",
+            name: "Campaign ROI",
+            units: "%",
+            direction: "higher",
+            aggregate: "avg",
+            benchmark: 150,
+            meaning: "The return on investment from marketing campaigns.",
+            measured: "=(Campaign Revenue - Campaign Cost) ÷ Campaign Cost × 100%",
+            actual: (c) => c.campaignROI,
+            budget: (c) => c.campaignROIBudget,
+          }),
+        ],
+      },
+    ],
+  },
+];
+
+const DOC = {
+  pipeline: "_pipelineData",
+  concentration: "_concentrationData",
+  sustainability: "_sustainabilityData",
+};
+
+const atPath = (obj, path) => path.reduce((o, k) => (o == null ? undefined : o[k]), obj);
+const numAt = (docs, src, path, mi) => {
+  const arr = atPath(docs[src], path);
+  if (!Array.isArray(arr)) return null;
+  const n = parseFloat(arr[mi]);
+  return Number.isFinite(n) ? n : null;
+};
+
+const buildContext = (docs, mi) => ({
+  pipelineValue: numAt(docs, "pipeline", ["pipelineData", "pipelineValue", "actual"], mi),
+  pipelineBudget: numAt(docs, "pipeline", ["pipelineData", "pipelineValue", "budget"], mi),
+  riskValue: numAt(docs, "pipeline", ["pipelineData", "riskValue", "actual"], mi),
+  riskBudget: numAt(docs, "pipeline", ["pipelineData", "riskValue", "budget"], mi),
+  coverage: numAt(docs, "pipeline", ["pipelineData", "coverage", "actual"], mi),
+  coverageBudget: numAt(docs, "pipeline", ["pipelineData", "coverage", "budget"], mi),
+  newLeads: numAt(docs, "pipeline", ["pipelineData", "newLeads", "actual"], mi),
+  newLeadsBudget: numAt(docs, "pipeline", ["pipelineData", "newLeads", "budget"], mi),
+  conversionRate: numAt(docs, "pipeline", ["pipelineData", "conversionRate", "actual"], mi),
+  conversionBudget: numAt(docs, "pipeline", ["pipelineData", "conversionRate", "budget"], mi),
+  salesVelocity: numAt(docs, "pipeline", ["pipelineData", "salesVelocity", "actual"], mi),
+  velocityBudget: numAt(docs, "pipeline", ["pipelineData", "salesVelocity", "budget"], mi),
+  totalSpend: numAt(docs, "concentration", ["concentrationData", "totalSpend", "actual"], mi),
+  spendBudget: numAt(docs, "concentration", ["concentrationData", "totalSpend", "budget"], mi),
+  totalROI: numAt(docs, "concentration", ["concentrationData", "totalROI", "actual"], mi),
+  roiBudget: numAt(docs, "concentration", ["concentrationData", "totalROI", "budget"], mi),
+  repeatRate: numAt(docs, "sustainability", ["sustainabilityData", "repeatRate", "actual"], mi),
+  repeatBudget: numAt(docs, "sustainability", ["sustainabilityData", "repeatRate", "budget"], mi),
+  netRetention: numAt(docs, "sustainability", ["sustainabilityData", "netRetention", "actual"], mi),
+  netRetentionBudget: numAt(docs, "sustainability", ["sustainabilityData", "netRetention", "budget"], mi),
+  campaignROI: numAt(docs, "sustainability", ["sustainabilityData", "campaignROI", "actual"], mi),
+  campaignROIBudget: numAt(docs, "sustainability", ["sustainabilityData", "campaignROI", "budget"], mi),
+});
+
+const monthEntry = (kpi, year, mi) => kpi.entries?.[`M:${year}-${String(mi + 1).padStart(2, "0")}`] || { actual: null, budget: null };
+
+const periodValues = (kpi, period, fy) => {
+  const now = new Date();
+  if (period === "month") return monthEntry(kpi, now.getFullYear(), now.getMonth());
+  const months = fyMonths(fy.startYear, fy.startMonth);
+  const elapsed = (list) => list.filter((m) => new Date(m.year, m.month, 1) <= new Date(now.getFullYear(), now.getMonth(), 1));
+  const rows = (list) => list.map((m) => monthEntry(kpi, m.year, m.month));
+  if (period === "quarter") {
+    const qs = fyQuarters(fy.startYear, fy.startMonth);
+    const q = qs.find((qq) => qq.months.some((m) => m.year === now.getFullYear() && m.month === now.getMonth())) || qs[0];
+    const r = rows(elapsed(q.months));
+    return { actual: rollUp(r.map((x) => Number(x.actual)), kpi.aggregate), budget: rollUp(r.map((x) => Number(x.budget)), kpi.aggregate) };
+  }
+  const r = rows(elapsed(months));
+  return { actual: rollUp(r.map((x) => Number(x.actual)), kpi.aggregate), budget: rollUp(r.map((x) => Number(x.budget)), kpi.aggregate) };
+};
+
+const getStatus = (kpi, period, fy) => {
+  const v = periodValues(kpi, period, fy);
+  return statusFromPair(kpi, v.budget, v.actual);
+};
+const getVariance = (kpi, period, fy) => {
+  const { budget, actual } = periodValues(kpi, period, fy);
+  const b = Number(budget),
+    a = Number(actual);
+  return Number.isFinite(b) && Number.isFinite(a) ? a - b : null;
+};
+
+// ==================== PIPELINE TABLE ====================
 
 const AVAILABLE_FIELDS = [
-  {
-    id: "tier",
-    label: "Tier Category",
-    type: "dropdown",
-    options: [
-      "Core anchor",
-      "Land & expand",
-      "Flagship",
-      "Coopetition",
-      "Capital corridor",
-      "Provincial Multiplier",
-    ],
-  },
+  { id: "tier", label: "Tier Category", type: "dropdown", options: ["Core anchor", "Land & expand", "Flagship", "Coopetition", "Capital corridor", "Provincial Multiplier"] },
   { id: "accountWebsite", label: "Account Website", type: "text" },
-  {
-    id: "targetCategory",
-    label: "Target Category",
-    type: "dropdown",
-    options: ["Strategic", "Tactical", "Operational"],
-  },
-  {
-    id: "sector",
-    label: "Sector",
-    type: "dropdown",
-    options: [
-      "Generalist",
-      "Agriculture",
-      "Automotive",
-      "Banking, Finance & Insurance",
-      "Beauty / Cosmetics / Personal Care",
-      "Construction",
-      "Consulting",
-      "Creative Arts / Design",
-      "Customer Service",
-      "Education & Training",
-      "Engineering",
-      "Environmental / Natural Sciences",
-      "Government / Public Sector",
-      "Healthcare / Medical",
-      "Hospitality / Tourism",
-      "Human Resources",
-      "Information Technology (IT)",
-      "Infrastructure",
-      "Legal / Law",
-      "Logistics / Supply Chain",
-      "Manufacturing",
-      "Marketing / Advertising / PR",
-      "Media / Journalism / Broadcasting",
-      "Mining",
-      "Energy",
-      "Oil & Gas",
-      "Non-Profit / NGO",
-      "Property / Real Estate",
-      "Retail / Wholesale",
-      "Safety & Security / Police / Defence",
-      "Sales",
-      "Science & Research",
-      "Social Services / Social Work",
-      "Sports / Recreation / Fitness",
-      "Telecommunications",
-      "Transport",
-      "Utilities (Water, Electricity, Waste)",
-      "Industry multiplier",
-      "Provincial multiplier",
-    ],
-  },
-  {
-    id: "publicPrivate",
-    label: "Public / Private",
-    type: "dropdown",
-    options: ["Public", "Private"],
-  },
-  {
-    id: "channel",
-    label: "Channel",
-    type: "dropdown",
-    options: ["Direct", "Partner", "Reseller", "Online", "Referral"],
-  },
+  { id: "targetCategory", label: "Target Category", type: "dropdown", options: ["Strategic", "Tactical", "Operational"] },
+  { id: "sector", label: "Sector", type: "dropdown", options: ["Generalist", "Agriculture", "Automotive", "Banking, Finance & Insurance", "Beauty / Cosmetics / Personal Care", "Construction", "Consulting", "Creative Arts / Design", "Customer Service", "Education & Training", "Engineering", "Environmental / Natural Sciences", "Government / Public Sector", "Healthcare / Medical", "Hospitality / Tourism", "Human Resources", "Information Technology (IT)", "Infrastructure", "Legal / Law", "Logistics / Supply Chain", "Manufacturing", "Marketing / Advertising / PR", "Media / Journalism / Broadcasting", "Mining", "Energy", "Oil & Gas", "Non-Profit / NGO", "Property / Real Estate", "Retail / Wholesale", "Safety & Security / Police / Defence", "Sales", "Science & Research", "Social Services / Social Work", "Sports / Recreation / Fitness", "Telecommunications", "Transport", "Utilities (Water, Electricity, Waste)", "Industry multiplier", "Provincial multiplier"] },
+  { id: "publicPrivate", label: "Public / Private", type: "dropdown", options: ["Public", "Private"] },
+  { id: "channel", label: "Channel", type: "dropdown", options: ["Direct", "Partner", "Reseller", "Online", "Referral"] },
   { id: "bigHook", label: "BIG Hook", type: "text" },
   { id: "revPotential", label: "Rev potential", type: "currency" },
   { id: "fyEnd", label: "FY End", type: "text" },
-  {
-    id: "strategicSignal",
-    label: "Strategic Signal",
-    type: "dropdown",
-    options: ["High", "Medium", "Low"],
-  },
-  {
-    id: "targetModel",
-    label: "Target Model",
-    type: "dropdown",
-    options: ["ICP", "Lookalike", "Niche", "Mass Market"],
-  },
+  { id: "strategicSignal", label: "Strategic Signal", type: "dropdown", options: ["High", "Medium", "Low"] },
+  { id: "targetModel", label: "Target Model", type: "dropdown", options: ["ICP", "Lookalike", "Niche", "Mass Market"] },
   { id: "compliance", label: "Compliance", type: "boolean" },
-  {
-    id: "esd",
-    label: "ESD (incl compliance, intelligence)",
-    type: "boolean",
-  },
-  {
-    id: "prevettedSupplyChain",
-    label: "Prevetted Supply Chain Pipeline",
-    type: "boolean",
-  },
-  {
-    id: "prevettedFunding",
-    label: "Prevetted Funding Pipeline",
-    type: "boolean",
-  },
-  {
-    id: "postInvestmentSupport",
-    label: "Post-Investment Support (Growth Suite)",
-    type: "boolean",
-  },
-  {
-    id: "portfolioIntelligence",
-    label: "Portfolio Intelligence",
-    type: "boolean",
-  },
-  {
-    id: "marketIntelligence",
-    label: "Market Intelligence",
-    type: "boolean",
-  },
+  { id: "esd", label: "ESD (incl compliance, intelligence)", type: "boolean" },
+  { id: "prevettedSupplyChain", label: "Prevetted Supply Chain Pipeline", type: "boolean" },
+  { id: "prevettedFunding", label: "Prevetted Funding Pipeline", type: "boolean" },
+  { id: "postInvestmentSupport", label: "Post-Investment Support (Growth Suite)", type: "boolean" },
+  { id: "portfolioIntelligence", label: "Portfolio Intelligence", type: "boolean" },
+  { id: "marketIntelligence", label: "Market Intelligence", type: "boolean" },
   { id: "internSponsorship", label: "InTern Sponsorship", type: "boolean" },
   { id: "likelyBuyer", label: "Likely Buyer", type: "text" },
-  {
-    id: "keyContact",
-    label: "Key Contact (Name & Surname)",
-    type: "text",
-  },
-  {
-    id: "keyContactRole",
-    label: "Key Contact Role & Department",
-    type: "text",
-  },
+  { id: "keyContact", label: "Key Contact (Name & Surname)", type: "text" },
+  { id: "keyContactRole", label: "Key Contact Role & Department", type: "text" },
   { id: "keyContactEmail", label: "Key Contact email", type: "text" },
   { id: "keyContactPhone", label: "Key Contact Phone", type: "text" },
   { id: "warmIntroPath", label: "Warm Intro Path", type: "text" },
@@ -312,20 +954,10 @@ const AVAILABLE_FIELDS = [
   { id: "byWhom", label: "By Whom", type: "text" },
   { id: "byWhen", label: "By When", type: "date" },
   { id: "notes", label: "Notes", type: "text" },
-  { id: "signedDate", label: "Signed Date", type: "date" }, // ADDED for sales velocity
+  { id: "signedDate", label: "Signed Date", type: "date" },
 ];
 
-const DEFAULT_VISIBLE_FIELDS = [
-  "tier",
-  "accountWebsite",
-  "sector",
-  "revPotential",
-  "probability",
-  "nextCta",
-  "byWhen",
-];
-
-// ==================== COLUMN SELECTOR MODAL ====================
+const DEFAULT_VISIBLE_FIELDS = ["tier", "accountWebsite", "sector", "revPotential", "probability", "nextCta", "byWhen"];
 
 const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
   if (!isOpen) return null;
@@ -333,85 +965,43 @@ const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
       <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[600px] w-[90%] max-h-[80vh] overflow-auto">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-mediumBrown text-lg font-semibold">
-            Select Columns to Display
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-mediumBrown hover:text-warmBrown"
-          >
-            <X size={20} />
-          </button>
+          <h3 className="text-mediumBrown text-lg font-semibold">Select Columns to Display</h3>
+          <button onClick={onClose} className="text-mediumBrown hover:text-warmBrown"><X size={20} /></button>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {AVAILABLE_FIELDS.map((field) => (
-            <label
-              key={field.id}
-              className="flex items-center gap-2 text-sm text-mediumBrown cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={visibleFields.includes(field.id)}
-                onChange={() => onToggleField(field.id)}
-                className="w-4 h-4 rounded border-[#e8ddd4] accent-mediumBrown"
-              />
+            <label key={field.id} className="flex items-center gap-2 text-sm text-mediumBrown cursor-pointer">
+              <input type="checkbox" checked={visibleFields.includes(field.id)} onChange={() => onToggleField(field.id)} className="w-4 h-4 rounded border-[#e8ddd4] accent-mediumBrown" />
               {field.label}
             </label>
           ))}
         </div>
         <div className="flex justify-end mt-5">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm"
-          >
-            Done
-          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm">Done</button>
         </div>
       </div>
     </div>
   );
 };
 
-// ==================== CELL RENDERERS ====================
-
 const BooleanCell = ({ value, onChange, isEditing }) => {
   if (isEditing) {
     return (
-      <select
-        value={value ? "yes" : "no"}
-        onChange={(e) => onChange(e.target.value === "yes")}
-        className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white"
-      >
+      <select value={value ? "yes" : "no"} onChange={(e) => onChange(e.target.value === "yes")} className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white">
         <option value="yes">Yes</option>
         <option value="no">No</option>
       </select>
     );
   }
-  return (
-    <span
-      className={`text-sm font-medium ${
-        value ? "text-green-600" : "text-red-500"
-      }`}
-    >
-      {value ? "✓ Yes" : "✗ No"}
-    </span>
-  );
+  return <span className={`text-sm font-medium ${value ? "text-green-600" : "text-red-500"}`}>{value ? "✓ Yes" : "✗ No"}</span>;
 };
 
 const DropdownCell = ({ value, options, onChange, isEditing }) => {
   if (isEditing) {
     return (
-      <select
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white"
-      >
+      <select value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white">
         <option value="">Select...</option>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
-          </option>
-        ))}
+        {options.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
       </select>
     );
   }
@@ -420,58 +1010,19 @@ const DropdownCell = ({ value, options, onChange, isEditing }) => {
 
 const TextCell = ({ value, onChange, isEditing, type }) => {
   if (isEditing) {
-    if (type === "currency") {
-      return (
-        <input
-          type="number"
-          step="0.01"
-          value={value || ""}
-          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
-        />
-      );
-    }
-    if (type === "number") {
-      return (
-        <input
-          type="number"
-          step="1"
-          value={value || ""}
-          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
-        />
-      );
+    if (type === "currency" || type === "number") {
+      return <input type="number" step="0.01" value={value || ""} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
     }
     if (type === "date") {
-      return (
-        <input
-          type="date"
-          value={value || ""}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
-        />
-      );
+      return <input type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
     }
-    return (
-      <input
-        type="text"
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
-      />
-    );
+    return <input type="text" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
   }
   if (type === "currency") {
-    return (
-      <span className="text-sm text-mediumBrown">
-        {formatCurrency(value)}
-      </span>
-    );
+    return <span className="text-sm text-mediumBrown">{value ? `R ${Number(value).toLocaleString()}` : "-"}</span>;
   }
   return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
 };
-
-// ==================== PIPELINE TABLE COMPONENT ====================
 
 const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   const [records, setRecords] = useState([]);
@@ -488,17 +1039,10 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const recordsRef = collection(
-        db,
-        "users",
-        currentUser.uid,
-        "pipelineRecords",
-      );
+      const recordsRef = collection(db, "users", currentUser.uid, "pipelineRecords");
       const querySnapshot = await getDocs(recordsRef);
       const recordsData = [];
-      querySnapshot.forEach((doc) => {
-        recordsData.push({ id: doc.id, ...doc.data() });
-      });
+      querySnapshot.forEach((doc) => { recordsData.push({ id: doc.id, ...doc.data() }); });
       setRecords(recordsData);
       setFilteredRecords(recordsData);
       if (onDataChange) onDataChange(recordsData);
@@ -509,9 +1053,7 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     }
   };
 
-  useEffect(() => {
-    if (currentUser) loadRecords();
-  }, [currentUser]);
+  useEffect(() => { if (currentUser) loadRecords(); }, [currentUser]);
 
   useEffect(() => {
     let filtered = [...records];
@@ -520,10 +1062,7 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
         filtered = filtered.filter((record) => {
           const recordValue = record[key];
           if (recordValue === undefined || recordValue === null) return false;
-          return recordValue
-            .toString()
-            .toLowerCase()
-            .includes(value.toLowerCase());
+          return recordValue.toString().toLowerCase().includes(value.toLowerCase());
         });
       }
     });
@@ -535,18 +1074,12 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     const newRecord = {};
     AVAILABLE_FIELDS.forEach((field) => {
       if (field.type === "boolean") newRecord[field.id] = false;
-      else if (field.type === "currency" || field.type === "number")
-        newRecord[field.id] = 0;
+      else if (field.type === "currency" || field.type === "number") newRecord[field.id] = 0;
       else newRecord[field.id] = "";
     });
     newRecord.createdAt = new Date().toISOString();
     try {
-      const recordsRef = collection(
-        db,
-        "users",
-        currentUser.uid,
-        "pipelineRecords",
-      );
+      const recordsRef = collection(db, "users", currentUser.uid, "pipelineRecords");
       const docRef = await addDoc(recordsRef, newRecord);
       const updated = [{ id: docRef.id, ...newRecord }, ...records];
       setRecords(updated);
@@ -562,17 +1095,9 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   const handleSaveEdit = async () => {
     if (!currentUser || !editingId) return;
     try {
-      const recordRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        "pipelineRecords",
-        editingId,
-      );
+      const recordRef = doc(db, "users", currentUser.uid, "pipelineRecords", editingId);
       await updateDoc(recordRef, editData);
-      const updated = records.map((r) =>
-        r.id === editingId ? { ...r, ...editData } : r,
-      );
+      const updated = records.map((r) => r.id === editingId ? { ...r, ...editData } : r);
       setRecords(updated);
       if (onDataChange) onDataChange(updated);
       setEditingId(null);
@@ -583,21 +1108,12 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditData({});
-  };
+  const handleCancelEdit = () => { setEditingId(null); setEditData({}); };
 
   const handleDeleteRecord = async (id) => {
     if (!currentUser) return;
     try {
-      const recordRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        "pipelineRecords",
-        id,
-      );
+      const recordRef = doc(db, "users", currentUser.uid, "pipelineRecords", id);
       await deleteDoc(recordRef);
       const updated = records.filter((r) => r.id !== id);
       setRecords(updated);
@@ -609,85 +1125,41 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     }
   };
 
-  const handleEditChange = (fieldId, value) => {
-    setEditData({ ...editData, [fieldId]: value });
-  };
+  const handleEditChange = (fieldId, value) => { setEditData({ ...editData, [fieldId]: value }); };
 
   const toggleField = (fieldId) => {
-    if (visibleFields.includes(fieldId)) {
-      setVisibleFields(visibleFields.filter((f) => f !== fieldId));
-    } else {
-      setVisibleFields([...visibleFields, fieldId]);
-    }
+    if (visibleFields.includes(fieldId)) setVisibleFields(visibleFields.filter((f) => f !== fieldId));
+    else setVisibleFields([...visibleFields, fieldId]);
   };
 
   const clearFilters = () => setFilters({});
 
-  const getFieldConfig = (fieldId) =>
-    AVAILABLE_FIELDS.find((f) => f.id === fieldId);
+  const getFieldConfig = (fieldId) => AVAILABLE_FIELDS.find((f) => f.id === fieldId);
 
   const renderCell = (record, fieldId, isEditing) => {
     const fieldConfig = getFieldConfig(fieldId);
     if (!fieldConfig) return null;
     const value = isEditing ? editData[fieldId] : record[fieldId];
     if (fieldConfig.type === "boolean") {
-      return (
-        <BooleanCell
-          value={value}
-          onChange={(newVal) => handleEditChange(fieldId, newVal)}
-          isEditing={isEditing}
-        />
-      );
+      return <BooleanCell value={value} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} />;
     }
     if (fieldConfig.type === "dropdown") {
-      return (
-        <DropdownCell
-          value={value}
-          options={fieldConfig.options}
-          onChange={(newVal) => handleEditChange(fieldId, newVal)}
-          isEditing={isEditing}
-        />
-      );
+      return <DropdownCell value={value} options={fieldConfig.options} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} />;
     }
-    return (
-      <TextCell
-        value={value}
-        onChange={(newVal) => handleEditChange(fieldId, newVal)}
-        isEditing={isEditing}
-        type={fieldConfig.type}
-      />
-    );
+    return <TextCell value={value} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} type={fieldConfig.type} />;
   };
 
   return (
     <div className="mt-5">
-      <ColumnSelector
-        isOpen={showColumnSelector}
-        onClose={() => setShowColumnSelector(false)}
-        visibleFields={visibleFields}
-        onToggleField={toggleField}
-      />
+      <ColumnSelector isOpen={showColumnSelector} onClose={() => setShowColumnSelector(false)} visibleFields={visibleFields} onToggleField={toggleField} />
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
           <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[400px] w-[90%]">
             <h3 className="text-mediumBrown text-lg mb-3">Confirm Delete</h3>
-            <p className="text-mediumBrown mb-5">
-              Are you sure you want to delete this record? This action cannot be
-              undone.
-            </p>
+            <p className="text-mediumBrown mb-5">Are you sure you want to delete this record? This action cannot be undone.</p>
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteRecord(showDeleteConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded-md"
-              >
-                Delete
-              </button>
+              <button onClick={() => setShowDeleteConfirm(null)} className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md">Cancel</button>
+              <button onClick={() => handleDeleteRecord(showDeleteConfirm)} className="px-4 py-2 bg-red-600 text-white rounded-md">Delete</button>
             </div>
           </div>
         </div>
@@ -695,19 +1167,9 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
       <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
         <div className="flex gap-2">
           {!isInvestorView && (
-            <button
-              onClick={handleAddRecord}
-              className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm font-semibold hover:bg-warmBrown transition"
-            >
-              + Add Record
-            </button>
+            <button onClick={handleAddRecord} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm font-semibold hover:bg-warmBrown transition">+ Add Record</button>
           )}
-          <button
-            onClick={() => setShowColumnSelector(true)}
-            className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md text-sm font-semibold flex items-center gap-2 hover:bg-[#d4c4b8] transition"
-          >
-            <Settings size={16} /> Columns
-          </button>
+          <button onClick={() => setShowColumnSelector(true)} className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md text-sm font-semibold flex items-center gap-2 hover:bg-[#d4c4b8] transition"><Settings size={16} /> Columns</button>
         </div>
       </div>
       <div className="bg-[#f5f0eb] p-3 rounded-lg mb-4 border border-[#e8ddd4] overflow-x-auto">
@@ -716,28 +1178,12 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
             const fieldConfig = getFieldConfig(fieldId);
             if (!fieldConfig) return null;
             return (
-              <div
-                key={`filter-${fieldId}`}
-                className="flex-shrink-0 min-w-[120px]"
-              >
-                <input
-                  type="text"
-                  placeholder={`Filter ${fieldConfig.label}`}
-                  value={filters[fieldId] || ""}
-                  onChange={(e) =>
-                    setFilters({ ...filters, [fieldId]: e.target.value })
-                  }
-                  className="w-full p-1.5 rounded border border-[#e8ddd4] text-xs bg-white"
-                />
+              <div key={`filter-${fieldId}`} className="flex-shrink-0 min-w-[120px]">
+                <input type="text" placeholder={`Filter ${fieldConfig.label}`} value={filters[fieldId] || ""} onChange={(e) => setFilters({ ...filters, [fieldId]: e.target.value })} className="w-full p-1.5 rounded border border-[#e8ddd4] text-xs bg-white" />
               </div>
             );
           })}
-          <button
-            onClick={clearFilters}
-            className="px-3 py-1.5 bg-mediumBrown text-white rounded-md text-xs font-semibold whitespace-nowrap"
-          >
-            Clear Filters
-          </button>
+          <button onClick={clearFilters} className="px-3 py-1.5 bg-mediumBrown text-white rounded-md text-xs font-semibold whitespace-nowrap">Clear Filters</button>
         </div>
       </div>
       <div className="overflow-x-auto bg-[#fdfcfb] rounded-lg border border-[#e8ddd4]">
@@ -746,106 +1192,34 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
             <tr className="bg-mediumBrown text-white">
               {visibleFields.map((fieldId) => {
                 const fieldConfig = getFieldConfig(fieldId);
-                return (
-                  <th
-                    key={fieldId}
-                    className="p-3 text-left text-sm font-semibold whitespace-nowrap"
-                  >
-                    {fieldConfig?.label || fieldId}
-                  </th>
-                );
+                return <th key={fieldId} className="p-3 text-left text-sm font-semibold whitespace-nowrap">{fieldConfig?.label || fieldId}</th>;
               })}
-              {!isInvestorView && (
-                <th className="p-3 text-center text-sm font-semibold whitespace-nowrap">
-                  Actions
-                </th>
-              )}
+              {!isInvestorView && <th className="p-3 text-center text-sm font-semibold whitespace-nowrap">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {filteredRecords.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={
-                    visibleFields.length + (isInvestorView ? 0 : 1)
-                  }
-                  className="p-8 text-center text-lightBrown"
-                >
-                  {loading
-                    ? "Loading..."
-                    : "No records found. Click 'Add Record' to get started."}
-                </td>
-              </tr>
+              <tr><td colSpan={visibleFields.length + (isInvestorView ? 0 : 1)} className="p-8 text-center text-lightBrown">{loading ? "Loading..." : "No records found. Click 'Add Record' to get started."}</td></tr>
             ) : (
               filteredRecords.map((record, idx) => (
-                <tr
-                  key={record.id}
-                  className={`border-b border-[#e8ddd4] ${
-                    idx % 2 === 0 ? "bg-white" : "bg-[#faf8f5]"
-                  }`}
-                >
+                <tr key={record.id} className={`border-b border-[#e8ddd4] ${idx % 2 === 0 ? "bg-white" : "bg-[#faf8f5]"}`}>
                   {visibleFields.map((fieldId) => (
-                    <td key={fieldId} className="p-2.5 align-middle">
-                      {renderCell(record, fieldId, editingId === record.id)}
-                    </td>
+                    <td key={fieldId} className="p-2.5 align-middle">{renderCell(record, fieldId, editingId === record.id)}</td>
                   ))}
                   {!isInvestorView && (
                     <td className="p-2.5 text-center whitespace-nowrap">
                       {editingId === record.id ? (
                         <div className="flex gap-1 justify-center">
-                          <button
-                            onClick={handleSaveEdit}
-                            className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
-                            title="Save"
-                          >
-                            <Check size={16} />
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="p-1 bg-gray-400 text-white rounded hover:bg-gray-500"
-                            title="Cancel"
-                          >
-                            <X size={16} />
-                          </button>
+                          <button onClick={handleSaveEdit} className="p-1 bg-green-600 text-white rounded hover:bg-green-700" title="Save"><Check size={16} /></button>
+                          <button onClick={handleCancelEdit} className="p-1 bg-gray-400 text-white rounded hover:bg-gray-500" title="Cancel"><X size={16} /></button>
                         </div>
                       ) : (
                         <div className="flex gap-1 justify-center">
-                          <button
-                            onClick={() => {
-                              setEditingId(record.id);
-                              setEditData({ ...record });
-                            }}
-                            className="p-1 bg-mediumBrown text-white rounded hover:bg-warmBrown"
-                            title="Edit"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M17 3l4 4-7 7H10v-4l7-7z" />
-                              <path d="M4 20h16" />
-                            </svg>
+                          <button onClick={() => { setEditingId(record.id); setEditData({ ...record }); }} className="p-1 bg-mediumBrown text-white rounded hover:bg-warmBrown" title="Edit">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3l4 4-7 7H10v-4l7-7z" /><path d="M4 20h16" /></svg>
                           </button>
-                          <button
-                            onClick={() => setShowDeleteConfirm(record.id)}
-                            className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
-                            title="Delete"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-13" />
-                              <path d="M9 4h6a1 1 0 0 1 1 1v2H8V5a1 1 0 0 1 1-1z" />
-                            </svg>
+                          <button onClick={() => setShowDeleteConfirm(record.id)} className="p-1 bg-red-600 text-white rounded hover:bg-red-700" title="Delete">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-13" /><path d="M9 4h6a1 1 0 0 1 1 1v2H8V5a1 1 0 0 1 1-1z" /></svg>
                           </button>
                         </div>
                       )}
@@ -857,58 +1231,1089 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
           </tbody>
         </table>
       </div>
-      <div className="mt-4 bg-[#f5f0eb] p-3 rounded-lg text-sm text-mediumBrown">
-        Showing {filteredRecords.length} of {records.length} records
-      </div>
+      <div className="mt-4 bg-[#f5f0eb] p-3 rounded-lg text-sm text-mediumBrown">Showing {filteredRecords.length} of {records.length} records</div>
     </div>
   );
 };
 
-// ==================== UNIVERSAL ADD DATA MODAL (two tabs) ====================
+// ==================== TREND CHART MODAL ====================
+const CHART_VERSION = 2;
+const DEFAULT_CHART = {
+  v: CHART_VERSION,
+  actualType: "bar",
+  budgetType: "scatter",
+  varianceType: "scatter",
+  actualColor: "#1e40af",
+  budgetColor: "#4a352f",
+  showValues: true,
+  showAxis: false,
+};
+const CHART_TYPES = [
+  { value: "bar", label: "Bars" },
+  { value: "line", label: "Line" },
+  { value: "area", label: "Area" },
+  { value: "scatter", label: "Circles" },
+];
+const SWATCHES = ["#1e40af", "#4a352f", "#166534", "#991b1b", "#92400e", "#6d28d9", "#0e7490", "#be185d"];
 
-const UniversalAddDataModal = ({
-  isOpen,
-  onClose,
-  currentTab,
-  user,
-  onSave,
-  loading,
-  fromDate,
-  toDate,
-}) => {
-  const [activeTab, setActiveTab] = useState(currentTab);
-  const MONTH_NAMES = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+const makeValueLabelPlugin = (kpi, enabled) => ({
+  id: "seriesValueLabels",
+  afterDatasetsDraw(chart) {
+    if (!enabled) return;
+    const { ctx } = chart;
+    ctx.save();
+    ctx.font = "600 10.5px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((el, i) => {
+        const raw = ds.data[i];
+        if (raw === null || raw === undefined) return;
+        ctx.fillStyle = ds.__labelColor || T.body;
+        ctx.fillText(fmtValue(raw, kpi, { signed: !!ds.__signed, bare: true }), el.x, el.y - 8);
+      });
+    });
+    ctx.restore();
+  },
+});
 
-  const rangeMonths =
-    fromDate && toDate ? getRangeMonths(fromDate, toDate) : null;
-  const rangeYears = rangeMonths
-    ? [...new Set(rangeMonths.map((r) => r.year))]
-    : [
-        toDate
-          ? parseInt(toDate.split("-")[0])
-          : new Date().getFullYear(),
-      ];
+const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, readOnly }) => {
+  const [noteText, setNoteText] = useState("");
+  const [noteState, setNoteState] = useState("idle");
+  const [showCustomise, setShowCustomise] = useState(false);
+  const noteTimer = useRef(null);
+  const prefs = kpi.chart?.v === CHART_VERSION ? { ...DEFAULT_CHART, ...kpi.chart } : { ...DEFAULT_CHART };
 
-  const [selectedYear, setSelectedYear] = useState(
-    rangeYears[rangeYears.length - 1],
-  );
+  const { labels, actual, budget, noteKey, caption } = useMemo(() => {
+    if (period === "quarter") {
+      const qs = fyQuarters(fy.startYear, fy.startMonth);
+      const rows = qs.map((q) => {
+        const ms = q.months.map((m) => monthEntry(kpi, m.year, m.month));
+        return { actual: rollUp(ms.map((r) => Number(r.actual)), kpi.aggregate), budget: rollUp(ms.map((r) => Number(r.budget)), kpi.aggregate) };
+      });
+      return {
+        labels: qs.map((q) => `${q.label} ${fyLabel(fy.startYear, fy.startMonth)}`),
+        actual: rows.map((r) => r.actual),
+        budget: rows.map((r) => r.budget),
+        noteKey: `Q:${fy.startYear}`,
+        caption: `Quarters of FY ${fyLabel(fy.startYear, fy.startMonth)}`,
+      };
+    }
+    const months = fyMonths(fy.startYear, fy.startMonth);
+    const rows = months.map((m) => monthEntry(kpi, m.year, m.month));
+    return {
+      labels: months.map((m) => m.label),
+      actual: rows.map((r) => parseNum(r.actual)),
+      budget: rows.map((r) => parseNum(r.budget)),
+      noteKey: currentMonthKey(),
+      caption: `FY ${fyLabel(fy.startYear, fy.startMonth)} · ${months[0].long} → ${months[11].long}`,
+    };
+  }, [kpi, period, fy]);
+
+  const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
 
   useEffect(() => {
-    setSelectedYear(rangeYears[rangeYears.length - 1]);
-  }, [fromDate, toDate]);
+    setNoteText(kpi.periodNotes?.[noteKey] || "");
+    setNoteState("idle");
+  }, [noteKey, kpi.id]);
+
+  const onNoteChange = (text) => {
+    setNoteText(text);
+    setNoteState("saving");
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => {
+      onSaveNote(noteKey, text);
+      setNoteState("saved");
+      setTimeout(() => setNoteState("idle"), 1800);
+    }, 700);
+  };
+  useEffect(() => () => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+  }, []);
+
+  const setPref = (patch) => onSaveChart({ ...prefs, ...patch, v: CHART_VERSION });
+  const varColors = variance.map((v) =>
+    v === null ? "rgba(138,122,116,0.4)" : varianceFavourable(kpi, v) ? T.green : T.red
+  );
+
+  const buildSeries = (type, data, color, extra = {}) => {
+    if (type === "scatter") {
+      return {
+        type: "scatter",
+        data,
+        showLine: false,
+        pointStyle: "circle",
+        pointRadius: 6,
+        pointHoverRadius: 9,
+        pointBackgroundColor: Array.isArray(color) ? color.map((c) => `${c}22`) : "#ffffff",
+        pointBorderColor: color,
+        pointBorderWidth: 2.4,
+        ...extra,
+      };
+    }
+    if (type === "line" || type === "area") {
+      return {
+        type: "line",
+        data,
+        borderColor: color,
+        backgroundColor: type === "area" ? `${color}22` : "transparent",
+        borderWidth: 2.5,
+        fill: type === "area",
+        tension: 0.25,
+        spanGaps: true,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointStyle: "circle",
+        pointBackgroundColor: "#ffffff",
+        pointBorderColor: color,
+        pointBorderWidth: 2.2,
+        ...extra,
+      };
+    }
+    return {
+      type: "bar",
+      data,
+      backgroundColor: Array.isArray(color) ? color.map((c) => `${c}b3`) : `${color}b3`,
+      borderWidth: 0,
+      borderRadius: 4,
+      barPercentage: 0.6,
+      categoryPercentage: 0.78,
+      ...extra,
+    };
+  };
+
+  const varianceData = {
+    labels,
+    datasets: [
+      { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors), __signed: true, __labelColor: T.body },
+    ],
+  };
+  const varianceOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: prefs.showValues ? 20 : 6, bottom: 0 } },
+    plugins: {
+      legend: { display: false },
+      datalabels: { display: false },
+      tooltip: {
+        backgroundColor: T.ink,
+        padding: 10,
+        cornerRadius: 8,
+        callbacks: {
+          title: (items) => labels[items[0].dataIndex],
+          label: (c) =>
+            c.parsed.y === null || c.parsed.y === undefined
+              ? "Variance: no data"
+              : `Variance: ${fmtValue(c.parsed.y, kpi, { signed: true })} (${varianceFavourable(kpi, c.parsed.y) ? "favourable" : "unfavourable"})`,
+        },
+      },
+    },
+    scales: { y: { display: false, grid: { display: false } }, x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
+  };
+
+  const mainData = {
+    labels,
+    datasets: [
+      { label: "Target", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1, __labelColor: prefs.budgetColor },
+      { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2, __labelColor: prefs.actualColor },
+    ],
+  };
+  const mainOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: prefs.showValues ? 20 : 6 } },
+    plugins: {
+      legend: { display: false },
+      datalabels: { display: false },
+      tooltip: {
+        backgroundColor: T.ink,
+        padding: 11,
+        cornerRadius: 8,
+        callbacks: {
+          label: (c) =>
+            c.parsed.y === null || c.parsed.y === undefined ? `${c.dataset.label}: no data` : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}`,
+        },
+      },
+    },
+    scales: {
+      y: {
+        display: prefs.showAxis,
+        grid: { display: prefs.showAxis, color: T.lineSoft },
+        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) },
+      },
+      x: {
+        display: true,
+        grid: { display: false },
+        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+      },
+    },
+  };
+
+  const avgBudget = mean(budget),
+    avgActual = mean(actual),
+    avgVar = mean(variance);
+  const onTarget = variance.filter((v) => v !== null && varianceFavourable(kpi, v)).length;
+  const counted = variance.filter((v) => v !== null).length;
+
+  const stat = (label, value, color) => (
+    <div key={label} style={{ ...cardS, padding: "11px 14px", flex: "1 1 150px" }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{label}</div>
+      <div
+        style={{
+          fontSize: "18px",
+          fontWeight: 700,
+          color: color || T.ink,
+          marginTop: "3px",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+  const dot = (color, filled) => (
+    <span
+      style={{
+        width: 11,
+        height: 11,
+        borderRadius: "50%",
+        border: `2.4px solid ${color}`,
+        background: filled ? color : "#ffffff",
+        display: "inline-block",
+      }}
+    />
+  );
+  const barChip = (color) => <span style={{ width: 11, height: 11, borderRadius: "3px", background: `${color}b3`, display: "inline-block" }} />;
+  const key = (label, swatch) => (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: T.body }}>
+      {swatch}
+      {label}
+    </span>
+  );
+
+  return (
+    <Modal
+      title={`${kpi.name} — Trend`}
+      subtitle={caption}
+      icon={<LineChartIcon size={17} />}
+      onClose={onClose}
+      width={960}
+      footer={
+        <>
+          <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}>
+            <Palette size={13} /> Customise chart
+          </button>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={btnPrimary}>
+            Close
+          </button>
+        </>
+      }
+    >
+      {showCustomise && (
+        <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+            {[
+              ["actualType", "Actual as"],
+              ["budgetType", "Target as"],
+              ["varianceType", "Variance as"],
+            ].map(([k, l]) => (
+              <div key={k}>
+                <label style={labelS}>{l}</label>
+                <select value={prefs[k]} onChange={(e) => setPref({ [k]: e.target.value })} style={selectS}>
+                  {CHART_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+            <div>
+              <label style={labelS}>Show</label>
+              <select
+                value={`${prefs.showValues}|${prefs.showAxis}`}
+                onChange={(e) => {
+                  const [v, a] = e.target.value.split("|");
+                  setPref({ showValues: v === "true", showAxis: a === "true" });
+                }}
+                style={selectS}
+              >
+                <option value="true|false">Value labels, no axis</option>
+                <option value="false|true">Axis, no value labels</option>
+                <option value="true|true">Both</option>
+                <option value="false|false">Neither</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "22px", flexWrap: "wrap", marginTop: "12px" }}>
+            {[
+              { k: "actualColor", l: "Actual colour" },
+              { k: "budgetColor", l: "Target colour" },
+            ].map((c) => (
+              <div key={c.k}>
+                <label style={labelS}>{c.l}</label>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {SWATCHES.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setPref({ [c.k]: s })}
+                      title={s}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: "6px",
+                        background: s,
+                        cursor: "pointer",
+                        border: prefs[c.k] === s ? `2px solid ${T.ink}` : `1px solid ${T.line}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {prefs[c.k] === s && <Check size={12} color="#fff" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
+            marginBottom: "2px",
+          }}
+        >
+          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Target vs Actual</span>
+          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {key("Variance", (
+              <span style={{ display: "inline-flex", gap: "3px" }}>
+                {dot(T.green)}
+                {dot(T.red)}
+              </span>
+            ))}
+            {key("Target", prefs.budgetType === "bar" ? barChip(prefs.budgetColor) : dot(prefs.budgetColor))}
+            {key("Actual", prefs.actualType === "bar" ? barChip(prefs.actualColor) : dot(prefs.actualColor, true))}
+          </span>
+        </div>
+        <div style={{ height: "112px", marginBottom: "-16px" }}>
+          <Chart
+            type="bar"
+            data={varianceData}
+            options={varianceOptions}
+            plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]}
+          />
+        </div>
+        <div style={{ height: "300px" }}>
+          <Chart type="bar" data={mainData} options={mainOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "14px" }}>
+        {stat("Average target", fmtValue(avgBudget, kpi))}
+        {stat("Average actual", fmtValue(avgActual, kpi))}
+        {stat("Average variance", fmtValue(avgVar, kpi, { signed: true }), avgVar === null ? T.ink : varianceFavourable(kpi, avgVar) ? T.green : T.red)}
+        {stat("Periods on target", counted ? `${onTarget} of ${counted}` : "—")}
+      </div>
+
+      <div style={{ ...cardS, marginBottom: "14px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "8px",
+          }}
+        >
+          <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+            <StickyNote size={13} /> Note for {PERIOD_LABEL[period].toLowerCase()}
+          </span>
+          <span style={{ fontSize: "11.5px", color: noteState === "saved" ? T.green : T.muted }}>
+            {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved" : "Saves automatically"}
+          </span>
+        </div>
+        <textarea
+          rows="3"
+          value={noteText}
+          readOnly={readOnly}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="e.g. Q4 campaign drove strong lead growth but conversion dropped."
+          style={{ ...inputS, resize: "vertical" }}
+        />
+      </div>
+
+      <div style={cardS}>
+        <div style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+          <Lightbulb size={13} /> Observations and Opportunities — {PERIOD_LABEL[period].toLowerCase()}
+        </div>
+        <AnalysisBody kpi={kpi} period={period} fy={fy} scope="period" compact />
+      </div>
+    </Modal>
+  );
+};
+
+// ==================== ANALYSIS MODAL ====================
+const localAnalysis = (kpi, period, v, fy) => {
+  const status = statusFromPair(kpi, v.budget, v.actual);
+  const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
+  const fav = varianceFavourable(kpi, variance);
+  return {
+    observations: [
+      `${PERIOD_LABEL[period]} actual sits at ${fmtValue(v.actual, kpi)}${v.budget === null ? " with no target captured." : ` against a target of ${fmtValue(v.budget, kpi)}.`}`,
+      variance === null
+        ? "Variance cannot be computed until a target exists for this period."
+        : `That is a ${fav ? "favourable" : "unfavourable"} variance of ${fmtValue(Math.abs(variance), kpi)}.`,
+      kpi.benchmark !== null ? `The recommended benchmark for this measure is ${fmtValue(kpi.benchmark, kpi)}.` : "No published benchmark for this measure — judge it against your own history.",
+      `${DIRECTIONS.find((d) => d.value === kpi.direction)?.label} for this KPI.`,
+    ],
+    trends:
+      status.key === "green"
+        ? ["Holding inside tolerance, which points to a stable position.", "Watch the month-to-month spread rather than the headline."]
+        : status.key === "amber"
+        ? ["Drifted outside tolerance but not far — this reads as drift rather than a break.", "Two or three more months at this level would move it into critical territory."]
+        : status.key === "red"
+        ? ["The gap is wide enough that a single-month correction is unlikely to close it.", "Treat the trend as broken until two consecutive months recover."]
+        : ["No target captured for this period, so there is nothing to measure the actual against."],
+    issues:
+      status.key === "green"
+        ? ["No material issue at this timeframe."]
+        : status.key === "none"
+        ? ["Capture a target so performance can be judged rather than just reported."]
+        : [`Target is not being met${variance === null ? "" : ` — off by ${fmtValue(Math.abs(variance), kpi)}`}.`, status.key === "red" ? "Severity warrants a named owner and a dated action." : "Unattended, this compounds quietly across periods."],
+    opportunities:
+      status.key === "green"
+        ? ["Consider tightening the target — the current one may no longer be stretching.", "Document what is working and apply it to the weaker measures in this category."]
+        : ["Raise an action against this KPI so it carries into the next governance meeting.", kpi.direction === "higher" ? "Find the largest single constraint and remove it before adding anything." : "Trace the biggest contributors to this number and address the largest one first."],
+  };
+};
+
+const summaryAnalysis = (kpi, fy) => {
+  const rows = PERIODS.map((p) => {
+    const v = periodValues(kpi, p.key, fy);
+    return {
+      key: p.key,
+      label: p.label,
+      v,
+      status: statusFromPair(kpi, v.budget, v.actual),
+      variance: Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null,
+    };
+  });
+  const withData = rows.filter((r) => r.status.key !== "none");
+  const reds = withData.filter((r) => r.status.key === "red");
+  const greens = withData.filter((r) => r.status.key === "green");
+  const mth = rows.find((r) => r.key === "month"),
+    yr = rows.find((r) => r.key === "year");
+  return {
+    observations: [
+      ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no target)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
+      `${withData.length} of ${rows.length} timeframes have both an actual and a target.`,
+    ],
+    trends:
+      withData.length < 2
+        ? ["Not enough timeframes with a target to compare the short term against the long."]
+        : [
+            mth?.status.key !== "none" && yr?.status.key !== "none" && mth.status.key !== yr.status.key
+              ? `The month and the year disagree — ${mth.status.label.toLowerCase()} this month against ${yr.status.label.toLowerCase()} for the year, so treat one as the outlier.`
+              : "Short and long timeframes tell the same story, which makes the signal more trustworthy.",
+            greens.length === withData.length
+              ? "Every timeframe is inside tolerance."
+              : reds.length === withData.length
+              ? "Every timeframe is critical — this is structural, not a bad month."
+              : "The picture is mixed; the shorter timeframe moves first, so watch it for the turn.",
+          ],
+    issues:
+      reds.length === 0 && withData.every((r) => r.status.key === "green")
+        ? ["No timeframe is outside tolerance."]
+        : [
+            ...reds.map((r) => `${r.label} is critical${r.variance === null ? "" : ` — off by ${fmtValue(Math.abs(r.variance), kpi)}`}.`),
+            ...withData.filter((r) => r.status.key === "amber").map((r) => `${r.label} needs attention.`),
+          ],
+    opportunities:
+      reds.length > 0
+        ? ["Raise a dated action — more than one timeframe shows the same gap.", "Check whether the target is still realistic before chasing the actual."]
+        : ["Focus on the timeframe drifting first; the others usually follow.", "Keep the target under review as the team grows."],
+  };
+};
+
+const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) => {
+  const [loading, setLoading] = useState(true);
+  const [analysis, setAnalysis] = useState(null);
+  const [source, setSource] = useState("ai");
+  const [reason, setReason] = useState("");
+
+  const build = useCallback(() => {
+    setLoading(true);
+    const v = periodValues(kpi, period, fy);
+    (async () => {
+      try {
+        const callable = httpsCallable(functions, "generateKpiAnalysis");
+        const res = await callable({
+          module: "Marketing & Sales",
+          kpiName: kpi.name,
+          meaning: kpi.meaning,
+          measured: kpi.measured,
+          units: kpi.units,
+          direction: kpi.direction,
+          benchmark: kpi.benchmark,
+          scope,
+          timeframe: scope === "summary" ? "All timeframes" : PERIOD_LABEL[period],
+          financialYearStartMonth: fy.startMonth,
+          budget: v.budget,
+          actual: v.actual,
+          variance: getVariance(kpi, period, fy),
+          status: getStatus(kpi, period, fy).label,
+          notes: kpi.notes || "",
+          entries: kpi.entries || {},
+        });
+        const d = res?.data;
+        if (d?.observations && d?.opportunities) {
+          setAnalysis({ observations: d.observations || [], trends: d.trends || [], issues: d.issues || [], opportunities: d.opportunities || [] });
+          setSource("ai");
+          return;
+        }
+        throw new Error("The function replied, but not in the expected shape.");
+      } catch (err) {
+        console.error("AI analysis unavailable:", err);
+        setReason(err?.code === "functions/not-found" ? "The generateKpiAnalysis function isn't deployed yet." : errText(err));
+        setSource("local");
+        setAnalysis(scope === "summary" ? summaryAnalysis(kpi, fy) : localAnalysis(kpi, period, v, fy));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [kpi, period, fy, scope]);
+
+  useEffect(() => {
+    build();
+  }, [build]);
+
+  const Section = ({ label, items, color }) => (
+    <div style={{ marginBottom: compact ? "12px" : "18px" }}>
+      <div
+        style={{
+          fontSize: "11px",
+          fontWeight: 700,
+          letterSpacing: "0.7px",
+          textTransform: "uppercase",
+          color,
+          marginBottom: "6px",
+        }}
+      >
+        {label}
+      </div>
+      <ul
+        style={{
+          margin: 0,
+          paddingLeft: "18px",
+          color: T.body,
+          fontSize: compact ? "13px" : "14px",
+          lineHeight: 1.65,
+        }}
+      >
+        {items.map((it, i) => (
+          <li key={i} style={{ marginBottom: "3px" }}>
+            {it}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "10px",
+          marginBottom: "12px",
+          flexWrap: "wrap",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "12px",
+            color: source === "ai" ? T.muted : T.amber,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "6px",
+            lineHeight: 1.5,
+          }}
+        >
+          <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
+          {loading
+            ? "Reviewing…"
+            : source === "ai"
+            ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}`
+            : `Rules-based summary built from your figures. ${reason}`}
+        </span>
+        <button
+          onClick={build}
+          disabled={loading}
+          style={{ ...btnQuiet, padding: "3px 9px", fontSize: "12.5px", opacity: loading ? 0.5 : 1 }}
+        >
+          <RefreshCw size={12} /> Regenerate
+        </button>
+      </div>
+      {loading ? (
+        <div style={{ padding: "22px 0", color: T.muted, fontSize: "13.5px", textAlign: "center" }}>Reviewing {kpi.name}…</div>
+      ) : (
+        analysis && (
+          <>
+            <Section label="Observations" items={analysis.observations} color={T.accent} />
+            <Section label="Trends" items={analysis.trends} color={T.blue} />
+            <Section label="Issues" items={analysis.issues} color={T.red} />
+            <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
+          </>
+        )
+      )}
+    </div>
+  );
+};
+
+const AnalysisModal = ({ kpi, period, fy, onClose }) => (
+  <Modal
+    title="Observations and Opportunities"
+    subtitle={`${kpi.name} · across all timeframes`}
+    icon={<Lightbulb size={17} />}
+    onClose={onClose}
+    width={700}
+    footer={<button onClick={onClose} style={btnPrimary}>Close</button>}
+  >
+    <AnalysisBody kpi={kpi} period={period} fy={fy} scope="summary" />
+  </Modal>
+);
+
+// ==================== ADD ACTION MODAL ====================
+const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClose, onSaved }) => {
+  const [meetings, setMeetings] = useState([]);
+  const [loadingMeetings, setLoadingMeetings] = useState(true);
+  const [meetingId, setMeetingId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const status = getStatus(kpi, period, fy);
+  const variance = getVariance(kpi, period, fy);
+  const v = periodValues(kpi, period, fy);
+
+  const [form, setForm] = useState({
+    title: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
+    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against target ${fmtValue(v.budget, kpi)}${
+      variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`
+    }. Raised from ${tabName} · ${categoryName}.`,
+    category: "Marketing & Sales",
+    assignedTo: "",
+    dueDate: "",
+    status: "In Progress",
+  });
+
+  const meetingDate = (m) => {
+    const dates = (m.instances || []).map((i) => new Date(i.date)).filter((d) => !Number.isNaN(d.getTime())).sort((a, b) => a - b);
+    if (!dates.length) return null;
+    const now = new Date();
+    return (dates.find((d) => d >= now) || dates[dates.length - 1]).toISOString();
+  };
+  const selected = meetings.find((m) => m.id === meetingId) || null;
+
+  const applyDefaults = (id, prev, force = false) => {
+    const m = meetings.find((x) => x.id === id);
+    if (!m) return prev;
+    const d = meetingDate(m);
+    const names = (m.participants || []).map((p) => (typeof p === "string" ? p : p.name || p.email || ""));
+    return {
+      ...prev,
+      category: force || !prev.dueDate ? (m.category || m.department || "Marketing & Sales") : prev.category,
+      dueDate: force || !prev.dueDate ? (d ? new Date(d).toISOString().split("T")[0] : "") : prev.dueDate,
+      assignedTo: names.includes(prev.assignedTo) ? prev.assignedTo : "",
+    };
+  };
+
+  useEffect(() => {
+    (async () => {
+      if (!userId) {
+        setLoadingMeetings(false);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, "governanceCalendar", userId));
+        const list = snap.exists() ? snap.data().meetings || [] : [];
+        setMeetings(list);
+        const dated = list.map((m) => ({ m, d: meetingDate(m) })).filter((x) => x.d);
+        const now = new Date();
+        const up = dated.filter((x) => new Date(x.d) >= now).sort((a, b) => new Date(a.d) - new Date(b.d))[0];
+        const latest = dated.sort((a, b) => new Date(b.d) - new Date(a.d))[0];
+        setMeetingId(up?.m.id || latest?.m.id || list[0]?.id || "");
+      } catch (err) {
+        console.error("Failed to load meetings:", err);
+        setMessage(`Could not load your meetings: ${errText(err)}`);
+      } finally {
+        setLoadingMeetings(false);
+      }
+    })();
+  }, [userId]);
+
+  useEffect(() => {
+    if (meetingId) setForm((p) => applyDefaults(meetingId, p, true));
+  }, [meetingId, meetings.length]);
+
+  const save = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const snap = await getDoc(doc(db, "governanceCalendar", userId));
+      let list = snap.exists() ? snap.data().meetings || [] : [];
+      const action = {
+        id: uid(),
+        title: form.title.trim(),
+        description: form.description.trim(),
+        category: form.category,
+        assignedTo: form.assignedTo.trim(),
+        dueDate: form.dueDate,
+        status: form.status,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        revisedDate: null,
+        sourceModule: "Marketing & Sales",
+        sourceKpi: kpi.name,
+        sourceCategory: `${tabName} · ${categoryName}`,
+      };
+      let targetId = meetingId;
+      if (!targetId) {
+        const meta = RAPS_CATEGORIES.find((c) => c.name === "Marketing & Sales");
+        const holder = {
+          id: uid(),
+          title: "Marketing & Sales Actions",
+          category: "Marketing & Sales",
+          department: "Marketing & Sales",
+          categoryColor: meta.color,
+          categoryBg: "#FCE4EC",
+          departmentColor: meta.color,
+          departmentBg: "#FCE4EC",
+          departments: [],
+          purpose: "Actions raised from Marketing & Sales.",
+          agenda: "",
+          preparations: "",
+          participants: [],
+          isRecurring: false,
+          recurrencePattern: null,
+          instances: [{ instanceId: uid(), date: new Date().toISOString(), time: "09:00", status: "scheduled" }],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          highlights: "",
+          lowlights: "",
+          opportunities: "",
+          priorities: "",
+          actions: [],
+        };
+        list = [...list, holder];
+        targetId = holder.id;
+      }
+      const updated = list.map((m) =>
+        m.id === targetId
+          ? { ...m, actions: [...(m.actions || []), { ...action, meetingId: m.id }], updatedAt: new Date().toISOString() }
+          : m
+      );
+      await setDoc(doc(db, "governanceCalendar", userId), { meetings: updated, updatedAt: new Date().toISOString(), userId }, { merge: true });
+      onSaved(updated.find((m) => m.id === targetId)?.title || "your calendar");
+      onClose();
+    } catch (err) {
+      console.error("Failed to save action:", err);
+      setMessage(`Could not save the action: ${errText(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Add Action"
+      subtitle={`${kpi.name} · ${PERIOD_LABEL[period]}`}
+      icon={<Plus size={17} />}
+      onClose={onClose}
+      width={640}
+      footer={
+        <>
+          <button onClick={onClose} style={btnGhost}>Cancel</button>
+          <button onClick={save} disabled={saving || !form.title.trim()} style={{ ...btnPrimary, opacity: saving || !form.title.trim() ? 0.6 : 1 }}>
+            {saving ? "Saving..." : "Save Action"}
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", borderRadius: "10px", background: status.bg, border: `1px solid ${status.color}33`, marginBottom: "16px" }}>
+        <StatusIcon status={status} size={20} />
+        <div style={{ fontSize: "14px", color: T.body }}><strong style={{ color: T.accent }}>{kpi.name}</strong> is {status.label.toLowerCase()} for {PERIOD_LABEL[period].toLowerCase()}.</div>
+      </div>
+      <div style={{ marginBottom: "14px" }}><label style={labelS}>Action *</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={inputS} /></div>
+      <div style={{ marginBottom: "14px" }}><label style={labelS}>Description</label><textarea rows="3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inputS, resize: "vertical" }} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+        <div>
+          <label style={labelS}>Attach to meeting</label>
+          {loadingMeetings ? <div style={{ fontSize: "13px", color: T.body }}>Loading...</div> : meetings.length === 0 ? (
+            <div style={{ fontSize: "12.5px", color: T.body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "9px 11px" }}>No meetings yet — filed under "Marketing & Sales Actions".</div>
+          ) : (
+            <select value={meetingId} onChange={(e) => { setMeetingId(e.target.value); setForm((p) => applyDefaults(e.target.value, p)); }} style={selectS}>
+              {meetings.map((m) => { const d = meetingDate(m); return <option key={m.id} value={m.id}>{m.title}{d ? ` — ${fmtDMY(d)}` : ""}</option>; })}
+            </select>
+          )}
+        </div>
+        <div>
+          <label style={labelS}>Category</label>
+          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={selectS}>
+            {RAPS_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+        <div>
+          <label style={labelS}>By whom</label>
+          {(selected?.participants || []).length > 0 ? (
+            <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={selectS}>
+              <option value="">Unassigned</option>
+              {selected.participants.map((p, i) => { const n = typeof p === "string" ? p : p.name || p.email || "Participant"; return <option key={i} value={n}>{n}</option>; })}
+            </select>
+          ) : <input value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={inputS} placeholder="Owner" />}
+        </div>
+        <div><label style={labelS}>By when</label><input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inputS} /></div>
+        <div><label style={labelS}>Status</label><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={selectS}>{ACTION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+      </div>
+      {message && <div style={{ color: T.red, fontSize: "13px", marginTop: "12px" }}>{message}</div>}
+    </Modal>
+  );
+};
+
+// ==================== NOTES MODAL ====================
+// ==================== NOTES MODAL ====================
+const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
+  const [notes, setNotes] = useState(kpi.notes || "");
+  const [state, setState] = useState("idle");
+  const timer = useRef(null);
+  const change = (t) => {
+    setNotes(t);
+    setState("saving");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      onSave(t);
+      setState("saved");
+      setTimeout(() => setState("idle"), 1800);
+    }, 700);
+  };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  return (
+    <Modal title={`Notes — ${kpi.name}`} icon={<StickyNote size={17} />} onClose={onClose} footer={<><span style={{ flex: 1, fontSize: "12.5px", color: state === "saved" ? T.green : T.muted, textAlign: "left" }}>{state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Saves automatically"}</span><button onClick={onClose} style={btnPrimary}>Close</button></>}>
+      <label style={labelS}>Context, anomalies or anything worth remembering about this KPI</label>
+      <textarea rows="9" value={notes} readOnly={readOnly} onChange={(e) => change(e.target.value)} style={{ ...inputS, resize: "vertical" }} />
+    </Modal>
+  );
+};
+
+// ==================== ADD CHOOSER ====================
+const AddChooser = ({ onPick, onClose }) => (
+  <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+      {[
+        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and target figures against the KPIs you already track." },
+        { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI", body: "Create a custom marketing & sales metric under any section or category." },
+      ].map((o) => (
+        <button key={o.key} onClick={() => onPick(o.key)} style={{ padding: "22px 20px", borderRadius: "12px", border: `1px solid ${T.lineStrong}`, background: T.bg, cursor: "pointer", textAlign: "left", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: "10px" }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.accentTint; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.lineStrong; e.currentTarget.style.background = T.bg; }}>
+          <span style={{ color: T.accent }}>{o.icon}</span>
+          <span style={{ fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{o.title}</span>
+          <span style={{ fontSize: "13px", color: T.body, lineHeight: 1.5 }}>{o.body}</span>
+        </button>
+      ))}
+    </div>
+  </Modal>
+);
+
+// ==================== ADD DATA WIZARD ====================
+const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, currentTabId }) => {
+  const editableTabs = tabs.filter((t) => t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
+  const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
+  const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
+  const [periodKey, setPeriodKey] = useState(null);
+  const [draft, setDraft] = useState({});
+  const [saveState, setSaveState] = useState("idle");
+  const timer = useRef(null);
+
+  const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
+  const months = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
+
+  useEffect(() => {
+    if (!months.length) return;
+    if (months.some((m) => m.key === periodKey)) return;
+    setPeriodKey(months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
+  }, [months]);
+
+  const monthMeta = months.find((m) => m.key === periodKey) || months[0];
+  const monthIndex = months.findIndex((m) => m.key === periodKey);
+
+  const rows = useMemo(() => {
+    if (!tab) return [];
+    const out = [];
+    tab.categories.forEach((cat) => (cat.kpis || []).forEach((k) => out.push({ kpi: k, category: cat.name })));
+    return out;
+  }, [tab]);
+
+  const draftKey = (kpiId, which) => `${monthMeta?.month}|${kpiId}|${which}`;
+
+  const value = (kpi, which) => {
+    const dk = draftKey(kpi.id, which);
+    if (draft[dk] !== undefined) return draft[dk];
+    if (!kpi.field) return "";
+    const path = which === "actual" ? kpi.field.a : kpi.field.b;
+    if (!path) return "";
+    const raw = kpi.field.scalar ? atPath(docs[kpi.field.src], path) : atPath(docs[kpi.field.src], path)?.[monthMeta.month];
+    return raw === undefined || raw === null ? "" : String(raw);
+  };
+
+  const setValue = (kpi, which, raw) => {
+    const dk = draftKey(kpi.id, which);
+    setDraft((p) => ({ ...p, [dk]: raw }));
+    setSaveState("saving");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      await onSaveField({ kpi, which, raw, monthIndex: monthMeta.month });
+      onSavePrefs({ tabId, startYear });
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 1800);
+    }, 800);
+  };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const cell = { ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" };
+  const th = { ...panelTh, position: "sticky", top: 0, zIndex: 2, verticalAlign: "top" };
+  const yearOptions = [
+    { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
+    { value: fy.startYear, badge: "FY", label: fyLabel(fy.startYear, fy.startMonth) },
+    { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
+  ];
+
+  if (!tab) {
+    return <Modal title="Add Data" icon={<Database size={17} />} onClose={onClose} width={520} footer={<button onClick={onClose} style={btnPrimary}>Close</button>}><p style={{ fontSize: "14px", color: T.body, margin: 0 }}>Nothing here takes direct input.</p></Modal>;
+  }
+
+  return (
+    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />} onClose={onClose} width={800} footer={<><button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button><span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}</span><button onClick={onClose} style={btnPrimary}>Done</button></>}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+        <div><label style={labelS}>Financial year</label><select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>{yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}</select></div>
+        <div><label style={labelS}>Section</label><select value={tabId} onChange={(e) => setTabId(e.target.value)} style={selectS}>{editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
+        <div style={{ flex: 1 }}><label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label><select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>{months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}</select></div>
+        <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
+        <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+      </div>
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead><tr><th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th><th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th><th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th></tr></thead>
+            <tbody>
+              {rows.map(({ kpi, category }, i) => (
+                <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
+                  <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    <div style={{ fontWeight: 600 }}>{kpi.name}</div>
+                    <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}</div>
+                  </td>
+                  {["actual", "budget"].map((which) => {
+                    const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+                    return (
+                      <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
+                        {!path ? <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>{which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}</div>
+                        : kpi.options ? <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}><option value="">—</option>{kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+                        : <input type="number" step="any" value={value(kpi, which)} placeholder="—" onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ==================== ADD KPI WIZARD ====================
+const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
+  const [tabId, setTabId] = useState(tabs.some((t) => t.id === currentTabId) ? currentTabId : tabs[0]?.id);
+  const [catChoice, setCatChoice] = useState("");
+  const [newCat, setNewCat] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: "", units: "#", direction: "higher", aggregate: "avg", meaning: "", measured: "" });
+
+  const tab = tabs.find((t) => t.id === tabId);
+  const cats = tab?.categories || [];
+  useEffect(() => { if (cats.length && !catChoice) setCatChoice(cats[0].name); }, [tabId]);
+  const creatingCat = catChoice === "__new__";
+  const catName = creatingCat ? newCat.trim() : catChoice;
+  const canSave = form.name.trim() && catName && form.meaning.trim() && form.measured.trim();
+
+  const commit = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    await onSave({ id: `custom_${uid().slice(0, 8)}`, tabId, category: catName, name: form.name.trim(), units: form.units, direction: form.direction, aggregate: form.aggregate, meaning: form.meaning.trim(), measured: form.measured.trim() });
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <Modal title="Add KPI" subtitle="A custom marketing & sales metric you capture by hand each month" icon={<Sparkles size={17} />} onClose={onClose} width={720} footer={<><button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button><div style={{ flex: 1 }} /><button onClick={commit} disabled={!canSave || saving} style={{ ...btnPrimary, opacity: canSave && !saving ? 1 : 0.5 }}>{saving ? "Saving..." : "Create KPI"}</button></>}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+        <div><label style={labelS}>Section</label><select value={tabId} onChange={(e) => { setTabId(e.target.value); setCatChoice(""); }} style={selectS}>{tabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+        <div><label style={labelS}>Category</label><select value={catChoice} onChange={(e) => setCatChoice(e.target.value)} style={selectS}><option value="">Select…</option>{cats.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}<option value="__new__">＋ New category…</option></select>{creatingCat && <input value={newCat} onChange={(e) => setNewCat(e.target.value)} style={{ ...inputS, marginTop: "8px" }} placeholder="New category name" />}</div>
+      </div>
+      <div style={{ marginBottom: "14px" }}><label style={labelS}>KPI name *</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputS} placeholder="e.g. Lead Conversion Rate" /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+        <div><label style={labelS}>Units</label><select value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} style={selectS}><option value="#">Count (#)</option><option value="%">Percent (%)</option><option value="R">Currency (R)</option><option value="hrs">Hours</option><option value="days">Days</option><option value="units">Units</option></select></div>
+        <div><label style={labelS}>What counts as good?</label><select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })} style={selectS}>{DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}</select></div>
+        <div><label style={labelS}>Rolling up</label><select value={form.aggregate} onChange={(e) => setForm({ ...form, aggregate: e.target.value })} style={selectS}><option value="avg">AVERAGE the months — rates, ratios</option><option value="sum">SUM the months — counts, hours, rand</option></select></div>
+      </div>
+      <div style={{ marginBottom: "14px" }}><label style={labelS}>What does this KPI mean? *</label><textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })} style={{ ...inputS, resize: "vertical" }} placeholder="In plain words — anyone reading the dashboard should get it from this sentence." /></div>
+      <div><label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}><Sigma size={13} /> How is this KPI measured? *</label><textarea rows="4" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })} style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }} placeholder={"=SUM(Converted) / SUM(TotalLeads) * 100"} /><p style={{ fontSize: "12px", color: T.muted, marginTop: "7px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}><Info size={12} /> Use Excel functions and named ranges — SUM, AVERAGE, COUNTIF, COUNTIFS.</p></div>
+    </Modal>
+  );
+};
+
+// ==================== UNIVERSAL ADD DATA MODAL ====================
+const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, loading, fromDate, toDate }) => {
+  const [activeTab, setActiveTab] = useState(currentTab);
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const getRangeMonths = (fromYM, toYM) => {
+    const SHORTS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const result = [];
+    let [y, m] = fromYM.split("-").map(Number);
+    const [toY, toM] = toYM.split("-").map(Number);
+    while (y < toY || (y === toY && m <= toM)) {
+      result.push({ year: y, monthIdx: m - 1, label: `${SHORTS[m - 1]} ${y}` });
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    return result;
+  };
+
+  const rangeMonths = fromDate && toDate ? getRangeMonths(fromDate, toDate) : null;
+  const rangeYears = rangeMonths ? [...new Set(rangeMonths.map((r) => r.year))] : [toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()];
+  const [selectedYear, setSelectedYear] = useState(rangeYears[rangeYears.length - 1]);
+
+  useEffect(() => { setSelectedYear(rangeYears[rangeYears.length - 1]); }, [fromDate, toDate]);
 
   const tabs = [
     { id: "revenue-concentration", label: "Revenue Concentration" },
@@ -953,50 +2358,29 @@ const UniversalAddDataModal = ({
     notes: "",
   });
 
-  useEffect(() => {
-    if (isOpen && user) loadDataForTab(activeTab);
-  }, [isOpen, activeTab, user, selectedYear]);
+  useEffect(() => { if (isOpen && user) loadDataForTab(activeTab); }, [isOpen, activeTab, user, selectedYear]);
 
   const loadDataForTab = async (tabId) => {
     try {
       switch (tabId) {
         case "revenue-concentration":
-          const concDoc = await getDoc(
-            doc(
-              db,
-              "pipelineData",
-              `${user.uid}_concentration_${selectedYear}`,
-            ),
-          );
+          const concDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`));
           if (concDoc.exists()) {
             const d = concDoc.data();
             setRevenueConcentrationData({
-              revenueChannels:
-                d.revenueChannels ||
-                revenueConcentrationData.revenueChannels,
-              customerSegments:
-                d.customerSegments ||
-                revenueConcentrationData.customerSegments,
-              revenueByCustomer:
-                d.revenueByCustomer ||
-                revenueConcentrationData.revenueByCustomer,
+              revenueChannels: d.revenueChannels || revenueConcentrationData.revenueChannels,
+              customerSegments: d.customerSegments || revenueConcentrationData.customerSegments,
+              revenueByCustomer: d.revenueByCustomer || revenueConcentrationData.revenueByCustomer,
               notes: d.notes || "",
             });
           }
           break;
         case "demand-sustainability":
-          const sustDoc = await getDoc(
-            doc(
-              db,
-              "pipelineData",
-              `${user.uid}_sustainability_${selectedYear}`,
-            ),
-          );
+          const sustDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`));
           if (sustDoc.exists()) {
             const d = sustDoc.data();
             setDemandSustainabilityData({
-              repeatCustomerRate:
-                d.repeatCustomerRate?.toString() || "",
+              repeatCustomerRate: d.repeatCustomerRate?.toString() || "",
               churnRate: d.churnRate?.toString() || "",
               campaigns: d.campaigns || demandSustainabilityData.campaigns,
               notes: d.notes || "",
@@ -1004,113 +2388,41 @@ const UniversalAddDataModal = ({
           }
           break;
       }
-    } catch (error) {
-      console.error(`Error loading data for ${tabId}:`, error);
-    }
+    } catch (error) { console.error(`Error loading data for ${tabId}:`, error); }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!user) {
-      alert("Please log in to save data");
-      return;
-    }
+    if (!user) { alert("Please log in to save data"); return; }
     try {
       switch (activeTab) {
         case "revenue-concentration":
-          const validCustomers = revenueConcentrationData.revenueByCustomer.filter(
-            (c) => c.name.trim() !== "" || parseFloat(c.revenue) > 0,
-          );
-          await setDoc(
-            doc(
-              db,
-              "pipelineData",
-              `${user.uid}_concentration_${selectedYear}`,
-            ),
-            {
-              userId: user.uid,
-              year: selectedYear,
-              revenueChannels: revenueConcentrationData.revenueChannels.map(
-                (c) => ({
-                  name: c.name,
-                  revenue: Number.parseFloat(c.revenue) || 0,
-                  spend: Number.parseFloat(c.spend) || 0,
-                }),
-              ),
-              customerSegments: revenueConcentrationData.customerSegments.map(
-                (s) => ({
-                  name: s.name,
-                  revenue: Number.parseFloat(s.revenue) || 0,
-                  customerCount:
-                    Number.parseFloat(s.customerCount) || 0,
-                }),
-              ),
-              revenueByCustomer: validCustomers.map((c) => ({
-                name: c.name,
-                revenue: Number.parseFloat(c.revenue) || 0,
-              })),
-              notes: revenueConcentrationData.notes,
-              lastUpdated: new Date().toISOString(),
-            },
-          );
+          const validCustomers = revenueConcentrationData.revenueByCustomer.filter((c) => c.name.trim() !== "" || parseFloat(c.revenue) > 0);
+          await setDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`), {
+            userId: user.uid, year: selectedYear,
+            revenueChannels: revenueConcentrationData.revenueChannels.map((c) => ({ name: c.name, revenue: Number.parseFloat(c.revenue) || 0, spend: Number.parseFloat(c.spend) || 0 })),
+            customerSegments: revenueConcentrationData.customerSegments.map((s) => ({ name: s.name, revenue: Number.parseFloat(s.revenue) || 0, customerCount: Number.parseFloat(s.customerCount) || 0 })),
+            revenueByCustomer: validCustomers.map((c) => ({ name: c.name, revenue: Number.parseFloat(c.revenue) || 0 })),
+            notes: revenueConcentrationData.notes, lastUpdated: new Date().toISOString(),
+          });
           break;
         case "demand-sustainability":
-          await setDoc(
-            doc(
-              db,
-              "pipelineData",
-              `${user.uid}_sustainability_${selectedYear}`,
-            ),
-            {
-              userId: user.uid,
-              year: selectedYear,
-              repeatCustomerRate:
-                Number.parseFloat(
-                  demandSustainabilityData.repeatCustomerRate,
-                ) || 0,
-              churnRate:
-                Number.parseFloat(demandSustainabilityData.churnRate) ||
-                0,
-              campaigns: demandSustainabilityData.campaigns.map((c) => ({
-                name: c.name,
-                cost: Number.parseFloat(c.cost) || 0,
-                revenue: Number.parseFloat(c.revenue) || 0,
-              })),
-              notes: demandSustainabilityData.notes,
-              lastUpdated: new Date().toISOString(),
-            },
-          );
+          await setDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`), {
+            userId: user.uid, year: selectedYear,
+            repeatCustomerRate: Number.parseFloat(demandSustainabilityData.repeatCustomerRate) || 0,
+            churnRate: Number.parseFloat(demandSustainabilityData.churnRate) || 0,
+            campaigns: demandSustainabilityData.campaigns.map((c) => ({ name: c.name, cost: Number.parseFloat(c.cost) || 0, revenue: Number.parseFloat(c.revenue) || 0 })),
+            notes: demandSustainabilityData.notes, lastUpdated: new Date().toISOString(),
+          });
           break;
       }
       if (onSave) onSave();
       alert("Data saved successfully!");
-    } catch (error) {
-      console.error("Error saving data:", error);
-      alert("Error saving data. Please try again.");
-    }
+    } catch (error) { console.error("Error saving data:", error); alert("Error saving data. Please try again."); }
   };
 
   const inputCls = "w-full p-2 rounded border border-[#e8ddd4] text-sm";
   const labelCls = "text-xs text-mediumBrown font-semibold";
-
-  const updateCustomer = (index, field, value) => {
-    const newList = [...revenueConcentrationData.revenueByCustomer];
-    newList[index] = { ...newList[index], [field]: value };
-    setRevenueConcentrationData({
-      ...revenueConcentrationData,
-      revenueByCustomer: newList,
-    });
-  };
-
-  const addCustomerRow = () => {
-    setRevenueConcentrationData((prev) => ({
-      ...prev,
-      revenueByCustomer: [
-        ...prev.revenueByCustomer,
-        { name: "", revenue: "" },
-      ],
-    }));
-  };
 
   if (!isOpen) return null;
 
@@ -1118,27 +2430,12 @@ const UniversalAddDataModal = ({
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
       <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[1400px] max-h-[90vh] overflow-auto w-[95%]">
         <div className="flex justify-between items-center mb-5">
-          <h3 className="text-mediumBrown m-0">
-            Add Marketing & Sales Data
-          </h3>
-          <button
-            onClick={onClose}
-            className="bg-transparent border-0 text-2xl text-mediumBrown cursor-pointer p-0 leading-none"
-          >
-            ×
-          </button>
+          <h3 className="text-mediumBrown m-0">Add Marketing & Sales Data</h3>
+          <button onClick={onClose} className="bg-transparent border-0 text-2xl text-mediumBrown cursor-pointer p-0 leading-none">×</button>
         </div>
         <div className="flex gap-1 mb-5 flex-wrap border-b-2 border-[#e8ddd4] pb-2.5">
           {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-2.5 border-0 rounded-t-md cursor-pointer font-semibold text-sm transition-all duration-300 -mb-0.5 ${
-                activeTab === tab.id
-                  ? "bg-mediumBrown text-[#fdfcfb] border-b-2 border-mediumBrown"
-                  : "bg-[#e8ddd4] text-mediumBrown border-b-2 border-transparent"
-              }`}
-            >
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 border-0 rounded-t-md cursor-pointer font-semibold text-sm transition-all duration-300 -mb-0.5 ${activeTab === tab.id ? "bg-mediumBrown text-[#fdfcfb] border-b-2 border-mediumBrown" : "bg-[#e8ddd4] text-mediumBrown border-b-2 border-transparent"}`}>
               {tab.label}
             </button>
           ))}
@@ -1146,19 +2443,9 @@ const UniversalAddDataModal = ({
 
         {rangeYears.length > 1 && (
           <div className="flex gap-2 mb-5 flex-wrap items-center">
-            <span className="text-mediumBrown text-sm font-semibold mr-1">
-              Year:
-            </span>
+            <span className="text-mediumBrown text-sm font-semibold mr-1">Year:</span>
             {rangeYears.map((yr) => (
-              <button
-                key={yr}
-                onClick={() => setSelectedYear(yr)}
-                className={`px-4 py-1.5 border-0 rounded-md cursor-pointer font-semibold text-sm ${
-                  selectedYear === yr
-                    ? "bg-mediumBrown text-[#fdfcfb]"
-                    : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"
-                }`}
-              >
+              <button key={yr} onClick={() => setSelectedYear(yr)} className={`px-4 py-1.5 border-0 rounded-md cursor-pointer font-semibold text-sm ${selectedYear === yr ? "bg-mediumBrown text-[#fdfcfb]" : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"}`}>
                 {yr}
               </button>
             ))}
@@ -1167,302 +2454,63 @@ const UniversalAddDataModal = ({
 
         {activeTab === "revenue-concentration" && (
           <div>
-            <h4 className="text-mediumBrown mb-5">
-              Revenue Concentration Data
-            </h4>
-            <h5 className="text-mediumBrown mb-3 font-semibold">
-              Revenue by Channel
-            </h5>
-            {revenueConcentrationData.revenueChannels.map(
-              (channel, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5"
-                >
-                  <input
-                    type="text"
-                    value={channel.name}
-                    onChange={(e) => {
-                      const n = [
-                        ...revenueConcentrationData.revenueChannels,
-                      ];
-                      n[index].name = e.target.value;
-                      setRevenueConcentrationData({
-                        ...revenueConcentrationData,
-                        revenueChannels: n,
-                      });
-                    }}
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                  <input
-                    type="number"
-                    value={channel.revenue}
-                    onChange={(e) => {
-                      const n = [
-                        ...revenueConcentrationData.revenueChannels,
-                      ];
-                      n[index].revenue = e.target.value;
-                      setRevenueConcentrationData({
-                        ...revenueConcentrationData,
-                        revenueChannels: n,
-                      });
-                    }}
-                    placeholder="Revenue (R)"
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                  <input
-                    type="number"
-                    value={channel.spend}
-                    onChange={(e) => {
-                      const n = [
-                        ...revenueConcentrationData.revenueChannels,
-                      ];
-                      n[index].spend = e.target.value;
-                      setRevenueConcentrationData({
-                        ...revenueConcentrationData,
-                        revenueChannels: n,
-                      });
-                    }}
-                    placeholder="Marketing Spend (R)"
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                </div>
-              ),
-            )}
-            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">
-              Customer Segments
-            </h5>
-            {revenueConcentrationData.customerSegments.map(
-              (segment, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5"
-                >
-                  <input
-                    type="text"
-                    value={segment.name}
-                    onChange={(e) => {
-                      const n = [
-                        ...revenueConcentrationData.customerSegments,
-                      ];
-                      n[index].name = e.target.value;
-                      setRevenueConcentrationData({
-                        ...revenueConcentrationData,
-                        customerSegments: n,
-                      });
-                    }}
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                  <input
-                    type="number"
-                    value={segment.revenue}
-                    onChange={(e) => {
-                      const n = [
-                        ...revenueConcentrationData.customerSegments,
-                      ];
-                      n[index].revenue = e.target.value;
-                      setRevenueConcentrationData({
-                        ...revenueConcentrationData,
-                        customerSegments: n,
-                      });
-                    }}
-                    placeholder="Revenue (R)"
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                  <input
-                    type="number"
-                    value={segment.customerCount}
-                    onChange={(e) => {
-                      const n = [
-                        ...revenueConcentrationData.customerSegments,
-                      ];
-                      n[index].customerCount = e.target.value;
-                      setRevenueConcentrationData({
-                        ...revenueConcentrationData,
-                        customerSegments: n,
-                      });
-                    }}
-                    placeholder="# Customers"
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                </div>
-              ),
-            )}
-            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">
-              Revenue by Customer
-            </h5>
-            {revenueConcentrationData.revenueByCustomer.map(
-              (cust, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[1fr_1fr] gap-2.5 mb-2.5"
-                >
-                  <input
-                    type="text"
-                    value={cust.name}
-                    onChange={(e) =>
-                      updateCustomer(index, "name", e.target.value)
-                    }
-                    placeholder="Customer name"
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                  <input
-                    type="number"
-                    value={cust.revenue}
-                    onChange={(e) =>
-                      updateCustomer(index, "revenue", e.target.value)
-                    }
-                    placeholder="Revenue (R)"
-                    className="p-2 rounded border border-[#e8ddd4]"
-                  />
-                </div>
-              ),
-            )}
-            <button
-              type="button"
-              onClick={addCustomerRow}
-              className="mt-2 px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown rounded text-sm"
-            >
-              + Add another customer
-            </button>
+            <h4 className="text-mediumBrown mb-5">Revenue Concentration Data</h4>
+            <h5 className="text-mediumBrown mb-3 font-semibold">Revenue by Channel</h5>
+            {revenueConcentrationData.revenueChannels.map((channel, index) => (
+              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
+                <input type="text" value={channel.name} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
+                <input type="number" value={channel.revenue} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
+                <input type="number" value={channel.spend} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].spend = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} placeholder="Marketing Spend (R)" className="p-2 rounded border border-[#e8ddd4]" />
+              </div>
+            ))}
+            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">Customer Segments</h5>
+            {revenueConcentrationData.customerSegments.map((segment, index) => (
+              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
+                <input type="text" value={segment.name} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
+                <input type="number" value={segment.revenue} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
+                <input type="number" value={segment.customerCount} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].customerCount = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} placeholder="# Customers" className="p-2 rounded border border-[#e8ddd4]" />
+              </div>
+            ))}
+            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">Revenue by Customer</h5>
+            {revenueConcentrationData.revenueByCustomer.map((cust, index) => (
+              <div key={index} className="grid grid-cols-[1fr_1fr] gap-2.5 mb-2.5">
+                <input type="text" value={cust.name} onChange={(e) => { const n = [...revenueConcentrationData.revenueByCustomer]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueByCustomer: n }); }} placeholder="Customer name" className="p-2 rounded border border-[#e8ddd4]" />
+                <input type="number" value={cust.revenue} onChange={(e) => { const n = [...revenueConcentrationData.revenueByCustomer]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueByCustomer: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
+              </div>
+            ))}
+            <button type="button" onClick={() => setRevenueConcentrationData((prev) => ({ ...prev, revenueByCustomer: [...prev.revenueByCustomer, { name: "", revenue: "" }] }))} className="mt-2 px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown rounded text-sm">+ Add another customer</button>
             <div className="mb-5 mt-7">
-              <label className="block mb-2.5 text-mediumBrown font-semibold">
-                Notes:
-              </label>
-              <textarea
-                value={revenueConcentrationData.notes}
-                onChange={(e) =>
-                  setRevenueConcentrationData({
-                    ...revenueConcentrationData,
-                    notes: e.target.value,
-                  })
-                }
-                placeholder="Add any additional notes..."
-                className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]"
-              />
+              <label className="block mb-2.5 text-mediumBrown font-semibold">Notes:</label>
+              <textarea value={revenueConcentrationData.notes} onChange={(e) => setRevenueConcentrationData({ ...revenueConcentrationData, notes: e.target.value })} placeholder="Add any additional notes..." className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]" />
             </div>
           </div>
         )}
 
         {activeTab === "demand-sustainability" && (
           <div>
-            <h4 className="text-mediumBrown mb-5">
-              Demand Sustainability Data
-            </h4>
+            <h4 className="text-mediumBrown mb-5">Demand Sustainability Data</h4>
             <div className="grid grid-cols-2 gap-[15px] mb-7">
-              <div>
-                <label className={labelCls}>Repeat Customer Rate (%)</label>
-                <input
-                  type="number"
-                  value={demandSustainabilityData.repeatCustomerRate}
-                  onChange={(e) =>
-                    setDemandSustainabilityData({
-                      ...demandSustainabilityData,
-                      repeatCustomerRate: e.target.value,
-                    })
-                  }
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Churn Rate (%)</label>
-                <input
-                  type="number"
-                  value={demandSustainabilityData.churnRate}
-                  onChange={(e) =>
-                    setDemandSustainabilityData({
-                      ...demandSustainabilityData,
-                      churnRate: e.target.value,
-                    })
-                  }
-                  className={inputCls}
-                />
-              </div>
+              <div><label className={labelCls}>Repeat Customer Rate (%)</label><input type="number" value={demandSustainabilityData.repeatCustomerRate} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, repeatCustomerRate: e.target.value })} className={inputCls} /></div>
+              <div><label className={labelCls}>Churn Rate (%)</label><input type="number" value={demandSustainabilityData.churnRate} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, churnRate: e.target.value })} className={inputCls} /></div>
             </div>
-            <h5 className="text-mediumBrown mb-3 font-semibold">
-              Campaigns
-            </h5>
+            <h5 className="text-mediumBrown mb-3 font-semibold">Campaigns</h5>
             {demandSustainabilityData.campaigns.map((campaign, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5"
-              >
-                <input
-                  type="text"
-                  value={campaign.name}
-                  onChange={(e) => {
-                    const n = [...demandSustainabilityData.campaigns];
-                    n[index].name = e.target.value;
-                    setDemandSustainabilityData({
-                      ...demandSustainabilityData,
-                      campaigns: n,
-                    });
-                  }}
-                  className="p-2 rounded border border-[#e8ddd4]"
-                />
-                <input
-                  type="number"
-                  value={campaign.cost}
-                  onChange={(e) => {
-                    const n = [...demandSustainabilityData.campaigns];
-                    n[index].cost = e.target.value;
-                    setDemandSustainabilityData({
-                      ...demandSustainabilityData,
-                      campaigns: n,
-                    });
-                  }}
-                  placeholder="Cost (R)"
-                  className="p-2 rounded border border-[#e8ddd4]"
-                />
-                <input
-                  type="number"
-                  value={campaign.revenue}
-                  onChange={(e) => {
-                    const n = [...demandSustainabilityData.campaigns];
-                    n[index].revenue = e.target.value;
-                    setDemandSustainabilityData({
-                      ...demandSustainabilityData,
-                      campaigns: n,
-                    });
-                  }}
-                  placeholder="Revenue (R)"
-                  className="p-2 rounded border border-[#e8ddd4]"
-                />
+              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
+                <input type="text" value={campaign.name} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].name = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
+                <input type="number" value={campaign.cost} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].cost = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} placeholder="Cost (R)" className="p-2 rounded border border-[#e8ddd4]" />
+                <input type="number" value={campaign.revenue} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].revenue = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
               </div>
             ))}
             <div className="mb-5">
-              <label className="block mb-2.5 text-mediumBrown font-semibold">
-                Notes:
-              </label>
-              <textarea
-                value={demandSustainabilityData.notes}
-                onChange={(e) =>
-                  setDemandSustainabilityData({
-                    ...demandSustainabilityData,
-                    notes: e.target.value,
-                  })
-                }
-                placeholder="Add any additional notes..."
-                className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]"
-              />
+              <label className="block mb-2.5 text-mediumBrown font-semibold">Notes:</label>
+              <textarea value={demandSustainabilityData.notes} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, notes: e.target.value })} placeholder="Add any additional notes..." className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]" />
             </div>
           </div>
         )}
 
         <div className="flex gap-2.5 justify-end mt-5">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 bg-[#e8ddd4] text-mediumBrown border-0 rounded-md cursor-pointer font-semibold"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className={`px-5 py-2.5 bg-mediumBrown text-[#fdfcfb] border-0 rounded-md font-semibold ${
-              loading ? "opacity-70 cursor-wait" : "cursor-pointer"
-            }`}
-          >
+          <button onClick={onClose} className="px-5 py-2.5 bg-[#e8ddd4] text-mediumBrown border-0 rounded-md cursor-pointer font-semibold">Cancel</button>
+          <button onClick={handleSubmit} disabled={loading} className={`px-5 py-2.5 bg-mediumBrown text-[#fdfcfb] border-0 rounded-md font-semibold ${loading ? "opacity-70 cursor-wait" : "cursor-pointer"}`}>
             {loading ? "Saving..." : "Save Data"}
           </button>
         </div>
@@ -1471,2083 +2519,852 @@ const UniversalAddDataModal = ({
   );
 };
 
-// ==================== KPI CARD ====================
+// ==================== MAIN COMPONENT ====================
+
+const PREFS_KEY = "marketingSales.addData.prefs";
+const META_DOC = "marketingSalesKpiMeta";
+
+const MarketingSales = () => {
+  const [user, setUser] = useState(null);
+  const [fyStartMonth, setFyStartMonth] = useState(0);
+  const [docs, setDocs] = useState({});
+  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [] });
+  const [loading, setLoading] = useState(true);
+  const [notification, setNotification] = useState(null);
+  const [dataPrefs, setDataPrefs] = useState(null);
+  const [showAbout, setShowAbout] = useState(false);
 
-const KPITripleCard = ({
-  title,
-  actualValue,
-  budgetValue,
-  unit = "number",
-  isPercentage = false,
-  goodDirection = "up",
-  onEyeClick,
-  onAddNotes,
-  onTrend,
-  notes,
-  currentUser,
-  dataKey,
-  section = "general", // Add section prop
-  contextData = {},
-}) => {
-  const [expanded, setExpanded] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-  const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
-  
-  const variance = actualValue - budgetValue;
-  const variancePercent =
-    budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
-
-
-  const getCurrencyScale = (val) => {
-    const n = Math.abs(Number.parseFloat(val) || 0);
-    if (n >= 1e9) return { label: "R b", divisor: 1e9 };
-    if (n >= 1e6) return { label: "R m", divisor: 1e6 };
-    if (n >= 1e3) return { label: "R k", divisor: 1e3 };
-    return { label: "R", divisor: 1 };
-  };
-  const currencyScale = getCurrencyScale(
-    Math.max(Math.abs(actualValue), Math.abs(budgetValue)),
-  );
-
-  const unitLabel =
-    unit === "currency"
-      ? currencyScale.label
-      : unit === "days"
-        ? "days"
-        : unit === "percentage" || isPercentage
-          ? "%"
-          : null;
-
-  const formatValue = (val) => {
-    const n = Number.parseFloat(val) || 0;
-    if (unit === "currency") return (n / currencyScale.divisor).toFixed(2);
-    if (unit === "days") return n.toFixed(0);
-    if (unit === "percentage" || isPercentage) return n.toFixed(1);
-    return formatNumber(n);
-  };
-
- 
-  const handleAIAnalysis = () => {
-    setSelectedMetricForAnalysis({
-      title: title,
-      key: dataKey || title.toLowerCase().replace(/\s+/g, '_'),
-      value: actualValue,
-      contextData: {
-        budget: budgetValue,
-        target: contextData.target,
-        timeRange: contextData.timeRange,
-        historicalValues: contextData.historicalValues,
-        industryBenchmark: contextData.industryBenchmark,
-        relatedMetrics: contextData.relatedMetrics,
-      }
-    });
-    setShowAnalysisModal(true);
-  };
-  
-  // Update the button onClick
-
-
-  return (
-    <div className="bg-[#fdfcfb] p-5 rounded-lg shadow-md mb-5 border border-[#e8ddd4] relative">
-      <div
-        onClick={onEyeClick}
-        className="absolute top-3 right-3 cursor-pointer w-8 h-8 flex items-center justify-center rounded-full bg-[#fdfcfb] shadow border-2 border-[#FF8C00] z-10 hover:bg-[#e8ddd4] hover:scale-110 transition"
-      >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#FF8C00"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="12" cy="12" r="5" strokeOpacity="0.5" />
-          <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z" />
-        </svg>
-      </div>
-      <h4 className="text-[#5d4037] mb-5 text-center font-semibold text-base">
-        {title}
-        {unitLabel && ` (${unitLabel})`}
-      </h4>
-      <div className="flex justify-around items-center mb-5">
-        <div className="text-center">
-          <div className="w-20 h-20 rounded-full border-4 border-[#FF8C00] flex items-center justify-center mx-auto mb-2 bg-[#FFB347]">
-            <span className="text-sm font-bold text-[#663d00]">
-              {formatValue(actualValue)}
-            </span>
-          </div>
-          <span className="text-[11px] text-[#5d4037] font-medium">
-            Actual
-          </span>
-        </div>
-        <div className="text-center">
-          <div className="w-20 h-20 rounded-full border-4 border-[#32CD32] flex items-center justify-center mx-auto mb-2 bg-[#90EE90]">
-            <span className="text-sm font-bold text-[#1e4d1e]">
-              {formatValue(budgetValue)}
-            </span>
-          </div>
-          <span className="text-[11px] text-[#5d4037] font-medium">
-            Budget
-          </span>
-        </div>
-        <div className="text-center">
-          <div className="w-20 h-20 rounded-full border-4 border-[#FFA500] flex items-center justify-center mx-auto mb-2 bg-[#FFD700]">
-            <div className="flex items-center gap-1">
-              {variancePercent > 0 ? (
-                <TrendingUp
-                  size={16}
-                  color={goodDirection === "up" ? "#16a34a" : "#dc2626"}
-                />
-              ) : (
-                <TrendingDown
-                  size={16}
-                  color={goodDirection === "down" ? "#16a34a" : "#dc2626"}
-                />
-              )}
-              <span
-                className={`text-xs font-semibold ${
-                  (goodDirection === "up" && variancePercent > 0) ||
-                  (goodDirection === "down" && variancePercent < 0)
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
-              >
-                {Math.abs(variancePercent).toFixed(1)}%
-              </span>
-            </div>
-          </div>
-          <span className="text-[11px] text-[#5d4037] font-medium">
-            Variance
-          </span>
-        </div>
-      </div>
-      <div className="border-t border-[#e8ddd4] pt-4">
-        <div className="flex gap-2 justify-center mb-3">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="px-3 py-1.5 bg-[#e8ddd4] text-[#5d4037] rounded font-semibold text-xs"
-          >
-            Add notes
-          </button>
-            <button
-    onClick={handleAIAnalysis} 
-    className="px-3 py-1.5 bg-[#e8ddd4] text-[#5d4037] rounded font-semibold text-xs"
-  >
-    AI analysis
-  </button>
-          <button
-            onClick={onTrend}
-            className="px-3 py-1.5 bg-[#e8ddd4] text-[#5d4037] rounded font-semibold text-xs"
-          >
-            View trend
-          </button>
-        </div>
-        {expanded && (
-          <div className="mb-2">
-            <label className="text-xs text-[#5d4037] font-semibold block mb-1">
-              Notes / Comments:
-            </label>
-            <textarea
-              value={notes || ""}
-              onChange={(e) => onAddNotes(e.target.value)}
-              placeholder="Add notes or comments..."
-              className="w-full p-2 rounded border border-[#e8ddd4] min-h-[60px] text-sm"
-            />
-          </div>
-        )}
-  {showAnalysisModal && selectedMetricForAnalysis && (
-      <MarketingAnalysisModal
-        isOpen={showAnalysisModal}
-        onClose={() => {
-          setShowAnalysisModal(false);
-          setSelectedMetricForAnalysis(null);
-        }}
-        kpiTitle={selectedMetricForAnalysis.title}
-        kpiKey={selectedMetricForAnalysis.key}
-        kpiValue={selectedMetricForAnalysis.value}
-        contextData={selectedMetricForAnalysis.contextData}
-        company={{
-          name: "Your Business",
-          stage: "Growth Stage",
-          industry: "General",
-        }}
-        currentUser={currentUser}
-        section={section} // Pass the section
-      />
-    )}
-      </div>
-    </div>
-  );
-};
-
-// ==================== BUDGET MODALS ====================
-
-const BudgetTargetModal = ({ isOpen, onClose, currentUser, onSave }) => {
-  const [budgets, setBudgets] = useState({
-    newLeads: 0,
-    salesVelocity: 0,
-    conversionRate: 0,
-    pipelineValue: 0,
-    riskValue: 0,
-  });
-
-  useEffect(() => {
-    if (!isOpen || !currentUser) return;
-    (async () => {
-      const snap = await getDoc(
-        doc(db, "pipelineData", `${currentUser.uid}_pipelineBudgets`),
-      );
-      if (snap.exists()) setBudgets(snap.data());
-    })();
-  }, [isOpen, currentUser]);
-
-  const handleChange = (key, value) => {
-    setBudgets((prev) => ({
-      ...prev,
-      [key]: parseFloat(value) || 0,
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!currentUser) return;
-    await setDoc(
-      doc(db, "pipelineData", `${currentUser.uid}_pipelineBudgets`),
-      budgets,
-    );
-    if (onSave) onSave();
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
-      <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[500px] w-[90%]">
-        <h3 className="text-mediumBrown text-lg mb-4">
-          Set Pipeline Budgets
-        </h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              New Leads
-            </label>
-            <input
-              type="number"
-              value={budgets.newLeads}
-              onChange={(e) => handleChange("newLeads", e.target.value)}
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Sales Velocity (days)
-            </label>
-            <input
-              type="number"
-              value={budgets.salesVelocity}
-              onChange={(e) =>
-                handleChange("salesVelocity", e.target.value)
-              }
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Conversion Rate (%)
-            </label>
-            <input
-              type="number"
-              value={budgets.conversionRate}
-              onChange={(e) =>
-                handleChange("conversionRate", e.target.value)
-              }
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Pipeline Value (R)
-            </label>
-            <input
-              type="number"
-              value={budgets.pipelineValue}
-              onChange={(e) =>
-                handleChange("pipelineValue", e.target.value)
-              }
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Risk Adjusted Value (R)
-            </label>
-            <input
-              type="number"
-              value={budgets.riskValue}
-              onChange={(e) => handleChange("riskValue", e.target.value)}
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-mediumBrown text-white rounded-md"
-          >
-            Save Budgets
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ConcentrationBudgetModal = ({
-  isOpen,
-  onClose,
-  currentUser,
-  onSave,
-}) => {
-  const [budgets, setBudgets] = useState({
-    totalMarketingSpend: 0,
-    overallROI: 0,
-  });
-
-  useEffect(() => {
-    if (!isOpen || !currentUser) return;
-    (async () => {
-      const snap = await getDoc(
-        doc(db, "pipelineData", `${currentUser.uid}_concentrationBudgets`),
-      );
-      if (snap.exists()) setBudgets(snap.data());
-    })();
-  }, [isOpen, currentUser]);
-
-  const handleChange = (key, value) => {
-    setBudgets((prev) => ({
-      ...prev,
-      [key]: parseFloat(value) || 0,
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!currentUser) return;
-    await setDoc(
-      doc(db, "pipelineData", `${currentUser.uid}_concentrationBudgets`),
-      budgets,
-    );
-    if (onSave) onSave();
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
-      <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[400px] w-[90%]">
-        <h3 className="text-mediumBrown text-lg mb-4">
-          Set Revenue Concentration Budgets
-        </h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Total Marketing Spend (R)
-            </label>
-            <input
-              type="number"
-              value={budgets.totalMarketingSpend}
-              onChange={(e) =>
-                handleChange("totalMarketingSpend", e.target.value)
-              }
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Overall ROI (%)
-            </label>
-            <input
-              type="number"
-              value={budgets.overallROI}
-              onChange={(e) => handleChange("overallROI", e.target.value)}
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-mediumBrown text-white rounded-md"
-          >
-            Save Budgets
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SustainabilityBudgetModal = ({
-  isOpen,
-  onClose,
-  currentUser,
-  onSave,
-}) => {
-  const [budgets, setBudgets] = useState({
-    repeatCustomerRate: 0,
-    churnRate: 0,
-    netRetention: 0,
-    campaignROI: 0,
-  });
-
-  useEffect(() => {
-    if (!isOpen || !currentUser) return;
-    (async () => {
-      const snap = await getDoc(
-        doc(
-          db,
-          "pipelineData",
-          `${currentUser.uid}_sustainabilityBudgets`,
-        ),
-      );
-      if (snap.exists()) setBudgets(snap.data());
-    })();
-  }, [isOpen, currentUser]);
-
-  const handleChange = (key, value) => {
-    setBudgets((prev) => ({
-      ...prev,
-      [key]: parseFloat(value) || 0,
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!currentUser) return;
-    await setDoc(
-      doc(
-        db,
-        "pipelineData",
-        `${currentUser.uid}_sustainabilityBudgets`,
-      ),
-      budgets,
-    );
-    if (onSave) onSave();
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
-      <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[400px] w-[90%]">
-        <h3 className="text-mediumBrown text-lg mb-4">
-          Set Demand Sustainability Budgets
-        </h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Repeat Customer Rate (%)
-            </label>
-            <input
-              type="number"
-              value={budgets.repeatCustomerRate}
-              onChange={(e) =>
-                handleChange("repeatCustomerRate", e.target.value)
-              }
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Churn Rate (%)
-            </label>
-            <input
-              type="number"
-              value={budgets.churnRate}
-              onChange={(e) => handleChange("churnRate", e.target.value)}
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Net Retention (%)
-            </label>
-            <input
-              type="number"
-              value={budgets.netRetention}
-              onChange={(e) =>
-                handleChange("netRetention", e.target.value)
-              }
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-mediumBrown font-semibold">
-              Campaign ROI (%)
-            </label>
-            <input
-              type="number"
-              value={budgets.campaignROI}
-              onChange={(e) =>
-                handleChange("campaignROI", e.target.value)
-              }
-              className="w-full p-2 rounded border border-[#e8ddd4] text-sm"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-mediumBrown text-white rounded-md"
-          >
-            Save Budgets
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ==================== PIPELINE VISIBILITY ====================
-
-const PipelineVisibility = ({
-  activeSection,
-  currentUser,
-  isInvestorView,
-  onDataChange,
-}) => {
-  if (activeSection !== "pipeline-visibility") return null;
-  return (
-    <div>
-      <KeyQuestionBox
-        question="Do we have enough quality demand, at the right risk, to hit revenue?"
-        signals="Forecast clarity, pipeline coverage, conversion rates"
-        decisions="Formalise sales process, improve lead quality, adjust targets"
-        section="pipeline-visibility"
-      />
-      <SectionControlsBar
-        title="Pipeline Visibility"
-        showAddData={false}
-        showViewMode={false}
-      />
-      <PipelineTable
-        currentUser={currentUser}
-        isInvestorView={isInvestorView}
-        onDataChange={onDataChange}
-      />
-    </div>
-  );
-};
-
-// ==================== PIPELINE SUFFICIENCY ====================
-
-const PipelineSufficiency = ({
-  activeSection,
-  currentUser,
-  fromDate,
-  toDate,
-  pipelineRecords,
-}) => {
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [targetRevenue, setTargetRevenue] = useState(0);
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [budgets, setBudgets] = useState({
-    newLeads: 0,
-    salesVelocity: 0,
-    conversionRate: 0,
-    pipelineValue: 0,
-    riskValue: 0,
-  });
-
-  useEffect(() => {
-    if (!currentUser) return;
-    (async () => {
-      const snap = await getDoc(
-        doc(db, "pipelineData", `${currentUser.uid}_targetRevenue`),
-      );
-      if (snap.exists()) setTargetRevenue(snap.data().value || 0);
-      const budgetSnap = await getDoc(
-        doc(db, "pipelineData", `${currentUser.uid}_pipelineBudgets`),
-      );
-      if (budgetSnap.exists()) setBudgets(budgetSnap.data());
-    })();
-  }, [currentUser]);
-
-  const handleTargetSave = async () => {
-    if (!currentUser) return;
-    await setDoc(
-      doc(db, "pipelineData", `${currentUser.uid}_targetRevenue`),
-      { value: targetRevenue },
-    );
-    alert("Target revenue saved");
-  };
-
-  const aggregateTableData = (records) => {
-    if (!fromDate || !toDate || !records) return null;
-    const rangeMonths = getRangeMonths(fromDate, toDate);
-    const monthlyNewLeads = Array(rangeMonths.length).fill(0);
-    const monthlyPipelineValue = Array(rangeMonths.length).fill(0);
-    const monthlyRiskValue = Array(rangeMonths.length).fill(0);
-    const monthlySalesVelocityDays = Array(rangeMonths.length)
-      .fill(0)
-      .map(() => ({ sum: 0, count: 0 }));
-    const monthlyConversionAttempts = Array(rangeMonths.length)
-      .fill(0)
-      .map(() => ({ total: 0, converted: 0 }));
-
-    records.forEach((rec) => {
-      const rev = parseFloat(rec.revPotential) || 0;
-      const prob = parseFloat(rec.probability) || 0;
-      const createdAt = rec.createdAt ? new Date(rec.createdAt) : null;
-      const signedDate = rec.signedDate
-        ? new Date(rec.signedDate)
-        : null;
-      const lastEngagement = rec.lastEngagement
-        ? new Date(rec.lastEngagement)
-        : null;
-      const dateToUse = lastEngagement || createdAt;
-      if (!dateToUse) return;
-      const monthIdx = dateToUse.getMonth();
-      const year = dateToUse.getFullYear();
-      const idx = rangeMonths.findIndex(
-        (r) => r.year === year && r.monthIdx === monthIdx,
-      );
-      if (idx < 0) return;
-
-      monthlyNewLeads[idx] += 1;
-      monthlyPipelineValue[idx] += rev;
-      monthlyRiskValue[idx] += rev * (prob / 100);
-
-      if (createdAt && signedDate) {
-        const days = (signedDate - createdAt) / (1000 * 60 * 60 * 24);
-        if (days >= 0) {
-          monthlySalesVelocityDays[idx].sum += days;
-          monthlySalesVelocityDays[idx].count += 1;
-        }
-      }
-
-      const isConverted = prob >= 50 || !!signedDate;
-      monthlyConversionAttempts[idx].total += 1;
-      if (isConverted) monthlyConversionAttempts[idx].converted += 1;
-    });
-
-    return {
-      labels: rangeMonths.map((r) => r.label),
-      newLeads: monthlyNewLeads,
-      pipelineValue: monthlyPipelineValue,
-      riskValue: monthlyRiskValue,
-      salesVelocity: monthlySalesVelocityDays.map((item) =>
-        item.count > 0 ? item.sum / item.count : 0,
-      ),
-      conversionRate: monthlyConversionAttempts.map((item) =>
-        item.total > 0 ? (item.converted / item.total) * 100 : 0,
-      ),
-    };
-  };
-
-  const aggregatedData = aggregateTableData(pipelineRecords);
-
-  if (activeSection !== "pipeline-sufficiency") return null;
-
-  const latest = {
-    newLeads: aggregatedData?.newLeads.slice(-1)[0] || 0,
-    salesVelocity: aggregatedData?.salesVelocity.slice(-1)[0] || 0,
-    conversionRate: aggregatedData?.conversionRate.slice(-1)[0] || 0,
-    pipelineValue: aggregatedData?.pipelineValue.slice(-1)[0] || 0,
-    riskValue: aggregatedData?.riskValue.slice(-1)[0] || 0,
-  };
-  const coverage =
-    targetRevenue > 0 ? (latest.riskValue / targetRevenue) * 100 : 0;
-
-  const calculationTexts = {
-    newLeads:
-      "New Leads: Number of pipeline records whose Last Engagement (or Created At) falls in the period.",
-    salesVelocity:
-      "Sales Velocity = Average days between Created At and Signed Date for closed deals in the period.",
-    conversionRate:
-      "Conversion Rate = Percentage of deals with Probability ≥ 50% or having a Signed Date.",
-    pipelineValue:
-      "Total Pipeline Value = Sum of Rev Potential for all records in the period.",
-    riskValue:
-      "Risk Adjusted Value = Sum of (Rev Potential × Probability %) for all records.",
-    coverage:
-      "Pipeline Coverage = (Risk Adjusted Value ÷ Target Revenue) × 100%.",
-  };
-
- // Inside PipelineSufficiency component, update the renderKPICard function
-const renderKPICard = (
-  title,
-  dataKey,
-  calculation,
-  unit,
-  goodDirection,
-  value,
-  trendData,
-  budgetVal,
-) => (
-  <KPITripleCard
-    key={dataKey}
-    title={title}
-    actualValue={value}
-    budgetValue={budgetVal}
-    unit={unit}
-    goodDirection={goodDirection}
-    onEyeClick={() => {
-      setSelectedCalculation({ title, calculation });
-      setShowCalculationModal(true);
-    }}
-    onAddNotes={(val) =>
-      setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
-    }
-    onTrend={() => {
-      setSelectedTrendItem({
-        name: title,
-        data: trendData,
-        labels: aggregatedData?.labels || [],
-        isPercentage: unit === "percentage",
-      });
-      setShowTrendModal(true);
-    }}
-    notes={kpiNotes[dataKey]}
-    currentUser={currentUser}  // Add this line
-    dataKey={dataKey}
-    section="pipeline-sufficiency"  // Add this line
-    contextData={{
-      target: targetRevenue,  // targetRevenue should be defined in this component's state
-      budget: budgetVal,
-      timeRange: `${fromDate} to ${toDate}`,
-    }}
-  />
-);
-
-  return (
-    <div>
-      <KeyQuestionBox
-        question="Is pipeline big enough?"
-        signals="Coverage ratio, lead volume trends"
-        decisions="Increase lead generation, adjust targets"
-        section="pipeline-sufficiency"
-      />
-      <SectionControlsBar
-        title="Pipeline Sufficiency"
-        showAddData={false}
-        showViewMode={false}
-        extraControls={
-          <button
-            onClick={() => setShowBudgetModal(true)}
-            className="px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown rounded text-sm"
-          >
-            Set Budgets
-          </button>
-        }
-      />
-
-      <div className="bg-[#f5f0eb] p-4 rounded-lg mb-6 flex gap-3 items-center">
-        <label className="text-sm font-semibold text-mediumBrown">
-          Target Revenue (R):
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          value={targetRevenue}
-          onChange={(e) =>
-            setTargetRevenue(parseFloat(e.target.value) || 0)
-          }
-          className="p-2 rounded border border-[#e8ddd4] w-40"
-        />
-        <button
-          onClick={handleTargetSave}
-          className="px-3 py-1.5 bg-mediumBrown text-white rounded text-sm"
-        >
-          Update Target
-        </button>
-      </div>
-
-      {aggregatedData ? (
-        <KpiGrid2>
-          {renderKPICard(
-            "New Leads",
-            "newLeads",
-            calculationTexts.newLeads,
-            "number",
-            "up",
-            latest.newLeads,
-            aggregatedData.newLeads,
-            budgets.newLeads,
-          )}
-          {renderKPICard(
-            "Sales Velocity",
-            "salesVelocity",
-            calculationTexts.salesVelocity,
-            "days",
-            "down",
-            latest.salesVelocity,
-            aggregatedData.salesVelocity,
-            budgets.salesVelocity,
-          )}
-          {renderKPICard(
-            "Conversion Rate",
-            "conversionRate",
-            calculationTexts.conversionRate,
-            "percentage",
-            "up",
-            latest.conversionRate,
-            aggregatedData.conversionRate,
-            budgets.conversionRate,
-          )}
-          {renderKPICard(
-            "Total Pipeline Value",
-            "pipelineValue",
-            calculationTexts.pipelineValue,
-            "currency",
-            "up",
-            latest.pipelineValue,
-            aggregatedData.pipelineValue,
-            budgets.pipelineValue,
-          )}
-          {renderKPICard(
-            "Risk Adjusted Value",
-            "riskValue",
-            calculationTexts.riskValue,
-            "currency",
-            "up",
-            latest.riskValue,
-            aggregatedData.riskValue,
-            budgets.riskValue,
-          )}
-          {renderKPICard(
-            "Pipeline Coverage",
-            "coverage",
-            calculationTexts.coverage,
-            "percentage",
-            "up",
-            coverage,
-            aggregatedData.riskValue.map((r) =>
-              targetRevenue > 0 ? (r / targetRevenue) * 100 : 0,
-            ),
-            0, // coverage budget
-          )}
-        </KpiGrid2>
-      ) : (
-        <p className="text-center text-mediumBrown">
-          No pipeline records available. Add records under Pipeline
-          Visibility.
-        </p>
-      )}
-
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-      {showTrendModal && selectedTrendItem && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => {
-            setShowTrendModal(false);
-            setSelectedTrendItem(null);
-          }}
-          item={{
-            name: selectedTrendItem.name,
-            isPercentage: selectedTrendItem.isPercentage,
-          }}
-          trendData={{
-            labels: selectedTrendItem.labels,
-            actual: selectedTrendItem.data,
-            budget: null,
-          }}
-          currencyUnit="zar"
-          formatValue={(v) => formatCurrency(v)}
-        />
-      )}
-      <BudgetTargetModal
-        isOpen={showBudgetModal}
-        onClose={() => setShowBudgetModal(false)}
-        currentUser={currentUser}
-        onSave={() => {
-          (async () => {
-            const snap = await getDoc(
-              doc(
-                db,
-                "pipelineData",
-                `${currentUser.uid}_pipelineBudgets`,
-              ),
-            );
-            if (snap.exists()) setBudgets(snap.data());
-          })();
-        }}
-      />
-    </div>
-  );
-};
-
-// ==================== REVENUE CONCENTRATION ====================
-
-const RevenueConcentration = ({
-  activeSection,
-  currentUser,
-  isInvestorView,
-  onAddData,
-  fromDate,
-  toDate,
-}) => {
-  const [loading, setLoading] = useState(false);
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [activeTab, setActiveTab] = useState("channel");
-  const [concentrationData, setConcentrationData] = useState({
-    revenueChannels: [
-      { name: "Social Media", revenue: 0, spend: 0 },
-      { name: "Email", revenue: 0, spend: 0 },
-      { name: "PPC", revenue: 0, spend: 0 },
-      { name: "SEO", revenue: 0, spend: 0 },
-      { name: "Referral", revenue: 0, spend: 0 },
-      { name: "Direct", revenue: 0, spend: 0 },
-    ],
-    customerSegments: [
-      { name: "Enterprise", revenue: 0, customerCount: 0 },
-      { name: "SMB", revenue: 0, customerCount: 0 },
-      { name: "Startup", revenue: 0, customerCount: 0 },
-      { name: "Non-Profit", revenue: 0, customerCount: 0 },
-      { name: "Education", revenue: 0, customerCount: 0 },
-    ],
-    revenueByCustomer: [
-      { name: "Customer A", revenue: 0 },
-      { name: "Customer B", revenue: 0 },
-      { name: "Customer C", revenue: 0 },
-      { name: "Customer D", revenue: 0 },
-      { name: "Customer E", revenue: 0 },
-    ],
-    notes: "",
-  });
-
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [budgets, setBudgets] = useState({
-    totalMarketingSpend: 0,
-    overallROI: 0,
-  });
-
-  const toYear = toDate
-    ? parseInt(toDate.split("-")[0])
-    : new Date().getFullYear();
-
-  useEffect(() => {
-    if (currentUser && activeSection === "revenue-concentration") loadData();
-  }, [currentUser, activeSection, toDate]);
-
-  const loadData = async () => {
-    if (!currentUser) return;
-    setLoading(true);
-    try {
-      const docSnap = await getDoc(
-        doc(
-          db,
-          "pipelineData",
-          `${currentUser.uid}_concentration_${toYear}`,
-        ),
-      );
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setConcentrationData({
-          revenueChannels:
-            data.revenueChannels || concentrationData.revenueChannels,
-          customerSegments:
-            data.customerSegments ||
-            concentrationData.customerSegments,
-          revenueByCustomer:
-            data.revenueByCustomer ||
-            concentrationData.revenueByCustomer,
-          notes: data.notes || "",
-        });
-      }
-      // load budgets
-      const budgetSnap = await getDoc(
-        doc(
-          db,
-          "pipelineData",
-          `${currentUser.uid}_concentrationBudgets`,
-        ),
-      );
-      if (budgetSnap.exists()) setBudgets(budgetSnap.data());
-    } catch (error) {
-      console.error("Error loading revenue concentration data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation });
-    setShowCalculationModal(true);
-  };
-
-  const openTrendModal = (itemName, currentValue, isPercentage = false) => {
-    const rangeMonths = getRangeMonths(fromDate, toDate);
-    setSelectedTrendItem({
-      name: itemName,
-      data: rangeMonths.map(() => currentValue),
-      labels: rangeMonths.map((r) => r.label),
-      isPercentage,
-    });
-    setShowTrendModal(true);
-  };
-
-// Inside RevenueConcentration component, update the renderKPICard function
-const renderKPICard = (
-  title,
-  dataKey,
-  calculation = "",
-  unit = "number",
-  goodDirection = "up",
-) => {
-  let actualValue = 0;
-  if (dataKey === "totalMarketingSpend")
-    actualValue = concentrationData.revenueChannels.reduce(
-      (sum, c) => sum + (c.spend || 0),
-      0,
-    );
-  else if (dataKey === "totalROI") {
-    const totalRevenue = concentrationData.revenueChannels.reduce(
-      (sum, c) => sum + (c.revenue || 0),
-      0,
-    );
-    const totalSpend = concentrationData.revenueChannels.reduce(
-      (sum, c) => sum + (c.spend || 0),
-      0,
-    );
-    actualValue =
-      totalSpend > 0
-        ? ((totalRevenue - totalSpend) / totalSpend) * 100
-        : 0;
-  }
-  const budgetVal = budgets[dataKey] || 0;
-  
-  return (
-    <KPITripleCard
-      key={dataKey}
-      title={title}
-      actualValue={actualValue}
-      budgetValue={budgetVal}
-      unit={unit}
-      goodDirection={goodDirection}
-      onEyeClick={() => handleCalculationClick(title, calculation)}
-      onAddNotes={(val) =>
-        setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
-      }
-      onTrend={() =>
-        openTrendModal(title, actualValue, unit === "percentage")
-      }
-      notes={kpiNotes[dataKey]}
-      currentUser={currentUser}  // Change from 'user' to 'currentUser'
-      dataKey={dataKey}
-      section={activeSection}  // Make sure activeSection is defined (should be "revenue-concentration")
-      contextData={{
-        budget: budgetVal,
-        timeRange: `${fromDate} to ${toDate}`,
-      }}
-    />
-  );
-};
-
-  if (activeSection !== "revenue-concentration") return null;
-
-  const totalRevenue = concentrationData.revenueChannels.reduce(
-    (sum, c) => sum + (c.revenue || 0),
-    0,
-  );
-  const top3Channels = [...concentrationData.revenueChannels]
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 3);
-  const top3Customers = [...concentrationData.revenueByCustomer]
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 3);
-  const top3Segments = [...concentrationData.customerSegments]
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 3);
-  const top3ChannelRevenue = top3Channels.reduce(
-    (sum, c) => sum + (c.revenue || 0),
-    0,
-  );
-  const top3Percentage =
-    totalRevenue > 0 ? (top3ChannelRevenue / totalRevenue) * 100 : 0;
-
-  return (
-    <div>
-      <KeyQuestionBox
-        question="Where does revenue actually come from? Are we over-dependent?"
-        signals="Channel concentration, segment dependency"
-        decisions="Diversify channels, reduce reliance on top clients"
-        section="revenue-concentration"
-      />
-      <SectionControlsBar
-        title="Revenue Concentration"
-        onAddData={!isInvestorView ? onAddData : null}
-        showAddData={!isInvestorView}
-        showViewMode={false}
-        extraControls={
-          <button
-            onClick={() => setShowBudgetModal(true)}
-            className="px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown rounded text-sm"
-          >
-            Set Budgets
-          </button>
-        }
-      />
-
-      <KpiGrid2>
-        {renderKPICard(
-          "Total Marketing Spend",
-          "totalMarketingSpend",
-          "Total Marketing Spend = Sum of all channel spends.",
-          "currency",
-          "down",
-        )}
-        {renderKPICard(
-          "Overall ROI",
-          "totalROI",
-          "Overall ROI = (Total Revenue - Total Spend) / Total Spend × 100%",
-          "percentage",
-          "up",
-        )}
-      </KpiGrid2>
-
-      {/* ... rest of RevenueConcentration JSX unchanged ... */}
-      <div className="bg-[#f5f0eb] p-5 rounded-lg mb-7">
-        <h3 className="text-mediumBrown mt-0 mb-[15px] text-base">
-          Top 3 Concentration
-        </h3>
-        <div className="grid grid-cols-3 gap-5">
-          {[
-            { label: "Top 3 Channels", data: top3Channels, nameKey: "name" },
-            {
-              label: "Top 3 Customers",
-              data: top3Customers,
-              nameKey: "name",
-            },
-            {
-              label: "Top 3 Segments",
-              data: top3Segments,
-              nameKey: "name",
-            },
-          ].map(({ label, data }) => (
-            <div key={label}>
-              <h4 className="text-mediumBrown text-sm mb-2.5">{label}</h4>
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-mediumBrown text-[#fdfcfb]">
-                    <th className="p-2 text-left text-xs">
-                      {label.split(" ")[2]}
-                    </th>
-                    <th className="p-2 text-right text-xs">Revenue</th>
-                    <th className="p-2 text-right text-xs">%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((item, index) => (
-                    <tr key={index} className="border-b border-[#e8ddd4]">
-                      <td className="p-2 text-xs text-mediumBrown">
-                        {item.name}
-                      </td>
-                      <td className="p-2 text-xs text-mediumBrown text-right">
-                        {formatCurrency(item.revenue)}
-                      </td>
-                      <td className="p-2 text-xs text-mediumBrown text-right">
-                        {totalRevenue > 0
-                          ? ((item.revenue / totalRevenue) * 100).toFixed(
-                              1,
-                            )
-                          : 0}
-                        %
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-[#f5f0eb] p-5 rounded-lg mb-7">
-        <h3 className="text-mediumBrown mt-0 mb-[15px] text-base">
-          {activeTab === "channel"
-            ? "Revenue by Channel"
-            : activeTab === "customer"
-              ? "Revenue by Customer"
-              : "Revenue by Segment"}
-        </h3>
-        <div className="h-[300px]">
-          <Bar
-            data={{
-              labels:
-                activeTab === "channel"
-                  ? concentrationData.revenueChannels.map((c) => c.name)
-                  : activeTab === "customer"
-                    ? concentrationData.revenueByCustomer.map(
-                        (c) => c.name,
-                      )
-                    : concentrationData.customerSegments.map(
-                        (s) => s.name,
-                      ),
-              datasets: [
-                {
-                  label: "Revenue",
-                  data:
-                    activeTab === "channel"
-                      ? concentrationData.revenueChannels.map(
-                          (c) => c.revenue,
-                        )
-                      : activeTab === "customer"
-                        ? concentrationData.revenueByCustomer.map(
-                            (c) => c.revenue,
-                          )
-                        : concentrationData.customerSegments.map(
-                            (s) => s.revenue,
-                          ),
-                  backgroundColor: "#5d4037",
-                  borderRadius: 4,
-                },
-                ...(activeTab === "channel"
-                  ? [
-                      {
-                        label: "Marketing Spend",
-                        data: concentrationData.revenueChannels.map(
-                          (c) => c.spend,
-                        ),
-                        backgroundColor: "#8d6e63",
-                        borderRadius: 4,
-                      },
-                    ]
-                  : []),
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                datalabels: { display: false },
-                legend: { display: activeTab === "channel" },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    callback: (value) => formatCurrency(value),
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="bg-[#f5f0eb] p-5 rounded-lg mb-7">
-        <h3 className="text-mediumBrown mt-0 mb-[15px] text-base">
-          Channel Performance
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-mediumBrown text-[#fdfcfb]">
-                {[
-                  "Channel",
-                  "Revenue",
-                  "Marketing Spend",
-                  "Net Profit",
-                  "ROI %",
-                  "% of Revenue",
-                ].map((h, i) => (
-                  <th
-                    key={h}
-                    className={`p-3 text-[13px] ${
-                      i === 0 ? "text-left" : "text-right"
-                    }`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {concentrationData.revenueChannels
-                .sort((a, b) => b.revenue - a.revenue)
-                .map((channel, index) => {
-                  const netProfit = channel.revenue - channel.spend;
-                  const roi =
-                    channel.spend > 0
-                      ? (netProfit / channel.spend) * 100
-                      : 0;
-                  const revenuePercentage =
-                    totalRevenue > 0
-                      ? (channel.revenue / totalRevenue) * 100
-                      : 0;
-                  return (
-                    <tr
-                      key={index}
-                      className={`border-b border-[#e8ddd4] ${
-                        index % 2 === 0 ? "bg-[#fdfcfb]" : "bg-[#f5f0eb]"
-                      }`}
-                    >
-                      <td className="p-2.5 text-[13px] text-mediumBrown font-semibold">
-                        {channel.name}
-                      </td>
-                      <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                        {formatCurrency(channel.revenue)}
-                      </td>
-                      <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                        {formatCurrency(channel.spend)}
-                      </td>
-                      <td
-                        className={`p-2.5 text-[13px] text-right font-semibold ${
-                          netProfit >= 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {formatCurrency(netProfit)}
-                      </td>
-                      <td
-                        className={`p-2.5 text-[13px] text-right font-semibold ${
-                          roi >= 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {roi.toFixed(1)}%
-                      </td>
-                      <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                        {revenuePercentage.toFixed(1)}%
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="bg-[#f5f0eb] p-[15px] rounded-md">
-        <h4 className="text-mediumBrown mt-0 mb-2.5">
-          Concentration Risk Analysis
-        </h4>
-        <div className="text-[13px] text-mediumBrown font-semibold mb-1">
-          Channel Concentration Risk
-        </div>
-        <div className="flex items-center mb-2.5">
-          <div className="w-full bg-[#e8ddd4] h-5 rounded-full overflow-hidden">
-            <div
-              className="h-full"
-              style={{
-                width: `${top3Percentage}%`,
-                backgroundColor:
-                  top3Percentage > 70
-                    ? "#dc2626"
-                    : top3Percentage > 50
-                      ? "#f59e0b"
-                      : "#16a34a",
-              }}
-            />
-          </div>
-          <div className="ml-2.5 text-sm text-mediumBrown font-semibold min-w-[40px]">
-            {top3Percentage.toFixed(1)}%
-          </div>
-        </div>
-        <div className="text-xs text-lightBrown">
-          Top 3 channels generate {top3Percentage.toFixed(1)}% of total revenue
-          {top3Percentage > 70 &&
-            " - High risk: Over-dependent on few channels"}
-          {top3Percentage <= 70 &&
-            top3Percentage > 50 &&
-            " - Moderate risk"}
-          {top3Percentage <= 50 && " - Low risk: Well diversified"}
-        </div>
-      </div>
-
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-      {showTrendModal && selectedTrendItem && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => {
-            setShowTrendModal(false);
-            setSelectedTrendItem(null);
-          }}
-          item={{
-            name: selectedTrendItem.name,
-            isPercentage: selectedTrendItem.isPercentage,
-          }}
-          trendData={{
-            labels: selectedTrendItem.labels,
-            actual: selectedTrendItem.data,
-            budget: null,
-          }}
-          currencyUnit="zar"
-          formatValue={(v) => formatCurrency(v)}
-        />
-      )}
-      <ConcentrationBudgetModal
-        isOpen={showBudgetModal}
-        onClose={() => setShowBudgetModal(false)}
-        currentUser={currentUser}
-        onSave={loadData}
-      />
-    </div>
-  );
-};
-
-// ==================== DEMAND SUSTAINABILITY ====================
-
-const DemandSustainability = ({
-  activeSection,
-  currentUser,
-  isInvestorView,
-  onAddData,
-  fromDate,
-  toDate,
-}) => {
-  const [loading, setLoading] = useState(false);
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [sustainabilityData, setSustainabilityData] = useState({
-    repeatCustomerRate: 0,
-    churnRate: 0,
-    campaigns: [
-      { name: "Q1 Campaign", cost: 0, revenue: 0 },
-      { name: "Q2 Campaign", cost: 0, revenue: 0 },
-      { name: "Summer Sale", cost: 0, revenue: 0 },
-      { name: "Holiday Campaign", cost: 0, revenue: 0 },
-    ],
-    notes: "",
-  });
-
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [budgets, setBudgets] = useState({
-    repeatCustomerRate: 0,
-    churnRate: 0,
-    netRetention: 0,
-    campaignROI: 0,
-  });
-
-  const toYear = toDate
-    ? parseInt(toDate.split("-")[0])
-    : new Date().getFullYear();
-
-  useEffect(() => {
-    if (currentUser && activeSection === "demand-sustainability") loadData();
-  }, [currentUser, activeSection, toDate]);
-
-  const loadData = async () => {
-    if (!currentUser) return;
-    setLoading(true);
-    try {
-      const docSnap = await getDoc(
-        doc(
-          db,
-          "pipelineData",
-          `${currentUser.uid}_sustainability_${toYear}`,
-        ),
-      );
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setSustainabilityData({
-          repeatCustomerRate: data.repeatCustomerRate || 0,
-          churnRate: data.churnRate || 0,
-          campaigns: data.campaigns || sustainabilityData.campaigns,
-          notes: data.notes || "",
-        });
-      }
-      const budgetSnap = await getDoc(
-        doc(
-          db,
-          "pipelineData",
-          `${currentUser.uid}_sustainabilityBudgets`,
-        ),
-      );
-      if (budgetSnap.exists()) setBudgets(budgetSnap.data());
-    } catch (error) {
-      console.error(
-        "Error loading demand sustainability data:",
-        error,
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation });
-    setShowCalculationModal(true);
-  };
-
-  const openTrendModal = (
-    itemName,
-    currentValue,
-    isPercentage = false,
-  ) => {
-    const rangeMonths = getRangeMonths(fromDate, toDate);
-    setSelectedTrendItem({
-      name: itemName,
-      data: rangeMonths.map(() => currentValue),
-      labels: rangeMonths.map((r) => r.label),
-      isPercentage,
-    });
-    setShowTrendModal(true);
-  };
-
-  // Inside DemandSustainability component, update the renderKPICard function
-const renderKPICard = (
-  title,
-  dataKey,
-  calculation = "",
-  unit = "percentage",
-  goodDirection = "up",
-) => {
-  let actualValue = 0;
-  if (dataKey === "repeatCustomerRate")
-    actualValue = sustainabilityData.repeatCustomerRate;
-  else if (dataKey === "churnRate")
-    actualValue = sustainabilityData.churnRate;
-  else if (dataKey === "netRetention")
-    actualValue =
-      sustainabilityData.repeatCustomerRate -
-      sustainabilityData.churnRate;
-  else if (dataKey === "campaignROI") {
-    const totalCost = sustainabilityData.campaigns.reduce(
-      (sum, c) => sum + (c.cost || 0),
-      0,
-    );
-    const totalRevenue = sustainabilityData.campaigns.reduce(
-      (sum, c) => sum + (c.revenue || 0),
-      0,
-    );
-    actualValue =
-      totalCost > 0
-        ? ((totalRevenue - totalCost) / totalCost) * 100
-        : 0;
-  }
-  const budgetVal = budgets[dataKey] || 0;
-  
-  return (
-    <KPITripleCard
-      key={dataKey}
-      title={title}
-      actualValue={actualValue}
-      budgetValue={budgetVal}
-      unit={unit}
-      goodDirection={goodDirection}
-      onEyeClick={() => handleCalculationClick(title, calculation)}
-      onAddNotes={(val) =>
-        setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
-      }
-      onTrend={() =>
-        openTrendModal(title, actualValue, unit === "percentage")
-      }
-      notes={kpiNotes[dataKey]}
-      currentUser={currentUser}  // Change from 'user' to 'currentUser'
-      dataKey={dataKey}
-      section="demand-sustainability"  // Add this line
-      contextData={{
-        budget: budgetVal,
-        timeRange: `${fromDate} to ${toDate}`,
-      }}
-    />
-  );
-};
-
-  if (activeSection !== "demand-sustainability") return null;
-
-  const netRetention =
-    sustainabilityData.repeatCustomerRate -
-    sustainabilityData.churnRate;
-  const totalCampaignCost = sustainabilityData.campaigns.reduce(
-    (sum, c) => sum + (c.cost || 0),
-    0,
-  );
-  const totalCampaignRevenue = sustainabilityData.campaigns.reduce(
-    (sum, c) => sum + (c.revenue || 0),
-    0,
-  );
-  const campaignROI =
-    totalCampaignCost > 0
-      ? ((totalCampaignRevenue - totalCampaignCost) /
-          totalCampaignCost) *
-        100
-      : 0;
-
-  const calculationTexts = {
-    repeatCustomerRate:
-      "Repeat Customer Rate = (Repeat Customers ÷ Total Customers) × 100%\n\nMeasures customer loyalty and satisfaction.",
-    churnRate:
-      "Churn Rate = (Customers Lost ÷ Total Customers) × 100%\n\nMeasures customer retention.",
-    netRetention:
-      "Net Retention Rate = Repeat Customer Rate - Churn Rate\n\nIndicates overall customer retention health.",
-    campaignROI:
-      "Campaign ROI = (Revenue - Cost) ÷ Cost × 100%\n\nMeasures marketing campaign effectiveness.",
-  };
-
-  return (
-    <div>
-      <KeyQuestionBox
-        question="Is demand repeatable? Will demand persist without constant spend?"
-        signals="Referral rates, repeat customers, CAC trends"
-        decisions="Build demand engine, focus on retention, optimize campaigns"
-        section="demand-sustainability"
-      />
-      <SectionControlsBar
-        title="Demand Sustainability"
-        onAddData={!isInvestorView ? onAddData : null}
-        showAddData={!isInvestorView}
-        showViewMode={false}
-        extraControls={
-          <button
-            onClick={() => setShowBudgetModal(true)}
-            className="px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown rounded text-sm"
-          >
-            Set Budgets
-          </button>
-        }
-      />
-      <KpiGrid2>
-        {renderKPICard(
-          "Repeat Customer Rate",
-          "repeatCustomerRate",
-          calculationTexts.repeatCustomerRate,
-          "percentage",
-          "up",
-        )}
-        {renderKPICard(
-          "Churn Rate",
-          "churnRate",
-          calculationTexts.churnRate,
-          "percentage",
-          "down",
-        )}
-        {renderKPICard(
-          "Net Retention",
-          "netRetention",
-          calculationTexts.netRetention,
-          "percentage",
-          "up",
-        )}
-        {renderKPICard(
-          "Campaign ROI",
-          "campaignROI",
-          calculationTexts.campaignROI,
-          "percentage",
-          "up",
-        )}
-      </KpiGrid2>
-
-      <div className="bg-[#f5f0eb] p-[15px] rounded-md mb-5">
-        <h4 className="text-mediumBrown mt-0 mb-2.5">
-          Campaign Performance
-        </h4>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-mediumBrown text-[#fdfcfb]">
-                <th className="p-3 text-left text-[13px]">Campaign</th>
-                <th className="p-3 text-right text-[13px]">Cost</th>
-                <th className="p-3 text-right text-[13px]">Revenue</th>
-                <th className="p-3 text-right text-[13px]">ROI %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sustainabilityData.campaigns.map((campaign, index) => {
-                const roi =
-                  campaign.cost > 0
-                    ? ((campaign.revenue - campaign.cost) /
-                        campaign.cost) *
-                      100
-                    : 0;
-                return (
-                  <tr
-                    key={index}
-                    className={`border-b border-[#e8ddd4] ${
-                      index % 2 === 0
-                        ? "bg-[#fdfcfb]"
-                        : "bg-[#f5f0eb]"
-                    }`}
-                  >
-                    <td className="p-2.5 text-[13px] text-mediumBrown font-semibold">
-                      {campaign.name}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                      {formatCurrency(campaign.cost)}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                      {formatCurrency(campaign.revenue)}
-                    </td>
-                    <td
-                      className={`p-2.5 text-[13px] text-right font-semibold ${
-                        roi >= 0 ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      {roi.toFixed(1)}%
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-      {showTrendModal && selectedTrendItem && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => {
-            setShowTrendModal(false);
-            setSelectedTrendItem(null);
-          }}
-          item={{
-            name: selectedTrendItem.name,
-            isPercentage: selectedTrendItem.isPercentage,
-          }}
-          trendData={{
-            labels: selectedTrendItem.labels,
-            actual: selectedTrendItem.data,
-            budget: null,
-          }}
-          currencyUnit="zar"
-          formatValue={(v) => formatCurrency(v)}
-        />
-      )}
-      <SustainabilityBudgetModal
-        isOpen={showBudgetModal}
-        onClose={() => setShowBudgetModal(false)}
-        currentUser={currentUser}
-        onSave={loadData}
-      />
-    </div>
-  );
-};
-
-// ==================== MAIN MARKETING SALES ====================
-
-export default function MarketingSales() {
-  const [activeSection, setActiveSection] = useState(
-    "pipeline-visibility",
-  );
-const [user, setUser] = useState(null);  // This should already exist
-  const [currentUser, setCurrentUser] = useState(null);  // Add this if needed
-  
-  const [showFullDescription, setShowFullDescription] = useState(false);
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
   const [viewOrigin, setViewOrigin] = useState("investor");
+
+  const [activeTabId, setActiveTabId] = useState(TAB_DEFS[0].id);
+  const [period, setPeriod] = useState("month");
+
+  const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", source: "all", status: "all" });
+  const [openFilter, setOpenFilter] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [widths, setWidths] = useState(() => ({
+    ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])),
+    [ACTIONS_KEY]: 166,
+  }));
+  const [visibility, setVisibility] = useState(() => Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])));
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const resizing = useRef(null);
+
+  const [infoKpi, setInfoKpi] = useState(null);
+  const [chartKpi, setChartKpi] = useState(null);
+  const [analysisKpi, setAnalysisKpi] = useState(null);
+  const [actionKpi, setActionKpi] = useState(null);
+  const [notesKpi, setNotesKpi] = useState(null);
+  const [addFlow, setAddFlow] = useState(null);
+  const [manageTabs, setManageTabs] = useState(false);
   const [showAddDataModal, setShowAddDataModal] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [pipelineRecords, setPipelineRecords] = useState([]);
+  const [loadingData, setLoadingData] = useState(false);
 
   const _now = new Date();
-  const _toYM = `${_now.getFullYear()}-${String(
-    _now.getMonth() + 1,
-  ).padStart(2, "0")}`;
+  const _toYM = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
   const _fromD = new Date(_now.getFullYear(), _now.getMonth() - 11, 1);
-  const _fromYM = `${_fromD.getFullYear()}-${String(
-    _fromD.getMonth() + 1,
-  ).padStart(2, "0")}`;
+  const _fromYM = `${_fromD.getFullYear()}-${String(_fromD.getMonth() + 1).padStart(2, "0")}`;
   const [filterMode, setFilterMode] = useState("range");
   const [fromDate, setFromDate] = useState(_fromYM);
   const [toDate, setToDate] = useState(_toYM);
 
+  const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
+
+  const notify = (type, message) => {
+    setNotification({ type, message: String(message) });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const savePrefs = (p) => {
+    setDataPrefs(p);
+    try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* ignore */ }
+  };
   useEffect(() => {
-    const investorViewMode =
-      sessionStorage.getItem("investorViewMode");
+    try { const raw = window.localStorage.getItem(PREFS_KEY); if (raw) setDataPrefs(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    const mode = sessionStorage.getItem("investorViewMode");
     const smeId = sessionStorage.getItem("viewingSMEId");
-    const smeName = sessionStorage.getItem("viewingSMEName");
-    const origin = sessionStorage.getItem("viewOrigin");
-    if (investorViewMode === "true" && smeId) {
+    if (mode === "true" && smeId) {
       setIsInvestorView(true);
       setViewingSMEId(smeId);
-      setViewingSMEName(smeName || "SME");
-      setViewOrigin(origin || "investor");
+      setViewingSMEName(sessionStorage.getItem("viewingSMEName") || "SME");
+      setViewOrigin(sessionStorage.getItem("viewOrigin") || "investor");
     }
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(
-        isInvestorView && viewingSMEId
-          ? { uid: viewingSMEId }
-          : currentUser,
-      );
-    });
-    return () => unsubscribe();
+    const unsub = onAuthStateChanged(auth, (cu) => setUser(isInvestorView && viewingSMEId ? { uid: viewingSMEId } : cu));
+    return () => unsub();
   }, [isInvestorView, viewingSMEId]);
 
-  const handleExitInvestorView = () => {
-    const origin = sessionStorage.getItem("viewOrigin");
-    sessionStorage.removeItem("viewingSMEId");
-    sessionStorage.removeItem("viewingSMEName");
-    sessionStorage.removeItem("investorViewMode");
-    sessionStorage.removeItem("viewOrigin");
-    if (origin === "cmf") {
-      window.location.href = "/cmf-cohorts";
-    } else if (origin === "catalyst") {
-      window.location.href = "/catalyst/cohorts";
-    } else {
-      window.location.href = "/my-cohorts";
+  const loadAll = useCallback(async (uid_) => {
+    const out = {};
+    const keys = ["pipeline", "concentration", "sustainability"];
+    await Promise.all(keys.map(async (k) => {
+      try {
+        const snap = await getDoc(doc(db, "marketingData", `${uid_}${DOC[k]}`));
+        if (snap.exists()) out[k] = snap.data();
+      } catch (err) { console.error(`Could not load ${k}:`, err); }
+    }));
+    return out;
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!user?.uid) { setLoading(false); return; }
+      try {
+        const profile = await getDoc(doc(db, "universalProfiles", user.uid));
+        setFyStartMonth(fyStartMonthFromEnd(profile.exists() ? profile.data()?.entityOverview?.financialYearEnd : null));
+        const [loaded, metaSnap] = await Promise.all([loadAll(user.uid), getDoc(doc(db, "marketingData", `${user.uid}_${META_DOC}`))]);
+        setDocs(loaded);
+        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], ...metaSnap.data() });
+      } catch (err) {
+        console.error("Error loading marketing data:", err);
+        notify("error", `Could not load your marketing data: ${errText(err)}`);
+      } finally { setLoading(false); }
+    })();
+  }, [user, loadAll]);
+
+  const persistMeta = async (next) => {
+    setMeta(next);
+    if (!user?.uid || isInvestorView) return;
+    try {
+      await setDoc(doc(db, "marketingData", `${user.uid}_${META_DOC}`), { ...next, userId: user.uid, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+      console.error("Error saving KPI meta:", err);
+      notify("error", `Changes could not be saved: ${errText(err)}`);
     }
   };
 
-  const handlePipelineRecordsChange = (records) =>
-    setPipelineRecords(records);
+  const writeDoc = async (src, mutate) => {
+    if (!user?.uid || isInvestorView) return;
+    const next = JSON.parse(JSON.stringify(docs[src] || {}));
+    mutate(next);
+    next.userId = user.uid;
+    next.lastUpdated = new Date().toISOString();
+    setDocs((p) => ({ ...p, [src]: next }));
+    try {
+      await setDoc(doc(db, "marketingData", `${user.uid}${DOC[src]}`), next, { merge: true });
+    } catch (err) {
+      console.error(`Error saving ${src}:`, err);
+      notify("error", `Could not save: ${errText(err)}`);
+    }
+  };
 
-  const sectionButtons = [
-    {
-      id: "pipeline-visibility",
-      label: "Pipeline Visibility",
-    },
-    {
-      id: "pipeline-sufficiency",
-      label: "Pipeline Sufficiency",
-    },
-    {
-      id: "revenue-concentration",
-      label: "Revenue Concentration",
-    },
-    {
-      id: "demand-sustainability",
-      label: "Demand Sustainability",
-    },
-  ];
+  const setAtPath = (root, path, value, { scalar = false, monthIndex = 0 } = {}) => {
+    let node = root;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (node[path[i]] === undefined || node[path[i]] === null) node[path[i]] = {};
+      node = node[path[i]];
+    }
+    const leaf = path[path.length - 1];
+    if (scalar) { node[leaf] = value; return; }
+    const arr = Array.isArray(node[leaf]) ? [...node[leaf]] : Array(12).fill("");
+    while (arr.length < 12) arr.push("");
+    arr[monthIndex] = value;
+    node[leaf] = arr;
+  };
+
+  const saveKpiField = async ({ kpi, which, raw, monthIndex }) => {
+    if (kpi.custom) {
+      const key = `M:${monthIndex}`;
+      const entries = { ...(meta.kpis[kpi.id]?.entries || {}) };
+      entries[key] = { ...(entries[key] || {}), [which]: parseNum(raw) };
+      await persistMeta({ ...meta, kpis: { ...meta.kpis, [kpi.id]: { ...(meta.kpis[kpi.id] || {}), entries } } });
+      return;
+    }
+    const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+    if (!path) return;
+    await writeDoc(kpi.field.src, (d) => setAtPath(d, path, raw, { scalar: !!kpi.field.scalar, monthIndex }));
+  };
+
+  const tabs = useMemo(() => {
+    const withCustom = TAB_DEFS.map((tab) => {
+      const cats = tab.categories.map((c) => ({ ...c, kpis: [...(c.kpis || [])] }));
+      (meta.custom || []).filter((c) => c.tabId === tab.id).forEach((c) => {
+        const kpi = K({ ...c, actual: () => null });
+        kpi.custom = true;
+        kpi.field = { src: "custom" };
+        const found = cats.find((x) => x.name === c.category);
+        if (found) found.kpis.push(kpi);
+        else cats.push({ name: c.category, kpis: [kpi] });
+      });
+      return { ...tab, categories: cats };
+    });
+
+    const months = fyMonths(fy.startYear, fy.startMonth);
+    return withCustom.map((tab) => ({
+      ...tab,
+      categories: tab.categories.map((cat) => ({
+        ...cat,
+        kpis: (cat.kpis || []).map((kpi) => {
+          const entries = {};
+          months.forEach((m) => {
+            if (kpi.custom) {
+              const saved = meta.kpis[kpi.id]?.entries?.[`M:${m.month}`];
+              entries[m.key] = { actual: saved?.actual ?? null, budget: saved?.budget ?? null };
+            } else {
+              const ctx = buildContext(docs, m.month);
+              const b = kpi.budget ? kpi.budget(ctx) : null;
+              entries[m.key] = {
+                actual: kpi.actual ? kpi.actual(ctx) : null,
+                budget: b !== null && b !== undefined ? b : kpi.benchmark,
+              };
+            }
+          });
+          const saved = meta.kpis[kpi.id] || {};
+          return {
+            ...kpi,
+            entries,
+            meaning: saved.meaning ?? kpi.meaning,
+            measured: saved.measured ?? kpi.measured,
+            notes: saved.notes || "",
+            periodNotes: saved.periodNotes || {},
+            chart: saved.chart || null,
+          };
+        }),
+      })),
+    }));
+  }, [docs, meta, fy]);
+
+  const visibleTabs = useMemo(() => tabs.filter((t) => !(meta.hiddenTabs || []).includes(t.id)), [tabs, meta.hiddenTabs]);
+
+  useEffect(() => {
+    if (!visibleTabs.length) return;
+    if (!visibleTabs.some((t) => t.id === activeTabId)) setActiveTabId(visibleTabs[0].id);
+  }, [visibleTabs, activeTabId]);
+
+  const activeTab = visibleTabs.find((t) => t.id === activeTabId) || visibleTabs[0];
+
+  const updateKpiMeta = (kpiId, patch) => persistMeta({ ...meta, kpis: { ...meta.kpis, [kpiId]: { ...(meta.kpis[kpiId] || {}), ...patch } } });
+
+  const targetSource = (kpi, period) => {
+    const months = fyMonths(fy.startYear, fy.startMonth);
+    const anyCaptured = months.some((m) => {
+      if (kpi.custom) return meta.kpis[kpi.id]?.entries?.[`M:${m.month}`]?.budget != null;
+      const ctx = buildContext(docs, m.month);
+      const b = kpi.budget ? kpi.budget(ctx) : null;
+      return b !== null && b !== undefined;
+    });
+    return anyCaptured ? "Set" : kpi.benchmark !== null ? "Benchmark" : "None";
+  };
+
+  const allRows = useMemo(() => {
+    if (!activeTab) return [];
+    const rows = [];
+    activeTab.categories.forEach((cat) => {
+      (cat.kpis || []).forEach((kpi) =>
+        rows.push({
+          kpi,
+          categoryName: cat.name,
+          tabName: activeTab.name,
+          status: getStatus(kpi, period, fy),
+          variance: getVariance(kpi, period, fy),
+          values: periodValues(kpi, period, fy),
+          source: targetSource(kpi, period),
+        })
+      );
+    });
+    return rows;
+  }, [activeTab, period, fy, docs, meta]);
+
+  const optionsFor = (key) => {
+    const set = new Set();
+    allRows.forEach((r) => {
+      if (key === "category") set.add(r.categoryName);
+      else if (key === "kpi") set.add(r.kpi.name);
+      else if (key === "units") set.add(r.kpi.units);
+      else if (key === "source") set.add(r.source);
+      else if (key === "status") set.add(r.status.label);
+    });
+    return ["all", ...Array.from(set).sort()];
+  };
+
+  const rows = useMemo(() => {
+    const list = allRows.filter(
+      (r) =>
+        (filters.category === "all" || r.categoryName === filters.category) &&
+        (filters.kpi === "all" || r.kpi.name === filters.kpi) &&
+        (filters.units === "all" || r.kpi.units === filters.units) &&
+        (filters.source === "all" || r.source === filters.source) &&
+        (filters.status === "all" || r.status.label === filters.status)
+    );
+
+    const get = {
+      category: (r) => r.categoryName,
+      kpi: (r) => r.kpi.name,
+      units: (r) => r.kpi.units,
+      source: (r) => r.source,
+      budget: (r) => Number(r.values.budget) || 0,
+      actual: (r) => Number(r.values.actual) || 0,
+      variance: (r) => Number(r.variance) || 0,
+      status: (r) => ({ green: 0, amber: 1, red: 2, none: 3 }[r.status.key]),
+    }[sortConfig.key];
+
+    return [...list].sort((a, b) => {
+      if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName);
+      if (!get) return 0;
+      const av = get(a), bv = get(b);
+      if (typeof av === "number" && typeof bv === "number") return sortConfig.direction === "asc" ? av - bv : bv - av;
+      const cmp = String(av).localeCompare(String(bv));
+      return sortConfig.direction === "asc" ? cmp : -cmp;
+    });
+  }, [allRows, filters, sortConfig]);
+
+  const groupedRows = useMemo(() => {
+    const groups = [];
+    rows.forEach((r) => {
+      const last = groups[groups.length - 1];
+      if (last && last.name === r.categoryName) last.items.push(r);
+      else groups.push({ name: r.categoryName, items: [r] });
+    });
+    return groups;
+  }, [rows]);
+
+  const visibleColumns = COLUMN_ORDER.filter((k) => visibility[k]);
+  const totalWidth = visibleColumns.reduce((s, k) => s + widths[k], 0) + widths[ACTIONS_KEY];
+  const activeFilterCount = Object.values(filters).filter((v) => v !== "all").length;
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX, startWidth = widths[key];
+    resizing.current = key;
+    const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
+    const onUp = () => {
+      resizing.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
+  const clearFilters = () => {
+    setFilters({ category: "all", kpi: "all", units: "all", source: "all", status: "all" });
+    setSortConfig({ key: null, direction: "asc" });
+  };
+
+  const downloadCSV = () => {
+    const p = PERIOD_PREFIX[period];
+    const lines = [["Section", "Category", "KPI", "Units", "Target source", `${p} Target`, `${p} Actual`, `${p} Variance`, "Status"]];
+    tabs.forEach((tab) =>
+      tab.categories.forEach((cat) =>
+        (cat.kpis || []).forEach((kpi) => {
+          const v = periodValues(kpi, period, fy);
+          lines.push([tab.name, cat.name, `"${kpi.name}"`, kpi.units, targetSource(kpi, period), v.budget ?? "", v.actual ?? "", getVariance(kpi, period, fy) ?? "", getStatus(kpi, period, fy).label]);
+        })
+      )
+    );
+    const blob = new Blob([lines.map((r) => r.join(",")).join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `marketing-sales-${period}-FY${fyLabel(fy.startYear, fy.startMonth).replace("/", "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exitInvestorView = () => {
+    const origin = sessionStorage.getItem("viewOrigin");
+    ["viewingSMEId", "viewingSMEName", "investorViewMode", "viewOrigin"].forEach((k) => sessionStorage.removeItem(k));
+    window.location.href = origin === "cmf" ? "/cmf-cohorts" : origin === "catalyst" ? "/catalyst/cohorts" : "/my-cohorts";
+  };
+
+  const thS = {
+    padding: 0,
+    background: T.header,
+    borderBottom: `2px solid ${T.header}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)",
+    position: "relative",
+    verticalAlign: "top",
+  };
+  const tdS = {
+    padding: "13px 14px",
+    color: T.body,
+    fontSize: "14px",
+    overflow: "hidden",
+    borderRight: `1px solid ${T.lineSoft}`,
+  };
+  const iconBtn = (c) => ({
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "5px",
+    borderRadius: "6px",
+    color: c,
+    display: "inline-flex",
+    alignItems: "center",
+  });
+
+  const handlePipelineRecordsChange = (records) => setPipelineRecords(records);
+
+  if (loading) {
+    return <div style={{ padding: "80px", textAlign: "center", color: T.body, fontSize: "14px" }}>Loading marketing & sales performance…</div>;
+  }
 
   return (
-    <div className="flex min-h-screen">
-      <div className="w-full min-h-screen box-border">
-        {isInvestorView && (
-          <div className="bg-[#e8f5e9] px-5 py-4 mt-[50px] mb-5 rounded-lg border-2 border-[#4caf50] flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">👁️</span>
-              <span className="text-[#2e7d32] font-semibold text-[15px]">
-                {viewOrigin === "catalyst"
-                  ? `Catalyst View: Viewing ${viewingSMEName}'s Marketing & Sales Data`
-                  : viewOrigin === "cmf"
-                  ? `Facilitator View: Viewing ${viewingSMEName}'s Marketing & Sales Data`
-                  : `Investor View: Viewing ${viewingSMEName}'s Marketing & Sales Data`}
+    <div style={{ minHeight: "100vh", padding: "28px", boxSizing: "border-box", background: T.bg, color: T.body }}>
+      {isInvestorView && (
+        <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderLeft: `3px solid ${T.accent}`, padding: "13px 18px", borderRadius: "10px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "10px", color: T.accent, fontWeight: 500, fontSize: "14px" }}>
+            <Eye size={15} />
+            {viewOrigin === "catalyst" ? "Catalyst view" : viewOrigin === "cmf" ? "Facilitator view" : "Investor view"}: {viewingSMEName}'s Marketing & Sales Performance
+          </span>
+          <button onClick={exitInvestorView} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+        </div>
+      )}
+
+      {notification && (
+        <div style={{ padding: "12px 16px", borderRadius: "10px", marginBottom: "16px", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", background: notification.type === "error" ? T.redBg : T.greenBg, border: `1px solid ${notification.type === "error" ? T.red : T.green}33`, color: notification.type === "error" ? T.red : T.green }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {notification.type === "error" ? <XCircle size={14} /> : <CheckCircle2 size={14} />} {notification.message}
+          </span>
+          <button onClick={() => setNotification(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={14} /></button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "12px" }}>
+        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>Marketing & Sales Performance Summary</h1>
+        <button onClick={() => setShowAbout((v) => !v)} style={btnQuiet}>
+          {showAbout ? "See less" : "See more"} {showAbout ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+      </div>
+      <p style={{ fontSize: "13.5px", color: T.body, margin: "0 0 20px", display: "flex", alignItems: "center", gap: "7px" }}>
+        <Calendar size={13} /> Financial year {fyLabel(fy.startYear, fy.startMonth)} · {MONTHS[fy.startMonth]} → {MONTHS[(fy.startMonth + 11) % 12]}
+      </p>
+
+      {showAbout && (
+        <div style={{ background: T.panel, border: `1px solid ${T.line}`, padding: "22px", borderRadius: "12px", marginBottom: "22px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
+          <div>
+            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "14.5px", fontWeight: 600 }}>What this dashboard does</h3>
+            <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
+              <li>Assesses pipeline visibility, quality, and concentration</li>
+              <li>Evaluates demand risk and market exposure</li>
+              <li>Monitors lead generation effectiveness and conversion rates</li>
+              <li>Measures customer acquisition cost and marketing ROI</li>
+              <li>Tracks sales cycle efficiency and pipeline velocity</li>
+            </ul>
+          </div>
+          <div>
+            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "14.5px", fontWeight: 600 }}>What it doesn't do</h3>
+            <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
+              <li>Run marketing campaigns or ad management</li>
+              <li>Manage CRM or customer relationship tracking</li>
+              <li>Track social media engagement or content scheduling</li>
+              <li>Email marketing automation or lead nurturing</li>
+              <li>SEO optimization or website analytics management</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "2px", borderBottom: `1px solid ${T.lineStrong}`, marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
+        {visibleTabs.map((tab) => {
+          const on = tab.id === activeTab?.id;
+          const counts = tab.categories.flatMap((c) => c.kpis || []).reduce((acc, k) => {
+            const key = getStatus(k, period, fy).key;
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {});
+          return (
+            <button key={tab.id} onClick={() => { setActiveTabId(tab.id); clearFilters(); }} style={{ padding: "12px 20px", background: "none", border: "none", cursor: "pointer", fontSize: "14.5px", fontWeight: on ? 600 : 500, color: on ? T.accent : T.body, borderBottom: on ? `2px solid ${T.accent}` : "2px solid transparent", display: "flex", alignItems: "center", gap: "9px", fontFamily: "inherit", marginBottom: "-1px" }}>
+              {tab.name}
+              <span style={{ display: "inline-flex", gap: "4px" }}>
+                {counts.red > 0 && <span style={{ fontSize: "11px", padding: "1px 7px", borderRadius: "999px", background: T.redBg, color: T.red, fontWeight: 700 }}>{counts.red}</span>}
+                {counts.amber > 0 && <span style={{ fontSize: "11px", padding: "1px 7px", borderRadius: "999px", background: T.amberBg, color: T.amber, fontWeight: 700 }}>{counts.amber}</span>}
               </span>
-            </div>
-            <button
-              onClick={handleExitInvestorView}
-              className="px-4 py-2 bg-[#4caf50] text-white rounded-md font-semibold text-sm flex items-center gap-2"
-            >
-              <span>←</span>
-              {viewOrigin === "catalyst"
-                ? "Back to Catalyst Cohorts"
-                : "Back to My Cohorts"}
             </button>
-          </div>
+          );
+        })}
+        {!isInvestorView && (
+          <button onClick={() => setManageTabs(true)} title="Hide or show a section" style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
+            <Settings2 size={13} /> Sections
+          </button>
         )}
+      </div>
 
-        <div>
-          <div className="flex justify-between items-center mb-5">
-            <h1 className="text-mediumBrown text-[32px] font-bold">
-              Marketing & Pipeline Performance
-            </h1>
-          </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{activeTab?.name}</h3>
+          <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
+          {activeFilterCount > 0 && (
+            <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
+              Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+            </button>
+          )}
+        </div>
 
-          <div className="bg-[#fdfcfb] p-5 rounded-lg shadow-sm mb-7 border border-mediumBrown">
-            <div
-              onClick={() =>
-                setShowFullDescription(!showFullDescription)
-              }
-              className="cursor-pointer flex justify-between items-center text-mediumBrown font-semibold"
-            >
-              <span>About this Dashboard</span>
-              <span>
-                {showFullDescription ? "▼" : "▶"}
-              </span>
-            </div>
-            {showFullDescription && (
-              <div className="mt-5">
-                <div className="grid grid-cols-2 gap-5">
-                  <div>
-                    <h3 className="text-warmBrown mt-0 mb-3 text-base">
-                      What this dashboard DOES
-                    </h3>
-                    <ul className="text-textBrown text-sm leading-7 m-0 pl-5">
-                      <li>
-                        Assesses pipeline visibility, quality, and
-                        concentration
-                      </li>
-                      <li>
-                        Evaluates demand risk and market exposure
-                      </li>
-                      <li>
-                        Monitors lead generation effectiveness and
-                        conversion rates
-                      </li>
-                      <li>
-                        Measures customer acquisition cost and
-                        marketing ROI
-                      </li>
-                      <li>
-                        Tracks sales cycle efficiency and pipeline
-                        velocity
-                      </li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h3 className="text-warmBrown mt-0 mb-3 text-base">
-                      What this dashboard does NOT do
-                    </h3>
-                    <ul className="text-textBrown text-sm leading-7 m-0 pl-5">
-                      <li>
-                        Run marketing campaigns or ad management
-                      </li>
-                      <li>
-                        Manage CRM or customer relationship tracking
-                      </li>
-                      <li>
-                        Track social media engagement or content
-                        scheduling
-                      </li>
-                      <li>
-                        Email marketing automation or lead nurturing
-                      </li>
-                      <li>
-                        SEO optimization or website analytics
-                        management
-                      </li>
-                    </ul>
-                  </div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
+            {showColumnMenu && (
+              <>
+                <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
+                <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
+                  {COLUMN_ORDER.map((key) => {
+                    const def = COLUMN_DEFS[key];
+                    return (
+                      <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px", cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
+                        {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
+                        <span style={{ flex: 1 }}>{key === "source" ? "Target source" : def.label}</span>
+                      </div>
+                    );
+                  })}
+                  <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
                 </div>
-              </div>
+              </>
             )}
           </div>
-
-          <div className="mb-7">
-            <DateRangePicker
-              filterMode={filterMode}
-              setFilterMode={setFilterMode}
-              fromDate={fromDate}
-              setFromDate={setFromDate}
-              toDate={toDate}
-              setToDate={setToDate}
-            />
-          </div>
-
-          <div className="flex gap-[15px] mb-7 bg-[#fdfcfb] rounded-lg shadow-sm flex-wrap">
-            {sectionButtons.map((button) => (
-              <button
-                key={button.id}
-                onClick={() => setActiveSection(button.id)}
-                className={`px-6 py-3 border-0 rounded-md cursor-pointer font-semibold text-[15px] transition-all duration-300 shadow min-w-[180px] text-center ${
-                  activeSection === button.id
-                    ? "bg-mediumBrown text-[#fdfcfb]"
-                    : "bg-[#e8ddd4] text-mediumBrown"
-                }`}
-              >
-                {button.label}
-              </button>
-            ))}
-          </div>
-
-          <PipelineVisibility
-            activeSection={activeSection}
-            currentUser={user}
-            isInvestorView={isInvestorView}
-            onDataChange={handlePipelineRecordsChange}
-            fromDate={fromDate}
-            toDate={toDate}
-          />
-          <PipelineSufficiency
-            activeSection={activeSection}
-            currentUser={user}
-            fromDate={fromDate}
-            toDate={toDate}
-            pipelineRecords={pipelineRecords}
-          />
-          <RevenueConcentration
-            activeSection={activeSection}
-            currentUser={user}
-            isInvestorView={isInvestorView}
-            onAddData={() => setShowAddDataModal(true)}
-            fromDate={fromDate}
-            toDate={toDate}
-          />
-          <DemandSustainability
-            activeSection={activeSection}
-            currentUser={user}
-            isInvestorView={isInvestorView}
-            onAddData={() => setShowAddDataModal(true)}
-            fromDate={fromDate}
-            toDate={toDate}
-          />
+          <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
+          <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
+            <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
+          </button>
+          {!isInvestorView && (
+            <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add KPI/Data</button>
+          )}
         </div>
       </div>
 
-      <UniversalAddDataModal
-        isOpen={showAddDataModal}
-        onClose={() => setShowAddDataModal(false)}
-        currentTab={activeSection}
-        user={user}
-        onSave={() => {
-          setLoading(true);
-          setTimeout(() => setLoading(false), 1000);
-        }}
-        loading={loading}
-        fromDate={fromDate}
-        toDate={toDate}
-      />
-      
-     
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
+          {PERIODS.map((p) => {
+            const on = p.key === period;
+            return (
+              <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px", fontWeight: 600, border: "none", fontFamily: "inherit", background: on ? T.bg : "transparent", color: on ? T.accent : T.body, boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <span style={{ fontSize: "12.5px", color: T.muted }}>Showing {PERIOD_PREFIX[period].toLowerCase()} target, actual and variance</span>
+      </div>
 
+      {allRows.length > 0 && (
+        <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "12px", overflow: "hidden", background: T.bg, marginBottom: "22px" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed" }}>
+              <thead>
+                <tr>
+                  {visibleColumns.map((key) => {
+                    const def = COLUMN_DEFS[key];
+                    const isOpen = openFilter === key;
+                    const sorted = sortConfig.key === key;
+                    const filtered = def.filter && filters[key] !== "all";
+                    const align = def.align === "center" ? "center" : "flex-start";
+                    const lines = key === "source" ? ["Target", "source"] : columnLines(key, period);
+
+                    return (
+                      <th key={key} style={{ ...thS, width: widths[key] }}>
+                        <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: align }}>
+                          <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                            <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
+                              {lines.map((l, i) => (
+                                <span key={i} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap", color: i < lines.length - 1 ? "rgba(255,255,255,0.82)" : "#ffffff" }}>{l}</span>
+                              ))}
+                            </span>
+                            <InfoTip text={def.tip} light />
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                            {def.sort && (
+                              <button onClick={() => toggleSort(key)} title="Sort" style={iconBtn(sorted ? "#fff" : "rgba(255,255,255,0.6)")}>
+                                {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                              </button>
+                            )}
+                            {def.filter && (
+                              <button onClick={() => setOpenFilter(isOpen ? null : key)} title="Filter" style={{ ...iconBtn(filtered ? "#fff" : "rgba(255,255,255,0.6)"), background: filtered ? "rgba(255,255,255,0.16)" : "transparent" }}>
+                                <SlidersHorizontal size={13} />
+                              </button>
+                            )}
+                          </span>
+                        </div>
+
+                        {isOpen && def.filter && (
+                          <div onMouseLeave={() => setOpenFilter(null)} style={{ position: "absolute", top: "100%", left: 0, marginTop: "2px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "10px", minWidth: "215px", maxHeight: "260px", overflowY: "auto", zIndex: 600, boxShadow: "0 12px 30px rgba(45,32,28,0.18)", padding: "6px" }}>
+                            {optionsFor(key).map((opt) => (
+                              <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setOpenFilter(null); }} style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px", background: filters[key] === opt ? T.accentTint : "transparent", color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
+                                {opt === "all" ? `All ${(key === "source" ? "target sources" : def.label.toLowerCase())}` : opt}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                      </th>
+                    );
+                  })}
+                  <th style={{ ...thS, width: widths[ACTIONS_KEY], borderRight: "none" }}>
+                    <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
+                      <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>Actions</span>
+                        <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, and notes for this KPI." />
+                      </span>
+                      <span style={{ height: "23px" }} />
+                    </div>
+                    <div onMouseDown={(e) => startResize(e, ACTIONS_KEY)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {groupedRows.length === 0 ? (
+                  <tr><td colSpan={visibleColumns.length + 1} style={{ ...tdS, textAlign: "center", padding: "56px 16px", color: T.muted, borderRight: "none" }}>No KPIs match the current filters.</td></tr>
+                ) : (
+                  groupedRows.map((group) =>
+                    group.items.map((row, idx) => {
+                      const { kpi, categoryName, tabName, status, variance, values, source } = row;
+                      const fav = varianceFavourable(kpi, variance);
+                      const last = idx === group.items.length - 1;
+                      const rowTd = { ...tdS, borderBottom: last ? `2px solid ${T.lineStrong}` : `1px solid ${T.lineSoft}` };
+                      const cell = (key, content) =>
+                        visibility[key] ? (
+                          <td key={key} style={{ ...rowTd, width: widths[key], textAlign: COLUMN_DEFS[key].align === "center" ? "center" : "left" }}>{content}</td>
+                        ) : null;
+
+                      return (
+                        <tr key={kpi.id}>
+                          {visibility.category && idx === 0 && (
+                            <td rowSpan={group.items.length} style={{ ...tdS, width: widths.category, background: T.panel, fontWeight: 700, color: T.accent, verticalAlign: "middle", borderBottom: `2px solid ${T.lineStrong}`, borderRight: `1px solid ${T.lineStrong}`, fontSize: "13.5px" }}>
+                              {group.name}
+                            </td>
+                          )}
+                          {visibility.kpi && (
+                            <td style={{ ...rowTd, width: widths.kpi }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                                <span style={{ fontWeight: 500, color: T.ink }}>{kpi.name}</span>
+                                <button onClick={() => setInfoKpi(kpi)} style={iconBtn(T.muted)} title="What it means and how it is measured"><Eye size={14} /></button>
+                                {kpi.notes && <StickyNote size={11} color={T.amber} />}
+                              </div>
+                            </td>
+                          )}
+                          {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
+                          {cell("source", (
+                            <span style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "999px", background: source === "Set" ? T.accentTint : T.raised, color: source === "Set" ? T.accent : T.body, fontWeight: 500 }}>
+                              {source}
+                            </span>
+                          ))}
+                          {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
+                          {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi, { bare: true })}</span>)}
+                          {cell("variance", variance === null || kpi.options ? <span style={{ color: T.faint }}>—</span> : <span style={{ fontWeight: 700, color: fav ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>{fmtValue(variance, kpi, { signed: true, bare: true })}</span>)}
+                          {cell("status", <span style={{ display: "inline-flex" }} title={status.label}><StatusIcon status={status} size={22} /></span>)}
+
+                          <td style={{ ...rowTd, width: widths[ACTIONS_KEY], textAlign: "center", borderRight: "none" }}>
+                            <div style={{ display: "flex", gap: "1px", justifyContent: "center", alignItems: "center" }}>
+                              <button onClick={() => setChartKpi(kpi)} style={iconBtn(T.body)} title="Trend chart"><LineChartIcon size={16} /></button>
+                              <button onClick={() => setAnalysisKpi(kpi)} style={iconBtn(T.body)} title="Summary analysis across all timeframes"><Lightbulb size={16} /></button>
+                              {!isInvestorView && (
+                                <button onClick={() => setActionKpi({ kpi, categoryName, tabName })} style={iconBtn(status.color)} title={`Add action (${status.label})`}><Plus size={16} /></button>
+                              )}
+                              <button onClick={() => setNotesKpi(kpi)} style={iconBtn(kpi.notes ? T.amber : T.body)} title="Notes"><StickyNote size={16} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.lineStrong}`, background: T.panel, fontSize: "12px", color: T.body, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+            <span>{activeTab?.categories.length} categories · a "Benchmark" target is the published figure, not one you set</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><CheckCircle2 size={13} color={T.green} /> On target</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><AlertTriangle size={13} color={T.amber} /> Needs attention</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><XCircle size={13} color={T.red} /> Critical</span>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline Visibility - Original Table */}
+      {activeTabId === "pipeline-visibility" && (
+        <div className="mt-5">
+          <PipelineTable currentUser={user} isInvestorView={isInvestorView} onDataChange={handlePipelineRecordsChange} />
+        </div>
+      )}
+
+      {/* Revenue Concentration - Extra sections */}
+      {activeTabId === "revenue-concentration" && (
+        <>
+          <div style={{ ...cardS, marginBottom: "20px" }}>
+            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Top 3 Concentration</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+              <div>
+                <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Channels</h4>
+                <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Channel</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
+                    <tbody>
+                      {["Social Media", "PPC", "Email"].map((channel, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{channel}</td>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,200,000</td>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>35.2%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Customers</h4>
+                <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Customer</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
+                    <tbody>
+                      {["Acme Corp", "TechGlobal", "EcoSolutions"].map((customer, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{customer}</td>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 850,000</td>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>24.9%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Segments</h4>
+                <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Segment</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
+                    <tbody>
+                      {["Enterprise", "SMB", "Startup"].map((segment, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{segment}</td>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,500,000</td>
+                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>44.0%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ ...cardS, marginBottom: "20px" }}>
+            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Channel Performance</h3>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Channel</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Marketing Spend</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Net Profit</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>% of Revenue</th></tr></thead>
+                <tbody>
+                  {["Social Media", "Email", "PPC", "SEO", "Referral", "Direct"].map((channel, i) => {
+                    const revenue = [150000, 120000, 80000, 60000, 50000, 40000][i];
+                    const spend = [45000, 30000, 35000, 15000, 10000, 5000][i];
+                    const net = revenue - spend;
+                    const roi = spend > 0 ? (net / spend) * 100 : 0;
+                    const pct = [22.0, 17.6, 11.7, 8.8, 7.3, 5.9][i];
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{channel}</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {spend.toLocaleString()}</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: net >= 0 ? T.green : T.red, fontWeight: 600 }}>R {net.toLocaleString()}</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>{pct}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ ...cardS, background: T.panel }}>
+            <h4 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "13px", fontWeight: 600 }}>Concentration Risk Analysis</h4>
+            <div style={{ fontSize: "13px", color: T.body, fontWeight: 600, marginBottom: "6px" }}>Channel Concentration Risk</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ flex: 1, background: T.line, height: "20px", borderRadius: "10px", overflow: "hidden" }}>
+                <div style={{ width: "51.3%", height: "100%", background: T.amber, borderRadius: "10px" }} />
+              </div>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: T.body, minWidth: "45px" }}>51.3%</span>
+            </div>
+            <div style={{ fontSize: "12px", color: T.muted, marginTop: "6px" }}>Top 3 channels generate 51.3% of total revenue - Moderate risk: Could benefit from further diversification</div>
+          </div>
+        </>
+      )}
+
+      {/* Demand Sustainability - Campaign Performance */}
+      {activeTabId === "demand-sustainability" && (
+        <div style={{ ...cardS, marginBottom: "20px" }}>
+          <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Campaign Performance</h3>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Campaign</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Cost</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th></tr></thead>
+              <tbody>
+                {["Q1 Campaign", "Q2 Campaign", "Summer Sale", "Holiday Campaign"].map((campaign, i) => {
+                  const cost = [25000, 30000, 15000, 40000][i];
+                  const revenue = [45000, 55000, 35000, 80000][i];
+                  const roi = cost > 0 ? ((revenue - cost) / cost) * 100 : 0;
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{campaign}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {cost.toLocaleString()}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {infoKpi && <KpiInfoModal kpi={infoKpi} readOnly={isInvestorView} onClose={() => setInfoKpi(null)} onSave={(patch) => { updateKpiMeta(infoKpi.id, patch); setInfoKpi({ ...infoKpi, ...patch }); notify("success", "KPI details updated."); }} />}
+      {chartKpi && <TrendChartModal kpi={chartKpi} period={period} fy={fy} readOnly={isInvestorView} onClose={() => setChartKpi(null)} onSaveNote={(key, text) => { const notes = { ...(chartKpi.periodNotes || {}) }; if (text.trim()) notes[key] = text.trim(); else delete notes[key]; updateKpiMeta(chartKpi.id, { periodNotes: notes }); setChartKpi({ ...chartKpi, periodNotes: notes }); }} onSaveChart={(chart) => { updateKpiMeta(chartKpi.id, { chart }); setChartKpi({ ...chartKpi, chart }); }} />}
+      {analysisKpi && <AnalysisModal kpi={analysisKpi} period={period} fy={fy} onClose={() => setAnalysisKpi(null)} />}
+      {actionKpi && <AddActionModal kpi={actionKpi.kpi} period={period} fy={fy} categoryName={actionKpi.categoryName} tabName={actionKpi.tabName} userId={user?.uid} onClose={() => setActionKpi(null)} onSaved={(m) => notify("success", `Action added to "${m}" and Integrated Actions.`)} />}
+      {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)} onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
+
+      {manageTabs && (
+        <Modal title="Sections" subtitle="Hide a section to take it off the dashboard" icon={<Settings2 size={17} />} onClose={() => setManageTabs(false)} width={560} footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
+          {tabs.map((t) => {
+            const hidden = (meta.hiddenTabs || []).includes(t.id);
+            const count = t.categories.flatMap((c) => c.kpis || []).length;
+            return (
+              <div key={t.id} style={{ ...cardS, marginBottom: "10px", opacity: hidden ? 0.6 : 1, display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: "180px" }}>
+                  <div style={{ fontSize: "14.5px", fontWeight: 600, color: T.accent }}>{t.name} {hidden && <span style={{ fontSize: "11.5px", fontWeight: 500, color: T.muted }}>· hidden</span>}</div>
+                  <div style={{ fontSize: "12.5px", color: T.muted }}>{t.categories.length} categories · {count} KPIs</div>
+                </div>
+                <button onClick={() => persistMeta({ ...meta, hiddenTabs: hidden ? (meta.hiddenTabs || []).filter((x) => x !== t.id) : [...(meta.hiddenTabs || []), t.id] })} disabled={!hidden && visibleTabs.length <= 1} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: !hidden && visibleTabs.length <= 1 ? 0.4 : 1 }}>
+                  {hidden ? <><Eye size={13} /> Show</> : <><EyeOff size={13} /> Hide</>}
+                </button>
+              </div>
+            );
+          })}
+          <p style={{ fontSize: "12.5px", color: T.muted, marginTop: "10px", marginBottom: 0, display: "flex", alignItems: "flex-start", gap: "6px" }}><Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} /> Sections are built in, so they hide rather than delete — the underlying marketing data is shared with the rest of the platform.</p>
+        </Modal>
+      )}
+
+      {addFlow === "choose" && <AddChooser onClose={() => setAddFlow(null)} onPick={(k) => setAddFlow(k)} />}
+
+      {addFlow === "data" && (
+        <AddDataWizard tabs={tabs} fy={fy} docs={docs} currentTabId={activeTabId} prefs={dataPrefs} onSavePrefs={savePrefs} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)} onSaveField={saveKpiField} />
+      )}
+
+      {addFlow === "kpi" && (
+        <AddKpiWizard tabs={tabs} currentTabId={activeTabId} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)} onSave={async (kpi) => { await persistMeta({ ...meta, custom: [...(meta.custom || []), kpi] }); notify("success", "KPI created."); }} />
+      )}
+
+      <UniversalAddDataModal isOpen={showAddDataModal} onClose={() => setShowAddDataModal(false)} currentTab={activeTabId} user={user} onSave={() => { setLoadingData(true); setTimeout(() => setLoadingData(false), 1000); }} loading={loadingData} fromDate={fromDate} toDate={toDate} />
     </div>
   );
-}
+};
+
+export default MarketingSales;
