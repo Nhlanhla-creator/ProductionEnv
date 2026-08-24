@@ -23,7 +23,7 @@
 .hero-section {
   position: relative;
   background: linear-gradient(135deg, #372C27 0%, #754A2D 50%, #9E6E3C 100%);
-  color: white;
+  color: rgb(84, 79, 79);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
