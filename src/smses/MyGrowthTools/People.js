@@ -216,9 +216,9 @@ const FOCUS_OPTIONS = [
 
 const TAB_DEFS = [
   {
-    id: "productivity", name: "Productivity",
+    id: "summary", name: "People Performance Summary",
     categories: [
-      { name: "Output & Efficiency", kpis: [
+      { name: "Productivity", kpis: [
         K({ id: "revenuePerEmployee", name: "Revenue per Employee", units: "R", direction: "higher", aggregate: "avg",
           benchmark: 500000,
           field: { src: "prod", a: ["productivityData","revenuePerEmployee","actual"], b: ["productivityData","revenuePerEmployee","budget"] },
@@ -244,12 +244,7 @@ const TAB_DEFS = [
           measured: "=SUM(OvertimeHours)\n\nFrom the timekeeping register for the month.",
           actual: (c) => c.overtimeHours, budget: (c) => c.overtimeHoursB }),
       ]},
-    ],
-  },
-  {
-    id: "capability", name: "Capability",
-    categories: [
-      { name: "Capability & Training", panel: "tracking", kpis: [
+      { name: "Capability & Training", kpis: [
         K({ id: "trainingSpendAmount", name: "Training Spend (R)", units: "R", direction: "higher", aggregate: "sum",
           benchmark: 50000,
           field: { src: "cap", a: ["capabilityData","trainingSpendAmount","actual"], b: ["capabilityData","trainingSpendAmount","budget"] },
@@ -269,19 +264,14 @@ const TAB_DEFS = [
           measured: "Captured as a category rather than calculated.\n\n=INDEX({\"Technical\";\"Leadership\";\"Compliance\"}, FocusCode)\n\nRotate the focus so no one area is neglected across a year.",
           actual: (c) => c.trainingFocus, budget: (c) => c.trainingFocusB }),
       ]},
-      { name: "Employee Composition", panel: "composition", kpis: [
+      { name: "Employee Composition", kpis: [
         K({ id: "headCount", name: "Head Count", units: "#", direction: "match", aggregate: "avg",
           field: { src: "comp", scalar: true, a: ["employeeData","headCount"], b: ["employeeData","targetHeadCount"] },
           meaning: "How many people are on the books, against the target you set. The gap is your open vacancies.",
           measured: "=COUNTA(EmployeeRegister)\n\nTarget head count is the planned establishment. Vacancies = Target − Actual.",
           actual: (c) => c.headCount, budget: (c) => c.targetHeadCount }),
       ]},
-    ],
-  },
-  {
-    id: "capacity", name: "Capacity",
-    categories: [
-      { name: "Execution Capacity", panel: "capacity", kpis: [
+      { name: "Execution Capacity", kpis: [
         K({ id: "criticalFunctionsSinglePoint", name: "% Critical Functions Dependent on 1 Person", units: "%", direction: "lower", aggregate: "avg",
           benchmark: 20,
           field: { src: "exec", a: ["executionData","criticalFunctionsSinglePoint"] },
@@ -295,12 +285,7 @@ const TAB_DEFS = [
           measured: "=COUNTIF(HasSecond, \"Yes\") / COUNTA(CriticalRoles) * 100\n\nAbove 80% is a resilient organisation.",
           actual: (c) => c.criticalRolesWith2IC }),
       ]},
-    ],
-  },
-  {
-    id: "stability", name: "Stability & Continuity",
-    categories: [
-      { name: "Stability", panel: "records", kpis: [
+      { name: "Stability", kpis: [
         K({ id: "overallTurnover", name: "Overall Turnover (% Annually)", units: "%", direction: "lower", aggregate: "avg",
           benchmark: 15,
           field: { src: "stab", a: ["stabilityData","overallTurnover"] },
@@ -325,6 +310,26 @@ const TAB_DEFS = [
           measured: "=COUNTIF(ContractType, \"Contract\") / COUNTA(Workforce) * 100\n\nOver 30% is worth a conversion plan.",
           actual: (c) => c.contractorDependence }),
       ]},
+    ],
+  },
+  {
+    id: "capability", name: "Capability",
+    categories: [
+      { name: "Employee Development Tracking", panel: "tracking", kpis: [] },
+    ],
+  },
+  {
+    id: "capacity", name: "Capacity",
+    categories: [
+      { name: "Founder Operational Load", panel: "capacityLoad", kpis: [] },
+      { name: "Average Span of Control", panel: "capacitySpan", kpis: [] },
+    ],
+  },
+  {
+    id: "stability", name: "Stability & Continuity",
+    categories: [
+      { name: "Termination Records", panel: "recordsTerm", kpis: [] },
+      { name: "New Hire Records", panel: "recordsHire", kpis: [] },
     ],
   },
 ];
@@ -394,7 +399,6 @@ const COLUMN_DEFS = {
   category:  { label: "Category", width: 178, tip: "The category this KPI sits under.", filter: true, sort: true, hideable: true },
   kpi:       { label: "KPI", width: 288, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
   units:     { label: "Units", width: 90, align: "center", tip: "The unit every figure in this row is expressed in.", filter: true, sort: true, hideable: true },
-  source:    { label: "Target", width: 118, align: "center", tip: "Whether the target beside this KPI is one you set, or the recommended benchmark used in its place.", filter: true, sort: true, hideable: true },
   budget:    { label: "Target", width: 132, align: "center", tip: "Your captured target, or the recommended benchmark where none is set.", sort: true, hideable: true },
   actual:    { label: "Actual", width: 132, align: "center", tip: "What was recorded for the selected period.", sort: true, hideable: true },
   variance:  { label: "Variance", width: 132, align: "center", tip: "Actual minus Target. Green means favourable for this KPI's direction.", sort: true, hideable: true },
@@ -637,8 +641,6 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         }
         throw new Error("The function replied, but not in the expected shape.");
       } catch (err) {
-        // "not-found" means the Cloud Function is not deployed — a different fix
-        // from a permissions error, so name it.
         console.error("AI analysis unavailable:", err);
         setReason(err?.code === "functions/not-found" ? "The generateKpiAnalysis function isn't deployed yet." : errText(err));
         setSource("local");
@@ -1406,73 +1408,6 @@ const AddChooser = ({ onPick, onClose }) => (
    ════════════════════════════════════════════════════════════════════════ */
 const BROWN = ["#3E2723", "#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"];
 
-const CompositionPanel = ({ docs, onEdit, readOnly }) => {
-  const d = docs.comp?.employeeData || {};
-  const totalContract = (d.permanent || 0) + (d.contract || 0) + (d.internship || 0);
-  const occLabels = ["Unskilled","Semi-skilled","Skilled Jnr","Prof Mid","Snr Mgt","Top Mgt"];
-  const occValues = [d.unskilled || 0, d.semiSkilled || 0, d.skilledJnr || 0, d.profMid || 0, d.snrMgt || 0, d.topMgt || 0];
-  const totalOcc = occValues.reduce((s, v) => s + v, 0);
-
-  return (
-    <div style={cardS}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Workforce Breakdown</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>Contract types and occupational levels behind the head count</div>
-        </div>
-        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit breakdown</button>}
-      </div>
-
-      <div style={{ ...cardS, background: T.panel, marginBottom: "16px", fontSize: "12.5px", color: T.body,
-        display: "flex", alignItems: "flex-start", gap: "8px" }}>
-        <Info size={14} color={T.accentSoft} style={{ marginTop: "1px", flexShrink: 0 }} />
-        <span>Demographic splits — gender, youth, HDI ownership — are tracked and reported under ESG Impact, not here.</span>
-      </div>
-
-      {totalContract === 0 && totalOcc === 0 ? (
-        <div style={{ textAlign: "center", padding: "30px 20px", color: T.muted, fontSize: "13.5px" }}>
-          No breakdown captured yet. Use Edit breakdown to add contract types and occupational levels.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
-          <div>
-            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Contract type</div>
-            <div style={{ height: "220px" }}>
-              <Pie
-                data={{ labels: ["Permanent","Contract","Internship"],
-                  datasets: [{ data: [d.permanent || 0, d.contract || 0, d.internship || 0],
-                    backgroundColor: [BROWN[0], BROWN[3], BROWN[5]], borderWidth: 0 }] }}
-                options={{ responsive: true, maintainAspectRatio: false,
-                  plugins: {
-                    legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
-                    datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
-                    tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
-                      callbacks: { label: (c) => `${c.label}: ${c.raw} (${totalContract ? ((c.raw / totalContract) * 100).toFixed(1) : 0}%)` } },
-                  } }}
-                plugins={[ChartDataLabels]}
-              />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Occupational levels</div>
-            <div style={{ height: "220px" }}>
-              <Bar
-                data={{ labels: occLabels, datasets: [{ label: "Count", data: occValues, backgroundColor: BROWN, borderWidth: 0, borderRadius: 4 }] }}
-                options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false,
-                  plugins: { legend: { display: false }, datalabels: { display: false },
-                    tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
-                      callbacks: { label: (c) => `${c.raw} (${totalOcc ? ((c.raw / totalOcc) * 100).toFixed(1) : 0}%)` } } },
-                  scales: { x: { beginAtZero: true, grid: { color: T.lineSoft }, ticks: { color: T.body, font: { size: 11 } } },
-                    y: { grid: { display: false }, ticks: { color: T.body, font: { size: 11 } } } } }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const TrackingPanel = ({ docs, onEdit, readOnly }) => {
   const employees = docs.track?.employees || [];
   const doneCount = (k) => employees.filter((e) => e[k]?.status === "Done").length;
@@ -1553,7 +1488,7 @@ const TrackingPanel = ({ docs, onEdit, readOnly }) => {
   );
 };
 
-const CapacityPanel = ({ docs, fy }) => {
+const CapacityLoadPanel = ({ docs, fy, onEdit, readOnly }) => {
   const exec = docs.exec?.executionData || {};
   const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
 
@@ -1564,18 +1499,16 @@ const CapacityPanel = ({ docs, fy }) => {
     if (v === "4" || v === 4) return { text: "Critical", color: T.red, bg: T.redBg };
     return { text: "—", color: T.faint, bg: T.raised };
   };
-  const spanStatus = (v) => {
-    const n = parseFloat(v);
-    if (!Number.isFinite(n)) return { text: "—", color: T.faint, bg: T.raised };
-    if (n >= 5 && n <= 8) return { text: n.toFixed(1), color: T.green, bg: T.greenBg };
-    if (n < 3 || n > 12) return { text: n.toFixed(1), color: T.red, bg: T.redBg };
-    return { text: n.toFixed(1), color: T.amber, bg: T.amberBg };
-  };
 
-  const row = (title, arr, styler, footnote) => (
-    <div style={{ ...cardS, marginBottom: "14px" }}>
-      <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent, marginBottom: "2px" }}>{title}</div>
-      <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "10px" }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Founder Operational Load</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
+        </div>
+        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit data</button>}
+      </div>
       <div style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "760px" }}>
           <thead>
@@ -1585,7 +1518,7 @@ const CapacityPanel = ({ docs, fy }) => {
           </thead>
           <tbody>
             <tr>{months.map((m) => {
-              const s = styler(arr?.[m.month]);
+              const s = loadStatus(exec.founderLoad?.[m.month]);
               return (
                 <td key={m.key} style={{ padding: "6px 4px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
                   <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color,
@@ -1596,26 +1529,131 @@ const CapacityPanel = ({ docs, fy }) => {
           </tbody>
         </table>
       </div>
-      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>{footnote}</p>
-    </div>
-  );
-
-  return (
-    <div>
-      {row("Founder Operational Load", exec.founderLoad, loadStatus,
-        "Low means the founder is on strategy and operations run without them. Critical means the business stops when they do. Aim for Low to Medium.")}
-      {row("Average Span of Control", exec.spanOfControl, spanStatus,
-        "Five to eight direct reports is the working range. Below three is top-heavy; above twelve and supervision stops being real.")}
+      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
+        Low means the founder is on strategy and operations run without them. Critical means the business stops when they do. Aim for Low to Medium.
+      </p>
     </div>
   );
 };
 
-const RecordsPanel = ({ docs, onEdit, readOnly }) => {
+const CapacitySpanPanel = ({ docs, fy, onEdit, readOnly }) => {
+  const exec = docs.exec?.executionData || {};
+  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+
+  const spanStatus = (v) => {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return { text: "—", color: T.faint, bg: T.raised };
+    if (n >= 5 && n <= 8) return { text: n.toFixed(1), color: T.green, bg: T.greenBg };
+    if (n < 3 || n > 12) return { text: n.toFixed(1), color: T.red, bg: T.redBg };
+    return { text: n.toFixed(1), color: T.amber, bg: T.amberBg };
+  };
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Average Span of Control</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
+        </div>
+        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit data</button>}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "760px" }}>
+          <thead>
+            <tr>{months.map((m) => (
+              <th key={m.key} style={{ ...panelTh, textAlign: "center", fontSize: "11px", padding: "7px 4px" }}>{m.label}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            <tr>{months.map((m) => {
+              const s = spanStatus(exec.spanOfControl?.[m.month]);
+              return (
+                <td key={m.key} style={{ padding: "6px 4px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
+                  <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color,
+                    fontSize: "11.5px", fontWeight: 700 }}>{s.text}</div>
+                </td>
+              );
+            })}</tr>
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
+        Five to eight direct reports is the working range. Below three is top-heavy; above twelve and supervision stops being real.
+      </p>
+    </div>
+  );
+};
+
+const RecordsTermPanel = ({ docs, onEdit, readOnly }) => {
   const terms = docs.term?.entries || [];
-  const hires = docs.hire?.entries || [];
 
   const byReason = terms.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
   const reasons = Object.keys(byReason);
+
+  const pie = (labels, values, colors, total) => (
+    <div style={{ height: "230px" }}>
+      <Pie data={{ labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] }}
+        options={{ responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+            datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
+            tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+              callbacks: { label: (c) => `${c.label}: ${c.raw} (${total ? ((c.raw / total) * 100).toFixed(1) : 0}%)` } },
+          } }}
+        plugins={[ChartDataLabels]} />
+    </div>
+  );
+
+  const table = (headers, rows, empty) => (
+    <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "460px" }}>
+          <thead><tr>{headers.map((h) => <th key={h} style={{ ...panelTh, textAlign: "left" }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={headers.length} style={{ padding: "26px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>{empty}</td></tr>
+            ) : rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Termination Records</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>{terms.length} exits recorded · {reasons.length} distinct reasons</div>
+        </div>
+        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
+        {table(["Employee", "Started", "Ended", "Reason"],
+          terms.map((e, i) => (
+            <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
+              <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name || "—"}</td>
+              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted || "—"}</td>
+              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateEnded || "—"}</td>
+              <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
+                <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{e.reason}</span>
+              </td>
+            </tr>
+          )), "No termination records yet.")}
+        {reasons.length > 0 && (
+          <div>
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Reasons for leaving</div>
+            {pie(reasons, reasons.map((r) => byReason[r]), BROWN, terms.length)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const RecordsHirePanel = ({ docs, onEdit, readOnly }) => {
+  const hires = docs.hire?.entries || [];
+
   const byType = {
     Permanent: hires.filter((e) => e.contractType === "Permanent").length,
     Contract: hires.filter((e) => e.contractType === "Contract").length,
@@ -1637,7 +1675,7 @@ const RecordsPanel = ({ docs, onEdit, readOnly }) => {
     </div>
   );
 
-  const table = (title, headers, rows, empty) => (
+  const table = (headers, rows, empty) => (
     <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
       <div style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "460px" }}>
@@ -1653,65 +1691,34 @@ const RecordsPanel = ({ docs, onEdit, readOnly }) => {
   );
 
   return (
-    <div>
-      <div style={{ ...cardS, marginBottom: "14px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-          <div>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Termination Records</div>
-            <div style={{ fontSize: "12.5px", color: T.muted }}>{terms.length} exits recorded · {reasons.length} distinct reasons</div>
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>New Hire Records</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>
+            {hires.length} hires · {byType.Permanent} permanent, {byType.Contract} contract, {byType.Internship} internship
           </div>
-          {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
-          {table("Terminations", ["Employee", "Started", "Ended", "Reason"],
-            terms.map((e, i) => (
-              <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
-                <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name || "—"}</td>
-                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted || "—"}</td>
-                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateEnded || "—"}</td>
-                <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                  <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{e.reason}</span>
-                </td>
-              </tr>
-            )), "No termination records yet.")}
-          {reasons.length > 0 && (
-            <div>
-              <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Reasons for leaving</div>
-              {pie(reasons, reasons.map((r) => byReason[r]), BROWN, terms.length)}
-            </div>
-          )}
-        </div>
+        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
       </div>
-
-      <div style={cardS}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
+        {table(["Employee", "Started", "Contract", "Ends"],
+          hires.map((e, i) => (
+            <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
+              <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name}</td>
+              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted}</td>
+              <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
+                <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{e.contractType}</span>
+              </td>
+              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.endDate || "—"}</td>
+            </tr>
+          )), "No new hire records yet.")}
+        {types.length > 0 && (
           <div>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>New Hire Records</div>
-            <div style={{ fontSize: "12.5px", color: T.muted }}>
-              {hires.length} hires · {byType.Permanent} permanent, {byType.Contract} contract, {byType.Internship} internship
-            </div>
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Hires by contract type</div>
+            {pie(types, types.map((t) => byType[t]), [T.green, T.amber, "#6d28d9"], hires.length)}
           </div>
-          {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
-          {table("New hires", ["Employee", "Started", "Contract", "Ends"],
-            hires.map((e, i) => (
-              <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
-                <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name}</td>
-                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted}</td>
-                <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                  <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{e.contractType}</span>
-                </td>
-                <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.endDate || "—"}</td>
-              </tr>
-            )), "No new hire records yet.")}
-          {types.length > 0 && (
-            <div>
-              <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Hires by contract type</div>
-              {pie(types, types.map((t) => byType[t]), [T.green, T.amber, "#6d28d9"], hires.length)}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1722,29 +1729,44 @@ const REASONS = ["Performance","Resignation","Redundancy","Misconduct","Retireme
 const CONTRACT_TYPES = ["Permanent","Contract","Internship"];
 
 const RecordsModal = ({ mode, docs, onClose, onSave }) => {
-  const [comp, setComp] = useState(() => ({ ...(docs.comp?.employeeData || {}) }));
   const [employees, setEmployees] = useState(() => [...(docs.track?.employees || [])]);
   const [terms, setTerms] = useState(() => [...(docs.term?.entries || [])]);
   const [hires, setHires] = useState(() => [...(docs.hire?.entries || [])]);
   const [saving, setSaving] = useState(false);
   const [newTerm, setNewTerm] = useState({ name: "", dateStarted: "", dateEnded: "", reason: "", customReason: "" });
   const [newHire, setNewHire] = useState({ name: "", dateStarted: "", contractType: "Permanent", endDate: "" });
+  const [exec, setExec] = useState(() => ({ ...(docs.exec?.executionData || {}) }));
 
-  const title = mode === "composition" ? "Workforce breakdown" : mode === "tracking" ? "Employee development tracking" : "People records";
+  const title = mode === "tracking" ? "Employee development tracking"
+    : mode === "capacityLoad" ? "Founder Operational Load"
+    : mode === "capacitySpan" ? "Average Span of Control"
+    : mode === "recordsTerm" ? "Termination Records"
+    : mode === "recordsHire" ? "New Hire Records"
+    : "People records";
 
   const commit = async () => {
     setSaving(true);
-    if (mode === "composition") await onSave("comp", { employeeData: comp });
     if (mode === "tracking") await onSave("track", { employees });
-    if (mode === "records") { await onSave("term", { entries: terms }); await onSave("hire", { entries: hires }); }
+    if (mode === "capacityLoad") await onSave("exec", { executionData: { ...docs.exec?.executionData, founderLoad: exec.founderLoad } });
+    if (mode === "capacitySpan") await onSave("exec", { executionData: { ...docs.exec?.executionData, spanOfControl: exec.spanOfControl } });
+    if (mode === "recordsTerm") await onSave("term", { entries: terms });
+    if (mode === "recordsHire") await onSave("hire", { entries: hires });
     setSaving(false); onClose();
   };
 
   const numField = (label, key) => (
     <div key={key}>
       <label style={labelS}>{label}</label>
-      <input type="number" min="0" value={comp[key] ?? ""} placeholder="0"
-        onChange={(e) => setComp({ ...comp, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
+      <input type="number" min="0" value={exec[key] ?? ""} placeholder="0"
+        onChange={(e) => setExec({ ...exec, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
+    </div>
+  );
+
+  const capacityEditor = (label, key, min, max) => (
+    <div>
+      <label style={labelS}>{label}</label>
+      <input type="number" min={min} max={max} value={exec[key] ?? ""} placeholder="—"
+        onChange={(e) => setExec({ ...exec, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
     </div>
   );
 
@@ -1755,27 +1777,6 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
         <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
           {saving ? "Saving…" : "Save"}</button>
       </>}>
-
-      {mode === "composition" && (
-        <>
-          <div style={{ ...cardS, background: T.panel, marginBottom: "14px", fontSize: "12.5px", color: T.body }}>
-            Head count and target are edited under Add Data — they're KPIs. This is the breakdown behind them.
-          </div>
-          <div style={{ marginBottom: "18px" }}>
-            <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Contract type</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-              {numField("Permanent", "permanent")}{numField("Contract", "contract")}{numField("Internship", "internship")}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Occupational levels</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-              {numField("Unskilled", "unskilled")}{numField("Semi-skilled", "semiSkilled")}{numField("Skilled Jnr", "skilledJnr")}
-              {numField("Prof Mid", "profMid")}{numField("Snr Mgt", "snrMgt")}{numField("Top Mgt", "topMgt")}
-            </div>
-          </div>
-        </>
-      )}
 
       {mode === "tracking" && (
         <>
@@ -1815,9 +1816,26 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
         </>
       )}
 
-      {mode === "records" && (
+      {(mode === "capacityLoad" || mode === "capacitySpan") && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "14px", fontSize: "12.5px", color: T.body }}>
+          {mode === "capacityLoad" ? "1 = Low, 2 = Medium, 3 = High, 4 = Critical" : "Number of direct reports per manager"}
+        </div>
+      )}
+
+      {mode === "capacityLoad" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
+          {Array.from({ length: 12 }, (_, i) => capacityEditor(MONTHS[i], i, 1, 4))}
+        </div>
+      )}
+
+      {mode === "capacitySpan" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
+          {Array.from({ length: 12 }, (_, i) => capacityEditor(MONTHS[i], i, 0, 20))}
+        </div>
+      )}
+
+      {mode === "recordsTerm" && (
         <>
-          <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Terminations</div>
           <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
               <div><label style={labelS}>Employee</label>
@@ -1856,8 +1874,11 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
                 style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "4px" }}><Trash2 size={13} /></button>
             </div>
           ))}
+        </>
+      )}
 
-          <div style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent, margin: "22px 0 10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>New hires</div>
+      {mode === "recordsHire" && (
+        <>
           <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
               <div><label style={labelS}>Employee</label>
@@ -1922,7 +1943,7 @@ const PeoplePerformance = () => {
   const [activeTabId, setActiveTabId] = useState(TAB_DEFS[0].id);
   const [period, setPeriod] = useState("month");
 
-  const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", source: "all", status: "all" });
+  const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", status: "all" });
   const [openFilter, setOpenFilter] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [widths, setWidths] = useState(() => ({ ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])), [ACTIONS_KEY]: 166 }));
@@ -2183,7 +2204,6 @@ const PeoplePerformance = () => {
       if (key === "category") set.add(r.categoryName);
       else if (key === "kpi") set.add(r.kpi.name);
       else if (key === "units") set.add(r.kpi.units);
-      else if (key === "source") set.add(r.source);
       else if (key === "status") set.add(r.status.label);
     });
     return ["all", ...Array.from(set).sort()];
@@ -2194,12 +2214,11 @@ const PeoplePerformance = () => {
       (filters.category === "all" || r.categoryName === filters.category) &&
       (filters.kpi === "all" || r.kpi.name === filters.kpi) &&
       (filters.units === "all" || r.kpi.units === filters.units) &&
-      (filters.source === "all" || r.source === filters.source) &&
       (filters.status === "all" || r.status.label === filters.status));
 
     const get = {
       category: (r) => r.categoryName, kpi: (r) => r.kpi.name,
-      units: (r) => r.kpi.units, source: (r) => r.source,
+      units: (r) => r.kpi.units,
       budget: (r) => Number(r.values.budget) || 0, actual: (r) => Number(r.values.actual) || 0,
       variance: (r) => Number(r.variance) || 0,
       status: (r) => ({ green: 0, amber: 1, red: 2, none: 3 }[r.status.key]),
@@ -2245,14 +2264,14 @@ const PeoplePerformance = () => {
   };
 
   const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
-  const clearFilters = () => { setFilters({ category: "all", kpi: "all", units: "all", source: "all", status: "all" }); setSortConfig({ key: null, direction: "asc" }); };
+  const clearFilters = () => { setFilters({ category: "all", kpi: "all", units: "all", status: "all" }); setSortConfig({ key: null, direction: "asc" }); };
 
   const downloadCSV = () => {
     const p = PERIOD_PREFIX[period];
-    const lines = [["Section","Category","KPI","Units","Target source", `${p} Target`, `${p} Actual`, `${p} Variance`, "Status"]];
+    const lines = [["Section","Category","KPI","Units", `${p} Target`, `${p} Actual`, `${p} Variance`, "Status"]];
     tabs.forEach((tab) => tab.categories.forEach((cat) => (cat.kpis || []).forEach((kpi) => {
       const v = periodValues(kpi, period, fy);
-      lines.push([tab.name, cat.name, `"${kpi.name}"`, kpi.units, targetSource(kpi, period),
+      lines.push([tab.name, cat.name, `"${kpi.name}"`, kpi.units,
         v.budget ?? "", v.actual ?? "", getVariance(kpi, period, fy) ?? "", getStatus(kpi, period, fy).label]);
     })));
     const blob = new Blob([lines.map((r) => r.join(",")).join("\n")], { type: "text/csv" });
@@ -2343,7 +2362,8 @@ const PeoplePerformance = () => {
         {visibleTabs.map((tab) => {
           const on = tab.id === activeTab?.id;
           const counts = tab.categories.flatMap((c) => c.kpis || []).reduce((acc, k) => {
-            const key = getStatus(k, period, fy).key; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
+            const key = getStatus(k, period, fy).key; acc[key] = (acc[key] || 0) + 1; return acc;
+          }, {});
           return (
             <button key={tab.id} onClick={() => { setActiveTabId(tab.id); clearFilters(); }}
               style={{ padding: "12px 20px", background: "none", border: "none", cursor: "pointer", fontSize: "14.5px",
@@ -2392,7 +2412,7 @@ const PeoplePerformance = () => {
                         style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px",
                           cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
                         {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
-                        <span style={{ flex: 1 }}>{key === "source" ? "Target source" : def.label}</span>
+                        <span style={{ flex: 1 }}>{def.label}</span>
                       </div>
                     );
                   })}
@@ -2442,12 +2462,10 @@ const PeoplePerformance = () => {
                     const sorted = sortConfig.key === key;
                     const filtered = def.filter && filters[key] !== "all";
                     const align = def.align === "center" ? "center" : "flex-start";
-                    const lines = key === "source" ? ["Target", "source"] : columnLines(key, period);
+                    const lines = columnLines(key, period);
 
                     return (
                       <th key={key} style={{ ...thS, width: widths[key] }}>
-                        {/* Every header starts at the top; two-line ones run
-                            further down rather than pushing the rest around. */}
                         <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: align }}>
                           <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
                             <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
@@ -2483,7 +2501,7 @@ const PeoplePerformance = () => {
                                 style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px",
                                   background: filters[key] === opt ? T.accentTint : "transparent",
                                   color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
-                                {opt === "all" ? `All ${(key === "source" ? "target sources" : def.label.toLowerCase())}` : opt}
+                                {opt === "all" ? `All ${def.label.toLowerCase()}s` : opt}
                               </div>
                             ))}
                           </div>
@@ -2514,7 +2532,7 @@ const PeoplePerformance = () => {
                     No KPIs match the current filters.
                   </td></tr>
                 ) : groupedRows.map((group) => group.items.map((row, idx) => {
-                  const { kpi, categoryName, tabName, status, variance, values, source } = row;
+                  const { kpi, categoryName, tabName, status, variance, values } = row;
                   const fav = varianceFavourable(kpi, variance);
                   const last = idx === group.items.length - 1;
                   const rowTd = { ...tdS, borderBottom: last ? `2px solid ${T.lineStrong}` : `1px solid ${T.lineSoft}` };
@@ -2542,12 +2560,6 @@ const PeoplePerformance = () => {
                         </td>
                       )}
                       {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
-                      {cell("source", (
-                        <span style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "999px",
-                          background: source === "Set" ? T.accentTint : T.raised, color: source === "Set" ? T.accent : T.body, fontWeight: 500 }}>
-                          {source}
-                        </span>
-                      ))}
                       {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
                       {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi, { bare: true })}</span>)}
                       {cell("variance", variance === null || kpi.options
@@ -2586,23 +2598,34 @@ const PeoplePerformance = () => {
         </div>
       )}
 
-      {/* Categories that carry more than a KPI row keep their panel below. */}
+      {/* Panels */}
       {panels.includes("tracking") && (
         <div style={{ marginBottom: "20px" }}>
           <TrackingPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("tracking")} />
         </div>
       )}
-      {panels.includes("composition") && (
+
+      {panels.includes("capacityLoad") && (
         <div style={{ marginBottom: "20px" }}>
-          <CompositionPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("composition")} />
+          <CapacityLoadPanel docs={docs} fy={fy} readOnly={isInvestorView} onEdit={() => setRecordsMode("capacityLoad")} />
         </div>
       )}
-      {panels.includes("capacity") && (
-        <div style={{ marginBottom: "20px" }}><CapacityPanel docs={docs} fy={fy} /></div>
-      )}
-      {panels.includes("records") && (
+
+      {panels.includes("capacitySpan") && (
         <div style={{ marginBottom: "20px" }}>
-          <RecordsPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("records")} />
+          <CapacitySpanPanel docs={docs} fy={fy} readOnly={isInvestorView} onEdit={() => setRecordsMode("capacitySpan")} />
+        </div>
+      )}
+
+      {panels.includes("recordsTerm") && (
+        <div style={{ marginBottom: "20px" }}>
+          <RecordsTermPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("recordsTerm")} />
+        </div>
+      )}
+
+      {panels.includes("recordsHire") && (
+        <div style={{ marginBottom: "20px" }}>
+          <RecordsHirePanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("recordsHire")} />
         </div>
       )}
 

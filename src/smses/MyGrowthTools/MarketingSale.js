@@ -523,6 +523,7 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
           DIRECTIONS.find((d) => d.value === kpi.direction)?.label,
           kpi.aggregate === "avg" ? "AVERAGE across periods" : "SUM across periods",
           kpi.benchmark !== null ? `Benchmark: ${fmtValue(kpi.benchmark, kpi)}` : null,
+          kpi.source ? `Source: ${kpi.source}` : null,
         ]
           .filter(Boolean)
           .map((c) => (
@@ -572,7 +573,6 @@ const COLUMN_DEFS = {
   category: { label: "Category", width: 178, tip: "The category this KPI sits under.", filter: true, sort: true, hideable: true },
   kpi: { label: "KPI", width: 288, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
   units: { label: "Units", width: 90, align: "center", tip: "The unit every figure in this row is expressed in.", filter: true, sort: true, hideable: true },
-  source: { label: "Target", width: 118, align: "center", tip: "Whether the target beside this KPI is one you set, or the recommended benchmark used in its place.", filter: true, sort: true, hideable: true },
   budget: { label: "Target", width: 132, align: "center", tip: "Your captured target, or the recommended benchmark where none is set.", sort: true, hideable: true },
   actual: { label: "Actual", width: 132, align: "center", tip: "What was recorded for the selected period.", sort: true, hideable: true },
   variance: { label: "Variance", width: 132, align: "center", tip: "Actual minus Target. Green means favourable for this KPI's direction.", sort: true, hideable: true },
@@ -599,95 +599,13 @@ const K = (o) => ({
   benchmark: o.benchmark ?? null,
   options: o.options || null,
   field: o.field || null,
+  source: o.source || null,
 });
 
 const TAB_DEFS = [
   {
-    id: "pipeline-visibility",
-    name: "Pipeline Visibility",
-    categories: [
-      {
-        name: "Pipeline Visibility",
-        kpis: [
-          K({
-            id: "totalPipelineValue",
-            name: "Total Pipeline Value",
-            units: "R",
-            direction: "higher",
-            aggregate: "sum",
-            benchmark: 1000000,
-            meaning: "The total value of all opportunities in your pipeline.",
-            measured: "=SUM(Rev Potential) for all active opportunities",
-            actual: (c) => c.pipelineValue,
-            budget: (c) => c.pipelineBudget,
-          }),
-          K({
-            id: "riskAdjustedValue",
-            name: "Risk Adjusted Value",
-            units: "R",
-            direction: "higher",
-            aggregate: "sum",
-            benchmark: 500000,
-            meaning: "The value of opportunities weighted by their probability of closing.",
-            measured: "=SUM(Rev Potential × Probability %) for all active opportunities",
-            actual: (c) => c.riskValue,
-            budget: (c) => c.riskBudget,
-          }),
-          K({
-            id: "pipelineCoverage",
-            name: "Pipeline Coverage",
-            units: "%",
-            direction: "higher",
-            aggregate: "avg",
-            benchmark: 200,
-            meaning: "The ratio of risk-adjusted pipeline value to target revenue.",
-            measured: "=Risk Adjusted Value ÷ Target Revenue × 100%",
-            actual: (c) => c.coverage,
-            budget: (c) => c.coverageBudget,
-          }),
-          K({
-            id: "newLeads",
-            name: "New Leads",
-            units: "#",
-            direction: "higher",
-            aggregate: "sum",
-            benchmark: 50,
-            meaning: "The number of new leads added to the pipeline in the period.",
-            measured: "=COUNT of new records in the period",
-            actual: (c) => c.newLeads,
-            budget: (c) => c.newLeadsBudget,
-          }),
-          K({
-            id: "conversionRate",
-            name: "Conversion Rate",
-            units: "%",
-            direction: "higher",
-            aggregate: "avg",
-            benchmark: 30,
-            meaning: "The percentage of opportunities that convert to closed deals.",
-            measured: "=Converted Opportunities ÷ Total Opportunities × 100%",
-            actual: (c) => c.conversionRate,
-            budget: (c) => c.conversionBudget,
-          }),
-          K({
-            id: "salesVelocity",
-            name: "Sales Velocity",
-            units: "days",
-            direction: "lower",
-            aggregate: "avg",
-            benchmark: 30,
-            meaning: "The average number of days from lead creation to close.",
-            measured: "=AVERAGE(Days between Created At and Signed Date)",
-            actual: (c) => c.salesVelocity,
-            budget: (c) => c.velocityBudget,
-          }),
-        ],
-      },
-    ],
-  },
-  {
-    id: "pipeline-sufficiency",
-    name: "Pipeline Sufficiency",
+    id: "summary",
+    name: "Marketing & Sales Performance Summary",
     categories: [
       {
         name: "Pipeline Sufficiency",
@@ -701,6 +619,7 @@ const TAB_DEFS = [
             benchmark: 1000000,
             meaning: "The total value of all opportunities in your pipeline.",
             measured: "=SUM(Rev Potential) for all active opportunities",
+            source: "Captured from pipeline records",
             actual: (c) => c.pipelineValue,
             budget: (c) => c.pipelineBudget,
           }),
@@ -713,6 +632,7 @@ const TAB_DEFS = [
             benchmark: 500000,
             meaning: "The value of opportunities weighted by their probability of closing.",
             measured: "=SUM(Rev Potential × Probability %) for all active opportunities",
+            source: "Captured from pipeline records",
             actual: (c) => c.riskValue,
             budget: (c) => c.riskBudget,
           }),
@@ -725,6 +645,7 @@ const TAB_DEFS = [
             benchmark: 200,
             meaning: "The ratio of risk-adjusted pipeline value to target revenue.",
             measured: "=Risk Adjusted Value ÷ Target Revenue × 100%",
+            source: "Calculated from pipeline data",
             actual: (c) => c.coverage,
             budget: (c) => c.coverageBudget,
           }),
@@ -737,6 +658,7 @@ const TAB_DEFS = [
             benchmark: 50,
             meaning: "The number of new leads added to the pipeline in the period.",
             measured: "=COUNT of new records in the period",
+            source: "Captured from pipeline records",
             actual: (c) => c.newLeads,
             budget: (c) => c.newLeadsBudget,
           }),
@@ -749,6 +671,7 @@ const TAB_DEFS = [
             benchmark: 30,
             meaning: "The percentage of opportunities that convert to closed deals.",
             measured: "=Converted Opportunities ÷ Total Opportunities × 100%",
+            source: "Calculated from pipeline data",
             actual: (c) => c.conversionRate,
             budget: (c) => c.conversionBudget,
           }),
@@ -761,17 +684,12 @@ const TAB_DEFS = [
             benchmark: 30,
             meaning: "The average number of days from lead creation to close.",
             measured: "=AVERAGE(Days between Created At and Signed Date)",
+            source: "Calculated from pipeline records",
             actual: (c) => c.salesVelocity,
             budget: (c) => c.velocityBudget,
           }),
         ],
       },
-    ],
-  },
-  {
-    id: "revenue-concentration",
-    name: "Revenue Concentration",
-    categories: [
       {
         name: "Revenue Concentration",
         kpis: [
@@ -784,6 +702,7 @@ const TAB_DEFS = [
             benchmark: 100000,
             meaning: "The total amount spent on marketing across all channels.",
             measured: "=SUM of all channel marketing spend",
+            source: "Captured from marketing data",
             actual: (c) => c.totalSpend,
             budget: (c) => c.spendBudget,
           }),
@@ -796,17 +715,12 @@ const TAB_DEFS = [
             benchmark: 200,
             meaning: "The return on investment from marketing activities.",
             measured: "=(Total Revenue - Total Spend) ÷ Total Spend × 100%",
+            source: "Calculated from marketing data",
             actual: (c) => c.totalROI,
             budget: (c) => c.roiBudget,
           }),
         ],
       },
-    ],
-  },
-  {
-    id: "demand-sustainability",
-    name: "Demand Sustainability",
-    categories: [
       {
         name: "Demand Sustainability",
         kpis: [
@@ -819,6 +733,7 @@ const TAB_DEFS = [
             benchmark: 40,
             meaning: "The percentage of customers who make repeat purchases.",
             measured: "=Repeat Customers ÷ Total Customers × 100%",
+            source: "Captured from customer data",
             actual: (c) => c.repeatRate,
             budget: (c) => c.repeatBudget,
           }),
@@ -831,6 +746,7 @@ const TAB_DEFS = [
             benchmark: 30,
             meaning: "The net customer retention rate (repeat rate minus churn rate).",
             measured: "=Repeat Customer Rate - Churn Rate",
+            source: "Calculated from customer data",
             actual: (c) => c.netRetention,
             budget: (c) => c.netRetentionBudget,
           }),
@@ -843,10 +759,58 @@ const TAB_DEFS = [
             benchmark: 150,
             meaning: "The return on investment from marketing campaigns.",
             measured: "=(Campaign Revenue - Campaign Cost) ÷ Campaign Cost × 100%",
+            source: "Calculated from campaign data",
             actual: (c) => c.campaignROI,
             budget: (c) => c.campaignROIBudget,
           }),
         ],
+      },
+    ],
+  },
+  {
+    id: "revenue-concentration",
+    name: "Revenue Concentration",
+    categories: [
+      {
+        name: "Top 3 Concentration",
+        panel: "top3",
+        kpis: [],
+        dataEditable: true,
+      },
+      {
+        name: "Channel Performance",
+        panel: "channelPerf",
+        kpis: [],
+        dataEditable: true,
+      },
+      {
+        name: "Concentration Risk Analysis",
+        panel: "riskAnalysis",
+        kpis: [],
+        dataEditable: true,
+      },
+    ],
+  },
+  {
+    id: "demand-sustainability",
+    name: "Demand Sustainability",
+    categories: [
+      {
+        name: "Campaign Performance",
+        panel: "campaignPerf",
+        kpis: [],
+        dataEditable: true,
+      },
+    ],
+  },
+  {
+    id: "pipeline-visibility",
+    name: "Pipeline Visibility",
+    categories: [
+      {
+        name: "Tier Category",
+        panel: "pipelineTable",
+        kpis: [],
       },
     ],
   },
@@ -1034,6 +998,9 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   const [editData, setEditData] = useState({});
   const [filters, setFilters] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [widths, setWidths] = useState(() => Object.fromEntries(AVAILABLE_FIELDS.map((f) => [f.id, 150])));
+  const resizing = useRef(null);
 
   const loadRecords = async () => {
     if (!currentUser) return;
@@ -1066,8 +1033,20 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
         });
       }
     });
+    // Apply sorting
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const av = a[sortConfig.key] ?? "";
+        const bv = b[sortConfig.key] ?? "";
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av;
+        }
+        const cmp = String(av).localeCompare(String(bv));
+        return sortConfig.direction === "asc" ? cmp : -cmp;
+      });
+    }
     setFilteredRecords(filtered);
-  }, [filters, records]);
+  }, [filters, records, sortConfig]);
 
   const handleAddRecord = async () => {
     if (!currentUser) return;
@@ -1149,6 +1128,36 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     return <TextCell value={value} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} type={fieldConfig.type} />;
   };
 
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX, startWidth = widths[key];
+    resizing.current = key;
+    const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
+    const onUp = () => {
+      resizing.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
+
+  const thS = {
+    padding: 0,
+    background: T.header,
+    borderBottom: `2px solid ${T.header}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)",
+    position: "relative",
+    verticalAlign: "top",
+  };
+
   return (
     <div className="mt-5">
       <ColumnSelector isOpen={showColumnSelector} onClose={() => setShowColumnSelector(false)} visibleFields={visibleFields} onToggleField={toggleField} />
@@ -1167,34 +1176,52 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
       <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
         <div className="flex gap-2">
           {!isInvestorView && (
-            <button onClick={handleAddRecord} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm font-semibold hover:bg-warmBrown transition">+ Add Record</button>
+            <button onClick={() => {}} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm font-semibold hover:bg-warmBrown transition">+ Add Record</button>
           )}
           <button onClick={() => setShowColumnSelector(true)} className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md text-sm font-semibold flex items-center gap-2 hover:bg-[#d4c4b8] transition"><Settings size={16} /> Columns</button>
-        </div>
-      </div>
-      <div className="bg-[#f5f0eb] p-3 rounded-lg mb-4 border border-[#e8ddd4] overflow-x-auto">
-        <div className="flex gap-3 items-center flex-nowrap min-w-max">
-          {visibleFields.map((fieldId) => {
-            const fieldConfig = getFieldConfig(fieldId);
-            if (!fieldConfig) return null;
-            return (
-              <div key={`filter-${fieldId}`} className="flex-shrink-0 min-w-[120px]">
-                <input type="text" placeholder={`Filter ${fieldConfig.label}`} value={filters[fieldId] || ""} onChange={(e) => setFilters({ ...filters, [fieldId]: e.target.value })} className="w-full p-1.5 rounded border border-[#e8ddd4] text-xs bg-white" />
-              </div>
-            );
-          })}
-          <button onClick={clearFilters} className="px-3 py-1.5 bg-mediumBrown text-white rounded-md text-xs font-semibold whitespace-nowrap">Clear Filters</button>
         </div>
       </div>
       <div className="overflow-x-auto bg-[#fdfcfb] rounded-lg border border-[#e8ddd4]">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-mediumBrown text-white">
+            <tr>
               {visibleFields.map((fieldId) => {
                 const fieldConfig = getFieldConfig(fieldId);
-                return <th key={fieldId} className="p-3 text-left text-sm font-semibold whitespace-nowrap">{fieldConfig?.label || fieldId}</th>;
+                const sorted = sortConfig.key === fieldId;
+                return (
+                  <th key={fieldId} style={{ ...thS, width: widths[fieldId] || 150 }}>
+                    <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                      <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", color: "#fff" }}>{fieldConfig?.label || fieldId}</span>
+                        <InfoTip text={fieldConfig?.label} light />
+                      </span>
+                      <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                        <button onClick={() => toggleSort(fieldId)} title="Sort" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", borderRadius: "4px", color: sorted ? "#fff" : "rgba(255,255,255,0.6)", display: "inline-flex", alignItems: "center" }}>
+                          {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} />}
+                        </button>
+                      </span>
+                      <div style={{ width: "100%", marginTop: "2px" }}>
+                        <input
+                          type="text"
+                          placeholder={`Filter ${fieldConfig?.label || ""}`}
+                          value={filters[fieldId] || ""}
+                          onChange={(e) => setFilters({ ...filters, [fieldId]: e.target.value })}
+                          style={{ width: "100%", padding: "3px 6px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.2)", fontSize: "11px", background: "rgba(255,255,255,0.1)", color: "#fff", outline: "none" }}
+                        />
+                      </div>
+                    </div>
+                    <div onMouseDown={(e) => startResize(e, fieldId)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                  </th>
+                );
               })}
-              {!isInvestorView && <th className="p-3 text-center text-sm font-semibold whitespace-nowrap">Actions</th>}
+              {!isInvestorView && (
+                <th style={{ ...thS, width: 100, borderRight: "none" }}>
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "#fff" }}>Actions</span>
+                    <div style={{ height: "40px" }} />
+                  </div>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -2097,7 +2124,6 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
 };
 
 // ==================== NOTES MODAL ====================
-// ==================== NOTES MODAL ====================
 const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
   const [state, setState] = useState("idle");
@@ -2542,7 +2568,7 @@ const MarketingSales = () => {
   const [activeTabId, setActiveTabId] = useState(TAB_DEFS[0].id);
   const [period, setPeriod] = useState("month");
 
-  const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", source: "all", status: "all" });
+  const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", status: "all" });
   const [openFilter, setOpenFilter] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [widths, setWidths] = useState(() => ({
@@ -2727,6 +2753,7 @@ const MarketingSales = () => {
             notes: saved.notes || "",
             periodNotes: saved.periodNotes || {},
             chart: saved.chart || null,
+            source: kpi.source || null,
           };
         }),
       })),
@@ -2780,7 +2807,6 @@ const MarketingSales = () => {
       if (key === "category") set.add(r.categoryName);
       else if (key === "kpi") set.add(r.kpi.name);
       else if (key === "units") set.add(r.kpi.units);
-      else if (key === "source") set.add(r.source);
       else if (key === "status") set.add(r.status.label);
     });
     return ["all", ...Array.from(set).sort()];
@@ -2792,7 +2818,6 @@ const MarketingSales = () => {
         (filters.category === "all" || r.categoryName === filters.category) &&
         (filters.kpi === "all" || r.kpi.name === filters.kpi) &&
         (filters.units === "all" || r.kpi.units === filters.units) &&
-        (filters.source === "all" || r.source === filters.source) &&
         (filters.status === "all" || r.status.label === filters.status)
     );
 
@@ -2800,7 +2825,6 @@ const MarketingSales = () => {
       category: (r) => r.categoryName,
       kpi: (r) => r.kpi.name,
       units: (r) => r.kpi.units,
-      source: (r) => r.source,
       budget: (r) => Number(r.values.budget) || 0,
       actual: (r) => Number(r.values.actual) || 0,
       variance: (r) => Number(r.variance) || 0,
@@ -2852,18 +2876,18 @@ const MarketingSales = () => {
 
   const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
   const clearFilters = () => {
-    setFilters({ category: "all", kpi: "all", units: "all", source: "all", status: "all" });
+    setFilters({ category: "all", kpi: "all", units: "all", status: "all" });
     setSortConfig({ key: null, direction: "asc" });
   };
 
   const downloadCSV = () => {
     const p = PERIOD_PREFIX[period];
-    const lines = [["Section", "Category", "KPI", "Units", "Target source", `${p} Target`, `${p} Actual`, `${p} Variance`, "Status"]];
+    const lines = [["Section", "Category", "KPI", "Units", `${p} Target`, `${p} Actual`, `${p} Variance`, "Status"]];
     tabs.forEach((tab) =>
       tab.categories.forEach((cat) =>
         (cat.kpis || []).forEach((kpi) => {
           const v = periodValues(kpi, period, fy);
-          lines.push([tab.name, cat.name, `"${kpi.name}"`, kpi.units, targetSource(kpi, period), v.budget ?? "", v.actual ?? "", getVariance(kpi, period, fy) ?? "", getStatus(kpi, period, fy).label]);
+          lines.push([tab.name, cat.name, `"${kpi.name}"`, kpi.units, v.budget ?? "", v.actual ?? "", getVariance(kpi, period, fy) ?? "", getStatus(kpi, period, fy).label]);
         })
       )
     );
@@ -2913,6 +2937,9 @@ const MarketingSales = () => {
   if (loading) {
     return <div style={{ padding: "80px", textAlign: "center", color: T.body, fontSize: "14px" }}>Loading marketing & sales performance…</div>;
   }
+
+  // Get panel data for current tab
+  const panels = (activeTab?.categories || []).map((c) => c.panel).filter(Boolean);
 
   return (
     <div style={{ minHeight: "100vh", padding: "28px", boxSizing: "border-box", background: T.bg, color: T.body }}>
@@ -3018,7 +3045,7 @@ const MarketingSales = () => {
                     return (
                       <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px", cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
                         {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
-                        <span style={{ flex: 1 }}>{key === "source" ? "Target source" : def.label}</span>
+                        <span style={{ flex: 1 }}>{def.label}</span>
                       </div>
                     );
                   })}
@@ -3063,7 +3090,7 @@ const MarketingSales = () => {
                     const sorted = sortConfig.key === key;
                     const filtered = def.filter && filters[key] !== "all";
                     const align = def.align === "center" ? "center" : "flex-start";
-                    const lines = key === "source" ? ["Target", "source"] : columnLines(key, period);
+                    const lines = columnLines(key, period);
 
                     return (
                       <th key={key} style={{ ...thS, width: widths[key] }}>
@@ -3094,7 +3121,7 @@ const MarketingSales = () => {
                           <div onMouseLeave={() => setOpenFilter(null)} style={{ position: "absolute", top: "100%", left: 0, marginTop: "2px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "10px", minWidth: "215px", maxHeight: "260px", overflowY: "auto", zIndex: 600, boxShadow: "0 12px 30px rgba(45,32,28,0.18)", padding: "6px" }}>
                             {optionsFor(key).map((opt) => (
                               <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setOpenFilter(null); }} style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px", background: filters[key] === opt ? T.accentTint : "transparent", color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
-                                {opt === "all" ? `All ${(key === "source" ? "target sources" : def.label.toLowerCase())}` : opt}
+                                {opt === "all" ? `All ${def.label.toLowerCase()}s` : opt}
                               </div>
                             ))}
                           </div>
@@ -3123,7 +3150,7 @@ const MarketingSales = () => {
                 ) : (
                   groupedRows.map((group) =>
                     group.items.map((row, idx) => {
-                      const { kpi, categoryName, tabName, status, variance, values, source } = row;
+                      const { kpi, categoryName, tabName, status, variance, values } = row;
                       const fav = varianceFavourable(kpi, variance);
                       const last = idx === group.items.length - 1;
                       const rowTd = { ...tdS, borderBottom: last ? `2px solid ${T.lineStrong}` : `1px solid ${T.lineSoft}` };
@@ -3149,11 +3176,6 @@ const MarketingSales = () => {
                             </td>
                           )}
                           {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
-                          {cell("source", (
-                            <span style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "999px", background: source === "Set" ? T.accentTint : T.raised, color: source === "Set" ? T.accent : T.body, fontWeight: 500 }}>
-                              {source}
-                            </span>
-                          ))}
                           {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
                           {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi, { bare: true })}</span>)}
                           {cell("variance", variance === null || kpi.options ? <span style={{ color: T.faint }}>—</span> : <span style={{ fontWeight: 700, color: fav ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>{fmtValue(variance, kpi, { signed: true, bare: true })}</span>)}
@@ -3189,117 +3211,111 @@ const MarketingSales = () => {
         </div>
       )}
 
-      {/* Pipeline Visibility - Original Table */}
-      {activeTabId === "pipeline-visibility" && (
-        <div className="mt-5">
-          <PipelineTable currentUser={user} isInvestorView={isInvestorView} onDataChange={handlePipelineRecordsChange} />
+      {/* Panels based on tab */}
+      {panels.includes("top3") && (
+        <div style={{ ...cardS, marginBottom: "20px" }}>
+          <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Top 3 Concentration</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+            <div>
+              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Channels</h4>
+              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Channel</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
+                  <tbody>
+                    {["Social Media", "PPC", "Email"].map((channel, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{channel}</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,200,000</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>35.2%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Customers</h4>
+              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Customer</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
+                  <tbody>
+                    {["Acme Corp", "TechGlobal", "EcoSolutions"].map((customer, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{customer}</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 850,000</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>24.9%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Segments</h4>
+              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Segment</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
+                  <tbody>
+                    {["Enterprise", "SMB", "Startup"].map((segment, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{segment}</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,500,000</td>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>44.0%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Revenue Concentration - Extra sections */}
-      {activeTabId === "revenue-concentration" && (
-        <>
-          <div style={{ ...cardS, marginBottom: "20px" }}>
-            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Top 3 Concentration</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
-              <div>
-                <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Channels</h4>
-                <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Channel</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                    <tbody>
-                      {["Social Media", "PPC", "Email"].map((channel, i) => (
-                        <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{channel}</td>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,200,000</td>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>35.2%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Customers</h4>
-                <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Customer</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                    <tbody>
-                      {["Acme Corp", "TechGlobal", "EcoSolutions"].map((customer, i) => (
-                        <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{customer}</td>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 850,000</td>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>24.9%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Segments</h4>
-                <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Segment</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                    <tbody>
-                      {["Enterprise", "SMB", "Startup"].map((segment, i) => (
-                        <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{segment}</td>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,500,000</td>
-                          <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>44.0%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+      {panels.includes("channelPerf") && (
+        <div style={{ ...cardS, marginBottom: "20px" }}>
+          <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Channel Performance</h3>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Channel</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Marketing Spend</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Net Profit</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>% of Revenue</th></tr></thead>
+              <tbody>
+                {["Social Media", "Email", "PPC", "SEO", "Referral", "Direct"].map((channel, i) => {
+                  const revenue = [150000, 120000, 80000, 60000, 50000, 40000][i];
+                  const spend = [45000, 30000, 35000, 15000, 10000, 5000][i];
+                  const net = revenue - spend;
+                  const roi = spend > 0 ? (net / spend) * 100 : 0;
+                  const pct = [22.0, 17.6, 11.7, 8.8, 7.3, 5.9][i];
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{channel}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {spend.toLocaleString()}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: net >= 0 ? T.green : T.red, fontWeight: 600 }}>R {net.toLocaleString()}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>{pct}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-
-          <div style={{ ...cardS, marginBottom: "20px" }}>
-            <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Channel Performance</h3>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Channel</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Marketing Spend</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Net Profit</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>% of Revenue</th></tr></thead>
-                <tbody>
-                  {["Social Media", "Email", "PPC", "SEO", "Referral", "Direct"].map((channel, i) => {
-                    const revenue = [150000, 120000, 80000, 60000, 50000, 40000][i];
-                    const spend = [45000, 30000, 35000, 15000, 10000, 5000][i];
-                    const net = revenue - spend;
-                    const roi = spend > 0 ? (net / spend) * 100 : 0;
-                    const pct = [22.0, 17.6, 11.7, 8.8, 7.3, 5.9][i];
-                    return (
-                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{channel}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {spend.toLocaleString()}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: net >= 0 ? T.green : T.red, fontWeight: 600 }}>R {net.toLocaleString()}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div style={{ ...cardS, background: T.panel }}>
-            <h4 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "13px", fontWeight: 600 }}>Concentration Risk Analysis</h4>
-            <div style={{ fontSize: "13px", color: T.body, fontWeight: 600, marginBottom: "6px" }}>Channel Concentration Risk</div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ flex: 1, background: T.line, height: "20px", borderRadius: "10px", overflow: "hidden" }}>
-                <div style={{ width: "51.3%", height: "100%", background: T.amber, borderRadius: "10px" }} />
-              </div>
-              <span style={{ fontSize: "14px", fontWeight: 700, color: T.body, minWidth: "45px" }}>51.3%</span>
-            </div>
-            <div style={{ fontSize: "12px", color: T.muted, marginTop: "6px" }}>Top 3 channels generate 51.3% of total revenue - Moderate risk: Could benefit from further diversification</div>
-          </div>
-        </>
+        </div>
       )}
 
-      {/* Demand Sustainability - Campaign Performance */}
-      {activeTabId === "demand-sustainability" && (
+      {panels.includes("riskAnalysis") && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "20px" }}>
+          <h4 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "13px", fontWeight: 600 }}>Concentration Risk Analysis</h4>
+          <div style={{ fontSize: "13px", color: T.body, fontWeight: 600, marginBottom: "6px" }}>Channel Concentration Risk</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ flex: 1, background: T.line, height: "20px", borderRadius: "10px", overflow: "hidden" }}>
+              <div style={{ width: "51.3%", height: "100%", background: T.amber, borderRadius: "10px" }} />
+            </div>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: T.body, minWidth: "45px" }}>51.3%</span>
+          </div>
+          <div style={{ fontSize: "12px", color: T.muted, marginTop: "6px" }}>Top 3 channels generate 51.3% of total revenue - Moderate risk: Could benefit from further diversification</div>
+        </div>
+      )}
+
+      {panels.includes("campaignPerf") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Campaign Performance</h3>
           <div style={{ overflowX: "auto" }}>
@@ -3322,6 +3338,13 @@ const MarketingSales = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Pipeline Visibility - Table only (Tier Category) */}
+      {activeTabId === "pipeline-visibility" && (
+        <div className="mt-5">
+          <PipelineTable currentUser={user} isInvestorView={isInvestorView} onDataChange={handlePipelineRecordsChange} />
         </div>
       )}
 
