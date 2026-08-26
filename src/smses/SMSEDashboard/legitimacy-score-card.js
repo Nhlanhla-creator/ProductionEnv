@@ -470,11 +470,11 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
             </div>
           </div>
 
-          {a?.failedDocs?.length > 0 && (
+          {/* {a?.failedDocs?.length > 0 && (
             <div style={{ marginTop: "8px", display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 12px", background: "#fdecea", border: "1px solid #e6b8ac", borderRadius: "20px", color: "#B71C1C", fontWeight: 700, fontSize: "10.5px", lineHeight: 1.4 }}>
               <AlertCircle size={12} /> {a.failedDocs.length} document{a.failedDocs.length === 1 ? "" : "s"} not counted
             </div>
-          )}
+          )} */}
 
           <button onClick={() => setShowModal(true)} style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "linear-gradient(135deg,#5d4037 0%,#4a2c20 100%)", color: "white", marginTop: "12px", border: "none", fontWeight: 600, fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", boxShadow: "0 4px 16px rgba(93,64,55,0.3)" }}>
             <span>Explore your score</span><ChevronDown size={16} />
