@@ -1,10 +1,56 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
+
 import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, FileText } from 'lucide-react'
 import { doc, updateDoc, setDoc, serverTimestamp, getDoc } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 import NeedHelp from "../../NeedHelp"
 import { useNavigate } from "react-router-dom"
+import { useState, useEffect, useRef, useMemo } from "react"
+import ScoreExplorer from "./ScoreExplorer"
+
+
+// Same values calculateBigScore always used — hoisted so the About/weighting
+// table in the explorer can read them without a second copy to keep in sync.
+const STAGE_WEIGHTS = {
+  startup: { compliance: 0.25, legitimacy: 0.15, governanceLeadership: 0.12, operational: 0.13, fundability: 0.35 },
+  growth: { compliance: 0.28, legitimacy: 0.13, governanceLeadership: 0.10, operational: 0.14, fundability: 0.35 },
+  scaling: { compliance: 0.32, legitimacy: 0.12, governanceLeadership: 0.08, operational: 0.13, fundability: 0.35 },
+  turnaround: { compliance: 0.30, legitimacy: 0.13, governanceLeadership: 0.10, operational: 0.12, fundability: 0.35 },
+  mature: { compliance: 0.38, legitimacy: 0.08, governanceLeadership: 0.07, operational: 0.12, fundability: 0.35 },
+}
+
+const STAGE_LABELS_DISPLAY = {
+  startup: "Startup",
+  growth: "Growth",
+  scaling: "Scaling",
+  turnaround: "Turnaround",
+  mature: "Mature",
+}
+
+// The tab each pillar's own score card lives under — same mapping
+// getRecommendations() already uses, just made reusable here too.
+const PILLAR_TABS = {
+  "Compliance score": { tab: "compliance", label: "Compliance" },
+  "Legitimacy score": { tab: "legitimacy", label: "Legitimacy" },
+  "Leadership & Governance score": { tab: "governance", label: "Leadership & Governance" },
+  "Operational Strength score": { tab: "operations", label: "Operational Strength" },
+  "Capital appeal score": { tab: "fundability", label: "Capital Appeal" },
+}
+
+const fmtPts = (n) => `${n >= 0 ? "+" : ""}${(Math.round(n * 10) / 10).toFixed(1)}%`
+
+const getDetailedAnalysis = (score) => {
+  if (score === null) return ""
+  if (score >= 91)
+    return "Outstanding business readiness. Your organization demonstrates excellence across all critical dimensions - compliance, legitimacy, leadership & governance, operational strength, and capital appeal. You're exceptionally well-positioned for major funding opportunities, strategic partnerships, and rapid scaling. This level of business maturity places you in the top tier of investment-ready companies."
+  if (score >= 81)
+    return "Strong overall business position. Your company shows solid performance across most areas with good compliance, credibility, leadership & governance, operational, and capital appeal foundations. You're well-prepared for growth opportunities and would be attractive to most investors and partners. Minor improvements in weaker areas could elevate you to exceptional status."
+  if (score >= 61)
+    return "Fair business readiness with improvement opportunities. While you have established foundations in several areas, significant gaps remain that may limit access to premium opportunities. Focus on strengthening your weakest scores - particularly compliance and capital appeal - to improve your overall market position."
+  if (score >= 41)
+    return "Basic foundation requiring substantial development. Your business shows some positive elements but lacks the comprehensive readiness needed for major opportunities. Systematic improvements across compliance, legitimacy, leadership & governance, and operational strength are essential before pursuing significant funding or partnerships."
+  return "Fundamental improvements urgently needed. Your business requires comprehensive strengthening across multiple critical areas. Focus immediately on achieving basic compliance, establishing professional legitimacy, building leadership & governance capabilities, and developing fundamental operational capabilities before pursuing external opportunities."
+}
 
 export function BigScoreCard({
   styles,
@@ -26,7 +72,7 @@ export function BigScoreCard({
   const [showBoostScoreModal, setShowBoostScoreModal] = useState(false)
   const navigate = useNavigate()
   const [showCatalystPopup, setShowCatalystPopup] = useState(false)
-  
+
   // FIX 1: Track state more carefully with refs
   const savedBigScoreRef = useRef(null)
   const pendingSaveTimeoutRef = useRef(null)
@@ -52,11 +98,11 @@ export function BigScoreCard({
   useEffect(() => {
     const loadSavedScore = async () => {
       if (!profileData?.id) return
-      
+
       try {
         const evaluationRef = doc(db, "bigEvaluations", profileData.id)
         const evaluationSnap = await getDoc(evaluationRef)
-        
+
         if (evaluationSnap.exists()) {
           const savedBigScore = evaluationSnap.data()?.scores?.bigScore
           if (savedBigScore !== undefined && savedBigScore !== null) {
@@ -70,7 +116,7 @@ export function BigScoreCard({
         initialLoadCompleteRef.current = true
       }
     }
-    
+
     loadSavedScore()
   }, [profileData?.id])
 
@@ -79,14 +125,14 @@ export function BigScoreCard({
   useEffect(() => {
     // Skip if we don't have all required data or initial load not complete
     if (!profileData?.id || !profileData?.formData || !initialLoadCompleteRef.current) return
-    
+
     // Check if all scores are valid numbers
     if (typeof complianceScore !== 'number') return
     if (typeof legitimacyScore !== 'number') return
     if (typeof fundabilityScore !== 'number') return
     if (typeof governanceLeadershipScore !== 'number') return
     if (typeof operationalScore !== 'number') return
-    
+
     // Calculate the BIG Score
     const result = calculateBigScore(
       complianceScore,
@@ -96,28 +142,28 @@ export function BigScoreCard({
       operationalScore,
       profileData.formData,
     )
-    
+
     const newBigScore = result.totalScore
-    
+
     // FIX 4: Only update state if score actually changed
     if (lastCalculatedScoreRef.current !== newBigScore) {
       // console.log(`Score calculated: ${lastCalculatedScoreRef.current} → ${newBigScore}`)
       lastCalculatedScoreRef.current = newBigScore
-      
+
       // Update UI display immediately
       setBigScore(newBigScore)
       setScoreBreakdown(result.breakdown)
-      
+
       // Notify parent
       if (onScoreUpdate) {
         onScoreUpdate(newBigScore)
       }
-      
+
       // Handle saving to database with delay logic
       handleSaveWithDelay(newBigScore)
     }
-    
-  }, [complianceScore, legitimacyScore, fundabilityScore, governanceLeadershipScore, operationalScore, profileData?.id, profileData?.formData, onScoreUpdate])
+
+ }, [complianceScore, legitimacyScore, fundabilityScore, governanceLeadershipScore, operationalScore, profileData?.id, profileData?.formData, onScoreUpdate])
 
   // FIX 5: Improved save delay logic
   const handleSaveWithDelay = (newScore) => {
@@ -126,27 +172,27 @@ export function BigScoreCard({
       clearTimeout(pendingSaveTimeoutRef.current)
       pendingSaveTimeoutRef.current = null
     }
-    
+
     const savedScore = savedBigScoreRef.current
-    
+
     // Case 1: First save (no saved score yet)
     if (savedScore === null) {
       // console.log(`[SAVE DECISION] First save detected - saving ${newScore} immediately`)
       executeSave(newScore)
       return
     }
-    
+
     // Case 2: Score improved
     if (newScore > savedScore) {
       // console.log(`[SAVE DECISION] Score improved: ${savedScore} → ${newScore} - saving immediately`)
       executeSave(newScore)
       return
     }
-    
+
     // Case 3: Score decreased - delay save
     if (newScore < savedScore) {
       // console.log(`[SAVE DECISION] Score decreased: ${savedScore} → ${newScore} - delaying 5s`)
-      
+
       // Set timeout to save after 5 seconds
       pendingSaveTimeoutRef.current = setTimeout(() => {
         // Check if user is still on this score after 5 seconds
@@ -160,94 +206,94 @@ export function BigScoreCard({
       }, 5000)
       return
     }
-    
+
     // Case 4: Score unchanged
     if (newScore === savedScore) {
       // console.log(`[SAVE DECISION] Score unchanged at ${newScore} - skipping save`)
       return
     }
   }
-  
- const executeSave = async (bigScoreValue) => {
-  // Prevent multiple simultaneous saves
-  if (isSavingRef.current) {
-    // console.log("[SAVE] Save already in progress - skipping")
-    return
-  }
-  
-  // Don't save if we already have this exact score saved
-  if (savedBigScoreRef.current === bigScoreValue) {
-    // console.log(`[SAVE] Score ${bigScoreValue} already saved - skipping`)
-    return
-  }
-  
-  isSavingRef.current = true
-  
-  try {
-    const smeName = profileData?.formData?.entityOverview?.registeredName || "Unnamed SME"
-    const now = new Date().toISOString()
-    
-    // Get existing document to check previous score and history
-    const evaluationRef = doc(db, "bigEvaluations", profileData.id)
-    const evaluationSnap = await getDoc(evaluationRef)
-    
-    let scoreHistory = []
-    
-    if (evaluationSnap.exists()) {
-      const existingData = evaluationSnap.data()
-      scoreHistory = existingData.scoreHistory || []
+
+  const executeSave = async (bigScoreValue) => {
+    // Prevent multiple simultaneous saves
+    if (isSavingRef.current) {
+      // console.log("[SAVE] Save already in progress - skipping")
+      return
     }
-    
-    // Add new score to history (keep last 5 entries)
-    scoreHistory.push({
-      score: bigScoreValue,
-      timestamp: now
-    })
-    
-    // Keep only last 5 entries
-    if (scoreHistory.length > 5) {
-      scoreHistory = scoreHistory.slice(-5)
+
+    // Don't save if we already have this exact score saved
+    if (savedBigScoreRef.current === bigScoreValue) {
+      // console.log(`[SAVE] Score ${bigScoreValue} already saved - skipping`)
+      return
     }
-    
-    // Save to bigEvaluations collection with score history
-    await setDoc(
-      evaluationRef,
-      {
-        smeName: smeName,
-        scores: {
-          compliance: complianceScore,
-          legitimacy: legitimacyScore,
-          fundability: fundabilityScore,
-          governanceLeadership: governanceLeadershipScore,
-          operational: operationalScore,
-          bigScore: bigScoreValue,
-          lastUpdated: now,
+
+    isSavingRef.current = true
+
+    try {
+      const smeName = profileData?.formData?.entityOverview?.registeredName || "Unnamed SME"
+      const now = new Date().toISOString()
+
+      // Get existing document to check previous score and history
+      const evaluationRef = doc(db, "bigEvaluations", profileData.id)
+      const evaluationSnap = await getDoc(evaluationRef)
+
+      let scoreHistory = []
+
+      if (evaluationSnap.exists()) {
+        const existingData = evaluationSnap.data()
+        scoreHistory = existingData.scoreHistory || []
+      }
+
+      // Add new score to history (keep last 5 entries)
+      scoreHistory.push({
+        score: bigScoreValue,
+        timestamp: now
+      })
+
+      // Keep only last 5 entries
+      if (scoreHistory.length > 5) {
+        scoreHistory = scoreHistory.slice(-5)
+      }
+
+      // Save to bigEvaluations collection with score history
+      await setDoc(
+        evaluationRef,
+        {
+          smeName: smeName,
+          scores: {
+            compliance: complianceScore,
+            legitimacy: legitimacyScore,
+            fundability: fundabilityScore,
+            governanceLeadership: governanceLeadershipScore,
+            operational: operationalScore,
+            bigScore: bigScoreValue,
+            lastUpdated: now,
+          },
+          scoreHistory: scoreHistory,
+          updatedAt: now,
+          createdAt: serverTimestamp(),
         },
-        scoreHistory: scoreHistory,
-        updatedAt: now,
-        createdAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
-    
-    // Update universalProfiles collection
-    const profileRef = doc(db, "universalProfiles", profileData.id)
-    await updateDoc(profileRef, {
-      bigScore: bigScoreValue,
-      bigScoreUpdatedAt: now,
-    })
-    
-    // console.log(`[SAVE SUCCESS] BIG Score ${bigScoreValue} saved to database`)
-    
-    // Update saved score ref
-    savedBigScoreRef.current = bigScoreValue
-    
-  } catch (err) {
-    console.error("[SAVE ERROR] Failed to update BIG Score in Firestore:", err)
-  } finally {
-    isSavingRef.current = false
+        { merge: true },
+      )
+
+      // Update universalProfiles collection
+      const profileRef = doc(db, "universalProfiles", profileData.id)
+      await updateDoc(profileRef, {
+        bigScore: bigScoreValue,
+        bigScoreUpdatedAt: now,
+      })
+
+      // console.log(`[SAVE SUCCESS] BIG Score ${bigScoreValue} saved to database`)
+
+      // Update saved score ref
+      savedBigScoreRef.current = bigScoreValue
+
+    } catch (err) {
+      console.error("[SAVE ERROR] Failed to update BIG Score in Firestore:", err)
+    } finally {
+      isSavingRef.current = false
+    }
   }
-}
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -261,7 +307,7 @@ export function BigScoreCard({
   // Catalyst popup on low score
   useEffect(() => {
     const hasDismissedCatalystPopup = sessionStorage.getItem('catalystPopupDismissed')
-    
+
     if (bigScore !== null && bigScore < 50 && !hasDismissedCatalystPopup) {
       const timer = setTimeout(() => {
         setShowCatalystPopup(true)
@@ -367,19 +413,21 @@ export function BigScoreCard({
     const stage = data?.entityOverview?.operationStage?.toLowerCase() || "startup"
     // 5 pillars: Compliance, Legitimacy, Leadership & Governance, Operational Strength, Capital Appeal (Fundability)
     const stageWeights = {
-      startup:    { compliance: 0.25, legitimacy: 0.15, governanceLeadership: 0.12, operational: 0.13, fundability: 0.35 },
-      growth:     { compliance: 0.28, legitimacy: 0.13, governanceLeadership: 0.10, operational: 0.14, fundability: 0.35 },
-      scaling:    { compliance: 0.32, legitimacy: 0.12, governanceLeadership: 0.08, operational: 0.13, fundability: 0.35 },
+      startup: { compliance: 0.25, legitimacy: 0.15, governanceLeadership: 0.12, operational: 0.13, fundability: 0.35 },
+      growth: { compliance: 0.28, legitimacy: 0.13, governanceLeadership: 0.10, operational: 0.14, fundability: 0.35 },
+      scaling: { compliance: 0.32, legitimacy: 0.12, governanceLeadership: 0.08, operational: 0.13, fundability: 0.35 },
       turnaround: { compliance: 0.30, legitimacy: 0.13, governanceLeadership: 0.10, operational: 0.12, fundability: 0.35 },
-      mature:     { compliance: 0.38, legitimacy: 0.08, governanceLeadership: 0.07, operational: 0.12, fundability: 0.35 },
+      mature: { compliance: 0.38, legitimacy: 0.08, governanceLeadership: 0.07, operational: 0.12, fundability: 0.35 },
     }
 
-    const weights = stageWeights[stage] || stageWeights.startup
+    const weights = STAGE_WEIGHTS[stage] || STAGE_WEIGHTS.startup
     const complianceWeighted = compliance * weights.compliance
     const legitimacyWeighted = legitimacy * weights.legitimacy
     const governanceLeadershipWeighted = governanceLeadership * weights.governanceLeadership
     const operationalWeighted = operational * weights.operational
     const fundabilityWeighted = fundability * weights.fundability
+
+
 
     const totalScore = Math.round(
       complianceWeighted + legitimacyWeighted + governanceLeadershipWeighted + operationalWeighted + fundabilityWeighted,
@@ -426,6 +474,163 @@ export function BigScoreCard({
     return { totalScore, breakdown }
   }
 
+  
+const operationStage = profileData?.formData?.entityOverview?.operationStage;
+
+  const explorer = useMemo(() => {
+  if (bigScore === null || !scoreBreakdown.length) return null;
+
+  const elements = scoreBreakdown.map((item) => {
+    const meta = PILLAR_TABS[item.name] || {};
+    const gap = 100 - item.score;
+    const potentialPointValue = Math.round(((gap * item.weight) / 100) * 10) / 10;
+    const row = {
+      key: item.name,
+      label: item.name.replace(" score", ""),
+      points: 100,
+      earned: item.score,
+      withheld: gap,
+      state: item.score >= 81 ? "counted" : item.score >= 41 ? "partial" : "missing",
+      evidence: `${item.score}% × ${item.weight}% weight = ${item.weightedScore} points of the BIG score`,
+      reason: gap > 0 ? `Contributes ${item.weightedScore} of the ${item.weight} points available here.` : null,
+      route: meta.tab ? `tab:${meta.tab}` : null,
+      section: meta.label || item.name.replace(" score", ""),
+      claimable: true,
+      pointValue: potentialPointValue,
+    };
+
+    return {
+      key: item.name,
+      label: item.name.replace(" score", ""),
+      percent: item.score,
+      weight: item.weight,
+      effectiveWeight: item.weightedScore,
+      breakdown: [row],
+      improvements: gap > 0 ? [row] : [],
+      sourceNote: `${item.score}% in this pillar, weighted ${item.weight}% of the BIG score, contributes ${item.weightedScore} points.`,
+    };
+  });
+
+  const potentialItems = elements
+    .filter((el) => el.improvements.length)
+    .map((el) => {
+      const row = el.improvements[0];
+      return {
+        ...row,
+        container: el.label,
+        importance: `Every point recovered in ${el.label} is worth up to ${fmtPts(row.pointValue)} of your overall BIG score.`,
+        fix: row.route ? `Open ${el.section} to see exactly what's withheld there and how to recover it.` : null,
+      };
+    })
+    .sort((a, b) => b.pointValue - a.pointValue);
+
+  const availablePoints = Math.round(potentialItems.reduce((s, i) => s + i.pointValue, 0) * 10) / 10;
+  const stageKey = profileData?.formData?.entityOverview?.operationStage?.toLowerCase() || "startup";
+
+  return {
+    blocks: [
+      {
+        key: "big",
+        label: "BIG Score",
+        percent: bigScore,
+        blockWeight: 100,
+        elements,
+      },
+    ],
+    attention:
+      bigScore < 50
+        ? [
+            {
+              key: "lowScore",
+              headline: "This score may qualify for incubation or acceleration support",
+              detail: "Scores under 50% often benefit from structured support before pursuing funding directly.",
+              chips: [],
+              cta: "See support options",
+              route: "catalyst",
+            },
+          ]
+        : [],
+    about: {
+      definition:
+        "The BIG score combines your compliance, legitimacy, leadership & governance, operational strength, and capital appeal scores into one comprehensive business readiness metric that reflects your overall organizational maturity and market readiness.",
+      definitionNotes: [
+        {
+          title: "Five key components",
+          body: "Compliance (legal and regulatory standing), Legitimacy (credibility and market presence), Leadership & Governance (can we trust the people and decision-making structures?), Operational Strength (can this business reliably execute?), and Capital Appeal (investment readiness and financial health).",
+        },
+        {
+          title: "Weighted assessment",
+          body: "Compliance and Capital Appeal receive the highest weights, as they represent the fundamental legal foundation and investment attractiveness that drive business opportunities and partnerships. Weightings shift slightly by business stage.",
+        },
+      ],
+      assessmentAreas: scoreBreakdown.map((item) => ({
+        label: item.name.replace(" score", ""),
+        weightLabel: `${item.weight}% at this stage`,
+        detail: `Currently ${item.score}%, contributing ${item.weightedScore} points of the BIG score.`,
+      })),
+      interpretation: [
+        { range: "91–100%", label: "Exceptional", color: "#1B5E20", meaning: "Highly prepared for major opportunities, partnerships, and growth." },
+        { range: "81–90%", label: "Strong", color: "#4CAF50", meaning: "Well-positioned for scaling, funding, and strategic partnerships." },
+        { range: "61–80%", label: "Progressing", color: "#FF9800", meaning: "Solid foundations. Strengthen key areas to unlock full potential." },
+        { range: "41–60%", label: "Foundational", color: "#F44336", meaning: "Core building blocks are in place, but targeted improvements are needed." },
+        { range: "0–40%", label: "Emerging", color: "#B71C1C", meaning: "Early stages of readiness. Focus on key priorities to grow." },
+      ],
+      weighting: {
+        formula: "BIG score = Σ (pillar score × pillar weight)",
+        formulaNote: "Weightings shift slightly by business stage — Compliance and Capital Appeal always carry the most weight.",
+        tables: [
+          {
+            title: "Pillar weighting at your stage",
+            firstColumn: "Pillar",
+            rows: scoreBreakdown.map((item) => ({
+              label: item.name.replace(" score", ""),
+              weight: `${item.weight}%`,
+              now: `${item.score}%`,
+            })),
+            note: `Business stage: ${profileData?.formData?.entityOverview?.operationStage || "Ideation"}.`,
+          },
+          {
+            title: "How the weighting moves by stage",
+            firstColumn: "Stage",
+            rows: Object.entries(STAGE_WEIGHTS).map(([key, w]) => ({
+              label: STAGE_LABELS_DISPLAY[key] || key,
+              weight: `${Math.round(w.compliance * 100)} · ${Math.round(w.legitimacy * 100)} · ${Math.round(w.governanceLeadership * 100)} · ${Math.round(w.operational * 100)} · ${Math.round(w.fundability * 100)}`,
+              now: stageKey === key ? "you" : "—",
+              excluded: stageKey !== key,
+            })),
+            note: "Weights read in order: Compliance · Legitimacy · Leadership & Governance · Operational · Capital Appeal.",
+          },
+        ],
+      },
+    },
+    potential: {
+      available: availablePoints,
+      locked: 0,
+      current: bigScore,
+      projected: Math.min(100, Math.round(bigScore + availablePoints)),
+      items: potentialItems,
+      lockedItems: [],
+    },
+    summary: { final: getDetailedAnalysis(bigScore) },
+  };
+}, [bigScore, scoreBreakdown, operationStage]);
+
+const goTo = (route) => {
+  if (!route) return;
+  if (route === "catalyst") {
+    setShowModal(false);
+    setShowBoostScoreModal(true);
+    return;
+  }
+  if (route.startsWith("tab:")) {
+    const tab = route.slice(4);
+    setShowModal(false);
+    if (setActiveTab) setActiveTab("tools", tab);
+    return;
+  }
+  navigate(route);
+};
+
   const getScoreLevel = (score) => {
     if (!score && score !== 0) return { level: "Calculating...", color: "#9E9E9E", icon: AlertCircle, description: "" }
     if (score >= 91)
@@ -464,7 +669,7 @@ export function BigScoreCard({
 
   const handleToolClick = (rec) => {
     setShowBoostScoreModal(false)
-    
+
     if (rec.url) {
       window.location.href = rec.url
     } else if (rec.tab && setActiveTab) {
@@ -472,7 +677,7 @@ export function BigScoreCard({
     }
   }
 
-  
+
   return (
     <>
       {/* Enhanced Outside Card Design */}
@@ -754,510 +959,43 @@ export function BigScoreCard({
           }
         `}</style>
       </div>
-
-      {/* Enhanced Modal */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: "0",
-            left: "0",
-            right: "0",
-            bottom: "0",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: "999999",
-            padding: "20px",
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowModal(false)
-            }
-          }}
-        >
-          <div
-            style={{
-              position: "relative",
-              backgroundColor: "#ffffff",
-              borderRadius: "12px",
-              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
-              zIndex: "999999",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              width: "90%",
-              maxWidth: "600px",
-              border: "1px solid #ccc",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                position: "absolute",
-                top: "15px",
-                right: "15px",
-                background: "#fff",
-                border: "2px solid #ddd",
-                fontSize: "20px",
-                cursor: "pointer",
-                color: "#666",
-                zIndex: "999999",
-                width: "35px",
-                height: "35px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "50%",
-                fontWeight: "bold",
-              }}
-            >
-              {"×"}
-            </button>
-            <div style={{ padding: "30px 20px 20px 20px" }}>
-              <h3
-                style={{
-                  margin: "0 0 20px 0",
-                  fontSize: "24px",
-                  fontWeight: "600",
-                  color: "#5d4037",
-                  textAlign: "center",
-                }}
-              >
-                BIG score breakdown
-              </h3>
-              <div
-                style={{
-                  textAlign: "center",
-                  marginBottom: "30px",
-                  padding: "20px",
-                  background: "linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)",
-                  borderRadius: "12px",
-                  border: "1px solid #d6b88a",
-                }}
-              >
-                <div
-                  style={{
-                    display: "inline-flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "120px",
-                    height: "120px",
-                    border: `4px solid ${scoreLevel.color}`,
-                    borderRadius: "50%",
-                    background: "white",
-                    boxShadow: "0 4px 12px rgba(139, 69, 19, 0.2)",
-                    marginBottom: "15px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "28px",
-                      fontWeight: "700",
-                      color: "#5d4037",
-                      lineHeight: "1",
-                    }}
-                  >
-                    {bigScore !== null ? `${bigScore}%` : "..."}
-                  </span>
-                  <span
-                    style={{
-                      color: scoreLevel.color,
-                      fontSize: "12px",
-                      fontWeight: "600",
-                      marginTop: "4px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    {scoreLevel.level}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontSize: "16px",
-                    color: "#6d4c41",
-                  }}
-                >
-                  <span>Business stage: </span>
-                  <span
-                    style={{
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {profileData?.formData?.entityOverview?.operationStage || "Ideation"}
-                  </span>
-                </div>
-              </div>
-
-              {/* About the BIG Score section */}
-              <div
-                style={{
-                  marginTop: "20px",
-                  border: "1px solid #d7ccc8",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: "#8d6e63",
-                    color: "white",
-                    padding: "12px 16px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                  }}
-                  onClick={() => setShowAboutScore(!showAboutScore)}
-                >
-                  <span>About the BIG score</span>
-                  <ChevronDown
-                    size={20}
-                    style={{
-                      transform: showAboutScore ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s ease",
-                    }}
-                  />
-                </div>
-                {showAboutScore && (
-                  <div
-                    style={{
-                      backgroundColor: "#f5f2f0",
-                      padding: "20px",
-                      color: "#5d4037",
-                    }}
-                  >
-                    <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
-                      The BIG score combines your compliance, legitimacy, leadership &amp; governance, operational
-                      strength, and capital appeal scores into one comprehensive business readiness metric that
-                      reflects your overall organizational maturity and market readiness.
-                    </p>
-                    <div
-                      style={{
-                        backgroundColor: "#efebe9",
-                        padding: "16px",
-                        borderRadius: "8px",
-                        marginBottom: "16px",
-                        borderLeft: "4px solid #8d6e63",
-                      }}
-                    >
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Five key components:</p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Compliance score:</strong> Legal and regulatory documentation and compliance
-                          status
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Legitimacy score:</strong> Business credibility, professionalism, and market
-                          presence
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Leadership &amp; Governance score:</strong> Ownership and board structure, founder
-                          and leadership quality, and governance maturity — can we trust the people and
-                          decision-making structures?
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Operational Strength score:</strong> Supplier &amp; continuity risk, delivery
-                          reliability, and safety/compliance — can this business reliably execute?
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Capital Appeal score:</strong> Investment readiness, financial health, and growth
-                          potential
-                        </li>
-                      </ul>
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor: "#efebe9",
-                        padding: "16px",
-                        borderRadius: "8px",
-                        marginBottom: "16px",
-                        borderLeft: "4px solid #8d6e63",
-                      }}
-                    >
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Score interpretation:</p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
-                        <li style={{ marginBottom: "4px" }}>
-                          <strong>91-100%:</strong> Exceptional - Your business is highly prepared for major
-                          opportunities, partnerships, and growth.
-                        </li>
-                        <li style={{ marginBottom: "4px" }}>
-                          <strong>81-90%:</strong> Strong - Well-positioned for scaling, funding, and strategic
-                          partnerships.
-                        </li>
-                        <li style={{ marginBottom: "4px" }}>
-                          <strong>61-80%:</strong> Progressing - On track with solid foundations. Strengthen key areas
-                          to unlock full potential.
-                        </li>
-                        <li style={{ marginBottom: "4px" }}>
-                          <strong>41-60%:</strong> Foundational - Core building blocks are in place, but targeted
-                          improvements are needed to advance.
-                        </li>
-                        <li style={{ marginBottom: "4px" }}>
-                          <strong>0-40%:</strong> Emerging - Your business is in the early stages of readiness. Focus on
-                          key priorities to grow.
-                        </li>
-                      </ul>
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor: "#efebe9",
-                        padding: "16px",
-                        borderRadius: "8px",
-                        marginBottom: "16px",
-                        borderLeft: "4px solid #8d6e63",
-                      }}
-                    >
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Weighted assessment:</p>
-                      <p style={{ margin: "0", color: "#5d4037" }}>
-                        Compliance and Capital Appeal receive the highest weights as they represent the
-                        fundamental legal foundation and investment attractiveness that drive business opportunities and
-                        partnerships. Weightings shift slightly by business stage.
-                      </p>
-                    </div>
-                    <p style={{ marginBottom: "0", lineHeight: "1.6", fontStyle: "italic", color: "#6d4c41" }}>
-                      Your BIG score provides a comprehensive view of your business readiness across all critical
-                      dimensions that matter to investors, partners, and stakeholders.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Score Breakdown Section */}
-              <div
-                style={{
-                  marginTop: "20px",
-                  border: "1px solid #d7ccc8",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: "#8d6e63",
-                    color: "white",
-                    padding: "12px 16px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                  }}
-                  onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
-                >
-                  <span>Score breakdown</span>
-                  <ChevronDown
-                    size={20}
-                    style={{
-                      transform: showScoreBreakdown ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s ease",
-                    }}
-                  />
-                </div>
-                {showScoreBreakdown && (
-                  <div
-                    style={{
-                      backgroundColor: "#f5f2f0",
-                      padding: "20px",
-                      color: "#5d4037",
-                    }}
-                  >
-                    {bigScore !== null &&
-                      scoreBreakdown.map((item, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            padding: "15px",
-                            borderBottom: index < scoreBreakdown.length - 1 ? "1px solid #e8d8cf" : "none",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            background: "white",
-                            marginBottom: "5px",
-                            borderRadius: "8px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              flex: "1",
-                            }}
-                          >
-                            <div
-                              style={{
-                                backgroundColor: item.color,
-                                width: "12px",
-                                height: "12px",
-                                borderRadius: "50%",
-                                marginRight: "12px",
-                                flexShrink: "0",
-                              }}
-                            ></div>
-                            <div>
-                              <div
-                                style={{
-                                  fontWeight: "600",
-                                  color: "#5d4037",
-                                  fontSize: "14px",
-                                  marginBottom: "2px",
-                                }}
-                              >
-                                {item.name}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: "12px",
-                                  color: "#8d6e63",
-                                  fontStyle: "italic",
-                                }}
-                              >
-                                {item.score}% × {item.weight}% weight = {item.weightedScore}%
-                              </div>
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "12px",
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: "80px",
-                                height: "8px",
-                                background: "#f3e8dc",
-                                borderRadius: "4px",
-                                overflow: "hidden",
-                                border: "1px solid #d6b88a",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${item.score}%`,
-                                  backgroundColor: getProgressBarColor(item.score),
-                                  height: "100%",
-                                  borderRadius: "4px",
-                                  transition: "width 0.3s ease",
-                                }}
-                              ></div>
-                            </div>
-                            <span
-                              style={{
-                                fontWeight: "600",
-                                color: "#5d4037",
-                                fontSize: "14px",
-                                minWidth: "35px",
-                                textAlign: "right",
-                              }}
-                            >
-                              {item.score}%
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Detailed Analysis Section */}
-              <div
-                style={{
-                  marginTop: "20px",
-                  border: "1px solid #d7ccc8",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: "#8d6e63",
-                    color: "white",
-                    padding: "12px 16px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                  }}
-                  onClick={() => setShowDetailedAnalysis(!showDetailedAnalysis)}
-                >
-                  <span>Detailed analysis</span>
-                  <ChevronDown
-                    size={20}
-                    style={{
-                      transform: showDetailedAnalysis ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s ease",
-                    }}
-                  />
-                </div>
-                {showDetailedAnalysis && (
-                  <div
-                    style={{
-                      backgroundColor: "#f5f2f0",
-                      padding: "20px",
-                      color: "#5d4037",
-                    }}
-                  >
-                    <div style={{ color: "#5d4037", lineHeight: "1.6" }}>
-                      {bigScore >= 91 && (
-                        <p style={{ margin: "0" }}>
-                          <strong>Outstanding business readiness.</strong> Your organization demonstrates excellence
-                          across all critical dimensions - compliance, legitimacy, leadership &amp; governance,
-                          operational strength, and capital appeal. You're exceptionally well-positioned for major
-                          funding opportunities, strategic partnerships, and rapid scaling. This level of business
-                          maturity places you in the top tier of investment-ready companies.
-                        </p>
-                      )}
-                      {bigScore >= 81 && bigScore <= 90 && (
-                        <p style={{ margin: "0" }}>
-                          <strong>Strong overall business position.</strong> Your company shows solid performance across
-                          most areas with good compliance, credibility, leadership &amp; governance, operational, and
-                          capital appeal foundations. You're well-prepared for growth opportunities and would be
-                          attractive to most investors and partners. Minor improvements in weaker areas could elevate
-                          you to exceptional status.
-                        </p>
-                      )}
-                      {bigScore >= 61 && bigScore <= 80 && (
-                        <p style={{ margin: "0" }}>
-                          <strong>Fair business readiness with improvement opportunities.</strong> While you have
-                          established foundations in several areas, significant gaps remain that may limit access to
-                          premium opportunities. Focus on strengthening your weakest scores - particularly compliance
-                          and capital appeal - to improve your overall market position.
-                        </p>
-                      )}
-                      {bigScore >= 41 && bigScore <= 60 && (
-                        <p style={{ margin: "0" }}>
-                          <strong>Basic foundation requiring substantial development.</strong> Your business shows some
-                          positive elements but lacks the comprehensive readiness needed for major opportunities.
-                          Systematic improvements across compliance, legitimacy, leadership &amp; governance, and
-                          operational strength are essential before pursuing significant funding or partnerships.
-                        </p>
-                      )}
-                      {bigScore <= 40 && (
-                        <p style={{ margin: "0" }}>
-                          <strong>Fundamental improvements urgently needed.</strong> Your business requires
-                          comprehensive strengthening across multiple critical areas. Focus immediately on achieving
-                          basic compliance, establishing professional legitimacy, building leadership &amp; governance
-                          capabilities, and developing fundamental operational capabilities before pursuing external
-                          opportunities.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+{/* Score breakdown modal — same explorer shell as the other four cards */}
+{showModal && (
+  <div
+    style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999999, padding: "20px" }}
+    onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
+  >
+    <div
+      style={{ position: "relative", backgroundColor: "#fff", borderRadius: "12px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", width: "100%", maxWidth: "620px", border: "1px solid #e8ddd6", overflow: "hidden" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {explorer ? (
+        <ScoreExplorer
+          title="BIG Score"
+          score={bigScore}
+          band={scoreLevel}
+          contextLine={
+            <div style={{ fontSize: "11.5px", color: "#8d6e63" }}>
+              Business stage: {profileData?.formData?.entityOverview?.operationStage || "Ideation"}
             </div>
-          </div>
+          }
+          about={explorer.about}
+          blocks={explorer.blocks}
+          potential={explorer.potential}
+          attention={explorer.attention}
+          summary={explorer.summary}
+          onNavigate={goTo}
+          onClose={() => setShowModal(false)}
+          fmtPts={fmtPts}
+        />
+      ) : (
+        <div style={{ padding: "40px", textAlign: "center", color: "#8d6e63", fontSize: "13px" }}>
+          <div>Working out your score…</div>
         </div>
       )}
+    </div>
+  </div>
+)}
 
       {/* Boost Score Modal */}
       {showBoostScoreModal && (
@@ -1488,8 +1226,8 @@ export function BigScoreCard({
                           </div>
                         )}
                         <div style={{ flex: "1", width: "100%" }}>
-                          <h4 style={{ 
-                            fontSize: "18px", 
+                          <h4 style={{
+                            fontSize: "18px",
                             fontWeight: "700",
                             margin: "0 0 12px 0",
                             color: "white"
@@ -1589,264 +1327,264 @@ export function BigScoreCard({
 
       {/* Low Score Popup for scores < 50% */}
       {showCatalystPopup && (
-  <div
-    style={{
-      position: "fixed",
-      inset: "0",
-      backgroundColor: "rgba(0, 0, 0, 0.6)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: "999999",
-      padding: "20px",
-    }}
-    onClick={(e) => {
-      if (e.target === e.currentTarget) {
-        setShowCatalystPopup(false)
-        sessionStorage.setItem('catalystPopupDismissed', 'true')
-      }
-    }}
-  >
-    <div
-      style={{
-        position: "relative",
-        backgroundColor: "#ffffff",
-        borderRadius: "16px",
-        boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
-        zIndex: "999999",
-        maxWidth: "500px",
-        width: "100%",
-        height: "90vh",
-        border: "2px solid #8D6E63",
-        overflow: "hidden",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* Header */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)",
-          padding: "24px 30px 20px 30px",
-          color: "white",
-          textAlign: "center",
-          position: "relative",
-        }}
-      >
         <div
           style={{
-            position: "absolute",
-            top: "-30px",
-            right: "-30px",
-            width: "100px",
-            height: "100px",
-            background: "rgba(255, 255, 255, 0.1)",
-            borderRadius: "50%",
+            position: "fixed",
+            inset: "0",
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: "999999",
+            padding: "20px",
           }}
-        ></div>
-        <h3
-          style={{
-            margin: "0 0 8px 0",
-            fontSize: "24px",
-            fontWeight: "700",
-            letterSpacing: "0.5px",
-          }}
-        >
-          Need Help Getting Started?
-        </h3>
-        <p
-          style={{
-            margin: "0",
-            fontSize: "14px",
-            opacity: "0.9",
-            fontWeight: "400",
-          }}
-        >
-          We're here to support your business journey
-        </p>
-      </div>
-
-      {/* Content */}
-      <div style={{ padding: "30px", height: "calc(100% - 88px)", overflowY: "auto" }}>
-        <div
-          style={{
-            textAlign: "center",
-            marginBottom: "24px",
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCatalystPopup(false)
+              sessionStorage.setItem('catalystPopupDismissed', 'true')
+            }
           }}
         >
           <div
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "80px",
-              height: "80px",
-              backgroundColor: "#F3E8DC",
-              borderRadius: "50%",
-              marginBottom: "16px",
-              border: "3px solid #8D6E63",
+              position: "relative",
+              backgroundColor: "#ffffff",
+              borderRadius: "16px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
+              zIndex: "999999",
+              maxWidth: "500px",
+              width: "100%",
+              height: "90vh",
+              border: "2px solid #8D6E63",
+              overflow: "hidden",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <span
+            {/* Header */}
+            <div
               style={{
-                fontSize: "32px",
-                fontWeight: "800",
-                color: "#8D6E63",
+                background: "linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)",
+                padding: "24px 30px 20px 30px",
+                color: "white",
+                textAlign: "center",
+                position: "relative",
               }}
             >
-              {bigScore}%
-            </span>
+              <div
+                style={{
+                  position: "absolute",
+                  top: "-30px",
+                  right: "-30px",
+                  width: "100px",
+                  height: "100px",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  borderRadius: "50%",
+                }}
+              ></div>
+              <h3
+                style={{
+                  margin: "0 0 8px 0",
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                Need Help Getting Started?
+              </h3>
+              <p
+                style={{
+                  margin: "0",
+                  fontSize: "14px",
+                  opacity: "0.9",
+                  fontWeight: "400",
+                }}
+              >
+                We're here to support your business journey
+              </p>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: "30px", height: "calc(100% - 88px)", overflowY: "auto" }}>
+              <div
+                style={{
+                  textAlign: "center",
+                  marginBottom: "24px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "80px",
+                    height: "80px",
+                    backgroundColor: "#F3E8DC",
+                    borderRadius: "50%",
+                    marginBottom: "16px",
+                    border: "3px solid #8D6E63",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "32px",
+                      fontWeight: "800",
+                      color: "#8D6E63",
+                    }}
+                  >
+                    {bigScore}%
+                  </span>
+                </div>
+                <p
+                  style={{
+                    fontSize: "16px",
+                    color: "#5D4037",
+                    margin: "0 0 16px 0",
+                    lineHeight: "1.5",
+                  }}
+                >
+                  Your score indicates you may benefit from incubation or acceleration support to strengthen your business foundation.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: "#F8F5F2",
+                  padding: "20px",
+                  borderRadius: "12px",
+                  border: "2px solid #E8D8CF",
+                  marginBottom: "24px",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: "14px",
+                    color: "#6D4C41",
+                    margin: "0 0 12px 0",
+                    fontWeight: "600",
+                  }}
+                >
+                  How We Can Help:
+                </p>
+                <ul
+                  style={{
+                    margin: "0",
+                    paddingLeft: "20px",
+                    color: "#5D4037",
+                    fontSize: "14px",
+                    lineHeight: "1.6",
+                  }}
+                >
+                  <li><strong>Find Advisors:</strong> Connect with experienced advisors who can guide your business growth</li>
+                  <li><strong>Catalyst Program:</strong> Get incubation or acceleration support to strengthen your foundation</li>
+                </ul>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "12px",
+                  flexDirection: "column",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    navigate("/find-advisors")
+                    setShowCatalystPopup(false)
+                    sessionStorage.setItem('catalystPopupDismissed', 'true')
+                  }}
+                  style={{
+                    padding: "16px 24px",
+                    borderRadius: "10px",
+                    background: "linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)",
+                    color: "white",
+                    border: "none",
+                    fontWeight: "700",
+                    fontSize: "15px",
+                    cursor: "pointer",
+                    transition: "all 0.3s ease",
+                    boxShadow: "0 6px 20px rgba(141, 110, 99, 0.4)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = "translateY(-2px)"
+                    e.target.style.boxShadow = "0 8px 25px rgba(141, 110, 99, 0.5)"
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = "translateY(0px)"
+                    e.target.style.boxShadow = "0 6px 20px rgba(141, 110, 99, 0.4)"
+                  }}
+                >
+                  <span>Find Advisors</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    navigate("/support-program-matches")
+                    setShowCatalystPopup(false)
+                    sessionStorage.setItem('catalystPopupDismissed', 'true')
+                  }}
+                  style={{
+                    padding: "16px 24px",
+                    borderRadius: "10px",
+                    background: "linear-gradient(135deg, #A67C52 0%, #8D6E63 100%)",
+                    color: "white",
+                    border: "none",
+                    fontWeight: "700",
+                    fontSize: "15px",
+                    cursor: "pointer",
+                    transition: "all 0.3s ease",
+                    boxShadow: "0 6px 20px rgba(166, 124, 82, 0.4)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = "translateY(-2px)"
+                    e.target.style.boxShadow = "0 8px 25px rgba(166, 124, 82, 0.5)"
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = "translateY(0px)"
+                    e.target.style.boxShadow = "0 6px 20px rgba(166, 124, 82, 0.4)"
+                  }}
+                >
+                  <span>Catalyst Program</span>
+                  <TrendingUp size={18} />
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowCatalystPopup(false)
+                    sessionStorage.setItem('catalystPopupDismissed', 'true')
+                  }}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: "10px",
+                    background: "transparent",
+                    color: "#8D6E63",
+                    border: "2px solid #8D6E63",
+                    fontWeight: "600",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    transition: "all 0.3s ease",
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = "#F8F5F2"
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = "transparent"
+                  }}
+                >
+                  Maybe Later
+                </button>
+              </div>
+            </div>
           </div>
-          <p
-            style={{
-              fontSize: "16px",
-              color: "#5D4037",
-              margin: "0 0 16px 0",
-              lineHeight: "1.5",
-            }}
-          >
-            Your score indicates you may benefit from incubation or acceleration support to strengthen your business foundation.
-          </p>
         </div>
-
-        <div
-          style={{
-            backgroundColor: "#F8F5F2",
-            padding: "20px",
-            borderRadius: "12px",
-            border: "2px solid #E8D8CF",
-            marginBottom: "24px",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "14px",
-              color: "#6D4C41",
-              margin: "0 0 12px 0",
-              fontWeight: "600",
-            }}
-          >
-            How We Can Help:
-          </p>
-          <ul
-            style={{
-              margin: "0",
-              paddingLeft: "20px",
-              color: "#5D4037",
-              fontSize: "14px",
-              lineHeight: "1.6",
-            }}
-          >
-            <li><strong>Find Advisors:</strong> Connect with experienced advisors who can guide your business growth</li>
-            <li><strong>Catalyst Program:</strong> Get incubation or acceleration support to strengthen your foundation</li>
-          </ul>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "12px",
-            flexDirection: "column",
-          }}
-        >
-         <button
-  onClick={() => {
-    navigate("/find-advisors")
-    setShowCatalystPopup(false)
-    sessionStorage.setItem('catalystPopupDismissed', 'true')
-  }}
-  style={{
-    padding: "16px 24px",
-    borderRadius: "10px",
-    background: "linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)",
-    color: "white",
-    border: "none",
-    fontWeight: "700",
-    fontSize: "15px",
-    cursor: "pointer",
-    transition: "all 0.3s ease",
-    boxShadow: "0 6px 20px rgba(141, 110, 99, 0.4)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
-  }}
-  onMouseOver={(e) => {
-    e.target.style.transform = "translateY(-2px)"
-    e.target.style.boxShadow = "0 8px 25px rgba(141, 110, 99, 0.5)"
-  }}
-  onMouseOut={(e) => {
-    e.target.style.transform = "translateY(0px)"
-    e.target.style.boxShadow = "0 6px 20px rgba(141, 110, 99, 0.4)"
-  }}
->
-  <span>Find Advisors</span>
-</button>
-
-<button
-  onClick={() => {
-    navigate("/support-program-matches")
-    setShowCatalystPopup(false)
-    sessionStorage.setItem('catalystPopupDismissed', 'true')
-  }}
-  style={{
-    padding: "16px 24px",
-    borderRadius: "10px",
-    background: "linear-gradient(135deg, #A67C52 0%, #8D6E63 100%)",
-    color: "white",
-    border: "none",
-    fontWeight: "700",
-    fontSize: "15px",
-    cursor: "pointer",
-    transition: "all 0.3s ease",
-    boxShadow: "0 6px 20px rgba(166, 124, 82, 0.4)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
-  }}
-  onMouseOver={(e) => {
-    e.target.style.transform = "translateY(-2px)"
-    e.target.style.boxShadow = "0 8px 25px rgba(166, 124, 82, 0.5)"
-  }}
-  onMouseOut={(e) => {
-    e.target.style.transform = "translateY(0px)"
-    e.target.style.boxShadow = "0 6px 20px rgba(166, 124, 82, 0.4)"
-  }}
->
-  <span>Catalyst Program</span>
-  <TrendingUp size={18} />
-</button>
-
-          <button
-            onClick={() => {
-              setShowCatalystPopup(false)
-              sessionStorage.setItem('catalystPopupDismissed', 'true')
-            }}
-            style={{
-              padding: "12px 24px",
-              borderRadius: "10px",
-              background: "transparent",
-              color: "#8D6E63",
-              border: "2px solid #8D6E63",
-              fontWeight: "600",
-              fontSize: "14px",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-            }}
-            onMouseOver={(e) => {
-              e.target.style.backgroundColor = "#F8F5F2"
-            }}
-            onMouseOut={(e) => {
-              e.target.style.backgroundColor = "transparent"
-            }}
-          >
-            Maybe Later
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
       <style>{`
         @keyframes spin {
