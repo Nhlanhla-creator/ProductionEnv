@@ -923,6 +923,48 @@ const AVAILABLE_FIELDS = [
 
 const DEFAULT_VISIBLE_FIELDS = ["tier", "accountWebsite", "sector", "revPotential", "probability", "nextCta", "byWhen"];
 
+// ── Filter Dropdown component (reused) ──
+const FilterDropdown = ({ options, value, onChange, onClose }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        onClose?.();
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
+      >
+        <SlidersHorizontal size={13} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
+              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Column Selector (unchanged) ──
 const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
   if (!isOpen) return null;
   return (
@@ -948,6 +990,7 @@ const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
   );
 };
 
+// ── Cell renderers ──
 const BooleanCell = ({ value, onChange, isEditing }) => {
   if (isEditing) {
     return (
@@ -988,6 +1031,7 @@ const TextCell = ({ value, onChange, isEditing, type }) => {
   return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
 };
 
+// ── Main Pipeline Table with drag-drop and filter dropdown ──
 const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   const [records, setRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
@@ -1001,6 +1045,14 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [widths, setWidths] = useState(() => Object.fromEntries(AVAILABLE_FIELDS.map((f) => [f.id, 150])));
   const resizing = useRef(null);
+
+  // --- Column order state for drag-drop ---
+  const [colOrder, setColOrder] = useState(DEFAULT_VISIBLE_FIELDS);
+
+  // Sync colOrder when visibleFields changes (keep only visible fields in order)
+  useEffect(() => {
+    setColOrder((prev) => prev.filter((f) => visibleFields.includes(f)));
+  }, [visibleFields]);
 
   const loadRecords = async () => {
     if (!currentUser) return;
@@ -1022,18 +1074,19 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
 
   useEffect(() => { if (currentUser) loadRecords(); }, [currentUser]);
 
+  // Filtering and sorting
   useEffect(() => {
     let filtered = [...records];
+    // Apply filters (exact match for dropdown)
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value.trim() !== "") {
         filtered = filtered.filter((record) => {
           const recordValue = record[key];
           if (recordValue === undefined || recordValue === null) return false;
-          return recordValue.toString().toLowerCase().includes(value.toLowerCase());
+          return String(recordValue) === value;
         });
       }
     });
-    // Apply sorting
     if (sortConfig.key) {
       filtered.sort((a, b) => {
         const av = a[sortConfig.key] ?? "";
@@ -1115,17 +1168,33 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
 
   const getFieldConfig = (fieldId) => AVAILABLE_FIELDS.find((f) => f.id === fieldId);
 
-  const renderCell = (record, fieldId, isEditing) => {
-    const fieldConfig = getFieldConfig(fieldId);
-    if (!fieldConfig) return null;
-    const value = isEditing ? editData[fieldId] : record[fieldId];
-    if (fieldConfig.type === "boolean") {
-      return <BooleanCell value={value} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} />;
-    }
-    if (fieldConfig.type === "dropdown") {
-      return <DropdownCell value={value} options={fieldConfig.options} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} />;
-    }
-    return <TextCell value={value} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} type={fieldConfig.type} />;
+  // Get unique filter options for a column
+  const getFilterOptions = (fieldId) => {
+    const values = records.map(r => r[fieldId]).filter(v => v !== undefined && v !== null && v !== "");
+    const unique = Array.from(new Set(values.map(v => String(v)))).sort();
+    return ["All", ...unique];
+  };
+
+  // Drag-drop handlers
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
   };
 
   const startResize = (e, key) => {
@@ -1158,6 +1227,19 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     verticalAlign: "top",
   };
 
+  const renderCell = (record, fieldId, isEditing) => {
+    const fieldConfig = getFieldConfig(fieldId);
+    if (!fieldConfig) return null;
+    const value = isEditing ? editData[fieldId] : record[fieldId];
+    if (fieldConfig.type === "boolean") {
+      return <BooleanCell value={value} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} />;
+    }
+    if (fieldConfig.type === "dropdown") {
+      return <DropdownCell value={value} options={fieldConfig.options} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} />;
+    }
+    return <TextCell value={value} onChange={(newVal) => handleEditChange(fieldId, newVal)} isEditing={isEditing} type={fieldConfig.type} />;
+  };
+
   return (
     <div className="mt-5">
       <ColumnSelector isOpen={showColumnSelector} onClose={() => setShowColumnSelector(false)} visibleFields={visibleFields} onToggleField={toggleField} />
@@ -1176,7 +1258,7 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
       <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
         <div className="flex gap-2">
           {!isInvestorView && (
-            <button onClick={() => {}} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm font-semibold hover:bg-warmBrown transition">+ Add Record</button>
+            <button onClick={handleAddRecord} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm font-semibold hover:bg-warmBrown transition">+ Add Record</button>
           )}
           <button onClick={() => setShowColumnSelector(true)} className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md text-sm font-semibold flex items-center gap-2 hover:bg-[#d4c4b8] transition"><Settings size={16} /> Columns</button>
         </div>
@@ -1185,28 +1267,32 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {visibleFields.map((fieldId) => {
+              {colOrder.map((fieldId) => {
                 const fieldConfig = getFieldConfig(fieldId);
                 const sorted = sortConfig.key === fieldId;
+                const currentFilter = filters[fieldId] || "All";
+                const filterOpts = getFilterOptions(fieldId);
                 return (
-                  <th key={fieldId} style={{ ...thS, width: widths[fieldId] || 150 }}>
+                  <th
+                    key={fieldId}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, fieldId)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, fieldId)}
+                    style={{ ...thS, width: widths[fieldId] || 150, userSelect: "none" }}
+                  >
                     <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
-                      <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", color: "#fff" }}>{fieldConfig?.label || fieldId}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px", width: "100%" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", color: "#fff", cursor: "grab" }}>{fieldConfig?.label || fieldId}</span>
                         <InfoTip text={fieldConfig?.label} light />
-                      </span>
-                      <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
                         <button onClick={() => toggleSort(fieldId)} title="Sort" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", borderRadius: "4px", color: sorted ? "#fff" : "rgba(255,255,255,0.6)", display: "inline-flex", alignItems: "center" }}>
                           {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} />}
                         </button>
-                      </span>
-                      <div style={{ width: "100%", marginTop: "2px" }}>
-                        <input
-                          type="text"
-                          placeholder={`Filter ${fieldConfig?.label || ""}`}
-                          value={filters[fieldId] || ""}
-                          onChange={(e) => setFilters({ ...filters, [fieldId]: e.target.value })}
-                          style={{ width: "100%", padding: "3px 6px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.2)", fontSize: "11px", background: "rgba(255,255,255,0.1)", color: "#fff", outline: "none" }}
+                        <FilterDropdown
+                          options={filterOpts}
+                          value={currentFilter}
+                          onChange={(val) => setFilters(p => ({ ...p, [fieldId]: val === "All" ? "" : val }))}
+                          onClose={() => {}}
                         />
                       </div>
                     </div>
@@ -1226,11 +1312,11 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
           </thead>
           <tbody>
             {filteredRecords.length === 0 ? (
-              <tr><td colSpan={visibleFields.length + (isInvestorView ? 0 : 1)} className="p-8 text-center text-lightBrown">{loading ? "Loading..." : "No records found. Click 'Add Record' to get started."}</td></tr>
+              <tr><td colSpan={colOrder.length + (isInvestorView ? 0 : 1)} className="p-8 text-center text-lightBrown">{loading ? "Loading..." : "No records found. Click 'Add Record' to get started."}</td></tr>
             ) : (
               filteredRecords.map((record, idx) => (
                 <tr key={record.id} className={`border-b border-[#e8ddd4] ${idx % 2 === 0 ? "bg-white" : "bg-[#faf8f5]"}`}>
-                  {visibleFields.map((fieldId) => (
+                  {colOrder.map((fieldId) => (
                     <td key={fieldId} className="p-2.5 align-middle">{renderCell(record, fieldId, editingId === record.id)}</td>
                   ))}
                   {!isInvestorView && (
@@ -1272,7 +1358,7 @@ const DEFAULT_CHART = {
   varianceType: "scatter",
   actualColor: "#1e40af",
   budgetColor: "#4a352f",
-  showValues: true,
+  showValues: false,
   showAxis: false,
 };
 const CHART_TYPES = [
@@ -1282,28 +1368,6 @@ const CHART_TYPES = [
   { value: "scatter", label: "Circles" },
 ];
 const SWATCHES = ["#1e40af", "#4a352f", "#166534", "#991b1b", "#92400e", "#6d28d9", "#0e7490", "#be185d"];
-
-const makeValueLabelPlugin = (kpi, enabled) => ({
-  id: "seriesValueLabels",
-  afterDatasetsDraw(chart) {
-    if (!enabled) return;
-    const { ctx } = chart;
-    ctx.save();
-    ctx.font = "600 10.5px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    chart.data.datasets.forEach((ds, di) => {
-      const meta = chart.getDatasetMeta(di);
-      if (meta.hidden) return;
-      meta.data.forEach((el, i) => {
-        const raw = ds.data[i];
-        if (raw === null || raw === undefined) return;
-        ctx.fillStyle = ds.__labelColor || T.body;
-        ctx.fillText(fmtValue(raw, kpi, { signed: !!ds.__signed, bare: true }), el.x, el.y - 8);
-      });
-    });
-    ctx.restore();
-  },
-});
 
 const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, readOnly }) => {
   const [noteText, setNoteText] = useState("");
@@ -1523,7 +1587,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
 
   return (
     <Modal
-      title={`${kpi.name} — Trend`}
+      title={`${kpi.name} — (${kpi.units})`}
       subtitle={caption}
       icon={<LineChartIcon size={17} />}
       onClose={onClose}
@@ -1639,11 +1703,10 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
             type="bar"
             data={varianceData}
             options={varianceOptions}
-            plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]}
           />
         </div>
         <div style={{ height: "300px" }}>
-          <Chart type="bar" data={mainData} options={mainOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+          <Chart type="bar" data={mainData} options={mainOptions} />
         </div>
       </div>
 
@@ -1664,7 +1727,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
           }}
         >
           <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-            <StickyNote size={13} /> Note for {PERIOD_LABEL[period].toLowerCase()}
+            <StickyNote size={13} /> Notes
           </span>
           <span style={{ fontSize: "11.5px", color: noteState === "saved" ? T.green : T.muted }}>
             {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved" : "Saves automatically"}
@@ -1704,14 +1767,6 @@ const localAnalysis = (kpi, period, v, fy) => {
       kpi.benchmark !== null ? `The recommended benchmark for this measure is ${fmtValue(kpi.benchmark, kpi)}.` : "No published benchmark for this measure — judge it against your own history.",
       `${DIRECTIONS.find((d) => d.value === kpi.direction)?.label} for this KPI.`,
     ],
-    trends:
-      status.key === "green"
-        ? ["Holding inside tolerance, which points to a stable position.", "Watch the month-to-month spread rather than the headline."]
-        : status.key === "amber"
-        ? ["Drifted outside tolerance but not far — this reads as drift rather than a break.", "Two or three more months at this level would move it into critical territory."]
-        : status.key === "red"
-        ? ["The gap is wide enough that a single-month correction is unlikely to close it.", "Treat the trend as broken until two consecutive months recover."]
-        : ["No target captured for this period, so there is nothing to measure the actual against."],
     issues:
       status.key === "green"
         ? ["No material issue at this timeframe."]
@@ -1746,19 +1801,6 @@ const summaryAnalysis = (kpi, fy) => {
       ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no target)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
       `${withData.length} of ${rows.length} timeframes have both an actual and a target.`,
     ],
-    trends:
-      withData.length < 2
-        ? ["Not enough timeframes with a target to compare the short term against the long."]
-        : [
-            mth?.status.key !== "none" && yr?.status.key !== "none" && mth.status.key !== yr.status.key
-              ? `The month and the year disagree — ${mth.status.label.toLowerCase()} this month against ${yr.status.label.toLowerCase()} for the year, so treat one as the outlier.`
-              : "Short and long timeframes tell the same story, which makes the signal more trustworthy.",
-            greens.length === withData.length
-              ? "Every timeframe is inside tolerance."
-              : reds.length === withData.length
-              ? "Every timeframe is critical — this is structural, not a bad month."
-              : "The picture is mixed; the shorter timeframe moves first, so watch it for the turn.",
-          ],
     issues:
       reds.length === 0 && withData.every((r) => r.status.key === "green")
         ? ["No timeframe is outside tolerance."]
@@ -1805,7 +1847,7 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         });
         const d = res?.data;
         if (d?.observations && d?.opportunities) {
-          setAnalysis({ observations: d.observations || [], trends: d.trends || [], issues: d.issues || [], opportunities: d.opportunities || [] });
+          setAnalysis({ observations: d.observations || [], issues: d.issues || [], opportunities: d.opportunities || [] });
           setSource("ai");
           return;
         }
@@ -1900,7 +1942,6 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         analysis && (
           <>
             <Section label="Observations" items={analysis.observations} color={T.accent} />
-            <Section label="Trends" items={analysis.trends} color={T.blue} />
             <Section label="Issues" items={analysis.issues} color={T.red} />
             <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
           </>
@@ -1937,9 +1978,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
 
   const [form, setForm] = useState({
     title: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
-    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against target ${fmtValue(v.budget, kpi)}${
-      variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`
-    }. Raised from ${tabName} · ${categoryName}.`,
+    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against target ${fmtValue(v.budget, kpi)}${variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${tabName} · ${categoryName}.`,
     category: "Marketing & Sales",
     assignedTo: "",
     dueDate: "",
@@ -2554,7 +2593,7 @@ const MarketingSales = () => {
   const [user, setUser] = useState(null);
   const [fyStartMonth, setFyStartMonth] = useState(0);
   const [docs, setDocs] = useState({});
-  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [] });
+  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [] });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [dataPrefs, setDataPrefs] = useState(null);
@@ -2573,11 +2612,14 @@ const MarketingSales = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [widths, setWidths] = useState(() => ({
     ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])),
-    [ACTIONS_KEY]: 166,
+    [ACTIONS_KEY]: 196,
   }));
   const [visibility, setVisibility] = useState(() => Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])));
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const resizing = useRef(null);
+
+  // --- Column order state for drag-drop on main KPI table ---
+  const [colOrder, setColOrder] = useState(COLUMN_ORDER);
 
   const [infoKpi, setInfoKpi] = useState(null);
   const [chartKpi, setChartKpi] = useState(null);
@@ -2649,7 +2691,7 @@ const MarketingSales = () => {
         setFyStartMonth(fyStartMonthFromEnd(profile.exists() ? profile.data()?.entityOverview?.financialYearEnd : null));
         const [loaded, metaSnap] = await Promise.all([loadAll(user.uid), getDoc(doc(db, "marketingData", `${user.uid}_${META_DOC}`))]);
         setDocs(loaded);
-        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], ...metaSnap.data() });
+        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], ...metaSnap.data() });
       } catch (err) {
         console.error("Error loading marketing data:", err);
         notify("error", `Could not load your marketing data: ${errText(err)}`);
@@ -2666,6 +2708,12 @@ const MarketingSales = () => {
       console.error("Error saving KPI meta:", err);
       notify("error", `Changes could not be saved: ${errText(err)}`);
     }
+  };
+
+  const deleteKpi = (kpiId) => {
+    if (!window.confirm(`Delete this KPI? It will be removed from the dashboard.`)) return;
+    persistMeta({ ...meta, hiddenKpis: Array.from(new Set([...(meta.hiddenKpis || []), kpiId])) });
+    notify("success", "KPI removed from the dashboard.");
   };
 
   const writeDoc = async (src, mutate) => {
@@ -2729,7 +2777,7 @@ const MarketingSales = () => {
       ...tab,
       categories: tab.categories.map((cat) => ({
         ...cat,
-        kpis: (cat.kpis || []).map((kpi) => {
+        kpis: (cat.kpis || []).filter((kpi) => !(meta.hiddenKpis || []).includes(kpi.id)).map((kpi) => {
           const entries = {};
           months.forEach((m) => {
             if (kpi.custom) {
@@ -2768,6 +2816,7 @@ const MarketingSales = () => {
   }, [visibleTabs, activeTabId]);
 
   const activeTab = visibleTabs.find((t) => t.id === activeTabId) || visibleTabs[0];
+  const isKpiTableTab = activeTab?.id === "summary";
 
   const updateKpiMeta = (kpiId, patch) => persistMeta({ ...meta, kpis: { ...meta.kpis, [kpiId]: { ...(meta.kpis[kpiId] || {}), ...patch } } });
 
@@ -2851,10 +2900,12 @@ const MarketingSales = () => {
     return groups;
   }, [rows]);
 
-  const visibleColumns = COLUMN_ORDER.filter((k) => visibility[k]);
+  // Determine visible columns based on visibility and colOrder (drag-drop)
+  const visibleColumns = colOrder.filter((k) => visibility[k]);
   const totalWidth = visibleColumns.reduce((s, k) => s + widths[k], 0) + widths[ACTIONS_KEY];
   const activeFilterCount = Object.values(filters).filter((v) => v !== "all").length;
 
+  // Resize handler for main table
   const startResize = (e, key) => {
     e.preventDefault();
     e.stopPropagation();
@@ -2872,6 +2923,28 @@ const MarketingSales = () => {
     document.body.style.userSelect = "none";
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+  };
+
+  // Drag-drop handlers for main table
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
   };
 
   const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
@@ -2938,7 +3011,6 @@ const MarketingSales = () => {
     return <div style={{ padding: "80px", textAlign: "center", color: T.body, fontSize: "14px" }}>Loading marketing & sales performance…</div>;
   }
 
-  // Get panel data for current tab
   const panels = (activeTab?.categories || []).map((c) => c.panel).filter(Boolean);
 
   return (
@@ -3016,8 +3088,8 @@ const MarketingSales = () => {
           );
         })}
         {!isInvestorView && (
-          <button onClick={() => setManageTabs(true)} title="Hide or show a section" style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
-            <Settings2 size={13} /> Sections
+          <button onClick={() => setManageTabs(true)} title="Show or hide dashboard tabs" style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
+            <Settings2 size={13} /> Manage Tabs
           </button>
         )}
       </div>
@@ -3025,35 +3097,41 @@ const MarketingSales = () => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{activeTab?.name}</h3>
-          <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
-          {activeFilterCount > 0 && (
-            <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
-              Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
-            </button>
+          {isKpiTableTab && (
+            <>
+              <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
+                  Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+                </button>
+              )}
+            </>
           )}
         </div>
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
-            {showColumnMenu && (
-              <>
-                <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
-                <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
-                  {COLUMN_ORDER.map((key) => {
-                    const def = COLUMN_DEFS[key];
-                    return (
-                      <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px", cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
-                        {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
-                        <span style={{ flex: 1 }}>{def.label}</span>
-                      </div>
-                    );
-                  })}
-                  <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
-                </div>
-              </>
-            )}
-          </div>
+          {isKpiTableTab && (
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
+              {showColumnMenu && (
+                <>
+                  <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
+                  <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
+                    {COLUMN_ORDER.map((key) => {
+                      const def = COLUMN_DEFS[key];
+                      return (
+                        <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px", cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
+                          {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
+                          <span style={{ flex: 1 }}>{def.label}</span>
+                        </div>
+                      );
+                    })}
+                    <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
             <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
@@ -3064,21 +3142,23 @@ const MarketingSales = () => {
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
-        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
-          {PERIODS.map((p) => {
-            const on = p.key === period;
-            return (
-              <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px", fontWeight: 600, border: "none", fontFamily: "inherit", background: on ? T.bg : "transparent", color: on ? T.accent : T.body, boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
-                {p.label}
-              </button>
-            );
-          })}
+      {isKpiTableTab && (
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+          <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
+            {PERIODS.map((p) => {
+              const on = p.key === period;
+              return (
+                <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px", fontWeight: 600, border: "none", fontFamily: "inherit", background: on ? T.bg : "transparent", color: on ? T.accent : T.body, boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <span style={{ fontSize: "12.5px", color: T.muted }}>Showing {PERIOD_PREFIX[period].toLowerCase()} target, actual and variance</span>
         </div>
-        <span style={{ fontSize: "12.5px", color: T.muted }}>Showing {PERIOD_PREFIX[period].toLowerCase()} target, actual and variance</span>
-      </div>
+      )}
 
-      {allRows.length > 0 && (
+      {allRows.length > 0 && isKpiTableTab && (
         <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "12px", overflow: "hidden", background: T.bg, marginBottom: "22px" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed" }}>
@@ -3093,10 +3173,17 @@ const MarketingSales = () => {
                     const lines = columnLines(key, period);
 
                     return (
-                      <th key={key} style={{ ...thS, width: widths[key] }}>
+                      <th
+                        key={key}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, key)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, key)}
+                        style={{ ...thS, width: widths[key], userSelect: "none" }}
+                      >
                         <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: align }}>
                           <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
-                            <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
+                            <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3, cursor: "grab" }}>
                               {lines.map((l, i) => (
                                 <span key={i} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap", color: i < lines.length - 1 ? "rgba(255,255,255,0.82)" : "#ffffff" }}>{l}</span>
                               ))}
@@ -3135,7 +3222,7 @@ const MarketingSales = () => {
                     <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
                       <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
                         <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>Actions</span>
-                        <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, and notes for this KPI." />
+                        <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, notes, and delete for this KPI." />
                       </span>
                       <span style={{ height: "23px" }} />
                     </div>
@@ -3189,6 +3276,9 @@ const MarketingSales = () => {
                                 <button onClick={() => setActionKpi({ kpi, categoryName, tabName })} style={iconBtn(status.color)} title={`Add action (${status.label})`}><Plus size={16} /></button>
                               )}
                               <button onClick={() => setNotesKpi(kpi)} style={iconBtn(kpi.notes ? T.amber : T.body)} title="Notes"><StickyNote size={16} /></button>
+                              {!isInvestorView && (
+                                <button onClick={() => deleteKpi(kpi.id)} style={iconBtn(T.red)} title="Delete KPI"><Trash2 size={16} /></button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -3211,8 +3301,8 @@ const MarketingSales = () => {
         </div>
       )}
 
-      {/* Panels based on tab */}
-      {panels.includes("top3") && (
+      {/* Panels based on tab - only shown for non-summary tabs */}
+      {!isKpiTableTab && panels.includes("top3") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Top 3 Concentration</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
@@ -3271,7 +3361,7 @@ const MarketingSales = () => {
         </div>
       )}
 
-      {panels.includes("channelPerf") && (
+      {!isKpiTableTab && panels.includes("channelPerf") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Channel Performance</h3>
           <div style={{ overflowX: "auto" }}>
@@ -3301,7 +3391,7 @@ const MarketingSales = () => {
         </div>
       )}
 
-      {panels.includes("riskAnalysis") && (
+      {!isKpiTableTab && panels.includes("riskAnalysis") && (
         <div style={{ ...cardS, background: T.panel, marginBottom: "20px" }}>
           <h4 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "13px", fontWeight: 600 }}>Concentration Risk Analysis</h4>
           <div style={{ fontSize: "13px", color: T.body, fontWeight: 600, marginBottom: "6px" }}>Channel Concentration Risk</div>
@@ -3315,7 +3405,7 @@ const MarketingSales = () => {
         </div>
       )}
 
-      {panels.includes("campaignPerf") && (
+      {!isKpiTableTab && panels.includes("campaignPerf") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Campaign Performance</h3>
           <div style={{ overflowX: "auto" }}>
@@ -3355,7 +3445,7 @@ const MarketingSales = () => {
       {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)} onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
 
       {manageTabs && (
-        <Modal title="Sections" subtitle="Hide a section to take it off the dashboard" icon={<Settings2 size={17} />} onClose={() => setManageTabs(false)} width={560} footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
+        <Modal title="Manage Dashboard Tabs" subtitle="Show or hide a tab from the dashboard" icon={<Settings2 size={17} />} onClose={() => setManageTabs(false)} width={560} footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
           {tabs.map((t) => {
             const hidden = (meta.hiddenTabs || []).includes(t.id);
             const count = t.categories.flatMap((c) => c.kpis || []).length;
@@ -3371,7 +3461,7 @@ const MarketingSales = () => {
               </div>
             );
           })}
-          <p style={{ fontSize: "12.5px", color: T.muted, marginTop: "10px", marginBottom: 0, display: "flex", alignItems: "flex-start", gap: "6px" }}><Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} /> Sections are built in, so they hide rather than delete — the underlying marketing data is shared with the rest of the platform.</p>
+          <p style={{ fontSize: "12.5px", color: T.muted, marginTop: "10px", marginBottom: 0, display: "flex", alignItems: "flex-start", gap: "6px" }}><Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} /> Tabs are built in, so they hide rather than delete — the underlying marketing data is shared with the rest of the platform.</p>
         </Modal>
       )}
 

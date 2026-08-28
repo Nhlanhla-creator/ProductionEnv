@@ -13,7 +13,7 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
   ExternalLink, Square, CheckSquare, ArrowLeft, Calendar, SlidersHorizontal,
-  Database, Sparkles, Sigma, Settings2, EyeOff, Palette, Check,
+  Database, Sparkles, Sigma, Settings2, EyeOff, Palette, Check, Trash2,
 } from "lucide-react";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -25,9 +25,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 const functions = getFunctions();
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Tokens — identical to Operational Performance so the two pages read as one
-   system. `header` is a deeper cut of the accent so the table band and the
-   merged Category cells sit in the same family.
+   Tokens — identical to Operational Performance
    ════════════════════════════════════════════════════════════════════════ */
 const T = {
   ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", faint: "#8a7a74",
@@ -53,8 +51,6 @@ const RAPS_CATEGORIES = [
 const ACTION_STATUSES = ["Not Done", "In Progress", "Done"];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-/* Financial data is captured monthly, so the week option from Operational
-   Performance has nothing behind it here. */
 const PERIODS = [
   { key: "month", label: "This month" },
   { key: "quarter", label: "This quarter" },
@@ -63,7 +59,7 @@ const PERIODS = [
 const PERIOD_LABEL = { month: "This month", quarter: "This quarter", year: "This year" };
 const PERIOD_PREFIX = { month: "Monthly", quarter: "Quarterly", year: "Annual" };
 
-/* ─── Financial year, from Entity Overview's financialYearEnd ────────────── */
+/* ─── Financial year ────────────────────────────────────────────────────── */
 const fyStartMonthFromEnd = (end) => {
   if (!end) return 0;
   const m = Number(String(end).split("-")[1]);
@@ -100,7 +96,6 @@ const trimNum = (n) => {
   return Number(n.toFixed(dp)).toLocaleString(LOCALE, { maximumFractionDigits: dp });
 };
 
-/* `bare` drops the unit marker — the table has its own Units column. */
 const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
   if (raw === null || raw === undefined || raw === "") return "—";
   const n = Number(raw);
@@ -132,10 +127,7 @@ const mean = (arr) => { const n = arr.filter((v) => Number.isFinite(v)); return 
 const div = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? a / b : null);
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Source documents.
-
-   Nothing new is invented for storage — the KPIs read the same Firestore docs
-   the old sections wrote to, so existing data appears immediately.
+   Source documents
    ════════════════════════════════════════════════════════════════════════ */
 const DOC = {
   pnl: "_pnlManual",
@@ -147,8 +139,6 @@ const DOC = {
 const num = (arr, mi) => { const v = arr?.[mi]; const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
 const sumObj = (obj, mi) => Object.values(obj || {}).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
 
-/* True only when at least one cell in the month carries a figure — the
-   difference between "nothing captured" and "genuinely zero". */
 const monthHasBs = (bs, mi) => {
   if (!bs) return false;
   const scan = (o) => Object.values(o || {}).some((a) => Array.isArray(a) && a[mi] !== "" && a[mi] !== null && a[mi] !== undefined);
@@ -186,8 +176,6 @@ const bsTotals = (bsDoc, mi) => {
   const liabilities = currentLiabilities + sumObj(bs.liabilities?.nonCurrentLiabilities, mi)
     + (bs.customLiabilitiesCategories || []).reduce((s, c) => s + sumObj(c.items, mi), 0);
 
-  /* Treasury shares reduce equity, so the naive sum has to be corrected twice
-     over — once to remove it, once to subtract it. */
   const equity = sumObj(bs.equity, mi) - 2 * (parseFloat(bs.equity?.treasuryShares?.[mi]) || 0)
     + (bs.customEquityCategories || []).reduce((s, c) => s + sumObj(c.items, mi), 0);
 
@@ -198,7 +186,6 @@ const bsTotals = (bsDoc, mi) => {
   };
 };
 
-/* Everything a KPI might need for one month, in one object. */
 const buildContext = (docs, year, mi) => {
   const p = docs[`${DOC.pnl}_${year}`], b = docs[`${DOC.bs}_${year}`];
   const c = docs[`${DOC.cost}_${year}`], l = docs[`${DOC.liq}_${year}`];
@@ -240,11 +227,7 @@ const buildContext = (docs, year, mi) => {
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   The KPI registry — tabs, categories, KPIs.
-
-   `field` marks a KPI you type in; anything with only `actual` is derived and
-   shown read-only in Add Data, because typing over a computed figure would
-   just be overwritten on the next load.
+   KPI registry (unchanged)
    ════════════════════════════════════════════════════════════════════════ */
 const K = (o) => ({
   id: o.id, name: o.name, units: o.units, direction: o.direction || "higher",
@@ -257,7 +240,7 @@ const K = (o) => ({
 const TAB_DEFS = [
   {
     id: "summary",
-    name: "Financial Performance Summary",
+    name: "Financial Performance",
     categories: [
       { name: "Solvency", kpis: [
         K({ id: "nav", name: "Net Asset Value", units: "R", direction: "higher", aggregate: "avg",
@@ -289,7 +272,7 @@ const TAB_DEFS = [
           actual: (c) => div(c.liabilities, c.equity) }),
         K({ id: "equityMultiplier", name: "Equity Multiplier", units: "×", direction: "lower", aggregate: "avg",
           source: "Calculated from Balance Sheet",
-          meaning: "How far the asset base is stretched over the equity behind it. The higher it climbs, the more a bad year hurts.",
+          meaning: "How far the asset base is stretched over the equity behind it. The higher it climbs, the worse a bad year hurts.",
           measured: "=TotalAssets / TotalEquity",
           actual: (c) => div(c.assets, c.equity) }),
       ]},
@@ -417,12 +400,6 @@ const TAB_DEFS = [
     ],
   },
   {
-    id: "balance-sheet",
-    name: "Balance Sheet",
-    custom: "balanceSheet",
-    categories: [],
-  },
-  {
     id: "equity-structure",
     name: "Equity Structure",
     custom: "equity",
@@ -430,14 +407,20 @@ const TAB_DEFS = [
   },
   {
     id: "liquidity",
-    name: "Liquidity",
+    name: "Loan Repayments",
     categories: [
       { name: "Loan Repayments", custom: "loans" },
     ],
   },
+  {
+    id: "balance-sheet",
+    name: "Balance Sheet",
+    custom: "balanceSheet",
+    categories: [],
+  },
 ];
 
-/* ─── Status ────────────────────────────────────────────────────────────── */
+/* ─── Status helpers ───────────────────────────────────────────────────── */
 const S = {
   green: { key: "green", label: "On budget", color: T.green, bg: T.greenBg },
   amber: { key: "amber", label: "Needs attention", color: T.amber, bg: T.amberBg },
@@ -472,7 +455,7 @@ const StatusIcon = ({ status, size = 22 }) => {
   return <Info {...p} />;
 };
 
-/* ─── Period resolution over the loaded entries ─────────────────────────── */
+/* ─── Period resolution ─────────────────────────────────────────────────── */
 const monthEntry = (kpi, year, mi) => kpi.entries?.[`M:${year}-${String(mi + 1).padStart(2, "0")}`] || { actual: null, budget: null };
 
 const periodValues = (kpi, period, fy) => {
@@ -575,29 +558,7 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better" },
 ];
 
-const makeValueLabelPlugin = (kpi, enabled) => ({
-  id: "seriesValueLabels",
-  afterDatasetsDraw(chart) {
-    if (!enabled) return;
-    const { ctx } = chart;
-    ctx.save();
-    ctx.font = "600 10.5px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    chart.data.datasets.forEach((ds, di) => {
-      const meta = chart.getDatasetMeta(di);
-      if (meta.hidden) return;
-      meta.data.forEach((el, i) => {
-        const raw = ds.data[i];
-        if (raw === null || raw === undefined) return;
-        ctx.fillStyle = ds.__labelColor || T.body;
-        ctx.fillText(fmtValue(raw, kpi, { signed: !!ds.__signed, bare: true }), el.x, el.y - 8);
-      });
-    });
-    ctx.restore();
-  },
-});
-
-/* ─── KPI info popup ────────────────────────────────────────────────────── */
+/* ─── KPI info modal (unchanged) ───────────────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
   const [meaning, setMeaning] = useState(kpi.meaning || "");
@@ -645,7 +606,7 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Analysis ──────────────────────────────────────────────────────────── */
+/* ─── Analysis (unchanged) ─────────────────────────────────────────────── */
 const localAnalysis = (kpi, period, v, fy) => {
   const status = statusFromPair(kpi, v.budget, v.actual);
   const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
@@ -763,10 +724,10 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
         <span style={{ fontSize: "12px", color: source === "ai" ? T.muted : T.amber, display: "flex", alignItems: "flex-start", gap: "6px", lineHeight: 1.5 }}>
           <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
-          {loading ? "Reviewing…" : source === "ai" ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}`
+          {loading ? "Reviewing…" : source === "ai" ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}` 
             : <span>Rules-based summary built from your figures. <span style={{ color: T.faint }}>{reason}</span></span>}
         </span>
         <button onClick={build} disabled={loading} style={{ ...btnQuiet, padding: "3px 9px", fontSize: "12.5px", opacity: loading ? 0.5 : 1 }}>
@@ -776,8 +737,7 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
       {loading ? <div style={{ padding: "22px 0", color: T.muted, fontSize: "13.5px", textAlign: "center" }}>Reviewing {kpi.name}…</div>
         : analysis && (
         <>
-          <Section label="Observations" items={analysis.observations} color={T.accent} />
-          <Section label="Trends" items={analysis.trends} color={T.blue} />
+          <Section label="Observations" items={[...(analysis.observations || []), ...(analysis.trends || [])]} color={T.accent} />
           <Section label="Issues" items={analysis.issues} color={T.red} />
           <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
         </>
@@ -794,16 +754,16 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => (
   </Modal>
 );
 
-/* ─── Trend chart ───────────────────────────────────────────────────────── */
-const CHART_VERSION = 2;
+/* ─── Trend chart (unchanged) ──────────────────────────────────────────── */
+const CHART_VERSION = 3;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
   actualType: "bar", budgetType: "scatter", varianceType: "scatter",
-  actualColor: "#1e40af", budgetColor: "#4a352f", showValues: true, showAxis: false,
+  actualColor: "#1e40af", budgetColor: "#4a352f", axisMode: "x",
 };
 const CHART_TYPES = [
-  { value: "bar", label: "Bars" }, { value: "line", label: "Line" },
-  { value: "area", label: "Area" }, { value: "scatter", label: "Circles" },
+  { value: "bar", label: "Column Chart" }, { value: "line", label: "Line Chart" },
+  { value: "area", label: "Area Chart" }, { value: "scatter", label: "Scatter Chart" },
 ];
 const SWATCHES = ["#1e40af", "#4a352f", "#166534", "#991b1b", "#92400e", "#6d28d9", "#0e7490", "#be185d"];
 
@@ -866,13 +826,11 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.78, ...extra };
   };
 
-  /* The variance band has no axes and no legend — it floats above the plot so
-     it reads as a top layer rather than a competing chart. */
   const varianceData = { labels, datasets: [
-    { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors), __signed: true, __labelColor: T.body }] };
+    { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors) }] };
   const varianceOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: prefs.showValues ? 20 : 6, bottom: 0 } },
+    layout: { padding: { top: 10, bottom: 0 } },
     plugins: {
       legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
@@ -884,19 +842,19 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   };
 
   const mainData = { labels, datasets: [
-    { label: "Budget", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1, __labelColor: prefs.budgetColor },
-    { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2, __labelColor: prefs.actualColor }] };
+    { label: "Budget", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1 },
+    { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2 }] };
   const mainOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: prefs.showValues ? 20 : 6 } },
+    layout: { padding: { top: 10 } },
     plugins: { legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
         callbacks: { label: (c) => c.parsed.y === null || c.parsed.y === undefined ? `${c.dataset.label}: no data`
           : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}` } } },
     scales: {
-      y: { display: prefs.showAxis, grid: { display: prefs.showAxis, color: T.lineSoft },
+      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both", grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
         ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
-      x: { display: true, grid: { display: false },
+      x: { display: prefs.axisMode === "x" || prefs.axisMode === "both", grid: { display: false },
         ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
     },
   };
@@ -916,14 +874,13 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const key = (label, swatch) => (<span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: T.body }}>{swatch}{label}</span>);
 
   return (
-    <Modal title={`${kpi.name} — Trend`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
-      footer={
-        <>
-          <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={btnPrimary}>Close</button>
-        </>
-      }>
+    <Modal title={`${kpi.name} — (${kpi.units})`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
+      footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
+        <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
+      </div>
+
       {showCustomise && (
         <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
@@ -936,13 +893,11 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
               </div>
             ))}
             <div>
-              <label style={labelS}>Show</label>
-              <select value={`${prefs.showValues}|${prefs.showAxis}`}
-                onChange={(e) => { const [v, a] = e.target.value.split("|"); setPref({ showValues: v === "true", showAxis: a === "true" }); }} style={selectS}>
-                <option value="true|false">Value labels, no axis</option>
-                <option value="false|true">Axis, no value labels</option>
-                <option value="true|true">Both</option>
-                <option value="false|false">Neither</option>
+              <label style={labelS}>Axis</label>
+              <select value={prefs.axisMode} onChange={(e) => setPref({ axisMode: e.target.value })} style={selectS}>
+                <option value="y">Show Y-Axis</option>
+                <option value="x">Show X-Axis</option>
+                <option value="both">Show Both</option>
               </select>
             </div>
           </div>
@@ -976,10 +931,10 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
           </span>
         </div>
         <div style={{ height: "112px", marginBottom: "-16px" }}>
-          <Chart type="bar" data={varianceData} options={varianceOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+          <Chart type="bar" data={varianceData} options={varianceOptions} />
         </div>
         <div style={{ height: "300px" }}>
-          <Chart type="bar" data={mainData} options={mainOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+          <Chart type="bar" data={mainData} options={mainOptions} />
         </div>
       </div>
 
@@ -993,7 +948,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       <div style={{ ...cardS, marginBottom: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-            <StickyNote size={13} /> Note for {PERIOD_LABEL[period].toLowerCase()}
+            <StickyNote size={13} /> Notes
           </span>
           <span style={{ fontSize: "11.5px", color: noteState === "saved" ? T.green : T.muted }}>
             {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved" : "Saves automatically"}
@@ -1014,7 +969,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   );
 };
 
-/* ─── Add Action ────────────────────────────────────────────────────────── */
+/* ─── Add Action (unchanged) ───────────────────────────────────────────── */
 const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClose, onSaved }) => {
   const [meetings, setMeetings] = useState([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
@@ -1028,8 +983,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
 
   const [form, setForm] = useState({
     title: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
-    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against budget ${fmtValue(v.budget, kpi)}${
-      variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${tabName} · ${categoryName}.`,
+    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against budget ${fmtValue(v.budget, kpi)}${variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${tabName} · ${categoryName}.`,
     category: "Financial Performance", assignedTo: "", dueDate: "", status: "In Progress",
   });
 
@@ -1182,7 +1136,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
   );
 };
 
-/* ─── KPI notes — autosaving ────────────────────────────────────────────── */
+/* ─── KPI notes (unchanged) ────────────────────────────────────────────── */
 const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
   const [state, setState] = useState("idle");
@@ -1210,21 +1164,679 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
+/* ─── Enhanced table hook with drag-and-drop and filter dropdown ──────── */
+function useEnhancedTable(initialCols, dataRows) {
+  const [colOrder, setColOrder] = useState(initialCols.map(c => c.key));
+  const [widths, setWidths] = useState(() => Object.fromEntries(initialCols.map(c => [c.key, c.width || 140])));
+  const [filters, setFilters] = useState(() => Object.fromEntries(initialCols.map(c => [c.key, ""])));
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" });
+
+  // Drag-and-drop handlers
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
+  };
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = widths[key];
+    const onMove = (ev) => setWidths(p => ({ ...p, [key]: Math.max(80, startW + (ev.clientX - startX)) }));
+    const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+  };
+
+  // Filter dropdown: get unique values from data for a column
+  const getFilterOptions = (key) => {
+    const vals = dataRows.map(row => String(row[key] || "").trim()).filter(v => v !== "");
+    return ["All", ...Array.from(new Set(vals)).sort()];
+  };
+
+  const filteredData = useMemo(() => {
+    return dataRows.filter(row => {
+      return colOrder.every(key => {
+        const filterVal = filters[key] || "";
+        if (!filterVal || filterVal === "All") return true;
+        const cellVal = String(row[key] || "").trim();
+        return cellVal === filterVal;
+      });
+    });
+  }, [dataRows, filters, colOrder]);
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig.key) return filteredData;
+    return [...filteredData].sort((a,b) => {
+      const av = a[sortConfig.key] ?? "";
+      const bv = b[sortConfig.key] ?? "";
+      if (typeof av === "number" && typeof bv === "number") return sortConfig.dir === "asc" ? av - bv : bv - av;
+      return sortConfig.dir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+  }, [filteredData, sortConfig]);
+
+  return {
+    colOrder, widths, filters, sortConfig,
+    setFilters, setSortConfig, startResize,
+    handleDragStart, handleDragOver, handleDrop,
+    getFilterOptions, sortedData,
+  };
+}
+
+/* ─── Shared FilterDropdown component ──────────────────────────────────── */
+const FilterDropdown = ({ options, value, onChange, onClose }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        onClose?.();
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "All" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
+      >
+        <SlidersHorizontal size={13} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
+              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ════════════════════════════════════════════════════════════════════════════
-   Add Data — writes back into the same source docs the old sections used.
+   Equity Structure – Dividend History (read‑only, enhanced table)
    ════════════════════════════════════════════════════════════════════════ */
-const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, currentTabId }) => {
-  const editableTabs = tabs.filter((t) => !t.custom && t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
-  const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId
-    : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
+const DividendHistory = ({ dividends, readOnly }) => {
+  const cols = [
+    { key: "year", label: "Year", tip: "The calendar year in which the dividend was declared." },
+    { key: "amountPerShare", label: "Amount per Share", tip: "The dividend amount paid per share." },
+    { key: "totalShares", label: "Total Shares", tip: "Number of shares outstanding at the time of payment." },
+    { key: "totalIssued", label: "Total Issued", tip: "Total dividend amount issued (shares × amount per share)." },
+    { key: "paymentDate", label: "Payment Date", tip: "Date when the dividend was actually paid." },
+    { key: "notes", label: "Notes", tip: "Optional notes about this dividend." },
+  ];
+  const rows = dividends.map(d => ({
+    year: d.year,
+    amountPerShare: d.amountPerShare ?? 0,
+    totalShares: d.totalShares ?? 0,
+    totalIssued: d.totalIssued ?? 0,
+    paymentDate: d.paymentDate || "",
+    notes: d.notes || "",
+  }));
+
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+
+  return (
+    <div style={{ backgroundColor: T.bg, border: `1px solid ${T.line}`, padding: "20px", margin: "20px 0", borderRadius: "10px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <h3 style={{ color: T.accent, margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Dividend History</h3>
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+          <p style={{ margin: 0, fontSize: "0.9rem" }}>No dividend data available. Use the <strong>Add Data</strong> button to enter your first dividend.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ background: T.header, color: "#fff" }}>
+                {colOrder.map((key) => {
+                  const col = cols.find(c => c.key === key);
+                  if (!col) return null;
+                  const isFiltered = filters[key] && filters[key] !== "All";
+                  const filterOpts = getFilterOptions(key);
+                  const currentFilter = filters[key] || "All";
+                  return (
+                    <th
+                      key={key}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, key)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, key)}
+                      style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                    >
+                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                          <InfoTip text={col.tip} light />
+                          <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                            style={iconBtn("rgba(255,255,255,0.6)")}>
+                            {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                          </button>
+                          <FilterDropdown
+                            options={filterOpts}
+                            value={currentFilter}
+                            onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                            onClose={() => {}}
+                          />
+                        </div>
+                      </div>
+                      <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedData.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                  {colOrder.map((key) => (
+                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {key === "amountPerShare" || key === "totalIssued" ? `R${(row[key] || 0).toFixed(2)}` :
+                       key === "totalShares" ? (row[key] || 0).toLocaleString() :
+                       row[key] || "-"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── Cap Table Overview (read‑only, enhanced tables) ────────────────── */
+const CapTableOverview = ({ investors, irrInvestments, readOnly }) => {
+  // Investor table
+  const investorCols = [
+    { key: "name", label: "Investor", tip: "Name of the investor or shareholder." },
+    { key: "shares", label: "Shares (%)", tip: "Number of shares held." },
+    { key: "investment", label: "Investment (RM)", tip: "Total amount invested by this shareholder." },
+  ];
+  const totalShares = investors.reduce((s, inv) => s + inv.shares, 0);
+  const totalInvestment = investors.reduce((s, inv) => s + (inv.investment || 0), 0);
+  const investorRows = investors.map(inv => ({
+    name: inv.name,
+    shares: totalShares > 0 ? ((inv.shares / totalShares) * 100).toFixed(1) : "0.0",
+    investment: inv.investment || 0,
+  }));
+
+  const { colOrder: invOrder, widths: invWidths, filters: invFilters, setFilters: setInvFilters, sortConfig: invSort, setSortConfig: setInvSort, startResize: startInvResize, handleDragStart: invDragStart, handleDragOver: invDragOver, handleDrop: invDrop, getFilterOptions: invFilterOpts, sortedData: sortedInvestors } = useEnhancedTable(investorCols, investorRows);
+
+  // IRR table
+  const irrCols = [
+    { key: "name", label: "Project", tip: "Name of the investment or project." },
+    { key: "irr", label: "IRR %", tip: "Internal Rate of Return (percentage)." },
+    { key: "initialInvestment", label: "Initial Investment", tip: "The amount invested upfront." },
+    { key: "duration", label: "Duration", tip: "Expected duration of the investment." },
+    { key: "riskRating", label: "Risk Rating", tip: "Perceived risk level (Low/Medium/High)." },
+  ];
+  const irrRows = irrInvestments.map(inv => ({
+    name: inv.name,
+    irr: inv.irr ?? 0,
+    initialInvestment: inv.details?.initialInvestment || "",
+    duration: inv.details?.duration || "",
+    riskRating: inv.details?.riskRating || "",
+  }));
+
+  const { colOrder: irrOrder, widths: irrWidths, filters: irrFilters, setFilters: setIrrFilters, sortConfig: irrSort, setSortConfig: setIrrSort, startResize: startIrrResize, handleDragStart: irrDragStart, handleDragOver: irrDragOver, handleDrop: irrDrop, getFilterOptions: irrFilterOpts, sortedData: sortedIrr } = useEnhancedTable(irrCols, irrRows);
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+
+  const renderTable = (cols, order, widths, filters, setFilters, sortConfig, setSortConfig, startResize, dragStart, dragOver, drop, filterOpts, data, label) => (
+    <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px", marginBottom: "20px" }}>
+      <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+        <thead>
+          <tr style={{ background: T.header, color: "#fff" }}>
+            {order.map((key) => {
+              const col = cols.find(c => c.key === key);
+              if (!col) return null;
+              const isFiltered = filters[key] && filters[key] !== "All";
+              const currentFilter = filters[key] || "All";
+              return (
+                <th
+                  key={key}
+                  draggable
+                  onDragStart={(e) => dragStart(e, key)}
+                  onDragOver={dragOver}
+                  onDrop={(e) => drop(e, key)}
+                  style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                >
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                      <InfoTip text={col.tip} light />
+                      <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                        style={iconBtn("rgba(255,255,255,0.6)")}>
+                        {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                      </button>
+                      <FilterDropdown
+                        options={filterOpts(key)}
+                        value={currentFilter}
+                        onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                        onClose={() => {}}
+                      />
+                    </div>
+                  </div>
+                  <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+              {order.map((key) => (
+                <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {key === "investment" ? `R${(row[key] || 0).toFixed(1)}` :
+                   key === "irr" ? `${(row[key] || 0).toFixed(1)}%` :
+                   row[key] || "-"}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        {label === "investor" && data.length > 0 && (
+          <tfoot>
+            <tr style={{ background: T.accentTint }}>
+              <td colSpan="2" style={{ padding: "10px 12px", fontWeight: 700, color: T.accent }}>Total</td>
+              <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent }}>R{totalInvestment.toFixed(1)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
+      <div style={{ backgroundColor: T.bg, border: `1px solid ${T.line}`, padding: "20px", borderRadius: "10px" }}>
+        <h3 style={{ color: T.accent, margin: "0 0 16px", fontSize: "1.1rem", fontWeight: 600 }}>Cap Table Overview</h3>
+        {investors.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+            <p style={{ margin: 0, fontSize: "0.9rem" }}>No investor data available. Use the <strong>Add Data</strong> button to enter your first investor.</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "1fr 1fr", gap: "30px", marginBottom: "30px" }}>
+              <div>
+                <h4 style={{ color: T.accentSoft, marginBottom: "15px", fontSize: "1rem" }}>Ownership Structure</h4>
+                <div style={{ height: "300px" }}>
+                  <Pie
+                    data={{
+                      labels: investors.map((inv) => inv.name),
+                      datasets: [
+                        {
+                          data: investors.map((inv) => inv.shares),
+                          backgroundColor: ["#a67c52", "#8b7355", "#b89f8d", "#e6d7c3", "#f5f0e1"],
+                          borderColor: "#4a352f",
+                          borderWidth: 1,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: window.innerWidth < 768 ? "bottom" : "right",
+                          labels: { font: { size: 11 } }
+                        },
+                        datalabels: {
+                          color: "#fff",
+                          font: { weight: "bold", size: 11 },
+                          formatter: (value, context) => {
+                            const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return percentage + "%";
+                          },
+                        },
+                      },
+                    }}
+                    plugins={[ChartDataLabels]}
+                  />
+                </div>
+              </div>
+              <div>
+                <h4 style={{ color: T.accentSoft, marginBottom: "15px", fontSize: "1rem" }}>Investor Details</h4>
+                {renderTable(investorCols, invOrder, invWidths, invFilters, setInvFilters, invSort, setInvSort, startInvResize, invDragStart, invDragOver, invDrop, invFilterOpts, sortedInvestors, "investor")}
+              </div>
+            </div>
+            <div>
+              <h4 style={{ color: T.accentSoft, marginBottom: "15px", fontSize: "1rem" }}>IRR on Equity Investments</h4>
+              {irrInvestments.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+                  <p style={{ margin: 0, fontSize: "0.9rem" }}>No investment data available. Use the <strong>Add Data</strong> button to enter your first investment.</p>
+                </div>
+              ) : (
+                renderTable(irrCols, irrOrder, irrWidths, irrFilters, setIrrFilters, irrSort, setIrrSort, startIrrResize, irrDragStart, irrDragOver, irrDrop, irrFilterOpts, sortedIrr, "irr")
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ─── Loan Repayments (read‑only, enhanced table) ────────────────────── */
+const LoanRepaymentsPanel = ({ loans, readOnly }) => {
+  const cols = [
+    { key: "name", label: "Loan Name", tip: "Name of the loan facility." },
+    { key: "scheduled", label: "Scheduled", tip: "Amount due for the period." },
+    { key: "paid", label: "Paid", tip: "Amount actually paid in the period." },
+    { key: "variance", label: "Variance", tip: "Paid minus Scheduled. Negative means underpaid (favourable)." },
+  ];
+  const rows = loans.map(l => ({
+    name: l.name,
+    scheduled: parseFloat(l.scheduled) || 0,
+    paid: parseFloat(l.paid) || 0,
+    variance: (parseFloat(l.paid) || 0) - (parseFloat(l.scheduled) || 0),
+  }));
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+  const totalScheduled = rows.reduce((s, r) => s + r.scheduled, 0);
+  const totalPaid = rows.reduce((s, r) => s + r.paid, 0);
+  const totalVar = totalPaid - totalScheduled;
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Loan Repayments</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>Scheduled vs paid, per loan facility</div>
+        </div>
+      </div>
+
+      {loans.length === 0 ? (
+        <div style={{ padding: "26px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>
+          No loans captured yet — use the <strong>Add Data</strong> button to start.
+        </div>
+      ) : (
+        <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ background: T.header, color: "#fff" }}>
+                {colOrder.map((key) => {
+                  const col = cols.find(c => c.key === key);
+                  if (!col) return null;
+                  const currentFilter = filters[key] || "All";
+                  const filterOpts = getFilterOptions(key);
+                  return (
+                    <th
+                      key={key}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, key)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, key)}
+                      style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                    >
+                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                          <InfoTip text={col.tip} light />
+                          <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                            style={iconBtn("rgba(255,255,255,0.6)")}>
+                            {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                          </button>
+                          <FilterDropdown
+                            options={filterOpts}
+                            value={currentFilter}
+                            onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                            onClose={() => {}}
+                          />
+                        </div>
+                      </div>
+                      <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedData.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 ? T.panel : T.bg }}>
+                  {colOrder.map((key) => (
+                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {key === "variance" ? (
+                        <span style={{ fontWeight: 700, color: row[key] <= 0 ? T.green : T.red }}>
+                          {fmtValue(row[key], { units: "R" }, { signed: true })}
+                        </span>
+                      ) : key === "scheduled" || key === "paid" ? fmtValue(row[key], { units: "R" }) : row[key]}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: T.accentTint }}>
+                <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent }}>Total</td>
+                <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent }}>{fmtValue(totalScheduled, { units: "R" })}</td>
+                <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent }}>{fmtValue(totalPaid, { units: "R" })}</td>
+                <td style={{ padding: "10px 12px", fontWeight: 700, color: totalVar <= 0 ? T.green : T.red }}>{fmtValue(totalVar, { units: "R" }, { signed: true })}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── Balance Sheet (read‑only) ────────────────────────────────────────── */
+const prettify = (k) => k.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
+const NEGATIVE_KEYS = new Set(["lessAmortization","treasuryShares","lessDepreciationBuildings","lessDepreciationComputer",
+  "lessDepreciationVehicles","lessDepreciationFurniture","lessDepreciationMachinery","lessDepreciationOther"]);
+
+const col = () => Array(12).fill("");
+
+const BLANK_BS = {
+  assets: {
+    bank: { currentAccount: col(), savingsAccount: col(), pettyCash: col() },
+    currentAssets: { cash: col(), tradeReceivables: col(), inventory: col(), prepaidExpenses: col(), otherReceivables: col() },
+    fixedAssets: {
+      land: col(), buildings: col(), computerEquipment: col(), vehicles: col(), furniture: col(),
+      machinery: col(), otherPropertyPlantEquipment: col(), assetsUnderConstruction: col(),
+      lessDepreciationBuildings: col(), lessDepreciationComputer: col(), lessDepreciationVehicles: col(),
+      lessDepreciationFurniture: col(), lessDepreciationMachinery: col(), lessDepreciationOther: col(),
+    },
+    intangibleAssets: { goodwill: col(), trademarks: col(), patents: col(), software: col(), customerLists: col(), lessAmortization: col() },
+    nonCurrentAssets: { investments: col(), loansReceivable: col(), deferredTaxAsset: col() },
+  },
+  liabilities: {
+    currentLiabilities: { tradePayables: col(), accruedExpenses: col(), shortTermLoans: col(), taxPayable: col(), bankOverdraft: col(), otherPayables: col() },
+    nonCurrentLiabilities: { longTermLoans: col(), financeLeases: col(), deferredTaxLiability: col(), shareholderLoans: col() },
+  },
+  equity: { shareCapital: col(), retainedEarnings: col(), currentYearEarnings: col(), reserves: col(), treasuryShares: col() },
+  customCategories: [], customLiabilitiesCategories: [], customEquityCategories: [],
+};
+
+const BalanceSheetTab = ({ fy, docs, readOnly }) => {
+  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+  const [monthKey, setMonthKey] = useState(() => months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
+  const meta = months.find((m) => m.key === monthKey) || months[0];
+  const monthIndex = months.findIndex((m) => m.key === monthKey);
+  const bsDoc = docs[`${DOC.bs}_${meta.year}`];
+  const bs = bsDoc?.balanceSheetData || BLANK_BS;
+  const mi = meta.month;
+  const totals = bsTotals({ balanceSheetData: bs }, mi);
+
+  const Section = ({ title, obj, total }) => {
+    if (!obj) return null;
+    return (
+      <div style={{ marginBottom: "18px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{title}</div>
+        <div style={{ border: `1px solid ${T.line}`, borderRadius: "8px", overflow: "hidden" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <tbody>
+              {Object.entries(obj).map(([key, arr], i) => {
+                if (!Array.isArray(arr)) return null;
+                const negative = NEGATIVE_KEYS.has(key);
+                const val = arr[mi] !== undefined && arr[mi] !== "" && arr[mi] !== null ? Number(arr[mi]) : null;
+                return (
+                  <tr key={key} style={{ background: i % 2 ? T.panel : T.bg }}>
+                    <td style={{ padding: "7px 12px", fontSize: "13.5px", color: negative ? T.muted : T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                      {negative && <span style={{ color: T.faint, marginRight: "5px" }}>−</span>}
+                      {prettify(key)}
+                    </td>
+                    <td style={{ padding: "7px 12px", textAlign: "right", fontSize: "13.5px", fontVariantNumeric: "tabular-nums", borderBottom: `1px solid ${T.lineSoft}` }}>
+                      {val !== null ? fmtValue(val, { units: "R" }) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {total !== undefined && (
+                <tr style={{ background: T.accentTint }}>
+                  <td style={{ padding: "9px 12px", fontSize: "13.5px", fontWeight: 700, color: T.accent, borderRight: `1px solid ${T.lineSoft}` }}>Total {title.toLowerCase()}</td>
+                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "14px", fontWeight: 700, color: T.accent, fontVariantNumeric: "tabular-nums" }}>
+                    {fmtValue(total, { units: "R" })}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const CustomSection = ({ list }) => {
+    if (!list?.length) return null;
+    return (
+      <>
+        {list.map((cat, ci) => (
+          <Section key={cat.name || cat.category || ci} title={cat.category || cat.name || `Custom ${ci + 1}`}
+            obj={cat.items} total={sumObj(cat.items, mi)} />
+        ))}
+      </>
+    );
+  };
+
+  const balanceGap = Number.isFinite(totals.assets) && Number.isFinite(totals.liabilities) && Number.isFinite(totals.equity)
+    ? totals.assets - (totals.liabilities + totals.equity) : null;
+  const balanced = balanceGap !== null && Math.abs(balanceGap) < 1;
+
+  const summary = (label, value, color) => (
+    <div key={label} style={{ ...cardS, padding: "12px 15px", flex: "1 1 170px" }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{label}</div>
+      <div style={{ fontSize: "19px", fontWeight: 700, color: color || T.ink, marginTop: "3px", fontVariantNumeric: "tabular-nums" }}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div style={{ minWidth: "230px" }}>
+          <label style={labelS}>Month</label>
+          <select value={monthKey} onChange={(e) => setMonthKey(e.target.value)} style={selectS}>
+            {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
+          </select>
+        </div>
+        <button onClick={() => setMonthKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
+          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
+        <button onClick={() => setMonthKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
+          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: "12.5px", color: T.muted, paddingBottom: "10px" }}>Read‑only — edit via <strong>Add Data</strong></span>
+      </div>
+
+      <div style={{ ...cardS, marginBottom: "16px", background: balanced ? T.greenBg : T.amberBg,
+        border: `1px solid ${(balanced ? T.green : T.amber)}33`, display: "flex", alignItems: "center", gap: "10px" }}>
+        {balanced ? <CheckCircle2 size={18} color={T.green} /> : <AlertTriangle size={18} color={T.amber} />}
+        <span style={{ fontSize: "13.5px", color: balanced ? T.green : T.amber }}>
+          {balanceGap === null ? `Nothing captured for ${meta.long} yet, so there is nothing to balance.`
+            : balanced ? "Assets equal liabilities plus equity for this month."
+            : `Out by ${fmtValue(Math.abs(balanceGap), { units: "R" })} — assets ${balanceGap > 0 ? "exceed" : "fall short of"} liabilities plus equity.`}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
+        {summary("Total assets", fmtValue(totals.assets, { units: "R" }))}
+        {summary("Total liabilities", fmtValue(totals.liabilities, { units: "R" }))}
+        {summary("Total equity", fmtValue(totals.equity, { units: "R" }))}
+        {summary("Net asset value", fmtValue(
+          Number.isFinite(totals.assets) && Number.isFinite(totals.liabilities) ? totals.assets - totals.liabilities : null,
+          { units: "R" }), T.accent)}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
+        <div>
+          <h4 style={{ fontSize: "15px", fontWeight: 700, color: T.accent, margin: "0 0 12px" }}>Assets</h4>
+          <Section title="Bank" obj={bs.assets?.bank} total={sumObj(bs.assets?.bank, mi)} />
+          <Section title="Current assets" obj={bs.assets?.currentAssets} total={sumObj(bs.assets?.currentAssets, mi)} />
+          <Section title="Fixed assets" obj={bs.assets?.fixedAssets} />
+          <Section title="Intangible assets" obj={bs.assets?.intangibleAssets} />
+          <Section title="Non-current assets" obj={bs.assets?.nonCurrentAssets} total={sumObj(bs.assets?.nonCurrentAssets, mi)} />
+          <CustomSection list={bs.assets?.customCategories || bs.customCategories} />
+        </div>
+
+        <div>
+          <h4 style={{ fontSize: "15px", fontWeight: 700, color: T.accent, margin: "0 0 12px" }}>Liabilities and equity</h4>
+          <Section title="Current liabilities" obj={bs.liabilities?.currentLiabilities} total={sumObj(bs.liabilities?.currentLiabilities, mi)} />
+          <Section title="Non-current liabilities" obj={bs.liabilities?.nonCurrentLiabilities} total={sumObj(bs.liabilities?.nonCurrentLiabilities, mi)} />
+          <CustomSection list={bs.customLiabilitiesCategories} />
+          <Section title="Equity" obj={bs.equity} total={sumObj(bs.equity, mi) - 2 * (parseFloat(bs.equity?.treasuryShares?.[mi]) || 0)} />
+          <CustomSection list={bs.customEquityCategories} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Add Data Wizard – FIXED: Shows all sections in dropdown ──────────── */
+const AddDataWizard = ({
+  tabs, fy, docs, prefs, onSavePrefs, onBack, onClose,
+  onSaveField, onSaveBalanceSheetCell, onSaveLoans, onSaveDividends, onSaveCapTable,
+  dividends, investors, irrInvestments, loans, readOnly,
+}) => {
+  const [section, setSection] = useState("kpi");
+  const [tabId, setTabId] = useState(null);
   const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
   const [periodKey, setPeriodKey] = useState(null);
   const [draft, setDraft] = useState({});
   const [saveState, setSaveState] = useState("idle");
   const timer = useRef(null);
 
-  const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
+  const editableTabs = tabs.filter((t) => !t.custom && t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
   const months = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
+
+  // For KPI section
+  const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
+  useEffect(() => {
+    if (section === "kpi" && !tabId && editableTabs.length) setTabId(editableTabs[0].id);
+  }, [section, editableTabs]);
 
   useEffect(() => {
     if (!months.length) return;
@@ -1244,7 +1856,6 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   }, [tab]);
 
   const draftKey = (kpiId, which) => `${monthMeta?.year}|${monthMeta?.month}|${kpiId}|${which}`;
-
   const value = (kpi, which) => {
     const dk = draftKey(kpi.id, which);
     if (draft[dk] !== undefined) return draft[dk];
@@ -1283,110 +1894,461 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
   ];
 
-  if (!tab) {
-    return (
-      <Modal title="Add Data" icon={<Database size={17} />} onClose={onClose} width={520}
-        footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
-        <p style={{ fontSize: "14px", color: T.body, margin: 0 }}>Nothing here takes direct input. The Balance Sheet tab is edited on the page itself.</p>
-      </Modal>
-    );
-  }
+  // ── Balance Sheet editor inside modal ──
+  const BalanceSheetEditor = () => {
+    const [localBS, setLocalBS] = useState(() => {
+      const bs = docs[`${DOC.bs}_${startYear}`]?.balanceSheetData || BLANK_BS;
+      return JSON.parse(JSON.stringify(bs));
+    });
+    const [bsSaveState, setBsSaveState] = useState("idle");
+    const bsTimer = useRef(null);
 
-  return (
-    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />}
-      onClose={onClose} width={800}
-      footer={
-        <>
-          <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
-          <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
-            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}
-          </span>
-          <button onClick={onClose} style={btnPrimary}>Done</button>
-        </>
+    const bsMonths = fyMonths(startYear, fy.startMonth);
+    const [bsMonthKey, setBsMonthKey] = useState(bsMonths[0].key);
+    const bsMeta = bsMonths.find(m => m.key === bsMonthKey) || bsMonths[0];
+    const bsMi = bsMeta.month;
+
+    const setBsCell = (path, key, raw) => {
+      const next = JSON.parse(JSON.stringify(localBS));
+      let node = next;
+      const segs = path.split(".");
+      for (const seg of segs) {
+        const idx = Number(seg);
+        node = Number.isFinite(idx) && String(idx) === seg ? node[idx] : node[seg];
+        if (!node) return;
       }
-    >
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-        <div>
-          <label style={labelS}>Financial year</label>
-          <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
-            {yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}
-          </select>
+      const arr = Array.isArray(node[key]) ? [...node[key]] : Array(12).fill("");
+      while (arr.length < 12) arr.push("");
+      arr[bsMi] = raw;
+      node[key] = arr;
+      setLocalBS(next);
+      setBsSaveState("saving");
+      if (bsTimer.current) clearTimeout(bsTimer.current);
+      bsTimer.current = setTimeout(async () => {
+        await onSaveBalanceSheetCell({ year: startYear, monthIndex: bsMi, path, key, raw });
+        setBsSaveState("saved");
+        setTimeout(() => setBsSaveState("idle"), 1800);
+      }, 800);
+    };
+
+    useEffect(() => () => { if (bsTimer.current) clearTimeout(bsTimer.current); }, []);
+
+    const renderSection = (title, obj, path) => {
+      if (!obj) return null;
+      return (
+        <div style={{ marginBottom: "16px" }}>
+          <div style={{ fontSize: "12px", fontWeight: 600, color: T.accent, marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.3px" }}>{title}</div>
+          <div style={{ border: `1px solid ${T.line}`, borderRadius: "6px", overflow: "hidden" }}>
+            <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
+              <tbody>
+                {Object.entries(obj).map(([key, arr], i) => {
+                  if (!Array.isArray(arr)) return null;
+                  const negative = NEGATIVE_KEYS.has(key);
+                  return (
+                    <tr key={key} style={{ background: i % 2 ? T.panel : T.bg }}>
+                      <td style={{ padding: "6px 10px", fontSize: "13px", color: negative ? T.muted : T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                        {negative && <span style={{ color: T.faint, marginRight: "5px" }}>−</span>}
+                        {prettify(key)}
+                      </td>
+                      <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, width: "40%" }}>
+                        <input type="number" step="any" value={arr[bsMi] ?? ""}
+                          onChange={(e) => setBsCell(path, key, e.target.value)}
+                          style={{ ...cell, minHeight: "28px", padding: "4px 8px", fontSize: "13px" }} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div>
-          <label style={labelS}>Section</label>
-          <select value={tabId} onChange={(e) => setTabId(e.target.value)} style={selectS}>
-            {editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+      );
+    };
+
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", flexWrap: "wrap" }}>
+          <div style={{ minWidth: "200px" }}>
+            <label style={labelS}>Month</label>
+            <select value={bsMonthKey} onChange={(e) => setBsMonthKey(e.target.value)} style={selectS}>
+              {bsMonths.map(m => <option key={m.key} value={m.key}>{m.long}</option>)}
+            </select>
+          </div>
+          <span style={{ fontSize: "12.5px", color: bsSaveState === "saved" ? T.green : T.muted, marginTop: "4px" }}>
+            {bsSaveState === "saving" ? "Saving…" : bsSaveState === "saved" ? "Saved" : "Edits save automatically"}
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+          <div>
+            <h5 style={{ fontSize: "13px", fontWeight: 700, color: T.accent, margin: "0 0 8px" }}>Assets</h5>
+            {renderSection("Bank", localBS.assets?.bank, "assets.bank")}
+            {renderSection("Current assets", localBS.assets?.currentAssets, "assets.currentAssets")}
+            {renderSection("Fixed assets", localBS.assets?.fixedAssets, "assets.fixedAssets")}
+            {renderSection("Intangible assets", localBS.assets?.intangibleAssets, "assets.intangibleAssets")}
+            {renderSection("Non-current assets", localBS.assets?.nonCurrentAssets, "assets.nonCurrentAssets")}
+          </div>
+          <div>
+            <h5 style={{ fontSize: "13px", fontWeight: 700, color: T.accent, margin: "0 0 8px" }}>Liabilities & Equity</h5>
+            {renderSection("Current liabilities", localBS.liabilities?.currentLiabilities, "liabilities.currentLiabilities")}
+            {renderSection("Non-current liabilities", localBS.liabilities?.nonCurrentLiabilities, "liabilities.nonCurrentLiabilities")}
+            {renderSection("Equity", localBS.equity, "equity")}
+          </div>
+        </div>
+        <div style={{ marginTop: "12px", fontSize: "12.5px", color: T.muted, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Info size={12} /> Custom categories are supported but not shown in this quick editor – use the main Balance Sheet tab for advanced editing.
         </div>
       </div>
+    );
+  };
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
-        <div style={{ flex: 1 }}>
-          <label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label>
-          <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
-            {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
-          </select>
+  // ── Loan editor inside modal ──
+  const LoanEditor = () => {
+    const [localLoans, setLocalLoans] = useState(loans.length ? loans : [{ id: uid(), name: "", scheduled: "", paid: "" }]);
+    const [loanSaveState, setLoanSaveState] = useState("idle");
+    const loanTimer = useRef(null);
+
+    const commitLoans = (next) => {
+      setLocalLoans(next);
+      setLoanSaveState("saving");
+      if (loanTimer.current) clearTimeout(loanTimer.current);
+      loanTimer.current = setTimeout(async () => {
+        await onSaveLoans(next);
+        setLoanSaveState("saved");
+        setTimeout(() => setLoanSaveState("idle"), 1800);
+      }, 600);
+    };
+
+    useEffect(() => () => { if (loanTimer.current) clearTimeout(loanTimer.current); }, []);
+
+    const addLoan = () => setLocalLoans([...localLoans, { id: uid(), name: "", scheduled: "", paid: "" }]);
+    const removeLoan = (id) => {
+      if (!window.confirm("Delete this loan?")) return;
+      commitLoans(localLoans.filter(l => l.id !== id));
+    };
+    const updateLoan = (id, field, val) => {
+      const next = localLoans.map(l => l.id === id ? { ...l, [field]: val } : l);
+      commitLoans(next);
+    };
+
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <span style={{ fontSize: "12.5px", color: loanSaveState === "saved" ? T.green : T.muted }}>
+            {loanSaveState === "saving" ? "Saving…" : loanSaveState === "saved" ? "Saved" : "Edits save automatically"}
+          </span>
+          <button onClick={addLoan} style={btnPrimary}><Plus size={13} /> Add Loan</button>
         </div>
-        <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-        <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
-      </div>
-
-      <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-        <Info size={12} /> Calculated KPIs are shown greyed — they follow from what you type above them.
-      </div>
-
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ maxHeight: "44vh", overflowY: "auto" }}>
+        <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
           <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
             <thead>
-              <tr>
-                <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
-                <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
-                <th style={{ ...th, textAlign: "center", width: "24%" }}>Budget</th>
+              <tr style={{ background: T.header, color: "#fff" }}>
+                <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Loan Name</th>
+                <th style={{ ...th, textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Scheduled</th>
+                <th style={{ ...th, textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Paid</th>
+                <th style={{ ...th, textAlign: "center" }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ kpi, category }, i) => {
-                const derivedActual = !kpi.custom && kpi.actual ? kpi.actual(ctx) : null;
-                const derivedBudget = !kpi.custom && kpi.budget ? kpi.budget(ctx) : null;
-                const bg = i % 2 ? T.panel : T.bg;
-                return (
-                  <tr key={kpi.id} style={{ background: bg }}>
-                    <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
-                      borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                      <div style={{ fontWeight: 600 }}>{kpi.name}</div>
-                      <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units} · {kpi.field ? "entered" : "calculated"}</div>
-                    </td>
-                    <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                      {kpi.field ? (
-                        <input type="number" step="any" value={value(kpi, "actual")} placeholder="—"
-                          onChange={(e) => setValue(kpi, "actual", e.target.value)} style={cell} />
-                      ) : (
-                        <div style={{ textAlign: "center", fontSize: "13.5px", color: T.muted, padding: "7px 0" }}>{fmtValue(derivedActual, kpi, { bare: true })}</div>
-                      )}
-                    </td>
-                    <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                      {kpi.field?.b || kpi.custom ? (
-                        <input type="number" step="any" value={value(kpi, "budget")} placeholder="—"
-                          onChange={(e) => setValue(kpi, "budget", e.target.value)} style={cell} />
-                      ) : (
-                        <div style={{ textAlign: "center", fontSize: "13.5px", color: T.faint, padding: "7px 0" }}>{fmtValue(derivedBudget, kpi, { bare: true })}</div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {localLoans.map((loan, i) => (
+                <tr key={loan.id} style={{ background: i % 2 ? T.panel : T.bg }}>
+                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    <input value={loan.name} onChange={(e) => updateLoan(loan.id, "name", e.target.value)} style={cell} placeholder="Name" />
+                  </td>
+                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    <input type="number" step="any" value={loan.scheduled} onChange={(e) => updateLoan(loan.id, "scheduled", e.target.value)} style={cell} placeholder="0" />
+                  </td>
+                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    <input type="number" step="any" value={loan.paid} onChange={(e) => updateLoan(loan.id, "paid", e.target.value)} style={cell} placeholder="0" />
+                  </td>
+                  <td style={{ padding: "4px 8px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
+                    <button onClick={() => removeLoan(loan.id)} style={{ ...btnQuiet, padding: "4px 8px", color: T.red }}><Trash2 size={14} /></button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
+    );
+  };
+
+  // ── Equity Structure editor inside modal ──
+  const EquityEditor = () => {
+    const [localDividends, setLocalDividends] = useState(dividends.length ? dividends : [{ year: new Date().getFullYear(), amountPerShare: 0, totalShares: 0, totalIssued: 0, paymentDate: "", notes: "" }]);
+    const [localInvestors, setLocalInvestors] = useState(investors.length ? investors : [{ name: "", shares: 0, investment: 0 }]);
+    const [localIrr, setLocalIrr] = useState(irrInvestments.length ? irrInvestments : [{ name: "", irr: 0, details: { initialInvestment: "", duration: "", cashFlows: [], riskRating: "Medium" } }]);
+    const [eqSaveState, setEqSaveState] = useState("idle");
+    const eqTimer = useRef(null);
+
+    const commitEquity = (divs, invs, irrs) => {
+      setLocalDividends(divs); setLocalInvestors(invs); setLocalIrr(irrs);
+      setEqSaveState("saving");
+      if (eqTimer.current) clearTimeout(eqTimer.current);
+      eqTimer.current = setTimeout(async () => {
+        await onSaveDividends(divs);
+        await onSaveCapTable({ investors: invs, irrInvestments: irrs });
+        setEqSaveState("saved");
+        setTimeout(() => setEqSaveState("idle"), 1800);
+      }, 800);
+    };
+
+    useEffect(() => () => { if (eqTimer.current) clearTimeout(eqTimer.current); }, []);
+
+    const updateDividend = (idx, field, val) => {
+      const next = [...localDividends];
+      if (field === "year") next[idx].year = Number(val) || 0;
+      else if (field === "amountPerShare") {
+        next[idx].amountPerShare = Number(val) || 0;
+        next[idx].totalIssued = (Number(val) || 0) * (next[idx].totalShares || 0);
+      } else if (field === "totalShares") {
+        next[idx].totalShares = Number(val) || 0;
+        next[idx].totalIssued = (next[idx].amountPerShare || 0) * (Number(val) || 0);
+      } else if (field === "totalIssued") next[idx].totalIssued = Number(val) || 0;
+      else if (field === "paymentDate" || field === "notes") next[idx][field] = val;
+      commitEquity(next, localInvestors, localIrr);
+    };
+    const addDividend = () => setLocalDividends([...localDividends, { year: new Date().getFullYear(), amountPerShare: 0, totalShares: 0, totalIssued: 0, paymentDate: "", notes: "" }]);
+    const removeDividend = (idx) => {
+      if (!window.confirm("Delete this dividend?")) return;
+      const next = localDividends.filter((_, i) => i !== idx);
+      commitEquity(next, localInvestors, localIrr);
+    };
+
+    const updateInvestor = (idx, field, val) => {
+      const next = [...localInvestors];
+      next[idx][field] = field === "name" ? val : Number(val) || 0;
+      commitEquity(localDividends, next, localIrr);
+    };
+    const addInvestor = () => setLocalInvestors([...localInvestors, { name: "", shares: 0, investment: 0 }]);
+    const removeInvestor = (idx) => {
+      if (!window.confirm("Delete this investor?")) return;
+      const next = localInvestors.filter((_, i) => i !== idx);
+      commitEquity(localDividends, next, localIrr);
+    };
+
+    const updateIrr = (idx, field, val) => {
+      const next = [...localIrr];
+      if (field === "name" || field === "riskRating") next[idx][field] = val;
+      else if (field === "irr") next[idx].irr = Number(val) || 0;
+      else if (field.startsWith("details.")) {
+        const sub = field.split(".")[1];
+        if (sub === "cashFlows") next[idx].details.cashFlows = val.split(",").map(s => s.trim());
+        else next[idx].details[sub] = val;
+      }
+      commitEquity(localDividends, localInvestors, next);
+    };
+    const addIrr = () => setLocalIrr([...localIrr, { name: "", irr: 0, details: { initialInvestment: "", duration: "", cashFlows: [], riskRating: "Medium" } }]);
+    const removeIrr = (idx) => {
+      if (!window.confirm("Delete this investment?")) return;
+      const next = localIrr.filter((_, i) => i !== idx);
+      commitEquity(localDividends, localInvestors, next);
+    };
+
+    const renderTable = (data, cols, updateFn, addFn, removeFn) => (
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "8px", overflow: "hidden", marginBottom: "16px" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
+          <thead>
+            <tr style={{ background: T.header, color: "#fff" }}>
+              {cols.map(c => <th key={c.key} style={{ ...th, textAlign: c.align || "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>{c.label}</th>)}
+              <th style={{ ...th, textAlign: "center" }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row, idx) => (
+              <tr key={idx} style={{ background: idx % 2 ? T.panel : T.bg }}>
+                {cols.map(c => (
+                  <td key={c.key} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                    {c.type === "select" ? (
+                      <select value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell}>
+                        {c.options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : c.type === "date" ? (
+                      <input type="date" value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
+                    ) : c.type === "text" ? (
+                      <input value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} placeholder={c.placeholder || ""} />
+                    ) : c.type === "number" ? (
+                      <input type="number" step="any" value={row[c.key] || 0} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
+                    ) : (
+                      <input type="text" value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
+                    )}
+                  </td>
+                ))}
+                <td style={{ padding: "4px 8px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
+                  <button onClick={() => removeFn(idx)} style={{ ...btnQuiet, padding: "4px 8px", color: T.red }}><Trash2 size={14} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ padding: "8px 12px", background: T.panel }}>
+          <button onClick={addFn} style={btnPrimary}><Plus size={12} /> Add</button>
+        </div>
+      </div>
+    );
+
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <span style={{ fontSize: "12.5px", color: eqSaveState === "saved" ? T.green : T.muted }}>
+            {eqSaveState === "saving" ? "Saving…" : eqSaveState === "saved" ? "Saved" : "Edits save automatically"}
+          </span>
+        </div>
+
+        <h5 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "0 0 10px" }}>Dividend History</h5>
+        {renderTable(
+          localDividends,
+          [
+            { key: "year", label: "Year", type: "number" },
+            { key: "amountPerShare", label: "Amount/Share", type: "number" },
+            { key: "totalShares", label: "Total Shares", type: "number" },
+            { key: "totalIssued", label: "Total Issued", type: "number" },
+            { key: "paymentDate", label: "Payment Date", type: "date" },
+            { key: "notes", label: "Notes", type: "text" },
+          ],
+          updateDividend, addDividend, removeDividend
+        )}
+
+        <h5 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "20px 0 10px" }}>Cap Table</h5>
+        {renderTable(
+          localInvestors,
+          [
+            { key: "name", label: "Investor", type: "text" },
+            { key: "shares", label: "Shares", type: "number" },
+            { key: "investment", label: "Investment (RM)", type: "number" },
+          ],
+          updateInvestor, addInvestor, removeInvestor
+        )}
+
+        <h5 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "20px 0 10px" }}>IRR Investments</h5>
+        {renderTable(
+          localIrr,
+          [
+            { key: "name", label: "Project", type: "text" },
+            { key: "irr", label: "IRR %", type: "number" },
+            { key: "details.initialInvestment", label: "Initial Investment", type: "text" },
+            { key: "details.duration", label: "Duration", type: "text" },
+            { key: "riskRating", label: "Risk Rating", type: "select", options: ["Low", "Medium", "High"] },
+          ],
+          updateIrr, addIrr, removeIrr
+        )}
+      </div>
+    );
+  };
+
+  // ── Render ──
+  // Always show the section selector at the top with all options
+  return (
+    <Modal title="Add Data" subtitle={`Editing ${section === "kpi" ? "Financial KPIs" : section === "equity" ? "Equity Structure" : section === "loans" ? "Loan Repayments" : "Balance Sheet"}`} icon={<Database size={17} />}
+      onClose={onClose} width={900}
+      footer={
+        <>
+          <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={btnPrimary}>Done</button>
+        </>
+      }
+    >
+      {/* Section selector - always visible with all options */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Section</label>
+        <select value={section} onChange={(e) => setSection(e.target.value)} style={selectS}>
+          <option value="kpi">Financial KPIs</option>
+          <option value="equity">Equity Structure</option>
+          <option value="loans">Loan Repayments</option>
+          <option value="balanceSheet">Balance Sheet</option>
+        </select>
+      </div>
+
+      {section === "kpi" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Financial year</label>
+              <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
+                {yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelS}>Section</label>
+              <select value={tabId || ""} onChange={(e) => setTabId(e.target.value)} style={selectS}>
+                {editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label>
+              <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
+                {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
+              </select>
+            </div>
+            <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
+              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
+            <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
+              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+          </div>
+
+          <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+            <Info size={12} /> Calculated KPIs are shown greyed — they follow from what you type above them.
+          </div>
+
+          <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+            <div style={{ maxHeight: "44vh", overflowY: "auto" }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
+                    <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
+                    <th style={{ ...th, textAlign: "center", width: "24%" }}>Budget</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(({ kpi, category }, i) => {
+                    const derivedActual = !kpi.custom && kpi.actual ? kpi.actual(ctx) : null;
+                    const derivedBudget = !kpi.custom && kpi.budget ? kpi.budget(ctx) : null;
+                    const bg = i % 2 ? T.panel : T.bg;
+                    return (
+                      <tr key={kpi.id} style={{ background: bg }}>
+                        <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
+                          borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                          <div style={{ fontWeight: 600 }}>{kpi.name}</div>
+                          <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units} · {kpi.field ? "entered" : "calculated"}</div>
+                        </td>
+                        <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                          {kpi.field ? (
+                            <input type="number" step="any" value={value(kpi, "actual")} placeholder="—"
+                              onChange={(e) => setValue(kpi, "actual", e.target.value)} style={cell} />
+                          ) : (
+                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.muted, padding: "7px 0" }}>{fmtValue(derivedActual, kpi, { bare: true })}</div>
+                          )}
+                        </td>
+                        <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
+                          {kpi.field?.b || kpi.custom ? (
+                            <input type="number" step="any" value={value(kpi, "budget")} placeholder="—"
+                              onChange={(e) => setValue(kpi, "budget", e.target.value)} style={cell} />
+                          ) : (
+                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.faint, padding: "7px 0" }}>{fmtValue(derivedBudget, kpi, { bare: true })}</div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {section === "equity" && <EquityEditor />}
+      {section === "loans" && <LoanEditor />}
+      {section === "balanceSheet" && <BalanceSheetEditor />}
     </Modal>
   );
 };
 
-/* ─── Add KPI ───────────────────────────────────────────────────────────── */
+/* ─── Add KPI Wizard (unchanged) ─────────────────────────────────────────── */
 const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
   const usable = tabs.filter((t) => !t.custom);
   const [tabId, setTabId] = useState(usable.some((t) => t.id === currentTabId) ? currentTabId : usable[0]?.id);
@@ -1485,11 +2447,12 @@ const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
   );
 };
 
+/* ─── Add Chooser ─────────────────────────────────────────────────────────── */
 const AddChooser = ({ onPick, onClose }) => (
   <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
       {[
-        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and budget figures against the KPIs you already track." },
+        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and budget figures against the KPIs you already track, or edit Equity Structure, Loans, and Balance Sheet." },
         { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI", body: "Create a custom metric under any section or category." },
       ].map((o) => (
         <button key={o.key} onClick={() => onPick(o.key)}
@@ -1507,963 +2470,25 @@ const AddChooser = ({ onPick, onClose }) => (
 );
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Balance Sheet — its own tab, always rendered, edited in place.
-   ════════════════════════════════════════════════════════════════════════ */
-const prettify = (k) => k.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
-const NEGATIVE_KEYS = new Set(["lessAmortization","treasuryShares","lessDepreciationBuildings","lessDepreciationComputer",
-  "lessDepreciationVehicles","lessDepreciationFurniture","lessDepreciationMachinery","lessDepreciationOther"]);
-
-const col = () => Array(12).fill("");
-
-/* The sheet always renders, even before anything is captured — otherwise
-   there'd be no way to start one. Editing any cell writes this shape to
-   Firestore, matching what the rest of the platform expects. */
-const BLANK_BS = {
-  assets: {
-    bank: { currentAccount: col(), savingsAccount: col(), pettyCash: col() },
-    currentAssets: { cash: col(), tradeReceivables: col(), inventory: col(), prepaidExpenses: col(), otherReceivables: col() },
-    fixedAssets: {
-      land: col(), buildings: col(), computerEquipment: col(), vehicles: col(), furniture: col(),
-      machinery: col(), otherPropertyPlantEquipment: col(), assetsUnderConstruction: col(),
-      lessDepreciationBuildings: col(), lessDepreciationComputer: col(), lessDepreciationVehicles: col(),
-      lessDepreciationFurniture: col(), lessDepreciationMachinery: col(), lessDepreciationOther: col(),
-    },
-    intangibleAssets: { goodwill: col(), trademarks: col(), patents: col(), software: col(), customerLists: col(), lessAmortization: col() },
-    nonCurrentAssets: { investments: col(), loansReceivable: col(), deferredTaxAsset: col() },
-  },
-  liabilities: {
-    currentLiabilities: { tradePayables: col(), accruedExpenses: col(), shortTermLoans: col(), taxPayable: col(), bankOverdraft: col(), otherPayables: col() },
-    nonCurrentLiabilities: { longTermLoans: col(), financeLeases: col(), deferredTaxLiability: col(), shareholderLoans: col() },
-  },
-  equity: { shareCapital: col(), retainedEarnings: col(), currentYearEarnings: col(), reserves: col(), treasuryShares: col() },
-  customCategories: [], customLiabilitiesCategories: [], customEquityCategories: [],
-};
-
-const BalanceSheetTab = ({ fy, docs, onSaveCell, readOnly }) => {
-  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
-  const [monthKey, setMonthKey] = useState(() => months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
-  const [draft, setDraft] = useState({});
-  const [saveState, setSaveState] = useState("idle");
-  const timer = useRef(null);
-
-  const meta = months.find((m) => m.key === monthKey) || months[0];
-  const monthIndex = months.findIndex((m) => m.key === monthKey);
-  const bsDoc = docs[`${DOC.bs}_${meta.year}`];
-  const bs = bsDoc?.balanceSheetData || BLANK_BS;
-  const isNew = !bsDoc?.balanceSheetData;
-  const mi = meta.month;
-  const totals = bsTotals({ balanceSheetData: bs }, mi);
-
-  const dk = (path, key) => `${meta.year}|${mi}|${path}|${key}`;
-  const cellValue = (path, key, arr) => {
-    const k = dk(path, key);
-    if (draft[k] !== undefined) return draft[k];
-    const v = arr?.[mi];
-    return v === undefined || v === null ? "" : String(v);
-  };
-  const setCell = (path, key, arr, raw) => {
-    setDraft((p) => ({ ...p, [dk(path, key)]: raw }));
-    setSaveState("saving");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      await onSaveCell({ year: meta.year, monthIndex: mi, path, key, raw });
-      setSaveState("saved"); setTimeout(() => setSaveState("idle"), 1800);
-    }, 800);
-  };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  const cellInput = { ...inputS, padding: "6px 9px", textAlign: "right", fontSize: "13.5px", minHeight: "32px" };
-
-  const Section = ({ title, obj, path, total }) => {
-    if (!obj) return null;
-    return (
-      <div style={{ marginBottom: "18px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent, marginBottom: "8px",
-          textTransform: "uppercase", letterSpacing: "0.5px" }}>{title}</div>
-        <div style={{ border: `1px solid ${T.line}`, borderRadius: "8px", overflow: "hidden" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-            <tbody>
-              {Object.entries(obj).map(([key, arr], i) => {
-                if (!Array.isArray(arr)) return null;
-                const negative = NEGATIVE_KEYS.has(key);
-                return (
-                  <tr key={key} style={{ background: i % 2 ? T.panel : T.bg }}>
-                    <td style={{ padding: "7px 12px", fontSize: "13.5px", color: negative ? T.muted : T.ink,
-                      borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                      {negative && <span style={{ color: T.faint, marginRight: "5px" }}>−</span>}
-                      {prettify(key)}
-                    </td>
-                    <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, width: "34%" }}>
-                      <input type="number" step="any" readOnly={readOnly} placeholder="—"
-                        value={cellValue(path, key, arr)}
-                        onChange={(e) => setCell(path, key, arr, e.target.value)} style={cellInput} />
-                    </td>
-                  </tr>
-                );
-              })}
-              {total !== undefined && (
-                <tr style={{ background: T.accentTint }}>
-                  <td style={{ padding: "9px 12px", fontSize: "13.5px", fontWeight: 700, color: T.accent,
-                    borderRight: `1px solid ${T.lineSoft}` }}>Total {title.toLowerCase()}</td>
-                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "14px", fontWeight: 700,
-                    color: T.accent, fontVariantNumeric: "tabular-nums" }}>
-                    {fmtValue(total, { units: "R" })}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  const CustomSection = ({ list, basePath }) => {
-    if (!list?.length) return null;
-    return (
-      <>
-        {list.map((cat, ci) => (
-          <Section key={cat.name || cat.category || ci} title={cat.category || cat.name || `Custom ${ci + 1}`}
-            obj={cat.items} path={`${basePath}.${ci}.items`} total={sumObj(cat.items, mi)} />
-        ))}
-      </>
-    );
-  };
-
-  const balanceGap = Number.isFinite(totals.assets) && Number.isFinite(totals.liabilities) && Number.isFinite(totals.equity)
-    ? totals.assets - (totals.liabilities + totals.equity) : null;
-  const balanced = balanceGap !== null && Math.abs(balanceGap) < 1;
-
-  const summary = (label, value, color) => (
-    <div key={label} style={{ ...cardS, padding: "12px 15px", flex: "1 1 170px" }}>
-      <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{label}</div>
-      <div style={{ fontSize: "19px", fontWeight: 700, color: color || T.ink, marginTop: "3px", fontVariantNumeric: "tabular-nums" }}>{value}</div>
-    </div>
-  );
-
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div style={{ minWidth: "230px" }}>
-          <label style={labelS}>Month</label>
-          <select value={monthKey} onChange={(e) => setMonthKey(e.target.value)} style={selectS}>
-            {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
-          </select>
-        </div>
-        <button onClick={() => setMonthKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-        <button onClick={() => setMonthKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
-        <span style={{ flex: 1 }} />
-        <span style={{ fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, paddingBottom: "10px" }}>
-          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Edits save automatically"}
-        </span>
-      </div>
-
-      {isNew && (
-        <div style={{ ...cardS, marginBottom: "16px", background: T.panel, display: "flex", alignItems: "center", gap: "10px" }}>
-          <Info size={18} color={T.accentSoft} />
-          <span style={{ fontSize: "13.5px", color: T.body }}>
-            Nothing captured for FY {fyLabel(fy.startYear, fy.startMonth)} yet — type into any line below and the sheet starts from there.
-          </span>
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
-        {summary("Total assets", fmtValue(totals.assets, { units: "R" }))}
-        {summary("Total liabilities", fmtValue(totals.liabilities, { units: "R" }))}
-        {summary("Total equity", fmtValue(totals.equity, { units: "R" }))}
-        {summary("Net asset value", fmtValue(
-          Number.isFinite(totals.assets) && Number.isFinite(totals.liabilities) ? totals.assets - totals.liabilities : null,
-          { units: "R" }), T.accent)}
-      </div>
-
-      <div style={{ ...cardS, marginBottom: "16px", background: balanced ? T.greenBg : T.amberBg,
-        border: `1px solid ${(balanced ? T.green : T.amber)}33`, display: "flex", alignItems: "center", gap: "10px" }}>
-        {balanced ? <CheckCircle2 size={18} color={T.green} /> : <AlertTriangle size={18} color={T.amber} />}
-        <span style={{ fontSize: "13.5px", color: balanced ? T.green : T.amber }}>
-          {balanceGap === null ? `Nothing captured for ${meta.long} yet, so there is nothing to balance.`
-            : balanced ? "Assets equal liabilities plus equity for this month."
-            : `Out by ${fmtValue(Math.abs(balanceGap), { units: "R" })} — assets ${balanceGap > 0 ? "exceed" : "fall short of"} liabilities plus equity.`}
-        </span>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
-        <div>
-          <h4 style={{ fontSize: "15px", fontWeight: 700, color: T.accent, margin: "0 0 12px" }}>Assets</h4>
-          <Section title="Bank" obj={bs.assets?.bank} path="assets.bank" total={sumObj(bs.assets?.bank, mi)} />
-          <Section title="Current assets" obj={bs.assets?.currentAssets} path="assets.currentAssets" total={sumObj(bs.assets?.currentAssets, mi)} />
-          <Section title="Fixed assets" obj={bs.assets?.fixedAssets} path="assets.fixedAssets" />
-          <Section title="Intangible assets" obj={bs.assets?.intangibleAssets} path="assets.intangibleAssets" />
-          <Section title="Non-current assets" obj={bs.assets?.nonCurrentAssets} path="assets.nonCurrentAssets" total={sumObj(bs.assets?.nonCurrentAssets, mi)} />
-          <CustomSection list={bs.assets?.customCategories || bs.customCategories}
-            basePath={bs.assets?.customCategories ? "assets.customCategories" : "customCategories"} />
-        </div>
-
-        <div>
-          <h4 style={{ fontSize: "15px", fontWeight: 700, color: T.accent, margin: "0 0 12px" }}>Liabilities and equity</h4>
-          <Section title="Current liabilities" obj={bs.liabilities?.currentLiabilities} path="liabilities.currentLiabilities" total={sumObj(bs.liabilities?.currentLiabilities, mi)} />
-          <Section title="Non-current liabilities" obj={bs.liabilities?.nonCurrentLiabilities} path="liabilities.nonCurrentLiabilities" total={sumObj(bs.liabilities?.nonCurrentLiabilities, mi)} />
-          <CustomSection list={bs.customLiabilitiesCategories} basePath="customLiabilitiesCategories" />
-          <Section title="Equity" obj={bs.equity} path="equity" total={sumObj(bs.equity, mi) - 2 * (parseFloat(bs.equity?.treasuryShares?.[mi]) || 0)} />
-          <CustomSection list={bs.customEquityCategories} basePath="customEquityCategories" />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* ════════════════════════════════════════════════════════════════════════════
-   Equity Structure — Dividend History and Cap Table Overview, carried over
-   from the original Capital Structure page exactly as they were.
-   ════════════════════════════════════════════════════════════════════════ */
-const DividendHistory = ({ currentUser, isInvestorView }) => {
-  const [dividends, setDividends] = useState([]);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [showDownloadOptions, setShowDownloadOptions] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const saveDividendData = async () => {
-    if (!currentUser) return;
-    try {
-      await setDoc(doc(db, "dividend-history", currentUser.uid), {
-        dividends,
-        lastUpdated: new Date().toISOString(),
-      });
-      setShowEditForm(false);
-      alert("Dividend history data saved successfully!");
-    } catch (error) {
-      console.error("Error saving dividend data:", error);
-      alert("Error saving data");
-    }
-  };
-
-  const loadDividendData = async () => {
-    if (!currentUser) return;
-    try {
-      setIsLoading(true);
-      const docRef = doc(db, "dividend-history", currentUser.uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const dividendsData = data.dividends || [];
-        const updatedDividends = dividendsData.map(dividend => ({
-          ...dividend,
-          amountPerShare: dividend.amountPerShare !== undefined ? dividend.amountPerShare : (dividend.amount || 0),
-          totalShares: dividend.totalShares !== undefined ? dividend.totalShares : 0,
-          totalIssued: dividend.totalIssued !== undefined ? dividend.totalIssued : (dividend.amountPerShare || 0) * (dividend.totalShares || 0),
-          notes: dividend.notes || ""
-        }));
-        setDividends(updatedDividends);
-      } else {
-        await setDoc(docRef, {
-          dividends: [],
-          lastUpdated: new Date().toISOString(),
-        });
-      }
-    } catch (error) {
-      console.error("Error loading dividend data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (currentUser) {
-      loadDividendData();
-    }
-  }, [currentUser]);
-
-  const updateDividend = (index, field, value) => {
-    const newDividends = [...dividends];
-    if (field === "year") {
-      newDividends[index][field] = Number.parseInt(value) || 0;
-    } else if (field === "amountPerShare") {
-      newDividends[index][field] = Number.parseFloat(value) || 0;
-      const totalShares = newDividends[index].totalShares || 0;
-      newDividends[index].totalIssued = (Number.parseFloat(value) || 0) * totalShares;
-    } else if (field === "totalShares") {
-      newDividends[index][field] = Number.parseFloat(value) || 0;
-      const amountPerShare = newDividends[index].amountPerShare || 0;
-      newDividends[index].totalIssued = amountPerShare * (Number.parseFloat(value) || 0);
-    } else if (field === "totalIssued") {
-      newDividends[index][field] = Number.parseFloat(value) || 0;
-    } else if (field === "notes") {
-      newDividends[index][field] = value;
-    } else {
-      newDividends[index][field] = value;
-    }
-    setDividends(newDividends);
-  };
-
-  const addDividend = () => {
-    setDividends([...dividends, { 
-      year: new Date().getFullYear(), 
-      amountPerShare: 0, 
-      totalShares: 0,
-      totalIssued: 0,
-      paymentDate: "",
-      notes: ""
-    }]);
-  };
-
-  const removeDividend = (index) => {
-    const newDividends = dividends.filter((_, i) => i !== index);
-    setDividends(newDividends);
-  };
-
-  const handleDownload = (type) => {
-    if (type === "csv") {
-      const csvContent = [
-        ["Year", "Amount per Share", "Total Shares", "Total Issued", "Payment Date", "Notes"],
-        ...dividends.map((div) => [
-          div.year, 
-          (div.amountPerShare || 0).toFixed(2), 
-          (div.totalShares || 0).toFixed(0),
-          (div.totalIssued || 0).toFixed(2), 
-          div.paymentDate,
-          `"${(div.notes || "").replace(/"/g, '""')}"`
-        ]),
-      ]
-        .map((row) => row.join(","))
-        .join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "dividend-history.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    } else if (type === "json") {
-      const jsonContent = JSON.stringify(dividends, null, 2);
-      const blob = new Blob([jsonContent], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "dividend-history.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-    setShowDownloadOptions(false);
-  };
-
-  if (isLoading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "200px", backgroundColor: "#fdfcfb", borderRadius: "8px" }}>
-        <div>Loading dividend history data...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ backgroundColor: "#fdfcfb", padding: "20px", margin: "20px 0", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h3 style={{ color: "#5d4037", margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Dividend History</h3>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{ padding: "6px 12px", backgroundColor: "#5d4037", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-              style={{ padding: "6px 12px", backgroundColor: "#72542b", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}
-            >
-              Download
-            </button>
-            {showDownloadOptions && (
-              <div style={{ position: "absolute", top: "100%", right: 0, backgroundColor: "#fdfcfb", border: "1px solid #d4c4b0", borderRadius: "4px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", zIndex: 1000 }}>
-                <button onClick={() => handleDownload("json")} style={{ display: "block", width: "100%", padding: "8px 15px", backgroundColor: "transparent", border: "none", textAlign: "left", cursor: "pointer", color: "#5d4037", fontSize: "0.8rem" }}>Download JSON</button>
-                <button onClick={() => handleDownload("csv")} style={{ display: "block", width: "100%", padding: "8px 15px", backgroundColor: "transparent", border: "none", textAlign: "left", cursor: "pointer", color: "#5d4037", fontSize: "0.8rem" }}>Download CSV</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div style={{ backgroundColor: "#f7f3f0", padding: "20px", borderRadius: "6px", marginBottom: "20px" }}>
-          <h4 style={{ color: "#72542b", marginTop: 0, fontSize: "1rem" }}>Edit Dividend History Data</h4>
-          {dividends.map((dividend, index) => (
-            <div key={index} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 2fr 2fr auto", gap: "10px", alignItems: "center", marginBottom: "10px", padding: "10px", backgroundColor: "#fdfcfb", borderRadius: "4px" }}>
-              <input type="number" value={dividend.year} onChange={(e) => updateDividend(index, "year", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Year" />
-              <input type="number" step="0.01" value={dividend.amountPerShare || 0} onChange={(e) => updateDividend(index, "amountPerShare", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Amount per Share" />
-              <input type="number" step="1" value={dividend.totalShares || 0} onChange={(e) => updateDividend(index, "totalShares", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Total Shares" />
-              <input type="number" step="0.01" value={dividend.totalIssued || 0} onChange={(e) => updateDividend(index, "totalIssued", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem", backgroundColor: "#f0e6d9" }} placeholder="Total Issued (auto)" readOnly />
-              <input type="date" value={dividend.paymentDate} onChange={(e) => updateDividend(index, "paymentDate", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} />
-              <input type="text" value={dividend.notes || ""} onChange={(e) => updateDividend(index, "notes", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Notes (optional)" />
-              <button onClick={() => removeDividend(index)} style={{ padding: "6px", backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Remove</button>
-            </div>
-          ))}
-          <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
-            <button onClick={addDividend} style={{ padding: "6px 12px", backgroundColor: "#72542b", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Add Dividend</button>
-            <button onClick={saveDividendData} style={{ padding: "6px 12px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Save Data</button>
-          </div>
-        </div>
-      )}
-
-      {dividends.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "30px", color: "#72542b", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-          <p style={{ margin: 0, fontSize: "0.9rem" }}>No dividend data available. {!isInvestorView && 'Click "Edit Data" to add your first dividend entry.'}</p>
-        </div>
-      ) : (
-        <div style={{ backgroundColor: "#f0e6d9", padding: "15px", borderRadius: "6px", overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", color: "#5d4037", fontSize: "0.85rem" }}>
-            <thead>
-              <tr style={{ borderBottom: "2px solid #d4c4b0" }}>
-                <th style={{ padding: "10px", textAlign: "left" }}>Year</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>Amount per Share</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>Total Shares</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>Total Issued</th>
-                <th style={{ padding: "10px", textAlign: "left" }}>Payment Date</th>
-                <th style={{ padding: "10px", textAlign: "left" }}>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dividends.sort((a, b) => b.year - a.year).map((div, index) => (
-                <tr key={index} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                  <td style={{ padding: "10px" }}>{div.year}</td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>R{(div.amountPerShare || 0).toFixed(2)}</td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>{(div.totalShares || 0).toLocaleString()}</td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>R{(div.totalIssued || 0).toFixed(2)}</td>
-                  <td style={{ padding: "10px" }}>{div.paymentDate}</td>
-                  <td style={{ padding: "10px", maxWidth: "200px", wordBreak: "break-word" }}>{div.notes || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const CapTableOverview = ({ currentUser, isInvestorView }) => {
-  const [investors, setInvestors] = useState([]);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [showDownloadOptions, setShowDownloadOptions] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const [irrInvestments, setIrrInvestments] = useState([]);
-  const [expandedInvestment, setExpandedInvestment] = useState(null);
-  const [showIrrEditForm, setShowIrrEditForm] = useState(false);
-  const [showIrrDownloadOptions, setShowIrrDownloadOptions] = useState(false);
-
-  const saveCapTableData = async () => {
-    if (!currentUser) return;
-    try {
-      await setDoc(doc(db, "cap-table", currentUser.uid), {
-        investors,
-        irrInvestments,
-        lastUpdated: new Date().toISOString(),
-      });
-      setShowEditForm(false);
-      setShowIrrEditForm(false);
-      alert("Cap table data saved successfully!");
-    } catch (error) {
-      console.error("Error saving cap table data:", error);
-      alert("Error saving data");
-    }
-  };
-
-  const loadCapTableData = async () => {
-    if (!currentUser) return;
-    try {
-      setIsLoading(true);
-      const docRef = doc(db, "cap-table", currentUser.uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const investorsData = data.investors || [];
-        const updatedInvestors = investorsData.map(investor => ({
-          ...investor,
-          investment: investor.investment !== undefined ? investor.investment : (investor.valuation || 0)
-        }));
-        setInvestors(updatedInvestors);
-        setIrrInvestments(data.irrInvestments || []);
-      } else {
-        await setDoc(docRef, {
-          investors: [],
-          irrInvestments: [],
-          lastUpdated: new Date().toISOString(),
-        });
-      }
-    } catch (error) {
-      console.error("Error loading cap table data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (currentUser) {
-      loadCapTableData();
-    }
-  }, [currentUser]);
-
-  const updateInvestor = (index, field, value) => {
-    const newInvestors = [...investors];
-    newInvestors[index][field] = field === "name" ? value : Number.parseFloat(value) || 0;
-    setInvestors(newInvestors);
-  };
-
-  const addInvestor = () => {
-    setInvestors([...investors, { name: "New Investor", shares: 0, investment: 0 }]);
-  };
-
-  const removeInvestor = (index) => {
-    const newInvestors = investors.filter((_, i) => i !== index);
-    setInvestors(newInvestors);
-  };
-
-  const updateIrrInvestment = (index, field, value) => {
-    const newInvestments = [...irrInvestments];
-    if (field === "name" || field === "riskRating") {
-      newInvestments[index][field] = value;
-    } else if (field === "irr") {
-      newInvestments[index][field] = Number.parseFloat(value) || 0;
-    } else if (field.startsWith("details.")) {
-      const detailField = field.split(".")[1];
-      if (detailField === "cashFlows") {
-        newInvestments[index].details[detailField] = value.split(",").map((flow) => flow.trim());
-      } else {
-        newInvestments[index].details[detailField] = value;
-      }
-    }
-    setIrrInvestments(newInvestments);
-  };
-
-  const addIrrInvestment = () => {
-    const newInvestment = {
-      name: "New Project",
-      irr: 0,
-      details: {
-        initialInvestment: "R0M",
-        duration: "0 years",
-        cashFlows: ["Year 1: R0M"],
-        riskRating: "Medium",
-      },
-    };
-    setIrrInvestments([...irrInvestments, newInvestment]);
-  };
-
-  const removeIrrInvestment = (index) => {
-    const newInvestments = irrInvestments.filter((_, i) => i !== index);
-    setIrrInvestments(newInvestments);
-  };
-
-  const toggleIrrInvestment = (index) => {
-    if (expandedInvestment === index) {
-      setExpandedInvestment(null);
-    } else {
-      setExpandedInvestment(index);
-    }
-  };
-
-  const handleDownload = (type) => {
-    const totalShares = investors.reduce((sum, inv) => sum + inv.shares, 0);
-    const totalInvestment = investors.reduce((sum, inv) => sum + (inv.investment || 0), 0);
-
-    if (type === "csv") {
-      const csvContent = [
-        ["Investor Name", "Shares", "Percentage", "Investment (RM)"],
-        ...investors.map((inv) => [
-          inv.name,
-          inv.shares,
-          totalShares > 0 ? ((inv.shares / totalShares) * 100).toFixed(1) : 0,
-          (inv.investment || 0).toFixed(1),
-        ]),
-        ["Total", totalShares, "100", totalInvestment.toFixed(1)],
-      ]
-        .map((row) => row.join(","))
-        .join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "cap-table.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    } else if (type === "json") {
-      const jsonContent = JSON.stringify({ investors, irrInvestments }, null, 2);
-      const blob = new Blob([jsonContent], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "cap-table.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-    setShowDownloadOptions(false);
-  };
-
-  const handleIrrDownload = (type) => {
-    if (type === "csv") {
-      const csvContent = [
-        ["Investment Name", "IRR %", "Initial Investment", "Duration", "Risk Rating"],
-        ...irrInvestments.map((inv) => [
-          inv.name,
-          inv.irr,
-          inv.details.initialInvestment,
-          inv.details.duration,
-          inv.details.riskRating,
-        ]),
-      ]
-        .map((row) => row.join(","))
-        .join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "irr-investments.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    } else if (type === "json") {
-      const jsonContent = JSON.stringify(irrInvestments, null, 2);
-      const blob = new Blob([jsonContent], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "irr-investments.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-    setShowIrrDownloadOptions(false);
-  };
-
-  if (isLoading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "200px", backgroundColor: "#fdfcfb", borderRadius: "8px" }}>
-        <div>Loading cap table data...</div>
-      </div>
-    );
-  }
-
-  const totalShares = investors.reduce((sum, inv) => sum + inv.shares, 0);
-  const totalInvestment = investors.reduce((sum, inv) => sum + (inv.investment || 0), 0);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
-      <div style={{ backgroundColor: "#fdfcfb", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ color: "#5d4037", margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Cap Table Overview</h3>
-          <div style={{ display: "flex", gap: "10px" }}>
-            {!isInvestorView && (
-              <button
-                onClick={() => setShowEditForm(!showEditForm)}
-                style={{ padding: "6px 12px", backgroundColor: "#5d4037", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}
-              >
-                {showEditForm ? "Cancel" : "Edit Data"}
-              </button>
-            )}
-            <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-                style={{ padding: "6px 12px", backgroundColor: "#72542b", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}
-              >
-                Download
-              </button>
-              {showDownloadOptions && (
-                <div style={{ position: "absolute", top: "100%", right: 0, backgroundColor: "#fdfcfb", border: "1px solid #d4c4b0", borderRadius: "4px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", zIndex: 1000 }}>
-                  <button onClick={() => handleDownload("json")} style={{ display: "block", width: "100%", padding: "8px 15px", backgroundColor: "transparent", border: "none", textAlign: "left", cursor: "pointer", color: "#5d4037", fontSize: "0.8rem" }}>Download JSON</button>
-                  <button onClick={() => handleDownload("csv")} style={{ display: "block", width: "100%", padding: "8px 15px", backgroundColor: "transparent", border: "none", textAlign: "left", cursor: "pointer", color: "#5d4037", fontSize: "0.8rem" }}>Download CSV</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {!isInvestorView && showEditForm && (
-          <div style={{ backgroundColor: "#f7f3f0", padding: "20px", borderRadius: "6px", marginBottom: "20px" }}>
-            <h4 style={{ color: "#72542b", marginTop: 0, fontSize: "1rem" }}>Edit Cap Table Data</h4>
-            {investors.map((investor, index) => (
-              <div key={index} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: "10px", alignItems: "center", marginBottom: "10px", padding: "10px", backgroundColor: "#fdfcfb", borderRadius: "4px" }}>
-                <input type="text" value={investor.name} onChange={(e) => updateInvestor(index, "name", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Investor Name" />
-                <input type="number" value={investor.shares} onChange={(e) => updateInvestor(index, "shares", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Shares %" />
-                <input type="number" step="0.1" value={investor.investment || 0} onChange={(e) => updateInvestor(index, "investment", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Investment (RM)" />
-                <button onClick={() => removeInvestor(index)} style={{ padding: "6px", backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Remove</button>
-              </div>
-            ))}
-            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
-              <button onClick={addInvestor} style={{ padding: "6px 12px", backgroundColor: "#72542b", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Add Investor</button>
-              <button onClick={saveCapTableData} style={{ padding: "6px 12px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Save Data</button>
-            </div>
-          </div>
-        )}
-
-        {investors.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "30px", color: "#72542b", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-            <p style={{ margin: 0, fontSize: "0.9rem" }}>No investor data available. {!isInvestorView && 'Click "Edit Data" to add your first investor.'}</p>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "1fr 1fr", gap: "30px" }}>
-            <div>
-              <h4 style={{ color: "#7d5a50", marginBottom: "15px", fontSize: "1rem" }}>Ownership Structure</h4>
-              <div style={{ height: "300px" }}>
-                <Pie
-                  data={{
-                    labels: investors.map((inv) => inv.name),
-                    datasets: [
-                      {
-                        data: investors.map((inv) => inv.shares),
-                        backgroundColor: ["#a67c52", "#8b7355", "#b89f8d", "#e6d7c3", "#f5f0e1"],
-                        borderColor: "#4a352f",
-                        borderWidth: 1,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: window.innerWidth < 768 ? "bottom" : "right",
-                        labels: { font: { size: 11 } }
-                      },
-                      datalabels: {
-                        color: "#fff",
-                        font: { weight: "bold", size: 11 },
-                        formatter: (value, context) => {
-                          const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
-                          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                          return percentage + "%";
-                        },
-                      },
-                    },
-                  }}
-                  plugins={[ChartDataLabels]}
-                />
-              </div>
-            </div>
-            <div>
-              <h4 style={{ color: "#7d5a50", marginBottom: "15px", fontSize: "1rem" }}>Investor Details</h4>
-              <div style={{ backgroundColor: "#f5f0e1", padding: "15px", borderRadius: "6px" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", color: "#5d4037", fontSize: "0.85rem" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "2px solid #e6d7c3" }}>
-                      <th style={{ padding: "10px", textAlign: "left" }}>Investor</th>
-                      <th style={{ padding: "10px", textAlign: "right" }}>Shares (%)</th>
-                      <th style={{ padding: "10px", textAlign: "right" }}>Investment (RM)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {investors.map((investor, index) => (
-                      <tr key={index} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                        <td style={{ padding: "10px" }}>{investor.name}</td>
-                        <td style={{ padding: "10px", textAlign: "right" }}>
-                          {totalShares > 0 ? ((investor.shares / totalShares) * 100).toFixed(1) : 0}%
-                        </td>
-                        <td style={{ padding: "10px", textAlign: "right" }}>R{(investor.investment || 0).toFixed(1)}</td>
-                      </tr>
-                    ))}
-                    <tr style={{ borderTop: "2px solid #e6d7c3", fontWeight: "bold" }}>
-                      <td style={{ padding: "10px" }}>Total</td>
-                      <td style={{ padding: "10px", textAlign: "right" }}>100%</td>
-                      <td style={{ padding: "10px", textAlign: "right" }}>R{totalInvestment.toFixed(1)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ backgroundColor: "#fdfcfb", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ color: "#5d4037", margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>IRR on Equity Investments</h3>
-          <div style={{ display: "flex", gap: "10px" }}>
-            {!isInvestorView && (
-              <button
-                onClick={() => setShowIrrEditForm(!showIrrEditForm)}
-                style={{ padding: "6px 12px", backgroundColor: "#5d4037", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}
-              >
-                {showIrrEditForm ? "Cancel" : "Edit Data"}
-              </button>
-            )}
-            <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowIrrDownloadOptions(!showIrrDownloadOptions)}
-                style={{ padding: "6px 12px", backgroundColor: "#72542b", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}
-              >
-                Download
-              </button>
-              {showIrrDownloadOptions && (
-                <div style={{ position: "absolute", top: "100%", right: 0, backgroundColor: "#fdfcfb", border: "1px solid #d4c4b0", borderRadius: "4px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", zIndex: 1000 }}>
-                  <button onClick={() => handleIrrDownload("json")} style={{ display: "block", width: "100%", padding: "8px 15px", backgroundColor: "transparent", border: "none", textAlign: "left", cursor: "pointer", color: "#5d4037", fontSize: "0.8rem" }}>Download JSON</button>
-                  <button onClick={() => handleIrrDownload("csv")} style={{ display: "block", width: "100%", padding: "8px 15px", backgroundColor: "transparent", border: "none", textAlign: "left", cursor: "pointer", color: "#5d4037", fontSize: "0.8rem" }}>Download CSV</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {!isInvestorView && showIrrEditForm && (
-          <div style={{ backgroundColor: "#f7f3f0", padding: "20px", borderRadius: "6px", marginBottom: "20px" }}>
-            <h4 style={{ color: "#72542b", marginTop: 0, fontSize: "1rem" }}>Edit IRR Investment Data</h4>
-            {irrInvestments.map((investment, index) => (
-              <div key={index} style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#fdfcfb", borderRadius: "4px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: "10px", alignItems: "center", marginBottom: "10px" }}>
-                  <input type="text" value={investment.name} onChange={(e) => updateIrrInvestment(index, "name", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Project Name" />
-                  <input type="number" value={investment.irr} onChange={(e) => updateIrrInvestment(index, "irr", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="IRR %" />
-                  <select value={investment.details.riskRating} onChange={(e) => updateIrrInvestment(index, "details.riskRating", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }}>
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                  <button onClick={() => removeIrrInvestment(index)} style={{ padding: "6px", backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Remove</button>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                  <input type="text" value={investment.details.initialInvestment} onChange={(e) => updateIrrInvestment(index, "details.initialInvestment", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Initial Investment" />
-                  <input type="text" value={investment.details.duration} onChange={(e) => updateIrrInvestment(index, "details.duration", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Duration" />
-                  <input type="text" value={investment.details.cashFlows.join(", ")} onChange={(e) => updateIrrInvestment(index, "details.cashFlows", e.target.value)} style={{ padding: "6px", border: "1px solid #d4c4b0", borderRadius: "4px", fontSize: "0.8rem" }} placeholder="Cash Flows (comma separated)" />
-                </div>
-              </div>
-            ))}
-            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
-              <button onClick={addIrrInvestment} style={{ padding: "6px 12px", backgroundColor: "#72542b", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Add Investment</button>
-              <button onClick={saveCapTableData} style={{ padding: "6px 12px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}>Save Data</button>
-            </div>
-          </div>
-        )}
-
-        {irrInvestments.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "30px", color: "#72542b", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-            <p style={{ margin: 0, fontSize: "0.9rem" }}>No investment data available. {!isInvestorView && 'Click "Edit Data" to add your first investment.'}</p>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))", gap: "20px" }}>
-            {irrInvestments.map((investment, index) => (
-              <div key={index} style={{ padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px", textAlign: "center" }}>
-                <h4 style={{ color: "#72542b", marginTop: 0, fontSize: "1rem" }}>{investment.name}</h4>
-                <div style={{ width: "100px", height: "100px", borderRadius: "50%", backgroundColor: "#e8ddd4", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", border: "6px solid #9c7c5f", marginBottom: "15px" }}>
-                  <span style={{ fontSize: "20px", fontWeight: "bold", color: "#5d4037" }}>{investment.irr}%</span>
-                </div>
-                <button onClick={() => toggleIrrInvestment(index)} style={{ padding: "6px 12px", backgroundColor: "#5d4037", color: "#fdfcfb", border: "none", borderRadius: "4px", cursor: "pointer", marginBottom: "10px", fontSize: "0.8rem" }}>
-                  {expandedInvestment === index ? "Hide Details" : "Breakdown"}
-                </button>
-                {expandedInvestment === index && (
-                  <div style={{ textAlign: "left", backgroundColor: "#e8ddd4", padding: "10px", borderRadius: "4px", marginTop: "10px", fontSize: "0.8rem" }}>
-                    <p><strong>Initial Investment:</strong> {investment.details.initialInvestment}</p>
-                    <p><strong>Duration:</strong> {investment.details.duration}</p>
-                    <p><strong>Risk Rating:</strong> {investment.details.riskRating}</p>
-                    <div>
-                      <strong>Cash Flows:</strong>
-                      <ul style={{ margin: "5px 0 0 20px", padding: 0 }}>
-                        {investment.details.cashFlows.map((flow, i) => (
-                          <li key={i}>{flow}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ─── Loan Repayments — a schedule, not a KPI ────────────────────────────── */
-const LoanRepaymentsPanel = ({ docs, fy, onSaveField, readOnly }) => {
-  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
-  const [draft, setDraft] = useState({});
-  const [saveState, setSaveState] = useState("idle");
-  const timer = useRef(null);
-
-  const val = (m) => {
-    const k = `${m.year}|${m.month}`;
-    if (draft[k] !== undefined) return draft[k];
-    const v = docs[`${DOC.liq}_${m.year}`]?.loanRepayments?.[m.month];
-    return v === undefined || v === null ? "" : String(v);
-  };
-  const set = (m, raw) => {
-    setDraft((p) => ({ ...p, [`${m.year}|${m.month}`]: raw }));
-    setSaveState("saving");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      await onSaveField({ src: "liq", field: "loanRepayments", year: m.year, monthIndex: m.month, raw });
-      setSaveState("saved"); setTimeout(() => setSaveState("idle"), 1800);
-    }, 800);
-  };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  const totalYear = months.reduce((s, m) => s + (parseFloat(val(m)) || 0), 0);
-  const th = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
-    letterSpacing: "0.5px", background: T.header };
-
-  return (
-    <div style={cardS}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Loan Repayments</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>What leaves the account for debt service each month · FY {fyLabel(fy.startYear, fy.startMonth)}</div>
-        </div>
-        <span style={{ fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted }}>
-          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Edits save automatically"}
-        </span>
-      </div>
-
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-          <thead>
-            <tr>
-              <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Month</th>
-              <th style={{ ...th, textAlign: "center", width: "38%" }}>Repayment</th>
-            </tr>
-          </thead>
-          <tbody>
-            {months.map((m, i) => (
-              <tr key={m.key} style={{ background: i % 2 ? T.panel : T.bg }}>
-                <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
-                  borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>{m.long}</td>
-                <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                  <input type="number" step="any" readOnly={readOnly} placeholder="—" value={val(m)}
-                    onChange={(e) => set(m, e.target.value)}
-                    style={{ ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" }} />
-                </td>
-              </tr>
-            ))}
-            <tr style={{ background: T.accentTint }}>
-              <td style={{ padding: "10px 12px", fontSize: "13.5px", fontWeight: 700, color: T.accent, borderRight: `1px solid ${T.lineSoft}` }}>
-                Total for the year
-              </td>
-              <td style={{ padding: "10px 12px", textAlign: "center", fontSize: "14.5px", fontWeight: 700, color: T.accent, fontVariantNumeric: "tabular-nums" }}>
-                {fmtValue(totalYear, { units: "R" })}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-/* ════════════════════════════════════════════════════════════════════════════
-   Main
+   Main FinancialPerformance Component
    ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "finPerf.addData.prefs";
 const META_DOC = "financialKpiMeta";
-const KPI_SUB = "__kpis__";
 
 const FinancialPerformance = () => {
   const [user, setUser] = useState(null);
   const [fyStartMonth, setFyStartMonth] = useState(0);
   const [docs, setDocs] = useState({});
-  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [] });
+  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], loans: [] });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [showAbout, setShowAbout] = useState(false);
   const [dataPrefs, setDataPrefs] = useState(null);
+
+  // State for Equity Structure data
+  const [dividends, setDividends] = useState([]);
+  const [investors, setInvestors] = useState([]);
+  const [irrInvestments, setIrrInvestments] = useState([]);
 
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
@@ -2476,7 +2501,7 @@ const FinancialPerformance = () => {
   const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", status: "all" });
   const [openFilter, setOpenFilter] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const [widths, setWidths] = useState(() => ({ ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])), [ACTIONS_KEY]: 166 }));
+  const [widths, setWidths] = useState(() => ({ ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])), [ACTIONS_KEY]: 196 }));
   const [visibility, setVisibility] = useState(() => Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])));
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const resizing = useRef(null);
@@ -2519,8 +2544,6 @@ const FinancialPerformance = () => {
     return () => unsub();
   }, [isInvestorView, viewingSMEId]);
 
-  /* Several financial years are loaded so FY−, FY and FY+ all resolve without
-     a round trip when the year selector moves. */
   const loadDocs = useCallback(async (uid_, startMonth) => {
     const base = fyStartYearOf(new Date(), startMonth);
     const years = [base - 1, base, base + 1, base + 2];
@@ -2536,6 +2559,34 @@ const FinancialPerformance = () => {
     return out;
   }, []);
 
+  // Load equity data
+  const loadEquityData = useCallback(async (uid_) => {
+    try {
+      const divRef = doc(db, "dividend-history", uid_);
+      const divSnap = await getDoc(divRef);
+      if (divSnap.exists()) {
+        const data = divSnap.data();
+        setDividends(data.dividends || []);
+      } else {
+        setDividends([]);
+      }
+
+      const capRef = doc(db, "cap-table", uid_);
+      const capSnap = await getDoc(capRef);
+      if (capSnap.exists()) {
+        const data = capSnap.data();
+        setInvestors(data.investors || []);
+        setIrrInvestments(data.irrInvestments || []);
+      } else {
+        setInvestors([]);
+        setIrrInvestments([]);
+      }
+    } catch (err) {
+      console.error("Error loading equity data:", err);
+      notify("error", `Could not load equity data: ${errText(err)}`);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       if (!user?.uid) { setLoading(false); return; }
@@ -2549,13 +2600,15 @@ const FinancialPerformance = () => {
           getDoc(doc(db, "users", user.uid, "financialData", META_DOC)),
         ]);
         setDocs(loaded);
-        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], ...metaSnap.data() });
+        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], loans: [], ...metaSnap.data() });
+
+        await loadEquityData(user.uid);
       } catch (err) {
         console.error("Error loading financial data:", err);
         notify("error", `Could not load your financial data: ${errText(err)}`);
       } finally { setLoading(false); }
     })();
-  }, [user, loadDocs]);
+  }, [user, loadDocs, loadEquityData]);
 
   const persistMeta = async (next) => {
     setMeta(next);
@@ -2569,8 +2622,6 @@ const FinancialPerformance = () => {
     }
   };
 
-  /* Writes a single month cell into the source doc, keeping the 12-slot array
-     shape the rest of the platform expects. */
   const writeArrayCell = async ({ docKey, field, monthIndex, raw }) => {
     if (!user?.uid || isInvestorView) return;
     const existing = docs[docKey] || {};
@@ -2602,13 +2653,9 @@ const FinancialPerformance = () => {
     await writeArrayCell({ docKey: `${DOC[kpi.field.src]}_${year}`, field, monthIndex, raw });
   };
 
-  const savePanelField = async ({ src, field, year, monthIndex, raw }) =>
-    writeArrayCell({ docKey: `${DOC[src]}_${year}`, field, monthIndex, raw });
-
   const saveBalanceSheetCell = async ({ year, monthIndex, path, key, raw }) => {
     if (!user?.uid || isInvestorView) return;
     const docKey = `${DOC.bs}_${year}`;
-
     const existing = docs[docKey]?.balanceSheetData
       ? docs[docKey]
       : { ...(docs[docKey] || {}), balanceSheetData: BLANK_BS, year, createdAt: new Date().toISOString() };
@@ -2636,8 +2683,35 @@ const FinancialPerformance = () => {
     }
   };
 
-  /* ─── Assemble tabs: registry + custom KPIs + saved meta, then hydrate
-       every KPI with a full financial year of entries. ─────────────────── */
+  // Equity data save functions
+  const saveDividends = async (data) => {
+    if (!user?.uid || isInvestorView) return;
+    try {
+      await setDoc(doc(db, "dividend-history", user.uid), { dividends: data, lastUpdated: new Date().toISOString() });
+      setDividends(data);
+    } catch (err) {
+      console.error("Error saving dividends:", err);
+      notify("error", `Could not save dividends: ${errText(err)}`);
+    }
+  };
+
+  const saveCapTable = async (data) => {
+    if (!user?.uid || isInvestorView) return;
+    try {
+      await setDoc(doc(db, "cap-table", user.uid), { ...data, lastUpdated: new Date().toISOString() });
+      setInvestors(data.investors || []);
+      setIrrInvestments(data.irrInvestments || []);
+    } catch (err) {
+      console.error("Error saving cap table:", err);
+      notify("error", `Could not save cap table: ${errText(err)}`);
+    }
+  };
+
+  const saveLoans = async (loans) => {
+    await persistMeta({ ...meta, loans });
+  };
+
+  /* ─── Assemble tabs ───────────────────────────────────────────────────── */
   const tabs = useMemo(() => {
     const withCustom = TAB_DEFS.map((tab) => {
       if (tab.custom) return { ...tab, categories: [] };
@@ -2657,7 +2731,7 @@ const FinancialPerformance = () => {
       ...tab,
       categories: tab.categories.map((cat) => ({
         ...cat,
-        kpis: (cat.kpis || []).map((kpi) => {
+        kpis: (cat.kpis || []).filter((kpi) => !(meta.hiddenKpis || []).includes(kpi.id)).map((kpi) => {
           const entries = {};
           months.forEach((m) => {
             if (kpi.custom) {
@@ -2686,9 +2760,15 @@ const FinancialPerformance = () => {
   }, [visibleTabs, activeTabId]);
 
   const activeTab = visibleTabs.find((t) => t.id === activeTabId) || visibleTabs[0];
+  const isKpiTableTab = activeTab?.id === "summary";
 
   const updateKpiMeta = (kpiId, patch) =>
     persistMeta({ ...meta, kpis: { ...meta.kpis, [kpiId]: { ...(meta.kpis[kpiId] || {}), ...patch } } });
+
+  const deleteKpi = (kpiId) => {
+    persistMeta({ ...meta, hiddenKpis: Array.from(new Set([...(meta.hiddenKpis || []), kpiId])) });
+    notify("success", "KPI removed from the dashboard.");
+  };
 
   const allRows = useMemo(() => {
     if (!activeTab || activeTab.custom) return [];
@@ -2828,7 +2908,7 @@ const FinancialPerformance = () => {
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "12px" }}>
-        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>Financial Performance Summary</h1>
+        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>Financial Performance</h1>
         <button onClick={() => setShowAbout((v) => !v)} style={btnQuiet}>
           {showAbout ? "See less" : "See more"} {showAbout ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
@@ -2882,9 +2962,9 @@ const FinancialPerformance = () => {
           );
         })}
         {!isInvestorView && (
-          <button onClick={() => setManageTabs(true)} title="Hide or show a section"
+          <button onClick={() => setManageTabs(true)} title="Show or hide dashboard tabs"
             style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
-            <Settings2 size={13} /> Sections
+            <Settings2 size={13} /> Manage Tabs
           </button>
         )}
       </div>
@@ -2892,38 +2972,44 @@ const FinancialPerformance = () => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{activeTab?.name}</h3>
-          <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
-          {activeFilterCount > 0 && (
-            <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
-              Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
-            </button>
+          {isKpiTableTab && (
+            <>
+              <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
+                  Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+                </button>
+              )}
+            </>
           )}
         </div>
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
-            {showColumnMenu && (
-              <>
-                <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
-                <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg,
-                  border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
-                  {COLUMN_ORDER.map((key) => {
-                    const def = COLUMN_DEFS[key];
-                    return (
-                      <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))}
-                        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px",
-                          cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
-                        {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
-                        <span style={{ flex: 1 }}>{def.label}</span>
-                      </div>
-                    );
-                  })}
-                  <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
-                </div>
-              </>
-            )}
-          </div>
+          {isKpiTableTab && (
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
+              {showColumnMenu && (
+                <>
+                  <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
+                  <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg,
+                    border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
+                    {COLUMN_ORDER.map((key) => {
+                      const def = COLUMN_DEFS[key];
+                      return (
+                        <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))}
+                          style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px",
+                            cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
+                          {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
+                          <span style={{ flex: 1 }}>{def.label}</span>
+                        </div>
+                      );
+                    })}
+                    <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
             <ClipboardList size={14} /> Financial Performance <ExternalLink size={11} />
@@ -2932,192 +3018,195 @@ const FinancialPerformance = () => {
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
-        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
-          {PERIODS.map((p) => {
-            const on = p.key === period;
-            return (
-              <button key={p.key} onClick={() => setPeriod(p.key)}
-                style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px",
-                  fontWeight: 600, border: "none", fontFamily: "inherit",
-                  background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
-                  boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
-                {p.label}
-              </button>
-            );
-          })}
+      {isKpiTableTab && (
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+          <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
+            {PERIODS.map((p) => {
+              const on = p.key === period;
+              return (
+                <button key={p.key} onClick={() => setPeriod(p.key)}
+                  style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px",
+                    fontWeight: 600, border: "none", fontFamily: "inherit",
+                    background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
+                    boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <span style={{ fontSize: "12.5px", color: T.muted }}>
+            Showing {PERIOD_PREFIX[period].toLowerCase()} budget, actual and variance
+          </span>
         </div>
-        <span style={{ fontSize: "12.5px", color: T.muted }}>
-          Showing {PERIOD_PREFIX[period].toLowerCase()} budget, actual and variance
-        </span>
-      </div>
+      )}
 
-      {/* Balance Sheet is a document, not a KPI table. */}
       {activeTab?.custom === "balanceSheet" ? (
-        <BalanceSheetTab fy={fy} docs={docs} readOnly={isInvestorView} onSaveCell={saveBalanceSheetCell} />
+        <BalanceSheetTab fy={fy} docs={docs} readOnly={isInvestorView} />
       ) : activeTab?.custom === "equity" ? (
         <div style={{ marginBottom: "20px" }}>
-          <DividendHistory currentUser={user} isInvestorView={isInvestorView} />
-          <CapTableOverview currentUser={user} isInvestorView={isInvestorView} />
+          <DividendHistory dividends={dividends} readOnly={isInvestorView} />
+          <CapTableOverview investors={investors} irrInvestments={irrInvestments} readOnly={isInvestorView} />
         </div>
       ) : (
-      <>
-        {/* KPI Table for Summary tab */}
-        {allRows.length > 0 && (
-          <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "12px", overflow: "hidden", background: T.bg, marginBottom: "20px" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed" }}>
-                <thead>
-                  <tr>
-                    {visibleColumns.map((key) => {
-                      const def = COLUMN_DEFS[key];
-                      const isOpen = openFilter === key;
-                      const sorted = sortConfig.key === key;
-                      const filtered = def.filter && filters[key] !== "all";
-                      const align = def.align === "center" ? "center" : "flex-start";
-                      const lines = columnLines(key, period);
+        <>
+          {allRows.length > 0 && (
+            <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "12px", overflow: "hidden", background: T.bg, marginBottom: "20px" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed" }}>
+                  <thead>
+                    <tr>
+                      {visibleColumns.map((key) => {
+                        const def = COLUMN_DEFS[key];
+                        const isOpen = openFilter === key;
+                        const sorted = sortConfig.key === key;
+                        const filtered = def.filter && filters[key] !== "all";
+                        const align = def.align === "center" ? "center" : "flex-start";
+                        const lines = columnLines(key, period);
+
+                        return (
+                          <th key={key} style={{ ...thS, width: widths[key] }}>
+                            <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: align }}>
+                              <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                                <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
+                                  {lines.map((l, i) => (
+                                    <span key={i} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap",
+                                      color: i < lines.length - 1 ? "rgba(255,255,255,0.82)" : "#ffffff" }}>{l}</span>
+                                  ))}
+                                </span>
+                                <InfoTip text={def.tip} light />
+                              </span>
+                              <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                                {def.sort && (
+                                  <button onClick={() => toggleSort(key)} title="Sort" style={iconBtn(sorted ? "#fff" : "rgba(255,255,255,0.6)")}>
+                                    {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                                  </button>
+                                )}
+                                {def.filter && (
+                                  <button onClick={() => setOpenFilter(isOpen ? null : key)} title="Filter"
+                                    style={{ ...iconBtn(filtered ? "#fff" : "rgba(255,255,255,0.6)"), background: filtered ? "rgba(255,255,255,0.16)" : "transparent" }}>
+                                    <SlidersHorizontal size={13} />
+                                  </button>
+                                )}
+                              </span>
+                            </div>
+
+                            {isOpen && def.filter && (
+                              <div onMouseLeave={() => setOpenFilter(null)}
+                                style={{ position: "absolute", top: "100%", left: 0, marginTop: "2px", background: T.bg,
+                                  border: `1px solid ${T.lineStrong}`, borderRadius: "10px", minWidth: "215px", maxHeight: "260px",
+                                  overflowY: "auto", zIndex: 600, boxShadow: "0 12px 30px rgba(45,32,28,0.18)", padding: "6px" }}>
+                                {optionsFor(key).map((opt) => (
+                                  <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setOpenFilter(null); }}
+                                    style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px",
+                                      background: filters[key] === opt ? T.accentTint : "transparent",
+                                      color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
+                                    {opt === "all" ? `All ${def.label.toLowerCase()}s` : opt}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize"
+                              style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                          </th>
+                        );
+                      })}
+                      <th style={{ ...thS, width: widths[ACTIONS_KEY], borderRight: "none" }}>
+                        <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
+                          <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                            <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>Actions</span>
+                            <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, notes, and delete for this KPI." />
+                          </span>
+                          <span style={{ height: "23px" }} />
+                        </div>
+                        <div onMouseDown={(e) => startResize(e, ACTIONS_KEY)}
+                          style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {groupedRows.length === 0 ? (
+                      <tr><td colSpan={visibleColumns.length + 1} style={{ ...tdS, textAlign: "center", padding: "56px 16px", color: T.muted, borderRight: "none" }}>
+                        No KPIs match the current filters.
+                      </td></tr>
+                    ) : groupedRows.map((group) => group.items.map((row, idx) => {
+                      const { kpi, categoryName, tabName, status, variance, values } = row;
+                      const fav = varianceFavourable(kpi, variance);
+                      const last = idx === group.items.length - 1;
+                      const rowTd = { ...tdS, borderBottom: last ? `2px solid ${T.lineStrong}` : `1px solid ${T.lineSoft}` };
+                      const cell = (key, content) => visibility[key] ? (
+                        <td key={key} style={{ ...rowTd, width: widths[key],
+                          textAlign: COLUMN_DEFS[key].align === "center" ? "center" : "left" }}>{content}</td>
+                      ) : null;
 
                       return (
-                        <th key={key} style={{ ...thS, width: widths[key] }}>
-                          <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: align }}>
-                            <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
-                              <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
-                                {lines.map((l, i) => (
-                                  <span key={i} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap",
-                                    color: i < lines.length - 1 ? "rgba(255,255,255,0.82)" : "#ffffff" }}>{l}</span>
-                                ))}
-                              </span>
-                              <InfoTip text={def.tip} light />
-                            </span>
-                            <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-                              {def.sort && (
-                                <button onClick={() => toggleSort(key)} title="Sort" style={iconBtn(sorted ? "#fff" : "rgba(255,255,255,0.6)")}>
-                                  {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
-                                </button>
-                              )}
-                              {def.filter && (
-                                <button onClick={() => setOpenFilter(isOpen ? null : key)} title="Filter"
-                                  style={{ ...iconBtn(filtered ? "#fff" : "rgba(255,255,255,0.6)"), background: filtered ? "rgba(255,255,255,0.16)" : "transparent" }}>
-                                  <SlidersHorizontal size={13} />
-                                </button>
-                              )}
-                            </span>
-                          </div>
-
-                          {isOpen && def.filter && (
-                            <div onMouseLeave={() => setOpenFilter(null)}
-                              style={{ position: "absolute", top: "100%", left: 0, marginTop: "2px", background: T.bg,
-                                border: `1px solid ${T.lineStrong}`, borderRadius: "10px", minWidth: "215px", maxHeight: "260px",
-                                overflowY: "auto", zIndex: 600, boxShadow: "0 12px 30px rgba(45,32,28,0.18)", padding: "6px" }}>
-                              {optionsFor(key).map((opt) => (
-                                <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setOpenFilter(null); }}
-                                  style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px",
-                                    background: filters[key] === opt ? T.accentTint : "transparent",
-                                    color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
-                                  {opt === "all" ? `All ${def.label.toLowerCase()}s` : opt}
-                                </div>
-                              ))}
-                            </div>
+                        <tr key={kpi.id}>
+                          {visibility.category && idx === 0 && (
+                            <td rowSpan={group.items.length} style={{ ...tdS, width: widths.category, background: T.panel,
+                              fontWeight: 700, color: T.accent, verticalAlign: "middle",
+                              borderBottom: `2px solid ${T.lineStrong}`, borderRight: `1px solid ${T.lineStrong}`, fontSize: "13.5px" }}>
+                              {group.name}
+                            </td>
                           )}
+                          {visibility.kpi && (
+                            <td style={{ ...rowTd, width: widths.kpi }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                                <span style={{ fontWeight: 500, color: T.ink }}>{kpi.name}</span>
+                                <button onClick={() => setInfoKpi(kpi)} style={iconBtn(T.muted)} title="What it means and how it is measured"><Eye size={14} /></button>
+                                {kpi.notes && <StickyNote size={11} color={T.amber} />}
+                              </div>
+                            </td>
+                          )}
+                          {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
+                          {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
+                          {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi, { bare: true })}</span>)}
+                          {cell("variance", variance === null
+                            ? <span style={{ color: T.faint }}>—</span>
+                            : <span style={{ fontWeight: 700, color: fav ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>
+                                {fmtValue(variance, kpi, { signed: true, bare: true })}</span>)}
+                          {cell("status", <span style={{ display: "inline-flex" }} title={status.label}><StatusIcon status={status} size={22} /></span>)}
 
-                          <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize"
-                            style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
-                        </th>
-                      );
-                    })}
-                    <th style={{ ...thS, width: widths[ACTIONS_KEY], borderRight: "none" }}>
-                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
-                        <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>Actions</span>
-                          <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, and notes for this KPI." />
-                        </span>
-                        <span style={{ height: "23px" }} />
-                      </div>
-                      <div onMouseDown={(e) => startResize(e, ACTIONS_KEY)}
-                        style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {groupedRows.length === 0 ? (
-                    <tr><td colSpan={visibleColumns.length + 1} style={{ ...tdS, textAlign: "center", padding: "56px 16px", color: T.muted, borderRight: "none" }}>
-                      No KPIs match the current filters.
-                    </td></tr>
-                  ) : groupedRows.map((group) => group.items.map((row, idx) => {
-                    const { kpi, categoryName, tabName, status, variance, values } = row;
-                    const fav = varianceFavourable(kpi, variance);
-                    const last = idx === group.items.length - 1;
-                    const rowTd = { ...tdS, borderBottom: last ? `2px solid ${T.lineStrong}` : `1px solid ${T.lineSoft}` };
-                    const cell = (key, content) => visibility[key] ? (
-                      <td key={key} style={{ ...rowTd, width: widths[key],
-                        textAlign: COLUMN_DEFS[key].align === "center" ? "center" : "left" }}>{content}</td>
-                    ) : null;
-
-                    return (
-                      <tr key={kpi.id}>
-                        {visibility.category && idx === 0 && (
-                          <td rowSpan={group.items.length} style={{ ...tdS, width: widths.category, background: T.panel,
-                            fontWeight: 700, color: T.accent, verticalAlign: "middle",
-                            borderBottom: `2px solid ${T.lineStrong}`, borderRight: `1px solid ${T.lineStrong}`, fontSize: "13.5px" }}>
-                            {group.name}
-                          </td>
-                        )}
-                        {visibility.kpi && (
-                          <td style={{ ...rowTd, width: widths.kpi }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                              <span style={{ fontWeight: 500, color: T.ink }}>{kpi.name}</span>
-                              <button onClick={() => setInfoKpi(kpi)} style={iconBtn(T.muted)} title="What it means and how it is measured"><Eye size={14} /></button>
-                              {kpi.notes && <StickyNote size={11} color={T.amber} />}
+                          <td style={{ ...rowTd, width: widths[ACTIONS_KEY], textAlign: "center", borderRight: "none" }}>
+                            <div style={{ display: "flex", gap: "1px", justifyContent: "center", alignItems: "center" }}>
+                              <button onClick={() => setChartKpi(kpi)} style={iconBtn(T.body)} title="Trend chart"><LineChartIcon size={16} /></button>
+                              <button onClick={() => setAnalysisKpi(kpi)} style={iconBtn(T.body)} title="Summary analysis across all timeframes"><Lightbulb size={16} /></button>
+                              {!isInvestorView && (
+                                <button onClick={() => setActionKpi({ kpi, categoryName, tabName })}
+                                  style={iconBtn(status.color)} title={`Add action (${status.label})`}><Plus size={16} /></button>
+                              )}
+                              <button onClick={() => setNotesKpi(kpi)} style={iconBtn(kpi.notes ? T.amber : T.body)} title="Notes"><StickyNote size={16} /></button>
+                              {!isInvestorView && (
+                                <button onClick={() => { if (window.confirm(`Delete "${kpi.name}"? This removes it from the dashboard.`)) deleteKpi(kpi.id); }}
+                                  style={iconBtn(T.red)} title="Delete KPI"><Trash2 size={16} /></button>
+                              )}
                             </div>
                           </td>
-                        )}
-                        {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
-                        {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
-                        {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi, { bare: true })}</span>)}
-                        {cell("variance", variance === null
-                          ? <span style={{ color: T.faint }}>—</span>
-                          : <span style={{ fontWeight: 700, color: fav ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>
-                              {fmtValue(variance, kpi, { signed: true, bare: true })}</span>)}
-                        {cell("status", <span style={{ display: "inline-flex" }} title={status.label}><StatusIcon status={status} size={22} /></span>)}
+                        </tr>
+                      );
+                    }))}
+                  </tbody>
+                </table>
+              </div>
 
-                        <td style={{ ...rowTd, width: widths[ACTIONS_KEY], textAlign: "center", borderRight: "none" }}>
-                          <div style={{ display: "flex", gap: "1px", justifyContent: "center", alignItems: "center" }}>
-                            <button onClick={() => setChartKpi(kpi)} style={iconBtn(T.body)} title="Trend chart"><LineChartIcon size={16} /></button>
-                            <button onClick={() => setAnalysisKpi(kpi)} style={iconBtn(T.body)} title="Summary analysis across all timeframes"><Lightbulb size={16} /></button>
-                            {!isInvestorView && (
-                              <button onClick={() => setActionKpi({ kpi, categoryName, tabName })}
-                                style={iconBtn(status.color)} title={`Add action (${status.label})`}><Plus size={16} /></button>
-                            )}
-                            <button onClick={() => setNotesKpi(kpi)} style={iconBtn(kpi.notes ? T.amber : T.body)} title="Notes"><StickyNote size={16} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  }))}
-                </tbody>
-              </table>
+              <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.lineStrong}`, background: T.panel, fontSize: "12px",
+                color: T.body, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                <span>{activeTab?.categories.filter((c) => !c.custom).length} categories · all figures in each row use that row's Units</span>
+                <span style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><CheckCircle2 size={13} color={T.green} /> On budget</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><AlertTriangle size={13} color={T.amber} /> Needs attention</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><XCircle size={13} color={T.red} /> Critical</span>
+                </span>
+              </div>
             </div>
+          )}
 
-            <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.lineStrong}`, background: T.panel, fontSize: "12px",
-              color: T.body, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
-              <span>{activeTab?.categories.filter((c) => !c.custom).length} categories · all figures in each row use that row's Units</span>
-              <span style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><CheckCircle2 size={13} color={T.green} /> On budget</span>
-                <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><AlertTriangle size={13} color={T.amber} /> Needs attention</span>
-                <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><XCircle size={13} color={T.red} /> Critical</span>
-              </span>
+          {activeTab?.categories.some((c) => c.custom === "loans") && (
+            <div style={{ marginBottom: "20px" }}>
+              <LoanRepaymentsPanel loans={meta.loans || []} readOnly={isInvestorView} />
             </div>
-          </div>
-        )}
-
-        {/* Loan Repayments stays a panel under the Liquidity tab. */}
-        {activeTab?.categories.some((c) => c.custom === "loans") && (
-          <div style={{ marginBottom: "20px" }}>
-            <LoanRepaymentsPanel docs={docs} fy={fy} readOnly={isInvestorView} onSaveField={savePanelField} />
-          </div>
-        )}
-      </>
+          )}
+        </>
       )}
 
       {infoKpi && <KpiInfoModal kpi={infoKpi} readOnly={isInvestorView} onClose={() => setInfoKpi(null)}
@@ -3143,7 +3232,7 @@ const FinancialPerformance = () => {
         onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
 
       {manageTabs && (
-        <Modal title="Sections" subtitle="Hide a section to take it off the dashboard" icon={<Settings2 size={17} />}
+        <Modal title="Manage Dashboard Tabs" subtitle="Show or hide a tab from the dashboard" icon={<Settings2 size={17} />}
           onClose={() => setManageTabs(false)} width={560}
           footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
           {tabs.map((t) => {
@@ -3172,7 +3261,7 @@ const FinancialPerformance = () => {
           })}
           <p style={{ fontSize: "12.5px", color: T.muted, marginTop: "10px", marginBottom: 0, display: "flex", alignItems: "flex-start", gap: "6px" }}>
             <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
-            Sections are built in, so they hide rather than delete — the underlying financial data is shared with the rest of the platform.
+            Tabs are built in, so they hide rather than delete — the underlying financial data is shared with the rest of the platform.
           </p>
         </Modal>
       )}
@@ -3181,7 +3270,13 @@ const FinancialPerformance = () => {
 
       {addFlow === "data" && <AddDataWizard tabs={tabs} fy={fy} docs={docs} currentTabId={activeTabId}
         prefs={dataPrefs} onSavePrefs={savePrefs} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
-        onSaveField={saveKpiField} />}
+        onSaveField={saveKpiField}
+        onSaveBalanceSheetCell={saveBalanceSheetCell}
+        onSaveLoans={saveLoans}
+        onSaveDividends={saveDividends}
+        onSaveCapTable={saveCapTable}
+        dividends={dividends} investors={investors} irrInvestments={irrInvestments} loans={meta.loans || []}
+        readOnly={isInvestorView} />}
 
       {addFlow === "kpi" && <AddKpiWizard tabs={tabs} currentTabId={activeTabId}
         onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
