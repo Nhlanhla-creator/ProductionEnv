@@ -18,6 +18,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend, Filler,
 } from "chart.js";
+import ChartDataLabels from "chartjs-plugin-datalabels";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
 
@@ -119,8 +120,6 @@ const trimNum = (n) => {
   return Number(n.toFixed(dp)).toLocaleString(LOCALE, { maximumFractionDigits: dp });
 };
 
-/* `bare` drops the unit marker — the table has its own Units column, so
-   repeating it in every cell is noise. Charts and tooltips keep it. */
 const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
   if (raw === null || raw === undefined || raw === "") return "—";
   let n = Number(raw);
@@ -152,14 +151,11 @@ const rollUp = (values, mode) => {
 const mean = (arr) => { const n = arr.filter((v) => Number.isFinite(v)); return n.length ? n.reduce((a,b)=>a+b,0) / n.length : null; };
 
 /* ─── KPI model ─────────────────────────────────────────────────────────── */
-/* v2: Budget draws as circles only — the line was reading as a second series
-   competing with the bars. Bumping the version resets saved chart prefs once
-   so existing KPIs pick up the new default. */
 const CHART_VERSION = 2;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
   actualType: "bar", budgetType: "scatter", varianceType: "scatter",
-  actualColor: "#1e40af", budgetColor: "#4a352f", showValues: true, showAxis: false,
+  actualColor: "#1e40af", budgetColor: "#4a352f", axisMode: "x",
 };
 
 const mkKpi = (o) => ({
@@ -184,7 +180,7 @@ const seedEntries = (sy, sm, budget, base, swing, aggregate) => {
 };
 
 const buildDefaultStructure = (sy, sm) => [
-  { id: "supply-chain", name: "Supply Chain", notes: "", subCategories: [
+  { id: "supply-chain", name: "Supply Chain", notes: "", hidden: false, subCategories: [
     { name: "Supplier Dependency", kpis: [
       mkKpi({ name: "Top 3 Supplier Spend", units: "%", frequency: "Monthly", direction: "lower", aggregate: "avg",
         meaning: "How much of your buying sits with your three biggest suppliers. The higher it is, the more exposed you are if one of them fails.",
@@ -214,7 +210,7 @@ const buildDefaultStructure = (sy, sm) => [
         entries: seedEntries(sy, sm, 20, 23, 3, "avg") }),
     ]},
   ]},
-  { id: "delivery", name: "Delivery", notes: "", subCategories: [
+  { id: "delivery", name: "Delivery", notes: "", hidden: false, subCategories: [
     { name: "Productivity", kpis: [
       mkKpi({ name: "Production Volume", units: "units", frequency: "Weekly", direction: "higher", aggregate: "sum",
         meaning: "Total good output produced and accepted in the period.",
@@ -248,7 +244,7 @@ const buildDefaultStructure = (sy, sm) => [
         entries: seedEntries(sy, sm, 1, 0.4, 0.2, "avg") }),
     ]},
   ]},
-  { id: "safety", name: "Safety", notes: "", subCategories: [
+  { id: "safety", name: "Safety", notes: "", hidden: false, subCategories: [
     { name: "Safety Risk", kpis: [
       mkKpi({ name: "Safety Incidents", units: "#", frequency: "Weekly", direction: "lower", aggregate: "sum",
         meaning: "Recordable incidents involving staff, contractors or visitors.",
@@ -367,7 +363,7 @@ const StatusIcon = ({ status, size = 22 }) => {
   return <Info {...p} />;
 };
 
-/* ─── Columns. Numeric columns are centred and unit-free. ────────────────── */
+/* ─── Columns ───────────────────────────────────────────────────────────── */
 const COLUMN_DEFS = {
   category:  { label: "Category", width: 168, tip: "The sub-category this KPI sits under.", filter: true, sort: true, hideable: true },
   kpi:       { label: "KPI", width: 258, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
@@ -446,29 +442,6 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better" },
 ];
 
-/* Value labels drawn on the canvas, so the charts can stand without axes. */
-const makeValueLabelPlugin = (kpi, enabled) => ({
-  id: "seriesValueLabels",
-  afterDatasetsDraw(chart) {
-    if (!enabled) return;
-    const { ctx } = chart;
-    ctx.save();
-    ctx.font = "600 10.5px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    chart.data.datasets.forEach((ds, di) => {
-      const meta = chart.getDatasetMeta(di);
-      if (meta.hidden) return;
-      meta.data.forEach((el, i) => {
-        const raw = ds.data[i];
-        if (raw === null || raw === undefined) return;
-        ctx.fillStyle = ds.__labelColor || T.body;
-        ctx.fillText(fmtValue(raw, kpi, { signed: !!ds.__signed, bare: true }), el.x, el.y - 8);
-      });
-    });
-    ctx.restore();
-  },
-});
-
 /* ─── KPI info popup ────────────────────────────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
@@ -530,14 +503,6 @@ const localAnalysis = (kpi, period, v, fy) => {
       `Captured ${kpi.frequency.toLowerCase()} on a financial year starting ${MONTHS[fy.startMonth]}.`,
       `${DIRECTIONS.find((d) => d.value === kpi.direction)?.label} for this KPI.`,
     ],
-    trends: status.key === "green"
-      ? ["Performance is holding inside tolerance, which points to a stable underlying process.",
-         "Watch the period-to-period spread rather than the headline — a stable average can hide widening swings."]
-      : status.key === "amber"
-        ? ["The metric has drifted outside tolerance but not far. This reads as drift rather than a break.",
-           "Two or three more periods at this level would move it into critical territory."]
-        : ["The gap to budget is wide enough that a single-period correction is unlikely to close it.",
-           "Treat the trend as broken rather than noisy until two consecutive periods recover."],
     issues: status.key === "green"
       ? ["No material issue at this timeframe. The risk is erosion if input costs or volumes shift."]
       : [`Budget is not being met${variance === null ? "" : ` — off by ${fmtValue(Math.abs(variance), kpi)}`}.`,
@@ -553,8 +518,6 @@ const localAnalysis = (kpi, period, v, fy) => {
   };
 };
 
-/* The table's icon opens the summary — all four timeframes read together,
-   which is a different question from "how is this month going". */
 const summaryAnalysis = (kpi, fy) => {
   const rows = PERIODS.map((p) => {
     const v = periodValues(kpi, p.key, fy);
@@ -564,28 +527,15 @@ const summaryAnalysis = (kpi, fy) => {
   const withData = rows.filter((r) => r.status.key !== "none");
   const reds = withData.filter((r) => r.status.key === "red");
   const greens = withData.filter((r) => r.status.key === "green");
-  const wk = rows.find((r) => r.key === "week"), yr = rows.find((r) => r.key === "year");
 
   return {
     observations: [
-      ...withData.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)} against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}.`),
-      withData.length === 0 ? "No timeframe has both a budget and an actual yet." : `${withData.length} of 4 timeframes have complete data.`,
+      ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no budget)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
+      `${withData.length} of ${rows.length} timeframes have both an actual and a budget.`,
     ],
-    trends: withData.length < 2 ? ["Not enough timeframes with data to compare short-term against long-term."]
-      : [
-        wk?.status.key !== "none" && yr?.status.key !== "none" && wk.status.key !== yr.status.key
-          ? `The week and the year disagree — ${wk.status.label.toLowerCase()} this week against ${yr.status.label.toLowerCase()} for the year, so treat one of them as the outlier rather than the trend.`
-          : "Short and long timeframes are telling the same story, which makes the signal more trustworthy.",
-        greens.length === withData.length ? "Every timeframe is inside tolerance."
-          : reds.length === withData.length ? "Every timeframe is critical — this is structural, not a bad period."
-          : "The picture is mixed across timeframes; the shorter ones move first, so watch those for the turn.",
-      ],
-    issues: reds.length === 0 && withData.every((r) => r.status.key === "green")
-      ? ["No timeframe is outside tolerance."]
-      : [
-        ...reds.map((r) => `${r.label} is critical${r.variance === null ? "" : ` — off by ${fmtValue(Math.abs(r.variance), kpi)}`}.`),
-        ...withData.filter((r) => r.status.key === "amber").map((r) => `${r.label} needs attention.`),
-      ],
+    issues: reds.length === 0 && withData.every((r) => r.status.key === "green") ? ["No timeframe is outside tolerance."]
+      : [...reds.map((r) => `${r.label} is critical${r.variance === null ? "" : ` — off by ${fmtValue(Math.abs(r.variance), kpi)}`}.`),
+         ...withData.filter((r) => r.status.key === "amber").map((r) => `${r.label} needs attention.`)],
     opportunities: reds.length > 0
       ? ["Raise a dated action — more than one timeframe is showing the same gap.",
          "Check whether the budget itself is still realistic before chasing the actual."]
@@ -619,13 +569,11 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         });
         const d = res?.data;
         if (d?.observations && d?.opportunities) {
-          setAnalysis({ observations: d.observations || [], trends: d.trends || [], issues: d.issues || [], opportunities: d.opportunities || [] });
+          setAnalysis({ observations: d.observations || [], issues: d.issues || [], opportunities: d.opportunities || [] });
           setSource("ai"); return;
         }
         throw new Error("The function replied, but not in the expected shape.");
       } catch (err) {
-        // "not-found" means the Cloud Function isn't deployed — a different fix
-        // from a permissions error, so name it.
         console.error("AI analysis unavailable:", err);
         setReason(err?.code === "functions/not-found" ? "The generateKpiAnalysis function isn't deployed yet." : errText(err));
         setSource("local");
@@ -647,10 +595,10 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
         <span style={{ fontSize: "12px", color: source === "ai" ? T.muted : T.amber, display: "flex", alignItems: "flex-start", gap: "6px", lineHeight: 1.5 }}>
           <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
-          {loading ? "Reviewing…" : source === "ai" ? `Generated from your KPI data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}`
+          {loading ? "Reviewing…" : source === "ai" ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}`
             : <span>Rules-based summary built from your figures. <span style={{ color: T.faint }}>{reason}</span></span>}
         </span>
         <button onClick={build} disabled={loading} style={{ ...btnQuiet, padding: "3px 9px", fontSize: "12.5px", opacity: loading ? 0.5 : 1 }}>
@@ -662,7 +610,6 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
       ) : analysis && (
         <>
           <Section label="Observations" items={analysis.observations} color={T.accent} />
-          <Section label="Trends" items={analysis.trends} color={T.blue} />
           <Section label="Issues" items={analysis.issues} color={T.red} />
           <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
         </>
@@ -680,13 +627,11 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => (
 );
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Trend chart — one card. The variance band floats above the plot with no
-   axes of its own, pulled down onto the main chart so it reads as a top layer
-   rather than a competing second chart.
+   Trend chart — matches Financial Performance exactly.
    ════════════════════════════════════════════════════════════════════════ */
 const CHART_TYPES = [
-  { value: "bar", label: "Bars" }, { value: "line", label: "Line" },
-  { value: "area", label: "Area" }, { value: "scatter", label: "Circles" },
+  { value: "bar", label: "Column Chart" }, { value: "line", label: "Line Chart" },
+  { value: "area", label: "Area Chart" }, { value: "scatter", label: "Scatter Chart" },
 ];
 const SWATCHES = ["#1e40af", "#4a352f", "#166534", "#991b1b", "#92400e", "#6d28d9", "#0e7490", "#be185d"];
 
@@ -696,8 +641,6 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const [showCustomise, setShowCustomise] = useState(false);
   const noteTimer = useRef(null);
 
-  /* Anything saved before v2 is ignored rather than merged, so the old
-     line-style Budget doesn't survive the change. */
   const prefs = kpi.chart?.v === CHART_VERSION ? { ...DEFAULT_CHART, ...kpi.chart } : { ...DEFAULT_CHART };
 
   const { labels, actual, budget, noteKey, caption } = useMemo(() => {
@@ -731,7 +674,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
 
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
 
-  useEffect(() => { setNoteText(kpi.periodNotes?.[noteKey] || ""); setNoteState("idle"); }, [noteKey, kpi.id]); // eslint-disable-line
+  useEffect(() => { setNoteText(kpi.periodNotes?.[noteKey] || ""); setNoteState("idle"); }, [noteKey, kpi.id]);
 
   const onNoteChange = (text) => {
     setNoteText(text);
@@ -766,16 +709,15 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.78, ...extra };
   };
 
-  /* The variance strip carries no axes and no legend of its own. */
   const varianceData = { labels, datasets: [
-    { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors), __signed: true, __labelColor: T.body },
-  ]};
+    { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors) }] };
   const varianceOptions = {
     responsive: true, maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: prefs.showValues ? 20 : 6, bottom: 0 } },
+    layout: { padding: { top: 10, bottom: 0 } },
     plugins: {
       legend: { display: false },
+      datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
         callbacks: { title: (items) => labels[items[0].dataIndex],
           label: (c) => c.parsed.y === null || c.parsed.y === undefined ? "Variance: no data"
@@ -788,23 +730,24 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   };
 
   const mainData = { labels, datasets: [
-    { label: "Budget", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1, __labelColor: prefs.budgetColor },
-    { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2, __labelColor: prefs.actualColor },
+    { label: "Budget", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1 },
+    { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2 },
   ]};
   const mainOptions = {
     responsive: true, maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: prefs.showValues ? 20 : 6 } },
+    layout: { padding: { top: 10 } },
     plugins: {
       legend: { display: false },
+      datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
         callbacks: { label: (c) => c.parsed.y === null || c.parsed.y === undefined ? `${c.dataset.label}: no data`
           : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}` } },
     },
     scales: {
-      y: { display: prefs.showAxis, grid: { display: prefs.showAxis, color: T.lineSoft },
+      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both", grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
         ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
-      x: { display: true, grid: { display: false },
+      x: { display: prefs.axisMode === "x" || prefs.axisMode === "both", grid: { display: false },
         ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
     },
   };
@@ -834,7 +777,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   );
 
   return (
-    <Modal title={`${kpi.name} — Trend`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
+    <Modal title={`${kpi.name} — (${kpi.units})`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
       footer={<>
         <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
         <div style={{ flex: 1 }} />
@@ -844,33 +787,20 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       {showCustomise && (
         <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+            {[["actualType","Actual as"],["budgetType","Budget as"],["varianceType","Variance as"]].map(([k, l]) => (
+              <div key={k}>
+                <label style={labelS}>{l}</label>
+                <select value={prefs[k]} onChange={(e) => setPref({ [k]: e.target.value })} style={selectS}>
+                  {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+            ))}
             <div>
-              <label style={labelS}>Actual as</label>
-              <select value={prefs.actualType} onChange={(e) => setPref({ actualType: e.target.value })} style={selectS}>
-                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelS}>Budget as</label>
-              <select value={prefs.budgetType} onChange={(e) => setPref({ budgetType: e.target.value })} style={selectS}>
-                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelS}>Variance as</label>
-              <select value={prefs.varianceType} onChange={(e) => setPref({ varianceType: e.target.value })} style={selectS}>
-                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelS}>Show</label>
-              <select value={`${prefs.showValues}|${prefs.showAxis}`}
-                onChange={(e) => { const [v, a] = e.target.value.split("|"); setPref({ showValues: v === "true", showAxis: a === "true" }); }}
-                style={selectS}>
-                <option value="true|false">Value labels, no axis</option>
-                <option value="false|true">Axis, no value labels</option>
-                <option value="true|true">Both</option>
-                <option value="false|false">Neither</option>
+              <label style={labelS}>Axis</label>
+              <select value={prefs.axisMode} onChange={(e) => setPref({ axisMode: e.target.value })} style={selectS}>
+                <option value="y">Show Y-Axis</option>
+                <option value="x">Show X-Axis</option>
+                <option value="both">Show Both</option>
               </select>
             </div>
           </div>
@@ -890,15 +820,10 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
                 </div>
               </div>
             ))}
-            <div style={{ fontSize: "12px", color: T.muted, alignSelf: "flex-end", paddingBottom: "3px" }}>
-              Variance keeps green/red — the colour is the verdict, not decoration.
-            </div>
           </div>
         </div>
       )}
 
-      {/* One card, two canvases. The variance band overlaps the top of the
-          main chart so it reads as part of it. */}
       <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "2px" }}>
           <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Budget vs Actual</span>
@@ -910,10 +835,10 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
         </div>
 
         <div style={{ height: "112px", marginBottom: "-16px" }}>
-          <Chart type="bar" data={varianceData} options={varianceOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+          <Chart type="bar" data={varianceData} options={varianceOptions} />
         </div>
         <div style={{ height: "300px" }}>
-          <Chart type="bar" data={mainData} options={mainOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+          <Chart type="bar" data={mainData} options={mainOptions} />
         </div>
       </div>
 
@@ -927,7 +852,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       <div style={{ ...cardS, marginBottom: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-            <StickyNote size={13} /> Note for {PERIOD_LABEL[period].toLowerCase()}
+            <StickyNote size={13} /> Notes
           </span>
           <span style={{ fontSize: "11.5px", color: noteState === "saved" ? T.green : T.muted }}>
             {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved" : "Saves automatically"}
@@ -1005,8 +930,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
     })();
   }, [userId]);
 
-  useEffect(() => { if (meetingId) setForm((p) => applyDefaults(meetingId, p, true)); // eslint-disable-next-line
-  }, [meetingId, meetings.length]);
+  useEffect(() => { if (meetingId) setForm((p) => applyDefaults(meetingId, p, true)); }, [meetingId, meetings.length]);
 
   const save = async () => {
     if (!form.title.trim()) return;
@@ -1114,7 +1038,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
   );
 };
 
-/* ─── KPI notes — autosaving ────────────────────────────────────────────── */
+/* ─── KPI notes ────────────────────────────────────────────────────────────── */
 const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
   const [state, setState] = useState("idle");
@@ -1140,20 +1064,24 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Manage categories — hide or delete ────────────────────────────────── */
+/* ─── Manage Categories ────────────────────────────────────────────── */
 const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   const [confirmId, setConfirmId] = useState(null);
+  
   const toggleHidden = (id) => onSave(structure.map((c) => (c.id === id ? { ...c, hidden: !c.hidden } : c)));
+  
   const remove = (id) => {
     const cat = structure.find((c) => c.id === id);
+    if (!cat) return;
     onSave(structure.filter((c) => c.id !== id));
     setConfirmId(null);
-    notify("success", `"${cat?.name}" deleted.`);
+    notify("success", `"${cat.name}" deleted.`);
   };
+
   const kpiCount = (c) => c.subCategories.reduce((s, sub) => s + sub.kpis.length, 0);
 
   return (
-    <Modal title="Categories" subtitle="Hide a category to take it off the dashboard, or delete it outright"
+    <Modal title="Manage Categories" subtitle="Hide a category to take it off the dashboard, or delete it outright"
       icon={<Settings2 size={17} />} onClose={onClose} width={620}
       footer={<button onClick={onClose} style={btnPrimary}>Done</button>}>
       {structure.map((c) => (
@@ -1202,13 +1130,12 @@ const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   );
 };
 
-/* ─── Add Data — autosaving ─────────────────────────────────────────────── */
+/* ─── Add Data ─────────────────────────────────────────────────────────── */
 const deriveFrequency = (category) => {
   const kpis = category?.subCategories.flatMap((s) => s.kpis) || [];
   if (!kpis.length) return { frequency: "Monthly", mixed: false };
   const tally = {};
   kpis.forEach((k) => {
-    // Quarterly KPIs are still captured monthly and rolled up.
     const f = k.frequency === "Quarterly" ? "Monthly" : k.frequency;
     tally[f] = (tally[f] || 0) + 1;
   });
@@ -1253,7 +1180,6 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     if (periods.some((p) => p.key === periodKey)) return;
     const todayKey = frequency === "Weekly" ? currentWeekKey() : frequency === "Monthly" ? currentMonthKey() : `D:${isoDate(new Date())}`;
     setPeriodKey(periods.find((p) => p.key === todayKey)?.key || periods[0].key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periods, frequency]);
 
   const periodIndex = periods.findIndex((p) => p.key === periodKey);
@@ -1284,8 +1210,6 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     })),
   });
 
-  /* Figures save themselves as they're typed, so stepping to the next period
-     can't quietly drop what was just entered. */
   const setValue = (kpiId, field, raw) => {
     const next = { ...draft, [kpiId]: { ...(draft[kpiId] || {}), [periodKey]: { ...(draft[kpiId]?.[periodKey] || {}), [field]: raw } } };
     setDraft(next);
@@ -1422,7 +1346,7 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
   const creatingSub = subChoice === "__new__" || creatingCategory;
   const subName = creatingSub ? newSubName.trim() : subChoice;
 
-  useEffect(() => { if (!creatingCategory && subs.length && !subChoice) setSubChoice(subs[0].name); }, [catId]); // eslint-disable-line
+  useEffect(() => { if (!creatingCategory && subs.length && !subChoice) setSubChoice(subs[0].name); }, [catId]);
 
   const canSave = form.name.trim() && subName && (!creatingCategory || newCategoryName.trim())
     && form.meaning.trim() && form.measured.trim();
@@ -1437,7 +1361,7 @@ const AddKpiWizard = ({ structure, categoryId, onBack, onClose, onSave }) => {
       meaning: form.meaning.trim(), measured: form.measured.trim(), entries: {},
     });
     const next = creatingCategory
-      ? [...structure, { id: `cat_${uid().slice(0,8)}`, name: newCategoryName.trim(), notes: "", subCategories: [{ name: subName, kpis: [kpi] }] }]
+      ? [...structure, { id: `cat_${uid().slice(0,8)}`, name: newCategoryName.trim(), notes: "", hidden: false, subCategories: [{ name: subName, kpis: [kpi] }] }]
       : structure.map((cat) => cat.id !== catId ? cat : {
           ...cat,
           subCategories: subs.some((s) => s.name === subName)
@@ -1688,6 +1612,18 @@ const OperationalPerformance = () => {
       subCategories: cat.subCategories.map((sub) => ({ ...sub,
         kpis: sub.kpis.map((k) => (k.id === kpiId ? { ...k, ...patch } : k)) })) })));
 
+  const deleteKpi = (kpiId) => {
+    if (!window.confirm("Delete this KPI and all its data? This cannot be undone.")) return;
+    persist(structure.map((cat) => ({
+      ...cat,
+      subCategories: cat.subCategories.map((sub) => ({
+        ...sub,
+        kpis: sub.kpis.filter((k) => k.id !== kpiId),
+      })),
+    })));
+    notify("success", "KPI deleted.");
+  };
+
   const visibleCategories = useMemo(() => (structure || []).filter((c) => !c.hidden), [structure]);
 
   useEffect(() => {
@@ -1737,7 +1673,6 @@ const OperationalPerformance = () => {
     }[sortConfig.key];
 
     return [...list].sort((a, b) => {
-      // Sub-category leads so the merged Category cell stays contiguous.
       if (a.subCategoryName !== b.subCategoryName) return a.subCategoryName.localeCompare(b.subCategoryName);
       if (!get) return 0;
       const av = get(a), bv = get(b);
@@ -1862,7 +1797,7 @@ const OperationalPerformance = () => {
               <li>Pick a timeframe above the table — the column names follow it</li>
               <li>The chart carries its own averages, note and analysis for that timeframe</li>
               <li>The lightbulb in the table reads all four timeframes together</li>
-              <li>Categories lets you hide or delete a whole category</li>
+              <li>Manage Categories lets you hide or delete a whole category</li>
             </ul>
           </div>
         </div>
@@ -1890,7 +1825,7 @@ const OperationalPerformance = () => {
         {!isInvestorView && (
           <button onClick={() => setManageCats(true)} title="Hide or delete a category"
             style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
-            <Settings2 size={13} /> Categories
+            <Settings2 size={13} /> Manage Categories
           </button>
         )}
       </div>
@@ -1898,7 +1833,7 @@ const OperationalPerformance = () => {
       {!activeCategory ? (
         <div style={{ ...cardS, textAlign: "center", padding: "50px 20px" }}>
           <p style={{ fontSize: "14.5px", color: T.body, margin: "0 0 12px" }}>Every category is hidden right now.</p>
-          <button onClick={() => setManageCats(true)} style={btnPrimary}><Settings2 size={13} /> Manage categories</button>
+          <button onClick={() => setManageCats(true)} style={btnPrimary}><Settings2 size={13} /> Manage Categories</button>
         </div>
       ) : (
       <>
@@ -1932,8 +1867,7 @@ const OperationalPerformance = () => {
                       </div>
                     );
                   })}
-                  <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))}
-                    style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
+                  <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
                 </div>
               </>
             )}
@@ -1981,8 +1915,6 @@ const OperationalPerformance = () => {
 
                   return (
                     <th key={key} style={{ ...thS, width: widths[key] }}>
-                      {/* Every header starts at the top; two-line ones simply
-                          run further down rather than pushing the rest around. */}
                       <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: align }}>
                         <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
                           <span style={{ display: "inline-flex", flexDirection: "column", alignItems: align, lineHeight: 1.3 }}>
@@ -2033,7 +1965,7 @@ const OperationalPerformance = () => {
                   <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
                     <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>Actions</span>
-                      <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, and notes for this KPI." />
+                      <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, notes, and delete for this KPI." />
                     </span>
                     <span style={{ height: "23px" }} />
                   </div>
@@ -2095,6 +2027,9 @@ const OperationalPerformance = () => {
                             style={iconBtn(status.color)} title={`Add action (${status.label})`}><Plus size={16} /></button>
                         )}
                         <button onClick={() => setNotesKpi(kpi)} style={iconBtn(kpi.notes ? T.amber : T.body)} title="Notes"><StickyNote size={16} /></button>
+                        {!isInvestorView && (
+                          <button onClick={() => deleteKpi(kpi.id)} style={iconBtn(T.red)} title="Delete KPI"><Trash2 size={16} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -2114,7 +2049,7 @@ const OperationalPerformance = () => {
           </span>
         </div>
       </div>
-      </>
+      </> 
       )}
 
       {infoKpi && <KpiInfoModal kpi={infoKpi} readOnly={isInvestorView} onClose={() => setInfoKpi(null)}
