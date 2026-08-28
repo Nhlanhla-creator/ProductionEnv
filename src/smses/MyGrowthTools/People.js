@@ -474,28 +474,6 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better" },
 ];
 
-const makeValueLabelPlugin = (kpi, enabled) => ({
-  id: "seriesValueLabels",
-  afterDatasetsDraw(chart) {
-    if (!enabled) return;
-    const { ctx } = chart;
-    ctx.save();
-    ctx.font = "600 10.5px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    chart.data.datasets.forEach((ds, di) => {
-      const meta = chart.getDatasetMeta(di);
-      if (meta.hidden) return;
-      meta.data.forEach((el, i) => {
-        const raw = ds.data[i];
-        if (raw === null || raw === undefined) return;
-        ctx.fillStyle = ds.__labelColor || T.body;
-        ctx.fillText(fmtValue(raw, kpi, { signed: !!ds.__signed, bare: true }), el.x, el.y - 8);
-      });
-    });
-    ctx.restore();
-  },
-});
-
 /* ─── KPI info popup ────────────────────────────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
@@ -557,16 +535,6 @@ const localAnalysis = (kpi, period, v, fy) => {
       kpi.benchmark !== null ? `The recommended benchmark for this measure is ${fmtValue(kpi.benchmark, kpi)}.` : "No published benchmark for this measure — judge it against your own history.",
       `${DIRECTIONS.find((d) => d.value === kpi.direction)?.label} for this KPI.`,
     ],
-    trends: status.key === "green"
-      ? ["Holding inside tolerance, which points to a stable people position.",
-         "Watch the month-to-month spread rather than the headline."]
-      : status.key === "amber"
-        ? ["Drifted outside tolerance but not far — this reads as drift rather than a break.",
-           "Two or three more months at this level would move it into critical territory."]
-        : status.key === "red"
-          ? ["The gap is wide enough that a single-month correction is unlikely to close it.",
-             "Treat the trend as broken until two consecutive months recover."]
-          : ["No target captured for this period, so there is nothing to measure the actual against."],
     issues: status.key === "green" ? ["No material issue at this timeframe."]
       : status.key === "none" ? ["Capture a target so performance can be judged rather than just reported."]
       : [`Target is not being met${variance === null ? "" : ` — off by ${fmtValue(Math.abs(variance), kpi)}`}.`,
@@ -595,13 +563,6 @@ const summaryAnalysis = (kpi, fy) => {
       ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no target)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
       `${withData.length} of ${rows.length} timeframes have both an actual and a target.`,
     ],
-    trends: withData.length < 2 ? ["Not enough timeframes with a target to compare the short term against the long."]
-      : [ mth?.status.key !== "none" && yr?.status.key !== "none" && mth.status.key !== yr.status.key
-            ? `The month and the year disagree — ${mth.status.label.toLowerCase()} this month against ${yr.status.label.toLowerCase()} for the year, so treat one as the outlier.`
-            : "Short and long timeframes tell the same story, which makes the signal more trustworthy.",
-          greens.length === withData.length ? "Every timeframe is inside tolerance."
-            : reds.length === withData.length ? "Every timeframe is critical — this is structural, not a bad month."
-            : "The picture is mixed; the shorter timeframe moves first, so watch it for the turn." ],
     issues: reds.length === 0 && withData.every((r) => r.status.key === "green") ? ["No timeframe is outside tolerance."]
       : [...reds.map((r) => `${r.label} is critical${r.variance === null ? "" : ` — off by ${fmtValue(Math.abs(r.variance), kpi)}`}.`),
          ...withData.filter((r) => r.status.key === "amber").map((r) => `${r.label} needs attention.`)],
@@ -636,7 +597,7 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         });
         const d = res?.data;
         if (d?.observations && d?.opportunities) {
-          setAnalysis({ observations: d.observations || [], trends: d.trends || [], issues: d.issues || [], opportunities: d.opportunities || [] });
+          setAnalysis({ observations: d.observations || [], issues: d.issues || [], opportunities: d.opportunities || [] });
           setSource("ai"); return;
         }
         throw new Error("The function replied, but not in the expected shape.");
@@ -662,10 +623,10 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
         <span style={{ fontSize: "12px", color: source === "ai" ? T.muted : T.amber, display: "flex", alignItems: "flex-start", gap: "6px", lineHeight: 1.5 }}>
           <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
-          {loading ? "Reviewing…" : source === "ai" ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}`
+          {loading ? "Reviewing…" : source === "ai" ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}` 
             : <span>Rules-based summary built from your figures. <span style={{ color: T.faint }}>{reason}</span></span>}
         </span>
         <button onClick={build} disabled={loading} style={{ ...btnQuiet, padding: "3px 9px", fontSize: "12.5px", opacity: loading ? 0.5 : 1 }}>
@@ -676,7 +637,6 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         : analysis && (
         <>
           <Section label="Observations" items={analysis.observations} color={T.accent} />
-          <Section label="Trends" items={analysis.trends} color={T.blue} />
           <Section label="Issues" items={analysis.issues} color={T.red} />
           <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
         </>
@@ -698,7 +658,7 @@ const CHART_VERSION = 2;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
   actualType: "bar", budgetType: "scatter", varianceType: "scatter",
-  actualColor: "#1e40af", budgetColor: "#4a352f", showValues: true, showAxis: false,
+  actualColor: "#1e40af", budgetColor: "#4a352f", showValues: false, showAxis: false,
 };
 const CHART_TYPES = [
   { value: "bar", label: "Bars" }, { value: "line", label: "Line" },
@@ -815,8 +775,8 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const key = (label, swatch) => (<span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: T.body }}>{swatch}{label}</span>);
 
   return (
-    <Modal title={`${kpi.name} — Trend`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
-      footer={<>
+    <Modal title={`${kpi.name} — (${kpi.units})`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
+      footer={<> 
         <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
         <div style={{ flex: 1 }} />
         <button onClick={onClose} style={btnPrimary}>Close</button>
@@ -874,10 +834,10 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
           </span>
         </div>
         <div style={{ height: "112px", marginBottom: "-16px" }}>
-          <Chart type="bar" data={varianceData} options={varianceOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+          <Chart type="bar" data={varianceData} options={varianceOptions} />
         </div>
         <div style={{ height: "300px" }}>
-          <Chart type="bar" data={mainData} options={mainOptions} plugins={[makeValueLabelPlugin(kpi, prefs.showValues)]} />
+          <Chart type="bar" data={mainData} options={mainOptions} />
         </div>
       </div>
 
@@ -891,7 +851,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       <div style={{ ...cardS, marginBottom: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-            <StickyNote size={13} /> Note for {PERIOD_LABEL[period].toLowerCase()}
+            <StickyNote size={13} /> Notes
           </span>
           <span style={{ fontSize: "11.5px", color: noteState === "saved" ? T.green : T.muted }}>
             {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved" : "Saves automatically"}
@@ -1013,7 +973,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
 
   return (
     <Modal title="Add Action" subtitle={`${kpi.name} · ${PERIOD_LABEL[period]}`} icon={<Plus size={17} />} onClose={onClose} width={640}
-      footer={<>
+      footer={<> 
         <button onClick={onClose} style={btnGhost}>Cancel</button>
         <button onClick={save} disabled={saving || !form.title.trim()} style={{ ...btnPrimary, opacity: saving || !form.title.trim() ? 0.6 : 1 }}>
           {saving ? "Saving..." : "Save Action"}</button>
@@ -1089,7 +1049,7 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   return (
     <Modal title={`Notes — ${kpi.name}`} icon={<StickyNote size={17} />} onClose={onClose}
-      footer={<>
+      footer={<> 
         <span style={{ flex: 1, fontSize: "12.5px", color: state === "saved" ? T.green : T.muted, textAlign: "left" }}>
           {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Saves automatically"}
         </span>
@@ -1097,6 +1057,906 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
       </>}>
       <label style={labelS}>Context, anomalies or anything worth remembering about this KPI</label>
       <textarea rows="9" value={notes} readOnly={readOnly} onChange={(e) => change(e.target.value)} style={{ ...inputS, resize: "vertical" }} />
+    </Modal>
+  );
+};
+
+/* ─── Enhanced table hook ───────────────────────────────────────────────── */
+function useEnhancedTable(initialCols, dataRows) {
+  const [colOrder, setColOrder] = useState(initialCols.map(c => c.key));
+  const [widths, setWidths] = useState(() => Object.fromEntries(initialCols.map(c => [c.key, c.width || 140])));
+  const [filters, setFilters] = useState(() => Object.fromEntries(initialCols.map(c => [c.key, ""])));
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" });
+
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
+  };
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = widths[key];
+    const onMove = (ev) => setWidths(p => ({ ...p, [key]: Math.max(80, startW + (ev.clientX - startX)) }));
+    const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+  };
+
+  const getFilterOptions = (key) => {
+    const vals = dataRows.map(row => String(row[key] || "").trim()).filter(v => v !== "");
+    return ["All", ...Array.from(new Set(vals)).sort()];
+  };
+
+  const filteredData = useMemo(() => {
+    return dataRows.filter(row => {
+      return colOrder.every(key => {
+        const filterVal = filters[key] || "";
+        if (!filterVal || filterVal === "All") return true;
+        const cellVal = String(row[key] || "").trim();
+        return cellVal === filterVal;
+      });
+    });
+  }, [dataRows, filters, colOrder]);
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig.key) return filteredData;
+    return [...filteredData].sort((a,b) => {
+      const av = a[sortConfig.key] ?? "";
+      const bv = b[sortConfig.key] ?? "";
+      if (typeof av === "number" && typeof bv === "number") return sortConfig.dir === "asc" ? av - bv : bv - av;
+      return sortConfig.dir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+  }, [filteredData, sortConfig]);
+
+  return {
+    colOrder, widths, filters, sortConfig,
+    setFilters, setSortConfig, startResize,
+    handleDragStart, handleDragOver, handleDrop,
+    getFilterOptions, sortedData,
+  };
+}
+
+/* ─── Shared FilterDropdown component ──────────────────────────────────── */
+const FilterDropdown = ({ options, value, onChange, onClose }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        onClose?.();
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "All" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
+      >
+        <SlidersHorizontal size={13} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
+              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── Enhanced table renderer ──────────────────────────────────────────── */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Panels — the parts of People Performance that aren't KPI rows.
+   All panels now use the enhanced table with filters, resize, and drag-drop.
+   ════════════════════════════════════════════════════════════════════════ */
+const BROWN = ["#3E2723", "#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"];
+
+const TrackingPanel = ({ docs, readOnly }) => {
+  const employees = docs.track?.employees || [];
+  
+  const cols = [
+    { key: "employee", label: "Employee", tip: "Name of the employee.", width: 180 },
+    { key: "skillsGap", label: "Skills Gap", tip: "Skills gap assessment status.", width: 140 },
+    { key: "idp", label: "IDP", tip: "Individual Development Plan status.", width: 140 },
+    { key: "midTermReview", label: "Mid-term Review", tip: "Mid-term review status.", width: 140 },
+    { key: "annualReview", label: "Annual Review", tip: "Annual review status.", width: 140 },
+  ];
+
+  const rows = employees.map(e => ({
+    employee: e.employee || "—",
+    skillsGap: e.skillsGap?.status === "Done" ? "✅ Done" : "❌ Not done",
+    idp: e.idp?.status === "Done" ? "✅ Done" : "❌ Not done",
+    midTermReview: e.midTermReview?.status === "Done" ? "✅ Done" : "❌ Not done",
+    annualReview: e.annualReview?.status === "Done" ? "✅ Done" : "❌ Not done",
+  }));
+
+  const doneCount = (key) => employees.filter((e) => e[key]?.status === "Done").length;
+  const stages = [
+    { key: "skillsGap", label: "Skills gap" },
+    { key: "idp", label: "IDP" },
+    { key: "midTermReview", label: "Mid-term review" },
+    { key: "annualReview", label: "Annual review" },
+  ];
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+  
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Employee Development Tracking</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>Skills gap, IDP and reviews — target is 100% completion</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div style={{ ...cardS, padding: "11px 14px", flex: "1 1 130px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Employees</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, marginTop: "3px" }}>{employees.length}</div>
+        </div>
+        {stages.map((s) => {
+          const n = doneCount(s.key);
+          const all = employees.length > 0 && n === employees.length;
+          return (
+            <div key={s.key} style={{ ...cardS, padding: "11px 14px", flex: "1 1 130px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{s.label}</div>
+              <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "3px", color: employees.length === 0 ? T.faint : all ? T.green : T.amber }}>
+                {employees.length ? `${n} of ${employees.length}` : "—"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {rows.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+          <p style={{ margin: 0, fontSize: "0.9rem" }}>No employees tracked yet. Use the <strong>Add Data</strong> button to start tracking.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ background: T.header, color: "#fff" }}>
+                {colOrder.map((key) => {
+                  const col = cols.find(c => c.key === key);
+                  if (!col) return null;
+                  const currentFilter = filters[key] || "All";
+                  const filterOpts = getFilterOptions(key);
+                  return (
+                    <th
+                      key={key}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, key)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, key)}
+                      style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                    >
+                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                          <InfoTip text={col.tip} light />
+                          <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                            style={iconBtn("rgba(255,255,255,0.6)")}>
+                            {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                          </button>
+                          <FilterDropdown
+                            options={filterOpts}
+                            value={currentFilter}
+                            onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                            onClose={() => {}}
+                          />
+                        </div>
+                      </div>
+                      <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedData.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                  {colOrder.map((key) => (
+                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {row[key] || "-"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
+  const exec = docs.exec?.executionData || {};
+  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+
+  const loadStatus = (v) => {
+    if (v === "1" || v === 1) return { text: "Low", color: T.green, bg: T.greenBg };
+    if (v === "2" || v === 2) return { text: "Medium", color: T.amber, bg: T.amberBg };
+    if (v === "3" || v === 3) return { text: "High", color: T.red, bg: T.redBg };
+    if (v === "4" || v === 4) return { text: "Critical", color: T.red, bg: T.redBg };
+    return { text: "—", color: T.faint, bg: T.raised };
+  };
+
+  const cols = months.map((m) => ({
+    key: m.key,
+    label: m.label,
+    tip: `Founder operational load for ${m.long}`,
+    width: 70,
+  }));
+
+  const rows = [{
+    ...Object.fromEntries(months.map((m) => {
+      const s = loadStatus(exec.founderLoad?.[m.month]);
+      return [m.key, s.text];
+    }))
+  }];
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+  
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Founder Operational Load</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
+        </div>
+      </div>
+      
+      <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+          <thead>
+            <tr style={{ background: T.header, color: "#fff" }}>
+              {colOrder.map((key) => {
+                const col = cols.find(c => c.key === key);
+                if (!col) return null;
+                const currentFilter = filters[key] || "All";
+                const filterOpts = getFilterOptions(key);
+                return (
+                  <th
+                    key={key}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, key)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, key)}
+                    style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                  >
+                    <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                        <InfoTip text={col.tip} light />
+                        <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                          style={iconBtn("rgba(255,255,255,0.6)")}>
+                          {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                        </button>
+                        <FilterDropdown
+                          options={filterOpts}
+                          value={currentFilter}
+                          onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                          onClose={() => {}}
+                        />
+                      </div>
+                    </div>
+                    <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedData.map((row, i) => (
+              <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                {colOrder.map((key) => {
+                  const val = row[key] || "—";
+                  const s = loadStatus(exec.founderLoad?.[months.find(m => m.key === key)?.month]);
+                  return (
+                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, textAlign: "center" }}>
+                      <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>{val}</div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
+        Low means the founder is on strategy and operations run without them. Critical means the business stops when they do. Aim for Low to Medium.
+      </p>
+    </div>
+  );
+};
+
+const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
+  const exec = docs.exec?.executionData || {};
+  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+
+  const spanStatus = (v) => {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return { text: "—", color: T.faint, bg: T.raised };
+    if (n >= 5 && n <= 8) return { text: n.toFixed(1), color: T.green, bg: T.greenBg };
+    if (n < 3 || n > 12) return { text: n.toFixed(1), color: T.red, bg: T.redBg };
+    return { text: n.toFixed(1), color: T.amber, bg: T.amberBg };
+  };
+
+  const cols = months.map((m) => ({
+    key: m.key,
+    label: m.label,
+    tip: `Average span of control for ${m.long}`,
+    width: 70,
+  }));
+
+  const rows = [{
+    ...Object.fromEntries(months.map((m) => {
+      const s = spanStatus(exec.spanOfControl?.[m.month]);
+      return [m.key, s.text];
+    }))
+  }];
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+  
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Average Span of Control</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
+        </div>
+      </div>
+      
+      <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+          <thead>
+            <tr style={{ background: T.header, color: "#fff" }}>
+              {colOrder.map((key) => {
+                const col = cols.find(c => c.key === key);
+                if (!col) return null;
+                const currentFilter = filters[key] || "All";
+                const filterOpts = getFilterOptions(key);
+                return (
+                  <th
+                    key={key}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, key)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, key)}
+                    style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                  >
+                    <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                        <InfoTip text={col.tip} light />
+                        <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                          style={iconBtn("rgba(255,255,255,0.6)")}>
+                          {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                        </button>
+                        <FilterDropdown
+                          options={filterOpts}
+                          value={currentFilter}
+                          onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                          onClose={() => {}}
+                        />
+                      </div>
+                    </div>
+                    <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedData.map((row, i) => (
+              <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                {colOrder.map((key) => {
+                  const val = row[key] || "—";
+                  const s = spanStatus(exec.spanOfControl?.[months.find(m => m.key === key)?.month]);
+                  return (
+                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, textAlign: "center" }}>
+                      <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>{val}</div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
+        Five to eight direct reports is the working range. Below three is top-heavy; above twelve and supervision stops being real.
+      </p>
+    </div>
+  );
+};
+
+const RecordsTermPanel = ({ docs, readOnly }) => {
+  const terms = docs.term?.entries || [];
+
+  const byReason = terms.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
+  const reasons = Object.keys(byReason);
+
+  const cols = [
+    { key: "name", label: "Employee", tip: "Name of the employee who left.", width: 180 },
+    { key: "dateStarted", label: "Started", tip: "Date the employee started.", width: 120 },
+    { key: "dateEnded", label: "Ended", tip: "Date the employee left.", width: 120 },
+    { key: "reason", label: "Reason", tip: "Reason for termination.", width: 150 },
+  ];
+
+  const rows = terms.map(e => ({
+    name: e.name || "—",
+    dateStarted: e.dateStarted || "—",
+    dateEnded: e.dateEnded || "—",
+    reason: e.reason || "—",
+  }));
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+  
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Termination Records</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>{terms.length} exits recorded · {reasons.length} distinct reasons</div>
+        </div>
+      </div>
+      
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
+        {rows.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+            <p style={{ margin: 0, fontSize: "0.9rem" }}>No termination records yet. Use the <strong>Add Data</strong> button to start tracking.</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+                <thead>
+                  <tr style={{ background: T.header, color: "#fff" }}>
+                    {colOrder.map((key) => {
+                      const col = cols.find(c => c.key === key);
+                      if (!col) return null;
+                      const currentFilter = filters[key] || "All";
+                      const filterOpts = getFilterOptions(key);
+                      return (
+                        <th
+                          key={key}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, key)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, key)}
+                          style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                        >
+                          <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                              <InfoTip text={col.tip} light />
+                              <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                                style={iconBtn("rgba(255,255,255,0.6)")}>
+                                {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                              </button>
+                              <FilterDropdown
+                                options={filterOpts}
+                                value={currentFilter}
+                                onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                                onClose={() => {}}
+                              />
+                            </div>
+                          </div>
+                          <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedData.map((row, i) => (
+                    <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                      {colOrder.map((key) => (
+                        <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {key === "reason" ? (
+                            <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{row[key]}</span>
+                          ) : row[key]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {reasons.length > 0 && (
+              <div>
+                <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Reasons for leaving</div>
+                <div style={{ height: "230px" }}>
+                  <Pie data={{ 
+                    labels: reasons, 
+                    datasets: [{ 
+                      data: reasons.map((r) => byReason[r]), 
+                      backgroundColor: BROWN, 
+                      borderWidth: 0 
+                    }] 
+                  }}
+                    options={{ responsive: true, maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+                        datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
+                        tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8, 
+                          callbacks: { label: (c) => `${c.label}: ${c.raw} (${terms.length ? ((c.raw / terms.length) * 100).toFixed(1) : 0}%)` } },
+                      } }}
+                    plugins={[ChartDataLabels]} />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const RecordsHirePanel = ({ docs, readOnly }) => {
+  const hires = docs.hire?.entries || [];
+
+  const byType = {
+    Permanent: hires.filter((e) => e.contractType === "Permanent").length,
+    Contract: hires.filter((e) => e.contractType === "Contract").length,
+    Internship: hires.filter((e) => e.contractType === "Internship").length,
+  };
+  const types = Object.keys(byType).filter((t) => byType[t] > 0);
+
+  const cols = [
+    { key: "name", label: "Employee", tip: "Name of the new hire.", width: 180 },
+    { key: "dateStarted", label: "Started", tip: "Date the employee started.", width: 120 },
+    { key: "contractType", label: "Contract", tip: "Type of contract.", width: 120 },
+    { key: "endDate", label: "Ends", tip: "End date for fixed-term contracts.", width: 120 },
+  ];
+
+  const rows = hires.map(e => ({
+    name: e.name || "—",
+    dateStarted: e.dateStarted || "—",
+    contractType: e.contractType || "—",
+    endDate: e.endDate || "—",
+  }));
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+  
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>New Hire Records</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>
+            {hires.length} hires · {byType.Permanent} permanent, {byType.Contract} contract, {byType.Internship} internship
+          </div>
+        </div>
+      </div>
+      
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
+        {rows.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+            <p style={{ margin: 0, fontSize: "0.9rem" }}>No new hire records yet. Use the <strong>Add Data</strong> button to start tracking.</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+                <thead>
+                  <tr style={{ background: T.header, color: "#fff" }}>
+                    {colOrder.map((key) => {
+                      const col = cols.find(c => c.key === key);
+                      if (!col) return null;
+                      const currentFilter = filters[key] || "All";
+                      const filterOpts = getFilterOptions(key);
+                      return (
+                        <th
+                          key={key}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, key)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, key)}
+                          style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
+                        >
+                          <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                              <InfoTip text={col.tip} light />
+                              <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
+                                style={iconBtn("rgba(255,255,255,0.6)")}>
+                                {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                              </button>
+                              <FilterDropdown
+                                options={filterOpts}
+                                value={currentFilter}
+                                onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                                onClose={() => {}}
+                              />
+                            </div>
+                          </div>
+                          <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedData.map((row, i) => (
+                    <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                      {colOrder.map((key) => (
+                        <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {key === "contractType" ? (
+                            <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{row[key]}</span>
+                          ) : row[key]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {types.length > 0 && (
+              <div>
+                <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Hires by contract type</div>
+                <div style={{ height: "230px" }}>
+                  <Pie data={{ 
+                    labels: types, 
+                    datasets: [{ 
+                      data: types.map((t) => byType[t]), 
+                      backgroundColor: [T.green, T.amber, "#6d28d9"], 
+                      borderWidth: 0 
+                    }] 
+                  }}
+                    options={{ responsive: true, maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+                        datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
+                        tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8, 
+                          callbacks: { label: (c) => `${c.label}: ${c.raw} (${hires.length ? ((c.raw / hires.length) * 100).toFixed(1) : 0}%)` } },
+                      } }}
+                    plugins={[ChartDataLabels]} />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ─── Records editor — the register-style data the KPI wizard can't hold ──── */
+const REASONS = ["Performance","Resignation","Redundancy","Misconduct","Retirement","Other"];
+const CONTRACT_TYPES = ["Permanent","Contract","Internship"];
+
+const RecordsModal = ({ mode, docs, onClose, onSave }) => {
+  const [employees, setEmployees] = useState(() => [...(docs.track?.employees || [])]);
+  const [terms, setTerms] = useState(() => [...(docs.term?.entries || [])]);
+  const [hires, setHires] = useState(() => [...(docs.hire?.entries || [])]);
+  const [saving, setSaving] = useState(false);
+  const [newTerm, setNewTerm] = useState({ name: "", dateStarted: "", dateEnded: "", reason: "", customReason: "" });
+  const [newHire, setNewHire] = useState({ name: "", dateStarted: "", contractType: "Permanent", endDate: "" });
+  const [exec, setExec] = useState(() => ({ ...(docs.exec?.executionData || {}) }));
+
+  const title = mode === "tracking" ? "Employee development tracking"
+    : mode === "capacityLoad" ? "Founder Operational Load"
+    : mode === "capacitySpan" ? "Average Span of Control"
+    : mode === "recordsTerm" ? "Termination Records"
+    : mode === "recordsHire" ? "New Hire Records"
+    : "People records";
+
+  const commit = async () => {
+    setSaving(true);
+    if (mode === "tracking") await onSave("track", { employees });
+    if (mode === "capacityLoad") await onSave("exec", { executionData: { ...docs.exec?.executionData, founderLoad: exec.founderLoad } });
+    if (mode === "capacitySpan") await onSave("exec", { executionData: { ...docs.exec?.executionData, spanOfControl: exec.spanOfControl } });
+    if (mode === "recordsTerm") await onSave("term", { entries: terms });
+    if (mode === "recordsHire") await onSave("hire", { entries: hires });
+    setSaving(false); onClose();
+  };
+
+  const numField = (label, key) => (
+    <div key={key}>
+      <label style={labelS}>{label}</label>
+      <input type="number" min="0" value={exec[key] ?? ""} placeholder="0"
+        onChange={(e) => setExec({ ...exec, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
+    </div>
+  );
+
+  const capacityEditor = (label, key, min, max) => (
+    <div>
+      <label style={labelS}>{label}</label>
+      <input type="number" min={min} max={max} value={exec[key] ?? ""} placeholder="—"
+        onChange={(e) => setExec({ ...exec, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
+    </div>
+  );
+
+  return (
+    <Modal title={title} icon={<Users size={17} />} onClose={onClose} width={860}
+      footer={<> 
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Saving…" : "Save"}</button>
+      </>}>
+
+      {mode === "tracking" && (
+        <>
+          <button onClick={() => setEmployees([...employees, { id: uid(), employee: `Employee ${employees.length + 1}`,
+            skillsGap: { date: "", status: "Not Done" }, idp: { date: "", status: "Not Done" },
+            midTermReview: { date: "", status: "Not Done" }, annualReview: { date: "", status: "Not Done" } }])}
+            style={{ ...btnGhost, marginBottom: "14px" }}><Plus size={13} /> Add employee</button>
+
+          {employees.length === 0 && <div style={{ textAlign: "center", padding: "24px", color: T.muted, fontSize: "13.5px" }}>No employees yet.</div>}
+
+          {employees.map((emp, i) => (
+            <div key={emp.id || i} style={{ ...cardS, marginBottom: "12px" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "12px" }}>
+                <input value={emp.employee} placeholder="Employee name"
+                  onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], employee: e.target.value }; setEmployees(n); }}
+                  style={{ ...inputS, flex: 1, fontWeight: 600 }} />
+                <button onClick={() => setEmployees(employees.filter((_, x) => x !== i))}
+                  style={{ ...btnGhost, padding: "9px 11px", color: T.red, borderColor: `${T.red}55` }}><Trash2 size={13} /></button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" }}>
+                {[["skillsGap","Skills gap"],["idp","IDP"],["midTermReview","Mid-term review"],["annualReview","Annual review"]].map(([k, l]) => (
+                  <div key={k}>
+                    <label style={labelS}>{l}</label>
+                    <input type="date" value={emp[k]?.date || ""} 
+                      onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], [k]: { ...(n[i][k] || {}), date: e.target.value } }; setEmployees(n); }} 
+                      style={{ ...inputS, marginBottom: "6px" }} />
+                    <select value={emp[k]?.status || "Not Done"} 
+                      onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], [k]: { ...(n[i][k] || {}), status: e.target.value } }; setEmployees(n); }} 
+                      style={selectS}>
+                      <option value="Done">Done</option><option value="Not Done">Not done</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {(mode === "capacityLoad" || mode === "capacitySpan") && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "14px", fontSize: "12.5px", color: T.body }}>
+          {mode === "capacityLoad" ? "1 = Low, 2 = Medium, 3 = High, 4 = Critical" : "Number of direct reports per manager"}
+        </div>
+      )}
+
+      {mode === "capacityLoad" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
+          {Array.from({ length: 12 }, (_, i) => capacityEditor(MONTHS[i], i, 1, 4))}
+        </div>
+      )}
+
+      {mode === "capacitySpan" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
+          {Array.from({ length: 12 }, (_, i) => capacityEditor(MONTHS[i], i, 0, 20))}
+        </div>
+      )}
+
+      {mode === "recordsTerm" && (
+        <>
+          <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+              <div><label style={labelS}>Employee</label>
+                <input value={newTerm.name} onChange={(e) => setNewTerm({ ...newTerm, name: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Started</label>
+                <input type="date" value={newTerm.dateStarted} onChange={(e) => setNewTerm({ ...newTerm, dateStarted: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Ended</label>
+                <input type="date" value={newTerm.dateEnded} onChange={(e) => setNewTerm({ ...newTerm, dateEnded: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Reason</label>
+                <select value={newTerm.reason} onChange={(e) => setNewTerm({ ...newTerm, reason: e.target.value })} style={selectS}>
+                  <option value="">Select…</option>
+                  {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select></div>
+              {newTerm.reason === "Other" && (
+                <div><label style={labelS}>Specify</label>
+                  <input value={newTerm.customReason} onChange={(e) => setNewTerm({ ...newTerm, customReason: e.target.value })} style={inputS} /></div>
+              )}
+            </div>
+            <button 
+              onClick={() => {
+                const reason = newTerm.reason === "Other" ? newTerm.customReason.trim() : newTerm.reason;
+                if (!newTerm.name.trim() || !reason || !newTerm.dateEnded) return;
+                setTerms([...terms, { id: uid(), name: newTerm.name.trim(), dateStarted: newTerm.dateStarted,
+                  dateEnded: newTerm.dateEnded, reason, dateAdded: new Date().toISOString() }]);
+                setNewTerm({ name: "", dateStarted: "", dateEnded: "", reason: "", customReason: "" });
+              }}
+              style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Plus size={13} /> Add termination</button>
+          </div>
+          {terms.map((e, i) => (
+            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px",
+              borderBottom: `1px solid ${T.lineSoft}`, fontSize: "13.5px", color: T.body }}>
+              <span style={{ flex: 1, color: T.ink }}>{e.name}</span>
+              <span style={{ color: T.muted, fontSize: "12.5px" }}>{e.dateEnded}</span>
+              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{e.reason}</span>
+              <button onClick={() => setTerms(terms.filter((_, x) => x !== i))} 
+                style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "4px" }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </>
+      )}
+
+      {mode === "recordsHire" && (
+        <>
+          <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+              <div><label style={labelS}>Employee</label>
+                <input value={newHire.name} onChange={(e) => setNewHire({ ...newHire, name: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Started</label>
+                <input type="date" value={newHire.dateStarted} onChange={(e) => setNewHire({ ...newHire, dateStarted: e.target.value })} style={inputS} /></div>
+              <div><label style={labelS}>Contract type</label>
+                <select value={newHire.contractType} onChange={(e) => setNewHire({ ...newHire, contractType: e.target.value })} style={selectS}>
+                  {CONTRACT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select></div>
+              {newHire.contractType !== "Permanent" && (
+                <div><label style={labelS}>Ends</label>
+                  <input type="date" value={newHire.endDate} onChange={(e) => setNewHire({ ...newHire, endDate: e.target.value })} style={inputS} /></div>
+              )}
+            </div>
+            <button 
+              onClick={() => {
+                if (!newHire.name.trim() || !newHire.dateStarted) return;
+                setHires([...hires, { id: uid(), name: newHire.name.trim(), dateStarted: newHire.dateStarted,
+                  contractType: newHire.contractType, endDate: newHire.endDate || null, dateAdded: new Date().toISOString() }]);
+                setNewHire({ name: "", dateStarted: "", contractType: "Permanent", endDate: "" });
+              }}
+              style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Plus size={13} /> Add hire</button>
+          </div>
+          {hires.map((e, i) => (
+            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px",
+              borderBottom: `1px solid ${T.lineSoft}`, fontSize: "13.5px", color: T.body }}>
+              <span style={{ flex: 1, color: T.ink }}>{e.name}</span>
+              <span style={{ color: T.muted, fontSize: "12.5px" }}>{e.dateStarted}</span>
+              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{e.contractType}</span>
+              <button onClick={() => setHires(hires.filter((_, x) => x !== i))} 
+                style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "4px" }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </>
+      )}
     </Modal>
   );
 };
@@ -1184,7 +2044,7 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   return (
     <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />}
       onClose={onClose} width={800}
-      footer={<>
+      footer={<> 
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
           {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}
@@ -1314,7 +2174,7 @@ const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
   return (
     <Modal title="Add KPI" subtitle="A custom people metric you capture by hand each month" icon={<Sparkles size={17} />}
       onClose={onClose} width={720}
-      footer={<>
+      footer={<> 
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <div style={{ flex: 1 }} />
         <button onClick={commit} disabled={!canSave || saving} style={{ ...btnPrimary, opacity: canSave && !saving ? 1 : 0.5 }}>
@@ -1366,13 +2226,13 @@ const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
       </div>
       <div style={{ marginBottom: "14px" }}>
         <label style={labelS}>What does this KPI mean? *</label>
-        <textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })}
+        <textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })} 
           style={{ ...inputS, resize: "vertical" }} placeholder="In plain words — anyone reading the dashboard should get it from this sentence." />
       </div>
       <div>
         <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}><Sigma size={13} /> How is this KPI measured? *</label>
-        <textarea rows="4" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })}
-          style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }}
+        <textarea rows="4" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })} 
+          style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }} 
           placeholder={"=SUM(DaysAbsent) / SUM(WorkingDays) * 100"} />
         <p style={{ fontSize: "12px", color: T.muted, marginTop: "7px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
           <Info size={12} /> Use Excel functions and named ranges — SUM, AVERAGE, COUNTIF, COUNTIFS.
@@ -1386,7 +2246,7 @@ const AddChooser = ({ onPick, onClose }) => (
   <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
       {[
-        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and target figures against the KPIs you already track." },
+        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and target figures against the KPIs you already track, or manage Employee Development, Termination Records, and New Hire Records." },
         { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI", body: "Create a custom people metric under any section or category." },
       ].map((o) => (
         <button key={o.key} onClick={() => onPick(o.key)}
@@ -1404,522 +2264,6 @@ const AddChooser = ({ onPick, onClose }) => (
 );
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Panels — the parts of People Performance that aren't KPI rows.
-   ════════════════════════════════════════════════════════════════════════ */
-const BROWN = ["#3E2723", "#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"];
-
-const TrackingPanel = ({ docs, onEdit, readOnly }) => {
-  const employees = docs.track?.employees || [];
-  const doneCount = (k) => employees.filter((e) => e[k]?.status === "Done").length;
-  const stages = [
-    { key: "skillsGap", label: "Skills gap" },
-    { key: "idp", label: "IDP" },
-    { key: "midTermReview", label: "Mid-term review" },
-    { key: "annualReview", label: "Annual review" },
-  ];
-
-  return (
-    <div style={cardS}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Employee Development Tracking</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>Skills gap, IDP and reviews — target is 100% completion</div>
-        </div>
-        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit tracking</button>}
-      </div>
-
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div style={{ ...cardS, padding: "11px 14px", flex: "1 1 130px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Employees</div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, marginTop: "3px" }}>{employees.length}</div>
-        </div>
-        {stages.map((s) => {
-          const n = doneCount(s.key);
-          const all = employees.length > 0 && n === employees.length;
-          return (
-            <div key={s.key} style={{ ...cardS, padding: "11px 14px", flex: "1 1 130px" }}>
-              <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{s.label}</div>
-              <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "3px", color: employees.length === 0 ? T.faint : all ? T.green : T.amber }}>
-                {employees.length ? `${n} of ${employees.length}` : "—"}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "760px" }}>
-            <thead>
-              <tr>
-                <th style={{ ...panelTh, textAlign: "left" }}>Employee</th>
-                {stages.map((s) => <th key={s.key} style={{ ...panelTh, textAlign: "center" }}>{s.label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {employees.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: "28px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>
-                  No employees tracked yet.
-                </td></tr>
-              ) : employees.map((e, i) => (
-                <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
-                  <td style={{ padding: "9px 12px", fontSize: "13.5px", fontWeight: 600, color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>
-                    {e.employee || "—"}
-                  </td>
-                  {stages.map((s) => {
-                    const done = e[s.key]?.status === "Done";
-                    return (
-                      <td key={s.key} style={{ padding: "9px 12px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px",
-                          color: done ? T.green : T.red }}>
-                          {done ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                          {e[s.key]?.date ? fmtDMY(e[s.key].date) : done ? "Done" : "Not done"}
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const CapacityLoadPanel = ({ docs, fy, onEdit, readOnly }) => {
-  const exec = docs.exec?.executionData || {};
-  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
-
-  const loadStatus = (v) => {
-    if (v === "1" || v === 1) return { text: "Low", color: T.green, bg: T.greenBg };
-    if (v === "2" || v === 2) return { text: "Medium", color: T.amber, bg: T.amberBg };
-    if (v === "3" || v === 3) return { text: "High", color: T.red, bg: T.redBg };
-    if (v === "4" || v === 4) return { text: "Critical", color: T.red, bg: T.redBg };
-    return { text: "—", color: T.faint, bg: T.raised };
-  };
-
-  return (
-    <div style={cardS}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Founder Operational Load</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
-        </div>
-        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit data</button>}
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "760px" }}>
-          <thead>
-            <tr>{months.map((m) => (
-              <th key={m.key} style={{ ...panelTh, textAlign: "center", fontSize: "11px", padding: "7px 4px" }}>{m.label}</th>
-            ))}</tr>
-          </thead>
-          <tbody>
-            <tr>{months.map((m) => {
-              const s = loadStatus(exec.founderLoad?.[m.month]);
-              return (
-                <td key={m.key} style={{ padding: "6px 4px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
-                  <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color,
-                    fontSize: "11.5px", fontWeight: 700 }}>{s.text}</div>
-                </td>
-              );
-            })}</tr>
-          </tbody>
-        </table>
-      </div>
-      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
-        Low means the founder is on strategy and operations run without them. Critical means the business stops when they do. Aim for Low to Medium.
-      </p>
-    </div>
-  );
-};
-
-const CapacitySpanPanel = ({ docs, fy, onEdit, readOnly }) => {
-  const exec = docs.exec?.executionData || {};
-  const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
-
-  const spanStatus = (v) => {
-    const n = parseFloat(v);
-    if (!Number.isFinite(n)) return { text: "—", color: T.faint, bg: T.raised };
-    if (n >= 5 && n <= 8) return { text: n.toFixed(1), color: T.green, bg: T.greenBg };
-    if (n < 3 || n > 12) return { text: n.toFixed(1), color: T.red, bg: T.redBg };
-    return { text: n.toFixed(1), color: T.amber, bg: T.amberBg };
-  };
-
-  return (
-    <div style={cardS}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Average Span of Control</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>FY {fyLabel(fy.startYear, fy.startMonth)}</div>
-        </div>
-        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit data</button>}
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "760px" }}>
-          <thead>
-            <tr>{months.map((m) => (
-              <th key={m.key} style={{ ...panelTh, textAlign: "center", fontSize: "11px", padding: "7px 4px" }}>{m.label}</th>
-            ))}</tr>
-          </thead>
-          <tbody>
-            <tr>{months.map((m) => {
-              const s = spanStatus(exec.spanOfControl?.[m.month]);
-              return (
-                <td key={m.key} style={{ padding: "6px 4px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
-                  <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color,
-                    fontSize: "11.5px", fontWeight: 700 }}>{s.text}</div>
-                </td>
-              );
-            })}</tr>
-          </tbody>
-        </table>
-      </div>
-      <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
-        Five to eight direct reports is the working range. Below three is top-heavy; above twelve and supervision stops being real.
-      </p>
-    </div>
-  );
-};
-
-const RecordsTermPanel = ({ docs, onEdit, readOnly }) => {
-  const terms = docs.term?.entries || [];
-
-  const byReason = terms.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
-  const reasons = Object.keys(byReason);
-
-  const pie = (labels, values, colors, total) => (
-    <div style={{ height: "230px" }}>
-      <Pie data={{ labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] }}
-        options={{ responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
-            datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
-            tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
-              callbacks: { label: (c) => `${c.label}: ${c.raw} (${total ? ((c.raw / total) * 100).toFixed(1) : 0}%)` } },
-          } }}
-        plugins={[ChartDataLabels]} />
-    </div>
-  );
-
-  const table = (headers, rows, empty) => (
-    <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "460px" }}>
-          <thead><tr>{headers.map((h) => <th key={h} style={{ ...panelTh, textAlign: "left" }}>{h}</th>)}</tr></thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={headers.length} style={{ padding: "26px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>{empty}</td></tr>
-            ) : rows}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={cardS}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Termination Records</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>{terms.length} exits recorded · {reasons.length} distinct reasons</div>
-        </div>
-        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
-        {table(["Employee", "Started", "Ended", "Reason"],
-          terms.map((e, i) => (
-            <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
-              <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name || "—"}</td>
-              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted || "—"}</td>
-              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateEnded || "—"}</td>
-              <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{e.reason}</span>
-              </td>
-            </tr>
-          )), "No termination records yet.")}
-        {reasons.length > 0 && (
-          <div>
-            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Reasons for leaving</div>
-            {pie(reasons, reasons.map((r) => byReason[r]), BROWN, terms.length)}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const RecordsHirePanel = ({ docs, onEdit, readOnly }) => {
-  const hires = docs.hire?.entries || [];
-
-  const byType = {
-    Permanent: hires.filter((e) => e.contractType === "Permanent").length,
-    Contract: hires.filter((e) => e.contractType === "Contract").length,
-    Internship: hires.filter((e) => e.contractType === "Internship").length,
-  };
-  const types = Object.keys(byType).filter((t) => byType[t] > 0);
-
-  const pie = (labels, values, colors, total) => (
-    <div style={{ height: "230px" }}>
-      <Pie data={{ labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] }}
-        options={{ responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { position: "bottom", labels: { color: T.body, font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
-            datalabels: { color: "#fff", font: { weight: "bold", size: 12 }, formatter: (v) => (v > 0 ? v : "") },
-            tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
-              callbacks: { label: (c) => `${c.label}: ${c.raw} (${total ? ((c.raw / total) * 100).toFixed(1) : 0}%)` } },
-          } }}
-        plugins={[ChartDataLabels]} />
-    </div>
-  );
-
-  const table = (headers, rows, empty) => (
-    <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: "460px" }}>
-          <thead><tr>{headers.map((h) => <th key={h} style={{ ...panelTh, textAlign: "left" }}>{h}</th>)}</tr></thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={headers.length} style={{ padding: "26px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>{empty}</td></tr>
-            ) : rows}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={cardS}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>New Hire Records</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>
-            {hires.length} hires · {byType.Permanent} permanent, {byType.Contract} contract, {byType.Internship} internship
-          </div>
-        </div>
-        {!readOnly && <button onClick={onEdit} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Pencil size={13} /> Edit records</button>}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px", alignItems: "start" }}>
-        {table(["Employee", "Started", "Contract", "Ends"],
-          hires.map((e, i) => (
-            <tr key={e.id || i} style={{ background: i % 2 ? T.panel : T.bg }}>
-              <td style={{ padding: "9px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}` }}>{e.name}</td>
-              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.dateStarted}</td>
-              <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{e.contractType}</span>
-              </td>
-              <td style={{ padding: "9px 12px", fontSize: "13px", color: T.body, borderBottom: `1px solid ${T.lineSoft}` }}>{e.endDate || "—"}</td>
-            </tr>
-          )), "No new hire records yet.")}
-        {types.length > 0 && (
-          <div>
-            <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "8px" }}>Hires by contract type</div>
-            {pie(types, types.map((t) => byType[t]), [T.green, T.amber, "#6d28d9"], hires.length)}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ─── Records editor — the register-style data the KPI wizard can't hold ──── */
-const REASONS = ["Performance","Resignation","Redundancy","Misconduct","Retirement","Other"];
-const CONTRACT_TYPES = ["Permanent","Contract","Internship"];
-
-const RecordsModal = ({ mode, docs, onClose, onSave }) => {
-  const [employees, setEmployees] = useState(() => [...(docs.track?.employees || [])]);
-  const [terms, setTerms] = useState(() => [...(docs.term?.entries || [])]);
-  const [hires, setHires] = useState(() => [...(docs.hire?.entries || [])]);
-  const [saving, setSaving] = useState(false);
-  const [newTerm, setNewTerm] = useState({ name: "", dateStarted: "", dateEnded: "", reason: "", customReason: "" });
-  const [newHire, setNewHire] = useState({ name: "", dateStarted: "", contractType: "Permanent", endDate: "" });
-  const [exec, setExec] = useState(() => ({ ...(docs.exec?.executionData || {}) }));
-
-  const title = mode === "tracking" ? "Employee development tracking"
-    : mode === "capacityLoad" ? "Founder Operational Load"
-    : mode === "capacitySpan" ? "Average Span of Control"
-    : mode === "recordsTerm" ? "Termination Records"
-    : mode === "recordsHire" ? "New Hire Records"
-    : "People records";
-
-  const commit = async () => {
-    setSaving(true);
-    if (mode === "tracking") await onSave("track", { employees });
-    if (mode === "capacityLoad") await onSave("exec", { executionData: { ...docs.exec?.executionData, founderLoad: exec.founderLoad } });
-    if (mode === "capacitySpan") await onSave("exec", { executionData: { ...docs.exec?.executionData, spanOfControl: exec.spanOfControl } });
-    if (mode === "recordsTerm") await onSave("term", { entries: terms });
-    if (mode === "recordsHire") await onSave("hire", { entries: hires });
-    setSaving(false); onClose();
-  };
-
-  const numField = (label, key) => (
-    <div key={key}>
-      <label style={labelS}>{label}</label>
-      <input type="number" min="0" value={exec[key] ?? ""} placeholder="0"
-        onChange={(e) => setExec({ ...exec, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
-    </div>
-  );
-
-  const capacityEditor = (label, key, min, max) => (
-    <div>
-      <label style={labelS}>{label}</label>
-      <input type="number" min={min} max={max} value={exec[key] ?? ""} placeholder="—"
-        onChange={(e) => setExec({ ...exec, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
-    </div>
-  );
-
-  return (
-    <Modal title={title} icon={<Users size={17} />} onClose={onClose} width={860}
-      footer={<>
-        <button onClick={onClose} style={btnGhost}>Cancel</button>
-        <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
-          {saving ? "Saving…" : "Save"}</button>
-      </>}>
-
-      {mode === "tracking" && (
-        <>
-          <button onClick={() => setEmployees([...employees, { id: uid(), employee: `Employee ${employees.length + 1}`,
-            skillsGap: { date: "", status: "Not Done" }, idp: { date: "", status: "Not Done" },
-            midTermReview: { date: "", status: "Not Done" }, annualReview: { date: "", status: "Not Done" } }])}
-            style={{ ...btnGhost, marginBottom: "14px" }}><Plus size={13} /> Add employee</button>
-
-          {employees.length === 0 && <div style={{ textAlign: "center", padding: "24px", color: T.muted, fontSize: "13.5px" }}>No employees yet.</div>}
-
-          {employees.map((emp, i) => (
-            <div key={emp.id || i} style={{ ...cardS, marginBottom: "12px" }}>
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "12px" }}>
-                <input value={emp.employee} placeholder="Employee name"
-                  onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], employee: e.target.value }; setEmployees(n); }}
-                  style={{ ...inputS, flex: 1, fontWeight: 600 }} />
-                <button onClick={() => setEmployees(employees.filter((_, x) => x !== i))}
-                  style={{ ...btnGhost, padding: "9px 11px", color: T.red, borderColor: `${T.red}55` }}><Trash2 size={13} /></button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" }}>
-                {[["skillsGap","Skills gap"],["idp","IDP"],["midTermReview","Mid-term review"],["annualReview","Annual review"]].map(([k, l]) => (
-                  <div key={k}>
-                    <label style={labelS}>{l}</label>
-                    <input type="date" value={emp[k]?.date || ""}
-                      onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], [k]: { ...(n[i][k] || {}), date: e.target.value } }; setEmployees(n); }}
-                      style={{ ...inputS, marginBottom: "6px" }} />
-                    <select value={emp[k]?.status || "Not Done"}
-                      onChange={(e) => { const n = [...employees]; n[i] = { ...n[i], [k]: { ...(n[i][k] || {}), status: e.target.value } }; setEmployees(n); }}
-                      style={selectS}>
-                      <option value="Done">Done</option><option value="Not Done">Not done</option>
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </>
-      )}
-
-      {(mode === "capacityLoad" || mode === "capacitySpan") && (
-        <div style={{ ...cardS, background: T.panel, marginBottom: "14px", fontSize: "12.5px", color: T.body }}>
-          {mode === "capacityLoad" ? "1 = Low, 2 = Medium, 3 = High, 4 = Critical" : "Number of direct reports per manager"}
-        </div>
-      )}
-
-      {mode === "capacityLoad" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
-          {Array.from({ length: 12 }, (_, i) => capacityEditor(MONTHS[i], i, 1, 4))}
-        </div>
-      )}
-
-      {mode === "capacitySpan" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
-          {Array.from({ length: 12 }, (_, i) => capacityEditor(MONTHS[i], i, 0, 20))}
-        </div>
-      )}
-
-      {mode === "recordsTerm" && (
-        <>
-          <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
-              <div><label style={labelS}>Employee</label>
-                <input value={newTerm.name} onChange={(e) => setNewTerm({ ...newTerm, name: e.target.value })} style={inputS} /></div>
-              <div><label style={labelS}>Started</label>
-                <input type="date" value={newTerm.dateStarted} onChange={(e) => setNewTerm({ ...newTerm, dateStarted: e.target.value })} style={inputS} /></div>
-              <div><label style={labelS}>Ended</label>
-                <input type="date" value={newTerm.dateEnded} onChange={(e) => setNewTerm({ ...newTerm, dateEnded: e.target.value })} style={inputS} /></div>
-              <div><label style={labelS}>Reason</label>
-                <select value={newTerm.reason} onChange={(e) => setNewTerm({ ...newTerm, reason: e.target.value })} style={selectS}>
-                  <option value="">Select…</option>
-                  {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select></div>
-              {newTerm.reason === "Other" && (
-                <div><label style={labelS}>Specify</label>
-                  <input value={newTerm.customReason} onChange={(e) => setNewTerm({ ...newTerm, customReason: e.target.value })} style={inputS} /></div>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                const reason = newTerm.reason === "Other" ? newTerm.customReason.trim() : newTerm.reason;
-                if (!newTerm.name.trim() || !reason || !newTerm.dateEnded) return;
-                setTerms([...terms, { id: uid(), name: newTerm.name.trim(), dateStarted: newTerm.dateStarted,
-                  dateEnded: newTerm.dateEnded, reason, dateAdded: new Date().toISOString() }]);
-                setNewTerm({ name: "", dateStarted: "", dateEnded: "", reason: "", customReason: "" });
-              }}
-              style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Plus size={13} /> Add termination</button>
-          </div>
-          {terms.map((e, i) => (
-            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px",
-              borderBottom: `1px solid ${T.lineSoft}`, fontSize: "13.5px", color: T.body }}>
-              <span style={{ flex: 1, color: T.ink }}>{e.name}</span>
-              <span style={{ color: T.muted, fontSize: "12.5px" }}>{e.dateEnded}</span>
-              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{e.reason}</span>
-              <button onClick={() => setTerms(terms.filter((_, x) => x !== i))}
-                style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "4px" }}><Trash2 size={13} /></button>
-            </div>
-          ))}
-        </>
-      )}
-
-      {mode === "recordsHire" && (
-        <>
-          <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "10px" }}>
-              <div><label style={labelS}>Employee</label>
-                <input value={newHire.name} onChange={(e) => setNewHire({ ...newHire, name: e.target.value })} style={inputS} /></div>
-              <div><label style={labelS}>Started</label>
-                <input type="date" value={newHire.dateStarted} onChange={(e) => setNewHire({ ...newHire, dateStarted: e.target.value })} style={inputS} /></div>
-              <div><label style={labelS}>Contract type</label>
-                <select value={newHire.contractType} onChange={(e) => setNewHire({ ...newHire, contractType: e.target.value })} style={selectS}>
-                  {CONTRACT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select></div>
-              {newHire.contractType !== "Permanent" && (
-                <div><label style={labelS}>Ends</label>
-                  <input type="date" value={newHire.endDate} onChange={(e) => setNewHire({ ...newHire, endDate: e.target.value })} style={inputS} /></div>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                if (!newHire.name.trim() || !newHire.dateStarted) return;
-                setHires([...hires, { id: uid(), name: newHire.name.trim(), dateStarted: newHire.dateStarted,
-                  contractType: newHire.contractType, endDate: newHire.endDate || null, dateAdded: new Date().toISOString() }]);
-                setNewHire({ name: "", dateStarted: "", contractType: "Permanent", endDate: "" });
-              }}
-              style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}><Plus size={13} /> Add hire</button>
-          </div>
-          {hires.map((e, i) => (
-            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px",
-              borderBottom: `1px solid ${T.lineSoft}`, fontSize: "13.5px", color: T.body }}>
-              <span style={{ flex: 1, color: T.ink }}>{e.name}</span>
-              <span style={{ color: T.muted, fontSize: "12.5px" }}>{e.dateStarted}</span>
-              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{e.contractType}</span>
-              <button onClick={() => setHires(hires.filter((_, x) => x !== i))}
-                style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "4px" }}><Trash2 size={13} /></button>
-            </div>
-          ))}
-        </>
-      )}
-    </Modal>
-  );
-};
-
-/* ════════════════════════════════════════════════════════════════════════════
    Main
    ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "peoplePerf.addData.prefs";
@@ -1929,7 +2273,7 @@ const PeoplePerformance = () => {
   const [user, setUser] = useState(null);
   const [fyStartMonth, setFyStartMonth] = useState(0);
   const [docs, setDocs] = useState({});
-  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [] });
+  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [] });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [showAbout, setShowAbout] = useState(false);
@@ -1946,7 +2290,7 @@ const PeoplePerformance = () => {
   const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", status: "all" });
   const [openFilter, setOpenFilter] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const [widths, setWidths] = useState(() => ({ ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])), [ACTIONS_KEY]: 166 }));
+  const [widths, setWidths] = useState(() => ({ ...Object.fromEntries(COLUMN_ORDER.map((k) => [k, COLUMN_DEFS[k].width])), [ACTIONS_KEY]: 196 }));
   const [visibility, setVisibility] = useState(() => Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])));
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const resizing = useRef(null);
@@ -2020,7 +2364,7 @@ const PeoplePerformance = () => {
           getDoc(doc(db, "peopleData", `${user.uid}_${META_DOC}`)),
         ]);
         setDocs(loaded);
-        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], ...metaSnap.data() });
+        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], ...metaSnap.data() });
       } catch (err) {
         console.error("Error loading people data:", err);
         notify("error", `Could not load your people data: ${errText(err)}`);
@@ -2038,6 +2382,12 @@ const PeoplePerformance = () => {
       console.error("Error saving KPI meta:", err);
       notify("error", `Changes could not be saved: ${errText(err)}`);
     }
+  };
+
+  const deleteKpi = (kpiId) => {
+    if (!window.confirm(`Delete this KPI? It will be removed from the dashboard.`)) return;
+    persistMeta({ ...meta, hiddenKpis: Array.from(new Set([...(meta.hiddenKpis || []), kpiId])) });
+    notify("success", "KPI removed from the dashboard.");
   };
 
   /* Writes into a nested path inside one peopleData doc, creating the shape
@@ -2134,7 +2484,7 @@ const PeoplePerformance = () => {
       ...tab,
       categories: tab.categories.map((cat) => ({
         ...cat,
-        kpis: (cat.kpis || []).map((kpi) => {
+        kpis: (cat.kpis || []).filter((kpi) => !(meta.hiddenKpis || []).includes(kpi.id)).map((kpi) => {
           const entries = {};
           months.forEach((m) => {
             if (kpi.custom) {
@@ -2168,6 +2518,7 @@ const PeoplePerformance = () => {
   }, [visibleTabs, activeTabId]);
 
   const activeTab = visibleTabs.find((t) => t.id === activeTabId) || visibleTabs[0];
+  const isKpiTableTab = activeTab?.id === "summary";
 
   const updateKpiMeta = (kpiId, patch) =>
     persistMeta({ ...meta, kpis: { ...meta.kpis, [kpiId]: { ...(meta.kpis[kpiId] || {}), ...patch } } });
@@ -2379,9 +2730,9 @@ const PeoplePerformance = () => {
           );
         })}
         {!isInvestorView && (
-          <button onClick={() => setManageTabs(true)} title="Hide or show a section"
+          <button onClick={() => setManageTabs(true)} title="Show or hide dashboard tabs"
             style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
-            <Settings2 size={13} /> Sections
+            <Settings2 size={13} /> Manage Tabs
           </button>
         )}
       </div>
@@ -2389,39 +2740,45 @@ const PeoplePerformance = () => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{activeTab?.name}</h3>
-          <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
-          {activeFilterCount > 0 && (
-            <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
-              Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
-            </button>
+          {isKpiTableTab && (
+            <>
+              <span style={{ fontSize: "12.5px", color: T.muted }}>{rows.length} of {allRows.length} KPIs</span>
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} style={{ ...btnQuiet, padding: "3px 10px", fontSize: "12.5px", border: `1px solid ${T.lineStrong}`, borderRadius: "999px" }}>
+                  Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+                </button>
+              )}
+            </>
           )}
         </div>
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
-            {showColumnMenu && (
-              <>
-                <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
-                <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg,
-                  border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
-                  {COLUMN_ORDER.map((key) => {
-                    const def = COLUMN_DEFS[key];
-                    return (
-                      <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))}
-                        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px",
-                          cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
-                        {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
-                        <span style={{ flex: 1 }}>{def.label}</span>
-                      </div>
-                    );
-                  })}
-                  <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))}
-                    style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
-                </div>
-              </>
-            )}
-          </div>
+          {isKpiTableTab && (
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowColumnMenu((v) => !v)} style={btnGhost}><Columns3 size={14} /> Columns</button>
+              {showColumnMenu && (
+                <>
+                  <div onClick={() => setShowColumnMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 400 }} />
+                  <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: "250px", background: T.bg,
+                    border: `1px solid ${T.lineStrong}`, borderRadius: "10px", boxShadow: "0 12px 30px rgba(45,32,28,0.16)", padding: "8px", zIndex: 401 }}>
+                    {COLUMN_ORDER.map((key) => {
+                      const def = COLUMN_DEFS[key];
+                      return (
+                        <div key={key} onClick={() => def.hideable && setVisibility((p) => ({ ...p, [key]: !p[key] }))}
+                          style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 9px", borderRadius: "7px",
+                            cursor: def.hideable ? "pointer" : "not-allowed", opacity: def.hideable ? 1 : 0.5, fontSize: "13.5px", color: T.body }}>
+                          {visibility[key] ? <CheckSquare size={14} color={T.accent} /> : <Square size={14} color={T.muted} />}
+                          <span style={{ flex: 1 }}>{def.label}</span>
+                        </div>
+                      );
+                    })}
+                    <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} 
+                      style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
             <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
@@ -2430,27 +2787,29 @@ const PeoplePerformance = () => {
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
-        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
-          {PERIODS.map((p) => {
-            const on = p.key === period;
-            return (
-              <button key={p.key} onClick={() => setPeriod(p.key)}
-                style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px",
-                  fontWeight: 600, border: "none", fontFamily: "inherit",
-                  background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
-                  boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
-                {p.label}
-              </button>
-            );
-          })}
+      {isKpiTableTab && (
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+          <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
+            {PERIODS.map((p) => {
+              const on = p.key === period;
+              return (
+                <button key={p.key} onClick={() => setPeriod(p.key)}
+                  style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px",
+                    fontWeight: 600, border: "none", fontFamily: "inherit",
+                    background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
+                    boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <span style={{ fontSize: "12.5px", color: T.muted }}>
+            Showing {PERIOD_PREFIX[period].toLowerCase()} target, actual and variance
+          </span>
         </div>
-        <span style={{ fontSize: "12.5px", color: T.muted }}>
-          Showing {PERIOD_PREFIX[period].toLowerCase()} target, actual and variance
-        </span>
-      </div>
+      )}
 
-      {allRows.length > 0 && (
+      {allRows.length > 0 && isKpiTableTab && (
         <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "12px", overflow: "hidden", background: T.bg, marginBottom: "22px" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "separate", borderSpacing: 0, width: totalWidth, minWidth: "100%", tableLayout: "fixed" }}>
@@ -2516,7 +2875,7 @@ const PeoplePerformance = () => {
                     <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
                       <span style={{ display: "flex", alignItems: "flex-start", gap: "5px" }}>
                         <span style={{ fontSize: "13px", fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>Actions</span>
-                        <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, and notes for this KPI." />
+                        <InfoTip light text="Trend chart, the all-timeframe analysis, add an action, notes, and delete for this KPI." />
                       </span>
                       <span style={{ height: "23px" }} />
                     </div>
@@ -2573,10 +2932,14 @@ const PeoplePerformance = () => {
                           <button onClick={() => setChartKpi(kpi)} style={iconBtn(T.body)} title="Trend chart"><LineChartIcon size={16} /></button>
                           <button onClick={() => setAnalysisKpi(kpi)} style={iconBtn(T.body)} title="Summary analysis across all timeframes"><Lightbulb size={16} /></button>
                           {!isInvestorView && (
-                            <button onClick={() => setActionKpi({ kpi, categoryName, tabName })}
+                            <button onClick={() => setActionKpi({ kpi, categoryName, tabName })} 
                               style={iconBtn(status.color)} title={`Add action (${status.label})`}><Plus size={16} /></button>
                           )}
                           <button onClick={() => setNotesKpi(kpi)} style={iconBtn(kpi.notes ? T.amber : T.body)} title="Notes"><StickyNote size={16} /></button>
+                          {!isInvestorView && (
+                            <button onClick={() => deleteKpi(kpi.id)} 
+                              style={iconBtn(T.red)} title="Delete KPI"><Trash2 size={16} /></button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2598,34 +2961,34 @@ const PeoplePerformance = () => {
         </div>
       )}
 
-      {/* Panels */}
-      {panels.includes("tracking") && (
+      {/* Panels - only shown for non-summary tabs */}
+      {!isKpiTableTab && panels.includes("tracking") && (
         <div style={{ marginBottom: "20px" }}>
-          <TrackingPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("tracking")} />
+          <TrackingPanel docs={docs} readOnly={isInvestorView} />
         </div>
       )}
 
-      {panels.includes("capacityLoad") && (
+      {!isKpiTableTab && panels.includes("capacityLoad") && (
         <div style={{ marginBottom: "20px" }}>
-          <CapacityLoadPanel docs={docs} fy={fy} readOnly={isInvestorView} onEdit={() => setRecordsMode("capacityLoad")} />
+          <CapacityLoadPanel docs={docs} fy={fy} readOnly={isInvestorView} />
         </div>
       )}
 
-      {panels.includes("capacitySpan") && (
+      {!isKpiTableTab && panels.includes("capacitySpan") && (
         <div style={{ marginBottom: "20px" }}>
-          <CapacitySpanPanel docs={docs} fy={fy} readOnly={isInvestorView} onEdit={() => setRecordsMode("capacitySpan")} />
+          <CapacitySpanPanel docs={docs} fy={fy} readOnly={isInvestorView} />
         </div>
       )}
 
-      {panels.includes("recordsTerm") && (
+      {!isKpiTableTab && panels.includes("recordsTerm") && (
         <div style={{ marginBottom: "20px" }}>
-          <RecordsTermPanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("recordsTerm")} />
+          <RecordsTermPanel docs={docs} readOnly={isInvestorView} />
         </div>
       )}
 
-      {panels.includes("recordsHire") && (
+      {!isKpiTableTab && panels.includes("recordsHire") && (
         <div style={{ marginBottom: "20px" }}>
-          <RecordsHirePanel docs={docs} readOnly={isInvestorView} onEdit={() => setRecordsMode("recordsHire")} />
+          <RecordsHirePanel docs={docs} readOnly={isInvestorView} />
         </div>
       )}
 
@@ -2655,7 +3018,7 @@ const PeoplePerformance = () => {
         onSave={async (src, payload) => { await saveRecords(src, payload); notify("success", "Records saved."); }} />}
 
       {manageTabs && (
-        <Modal title="Sections" subtitle="Hide a section to take it off the dashboard" icon={<Settings2 size={17} />}
+        <Modal title="Manage Dashboard Tabs" subtitle="Show or hide a tab from the dashboard" icon={<Settings2 size={17} />}
           onClose={() => setManageTabs(false)} width={560}
           footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
           {tabs.map((t) => {
@@ -2670,7 +3033,7 @@ const PeoplePerformance = () => {
                   </div>
                   <div style={{ fontSize: "12.5px", color: T.muted }}>{t.categories.length} categories · {count} KPIs</div>
                 </div>
-                <button
+                <button 
                   onClick={() => persistMeta({ ...meta,
                     hiddenTabs: hidden ? (meta.hiddenTabs || []).filter((x) => x !== t.id) : [...(meta.hiddenTabs || []), t.id] })}
                   disabled={!hidden && visibleTabs.length <= 1}
