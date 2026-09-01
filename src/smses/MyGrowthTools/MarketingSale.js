@@ -583,6 +583,47 @@ const ACTIONS_KEY = "__actions__";
 const columnLines = (key, period) =>
   ["budget", "actual", "variance"].includes(key) ? [PERIOD_PREFIX[period], COLUMN_DEFS[key].label] : [COLUMN_DEFS[key].label];
 
+// ── Filter Dropdown component (reused) ──
+const FilterDropdown = ({ options, value, onChange, onClose }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        onClose?.();
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "All" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
+      >
+        <SlidersHorizontal size={13} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
+              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ════════════════════════════════════════════════════════════════════════════
    Marketing & Sales KPI Registry
    ════════════════════════════════════════════════════════════════════════ */
@@ -620,8 +661,7 @@ const TAB_DEFS = [
             meaning: "The total value of all opportunities in your pipeline.",
             measured: "=SUM(Rev Potential) for all active opportunities",
             source: "Captured from pipeline records",
-            actual: (c) => c.pipelineValue,
-            budget: (c) => c.pipelineBudget,
+            field: { src: "pipeline", a: ["pipelineData", "pipelineValue", "actual"], b: ["pipelineData", "pipelineValue", "budget"] },
           }),
           K({
             id: "riskAdjustedValue",
@@ -633,8 +673,7 @@ const TAB_DEFS = [
             meaning: "The value of opportunities weighted by their probability of closing.",
             measured: "=SUM(Rev Potential × Probability %) for all active opportunities",
             source: "Captured from pipeline records",
-            actual: (c) => c.riskValue,
-            budget: (c) => c.riskBudget,
+            field: { src: "pipeline", a: ["pipelineData", "riskValue", "actual"], b: ["pipelineData", "riskValue", "budget"] },
           }),
           K({
             id: "pipelineCoverage",
@@ -646,8 +685,7 @@ const TAB_DEFS = [
             meaning: "The ratio of risk-adjusted pipeline value to target revenue.",
             measured: "=Risk Adjusted Value ÷ Target Revenue × 100%",
             source: "Calculated from pipeline data",
-            actual: (c) => c.coverage,
-            budget: (c) => c.coverageBudget,
+            field: { src: "pipeline", a: ["pipelineData", "coverage", "actual"], b: ["pipelineData", "coverage", "budget"] },
           }),
           K({
             id: "newLeads",
@@ -659,8 +697,7 @@ const TAB_DEFS = [
             meaning: "The number of new leads added to the pipeline in the period.",
             measured: "=COUNT of new records in the period",
             source: "Captured from pipeline records",
-            actual: (c) => c.newLeads,
-            budget: (c) => c.newLeadsBudget,
+            field: { src: "pipeline", a: ["pipelineData", "newLeads", "actual"], b: ["pipelineData", "newLeads", "budget"] },
           }),
           K({
             id: "conversionRate",
@@ -672,8 +709,7 @@ const TAB_DEFS = [
             meaning: "The percentage of opportunities that convert to closed deals.",
             measured: "=Converted Opportunities ÷ Total Opportunities × 100%",
             source: "Calculated from pipeline data",
-            actual: (c) => c.conversionRate,
-            budget: (c) => c.conversionBudget,
+            field: { src: "pipeline", a: ["pipelineData", "conversionRate", "actual"], b: ["pipelineData", "conversionRate", "budget"] },
           }),
           K({
             id: "salesVelocity",
@@ -685,8 +721,7 @@ const TAB_DEFS = [
             meaning: "The average number of days from lead creation to close.",
             measured: "=AVERAGE(Days between Created At and Signed Date)",
             source: "Calculated from pipeline records",
-            actual: (c) => c.salesVelocity,
-            budget: (c) => c.velocityBudget,
+            field: { src: "pipeline", a: ["pipelineData", "salesVelocity", "actual"], b: ["pipelineData", "salesVelocity", "budget"] },
           }),
         ],
       },
@@ -703,8 +738,7 @@ const TAB_DEFS = [
             meaning: "The total amount spent on marketing across all channels.",
             measured: "=SUM of all channel marketing spend",
             source: "Captured from marketing data",
-            actual: (c) => c.totalSpend,
-            budget: (c) => c.spendBudget,
+            field: { src: "concentration", a: ["concentrationData", "totalSpend", "actual"], b: ["concentrationData", "totalSpend", "budget"] },
           }),
           K({
             id: "overallROI",
@@ -716,8 +750,7 @@ const TAB_DEFS = [
             meaning: "The return on investment from marketing activities.",
             measured: "=(Total Revenue - Total Spend) ÷ Total Spend × 100%",
             source: "Calculated from marketing data",
-            actual: (c) => c.totalROI,
-            budget: (c) => c.roiBudget,
+            field: { src: "concentration", a: ["concentrationData", "totalROI", "actual"], b: ["concentrationData", "totalROI", "budget"] },
           }),
         ],
       },
@@ -734,8 +767,7 @@ const TAB_DEFS = [
             meaning: "The percentage of customers who make repeat purchases.",
             measured: "=Repeat Customers ÷ Total Customers × 100%",
             source: "Captured from customer data",
-            actual: (c) => c.repeatRate,
-            budget: (c) => c.repeatBudget,
+            field: { src: "sustainability", a: ["sustainabilityData", "repeatRate", "actual"], b: ["sustainabilityData", "repeatRate", "budget"] },
           }),
           K({
             id: "netRetention",
@@ -747,8 +779,7 @@ const TAB_DEFS = [
             meaning: "The net customer retention rate (repeat rate minus churn rate).",
             measured: "=Repeat Customer Rate - Churn Rate",
             source: "Calculated from customer data",
-            actual: (c) => c.netRetention,
-            budget: (c) => c.netRetentionBudget,
+            field: { src: "sustainability", a: ["sustainabilityData", "netRetention", "actual"], b: ["sustainabilityData", "netRetention", "budget"] },
           }),
           K({
             id: "campaignROI",
@@ -760,8 +791,7 @@ const TAB_DEFS = [
             meaning: "The return on investment from marketing campaigns.",
             measured: "=(Campaign Revenue - Campaign Cost) ÷ Campaign Cost × 100%",
             source: "Calculated from campaign data",
-            actual: (c) => c.campaignROI,
-            budget: (c) => c.campaignROIBudget,
+            field: { src: "sustainability", a: ["sustainabilityData", "campaignROI", "actual"], b: ["sustainabilityData", "campaignROI", "budget"] },
           }),
         ],
       },
@@ -923,48 +953,7 @@ const AVAILABLE_FIELDS = [
 
 const DEFAULT_VISIBLE_FIELDS = ["tier", "accountWebsite", "sector", "revPotential", "probability", "nextCta", "byWhen"];
 
-// ── Filter Dropdown component (reused) ──
-const FilterDropdown = ({ options, value, onChange, onClose }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [onClose]);
-
-  return (
-    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
-      >
-        <SlidersHorizontal size={13} />
-      </button>
-      {open && (
-        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
-          {options.map((opt) => (
-            <div
-              key={opt}
-              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
-              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
-            >
-              {opt}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── Column Selector (unchanged) ──
+// ── Column Selector ──
 const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
   if (!isOpen) return null;
   return (
@@ -1077,7 +1066,6 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   // Filtering and sorting
   useEffect(() => {
     let filtered = [...records];
-    // Apply filters (exact match for dropdown)
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value.trim() !== "") {
         filtered = filtered.filter((record) => {
@@ -1345,6 +1333,585 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
         </table>
       </div>
       <div className="mt-4 bg-[#f5f0eb] p-3 rounded-lg text-sm text-mediumBrown">Showing {filteredRecords.length} of {records.length} records</div>
+    </div>
+  );
+};
+
+// ==================== TOP 3 CONCENTRATION (with data editing) ====================
+const Top3Concentration = ({ data, isInvestorView, onDataChange }) => {
+  const [localData, setLocalData] = useState(data || {
+    channels: [
+      { name: "Social Media", revenue: 1200000, percentage: 35.2 },
+      { name: "PPC", revenue: 800000, percentage: 23.5 },
+      { name: "Email", revenue: 500000, percentage: 14.7 },
+    ],
+    customers: [
+      { name: "Acme Corp", revenue: 850000, percentage: 24.9 },
+      { name: "TechGlobal", revenue: 650000, percentage: 19.0 },
+      { name: "EcoSolutions", revenue: 450000, percentage: 13.2 },
+    ],
+    segments: [
+      { name: "Enterprise", revenue: 1500000, percentage: 44.0 },
+      { name: "SMB", revenue: 800000, percentage: 23.5 },
+      { name: "Startup", revenue: 400000, percentage: 11.7 },
+    ],
+  });
+
+  useEffect(() => {
+    if (data) setLocalData(data);
+  }, [data]);
+
+  const renderTable = (data, title, type) => (
+    <div>
+      <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>{title}</h4>
+      <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: T.header }}>
+              <th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Name</th>
+              <th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th>
+              <th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{item.name}</td>
+                <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {item.revenue.toLocaleString()}</td>
+                <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>{item.percentage}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+      {renderTable(localData.channels || [], "Top 3 Channels", "channels")}
+      {renderTable(localData.customers || [], "Top 3 Customers", "customers")}
+      {renderTable(localData.segments || [], "Top 3 Segments", "segments")}
+    </div>
+  );
+};
+
+// ==================== CHANNEL PERFORMANCE TABLE (editable) ====================
+const ChannelPerformanceTable = ({ data, isInvestorView, onDataChange }) => {
+  const [localData, setLocalData] = useState(data || [
+    { name: "Social Media", revenue: 150000, spend: 45000 },
+    { name: "Email", revenue: 120000, spend: 30000 },
+    { name: "PPC", revenue: 80000, spend: 35000 },
+    { name: "SEO", revenue: 60000, spend: 15000 },
+    { name: "Referral", revenue: 50000, spend: 10000 },
+    { name: "Direct", revenue: 40000, spend: 5000 },
+  ]);
+
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [filteredData, setFilteredData] = useState(localData);
+  const [widths, setWidths] = useState(() => ({
+    name: 200,
+    revenue: 150,
+    spend: 150,
+    net: 120,
+    roi: 120,
+    pct: 120,
+  }));
+  const [colOrder, setColOrder] = useState(["name", "revenue", "spend", "net", "roi", "pct"]);
+  const resizing = useRef(null);
+
+  useEffect(() => {
+    if (data) setLocalData(data);
+  }, [data]);
+
+  useEffect(() => {
+    let filtered = [...localData];
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value.trim() !== "") {
+        filtered = filtered.filter((item) => {
+          const itemVal = item[key];
+          if (itemVal === undefined || itemVal === null) return false;
+          return String(itemVal) === value;
+        });
+      }
+    });
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const av = a[sortConfig.key] ?? "";
+        const bv = b[sortConfig.key] ?? "";
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av;
+        }
+        const cmp = String(av).localeCompare(String(bv));
+        return sortConfig.direction === "asc" ? cmp : -cmp;
+      });
+    }
+    setFilteredData(filtered);
+  }, [filters, sortConfig, localData]);
+
+  const getFilterOptions = (key) => {
+    const values = localData.map((item) => item[key]).filter((v) => v !== undefined && v !== null && v !== "");
+    const unique = Array.from(new Set(values.map((v) => String(v)))).sort();
+    return ["All", ...unique];
+  };
+
+  const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
+
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
+  };
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX,
+      startWidth = widths[key];
+    resizing.current = key;
+    const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
+    const onUp = () => {
+      resizing.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const thS = {
+    padding: 0,
+    background: T.header,
+    borderBottom: `2px solid ${T.header}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)",
+    position: "relative",
+    verticalAlign: "top",
+  };
+
+  const totalRevenue = localData.reduce((sum, item) => sum + item.revenue, 0);
+
+  const labels = {
+    name: "Channel",
+    revenue: "Revenue",
+    spend: "Marketing Spend",
+    net: "Net Profit",
+    roi: "ROI %",
+    pct: "% of Revenue",
+  };
+
+  return (
+    <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <thead>
+          <tr>
+            {colOrder.map((key) => {
+              const sorted = sortConfig.key === key;
+              const currentFilter = filters[key] || "All";
+              const filterOpts = getFilterOptions(key);
+              return (
+                <th
+                  key={key}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, key)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, key)}
+                  style={{ ...thS, width: widths[key] || 150, userSelect: "none" }}
+                >
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", width: "100%" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", color: "#fff", cursor: "grab" }}>{labels[key] || key}</span>
+                      <button onClick={() => toggleSort(key)} title="Sort" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", borderRadius: "4px", color: sorted ? "#fff" : "rgba(255,255,255,0.6)", display: "inline-flex", alignItems: "center" }}>
+                        {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} />}
+                      </button>
+                      <FilterDropdown
+                        options={filterOpts}
+                        value={currentFilter}
+                        onChange={(val) => setFilters((p) => ({ ...p, [key]: val === "All" ? "" : val }))}
+                        onClose={() => {}}
+                      />
+                    </div>
+                  </div>
+                  <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredData.map((item, idx) => {
+            const net = item.revenue - item.spend;
+            const roi = item.spend > 0 ? (net / item.spend) * 100 : 0;
+            const pct = totalRevenue > 0 ? (item.revenue / totalRevenue) * 100 : 0;
+            return (
+              <tr key={idx} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: idx % 2 ? T.panel : T.bg }}>
+                {colOrder.map((key) => (
+                  <td key={key} style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: key === "name" ? "left" : "right" }}>
+                    {key === "name" && <span style={{ fontWeight: 600 }}>{item.name}</span>}
+                    {key === "revenue" && `R ${item.revenue.toLocaleString()}`}
+                    {key === "spend" && `R ${item.spend.toLocaleString()}`}
+                    {key === "net" && <span style={{ color: net >= 0 ? T.green : T.red, fontWeight: 600 }}>R {net.toLocaleString()}</span>}
+                    {key === "roi" && <span style={{ color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</span>}
+                    {key === "pct" && `${pct.toFixed(1)}%`}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// ==================== CONCENTRATION RISK ANALYSIS BAR CHART ====================
+const ConcentrationRiskBarChart = ({ data, isInvestorView }) => {
+  const [localData, setLocalData] = useState(data || {
+    channels: [
+      { name: "Social Media", revenue: 150000, spend: 45000 },
+      { name: "Email", revenue: 120000, spend: 30000 },
+      { name: "PPC", revenue: 80000, spend: 35000 },
+      { name: "SEO", revenue: 60000, spend: 15000 },
+      { name: "Referral", revenue: 50000, spend: 10000 },
+      { name: "Direct", revenue: 40000, spend: 5000 },
+    ],
+  });
+
+  useEffect(() => {
+    if (data) setLocalData(data);
+  }, [data]);
+
+  // Calculate metrics for each channel
+  const chartData = useMemo(() => {
+    const sorted = [...localData.channels].sort((a, b) => b.revenue - a.revenue);
+    const totalRevenue = sorted.reduce((sum, ch) => sum + ch.revenue, 0);
+    
+    return {
+      labels: sorted.map(ch => ch.name),
+      datasets: [
+        {
+          label: "Revenue",
+          data: sorted.map(ch => ch.revenue),
+          backgroundColor: sorted.map((_, i) => {
+            const colors = ["#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
+            return colors[i % colors.length];
+          }),
+          borderColor: sorted.map((_, i) => {
+            const colors = ["#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"];
+            return colors[i % colors.length];
+          }),
+          borderWidth: 1,
+          borderRadius: 4,
+          barPercentage: 0.6,
+        },
+        {
+          label: "Marketing Spend",
+          data: sorted.map(ch => ch.spend),
+          backgroundColor: "rgba(234, 88, 12, 0.8)",
+          borderColor: "#c2410c",
+          borderWidth: 1,
+          borderRadius: 4,
+          barPercentage: 0.6,
+        },
+      ],
+    };
+  }, [localData]);
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "top",
+        labels: {
+          font: { size: 12, weight: "500" },
+          color: T.body,
+          padding: 16,
+          usePointStyle: true,
+          pointStyle: "circle",
+        },
+      },
+      tooltip: {
+        backgroundColor: T.ink,
+        padding: 12,
+        cornerRadius: 8,
+        callbacks: {
+          label: (context) => {
+            const label = context.dataset.label || "";
+            const value = context.parsed.y;
+            return `${label}: R ${value.toLocaleString()}`;
+          },
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: T.lineSoft },
+        ticks: {
+          color: T.body,
+          font: { size: 11 },
+          callback: (value) => `R ${(value / 1000).toFixed(0)}k`,
+        },
+      },
+      x: {
+        grid: { display: false },
+        ticks: {
+          color: T.body,
+          font: { size: 11 },
+          maxRotation: 45,
+          minRotation: 0,
+        },
+      },
+    },
+  };
+
+  // Calculate summary stats
+  const totalRevenue = localData.channels.reduce((sum, ch) => sum + ch.revenue, 0);
+  const totalSpend = localData.channels.reduce((sum, ch) => sum + ch.spend, 0);
+  const avgROI = localData.channels.length > 0 
+    ? localData.channels.reduce((sum, ch) => sum + ((ch.revenue - ch.spend) / ch.spend * 100), 0) / localData.channels.length 
+    : 0;
+
+  const top3Revenue = localData.channels
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 3)
+    .reduce((sum, ch) => sum + ch.revenue, 0);
+  const top3Concentration = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0;
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginBottom: "20px" }}>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Total Revenue</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink }}>R {totalRevenue.toLocaleString()}</div>
+        </div>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Total Spend</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink }}>R {totalSpend.toLocaleString()}</div>
+        </div>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Top 3 Concentration</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: top3Concentration > 70 ? T.red : top3Concentration > 50 ? T.amber : T.green }}>{top3Concentration.toFixed(1)}%</div>
+        </div>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Avg ROI</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: avgROI > 100 ? T.green : avgROI > 50 ? T.amber : T.red }}>{avgROI.toFixed(1)}%</div>
+        </div>
+      </div>
+
+      <div style={{ height: "320px", marginBottom: "20px" }}>
+        <Chart type="bar" data={chartData} options={options} />
+      </div>
+
+      <div style={{ fontSize: "12.5px", color: T.muted, padding: "12px 14px", background: T.panel, borderRadius: "8px", border: `1px solid ${T.lineSoft}` }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+          <Info size={14} style={{ marginTop: "2px", flexShrink: 0 }} />
+          <div>
+            <strong>Concentration Risk Analysis:</strong> 
+            {" "}Top 3 channels represent {top3Concentration.toFixed(1)}% of total revenue.
+            {top3Concentration > 70 
+              ? " High concentration risk — consider diversifying revenue streams." 
+              : top3Concentration > 50 
+              ? " Moderate concentration risk — monitor top channels closely." 
+              : " Low concentration risk — revenue is well distributed."}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== CAMPAIGN PERFORMANCE TABLE (editable) ====================
+const CampaignPerformanceTable = ({ data, isInvestorView, onDataChange }) => {
+  const [localData, setLocalData] = useState(data || [
+    { name: "Q1 Campaign", cost: 25000, revenue: 45000 },
+    { name: "Q2 Campaign", cost: 30000, revenue: 55000 },
+    { name: "Summer Sale", cost: 15000, revenue: 35000 },
+    { name: "Holiday Campaign", cost: 40000, revenue: 80000 },
+  ]);
+
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [filteredData, setFilteredData] = useState(localData);
+  const [widths, setWidths] = useState(() => ({
+    name: 200,
+    cost: 150,
+    revenue: 150,
+    roi: 120,
+  }));
+  const [colOrder, setColOrder] = useState(["name", "cost", "revenue", "roi"]);
+  const resizing = useRef(null);
+
+  useEffect(() => {
+    if (data) setLocalData(data);
+  }, [data]);
+
+  useEffect(() => {
+    let filtered = [...localData];
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value.trim() !== "") {
+        filtered = filtered.filter((item) => {
+          const itemVal = item[key];
+          if (itemVal === undefined || itemVal === null) return false;
+          return String(itemVal) === value;
+        });
+      }
+    });
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const av = a[sortConfig.key] ?? "";
+        const bv = b[sortConfig.key] ?? "";
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av;
+        }
+        const cmp = String(av).localeCompare(String(bv));
+        return sortConfig.direction === "asc" ? cmp : -cmp;
+      });
+    }
+    setFilteredData(filtered);
+  }, [filters, sortConfig, localData]);
+
+  const getFilterOptions = (key) => {
+    const values = localData.map((item) => item[key]).filter((v) => v !== undefined && v !== null && v !== "");
+    const unique = Array.from(new Set(values.map((v) => String(v)))).sort();
+    return ["All", ...unique];
+  };
+
+  const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
+
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
+  };
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX,
+      startWidth = widths[key];
+    resizing.current = key;
+    const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
+    const onUp = () => {
+      resizing.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const thS = {
+    padding: 0,
+    background: T.header,
+    borderBottom: `2px solid ${T.header}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)",
+    position: "relative",
+    verticalAlign: "top",
+  };
+
+  const labels = {
+    name: "Campaign",
+    cost: "Cost",
+    revenue: "Revenue",
+    roi: "ROI %",
+  };
+
+  return (
+    <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <thead>
+          <tr>
+            {colOrder.map((key) => {
+              const sorted = sortConfig.key === key;
+              const currentFilter = filters[key] || "All";
+              const filterOpts = getFilterOptions(key);
+              return (
+                <th
+                  key={key}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, key)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, key)}
+                  style={{ ...thS, width: widths[key] || 150, userSelect: "none" }}
+                >
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", width: "100%" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", color: "#fff", cursor: "grab" }}>{labels[key] || key}</span>
+                      <button onClick={() => toggleSort(key)} title="Sort" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", borderRadius: "4px", color: sorted ? "#fff" : "rgba(255,255,255,0.6)", display: "inline-flex", alignItems: "center" }}>
+                        {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} />}
+                      </button>
+                      <FilterDropdown
+                        options={filterOpts}
+                        value={currentFilter}
+                        onChange={(val) => setFilters((p) => ({ ...p, [key]: val === "All" ? "" : val }))}
+                        onClose={() => {}}
+                      />
+                    </div>
+                  </div>
+                  <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredData.map((item, idx) => {
+            const roi = item.cost > 0 ? ((item.revenue - item.cost) / item.cost) * 100 : 0;
+            return (
+              <tr key={idx} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: idx % 2 ? T.panel : T.bg }}>
+                {colOrder.map((key) => (
+                  <td key={key} style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: key === "name" ? "left" : "right" }}>
+                    {key === "name" && <span style={{ fontWeight: 600 }}>{item.name}</span>}
+                    {key === "cost" && `R ${item.cost.toLocaleString()}`}
+                    {key === "revenue" && `R ${item.revenue.toLocaleString()}`}
+                    {key === "roi" && <span style={{ color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</span>}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -2208,8 +2775,22 @@ const AddChooser = ({ onPick, onClose }) => (
 
 // ==================== ADD DATA WIZARD ====================
 const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, currentTabId }) => {
-  const editableTabs = tabs.filter((t) => t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
-  const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
+  const editableTabs = tabs.filter((t) => {
+    const hasEditableKpis = t.categories.some((c) => 
+      (c.kpis || []).some((k) => k.field)
+    );
+    const hasPanel = t.categories.some((c) => 
+      c.panel === "top3" || 
+      c.panel === "channelPerf" || 
+      c.panel === "riskAnalysis" || 
+      c.panel === "campaignPerf" ||
+      c.panel === "pipelineTable"
+    );
+    return hasEditableKpis || hasPanel;
+  });
+  
+  const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId
+    : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
   const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
   const [periodKey, setPeriodKey] = useState(null);
   const [draft, setDraft] = useState({});
@@ -2231,7 +2812,30 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   const rows = useMemo(() => {
     if (!tab) return [];
     const out = [];
-    tab.categories.forEach((cat) => (cat.kpis || []).forEach((k) => out.push({ kpi: k, category: cat.name })));
+    tab.categories.forEach((cat) => {
+      const hasPanel = cat.panel === "top3" || cat.panel === "channelPerf" || 
+                       cat.panel === "riskAnalysis" || cat.panel === "campaignPerf" ||
+                       cat.panel === "pipelineTable";
+      if (hasPanel) {
+        out.push({ 
+          kpi: { 
+            id: `panel_${cat.panel}`, 
+            name: `📋 ${cat.name}`, 
+            units: "", 
+            field: null,
+            panel: cat.panel,
+            isPanel: true 
+          }, 
+          category: cat.name 
+        });
+      } else {
+        (cat.kpis || []).forEach((k) => {
+          if (k.field) {
+            out.push({ kpi: k, category: cat.name });
+          }
+        });
+      }
+    });
     return out;
   }, [tab]);
 
@@ -2273,44 +2877,85 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     return <Modal title="Add Data" icon={<Database size={17} />} onClose={onClose} width={520} footer={<button onClick={onClose} style={btnPrimary}>Close</button>}><p style={{ fontSize: "14px", color: T.body, margin: 0 }}>Nothing here takes direct input.</p></Modal>;
   }
 
+  const hasPanelData = tab.categories.some((c) => 
+    c.panel === "top3" || c.panel === "channelPerf" || 
+    c.panel === "riskAnalysis" || c.panel === "campaignPerf" ||
+    c.panel === "pipelineTable"
+  );
+
   return (
     <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />} onClose={onClose} width={800} footer={<><button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button><span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}</span><button onClick={onClose} style={btnPrimary}>Done</button></>}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
         <div><label style={labelS}>Financial year</label><select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>{yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}</select></div>
         <div><label style={labelS}>Section</label><select value={tabId} onChange={(e) => setTabId(e.target.value)} style={selectS}>{editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
-        <div style={{ flex: 1 }}><label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label><select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>{months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}</select></div>
-        <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-        <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
-      </div>
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-            <thead><tr><th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th><th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th><th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th></tr></thead>
-            <tbody>
-              {rows.map(({ kpi, category }, i) => (
-                <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                  <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <div style={{ fontWeight: 600 }}>{kpi.name}</div>
-                    <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}</div>
-                  </td>
-                  {["actual", "budget"].map((which) => {
-                    const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+
+      {hasPanelData && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <Info size={16} color={T.accentSoft} />
+          <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
+            This section contains marketing data (Revenue Concentration, Channel Performance, Campaign Performance, etc.). Click the button below to edit this data.
+          </span>
+          <button 
+            onClick={() => {
+              const panelCat = tab.categories.find((c) => 
+                c.panel === "top3" || c.panel === "channelPerf" || 
+                c.panel === "riskAnalysis" || c.panel === "campaignPerf" ||
+                c.panel === "pipelineTable"
+              );
+              if (panelCat?.panel) {
+                onClose();
+                if (window.__setMarketingPanel) {
+                  window.__setMarketingPanel(panelCat.panel);
+                }
+              }
+            }}
+            style={{ ...btnPrimary, padding: "7px 14px", fontSize: "12.5px" }}>
+            <Database size={13} /> Edit Marketing Data
+          </button>
+        </div>
+      )}
+
+      {!hasPanelData && (
+        <>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
+            <div style={{ flex: 1 }}><label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label><select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>{months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}</select></div>
+            <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
+            <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+          </div>
+
+          <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+            <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+                <thead><tr><th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th><th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th><th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th></tr></thead>
+                <tbody>
+                  {rows.map(({ kpi, category }, i) => {
+                    if (kpi.isPanel) return null;
                     return (
-                      <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
-                        {!path ? <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>{which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}</div>
-                        : kpi.options ? <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}><option value="">—</option>{kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
-                        : <input type="number" step="any" value={value(kpi, which)} placeholder="—" onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />}
-                      </td>
+                      <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
+                        <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                          <div style={{ fontWeight: 600 }}>{kpi.name}</div>
+                          <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}</div>
+                        </td>
+                        {["actual", "budget"].map((which) => {
+                          const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+                          return (
+                            <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
+                              {!path ? <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>{which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}</div>
+                              : kpi.options ? <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}><option value="">—</option>{kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+                              : <input type="number" step="any" value={value(kpi, which)} placeholder="—" onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />}
+                            </td>
+                          );
+                        })}
+                      </tr>
                     );
                   })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </Modal>
   );
 };
@@ -2356,236 +3001,214 @@ const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
   );
 };
 
-// ==================== UNIVERSAL ADD DATA MODAL ====================
-const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, loading, fromDate, toDate }) => {
-  const [activeTab, setActiveTab] = useState(currentTab);
-  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// ==================== MARKETING DATA MODAL ====================
+const MarketingDataModal = ({ mode, onClose, onSave, isInvestorView }) => {
+  const [data, setData] = useState({});
+  const [saving, setSaving] = useState(false);
 
-  const getRangeMonths = (fromYM, toYM) => {
-    const SHORTS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const result = [];
-    let [y, m] = fromYM.split("-").map(Number);
-    const [toY, toM] = toYM.split("-").map(Number);
-    while (y < toY || (y === toY && m <= toM)) {
-      result.push({ year: y, monthIdx: m - 1, label: `${SHORTS[m - 1]} ${y}` });
-      m++;
-      if (m > 12) { m = 1; y++; }
+  useEffect(() => {
+    // Load data based on mode
+    const loadData = () => {
+      if (mode === "top3") {
+        setData({
+          channels: [
+            { name: "Social Media", revenue: 1200000, percentage: 35.2 },
+            { name: "PPC", revenue: 800000, percentage: 23.5 },
+            { name: "Email", revenue: 500000, percentage: 14.7 },
+          ],
+          customers: [
+            { name: "Acme Corp", revenue: 850000, percentage: 24.9 },
+            { name: "TechGlobal", revenue: 650000, percentage: 19.0 },
+            { name: "EcoSolutions", revenue: 450000, percentage: 13.2 },
+          ],
+          segments: [
+            { name: "Enterprise", revenue: 1500000, percentage: 44.0 },
+            { name: "SMB", revenue: 800000, percentage: 23.5 },
+            { name: "Startup", revenue: 400000, percentage: 11.7 },
+          ],
+        });
+      } else if (mode === "channelPerf" || mode === "riskAnalysis") {
+        setData({
+          channels: [
+            { name: "Social Media", revenue: 150000, spend: 45000 },
+            { name: "Email", revenue: 120000, spend: 30000 },
+            { name: "PPC", revenue: 80000, spend: 35000 },
+            { name: "SEO", revenue: 60000, spend: 15000 },
+            { name: "Referral", revenue: 50000, spend: 10000 },
+            { name: "Direct", revenue: 40000, spend: 5000 },
+          ],
+        });
+      } else if (mode === "campaignPerf") {
+        setData({
+          campaigns: [
+            { name: "Q1 Campaign", cost: 25000, revenue: 45000 },
+            { name: "Q2 Campaign", cost: 30000, revenue: 55000 },
+            { name: "Summer Sale", cost: 15000, revenue: 35000 },
+            { name: "Holiday Campaign", cost: 40000, revenue: 80000 },
+          ],
+        });
+      } else if (mode === "pipelineTable") {
+        setData({});
+      }
+    };
+    loadData();
+  }, [mode]);
+
+  const commit = async () => {
+    setSaving(true);
+    await onSave(mode, data);
+    setSaving(false);
+    onClose();
+  };
+
+  const renderContent = () => {
+    if (mode === "top3") {
+      return (
+        <div>
+          <h4 style={{ color: T.accent, marginBottom: "15px" }}>Top 3 Concentration Data</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+            {["channels", "customers", "segments"].map((type) => (
+              <div key={type}>
+                <label style={labelS}>{type.charAt(0).toUpperCase() + type.slice(1)}</label>
+                {(data[type] || []).map((item, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: "6px", marginBottom: "6px", flexWrap: "wrap" }}>
+                    <input type="text" value={item.name || ""} onChange={(e) => {
+                      const newData = { ...data };
+                      newData[type][idx].name = e.target.value;
+                      setData(newData);
+                    }} style={{ ...inputS, flex: 2, minWidth: "100px" }} placeholder="Name" />
+                    <input type="number" value={item.revenue || ""} onChange={(e) => {
+                      const newData = { ...data };
+                      newData[type][idx].revenue = parseFloat(e.target.value) || 0;
+                      setData(newData);
+                    }} style={{ ...inputS, flex: 1, minWidth: "80px" }} placeholder="Revenue" />
+                    <input type="number" value={item.percentage || ""} onChange={(e) => {
+                      const newData = { ...data };
+                      newData[type][idx].percentage = parseFloat(e.target.value) || 0;
+                      setData(newData);
+                    }} style={{ ...inputS, flex: 1, minWidth: "60px" }} placeholder="%" />
+                  </div>
+                ))}
+                <button onClick={() => {
+                  const newData = { ...data };
+                  newData[type] = [...(newData[type] || []), { name: "", revenue: 0, percentage: 0 }];
+                  setData(newData);
+                }} style={{ ...btnGhost, padding: "6px 12px", fontSize: "12px" }}><Plus size={13} /> Add</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
     }
-    return result;
+
+    if (mode === "channelPerf" || mode === "riskAnalysis") {
+      return (
+        <div>
+          <h4 style={{ color: T.accent, marginBottom: "15px" }}>Channel Performance Data</h4>
+          <div>
+            <label style={labelS}>Channels</label>
+            {(data.channels || []).map((item, idx) => (
+              <div key={idx} style={{ display: "flex", gap: "6px", marginBottom: "6px", flexWrap: "wrap" }}>
+                <input type="text" value={item.name || ""} onChange={(e) => {
+                  const newData = { ...data };
+                  newData.channels[idx].name = e.target.value;
+                  setData(newData);
+                }} style={{ ...inputS, flex: 2, minWidth: "120px" }} placeholder="Channel name" />
+                <input type="number" value={item.revenue || ""} onChange={(e) => {
+                  const newData = { ...data };
+                  newData.channels[idx].revenue = parseFloat(e.target.value) || 0;
+                  setData(newData);
+                }} style={{ ...inputS, flex: 1, minWidth: "80px" }} placeholder="Revenue (R)" />
+                <input type="number" value={item.spend || ""} onChange={(e) => {
+                  const newData = { ...data };
+                  newData.channels[idx].spend = parseFloat(e.target.value) || 0;
+                  setData(newData);
+                }} style={{ ...inputS, flex: 1, minWidth: "80px" }} placeholder="Spend (R)" />
+              </div>
+            ))}
+            <button onClick={() => {
+              const newData = { ...data };
+              newData.channels = [...(newData.channels || []), { name: "", revenue: 0, spend: 0 }];
+              setData(newData);
+            }} style={{ ...btnGhost, padding: "6px 12px", fontSize: "12px" }}><Plus size={13} /> Add channel</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (mode === "campaignPerf") {
+      return (
+        <div>
+          <h4 style={{ color: T.accent, marginBottom: "15px" }}>Campaign Performance Data</h4>
+          <div>
+            <label style={labelS}>Campaigns</label>
+            {(data.campaigns || []).map((item, idx) => (
+              <div key={idx} style={{ display: "flex", gap: "6px", marginBottom: "6px", flexWrap: "wrap" }}>
+                <input type="text" value={item.name || ""} onChange={(e) => {
+                  const newData = { ...data };
+                  newData.campaigns[idx].name = e.target.value;
+                  setData(newData);
+                }} style={{ ...inputS, flex: 2, minWidth: "120px" }} placeholder="Campaign name" />
+                <input type="number" value={item.cost || ""} onChange={(e) => {
+                  const newData = { ...data };
+                  newData.campaigns[idx].cost = parseFloat(e.target.value) || 0;
+                  setData(newData);
+                }} style={{ ...inputS, flex: 1, minWidth: "80px" }} placeholder="Cost (R)" />
+                <input type="number" value={item.revenue || ""} onChange={(e) => {
+                  const newData = { ...data };
+                  newData.campaigns[idx].revenue = parseFloat(e.target.value) || 0;
+                  setData(newData);
+                }} style={{ ...inputS, flex: 1, minWidth: "80px" }} placeholder="Revenue (R)" />
+              </div>
+            ))}
+            <button onClick={() => {
+              const newData = { ...data };
+              newData.campaigns = [...(newData.campaigns || []), { name: "", cost: 0, revenue: 0 }];
+              setData(newData);
+            }} style={{ ...btnGhost, padding: "6px 12px", fontSize: "12px" }}><Plus size={13} /> Add campaign</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (mode === "pipelineTable") {
+      return (
+        <div>
+          <h4 style={{ color: T.accent, marginBottom: "15px" }}>Pipeline Data</h4>
+          <p style={{ color: T.muted, marginBottom: "15px" }}>Pipeline records can be managed directly in the Pipeline Visibility tab. Use the "Add Record" button there to add new opportunities.</p>
+        </div>
+      );
+    }
+
+    return <p>No data editor available for this section.</p>;
   };
-
-  const rangeMonths = fromDate && toDate ? getRangeMonths(fromDate, toDate) : null;
-  const rangeYears = rangeMonths ? [...new Set(rangeMonths.map((r) => r.year))] : [toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()];
-  const [selectedYear, setSelectedYear] = useState(rangeYears[rangeYears.length - 1]);
-
-  useEffect(() => { setSelectedYear(rangeYears[rangeYears.length - 1]); }, [fromDate, toDate]);
-
-  const tabs = [
-    { id: "revenue-concentration", label: "Revenue Concentration" },
-    { id: "demand-sustainability", label: "Demand Sustainability" },
-  ];
-
-  const [revenueConcentrationData, setRevenueConcentrationData] = useState({
-    revenueChannels: [
-      { name: "Social Media", revenue: "", spend: "" },
-      { name: "Email", revenue: "", spend: "" },
-      { name: "PPC", revenue: "", spend: "" },
-      { name: "SEO", revenue: "", spend: "" },
-      { name: "Referral", revenue: "", spend: "" },
-      { name: "Direct", revenue: "", spend: "" },
-    ],
-    customerSegments: [
-      { name: "Enterprise", revenue: "", customerCount: "" },
-      { name: "SMB", revenue: "", customerCount: "" },
-      { name: "Startup", revenue: "", customerCount: "" },
-      { name: "Non-Profit", revenue: "", customerCount: "" },
-      { name: "Education", revenue: "", customerCount: "" },
-    ],
-    revenueByCustomer: [
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-    ],
-    notes: "",
-  });
-
-  const [demandSustainabilityData, setDemandSustainabilityData] = useState({
-    repeatCustomerRate: "",
-    churnRate: "",
-    campaigns: [
-      { name: "Q1 Campaign", cost: "", revenue: "" },
-      { name: "Q2 Campaign", cost: "", revenue: "" },
-      { name: "Summer Sale", cost: "", revenue: "" },
-      { name: "Holiday Campaign", cost: "", revenue: "" },
-    ],
-    notes: "",
-  });
-
-  useEffect(() => { if (isOpen && user) loadDataForTab(activeTab); }, [isOpen, activeTab, user, selectedYear]);
-
-  const loadDataForTab = async (tabId) => {
-    try {
-      switch (tabId) {
-        case "revenue-concentration":
-          const concDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`));
-          if (concDoc.exists()) {
-            const d = concDoc.data();
-            setRevenueConcentrationData({
-              revenueChannels: d.revenueChannels || revenueConcentrationData.revenueChannels,
-              customerSegments: d.customerSegments || revenueConcentrationData.customerSegments,
-              revenueByCustomer: d.revenueByCustomer || revenueConcentrationData.revenueByCustomer,
-              notes: d.notes || "",
-            });
-          }
-          break;
-        case "demand-sustainability":
-          const sustDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`));
-          if (sustDoc.exists()) {
-            const d = sustDoc.data();
-            setDemandSustainabilityData({
-              repeatCustomerRate: d.repeatCustomerRate?.toString() || "",
-              churnRate: d.churnRate?.toString() || "",
-              campaigns: d.campaigns || demandSustainabilityData.campaigns,
-              notes: d.notes || "",
-            });
-          }
-          break;
-      }
-    } catch (error) { console.error(`Error loading data for ${tabId}:`, error); }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) { alert("Please log in to save data"); return; }
-    try {
-      switch (activeTab) {
-        case "revenue-concentration":
-          const validCustomers = revenueConcentrationData.revenueByCustomer.filter((c) => c.name.trim() !== "" || parseFloat(c.revenue) > 0);
-          await setDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`), {
-            userId: user.uid, year: selectedYear,
-            revenueChannels: revenueConcentrationData.revenueChannels.map((c) => ({ name: c.name, revenue: Number.parseFloat(c.revenue) || 0, spend: Number.parseFloat(c.spend) || 0 })),
-            customerSegments: revenueConcentrationData.customerSegments.map((s) => ({ name: s.name, revenue: Number.parseFloat(s.revenue) || 0, customerCount: Number.parseFloat(s.customerCount) || 0 })),
-            revenueByCustomer: validCustomers.map((c) => ({ name: c.name, revenue: Number.parseFloat(c.revenue) || 0 })),
-            notes: revenueConcentrationData.notes, lastUpdated: new Date().toISOString(),
-          });
-          break;
-        case "demand-sustainability":
-          await setDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`), {
-            userId: user.uid, year: selectedYear,
-            repeatCustomerRate: Number.parseFloat(demandSustainabilityData.repeatCustomerRate) || 0,
-            churnRate: Number.parseFloat(demandSustainabilityData.churnRate) || 0,
-            campaigns: demandSustainabilityData.campaigns.map((c) => ({ name: c.name, cost: Number.parseFloat(c.cost) || 0, revenue: Number.parseFloat(c.revenue) || 0 })),
-            notes: demandSustainabilityData.notes, lastUpdated: new Date().toISOString(),
-          });
-          break;
-      }
-      if (onSave) onSave();
-      alert("Data saved successfully!");
-    } catch (error) { console.error("Error saving data:", error); alert("Error saving data. Please try again."); }
-  };
-
-  const inputCls = "w-full p-2 rounded border border-[#e8ddd4] text-sm";
-  const labelCls = "text-xs text-mediumBrown font-semibold";
-
-  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
-      <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[1400px] max-h-[90vh] overflow-auto w-[95%]">
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-mediumBrown m-0">Add Marketing & Sales Data</h3>
-          <button onClick={onClose} className="bg-transparent border-0 text-2xl text-mediumBrown cursor-pointer p-0 leading-none">×</button>
-        </div>
-        <div className="flex gap-1 mb-5 flex-wrap border-b-2 border-[#e8ddd4] pb-2.5">
-          {tabs.map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 border-0 rounded-t-md cursor-pointer font-semibold text-sm transition-all duration-300 -mb-0.5 ${activeTab === tab.id ? "bg-mediumBrown text-[#fdfcfb] border-b-2 border-mediumBrown" : "bg-[#e8ddd4] text-mediumBrown border-b-2 border-transparent"}`}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {rangeYears.length > 1 && (
-          <div className="flex gap-2 mb-5 flex-wrap items-center">
-            <span className="text-mediumBrown text-sm font-semibold mr-1">Year:</span>
-            {rangeYears.map((yr) => (
-              <button key={yr} onClick={() => setSelectedYear(yr)} className={`px-4 py-1.5 border-0 rounded-md cursor-pointer font-semibold text-sm ${selectedYear === yr ? "bg-mediumBrown text-[#fdfcfb]" : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"}`}>
-                {yr}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {activeTab === "revenue-concentration" && (
-          <div>
-            <h4 className="text-mediumBrown mb-5">Revenue Concentration Data</h4>
-            <h5 className="text-mediumBrown mb-3 font-semibold">Revenue by Channel</h5>
-            {revenueConcentrationData.revenueChannels.map((channel, index) => (
-              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={channel.name} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={channel.revenue} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={channel.spend} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].spend = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} placeholder="Marketing Spend (R)" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">Customer Segments</h5>
-            {revenueConcentrationData.customerSegments.map((segment, index) => (
-              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={segment.name} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={segment.revenue} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={segment.customerCount} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].customerCount = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} placeholder="# Customers" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">Revenue by Customer</h5>
-            {revenueConcentrationData.revenueByCustomer.map((cust, index) => (
-              <div key={index} className="grid grid-cols-[1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={cust.name} onChange={(e) => { const n = [...revenueConcentrationData.revenueByCustomer]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueByCustomer: n }); }} placeholder="Customer name" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={cust.revenue} onChange={(e) => { const n = [...revenueConcentrationData.revenueByCustomer]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueByCustomer: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <button type="button" onClick={() => setRevenueConcentrationData((prev) => ({ ...prev, revenueByCustomer: [...prev.revenueByCustomer, { name: "", revenue: "" }] }))} className="mt-2 px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown rounded text-sm">+ Add another customer</button>
-            <div className="mb-5 mt-7">
-              <label className="block mb-2.5 text-mediumBrown font-semibold">Notes:</label>
-              <textarea value={revenueConcentrationData.notes} onChange={(e) => setRevenueConcentrationData({ ...revenueConcentrationData, notes: e.target.value })} placeholder="Add any additional notes..." className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]" />
-            </div>
-          </div>
-        )}
-
-        {activeTab === "demand-sustainability" && (
-          <div>
-            <h4 className="text-mediumBrown mb-5">Demand Sustainability Data</h4>
-            <div className="grid grid-cols-2 gap-[15px] mb-7">
-              <div><label className={labelCls}>Repeat Customer Rate (%)</label><input type="number" value={demandSustainabilityData.repeatCustomerRate} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, repeatCustomerRate: e.target.value })} className={inputCls} /></div>
-              <div><label className={labelCls}>Churn Rate (%)</label><input type="number" value={demandSustainabilityData.churnRate} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, churnRate: e.target.value })} className={inputCls} /></div>
-            </div>
-            <h5 className="text-mediumBrown mb-3 font-semibold">Campaigns</h5>
-            {demandSustainabilityData.campaigns.map((campaign, index) => (
-              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={campaign.name} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].name = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={campaign.cost} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].cost = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} placeholder="Cost (R)" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={campaign.revenue} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].revenue = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <div className="mb-5">
-              <label className="block mb-2.5 text-mediumBrown font-semibold">Notes:</label>
-              <textarea value={demandSustainabilityData.notes} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, notes: e.target.value })} placeholder="Add any additional notes..." className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]" />
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2.5 justify-end mt-5">
-          <button onClick={onClose} className="px-5 py-2.5 bg-[#e8ddd4] text-mediumBrown border-0 rounded-md cursor-pointer font-semibold">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} className={`px-5 py-2.5 bg-mediumBrown text-[#fdfcfb] border-0 rounded-md font-semibold ${loading ? "opacity-70 cursor-wait" : "cursor-pointer"}`}>
-            {loading ? "Saving..." : "Save Data"}
+    <Modal title="Edit Marketing Data" icon={<Database size={17} />} onClose={onClose} width={860}
+      footer={!isInvestorView && (
+        <>
+          <button onClick={onClose} style={btnGhost}>Cancel</button>
+          <button onClick={commit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Saving…" : "Save"}
           </button>
+        </>
+      )}>
+      {isInvestorView ? (
+        <div style={{ textAlign: "center", padding: "30px", color: T.muted }}>
+          <Eye size={24} color={T.muted} />
+          <p style={{ marginTop: "10px" }}>Investor view — data is read-only.</p>
+          <button onClick={onClose} style={btnPrimary}>Close</button>
         </div>
-      </div>
-    </div>
+      ) : (
+        renderContent()
+      )}
+    </Modal>
   );
 };
 
-// ==================== MAIN COMPONENT ====================
-
+/* ════════════════════════════════════════════════════════════════════════════
+   Main
+   ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "marketingSales.addData.prefs";
 const META_DOC = "marketingSalesKpiMeta";
 
@@ -2618,7 +3241,6 @@ const MarketingSales = () => {
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const resizing = useRef(null);
 
-  // --- Column order state for drag-drop on main KPI table ---
   const [colOrder, setColOrder] = useState(COLUMN_ORDER);
 
   const [infoKpi, setInfoKpi] = useState(null);
@@ -2628,7 +3250,8 @@ const MarketingSales = () => {
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
   const [manageTabs, setManageTabs] = useState(false);
-  const [showAddDataModal, setShowAddDataModal] = useState(false);
+  const [marketingPanel, setMarketingPanel] = useState(null);
+
   const [pipelineRecords, setPipelineRecords] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -2653,6 +3276,15 @@ const MarketingSales = () => {
   };
   useEffect(() => {
     try { const raw = window.localStorage.getItem(PREFS_KEY); if (raw) setDataPrefs(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    window.__setMarketingPanel = (mode) => {
+      setMarketingPanel(mode);
+    };
+    return () => {
+      delete window.__setMarketingPanel;
+    };
   }, []);
 
   useEffect(() => {
@@ -2756,6 +3388,31 @@ const MarketingSales = () => {
     const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
     if (!path) return;
     await writeDoc(kpi.field.src, (d) => setAtPath(d, path, raw, { scalar: !!kpi.field.scalar, monthIndex }));
+  };
+
+  const saveMarketingPanelData = async (mode, data) => {
+    if (!user?.uid || isInvestorView) return;
+    try {
+      const srcMap = {
+        top3: "concentration",
+        channelPerf: "concentration",
+        riskAnalysis: "concentration",
+        campaignPerf: "sustainability",
+        pipelineTable: "pipeline",
+      };
+      const src = srcMap[mode];
+      if (!src) {
+        notify("error", "Unknown panel type");
+        return;
+      }
+      await writeDoc(src, (d) => {
+        d[mode] = data;
+      });
+      notify("success", "Marketing data saved.");
+    } catch (err) {
+      console.error("Error saving marketing data:", err);
+      notify("error", `Could not save: ${errText(err)}`);
+    }
   };
 
   const tabs = useMemo(() => {
@@ -2900,12 +3557,10 @@ const MarketingSales = () => {
     return groups;
   }, [rows]);
 
-  // Determine visible columns based on visibility and colOrder (drag-drop)
   const visibleColumns = colOrder.filter((k) => visibility[k]);
   const totalWidth = visibleColumns.reduce((s, k) => s + widths[k], 0) + widths[ACTIONS_KEY];
   const activeFilterCount = Object.values(filters).filter((v) => v !== "all").length;
 
-  // Resize handler for main table
   const startResize = (e, key) => {
     e.preventDefault();
     e.stopPropagation();
@@ -2925,7 +3580,6 @@ const MarketingSales = () => {
     window.addEventListener("mouseup", onUp);
   };
 
-  // Drag-drop handlers for main table
   const handleDragStart = (e, key) => {
     e.dataTransfer.setData("text/plain", key);
     e.dataTransfer.effectAllowed = "move";
@@ -3134,7 +3788,7 @@ const MarketingSales = () => {
           )}
           <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
-            <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
+            <ClipboardList size={14} /> Marketing & Sales Overview <ExternalLink size={11} />
           </button>
           {!isInvestorView && (
             <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add KPI/Data</button>
@@ -3197,23 +3851,15 @@ const MarketingSales = () => {
                               </button>
                             )}
                             {def.filter && (
-                              <button onClick={() => setOpenFilter(isOpen ? null : key)} title="Filter" style={{ ...iconBtn(filtered ? "#fff" : "rgba(255,255,255,0.6)"), background: filtered ? "rgba(255,255,255,0.16)" : "transparent" }}>
-                                <SlidersHorizontal size={13} />
-                              </button>
+                              <FilterDropdown
+                                options={optionsFor(key)}
+                                value={filters[key] || "All"}
+                                onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                                onClose={() => {}}
+                              />
                             )}
                           </span>
                         </div>
-
-                        {isOpen && def.filter && (
-                          <div onMouseLeave={() => setOpenFilter(null)} style={{ position: "absolute", top: "100%", left: 0, marginTop: "2px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "10px", minWidth: "215px", maxHeight: "260px", overflowY: "auto", zIndex: 600, boxShadow: "0 12px 30px rgba(45,32,28,0.18)", padding: "6px" }}>
-                            {optionsFor(key).map((opt) => (
-                              <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setOpenFilter(null); }} style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px", background: filters[key] === opt ? T.accentTint : "transparent", color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
-                                {opt === "all" ? `All ${def.label.toLowerCase()}s` : opt}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
                         <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
                       </th>
                     );
@@ -3305,129 +3951,28 @@ const MarketingSales = () => {
       {!isKpiTableTab && panels.includes("top3") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Top 3 Concentration</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Channels</h4>
-              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Channel</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                  <tbody>
-                    {["Social Media", "PPC", "Email"].map((channel, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{channel}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,200,000</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>35.2%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div>
-              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Customers</h4>
-              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Customer</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                  <tbody>
-                    {["Acme Corp", "TechGlobal", "EcoSolutions"].map((customer, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{customer}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 850,000</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>24.9%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div>
-              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Segments</h4>
-              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Segment</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                  <tbody>
-                    {["Enterprise", "SMB", "Startup"].map((segment, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{segment}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,500,000</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>44.0%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <Top3Concentration isInvestorView={isInvestorView} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("channelPerf") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Channel Performance</h3>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Channel</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Marketing Spend</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Net Profit</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>% of Revenue</th></tr></thead>
-              <tbody>
-                {["Social Media", "Email", "PPC", "SEO", "Referral", "Direct"].map((channel, i) => {
-                  const revenue = [150000, 120000, 80000, 60000, 50000, 40000][i];
-                  const spend = [45000, 30000, 35000, 15000, 10000, 5000][i];
-                  const net = revenue - spend;
-                  const roi = spend > 0 ? (net / spend) * 100 : 0;
-                  const pct = [22.0, 17.6, 11.7, 8.8, 7.3, 5.9][i];
-                  return (
-                    <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{channel}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {spend.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: net >= 0 ? T.green : T.red, fontWeight: 600 }}>R {net.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>{pct}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ChannelPerformanceTable isInvestorView={isInvestorView} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("riskAnalysis") && (
         <div style={{ ...cardS, background: T.panel, marginBottom: "20px" }}>
-          <h4 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "13px", fontWeight: 600 }}>Concentration Risk Analysis</h4>
-          <div style={{ fontSize: "13px", color: T.body, fontWeight: 600, marginBottom: "6px" }}>Channel Concentration Risk</div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ flex: 1, background: T.line, height: "20px", borderRadius: "10px", overflow: "hidden" }}>
-              <div style={{ width: "51.3%", height: "100%", background: T.amber, borderRadius: "10px" }} />
-            </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: T.body, minWidth: "45px" }}>51.3%</span>
-          </div>
-          <div style={{ fontSize: "12px", color: T.muted, marginTop: "6px" }}>Top 3 channels generate 51.3% of total revenue - Moderate risk: Could benefit from further diversification</div>
+          <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Concentration Risk Analysis</h3>
+          <ConcentrationRiskBarChart isInvestorView={isInvestorView} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("campaignPerf") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Campaign Performance</h3>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Campaign</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Cost</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th></tr></thead>
-              <tbody>
-                {["Q1 Campaign", "Q2 Campaign", "Summer Sale", "Holiday Campaign"].map((campaign, i) => {
-                  const cost = [25000, 30000, 15000, 40000][i];
-                  const revenue = [45000, 55000, 35000, 80000][i];
-                  const roi = cost > 0 ? ((revenue - cost) / cost) * 100 : 0;
-                  return (
-                    <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{campaign}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {cost.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <CampaignPerformanceTable isInvestorView={isInvestorView} />
         </div>
       )}
 
@@ -3443,6 +3988,15 @@ const MarketingSales = () => {
       {analysisKpi && <AnalysisModal kpi={analysisKpi} period={period} fy={fy} onClose={() => setAnalysisKpi(null)} />}
       {actionKpi && <AddActionModal kpi={actionKpi.kpi} period={period} fy={fy} categoryName={actionKpi.categoryName} tabName={actionKpi.tabName} userId={user?.uid} onClose={() => setActionKpi(null)} onSaved={(m) => notify("success", `Action added to "${m}" and Integrated Actions.`)} />}
       {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)} onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
+
+      {marketingPanel && (
+        <MarketingDataModal 
+          mode={marketingPanel} 
+          onClose={() => setMarketingPanel(null)} 
+          onSave={saveMarketingPanelData}
+          isInvestorView={isInvestorView}
+        />
+      )}
 
       {manageTabs && (
         <Modal title="Manage Dashboard Tabs" subtitle="Show or hide a tab from the dashboard" icon={<Settings2 size={17} />} onClose={() => setManageTabs(false)} width={560} footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
@@ -3468,14 +4022,22 @@ const MarketingSales = () => {
       {addFlow === "choose" && <AddChooser onClose={() => setAddFlow(null)} onPick={(k) => setAddFlow(k)} />}
 
       {addFlow === "data" && (
-        <AddDataWizard tabs={tabs} fy={fy} docs={docs} currentTabId={activeTabId} prefs={dataPrefs} onSavePrefs={savePrefs} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)} onSaveField={saveKpiField} />
+        <AddDataWizard 
+          tabs={tabs} 
+          fy={fy} 
+          docs={docs} 
+          currentTabId={activeTabId} 
+          prefs={dataPrefs} 
+          onSavePrefs={savePrefs} 
+          onBack={() => setAddFlow("choose")} 
+          onClose={() => setAddFlow(null)} 
+          onSaveField={saveKpiField}
+        />
       )}
 
       {addFlow === "kpi" && (
         <AddKpiWizard tabs={tabs} currentTabId={activeTabId} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)} onSave={async (kpi) => { await persistMeta({ ...meta, custom: [...(meta.custom || []), kpi] }); notify("success", "KPI created."); }} />
       )}
-
-      <UniversalAddDataModal isOpen={showAddDataModal} onClose={() => setShowAddDataModal(false)} currentTab={activeTabId} user={user} onSave={() => { setLoadingData(true); setTimeout(() => setLoadingData(false), 1000); }} loading={loadingData} fromDate={fromDate} toDate={toDate} />
     </div>
   );
 };

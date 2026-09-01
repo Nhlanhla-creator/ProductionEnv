@@ -1174,11 +1174,8 @@ const FilterDropdown = ({ options, value, onChange, onClose }) => {
   );
 };
 
-/* ─── Enhanced table renderer ──────────────────────────────────────────── */
-
 /* ════════════════════════════════════════════════════════════════════════════
    Panels — the parts of People Performance that aren't KPI rows.
-   All panels now use the enhanced table with filters, resize, and drag-drop.
    ════════════════════════════════════════════════════════════════════════ */
 const BROWN = ["#3E2723", "#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"];
 
@@ -1304,6 +1301,7 @@ const TrackingPanel = ({ docs, readOnly }) => {
   );
 };
 
+// Simplified CapacityLoadPanel - NO filters or drag-drop
 const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
   const exec = docs.exec?.executionData || {};
   const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
@@ -1315,24 +1313,6 @@ const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
     if (v === "4" || v === 4) return { text: "Critical", color: T.red, bg: T.redBg };
     return { text: "—", color: T.faint, bg: T.raised };
   };
-
-  const cols = months.map((m) => ({
-    key: m.key,
-    label: m.label,
-    tip: `Founder operational load for ${m.long}`,
-    width: 70,
-  }));
-
-  const rows = [{
-    ...Object.fromEntries(months.map((m) => {
-      const s = loadStatus(exec.founderLoad?.[m.month]);
-      return [m.key, s.text];
-    }))
-  }];
-
-  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
-  
-  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
 
   return (
     <div style={cardS}>
@@ -1347,56 +1327,26 @@ const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
           <thead>
             <tr style={{ background: T.header, color: "#fff" }}>
-              {colOrder.map((key) => {
-                const col = cols.find(c => c.key === key);
-                if (!col) return null;
-                const currentFilter = filters[key] || "All";
-                const filterOpts = getFilterOptions(key);
-                return (
-                  <th
-                    key={key}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, key)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, key)}
-                    style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
-                  >
-                    <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
-                        <InfoTip text={col.tip} light />
-                        <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
-                          style={iconBtn("rgba(255,255,255,0.6)")}>
-                          {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
-                        </button>
-                        <FilterDropdown
-                          options={filterOpts}
-                          value={currentFilter}
-                          onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
-                          onClose={() => {}}
-                        />
-                      </div>
-                    </div>
-                    <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
-                  </th>
-                );
-              })}
+              {months.map((m) => (
+                <th key={m.key} style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.14)" }}>
+                  {m.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((row, i) => (
-              <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
-                {colOrder.map((key) => {
-                  const val = row[key] || "—";
-                  const s = loadStatus(exec.founderLoad?.[months.find(m => m.key === key)?.month]);
-                  return (
-                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, textAlign: "center" }}>
-                      <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>{val}</div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            <tr style={{ background: T.bg }}>
+              {months.map((m) => {
+                const s = loadStatus(exec.founderLoad?.[m.month]);
+                return (
+                  <td key={m.key} style={{ padding: "10px 12px", textAlign: "center", borderRight: `1px solid ${T.lineSoft}` }}>
+                    <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>
+                      {s.text}
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
           </tbody>
         </table>
       </div>
@@ -1407,6 +1357,7 @@ const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
   );
 };
 
+// Simplified CapacitySpanPanel - NO filters or drag-drop
 const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
   const exec = docs.exec?.executionData || {};
   const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
@@ -1418,24 +1369,6 @@ const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
     if (n < 3 || n > 12) return { text: n.toFixed(1), color: T.red, bg: T.redBg };
     return { text: n.toFixed(1), color: T.amber, bg: T.amberBg };
   };
-
-  const cols = months.map((m) => ({
-    key: m.key,
-    label: m.label,
-    tip: `Average span of control for ${m.long}`,
-    width: 70,
-  }));
-
-  const rows = [{
-    ...Object.fromEntries(months.map((m) => {
-      const s = spanStatus(exec.spanOfControl?.[m.month]);
-      return [m.key, s.text];
-    }))
-  }];
-
-  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
-  
-  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
 
   return (
     <div style={cardS}>
@@ -1450,56 +1383,26 @@ const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
           <thead>
             <tr style={{ background: T.header, color: "#fff" }}>
-              {colOrder.map((key) => {
-                const col = cols.find(c => c.key === key);
-                if (!col) return null;
-                const currentFilter = filters[key] || "All";
-                const filterOpts = getFilterOptions(key);
-                return (
-                  <th
-                    key={key}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, key)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, key)}
-                    style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}
-                  >
-                    <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
-                        <InfoTip text={col.tip} light />
-                        <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })}
-                          style={iconBtn("rgba(255,255,255,0.6)")}>
-                          {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
-                        </button>
-                        <FilterDropdown
-                          options={filterOpts}
-                          value={currentFilter}
-                          onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
-                          onClose={() => {}}
-                        />
-                      </div>
-                    </div>
-                    <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
-                  </th>
-                );
-              })}
+              {months.map((m) => (
+                <th key={m.key} style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.14)" }}>
+                  {m.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((row, i) => (
-              <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
-                {colOrder.map((key) => {
-                  const val = row[key] || "—";
-                  const s = spanStatus(exec.spanOfControl?.[months.find(m => m.key === key)?.month]);
-                  return (
-                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, textAlign: "center" }}>
-                      <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>{val}</div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            <tr style={{ background: T.bg }}>
+              {months.map((m) => {
+                const s = spanStatus(exec.spanOfControl?.[m.month]);
+                return (
+                  <td key={m.key} style={{ padding: "10px 12px", textAlign: "center", borderRight: `1px solid ${T.lineSoft}` }}>
+                    <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>
+                      {s.text}
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
           </tbody>
         </table>
       </div>
@@ -1963,9 +1866,26 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
 
 /* ════════════════════════════════════════════════════════════════════════════
    Add Data — writes back into the same peopleData docs the old sections used.
+   FIXED: Shows ALL tabs, not just the first one.
    ════════════════════════════════════════════════════════════════════════ */
 const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, onPullFinancials, currentTabId }) => {
-  const editableTabs = tabs.filter((t) => t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
+  // FIX: Include tabs that have either editable KPIs OR panels that need data entry
+  const editableTabs = tabs.filter((t) => {
+    // Check if any category has editable KPIs (with field property)
+    const hasEditableKpis = t.categories.some((c) => 
+      (c.kpis || []).some((k) => k.field)
+    );
+    // Check if any category has a panel that needs data entry
+    const hasPanel = t.categories.some((c) => 
+      c.panel === "tracking" || 
+      c.panel === "capacityLoad" || 
+      c.panel === "capacitySpan" || 
+      c.panel === "recordsTerm" || 
+      c.panel === "recordsHire"
+    );
+    return hasEditableKpis || hasPanel;
+  });
+  
   const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId
     : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
   const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
@@ -1988,10 +1908,38 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   const monthMeta = months.find((m) => m.key === periodKey) || months[0];
   const monthIndex = months.findIndex((m) => m.key === periodKey);
 
+  // Get rows from the selected tab - include all editable KPIs
   const rows = useMemo(() => {
     if (!tab) return [];
     const out = [];
-    tab.categories.forEach((cat) => (cat.kpis || []).forEach((k) => out.push({ kpi: k, category: cat.name })));
+    tab.categories.forEach((cat) => {
+      // Check if this category has a panel
+      const hasPanel = cat.panel === "tracking" || cat.panel === "capacityLoad" || 
+                       cat.panel === "capacitySpan" || cat.panel === "recordsTerm" || 
+                       cat.panel === "recordsHire";
+      if (hasPanel) {
+        // For panel tabs, we want to show a special message or the panel data
+        // We'll add a special entry to indicate this tab has panel data
+        out.push({ 
+          kpi: { 
+            id: `panel_${cat.panel}`, 
+            name: `📋 ${cat.name}`, 
+            units: "", 
+            field: null,
+            panel: cat.panel,
+            isPanel: true 
+          }, 
+          category: cat.name 
+        });
+      } else {
+        // For regular tabs, include editable KPIs
+        (cat.kpis || []).forEach((k) => {
+          if (k.field) {
+            out.push({ kpi: k, category: cat.name });
+          }
+        });
+      }
+    });
     return out;
   }, [tab]);
 
@@ -2041,6 +1989,13 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     );
   }
 
+  // Check if the selected tab has panel data (like records)
+  const hasPanelData = tab.categories.some((c) => 
+    c.panel === "tracking" || c.panel === "capacityLoad" || 
+    c.panel === "capacitySpan" || c.panel === "recordsTerm" || 
+    c.panel === "recordsHire"
+  );
+
   return (
     <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />}
       onClose={onClose} width={800}
@@ -2067,80 +2022,119 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
-        <div style={{ flex: 1 }}>
-          <label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label>
-          <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
-            {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
-          </select>
-        </div>
-        <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-        <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
-      </div>
-
-      {(tabId === "productivity" || tabId === "capability") && (
+      {hasPanelData && (
         <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex",
           alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <Info size={16} color={T.accentSoft} />
           <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
-            Revenue per employee, labour cost % and training spend can be computed from Financial Performance rather than typed.
+            This section contains records data (Employee Development, Terminations, Hires, etc.). Click the button below to edit these records.
           </span>
-          <button onClick={async () => { setPulling(true); await onPullFinancials(); setPulling(false); }}
-            disabled={pulling} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: pulling ? 0.6 : 1 }}>
-            <RefreshCw size={12} /> {pulling ? "Pulling…" : "Pull from Financials"}
+          <button 
+            onClick={() => {
+              // Find the first panel category
+              const panelCat = tab.categories.find((c) => 
+                c.panel === "tracking" || c.panel === "capacityLoad" || 
+                c.panel === "capacitySpan" || c.panel === "recordsTerm" || 
+                c.panel === "recordsHire"
+              );
+              if (panelCat?.panel) {
+                onClose();
+                // Let the parent know which panel to open
+                if (window.__setRecordsMode) {
+                  window.__setRecordsMode(panelCat.panel);
+                }
+              }
+            }}
+            style={{ ...btnPrimary, padding: "7px 14px", fontSize: "12.5px" }}>
+            <Users size={13} /> Edit Records
           </button>
         </div>
       )}
 
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-            <thead>
-              <tr>
-                <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
-                <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
-                <th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ kpi, category }, i) => (
-                <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                  <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
-                    borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <div style={{ fontWeight: 600 }}>{kpi.name}</div>
-                    <div style={{ fontSize: "11.5px", color: T.muted }}>
-                      {category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}
-                    </div>
-                  </td>
-                  {["actual", "budget"].map((which) => {
-                    const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+      {!hasPanelData && (
+        <>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label>
+              <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
+                {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
+              </select>
+            </div>
+            <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
+              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
+            <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
+              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+          </div>
+
+          {(tabId === "summary") && (
+            <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex",
+              alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <Info size={16} color={T.accentSoft} />
+              <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
+                Revenue per employee, labour cost % and training spend can be computed from Financial Performance rather than typed.
+              </span>
+              <button onClick={async () => { setPulling(true); await onPullFinancials(); setPulling(false); }}
+                disabled={pulling} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: pulling ? 0.6 : 1 }}>
+                <RefreshCw size={12} /> {pulling ? "Pulling…" : "Pull from Financials"}
+              </button>
+            </div>
+          )}
+
+          <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+            <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
+                    <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
+                    <th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(({ kpi, category }, i) => {
+                    // Skip panel rows - they should have been handled above
+                    if (kpi.isPanel) return null;
+                    const pathActual = kpi.field?.a;
+                    const pathBudget = kpi.field?.b;
                     return (
-                      <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`,
-                        borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
-                        {!path ? (
-                          <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>
-                            {which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}
+                      <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
+                        <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
+                          borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                          <div style={{ fontWeight: 600 }}>{kpi.name}</div>
+                          <div style={{ fontSize: "11.5px", color: T.muted }}>
+                            {category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}
                           </div>
-                        ) : kpi.options ? (
-                          <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}>
-                            <option value="">—</option>
-                            {kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        ) : (
-                          <input type="number" step="any" value={value(kpi, which)} placeholder="—"
-                            onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />
-                        )}
-                      </td>
+                        </td>
+                        {["actual", "budget"].map((which) => {
+                          const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
+                          return (
+                            <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`,
+                              borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
+                              {!path ? (
+                                <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>
+                                  {which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}
+                                </div>
+                              ) : kpi.options ? (
+                                <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}>
+                                  <option value="">—</option>
+                                  {kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                              ) : (
+                                <input type="number" step="any" value={value(kpi, which)} placeholder="—"
+                                  onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
                     );
                   })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </Modal>
   );
 };
@@ -2317,6 +2311,16 @@ const PeoplePerformance = () => {
   };
   useEffect(() => {
     try { const raw = window.localStorage.getItem(PREFS_KEY); if (raw) setDataPrefs(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+
+  // Set up the global callback for the AddDataWizard to open records
+  useEffect(() => {
+    window.__setRecordsMode = (mode) => {
+      setRecordsMode(mode);
+    };
+    return () => {
+      delete window.__setRecordsMode;
+    };
   }, []);
 
   useEffect(() => {
@@ -2781,7 +2785,7 @@ const PeoplePerformance = () => {
           )}
           <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
-            <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
+            <ClipboardList size={14} /> People Performance <ExternalLink size={11} />
           </button>
           {!isInvestorView && <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add KPI/Data</button>}
         </div>
