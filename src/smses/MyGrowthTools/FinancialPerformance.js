@@ -113,6 +113,50 @@ const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
   return `${sign}${trimNum(n)}${suffix}`;
 };
 
+// NEW: Parse number with thousand separators support
+const parseNumberInput = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  // Remove thousand separators (spaces, commas, periods used as separators)
+  const cleaned = String(value).replace(/[\s,]/g, '');
+  const n = Number(cleaned);
+  return Number.isNaN(n) ? null : n;
+};
+
+// NEW: Format number for display with thousand separators
+const formatDisplayNumber = (value, units = null) => {
+  if (value === null || value === undefined || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  
+  // For percentage, keep limited decimal places
+  if (units === "%") {
+    return n.toFixed(1);
+  }
+  
+  // For currency and other numbers, add thousand separators
+  if (Math.abs(n) >= 1) {
+    return n.toLocaleString(LOCALE);
+  }
+  return String(n);
+};
+
+// NEW: Validate input based on units
+const isValidInput = (value, units) => {
+  if (value === "" || value === null || value === undefined) return true;
+  const cleaned = String(value).replace(/[\s,]/g, '');
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return false;
+  
+  if (units === "%") {
+    // Percentages should be between 0 and 100 (or -100 to 100 for variances)
+    return n >= -100 && n <= 100;
+  }
+  if (units === "×") {
+    return n >= 0 && n <= 1000; // Reasonable ratio range
+  }
+  return true;
+};
+
 const parseNum = (v) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isNaN(n) ? null : n; };
 const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
 const errText = (e) => String(e?.message ?? e ?? "Unknown error");
@@ -1855,10 +1899,22 @@ const AddDataWizard = ({
     return out;
   }, [tab]);
 
-  const draftKey = (kpiId, which) => `${monthMeta?.year}|${monthMeta?.month}|${kpiId}|${which}`;
-  const value = (kpi, which) => {
-    const dk = draftKey(kpi.id, which);
-    if (draft[dk] !== undefined) return draft[dk];
+  // FIXED: Properly handle draft values with display formatting
+  const getDisplayValue = (kpi, which) => {
+    const dk = `${monthMeta?.year}|${monthMeta?.month}|${kpi.id}|${which}`;
+    if (draft[dk] !== undefined) {
+      // If the draft value exists, show it with formatting
+      const raw = draft[dk];
+      if (raw === "" || raw === null || raw === undefined) return "";
+      // For display, format with thousand separators if it's a number
+      const num = parseNumberInput(raw);
+      if (num !== null) {
+        return formatDisplayNumber(num, kpi.units);
+      }
+      return raw;
+    }
+    
+    // If no draft, get the stored value
     if (!kpi.field) return "";
     if (kpi.custom) {
       const v = kpi.entries?.[monthMeta.key]?.[which];
@@ -1868,22 +1924,63 @@ const AddDataWizard = ({
     if (!field) return "";
     const d = docs[`${DOC[kpi.field.src]}_${monthMeta.year}`];
     const v = d?.[field]?.[monthMeta.month];
-    return v === undefined || v === null ? "" : String(v);
+    // Format the stored value with thousand separators
+    if (v !== undefined && v !== null && v !== "") {
+      const num = Number(v);
+      if (Number.isFinite(num)) {
+        return formatDisplayNumber(num, kpi.units);
+      }
+      return String(v);
+    }
+    return "";
   };
 
-  const setValue = (kpi, which, raw) => {
-    const dk = draftKey(kpi.id, which);
+  // FIXED: Handle input changes without losing focus
+  const handleInputChange = (kpi, which, e) => {
+    const raw = e.target.value;
+    const dk = `${monthMeta?.year}|${monthMeta?.month}|${kpi.id}|${which}`;
+    
+    // Update draft immediately for display
     setDraft((p) => ({ ...p, [dk]: raw }));
     setSaveState("saving");
+    
+    // Clear any pending save
     if (timer.current) clearTimeout(timer.current);
+    
+    // Schedule save with debounce (but only if the value is valid)
     timer.current = setTimeout(async () => {
-      await onSaveField({ kpi, which, raw, year: monthMeta.year, monthIndex: monthMeta.month });
+      // Parse and validate the input
+      const num = parseNumberInput(raw);
+      
+      // If it's a percentage and invalid, show a warning but still save
+      if (kpi.units === "%" && num !== null && (num < -100 || num > 100)) {
+        // Allow invalid values temporarily but they'll be validated
+        console.warn(`Percentage value ${num} is outside -100 to 100 range`);
+      }
+      
+      await onSaveField({ kpi, which, raw: num !== null ? String(num) : raw, year: monthMeta.year, monthIndex: monthMeta.month });
       onSavePrefs({ tabId, startYear });
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 1800);
-    }, 800);
+    }, 1200); // Increased debounce to prevent focus loss
   };
+
+  // Clean up timer on unmount
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  // Helper to check if a field should be editable
+  const isEditable = (kpi, which) => {
+    if (kpi.custom) return true;
+    if (!kpi.field) return false;
+    const field = which === "actual" ? kpi.field.a : kpi.field.b;
+    return !!field;
+  };
+
+  // Get derived value for calculated fields
+  const getDerivedValue = (kpi) => {
+    if (kpi.custom || !kpi.actual) return null;
+    return kpi.actual(ctx);
+  };
 
   const cell = { ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" };
   const th = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
@@ -1904,7 +2001,6 @@ const AddDataWizard = ({
     const bsTimer = useRef(null);
 
     const bsMonths = fyMonths(startYear, fy.startMonth);
-    // FIX: Initialize with first month that has data, or first month
     const [bsMonthKey, setBsMonthKey] = useState(() => {
       const defaultKey = bsMonths.find((m) => m.key === currentMonthKey())?.key || bsMonths[0].key;
       return defaultKey;
@@ -1932,7 +2028,7 @@ const AddDataWizard = ({
         await onSaveBalanceSheetCell({ year: startYear, monthIndex: bsMi, path, key, raw });
         setBsSaveState("saved");
         setTimeout(() => setBsSaveState("idle"), 1800);
-      }, 800);
+      }, 1200);
     };
 
     useEffect(() => () => { if (bsTimer.current) clearTimeout(bsTimer.current); }, []);
@@ -1948,6 +2044,7 @@ const AddDataWizard = ({
                 {Object.entries(obj).map(([key, arr], i) => {
                   if (!Array.isArray(arr)) return null;
                   const negative = NEGATIVE_KEYS.has(key);
+                  const val = arr[bsMi] !== undefined && arr[bsMi] !== "" && arr[bsMi] !== null ? Number(arr[bsMi]) : null;
                   return (
                     <tr key={key} style={{ background: i % 2 ? T.panel : T.bg }}>
                       <td style={{ padding: "6px 10px", fontSize: "13px", color: negative ? T.muted : T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
@@ -1955,9 +2052,15 @@ const AddDataWizard = ({
                         {prettify(key)}
                       </td>
                       <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, width: "40%" }}>
-                        <input type="number" step="any" value={arr[bsMi] ?? ""}
-                          onChange={(e) => setBsCell(path, key, e.target.value)}
-                          style={{ ...cell, minHeight: "28px", padding: "4px 8px", fontSize: "13px" }} />
+                        <input type="text" 
+                          value={val !== null ? formatDisplayNumber(val) : ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const num = parseNumberInput(raw);
+                            setBsCell(path, key, num !== null ? String(num) : raw);
+                          }}
+                          style={{ ...cell, minHeight: "28px", padding: "4px 8px", fontSize: "13px" }} 
+                          placeholder="0" />
                       </td>
                     </tr>
                   );
@@ -2019,7 +2122,7 @@ const AddDataWizard = ({
         await onSaveLoans(next);
         setLoanSaveState("saved");
         setTimeout(() => setLoanSaveState("idle"), 1800);
-      }, 600);
+      }, 1200);
     };
 
     useEffect(() => () => { if (loanTimer.current) clearTimeout(loanTimer.current); }, []);
@@ -2059,10 +2162,20 @@ const AddDataWizard = ({
                     <input value={loan.name} onChange={(e) => updateLoan(loan.id, "name", e.target.value)} style={cell} placeholder="Name" />
                   </td>
                   <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <input type="number" step="any" value={loan.scheduled} onChange={(e) => updateLoan(loan.id, "scheduled", e.target.value)} style={cell} placeholder="0" />
+                    <input type="text" value={loan.scheduled ? formatDisplayNumber(parseNumberInput(loan.scheduled) || 0) : ""} 
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const num = parseNumberInput(raw);
+                        updateLoan(loan.id, "scheduled", num !== null ? String(num) : raw);
+                      }} style={cell} placeholder="0" />
                   </td>
                   <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <input type="number" step="any" value={loan.paid} onChange={(e) => updateLoan(loan.id, "paid", e.target.value)} style={cell} placeholder="0" />
+                    <input type="text" value={loan.paid ? formatDisplayNumber(parseNumberInput(loan.paid) || 0) : ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const num = parseNumberInput(raw);
+                        updateLoan(loan.id, "paid", num !== null ? String(num) : raw);
+                      }} style={cell} placeholder="0" />
                   </td>
                   <td style={{ padding: "4px 8px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
                     <button onClick={() => removeLoan(loan.id)} style={{ ...btnQuiet, padding: "4px 8px", color: T.red }}><Trash2 size={14} /></button>
@@ -2093,7 +2206,7 @@ const AddDataWizard = ({
         await onSaveCapTable({ investors: invs, irrInvestments: irrs });
         setEqSaveState("saved");
         setTimeout(() => setEqSaveState("idle"), 1800);
-      }, 800);
+      }, 1200);
     };
 
     useEffect(() => () => { if (eqTimer.current) clearTimeout(eqTimer.current); }, []);
@@ -2102,13 +2215,17 @@ const AddDataWizard = ({
       const next = [...localDividends];
       if (field === "year") next[idx].year = Number(val) || 0;
       else if (field === "amountPerShare") {
-        next[idx].amountPerShare = Number(val) || 0;
-        next[idx].totalIssued = (Number(val) || 0) * (next[idx].totalShares || 0);
+        const num = parseNumberInput(val);
+        next[idx].amountPerShare = num || 0;
+        next[idx].totalIssued = (num || 0) * (next[idx].totalShares || 0);
       } else if (field === "totalShares") {
-        next[idx].totalShares = Number(val) || 0;
-        next[idx].totalIssued = (next[idx].amountPerShare || 0) * (Number(val) || 0);
-      } else if (field === "totalIssued") next[idx].totalIssued = Number(val) || 0;
-      else if (field === "paymentDate" || field === "notes") next[idx][field] = val;
+        const num = parseNumberInput(val);
+        next[idx].totalShares = num || 0;
+        next[idx].totalIssued = (next[idx].amountPerShare || 0) * (num || 0);
+      } else if (field === "totalIssued") {
+        const num = parseNumberInput(val);
+        next[idx].totalIssued = num || 0;
+      } else if (field === "paymentDate" || field === "notes") next[idx][field] = val;
       commitEquity(next, localInvestors, localIrr);
     };
     const addDividend = () => setLocalDividends([...localDividends, { year: new Date().getFullYear(), amountPerShare: 0, totalShares: 0, totalIssued: 0, paymentDate: "", notes: "" }]);
@@ -2120,7 +2237,12 @@ const AddDataWizard = ({
 
     const updateInvestor = (idx, field, val) => {
       const next = [...localInvestors];
-      next[idx][field] = field === "name" ? val : Number(val) || 0;
+      if (field === "name") {
+        next[idx].name = val;
+      } else {
+        const num = parseNumberInput(val);
+        next[idx][field] = num || 0;
+      }
       commitEquity(localDividends, next, localIrr);
     };
     const addInvestor = () => setLocalInvestors([...localInvestors, { name: "", shares: 0, investment: 0 }]);
@@ -2130,7 +2252,6 @@ const AddDataWizard = ({
       commitEquity(localDividends, next, localIrr);
     };
 
-    // FIX: Correctly handle nested details updates for IRR
     const updateIrr = (idx, field, val) => {
       const next = [...localIrr];
       if (field === "name") {
@@ -2138,7 +2259,8 @@ const AddDataWizard = ({
       } else if (field === "riskRating") {
         next[idx].riskRating = val;
       } else if (field === "irr") {
-        next[idx].irr = Number(val) || 0;
+        const num = parseNumberInput(val);
+        next[idx].irr = num || 0;
       } else if (field.startsWith("details.")) {
         const sub = field.split(".")[1];
         if (!next[idx].details) next[idx].details = {};
@@ -2187,7 +2309,12 @@ const AddDataWizard = ({
                       ) : c.type === "text" ? (
                         <input value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} placeholder={c.placeholder || ""} />
                       ) : c.type === "number" ? (
-                        <input type="number" step="any" value={value || 0} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
+                        <input type="text" value={value ? formatDisplayNumber(parseNumberInput(value) || 0) : ""} 
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const num = parseNumberInput(raw);
+                            updateFn(idx, c.key, num !== null ? String(num) : raw);
+                          }} style={cell} />
                       ) : (
                         <input type="text" value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
                       )}
@@ -2329,6 +2456,11 @@ const AddDataWizard = ({
                     const derivedActual = !kpi.custom && kpi.actual ? kpi.actual(ctx) : null;
                     const derivedBudget = !kpi.custom && kpi.budget ? kpi.budget(ctx) : null;
                     const bg = i % 2 ? T.panel : T.bg;
+                    const isEditableActual = isEditable(kpi, "actual");
+                    const isEditableBudget = isEditable(kpi, "budget");
+                    const displayActual = getDisplayValue(kpi, "actual");
+                    const displayBudget = getDisplayValue(kpi, "budget");
+                    
                     return (
                       <tr key={kpi.id} style={{ background: bg }}>
                         <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
@@ -2337,19 +2469,31 @@ const AddDataWizard = ({
                           <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units} · {kpi.field ? "entered" : "calculated"}</div>
                         </td>
                         <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                          {kpi.field ? (
-                            <input type="number" step="any" value={value(kpi, "actual")} placeholder="—"
-                              onChange={(e) => setValue(kpi, "actual", e.target.value)} style={cell} />
+                          {isEditableActual ? (
+                            <input type="text" 
+                              value={displayActual}
+                              onChange={(e) => handleInputChange(kpi, "actual", e)}
+                              onFocus={(e) => e.target.select()}
+                              placeholder="—"
+                              style={{ ...cell, borderColor: kpi.units === "%" && displayActual && (parseNumberInput(displayActual) < -100 || parseNumberInput(displayActual) > 100) ? T.red : undefined }} />
                           ) : (
-                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.muted, padding: "7px 0" }}>{fmtValue(derivedActual, kpi, { bare: true })}</div>
+                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.muted, padding: "7px 0" }}>
+                              {derivedActual !== null && derivedActual !== undefined ? fmtValue(derivedActual, kpi, { bare: true }) : "—"}
+                            </div>
                           )}
                         </td>
                         <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                          {kpi.field?.b || kpi.custom ? (
-                            <input type="number" step="any" value={value(kpi, "budget")} placeholder="—"
-                              onChange={(e) => setValue(kpi, "budget", e.target.value)} style={cell} />
+                          {isEditableBudget ? (
+                            <input type="text" 
+                              value={displayBudget}
+                              onChange={(e) => handleInputChange(kpi, "budget", e)}
+                              onFocus={(e) => e.target.select()}
+                              placeholder="—"
+                              style={{ ...cell, borderColor: kpi.units === "%" && displayBudget && (parseNumberInput(displayBudget) < -100 || parseNumberInput(displayBudget) > 100) ? T.red : undefined }} />
                           ) : (
-                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.faint, padding: "7px 0" }}>{fmtValue(derivedBudget, kpi, { bare: true })}</div>
+                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.faint, padding: "7px 0" }}>
+                              {derivedBudget !== null && derivedBudget !== undefined ? fmtValue(derivedBudget, kpi, { bare: true }) : "—"}
+                            </div>
                           )}
                         </td>
                       </tr>

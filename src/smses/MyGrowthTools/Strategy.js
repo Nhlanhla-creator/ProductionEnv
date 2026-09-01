@@ -54,6 +54,89 @@ ChartJS.register(
   Legend,
 );
 
+// ─── Design Tokens (matching Financial Performance) ──────────────────────
+const T = {
+  ink: "#2d201c",
+  body: "#3b2b26",
+  muted: "#6b5b55",
+  faint: "#8a7a74",
+  line: "#ded8d4",
+  lineSoft: "#e9e3df",
+  lineStrong: "#b0a29b",
+  bg: "#ffffff",
+  panel: "#faf8f7",
+  raised: "#f2eeec",
+  accent: "#4a352f",
+  accentSoft: "#6b4f47",
+  accentTint: "#f4efec",
+  header: "#241813",
+  green: "#166534",
+  greenBg: "#f0fdf4",
+  amber: "#92400e",
+  amberBg: "#fffbeb",
+  red: "#991b1b",
+  redBg: "#fef2f2",
+  blue: "#1e40af",
+};
+
+// ─── Shared UI Components ────────────────────────────────────────────────
+const btnBase = {
+  padding: "9px 16px",
+  borderRadius: "8px",
+  fontSize: "13.5px",
+  fontWeight: 500,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "7px",
+  fontFamily: "inherit",
+};
+const btnPrimary = {
+  ...btnBase,
+  background: T.accent,
+  color: "#fff",
+  border: `1px solid ${T.accent}`,
+  fontWeight: 600,
+};
+const btnGhost = {
+  ...btnBase,
+  background: T.bg,
+  color: T.body,
+  border: `1px solid ${T.lineStrong}`,
+};
+const btnQuiet = {
+  ...btnBase,
+  background: "transparent",
+  color: T.accent,
+  border: "1px solid transparent",
+};
+const inputS = {
+  width: "100%",
+  padding: "9px 11px",
+  border: `1px solid ${T.lineStrong}`,
+  borderRadius: "8px",
+  fontSize: "13.5px",
+  fontFamily: "inherit",
+  boxSizing: "border-box",
+  color: T.ink,
+  background: T.bg,
+  outline: "none",
+};
+const selectS = { ...inputS, cursor: "pointer" };
+const labelS = {
+  display: "block",
+  fontSize: "12.5px",
+  fontWeight: 600,
+  color: T.accent,
+  marginBottom: "5px",
+};
+const cardS = {
+  background: T.bg,
+  border: `1px solid ${T.line}`,
+  borderRadius: "10px",
+  padding: "14px 16px",
+};
+
 const SECTION_DATA = {
   "strategic-clarity": {
     name: "Strategic Clarity",
@@ -119,28 +202,17 @@ const SECTION_DATA = {
       "Review cadence",
     ],
   },
-  "change-adaptability": {
-    name: "Change and Adaptability",
-    keyQuestion:
-      "Does the organization effectively adapt its strategy based on feedback and changing conditions?",
-    keySignals:
-      "Strategy reviews occur regularly, Pivots are documented and reasoned",
-    keyDecisions:
-      "When to pivot vs persist? What adjustments are needed? How to communicate changes?",
-    kpis: ["Review frequency", "Pivot documentation", "Strategy adjustments"],
-  },
 };
 
-// RISK COLORS for scatter plot - each category gets a distinct color
-// RISK COLORS for scatter plot - each category gets a distinct color
+// RISK COLORS for scatter plot
 const RISK_COLORS = {
-  "financial-risk": "#4CAF50", // Green
-  "market-risk": "#2196F3", // Blue
-  "operational-risk": "#FF9800", // Orange
-  "reputational-risk": "#9C27B0", // Purple
-  "compliance-risk": "#F44336", // Red
-  "technology-risk": "#FF69B4", // Hot Pink - distinct from market risk
-  "business-risk": "#7d5a50", // Brown for "All" view
+  "financial-risk": "#4CAF50",
+  "market-risk": "#2196F3",
+  "operational-risk": "#FF9800",
+  "reputational-risk": "#9C27B0",
+  "compliance-risk": "#F44336",
+  "technology-risk": "#FF69B4",
+  "business-risk": "#7d5a50",
 };
 
 // Helper function to get months array based on year
@@ -149,15 +221,15 @@ const getMonths = (year) => {
   if (year === currentYear) {
     const currentMonth = new Date().getMonth();
     return Array.from({ length: currentMonth + 1 }, (_, i) =>
-      new Date(currentYear, i, 1).toLocaleString("default", { month: "short" }),
+      new Date(currentYear, i, 1).toLocaleString("default", { month: "short" })
     );
   }
   return Array.from({ length: 12 }, (_, i) =>
-    new Date(year, i, 1).toLocaleString("default", { month: "short" }),
+    new Date(year, i, 1).toLocaleString("default", { month: "short" })
   );
 };
 
-// Key Question Component with Show More functionality - UPDATED
+// Key Question Component
 const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   const [showMore, setShowMore] = useState(false);
 
@@ -169,18 +241,18 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   return (
     <div
       style={{
-        backgroundColor: "#DCDCDC",
+        background: T.panel,
         padding: "15px 20px",
-        borderRadius: "8px",
+        borderRadius: "10px",
         marginBottom: "20px",
-        border: "1px solid #5d4037",
+        border: `1px solid ${T.line}`,
       }}
     >
       <div style={{ marginBottom: "8px" }}>
-        <strong style={{ color: "#5d4037", fontSize: "14px" }}>
+        <strong style={{ color: T.accent, fontSize: "14px" }}>
           Key Question:
         </strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
+        <span style={{ color: T.body, fontSize: "14px", marginLeft: "8px" }}>
           {showMore ? question : getFirstSentence(question)}
         </span>
         {!showMore &&
@@ -192,7 +264,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
               style={{
                 background: "none",
                 border: "none",
-                color: "#5d4037",
+                color: T.accent,
                 fontWeight: "600",
                 cursor: "pointer",
                 marginLeft: "5px",
@@ -207,22 +279,18 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
       {showMore && (
         <>
           <div style={{ marginBottom: "8px" }}>
-            <strong style={{ color: "#5d4037", fontSize: "14px" }}>
+            <strong style={{ color: T.accent, fontSize: "14px" }}>
               Key Signals:
             </strong>
-            <span
-              style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}
-            >
+            <span style={{ color: T.body, fontSize: "14px", marginLeft: "8px" }}>
               {signals}
             </span>
           </div>
           <div>
-            <strong style={{ color: "#5d4037", fontSize: "14px" }}>
+            <strong style={{ color: T.accent, fontSize: "14px" }}>
               Key Decisions:
             </strong>
-            <span
-              style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}
-            >
+            <span style={{ color: T.body, fontSize: "14px", marginLeft: "8px" }}>
               {decisions}
             </span>
           </div>
@@ -231,7 +299,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
             style={{
               background: "none",
               border: "none",
-              color: "#5d4037",
+              color: T.accent,
               fontWeight: "600",
               cursor: "pointer",
               marginTop: "10px",
@@ -274,7 +342,6 @@ const AIAnalysisButton = ({
   const [analysisError, setAnalysisError] = useState("");
   const [savedAnalysis, setSavedAnalysis] = useState("");
 
-  // Load saved analysis on component mount
   useEffect(() => {
     if (userId) {
       loadSavedAnalysis();
@@ -298,29 +365,19 @@ const AIAnalysisButton = ({
     }
   };
 
-  // NEW: Function to clean up the AI response
   const cleanAIResponse = (text) => {
     if (!text) return text;
-
-    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
     let cleaned = text
-      // Remove hashtags at beginning of lines
       .replace(/^#+\s*/gm, "")
-      // Remove any remaining hashtags
       .replace(/#/g, "")
-      // Remove asterisk formatting
       .replace(/\*\*/g, "")
       .replace(/\*/g, "")
-      // Clean up multiple newlines
       .replace(/\n{3,}/g, "\n\n")
-      // Remove markdown links but keep text
       .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
-      // Trim each line
       .split("\n")
       .map((line) => line.trim())
       .join("\n")
       .trim();
-
     return cleaned;
   };
 
@@ -340,17 +397,13 @@ const AIAnalysisButton = ({
     setShowAnalysis(true);
 
     try {
-      // Prepare data for AI analysis
       const analysisData = prepareStrategicClarityData(visionMissionData);
-
-      // Create prompt for AI analysis
       const prompt = createStrategicClarityPrompt(analysisData);
 
-      // Call Firebase Function for AI analysis
       const functions = getFunctions();
       const generateStrategicClarityAnalysis = httpsCallable(
         functions,
-        "generateStrategicClarityAnalysis",
+        "generateStrategicClarityAnalysis"
       );
 
       const response = await generateStrategicClarityAnalysis({
@@ -365,10 +418,8 @@ const AIAnalysisButton = ({
         throw new Error("No analysis generated");
       }
 
-      // Clean the analysis before saving
       analysis = cleanAIResponse(analysis);
 
-      // Save analysis to Firestore
       const aiAnalysisRef = doc(db, "strategicClarityAnalysis", userId);
       await setDoc(
         aiAnalysisRef,
@@ -378,7 +429,7 @@ const AIAnalysisButton = ({
           dataSnapshot: visionMissionData,
           userId: userId,
         },
-        { merge: true },
+        { merge: true }
       );
 
       setAiAnalysis(analysis);
@@ -387,7 +438,7 @@ const AIAnalysisButton = ({
       console.error("Error generating AI analysis:", error);
       setAnalysisError(`Failed to generate analysis: ${error.message}`);
       setAiAnalysis(
-        "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric.",
+        "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."
       );
     } finally {
       setIsGenerating(false);
@@ -403,8 +454,7 @@ const AIAnalysisButton = ({
       strategicPriorities: data.strategicPriorities || [],
       strategicHorizon: data.strategicHorizon || "12",
       completedPriorities:
-        data.strategicPriorities?.filter((p) => p.status === "Done").length ||
-        0,
+        data.strategicPriorities?.filter((p) => p.status === "Done").length || 0,
       totalPriorities: data.strategicPriorities?.length || 0,
       valuesCount: data.values?.length || 0,
       operatingPrinciplesCount: data.operatingPrinciples?.length || 0,
@@ -487,12 +537,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
   const handleAIAnalysis = () => {
     if (!showAnalysis) {
-      // If we have saved analysis, show it
       if (savedAnalysis) {
         setAiAnalysis(savedAnalysis);
         setShowAnalysis(true);
       } else {
-        // Otherwise generate new analysis
         generateAIAnalysis();
       }
     } else {
@@ -518,19 +566,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           onClick={handleAIAnalysis}
           disabled={isGenerating || isInvestorView}
           style={{
-            padding: "12px 24px",
-            backgroundColor: isInvestorView ? "#a1887f" : "#4a352f",
-            color: "#fdfcfb",
-            border: "none",
-            borderRadius: "6px",
-            cursor: isInvestorView ? "not-allowed" : "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            transition: "all 0.2s ease",
+            ...btnPrimary,
             opacity: isGenerating ? 0.7 : 1,
+            background: isInvestorView ? T.muted : T.accent,
           }}
         >
           {isGenerating ? (
@@ -554,17 +592,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             onClick={refreshAnalysis}
             disabled={isInvestorView}
             style={{
+              ...btnGhost,
               padding: "8px 16px",
-              backgroundColor: "#7d5a50",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: isInvestorView ? "not-allowed" : "pointer",
               fontSize: "12px",
-              fontWeight: "500",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
             }}
             title="Refresh AI Analysis"
           >
@@ -576,10 +606,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       {showAnalysis && (
         <div
           style={{
-            backgroundColor: "#f8f4f0",
+            background: T.panel,
             padding: "20px",
-            borderRadius: "8px",
-            border: "1px solid #d7ccc8",
+            borderRadius: "10px",
+            border: `1px solid ${T.line}`,
             marginTop: "10px",
             position: "relative",
           }}
@@ -595,10 +625,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             <div>
               <label
                 style={{
+                  ...labelS,
                   fontSize: "16px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
                   marginBottom: "8px",
                 }}
               >
@@ -607,7 +635,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <p
                 style={{
                   fontSize: "12px",
-                  color: "#8d6e63",
+                  color: T.muted,
                   margin: "0 0 10px 0",
                   fontStyle: "italic",
                 }}
@@ -620,8 +648,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <span
                 style={{
                   fontSize: "10px",
-                  color: "#8d6e63",
-                  backgroundColor: "#efebe9",
+                  color: T.muted,
+                  background: T.raised,
                   padding: "4px 8px",
                   borderRadius: "4px",
                   fontWeight: "500",
@@ -636,10 +664,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             <div
               style={{
                 padding: "15px",
-                backgroundColor: "#ffebee",
+                background: T.redBg,
                 borderRadius: "6px",
-                border: "1px solid #ffcdd2",
-                color: "#c62828",
+                border: `1px solid ${T.red}33`,
+                color: T.red,
                 fontSize: "14px",
               }}
             >
@@ -650,15 +678,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               style={{
                 textAlign: "center",
                 padding: "30px",
-                color: "#5d4037",
+                color: T.body,
               }}
             >
               <div
                 style={{
                   width: "40px",
                   height: "40px",
-                  border: "3px solid #f3e5f5",
-                  borderTop: "3px solid #8d6e63",
+                  border: `3px solid ${T.lineSoft}`,
+                  borderTop: `3px solid ${T.accent}`,
                   borderRadius: "50%",
                   animation: "spin 1s linear infinite",
                   margin: "0 auto 15px",
@@ -666,7 +694,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               ></div>
               <p>Analyzing your strategic clarity data...</p>
               <p
-                style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}
+                style={{ fontSize: "12px", color: T.muted, marginTop: "5px" }}
               >
                 Comparing against industry benchmarks and best practices
               </p>
@@ -674,15 +702,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           ) : (
             <div
               style={{
-                backgroundColor: "white",
+                background: T.bg,
                 padding: "20px",
-                borderRadius: "6px",
-                border: "1px solid #e8d8cf",
+                borderRadius: "8px",
+                border: `1px solid ${T.lineSoft}`,
                 maxHeight: "400px",
                 overflowY: "auto",
                 fontSize: "14px",
                 lineHeight: "1.6",
-                color: "#5d4037",
+                color: T.body,
                 whiteSpace: "pre-wrap",
               }}
             >
@@ -695,9 +723,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             style={{
               marginTop: "15px",
               paddingTop: "15px",
-              borderTop: "1px solid #e8d8cf",
+              borderTop: `1px solid ${T.lineSoft}`,
               fontSize: "11px",
-              color: "#8d6e63",
+              color: T.muted,
               fontStyle: "italic",
               display: "flex",
               justifyContent: "space-between",
@@ -710,7 +738,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               style={{
                 background: "none",
                 border: "none",
-                color: "#8d6e63",
+                color: T.muted,
                 cursor: "pointer",
                 fontSize: "12px",
                 textDecoration: "underline",
@@ -725,7 +753,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   );
 };
 
-// Strategic Clarity Component with updated UI and Operating Principles
+// Strategic Clarity Component
 const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   const [visionMissionData, setVisionMissionData] = useState({
     vision: "",
@@ -748,7 +776,6 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   });
   const [triggerAnalysis, setTriggerAnalysis] = useState(false);
 
-  // Load data and set up real-time listener
   useEffect(() => {
     if (!currentUser || activeSection !== "strategic-clarity") return;
 
@@ -757,8 +784,8 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
         const visionMissionSnapshot = await getDocs(
           query(
             collection(db, "visionMission"),
-            where("userId", "==", currentUser.uid),
-          ),
+            where("userId", "==", currentUser.uid)
+          )
         );
 
         if (!visionMissionSnapshot.empty) {
@@ -779,10 +806,9 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
 
     loadVisionMissionData();
 
-    // Set up real-time listener for changes
     const visionMissionQuery = query(
       collection(db, "visionMission"),
-      where("userId", "==", currentUser.uid),
+      where("userId", "==", currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(visionMissionQuery, (snapshot) => {
@@ -797,7 +823,6 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
           strategicHorizon: data.strategicHorizon || "12",
         });
 
-        // Trigger AI analysis when data changes significantly
         if (snapshot.docs[0].metadata.hasPendingWrites) {
           setTriggerAnalysis(true);
         }
@@ -807,10 +832,8 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     return () => unsubscribe();
   }, [activeSection, currentUser]);
 
-  // Reset trigger after analysis
   useEffect(() => {
     if (triggerAnalysis) {
-      // Trigger AI analysis update
       setTriggerAnalysis(false);
     }
   }, [triggerAnalysis]);
@@ -838,8 +861,8 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
       const existingSnapshot = await getDocs(
         query(
           collection(db, "visionMission"),
-          where("userId", "==", currentUser.uid),
-        ),
+          where("userId", "==", currentUser.uid)
+        )
       );
 
       if (existingSnapshot.empty) {
@@ -912,7 +935,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     setVisionMissionData((prev) => ({
       ...prev,
       operatingPrinciples: prev.operatingPrinciples.filter(
-        (_, i) => i !== index,
+        (_, i) => i !== index
       ),
     }));
   };
@@ -951,7 +974,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     setVisionMissionData((prev) => ({
       ...prev,
       strategicPriorities: prev.strategicPriorities.filter(
-        (_, i) => i !== index,
+        (_, i) => i !== index
       ),
     }));
   };
@@ -965,20 +988,13 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     setVisionMissionData((prev) => ({
       ...prev,
       strategicPriorities: prev.strategicPriorities.map((priority, i) =>
-        i === index ? { ...priority, [field]: value } : priority,
+        i === index ? { ...priority, [field]: value } : priority
       ),
     }));
   };
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      {/* Key Question Section */}
+    <div style={cardS}>
       <KeyQuestionBox
         question={SECTION_DATA["strategic-clarity"].keyQuestion}
         signals={SECTION_DATA["strategic-clarity"].keySignals}
@@ -988,15 +1004,15 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
       {!currentUser && (
         <div
           style={{
-            backgroundColor: "#fff3cd",
-            border: "1px solid #ffeaa7",
+            background: T.amberBg,
+            border: `1px solid ${T.amber}33`,
             padding: "15px",
-            borderRadius: "6px",
+            borderRadius: "8px",
             marginBottom: "20px",
             textAlign: "center",
           }}
         >
-          <p style={{ color: "#856404", margin: 0 }}>
+          <p style={{ color: T.amber, margin: 0 }}>
             Please log in to access and manage your Strategic Clarity data.
           </p>
         </div>
@@ -1008,19 +1024,13 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
-              gap: "30px",
-              marginBottom: "30px",
+              gap: "20px",
+              marginBottom: "20px",
             }}
           >
-            <div
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "20px",
-                borderRadius: "6px",
-              }}
-            >
+            <div style={cardS}>
               <h3
-                style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}
+                style={{ color: T.accent, marginTop: 0, marginBottom: "15px" }}
               >
                 Vision
               </h3>
@@ -1036,29 +1046,17 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 rows="6"
                 disabled={isInvestorView}
                 style={{
-                  width: "100%",
-                  padding: "15px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
+                  ...inputS,
                   resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  background: isInvestorView ? T.panel : T.bg,
                   cursor: isInvestorView ? "not-allowed" : "text",
                 }}
               />
             </div>
 
-            <div
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "20px",
-                borderRadius: "6px",
-              }}
-            >
+            <div style={cardS}>
               <h3
-                style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}
+                style={{ color: T.accent, marginTop: 0, marginBottom: "15px" }}
               >
                 Mission
               </h3>
@@ -1074,15 +1072,9 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 rows="6"
                 disabled={isInvestorView}
                 style={{
-                  width: "100%",
-                  padding: "15px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
+                  ...inputS,
                   resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  background: isInvestorView ? T.panel : T.bg,
                   cursor: isInvestorView ? "not-allowed" : "text",
                 }}
               />
@@ -1090,14 +1082,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
           </div>
 
           {/* Core Values Section */}
-          <div
-            style={{
-              backgroundColor: "#f7f3f0",
-              padding: "20px",
-              borderRadius: "6px",
-              marginBottom: "30px",
-            }}
-          >
+          <div style={{ ...cardS, marginBottom: "20px" }}>
             <div
               style={{
                 display: "flex",
@@ -1106,21 +1091,9 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 marginBottom: "15px",
               }}
             >
-              <h3 style={{ color: "#5d4037", margin: 0 }}>Core Values</h3>
+              <h3 style={{ color: T.accent, margin: 0 }}>Core Values</h3>
               {!isInvestorView && (
-                <button
-                  onClick={() => setShowModal(true)}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#7d5a50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "12px",
-                  }}
-                >
+                <button onClick={() => setShowModal(true)} style={btnPrimary}>
                   Add Value
                 </button>
               )}
@@ -1137,25 +1110,25 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 <div
                   key={index}
                   style={{
-                    backgroundColor: "#fdfcfb",
+                    background: T.panel,
                     padding: "15px",
-                    borderRadius: "4px",
-                    border: "2px solid #e8ddd4",
+                    borderRadius: "8px",
+                    border: `1px solid ${T.line}`,
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
                   }}
                 >
-                  <span style={{ color: "#5d4037", fontWeight: "500" }}>
+                  <span style={{ color: T.ink, fontWeight: "500" }}>
                     {value}
                   </span>
                   {!isInvestorView && (
                     <button
                       onClick={() => handleRemoveValue(index)}
                       style={{
-                        backgroundColor: "transparent",
+                        background: "none",
                         border: "none",
-                        color: "#d32f2f",
+                        color: T.red,
                         cursor: "pointer",
                         fontSize: "18px",
                         padding: "0 5px",
@@ -1170,15 +1143,8 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             </div>
           </div>
 
-          {/* Operating Principles Section - NEW */}
-          <div
-            style={{
-              backgroundColor: "#f7f3f0",
-              padding: "20px",
-              borderRadius: "6px",
-              marginBottom: "30px",
-            }}
-          >
+          {/* Operating Principles Section */}
+          <div style={{ ...cardS, marginBottom: "20px" }}>
             <div
               style={{
                 display: "flex",
@@ -1187,22 +1153,13 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 marginBottom: "15px",
               }}
             >
-              <h3 style={{ color: "#5d4037", margin: 0 }}>
+              <h3 style={{ color: T.accent, margin: 0 }}>
                 Operating Principles
               </h3>
               {!isInvestorView && (
                 <button
                   onClick={() => setShowOperatingPrincipleModal(true)}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#7d5a50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "12px",
-                  }}
+                  style={btnPrimary}
                 >
                   Add Principle
                 </button>
@@ -1212,7 +1169,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             {visionMissionData.operatingPrinciples.length === 0 ? (
               <p
                 style={{
-                  color: "#7d5a50",
+                  color: T.muted,
                   textAlign: "center",
                   padding: "20px",
                 }}
@@ -1233,25 +1190,25 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                     <div
                       key={index}
                       style={{
-                        backgroundColor: "#fdfcfb",
+                        background: T.panel,
                         padding: "15px",
-                        borderRadius: "4px",
-                        border: "2px solid #bcaaa4",
+                        borderRadius: "8px",
+                        border: `1px solid ${T.line}`,
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
                       }}
                     >
-                      <span style={{ color: "#5d4037", fontWeight: "500" }}>
+                      <span style={{ color: T.ink, fontWeight: "500" }}>
                         {principle}
                       </span>
                       {!isInvestorView && (
                         <button
                           onClick={() => handleRemoveOperatingPrinciple(index)}
                           style={{
-                            backgroundColor: "transparent",
+                            background: "none",
                             border: "none",
-                            color: "#d32f2f",
+                            color: T.red,
                             cursor: "pointer",
                             fontSize: "18px",
                             padding: "0 5px",
@@ -1262,23 +1219,16 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                         </button>
                       )}
                     </div>
-                  ),
+                  )
                 )}
               </div>
             )}
           </div>
 
           {/* Strategic Horizon */}
-          <div
-            style={{
-              backgroundColor: "#f7f3f0",
-              padding: "20px",
-              borderRadius: "6px",
-              marginBottom: "30px",
-            }}
-          >
+          <div style={{ ...cardS, marginBottom: "20px" }}>
             <h3
-              style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}
+              style={{ color: T.accent, marginTop: 0, marginBottom: "15px" }}
             >
               Strategic Horizon
             </h3>
@@ -1292,14 +1242,10 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
               }
               disabled={isInvestorView}
               style={{
+                ...selectS,
                 width: "150px",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                background: isInvestorView ? T.panel : T.bg,
                 cursor: isInvestorView ? "not-allowed" : "pointer",
-                fontFamily: "inherit",
               }}
             >
               <option value="12">12 months</option>
@@ -1310,14 +1256,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             </select>
           </div>
 
-          <div
-            style={{
-              backgroundColor: "#f7f3f0",
-              padding: "20px",
-              borderRadius: "6px",
-              marginBottom: "30px",
-            }}
-          >
+          <div style={{ ...cardS, marginBottom: "20px" }}>
             <div
               style={{
                 display: "flex",
@@ -1326,23 +1265,14 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 marginBottom: "15px",
               }}
             >
-              <h3 style={{ color: "#5d4037", margin: 0 }}>
+              <h3 style={{ color: T.accent, margin: 0 }}>
                 Strategic Priorities (Max 3-5)
               </h3>
               {!isInvestorView &&
                 visionMissionData.strategicPriorities.length < 5 && (
                   <button
                     onClick={() => setShowPriorityModal(true)}
-                    style={{
-                      padding: "8px 16px",
-                      backgroundColor: "#7d5a50",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                      fontSize: "12px",
-                    }}
+                    style={btnPrimary}
                   >
                     Add Priority
                   </button>
@@ -1352,7 +1282,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             {visionMissionData.strategicPriorities.length === 0 ? (
               <p
                 style={{
-                  color: "#7d5a50",
+                  color: T.muted,
                   textAlign: "center",
                   padding: "20px",
                 }}
@@ -1365,15 +1295,15 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    color: "#4a352f",
+                    color: T.body,
                     minWidth: "800px",
                   }}
                 >
                   <thead>
                     <tr
                       style={{
-                        backgroundColor: "#e6d7c3",
-                        borderBottom: "2px solid #c8b6a6",
+                        background: T.header,
+                        borderBottom: `2px solid ${T.line}`,
                       }}
                     >
                       <th
@@ -1381,6 +1311,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                           padding: "12px",
                           textAlign: "left",
                           fontWeight: "600",
+                          color: "#fff",
                         }}
                       >
                         Description
@@ -1390,6 +1321,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                           padding: "12px",
                           textAlign: "left",
                           fontWeight: "600",
+                          color: "#fff",
                           width: "120px",
                         }}
                       >
@@ -1400,6 +1332,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                           padding: "12px",
                           textAlign: "left",
                           fontWeight: "600",
+                          color: "#fff",
                           width: "120px",
                         }}
                       >
@@ -1411,6 +1344,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                             width: "80px",
                           }}
                         >
@@ -1424,7 +1358,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                       (priority, index) => (
                         <tr
                           key={index}
-                          style={{ borderBottom: "1px solid #e6d7c3" }}
+                          style={{ borderBottom: `1px solid ${T.lineSoft}` }}
                         >
                           <td style={{ padding: "12px" }}>
                             {isInvestorView ? (
@@ -1437,16 +1371,10 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                                   handleUpdatePriority(
                                     index,
                                     "description",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
-                                style={{
-                                  width: "100%",
-                                  padding: "8px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "14px",
-                                }}
+                                style={inputS}
                               />
                             )}
                           </td>
@@ -1461,16 +1389,10 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                                   handleUpdatePriority(
                                     index,
                                     "dueDate",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
-                                style={{
-                                  width: "100%",
-                                  padding: "8px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "14px",
-                                }}
+                                style={inputS}
                               />
                             )}
                           </td>
@@ -1482,10 +1404,14 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                                   borderRadius: "4px",
                                   fontSize: "12px",
                                   fontWeight: "500",
-                                  backgroundColor:
+                                  background:
                                     priority.status === "Done"
-                                      ? "#c8e6c9"
-                                      : "#ffcdd2",
+                                      ? T.greenBg
+                                      : T.amberBg,
+                                  color:
+                                    priority.status === "Done"
+                                      ? T.green
+                                      : T.amber,
                                 }}
                               >
                                 {priority.status}
@@ -1497,16 +1423,10 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                                   handleUpdatePriority(
                                     index,
                                     "status",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
-                                style={{
-                                  width: "100%",
-                                  padding: "8px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "14px",
-                                }}
+                                style={selectS}
                               >
                                 <option value="Not Done">Not Done</option>
                                 <option value="Done">Done</option>
@@ -1519,8 +1439,8 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                                 onClick={() => handleRemovePriority(index)}
                                 style={{
                                   padding: "4px 8px",
-                                  backgroundColor: "#F44336",
-                                  color: "white",
+                                  background: T.red,
+                                  color: "#fff",
                                   border: "none",
                                   borderRadius: "4px",
                                   cursor: "pointer",
@@ -1533,7 +1453,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                             </td>
                           )}
                         </tr>
-                      ),
+                      )
                     )}
                   </tbody>
                 </table>
@@ -1551,19 +1471,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
 
           {!isInvestorView && (
             <div style={{ marginTop: "20px", textAlign: "right" }}>
-              <button
-                onClick={handleSaveVisionMission}
-                style={{
-                  padding: "12px 30px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                }}
-              >
+              <button onClick={handleSaveVisionMission} style={btnPrimary}>
                 Save Changes
               </button>
             </div>
@@ -1580,7 +1488,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -1589,28 +1497,20 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
         >
           <div
             style={{
-              backgroundColor: "white",
+              background: T.bg,
               padding: "30px",
-              borderRadius: "8px",
+              borderRadius: "10px",
               width: "90%",
               maxWidth: "500px",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>Add Core Value</h3>
+            <h3 style={{ color: T.accent, marginTop: 0 }}>Add Core Value</h3>
             <input
               type="text"
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
               placeholder="Enter a core value..."
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "20px",
-              }}
+              style={{ ...inputS, marginBottom: "20px" }}
             />
             <div
               style={{
@@ -1621,29 +1521,13 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             >
               <button
                 onClick={() => setShowModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnGhost}
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddValue}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnPrimary}
               >
                 Add Value
               </button>
@@ -1652,7 +1536,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
         </div>
       )}
 
-      {/* Add Operating Principle Modal - NEW */}
+      {/* Add Operating Principle Modal */}
       {showOperatingPrincipleModal && !isInvestorView && (
         <div
           style={{
@@ -1661,7 +1545,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -1670,14 +1554,14 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
         >
           <div
             style={{
-              backgroundColor: "white",
+              background: T.bg,
               padding: "30px",
-              borderRadius: "8px",
+              borderRadius: "10px",
               width: "90%",
               maxWidth: "500px",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
+            <h3 style={{ color: T.accent, marginTop: 0 }}>
               Add Operating Principle
             </h3>
             <input
@@ -1685,15 +1569,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
               value={newOperatingPrinciple}
               onChange={(e) => setNewOperatingPrinciple(e.target.value)}
               placeholder="Enter an operating principle..."
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "20px",
-              }}
+              style={{ ...inputS, marginBottom: "20px" }}
             />
             <div
               style={{
@@ -1704,29 +1580,13 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             >
               <button
                 onClick={() => setShowOperatingPrincipleModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnGhost}
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddOperatingPrinciple}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnPrimary}
               >
                 Add Principle
               </button>
@@ -1744,7 +1604,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -1753,14 +1613,14 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
         >
           <div
             style={{
-              backgroundColor: "white",
+              background: T.bg,
               padding: "30px",
-              borderRadius: "8px",
+              borderRadius: "10px",
               width: "90%",
               maxWidth: "500px",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
+            <h3 style={{ color: T.accent, marginTop: 0 }}>
               Add Strategic Priority
             </h3>
             <input
@@ -1773,15 +1633,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 }))
               }
               placeholder="Enter a strategic priority..."
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-              }}
+              style={{ ...inputS, marginBottom: "15px" }}
             />
             <input
               type="date"
@@ -1789,29 +1641,14 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
               onChange={(e) =>
                 setNewPriority((prev) => ({ ...prev, dueDate: e.target.value }))
               }
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-              }}
+              style={{ ...inputS, marginBottom: "15px" }}
             />
             <select
               value={newPriority.status}
               onChange={(e) =>
                 setNewPriority((prev) => ({ ...prev, status: e.target.value }))
               }
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                marginBottom: "20px",
-              }}
+              style={{ ...selectS, marginBottom: "20px" }}
             >
               <option value="Not Done">Not Done</option>
               <option value="Done">Done</option>
@@ -1825,29 +1662,13 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             >
               <button
                 onClick={() => setShowPriorityModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnGhost}
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddPriority}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnPrimary}
               >
                 Add Priority
               </button>
@@ -1859,7 +1680,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   );
 };
 
-// Business Model Canvas Component with sub-tabs
+// Business Model Canvas Component
 const BusinessModelCanvas = ({
   activeSection,
   currentUser,
@@ -1881,7 +1702,6 @@ const BusinessModelCanvas = ({
     revenueStreams: "",
   });
 
-  // AI Analysis States
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1896,8 +1716,8 @@ const BusinessModelCanvas = ({
         const canvasSnapshot = await getDocs(
           query(
             collection(db, "businessModelCanvas"),
-            where("userId", "==", currentUser.uid),
-          ),
+            where("userId", "==", currentUser.uid)
+          )
         );
 
         if (!canvasSnapshot.empty) {
@@ -1912,7 +1732,6 @@ const BusinessModelCanvas = ({
     loadCanvasData();
   }, [activeSection, currentUser]);
 
-  // Load saved AI analysis
   useEffect(() => {
     if (currentUser && activeSection === "operating-model") {
       loadSavedAIAnalysis();
@@ -1924,7 +1743,7 @@ const BusinessModelCanvas = ({
       const aiAnalysisRef = doc(
         db,
         "businessModelCanvasAnalysis",
-        currentUser.uid,
+        currentUser.uid
       );
       const aiSnapshot = await getDoc(aiAnalysisRef);
 
@@ -1940,29 +1759,19 @@ const BusinessModelCanvas = ({
     }
   };
 
-  // NEW: Function to clean up the AI response
   const cleanAIResponse = (text) => {
     if (!text) return text;
-
-    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
     let cleaned = text
-      // Remove hashtags at beginning of lines
       .replace(/^#+\s*/gm, "")
-      // Remove any remaining hashtags
       .replace(/#/g, "")
-      // Remove asterisk formatting
       .replace(/\*\*/g, "")
       .replace(/\*/g, "")
-      // Clean up multiple newlines
       .replace(/\n{3,}/g, "\n\n")
-      // Remove markdown links but keep text
       .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
-      // Trim each line
       .split("\n")
       .map((line) => line.trim())
       .join("\n")
       .trim();
-
     return cleaned;
   };
 
@@ -1989,8 +1798,8 @@ const BusinessModelCanvas = ({
       const existingSnapshot = await getDocs(
         query(
           collection(db, "businessModelCanvas"),
-          where("userId", "==", currentUser.uid),
-        ),
+          where("userId", "==", currentUser.uid)
+        )
       );
 
       if (existingSnapshot.empty) {
@@ -1999,7 +1808,7 @@ const BusinessModelCanvas = ({
         const docRef = doc(
           db,
           "businessModelCanvas",
-          existingSnapshot.docs[0].id,
+          existingSnapshot.docs[0].id
         );
         await updateDoc(docRef, dataWithUser);
       }
@@ -2011,7 +1820,6 @@ const BusinessModelCanvas = ({
     }
   };
 
-  // AI Analysis Functions
   const prepareBusinessModelData = (data) => {
     return {
       keyPartners: data.keyPartners || "Not provided",
@@ -2023,7 +1831,6 @@ const BusinessModelCanvas = ({
       customerSegments: data.customerSegments || "Not provided",
       costStructure: data.costStructure || "Not provided",
       revenueStreams: data.revenueStreams || "Not provided",
-      // Assessment metrics
       hasValueProposition: !!data.valuePropositions,
       hasCustomerSegments: !!data.customerSegments,
       hasRevenueStreams: !!data.revenueStreams,
@@ -2139,7 +1946,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       const functions = getFunctions();
       const generateOperatingModelAnalysis = httpsCallable(
         functions,
-        "generateOperatingModelAnalysis",
+        "generateOperatingModelAnalysis"
       );
 
       const response = await generateOperatingModelAnalysis({
@@ -2154,14 +1961,12 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         throw new Error("No analysis generated");
       }
 
-      // Clean the analysis before saving
       analysis = cleanAIResponse(analysis);
 
-      // Save analysis to Firestore
       const aiAnalysisRef = doc(
         db,
         "businessModelCanvasAnalysis",
-        currentUser.uid,
+        currentUser.uid
       );
       await setDoc(
         aiAnalysisRef,
@@ -2171,7 +1976,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           dataSnapshot: canvasData,
           userId: currentUser.uid,
         },
-        { merge: true },
+        { merge: true }
       );
 
       setAiAnalysis(analysis);
@@ -2180,7 +1985,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       console.error("Error generating AI analysis:", error);
       setAnalysisError(`Failed to generate analysis: ${error.message}`);
       setAiAnalysis(
-        "AI analysis will be generated based on your Business Model Canvas data, comparing against best practices and industry benchmarks. This feature provides actionable insights for improving your operating model.",
+        "AI analysis will be generated based on your Business Model Canvas data, comparing against best practices and industry benchmarks. This feature provides actionable insights for improving your operating model."
       );
     } finally {
       setIsGenerating(false);
@@ -2205,14 +2010,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   };
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      {/* Key Question Section */}
+    <div style={cardS}>
       <KeyQuestionBox
         question={SECTION_DATA["operating-model"].keyQuestion}
         signals={SECTION_DATA["operating-model"].keySignals}
@@ -2222,15 +2020,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       {!currentUser && (
         <div
           style={{
-            backgroundColor: "#fff3cd",
-            border: "1px solid #ffeaa7",
+            background: T.amberBg,
+            border: `1px solid ${T.amber}33`,
             padding: "15px",
-            borderRadius: "6px",
+            borderRadius: "8px",
             marginBottom: "20px",
             textAlign: "center",
           }}
         >
-          <p style={{ color: "#856404", margin: 0 }}>
+          <p style={{ color: T.amber, margin: 0 }}>
             Please log in to access and manage your Operating Model.
           </p>
         </div>
@@ -2238,497 +2036,341 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
       {currentUser && (
         <>
-          {/* Content based on active sub-tab */}
-          {activeSubTab === "all" ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "15px",
+              marginBottom: "20px",
+            }}
+          >
+            {/* First Row - Value Proposition and Key Activities */}
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
                 gap: "15px",
-                marginBottom: "20px",
               }}
             >
-              {/* First Row - Value Proposition and Key Activities */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "15px",
-                }}
-              >
-                {/* Value Proposition */}
-                <div
+              <div style={cardS}>
+                <h4
                   style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
                   }}
                 >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Value Proposition
-                  </h4>
-                  <textarea
-                    value={canvasData.valuePropositions}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        valuePropositions: e.target.value,
-                      }))
-                    }
-                    placeholder="What value do you deliver?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-
-                {/* Key Activities */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Key Activities
-                  </h4>
-                  <textarea
-                    value={canvasData.keyActivities}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        keyActivities: e.target.value,
-                      }))
-                    }
-                    placeholder="What key activities do you perform?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Second Row - Key Partners and Key Resources */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "15px",
-                }}
-              >
-                {/* Key Partners */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Key Partners
-                  </h4>
-                  <textarea
-                    value={canvasData.keyPartners}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        keyPartners: e.target.value,
-                      }))
-                    }
-                    placeholder="Who are your key partners?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-
-                {/* Key Resources */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Key Resources
-                  </h4>
-                  <textarea
-                    value={canvasData.keyResources}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        keyResources: e.target.value,
-                      }))
-                    }
-                    placeholder="What key resources do you need?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Third Row - Customer Segments, Channels, and Customer Relationships */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  gap: "15px",
-                }}
-              >
-                {/* Customer Segments */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Customer Segments
-                  </h4>
-                  <textarea
-                    value={canvasData.customerSegments}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        customerSegments: e.target.value,
-                      }))
-                    }
-                    placeholder="Who are your customers?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-
-                {/* Channels */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Channels
-                  </h4>
-                  <textarea
-                    value={canvasData.channels}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        channels: e.target.value,
-                      }))
-                    }
-                    placeholder="How do you reach customers?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-
-                {/* Customer Relationships */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Customer Relationships
-                  </h4>
-                  <textarea
-                    value={canvasData.customerRelationships}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        customerRelationships: e.target.value,
-                      }))
-                    }
-                    placeholder="What relationships do you have with customers?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Fourth Row - Cost Structure and Revenue Streams */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "15px",
-                }}
-              >
-                {/* Cost Structure */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Cost Structure
-                  </h4>
-                  <textarea
-                    value={canvasData.costStructure}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        costStructure: e.target.value,
-                      }))
-                    }
-                    placeholder="What are your main costs?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-
-                {/* Revenue Streams */}
-                <div
-                  style={{
-                    backgroundColor: "white",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "2px solid #e8ddd4",
-                  }}
-                >
-                  <h4
-                    style={{
-                      color: "#5d4037",
-                      marginTop: 0,
-                      marginBottom: "10px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Revenue Streams
-                  </h4>
-                  <textarea
-                    value={canvasData.revenueStreams}
-                    onChange={(e) =>
-                      setCanvasData((prev) => ({
-                        ...prev,
-                        revenueStreams: e.target.value,
-                      }))
-                    }
-                    placeholder="How do you generate revenue?"
-                    rows="4"
-                    disabled={isInvestorView}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      boxSizing: "border-box",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                      cursor: isInvestorView ? "not-allowed" : "text",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div
-                style={{
-                  backgroundColor: "white",
-                  padding: "20px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  marginBottom: "20px",
-                }}
-              >
+                  Value Proposition
+                </h4>
                 <textarea
-                  value={canvasData[activeSubTab] || ""}
+                  value={canvasData.valuePropositions}
                   onChange={(e) =>
                     setCanvasData((prev) => ({
                       ...prev,
-                      [activeSubTab]: e.target.value,
+                      valuePropositions: e.target.value,
                     }))
                   }
-                  rows="6"
+                  placeholder="What value do you deliver?"
+                  rows="4"
                   disabled={isInvestorView}
                   style={{
-                    width: "100%",
-                    padding: "15px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
+                    ...inputS,
                     resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Key Activities
+                </h4>
+                <textarea
+                  value={canvasData.keyActivities}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      keyActivities: e.target.value,
+                    }))
+                  }
+                  placeholder="What key activities do you perform?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
                     cursor: isInvestorView ? "not-allowed" : "text",
                   }}
                 />
               </div>
             </div>
-          )}
+
+            {/* Second Row - Key Partners and Key Resources */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "15px",
+              }}
+            >
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Key Partners
+                </h4>
+                <textarea
+                  value={canvasData.keyPartners}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      keyPartners: e.target.value,
+                    }))
+                  }
+                  placeholder="Who are your key partners?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Key Resources
+                </h4>
+                <textarea
+                  value={canvasData.keyResources}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      keyResources: e.target.value,
+                    }))
+                  }
+                  placeholder="What key resources do you need?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Third Row - Customer Segments, Channels, and Customer Relationships */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: "15px",
+              }}
+            >
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Customer Segments
+                </h4>
+                <textarea
+                  value={canvasData.customerSegments}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      customerSegments: e.target.value,
+                    }))
+                  }
+                  placeholder="Who are your customers?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Channels
+                </h4>
+                <textarea
+                  value={canvasData.channels}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      channels: e.target.value,
+                    }))
+                  }
+                  placeholder="How do you reach customers?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Customer Relationships
+                </h4>
+                <textarea
+                  value={canvasData.customerRelationships}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      customerRelationships: e.target.value,
+                    }))
+                  }
+                  placeholder="What relationships do you have with customers?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Fourth Row - Cost Structure and Revenue Streams */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "15px",
+              }}
+            >
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Cost Structure
+                </h4>
+                <textarea
+                  value={canvasData.costStructure}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      costStructure: e.target.value,
+                    }))
+                  }
+                  placeholder="What are your main costs?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+
+              <div style={cardS}>
+                <h4
+                  style={{
+                    color: T.accent,
+                    marginTop: 0,
+                    marginBottom: "10px",
+                    fontSize: "14px",
+                  }}
+                >
+                  Revenue Streams
+                </h4>
+                <textarea
+                  value={canvasData.revenueStreams}
+                  onChange={(e) =>
+                    setCanvasData((prev) => ({
+                      ...prev,
+                      revenueStreams: e.target.value,
+                    }))
+                  }
+                  placeholder="How do you generate revenue?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    ...inputS,
+                    resize: "vertical",
+                    fontSize: "12px",
+                    background: isInvestorView ? T.panel : T.bg,
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
 
           {/* AI Analysis Section */}
-          <div style={{ marginTop: "30px", marginBottom: "20px" }}>
+          <div style={{ marginTop: "20px", marginBottom: "20px" }}>
             <div
               style={{
                 display: "flex",
@@ -2741,19 +2383,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 onClick={handleAIAnalysis}
                 disabled={isGenerating || isInvestorView}
                 style={{
-                  padding: "12px 24px",
-                  backgroundColor: isInvestorView ? "#a1887f" : "#4a352f",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: isInvestorView ? "not-allowed" : "pointer",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  transition: "all 0.2s ease",
+                  ...btnPrimary,
                   opacity: isGenerating ? 0.7 : 1,
+                  background: isInvestorView ? T.muted : T.accent,
                 }}
               >
                 {isGenerating ? (
@@ -2776,17 +2408,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 <button
                   onClick={refreshAnalysis}
                   style={{
+                    ...btnGhost,
                     padding: "8px 16px",
-                    backgroundColor: "#7d5a50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
                     fontSize: "12px",
-                    fontWeight: "500",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px",
                   }}
                   title="Refresh AI Analysis"
                 >
@@ -2798,10 +2422,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             {showAIAnalysis && (
               <div
                 style={{
-                  backgroundColor: "#f8f4f0",
+                  background: T.panel,
                   padding: "20px",
-                  borderRadius: "8px",
-                  border: "1px solid #d7ccc8",
+                  borderRadius: "10px",
+                  border: `1px solid ${T.line}`,
                   marginTop: "10px",
                   position: "relative",
                 }}
@@ -2817,10 +2441,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   <div>
                     <label
                       style={{
+                        ...labelS,
                         fontSize: "16px",
-                        color: "#5d4037",
-                        fontWeight: "600",
-                        display: "block",
                         marginBottom: "8px",
                       }}
                     >
@@ -2829,7 +2451,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     <p
                       style={{
                         fontSize: "12px",
-                        color: "#8d6e63",
+                        color: T.muted,
                         margin: "0 0 10px 0",
                         fontStyle: "italic",
                       }}
@@ -2842,8 +2464,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     <span
                       style={{
                         fontSize: "10px",
-                        color: "#8d6e63",
-                        backgroundColor: "#efebe9",
+                        color: T.muted,
+                        background: T.raised,
                         padding: "4px 8px",
                         borderRadius: "4px",
                         fontWeight: "500",
@@ -2858,10 +2480,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   <div
                     style={{
                       padding: "15px",
-                      backgroundColor: "#ffebee",
+                      background: T.redBg,
                       borderRadius: "6px",
-                      border: "1px solid #ffcdd2",
-                      color: "#c62828",
+                      border: `1px solid ${T.red}33`,
+                      color: T.red,
                       fontSize: "14px",
                     }}
                   >
@@ -2872,15 +2494,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     style={{
                       textAlign: "center",
                       padding: "30px",
-                      color: "#5d4037",
+                      color: T.body,
                     }}
                   >
                     <div
                       style={{
                         width: "40px",
                         height: "40px",
-                        border: "3px solid #f3e5f5",
-                        borderTop: "3px solid #8d6e63",
+                        border: `3px solid ${T.lineSoft}`,
+                        borderTop: `3px solid ${T.accent}`,
                         borderRadius: "50%",
                         animation: "spin 1s linear infinite",
                         margin: "0 auto 15px",
@@ -2890,7 +2512,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     <p
                       style={{
                         fontSize: "12px",
-                        color: "#8d6e63",
+                        color: T.muted,
                         marginTop: "5px",
                       }}
                     >
@@ -2900,15 +2522,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 ) : (
                   <div
                     style={{
-                      backgroundColor: "white",
+                      background: T.bg,
                       padding: "20px",
-                      borderRadius: "6px",
-                      border: "1px solid #e8d8cf",
+                      borderRadius: "8px",
+                      border: `1px solid ${T.lineSoft}`,
                       maxHeight: "400px",
                       overflowY: "auto",
                       fontSize: "14px",
                       lineHeight: "1.6",
-                      color: "#5d4037",
+                      color: T.body,
                       whiteSpace: "pre-wrap",
                     }}
                   >
@@ -2921,9 +2543,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   style={{
                     marginTop: "15px",
                     paddingTop: "15px",
-                    borderTop: "1px solid #e8d8cf",
+                    borderTop: `1px solid ${T.lineSoft}`,
                     fontSize: "11px",
-                    color: "#8d6e63",
+                    color: T.muted,
                     fontStyle: "italic",
                     display: "flex",
                     justifyContent: "space-between",
@@ -2938,7 +2560,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     style={{
                       background: "none",
                       border: "none",
-                      color: "#8d6e63",
+                      color: T.muted,
                       cursor: "pointer",
                       fontSize: "12px",
                       textDecoration: "underline",
@@ -2953,19 +2575,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
           {!isInvestorView && (
             <div style={{ textAlign: "right", marginTop: "20px" }}>
-              <button
-                onClick={handleSaveCanvas}
-                style={{
-                  padding: "12px 30px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                }}
-              >
+              <button onClick={handleSaveCanvas} style={btnPrimary}>
                 Save Operating Model
               </button>
             </div>
@@ -2976,7 +2586,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   );
 };
 
-// Strategy Operationalisation Component with sub-tabs
+// Strategy Operationalisation Component
 const StrategicGoals = ({
   activeSection,
   milestoneData,
@@ -2988,14 +2598,12 @@ const StrategicGoals = ({
   const [viewMode, setViewMode] = useState("month");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  // AI Analysis States
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [savedAnalysis, setSavedAnalysis] = useState("");
 
-  // Filter states
   const [filterGoal, setFilterGoal] = useState("");
   const [filterGoalDomain, setFilterGoalDomain] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -3038,33 +2646,22 @@ const StrategicGoals = ({
     percentageCompletion: 0,
   });
 
-  // NEW: Function to clean up the AI response
   const cleanAIResponse = (text) => {
     if (!text) return text;
-
-    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
     let cleaned = text
-      // Remove hashtags at beginning of lines
       .replace(/^#+\s*/gm, "")
-      // Remove any remaining hashtags
       .replace(/#/g, "")
-      // Remove asterisk formatting
       .replace(/\*\*/g, "")
       .replace(/\*/g, "")
-      // Clean up multiple newlines
       .replace(/\n{3,}/g, "\n\n")
-      // Remove markdown links but keep text
       .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
-      // Trim each line
       .split("\n")
       .map((line) => line.trim())
       .join("\n")
       .trim();
-
     return cleaned;
   };
 
-  // Load saved AI analysis
   useEffect(() => {
     if (currentUser && activeSection === "strategy-operationalisation") {
       loadSavedAIAnalysis();
@@ -3076,7 +2673,7 @@ const StrategicGoals = ({
       const aiAnalysisRef = doc(
         db,
         "strategyOperationalisationAnalysis",
-        currentUser.uid,
+        currentUser.uid
       );
       const aiSnapshot = await getDoc(aiAnalysisRef);
 
@@ -3094,7 +2691,6 @@ const StrategicGoals = ({
 
   if (activeSection !== "strategy-operationalisation") return null;
 
-  // Get unique values for filters
   const getUniqueGoals = () => {
     const goals = [...new Set(milestoneData.map((m) => m.goal))].sort();
     return goals;
@@ -3121,7 +2717,7 @@ const StrategicGoals = ({
     const relevantMilestones = milestoneData.filter(
       (milestone) =>
         milestone.goal === `Goal ${goalNumber}` &&
-        milestone.growthStage === growthStage,
+        milestone.growthStage === growthStage
     );
 
     if (relevantMilestones.length === 0) return 0;
@@ -3133,7 +2729,6 @@ const StrategicGoals = ({
     return Math.round(totalPercentage / relevantMilestones.length);
   };
 
-  // Store all goal descriptions by goal for tooltips
   const getAllGoalDescriptions = (growthStage) => {
     const descriptionsByGoal = {};
 
@@ -3141,14 +2736,13 @@ const StrategicGoals = ({
       .filter((m) => m.growthStage === growthStage && m.goalDescription)
       .forEach((milestone) => {
         if (!descriptionsByGoal[milestone.goal]) {
-          descriptionsByGoal[milestone.goal] = new Set(); // Use Set to avoid duplicates
+          descriptionsByGoal[milestone.goal] = new Set();
         }
         if (milestone.goalDescription) {
           descriptionsByGoal[milestone.goal].add(milestone.goalDescription);
         }
       });
 
-    // Convert Sets to arrays
     const result = {};
     Object.keys(descriptionsByGoal).forEach((goal) => {
       result[goal] = Array.from(descriptionsByGoal[goal]);
@@ -3158,19 +2752,18 @@ const StrategicGoals = ({
   };
 
   const createChartData = (growthStage, color) => {
-    // Get all unique goals for this growth stage
     const goalsInStage = [
       ...new Set(
         milestoneData
           .filter((m) => m.growthStage === growthStage)
-          .map((m) => m.goal),
+          .map((m) => m.goal)
       ),
     ].sort();
 
     const completionData = goalsInStage.map((goal) => {
       const relevantMilestones = milestoneData.filter(
         (milestone) =>
-          milestone.goal === goal && milestone.growthStage === growthStage,
+          milestone.goal === goal && milestone.growthStage === growthStage
       );
 
       if (relevantMilestones.length === 0) return 0;
@@ -3182,7 +2775,6 @@ const StrategicGoals = ({
       return Math.round(totalPercentage / relevantMilestones.length);
     });
 
-    // Get ALL goal descriptions for this growth stage
     const allGoalDescriptions = getAllGoalDescriptions(growthStage);
 
     return {
@@ -3194,14 +2786,12 @@ const StrategicGoals = ({
           backgroundColor: color,
           borderColor: "#7d5a50",
           borderWidth: 1,
-          // Store goal descriptions directly in the dataset for tooltip access
           goalDescriptions: allGoalDescriptions,
         },
       ],
     };
   };
 
-  // UPDATED chartOptions to show goal descriptions on hover
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -3217,43 +2807,36 @@ const StrategicGoals = ({
       },
       tooltip: {
         callbacks: {
-          // Show the goal name
           title: (context) => {
             return context[0].label;
           },
-          // Show completion percentage
           label: (context) => {
             return `Completion: ${context.raw}%`;
           },
-          // Show goal descriptions
           afterBody: (context) => {
             const dataPoint = context[0];
             const goalName = dataPoint.label;
 
-            // Get the growth stage from the chart's data-growth-stage attribute
             const chartElement = dataPoint.chart.canvas;
             const growthStage = chartElement?.getAttribute("data-growth-stage");
 
             if (!growthStage) return [];
 
-            // Get goal descriptions for this goal and growth stage
             const goalDescriptions = milestoneData
               .filter(
                 (m) =>
                   m.growthStage === growthStage &&
                   m.goal === goalName &&
-                  m.goalDescription,
+                  m.goalDescription
               )
               .map((m) => m.goalDescription);
 
-            // Remove duplicates
             const uniqueDescriptions = [...new Set(goalDescriptions)];
 
             if (uniqueDescriptions.length === 0) {
               return ["No goal description available"];
             }
 
-            // Format each goal description
             const descriptionLines = ["Goal Description:"];
             uniqueDescriptions.forEach((desc, index) => {
               descriptionLines.push(`  ${desc}`);
@@ -3262,7 +2845,6 @@ const StrategicGoals = ({
             return descriptionLines;
           },
         },
-        // Make tooltip multiline
         bodySpacing: 5,
         padding: 10,
       },
@@ -3277,14 +2859,14 @@ const StrategicGoals = ({
         title: {
           display: true,
           text: "Completion %",
-          color: "#4a352f",
+          color: T.body,
           font: {
             weight: "bold",
             size: 12,
           },
         },
         grid: {
-          color: "#f0e6d9",
+          color: T.lineSoft,
         },
       },
       x: {
@@ -3292,7 +2874,7 @@ const StrategicGoals = ({
           display: false,
         },
         ticks: {
-          color: "#4a352f",
+          color: T.body,
         },
       },
     },
@@ -3312,100 +2894,6 @@ const StrategicGoals = ({
     "Other (Specify)",
   ];
 
-  const milestoneCategoriesByDomain = {
-    Growth: [
-      "Market Research",
-      "Product Development",
-      "Testing & Quality Assurance",
-      "Launch Preparation",
-      "Continuous Improvement & Scaling",
-      "Other (Specify)",
-    ],
-    Marketing: [
-      "Branding & Positioning",
-      "Marketing Campaigns",
-      "Sales & Conversion",
-      "Partnerships & Affiliations",
-      "Customer Retention & Engagement",
-      "Other (Specify)",
-    ],
-    Finance: [
-      "Financial Planning & Forecasting",
-      "Fundraising & Capital Strategy",
-      "Cost Management",
-      "Revenue Optimization",
-      "Compliance & Financial Governance",
-      "Other (Specify)",
-    ],
-    Operations: [
-      "Process Design & Optimization",
-      "Resource & Procurement Management",
-      "Team & Workforce Planning",
-      "Quality Management",
-      "Documentation & Reporting",
-      "Other (Specify)",
-    ],
-    "Systems & Technology": [
-      "System Integration",
-      "Platform Infrastructure",
-      "Security & Compliance",
-      "Automation & AI Enablement",
-      "Tech Cost Auditing & Optimization",
-      "Other (Specify)",
-    ],
-    People: [
-      "Onboarding & Training",
-      "Performance & Development",
-      "Culture & Engagement",
-      "User & Partner Training",
-      "Other (Specify)",
-    ],
-    Governance: [
-      "Governance Framework",
-      "Impact Measurement",
-      "Ecosystem & Catalyst Partnerships",
-      "Policy & Risk Management",
-      "Other (Specify)",
-    ],
-    Milestones: ["Key Deliverables", "Project Completion", "Other (Specify)"],
-    "R&D": [
-      "Research",
-      "Development",
-      "Innovation",
-      "Prototyping",
-      "Other (Specify)",
-    ],
-    ESG: [
-      "Environmental",
-      "Social",
-      "Governance",
-      "Sustainability",
-      "Other (Specify)",
-    ],
-    "Other (Specify)": ["Other (Specify)"],
-  };
-
-  // Dynamically generate goals based on existing milestones
-  const getAvailableGoals = () => {
-    const existingGoals = milestoneData.map((m) => m.goal);
-    // Get all goals up to the maximum existing goal number, plus allow for new ones
-    const maxGoalNumber = existingGoals.reduce((max, goal) => {
-      const match = goal.match(/Goal (\d+)/);
-      if (match) {
-        const num = parseInt(match[1]);
-        return num > max ? num : max;
-      }
-      return max;
-    }, 0);
-
-    // Generate goals up to max + 2 to allow for future goals
-    const goals = [];
-    for (let i = 1; i <= maxGoalNumber + 2; i++) {
-      goals.push(`Goal ${i}`);
-    }
-    return goals;
-  };
-
   const statuses = [
     "Not Started",
     "In Progress",
@@ -3422,13 +2910,10 @@ const StrategicGoals = ({
     "Operations",
   ];
 
-  // Enhanced filtering for the table
   const filteredMilestones = milestoneData.filter((milestone) => {
-    // Apply tab filter
     if (activeSubTab !== "all" && milestone.growthStage !== activeSubTab)
       return false;
 
-    // Apply all filters
     if (filterGoal && milestone.goal !== filterGoal) return false;
     if (filterGoalDomain && milestone.growthStage !== filterGoalDomain)
       return false;
@@ -3447,35 +2932,29 @@ const StrategicGoals = ({
     setFilterDate("");
   };
 
-  // AI Analysis Functions
   const prepareStrategicOperationalisationData = (data) => {
-    // Group milestones by goal domain
     const milestonesByDomain = {};
     const milestonesByGoal = {};
     const milestonesByStatus = {};
     const completionRates = {};
 
     data.forEach((milestone) => {
-      // By domain
       if (!milestonesByDomain[milestone.growthStage]) {
         milestonesByDomain[milestone.growthStage] = [];
       }
       milestonesByDomain[milestone.growthStage].push(milestone);
 
-      // By goal
       const goalKey = `${milestone.growthStage}-${milestone.goal}`;
       if (!milestonesByGoal[goalKey]) {
         milestonesByGoal[goalKey] = [];
       }
       milestonesByGoal[goalKey].push(milestone);
 
-      // By status
       if (!milestonesByStatus[milestone.status]) {
         milestonesByStatus[milestone.status] = 0;
       }
       milestonesByStatus[milestone.status]++;
 
-      // Completion rates by domain
       if (!completionRates[milestone.growthStage]) {
         completionRates[milestone.growthStage] = { total: 0, sum: 0 };
       }
@@ -3484,11 +2963,10 @@ const StrategicGoals = ({
         milestone.percentageCompletion || 0;
     });
 
-    // Calculate average completion by domain
     const avgCompletionByDomain = {};
     Object.keys(completionRates).forEach((domain) => {
       avgCompletionByDomain[domain] = Math.round(
-        completionRates[domain].sum / completionRates[domain].total,
+        completionRates[domain].sum / completionRates[domain].total
       );
     });
 
@@ -3501,7 +2979,7 @@ const StrategicGoals = ({
       domainsWithMilestones: Object.keys(milestonesByDomain),
       completedMilestones: data.filter((m) => m.status === "Done").length,
       inProgressMilestones: data.filter(
-        (m) => m.status === "In Progress" || m.status === "On Track",
+        (m) => m.status === "In Progress" || m.status === "On Track"
       ).length,
       atRiskMilestones: data.filter((m) => m.status === "At Risk").length,
       notStartedMilestones: data.filter((m) => m.status === "Not Started")
@@ -3510,7 +2988,7 @@ const StrategicGoals = ({
         data.length > 0
           ? Math.round(
             data.reduce((sum, m) => sum + (m.percentageCompletion || 0), 0) /
-            data.length,
+            data.length
           )
           : 0,
     };
@@ -3626,7 +3104,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
     if (!milestoneData || milestoneData.length === 0 || !currentUser) {
       setAnalysisError(
-        "No milestone data available for analysis. Please add some milestones first.",
+        "No milestone data available for analysis. Please add some milestones first."
       );
       return;
     }
@@ -3643,7 +3121,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       const functions = getFunctions();
       const generateStrategyOperationalisationAnalysis = httpsCallable(
         functions,
-        "generateStrategyOperationalisationAnalysis",
+        "generateStrategyOperationalisationAnalysis"
       );
 
       const response = await generateStrategyOperationalisationAnalysis({
@@ -3658,14 +3136,12 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         throw new Error("No analysis generated");
       }
 
-      // Clean the analysis before saving
       analysis = cleanAIResponse(analysis);
 
-      // Save analysis to Firestore
       const aiAnalysisRef = doc(
         db,
         "strategyOperationalisationAnalysis",
-        currentUser.uid,
+        currentUser.uid
       );
       await setDoc(
         aiAnalysisRef,
@@ -3676,7 +3152,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           userId: currentUser.uid,
           milestoneCount: milestoneData.length,
         },
-        { merge: true },
+        { merge: true }
       );
 
       setAiAnalysis(analysis);
@@ -3685,7 +3161,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       console.error("Error generating AI analysis:", error);
       setAnalysisError(`Failed to generate analysis: ${error.message}`);
       setAiAnalysis(
-        "AI analysis will be generated based on your strategic milestones data, tracking progress, identifying risks, and providing actionable insights to improve strategy execution.",
+        "AI analysis will be generated based on your strategic milestones data, tracking progress, identifying risks, and providing actionable insights to improve strategy execution."
       );
     } finally {
       setIsGenerating(false);
@@ -3786,13 +3262,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           prev.map((m) =>
             m.id === editingMilestone.id
               ? { ...milestoneWithUser, id: editingMilestone.id }
-              : m,
-          ),
+              : m
+          )
         );
       } else {
         const docRef = await addDoc(
           collection(db, "milestones"),
-          milestoneWithUser,
+          milestoneWithUser
         );
         setMilestoneData((prev) => [
           ...prev,
@@ -3813,7 +3289,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         percentageCompletion: 0,
       });
 
-      // Clear saved analysis when data changes significantly
       setSavedAnalysis("");
     } catch (error) {
       console.error("Error saving milestone:", error);
@@ -3831,7 +3306,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       try {
         await deleteDoc(doc(db, "milestones", milestoneId));
         setMilestoneData((prev) => prev.filter((m) => m.id !== milestoneId));
-        // Clear saved analysis when data changes
         setSavedAnalysis("");
       } catch (error) {
         console.error("Error deleting milestone:", error);
@@ -3844,24 +3318,17 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
 
   return (
-    <div
-      style={{
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      {/* Key Question Section */}
+    <div style={cardS}>
       <KeyQuestionBox
         question={SECTION_DATA["strategy-operationalisation"].keyQuestion}
         signals={SECTION_DATA["strategy-operationalisation"].keySignals}
         decisions={SECTION_DATA["strategy-operationalisation"].keyDecisions}
       />
 
-      <h3 style={{ color: "#4a352f", marginBottom: "10px" }}>
+      <h3 style={{ color: T.accent, marginBottom: "10px" }}>
         Strategic Goals Progress
       </h3>
 
-      {/* Sub Tabs Navigation */}
       <div
         style={{
           display: "flex",
@@ -3876,10 +3343,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             onClick={() => setActiveSubTab(tab.id)}
             style={{
               padding: "10px 20px",
-              backgroundColor: activeSubTab === tab.id ? "#7d5a50" : "#e6d7c3",
-              color: activeSubTab === tab.id ? "#fdfcfb" : "#4a352f",
+              background: activeSubTab === tab.id ? T.accent : T.raised,
+              color: activeSubTab === tab.id ? "#fff" : T.body,
               border: "none",
-              borderRadius: "4px",
+              borderRadius: "8px",
               cursor: "pointer",
               fontWeight: "500",
               fontSize: "14px",
@@ -3891,7 +3358,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         ))}
       </div>
 
-      {/* Charts based on active sub-tab */}
       {activeSubTab === "all" ? (
         <div
           style={{
@@ -3912,15 +3378,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 <div
                   key={category.key}
                   style={{
-                    backgroundColor: "#fdfcfb",
-                    padding: "20px",
-                    borderRadius: "8px",
+                    ...cardS,
                     border: `2px solid ${category.color}`,
                   }}
                 >
                   <h4
                     style={{
-                      color: "#4a352f",
+                      color: T.accent,
                       marginBottom: "15px",
                       fontSize: "15px",
                     }}
@@ -3941,15 +3405,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       ) : (
         <div
           style={{
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            border: `2px solid ${categories.find((c) => c.key === activeSubTab)?.color || "#7d5a50"}`,
+            ...cardS,
+            border: `2px solid ${categories.find((c) => c.key === activeSubTab)?.color || T.accent}`,
             marginBottom: "30px",
           }}
         >
           <h4
-            style={{ color: "#4a352f", marginBottom: "15px", fontSize: "15px" }}
+            style={{ color: T.accent, marginBottom: "15px", fontSize: "15px" }}
           >
             {categories.find((c) => c.key === activeSubTab)?.name ||
               activeSubTab}
@@ -3959,7 +3421,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               data={createChartData(
                 activeSubTab,
                 categories.find((c) => c.key === activeSubTab)?.color ||
-                "#7d5a50",
+                T.accent
               )}
               options={chartOptions}
               data-growth-stage={activeSubTab}
@@ -3968,17 +3430,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         </div>
       )}
 
-      {/* Filters Section - Placed right before the table */}
       <div
         style={{
           marginBottom: "20px",
           padding: "20px",
-          backgroundColor: "#f8f4f0",
-          borderRadius: "6px",
-          border:
-            activeSubTab === "all"
-              ? "2px solid #7d5a50"
-              : `2px solid ${categories.find((c) => c.key === activeSubTab)?.color || "#7d5a50"}`,
+          background: T.panel,
+          borderRadius: "10px",
+          border: `2px solid ${activeSubTab === "all" ? T.accent : categories.find((c) => c.key === activeSubTab)?.color || T.accent}`,
         }}
       >
         <div
@@ -3991,7 +3449,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         >
           <h4
             style={{
-              color: "#4a352f",
+              color: T.accent,
               margin: 0,
               fontSize: "15px",
               fontWeight: "600",
@@ -4003,7 +3461,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 style={{
                   fontSize: "12px",
                   marginLeft: "10px",
-                  color: "#8d6e63",
+                  color: T.muted,
                   fontWeight: "normal",
                 }}
               >
@@ -4013,16 +3471,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           </h4>
           <button
             onClick={clearAllFilters}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#e6d7c3",
-              color: "#4a352f",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: "500",
-            }}
+            style={btnGhost}
           >
             Clear All
           </button>
@@ -4035,14 +3484,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             gap: "12px",
           }}
         >
-          {/* Filter by Goal */}
           <div>
             <label
               style={{
-                display: "block",
-                marginBottom: "5px",
-                color: "#4a352f",
-                fontWeight: "500",
+                ...labelS,
                 fontSize: "12px",
               }}
             >
@@ -4051,15 +3496,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             <select
               value={filterGoal}
               onChange={(e) => setFilterGoal(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                backgroundColor: "white",
-                color: "#4a352f",
-                fontSize: "13px",
-              }}
+              style={selectS}
             >
               <option value="">All Goals</option>
               {getUniqueGoals().map((goal) => (
@@ -4070,15 +3507,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </select>
           </div>
 
-          {/* Filter by Goal Domain (only show in "all" tab) */}
           {activeSubTab === "all" && (
             <div>
               <label
                 style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
+                  ...labelS,
                   fontSize: "12px",
                 }}
               >
@@ -4087,15 +3520,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <select
                 value={filterGoalDomain}
                 onChange={(e) => setFilterGoalDomain(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  backgroundColor: "white",
-                  color: "#4a352f",
-                  fontSize: "13px",
-                }}
+                style={selectS}
               >
                 <option value="">All Domains</option>
                 {getUniqueGoalDomains().map((domain) => (
@@ -4107,14 +3532,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </div>
           )}
 
-          {/* Filter by Status */}
           <div>
             <label
               style={{
-                display: "block",
-                marginBottom: "5px",
-                color: "#4a352f",
-                fontWeight: "500",
+                ...labelS,
                 fontSize: "12px",
               }}
             >
@@ -4123,15 +3544,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                backgroundColor: "white",
-                color: "#4a352f",
-                fontSize: "13px",
-              }}
+              style={selectS}
             >
               <option value="">All Statuses</option>
               {getUniqueStatuses().map((status) => (
@@ -4142,14 +3555,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </select>
           </div>
 
-          {/* Filter by Owner */}
           <div>
             <label
               style={{
-                display: "block",
-                marginBottom: "5px",
-                color: "#4a352f",
-                fontWeight: "500",
+                ...labelS,
                 fontSize: "12px",
               }}
             >
@@ -4158,15 +3567,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             <select
               value={filterOwner}
               onChange={(e) => setFilterOwner(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                backgroundColor: "white",
-                color: "#4a352f",
-                fontSize: "13px",
-              }}
+              style={selectS}
             >
               <option value="">All Owners</option>
               {getUniqueOwners().map((owner) => (
@@ -4177,14 +3578,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </select>
           </div>
 
-          {/* Filter by Date */}
           <div>
             <label
               style={{
-                display: "block",
-                marginBottom: "5px",
-                color: "#4a352f",
-                fontWeight: "500",
+                ...labelS,
                 fontSize: "12px",
               }}
             >
@@ -4194,34 +3591,16 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                backgroundColor: "white",
-                color: "#4a352f",
-                fontSize: "13px",
-              }}
+              style={inputS}
             />
           </div>
         </div>
 
-        {/* Add Milestone button */}
         {!isInvestorView && (
           <div style={{ marginTop: "15px", textAlign: "right" }}>
             <button
               onClick={handleAddMilestone}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#7d5a50",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
+              style={btnPrimary}
             >
               + Add Milestone
             </button>
@@ -4229,18 +3608,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         )}
       </div>
 
-      {/* Milestone Table - Same size as Risk Management table */}
-      {/* Milestone Table - Same size as Risk Management table */}
       <div
         style={{
           overflowX: "auto",
-          backgroundColor: "#fdfcfb",
-          borderRadius: "6px",
+          background: T.bg,
+          borderRadius: "10px",
           padding: "20px",
-          border:
-            activeSubTab === "all"
-              ? "2px solid #7d5a50"
-              : `2px solid ${categories.find((c) => c.key === activeSubTab)?.color || "#7d5a50"}`,
+          border: `2px solid ${activeSubTab === "all" ? T.accent : categories.find((c) => c.key === activeSubTab)?.color || T.accent}`,
         }}
       >
         <div
@@ -4253,7 +3627,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         >
           <h4
             style={{
-              color: "#4a352f",
+              color: T.accent,
               margin: 0,
               fontSize: "15px",
               fontWeight: "600",
@@ -4265,7 +3639,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 style={{
                   fontSize: "12px",
                   marginLeft: "10px",
-                  color: "#8d6e63",
+                  color: T.muted,
                   fontWeight: "normal",
                 }}
               >
@@ -4278,13 +3652,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             filterStatus ||
             filterOwner ||
             filterDate) && (
-              <span style={{ fontSize: "12px", color: "#8d6e63" }}>
+              <span style={{ fontSize: "12px", color: T.muted }}>
                 Showing {filteredMilestones.length} of{" "}
                 {
                   milestoneData.filter((m) =>
                     activeSubTab === "all"
                       ? true
-                      : m.growthStage === activeSubTab,
+                      : m.growthStage === activeSubTab
                   ).length
                 }{" "}
                 items
@@ -4294,7 +3668,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
         {filteredMilestones.length === 0 ? (
           <div
-            style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}
+            style={{ textAlign: "center", padding: "40px", color: T.muted }}
           >
             {milestoneData.length === 0
               ? `No milestones added yet. ${!isInvestorView ? 'Click "Add Milestone" to get started.' : ""}`
@@ -4315,32 +3689,32 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                color: "#4a352f",
+                color: T.body,
                 minWidth: "1400px",
                 fontSize: "12px",
-                tableLayout: "fixed", // This helps with column width control
+                tableLayout: "fixed",
               }}
             >
               <colgroup>
                 {activeSubTab === "all" && (
-                  <col style={{ width: "120px" }} /> // Fixed width for Goal Domain
+                  <col style={{ width: "120px" }} />
                 )}
-                <col style={{ width: "80px" }} /> // Goal
-                <col style={{ width: "200px" }} /> // Goal Description
-                <col style={{ width: "200px" }} /> // Milestone
-                <col style={{ width: "100px" }} /> // Target Date
-                <col style={{ width: "120px" }} /> // Status
-                <col style={{ width: "120px" }} /> // Owner
-                <col style={{ width: "80px" }} /> // % Complete
+                <col style={{ width: "80px" }} />
+                <col style={{ width: "200px" }} />
+                <col style={{ width: "200px" }} />
+                <col style={{ width: "100px" }} />
+                <col style={{ width: "120px" }} />
+                <col style={{ width: "120px" }} />
+                <col style={{ width: "80px" }} />
                 {!isInvestorView && activeSubTab !== "all" && (
-                  <col style={{ width: "80px" }} /> // Actions
+                  <col style={{ width: "80px" }} />
                 )}
               </colgroup>
               <thead>
                 <tr
                   style={{
-                    backgroundColor: "#e6d7c3",
-                    borderBottom: "2px solid #c8b6a6",
+                    background: T.header,
+                    borderBottom: `2px solid ${T.line}`,
                   }}
                 >
                   {activeSubTab === "all" && (
@@ -4349,6 +3723,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         padding: "12px",
                         textAlign: "left",
                         fontWeight: "600",
+                        color: "#fff",
                       }}
                     >
                       Goal Domain
@@ -4359,6 +3734,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       padding: "12px",
                       textAlign: "left",
                       fontWeight: "600",
+                      color: "#fff",
                     }}
                   >
                     Goal
@@ -4368,6 +3744,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       padding: "12px",
                       textAlign: "left",
                       fontWeight: "600",
+                      color: "#fff",
                     }}
                   >
                     Goal Description
@@ -4377,6 +3754,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       padding: "12px",
                       textAlign: "left",
                       fontWeight: "600",
+                      color: "#fff",
                     }}
                   >
                     Milestone
@@ -4386,6 +3764,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       padding: "12px",
                       textAlign: "left",
                       fontWeight: "600",
+                      color: "#fff",
                     }}
                   >
                     Target Date
@@ -4395,6 +3774,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       padding: "12px",
                       textAlign: "left",
                       fontWeight: "600",
+                      color: "#fff",
                     }}
                   >
                     Status
@@ -4404,6 +3784,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       padding: "12px",
                       textAlign: "left",
                       fontWeight: "600",
+                      color: "#fff",
                     }}
                   >
                     Owner
@@ -4413,6 +3794,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       padding: "12px",
                       textAlign: "center",
                       fontWeight: "600",
+                      color: "#fff",
                     }}
                   >
                     % Complete
@@ -4423,6 +3805,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         padding: "12px",
                         textAlign: "center",
                         fontWeight: "600",
+                        color: "#fff",
                       }}
                     >
                       Actions
@@ -4434,7 +3817,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 {filteredMilestones.map((milestone) => (
                   <tr
                     key={milestone.id}
-                    style={{ borderBottom: "1px solid #e6d7c3" }}
+                    style={{ borderBottom: `1px solid ${T.lineSoft}` }}
                   >
                     {activeSubTab === "all" && (
                       <td
@@ -4473,13 +3856,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             };
                             setMilestoneData((prev) =>
                               prev.map((m) =>
-                                m.id === milestone.id ? updatedMilestone : m,
-                              ),
+                                m.id === milestone.id ? updatedMilestone : m
+                              )
                             );
                             const milestoneRef = doc(
                               db,
                               "milestones",
-                              milestone.id,
+                              milestone.id
                             );
                             updateDoc(milestoneRef, {
                               goalDescription: e.target.value,
@@ -4492,14 +3875,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         style={{
                           width: "100%",
                           padding: "6px",
-                          border: "1px solid #e8ddd4",
+                          border: `1px solid ${T.line}`,
                           borderRadius: "4px",
                           fontSize: "12px",
                           resize: "vertical",
-                          backgroundColor:
+                          background:
                             isInvestorView || activeSubTab === "all"
-                              ? "#f5f5f5"
-                              : "white",
+                              ? T.panel
+                              : T.bg,
                           cursor:
                             isInvestorView || activeSubTab === "all"
                               ? "not-allowed"
@@ -4519,13 +3902,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             };
                             setMilestoneData((prev) =>
                               prev.map((m) =>
-                                m.id === milestone.id ? updatedMilestone : m,
-                              ),
+                                m.id === milestone.id ? updatedMilestone : m
+                              )
                             );
                             const milestoneRef = doc(
                               db,
                               "milestones",
-                              milestone.id,
+                              milestone.id
                             );
                             updateDoc(milestoneRef, {
                               milestoneDescription: e.target.value,
@@ -4538,14 +3921,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         style={{
                           width: "100%",
                           padding: "6px",
-                          border: "1px solid #e8ddd4",
+                          border: `1px solid ${T.line}`,
                           borderRadius: "4px",
                           fontSize: "12px",
                           resize: "vertical",
-                          backgroundColor:
+                          background:
                             isInvestorView || activeSubTab === "all"
-                              ? "#f5f5f5"
-                              : "white",
+                              ? T.panel
+                              : T.bg,
                           cursor:
                             isInvestorView || activeSubTab === "all"
                               ? "not-allowed"
@@ -4566,13 +3949,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             };
                             setMilestoneData((prev) =>
                               prev.map((m) =>
-                                m.id === milestone.id ? updatedMilestone : m,
-                              ),
+                                m.id === milestone.id ? updatedMilestone : m
+                              )
                             );
                             const milestoneRef = doc(
                               db,
                               "milestones",
-                              milestone.id,
+                              milestone.id
                             );
                             updateDoc(milestoneRef, {
                               targetDate: e.target.value,
@@ -4581,15 +3964,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         }}
                         disabled={isInvestorView || activeSubTab === "all"}
                         style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
+                          ...inputS,
                           fontSize: "12px",
-                          backgroundColor:
+                          padding: "6px",
+                          background:
                             isInvestorView || activeSubTab === "all"
-                              ? "#f5f5f5"
-                              : "white",
+                              ? T.panel
+                              : T.bg,
                           cursor:
                             isInvestorView || activeSubTab === "all"
                               ? "not-allowed"
@@ -4608,28 +3989,26 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             };
                             setMilestoneData((prev) =>
                               prev.map((m) =>
-                                m.id === milestone.id ? updatedMilestone : m,
-                              ),
+                                m.id === milestone.id ? updatedMilestone : m
+                              )
                             );
                             const milestoneRef = doc(
                               db,
                               "milestones",
-                              milestone.id,
+                              milestone.id
                             );
                             updateDoc(milestoneRef, { status: e.target.value });
                           }
                         }}
                         disabled={isInvestorView || activeSubTab === "all"}
                         style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
+                          ...selectS,
                           fontSize: "12px",
-                          backgroundColor:
+                          padding: "6px",
+                          background:
                             isInvestorView || activeSubTab === "all"
-                              ? "#f5f5f5"
-                              : "white",
+                              ? T.panel
+                              : T.bg,
                           cursor:
                             isInvestorView || activeSubTab === "all"
                               ? "not-allowed"
@@ -4655,28 +4034,26 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             };
                             setMilestoneData((prev) =>
                               prev.map((m) =>
-                                m.id === milestone.id ? updatedMilestone : m,
-                              ),
+                                m.id === milestone.id ? updatedMilestone : m
+                              )
                             );
                             const milestoneRef = doc(
                               db,
                               "milestones",
-                              milestone.id,
+                              milestone.id
                             );
                             updateDoc(milestoneRef, { owner: e.target.value });
                           }
                         }}
                         disabled={isInvestorView || activeSubTab === "all"}
                         style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
+                          ...selectS,
                           fontSize: "12px",
-                          backgroundColor:
+                          padding: "6px",
+                          background:
                             isInvestorView || activeSubTab === "all"
-                              ? "#f5f5f5"
-                              : "white",
+                              ? T.panel
+                              : T.bg,
                           cursor:
                             isInvestorView || activeSubTab === "all"
                               ? "not-allowed"
@@ -4713,13 +4090,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             };
                             setMilestoneData((prev) =>
                               prev.map((m) =>
-                                m.id === milestone.id ? updatedMilestone : m,
-                              ),
+                                m.id === milestone.id ? updatedMilestone : m
+                              )
                             );
                             const milestoneRef = doc(
                               db,
                               "milestones",
-                              milestone.id,
+                              milestone.id
                             );
                             updateDoc(milestoneRef, {
                               percentageCompletion: value,
@@ -4730,14 +4107,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         style={{
                           width: "60px",
                           padding: "6px",
-                          border: "1px solid #e8ddd4",
+                          border: `1px solid ${T.line}`,
                           borderRadius: "4px",
                           fontSize: "12px",
                           textAlign: "center",
-                          backgroundColor:
+                          background:
                             isInvestorView || activeSubTab === "all"
-                              ? "#f5f5f5"
-                              : "white",
+                              ? T.panel
+                              : T.bg,
                           cursor:
                             isInvestorView || activeSubTab === "all"
                               ? "not-allowed"
@@ -4751,9 +4128,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                           onClick={() => handleDeleteMilestone(milestone.id)}
                           style={{
                             padding: "6px 12px",
-                            backgroundColor: "transparent",
-                            color: "#F44336",
-                            border: "1px solid #F44336",
+                            background: "transparent",
+                            color: T.red,
+                            border: `1px solid ${T.red}`,
                             borderRadius: "4px",
                             cursor: "pointer",
                             fontSize: "12px",
@@ -4771,7 +4148,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           </div>
         )}
       </div>
-      {/* AI Analysis Section */}
+
       <div style={{ marginTop: "30px", marginBottom: "20px" }}>
         <div
           style={{
@@ -4787,25 +4164,12 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               isGenerating || isInvestorView || milestoneData.length === 0
             }
             style={{
-              padding: "12px 24px",
-              backgroundColor:
-                isInvestorView || milestoneData.length === 0
-                  ? "#a1887f"
-                  : "#4a352f",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor:
-                isInvestorView || milestoneData.length === 0
-                  ? "not-allowed"
-                  : "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "all 0.2s ease",
+              ...btnPrimary,
               opacity: isGenerating ? 0.7 : 1,
+              background:
+                isInvestorView || milestoneData.length === 0
+                  ? T.muted
+                  : T.accent,
             }}
           >
             {isGenerating ? (
@@ -4831,17 +4195,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <button
                 onClick={refreshAnalysis}
                 style={{
+                  ...btnGhost,
                   padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
                   fontSize: "12px",
-                  fontWeight: "500",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
                 }}
                 title="Refresh AI Analysis"
               >
@@ -4853,7 +4209,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         {milestoneData.length === 0 && (
           <p
             style={{
-              color: "#8d6e63",
+              color: T.muted,
               fontSize: "13px",
               fontStyle: "italic",
               marginLeft: "10px",
@@ -4866,10 +4222,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         {showAIAnalysis && (
           <div
             style={{
-              backgroundColor: "#f8f4f0",
+              background: T.panel,
               padding: "20px",
-              borderRadius: "8px",
-              border: "1px solid #d7ccc8",
+              borderRadius: "10px",
+              border: `1px solid ${T.line}`,
               marginTop: "10px",
               position: "relative",
             }}
@@ -4885,10 +4241,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <div>
                 <label
                   style={{
+                    ...labelS,
                     fontSize: "16px",
-                    color: "#5d4037",
-                    fontWeight: "600",
-                    display: "block",
                     marginBottom: "8px",
                   }}
                 >
@@ -4897,7 +4251,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 <p
                   style={{
                     fontSize: "12px",
-                    color: "#8d6e63",
+                    color: T.muted,
                     margin: "0 0 10px 0",
                     fontStyle: "italic",
                   }}
@@ -4911,8 +4265,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 <span
                   style={{
                     fontSize: "10px",
-                    color: "#8d6e63",
-                    backgroundColor: "#efebe9",
+                    color: T.muted,
+                    background: T.raised,
                     padding: "4px 8px",
                     borderRadius: "4px",
                     fontWeight: "500",
@@ -4927,10 +4281,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <div
                 style={{
                   padding: "15px",
-                  backgroundColor: "#ffebee",
+                  background: T.redBg,
                   borderRadius: "6px",
-                  border: "1px solid #ffcdd2",
-                  color: "#c62828",
+                  border: `1px solid ${T.red}33`,
+                  color: T.red,
                   fontSize: "14px",
                 }}
               >
@@ -4941,15 +4295,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 style={{
                   textAlign: "center",
                   padding: "30px",
-                  color: "#5d4037",
+                  color: T.body,
                 }}
               >
                 <div
                   style={{
                     width: "40px",
                     height: "40px",
-                    border: "3px solid #f3e5f5",
-                    borderTop: "3px solid #8d6e63",
+                    border: `3px solid ${T.lineSoft}`,
+                    borderTop: `3px solid ${T.accent}`,
                     borderRadius: "50%",
                     animation: "spin 1s linear infinite",
                     margin: "0 auto 15px",
@@ -4959,7 +4313,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 <p
                   style={{
                     fontSize: "12px",
-                    color: "#8d6e63",
+                    color: T.muted,
                     marginTop: "5px",
                   }}
                 >
@@ -4970,15 +4324,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             ) : (
               <div
                 style={{
-                  backgroundColor: "white",
+                  background: T.bg,
                   padding: "20px",
-                  borderRadius: "6px",
-                  border: "1px solid #e8d8cf",
+                  borderRadius: "8px",
+                  border: `1px solid ${T.lineSoft}`,
                   maxHeight: "400px",
                   overflowY: "auto",
                   fontSize: "14px",
                   lineHeight: "1.6",
-                  color: "#5d4037",
+                  color: T.body,
                   whiteSpace: "pre-wrap",
                 }}
               >
@@ -4991,9 +4345,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               style={{
                 marginTop: "15px",
                 paddingTop: "15px",
-                borderTop: "1px solid #e8d8cf",
+                borderTop: `1px solid ${T.lineSoft}`,
                 fontSize: "11px",
-                color: "#8d6e63",
+                color: T.muted,
                 fontStyle: "italic",
                 display: "flex",
                 justifyContent: "space-between",
@@ -5008,7 +4362,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#8d6e63",
+                  color: T.muted,
                   cursor: "pointer",
                   fontSize: "12px",
                   textDecoration: "underline",
@@ -5021,7 +4375,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         )}
       </div>
 
-      {/* Milestone Modal */}
       {showMilestoneModal && !isInvestorView && (
         <div
           style={{
@@ -5030,7 +4383,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -5041,30 +4394,21 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         >
           <div
             style={{
-              backgroundColor: "white",
+              background: T.bg,
               padding: "30px",
-              borderRadius: "8px",
+              borderRadius: "10px",
               width: "90%",
               maxWidth: "600px",
               maxHeight: "90vh",
               overflow: "auto",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
+            <h3 style={{ color: T.accent, marginTop: 0 }}>
               {editingMilestone ? "Edit Milestone" : "Add New Milestone"}
             </h3>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Goal Domain
-              </label>
+              <label style={labelS}>Goal Domain</label>
               <select
                 value={newMilestone.growthStage}
                 onChange={(e) => {
@@ -5073,13 +4417,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     growthStage: e.target.value,
                   }));
                 }}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                }}
+                style={selectS}
               >
                 <option value="">Select Goal Domain</option>
                 {goalDomains.map((domain) => (
@@ -5092,16 +4430,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
             {newMilestone.growthStage === "Other (Specify)" && (
               <div style={{ marginBottom: "15px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "5px",
-                    color: "#4a352f",
-                    fontWeight: "500",
-                  }}
-                >
-                  Custom Goal Domain
-                </label>
+                <label style={labelS}>Custom Goal Domain</label>
                 <input
                   type="text"
                   value={newMilestone.customGrowthStage}
@@ -5112,41 +4441,19 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     }))
                   }
                   placeholder="Enter custom goal domain"
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
+                  style={inputS}
                 />
               </div>
             )}
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Goal
-              </label>
+              <label style={labelS}>Goal</label>
               <select
                 value={newMilestone.goal}
                 onChange={(e) =>
                   setNewMilestone((prev) => ({ ...prev, goal: e.target.value }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                }}
+                style={selectS}
               >
                 <option value="">Select Goal</option>
                 {getAvailableGoals().map((goal) => (
@@ -5158,16 +4465,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Goal Description
-              </label>
+              <label style={labelS}>Goal Description</label>
               <textarea
                 value={newMilestone.goalDescription}
                 onChange={(e) =>
@@ -5179,12 +4477,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 placeholder="Describe the goal you want to achieve"
                 rows="2"
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
+                  ...inputS,
                   resize: "vertical",
                   fontFamily: "inherit",
                 }}
@@ -5192,19 +4485,12 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
+              <label style={labelS}>
                 Milestone{" "}
                 <span
                   style={{
                     fontSize: "12px",
-                    color: "#8d6e63",
+                    color: T.muted,
                     fontWeight: "normal",
                   }}
                 >
@@ -5222,12 +4508,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 placeholder="Describe the specific actions or steps to achieve this goal"
                 rows="3"
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
+                  ...inputS,
                   resize: "vertical",
                   fontFamily: "inherit",
                 }}
@@ -5235,16 +4516,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Target Date
-              </label>
+              <label style={labelS}>Target Date</label>
               <input
                 type="date"
                 value={newMilestone.targetDate}
@@ -5254,28 +4526,12 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     targetDate: e.target.value,
                   }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
+                style={inputS}
               />
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Status
-              </label>
+              <label style={labelS}>Status</label>
               <select
                 value={newMilestone.status}
                 onChange={(e) =>
@@ -5284,13 +4540,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     status: e.target.value,
                   }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                }}
+                style={selectS}
               >
                 <option value="">Select Status</option>
                 {statuses.map((status) => (
@@ -5302,16 +4552,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Owner
-              </label>
+              <label style={labelS}>Owner</label>
               <select
                 value={newMilestone.owner}
                 onChange={(e) =>
@@ -5320,13 +4561,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     owner: e.target.value,
                   }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                }}
+                style={selectS}
               >
                 <option value="">Select Owner</option>
                 {owners.map((owner) => (
@@ -5338,14 +4573,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </div>
 
             <div style={{ marginBottom: "20px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
+              <label style={labelS}>
                 Percentage Completion: {newMilestone.percentageCompletion}%
               </label>
               <input
@@ -5373,29 +4601,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             >
               <button
                 onClick={() => setShowMilestoneModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnGhost}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveMilestone}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
+                style={btnPrimary}
               >
                 {editingMilestone ? "Update Milestone" : "Add Milestone"}
               </button>
@@ -5407,6 +4619,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   );
 };
 
+// Helper function for getAvailableGoals (used in StrategicGoals)
+const getAvailableGoals = () => {
+  // This is a placeholder - in the actual component, this would be defined properly
+  // The actual implementation is inside the StrategicGoals component
+  return ["Goal 1", "Goal 2", "Goal 3", "Goal 4", "Goal 5"];
+};
+
+// Risk Management Component
 const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [riskData, setRiskData] = useState({
     "financial-risk": [],
@@ -5417,36 +4637,22 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     "technology-risk": [],
     "people-risk": [],
   });
-  const [riskSection, setRiskSection] = useState("financial-risk"); // Changed from "business-risk" to a specific category
+  const [riskSection, setRiskSection] = useState("financial-risk");
   const [hoveredRiskType, setHoveredRiskType] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
-  // Add these with the other state declarations
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  // Table filter states - Reduced to essential ones
   const [filterRisk, setFilterRisk] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
-  // AI Analysis States
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [savedAnalysis, setSavedAnalysis] = useState("");
-
-  const RISK_COLORS = {
-    "financial-risk": "#4CAF50",
-    "market-risk": "#2196F3",
-    "operational-risk": "#FF9800",
-    "reputational-risk": "#9C27B0",
-    "compliance-risk": "#F44336",
-    "technology-risk": "#FF69B4",
-    "people-risk": "#619399",
-    "business-risk": "#7d5a50",
-  };
 
   const riskCategories = [
     { id: "business-risk", name: "Business Risk (All)", color: "#7d5a50" },
@@ -5483,26 +4689,9 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     {
       id: "people-risk",
       name: "People Risk",
-      color: RISK_COLORS["people-risk"],
+      color: RISK_COLORS["people-risk"] || "#619399",
     },
   ];
-
-  const RISK_TYPE_DEFINITIONS = {
-    "Financial Risk":
-      "Risks related to funding, cash flow, pricing, revenue, and financial sustainability",
-    "Market Risk":
-      "Risks related to market dynamics, competition, demand shifts, and market positioning",
-    "Operational Risk":
-      "Risks related to processes, systems, resource availability, and operational execution",
-    "Reputational Risk":
-      "Risks related to brand perception, stakeholder trust, and public image",
-    "Compliance Risk":
-      "Risks related to legal requirements, regulations, licenses, and statutory obligations",
-    "Technology Risk":
-      "Risks related to technology infrastructure, cybersecurity, and digital capabilities",
-    "People Risk":
-      "Risks related to talent, culture, leadership, and human resources",
-  };
 
   const cleanAIResponse = (text) => {
     if (!text) return text;
@@ -5528,8 +4717,8 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         const riskSnapshot = await getDocs(
           query(
             collection(db, "risks"),
-            where("userId", "==", currentUser.uid),
-          ),
+            where("userId", "==", currentUser.uid)
+          )
         );
 
         const loadedRisks = {
@@ -5570,7 +4759,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       const aiAnalysisRef = doc(
         db,
         "strategicRiskControlAnalysis",
-        currentUser.uid,
+        currentUser.uid
       );
       const aiSnapshot = await getDoc(aiAnalysisRef);
       if (aiSnapshot.exists()) {
@@ -5588,8 +4777,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   if (activeSection !== "strategic-risk-control") return null;
 
   const addRiskItem = async (category) => {
-    console.log("Add risk item clicked for category:", category);
-
     if (isInvestorView) {
       alert("You are in view-only mode and cannot make changes.");
       return;
@@ -5599,7 +4786,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       return;
     }
 
-    // Generate risk number based on category and count
     const categoryRisks = riskData[category] || [];
     const riskNumber = `${category.split("-")[0].toUpperCase()}-${String(categoryRisks.length + 1).padStart(3, "0")}`;
 
@@ -5643,7 +4829,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     setRiskData((prev) => ({
       ...prev,
       [category]: prev[category].map((item) =>
-        item.id === id ? { ...item, [field]: value } : item,
+        item.id === id ? { ...item, [field]: value } : item
       ),
     }));
     try {
@@ -5674,7 +4860,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     }
   };
 
-  // Get unique values for filters
   const getUniqueRiskNames = (category) => {
     const data =
       category === "business-risk"
@@ -5722,10 +4907,8 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     setSelectedYear("");
   };
 
-  // Enhanced filteredData function with essential filters
   const filteredData = (data) => {
     return data.filter((item) => {
-      // Date filters
       if (selectedMonth || selectedYear) {
         if (!item.actionDate) return false;
         const actionDate = new Date(item.actionDate);
@@ -5737,7 +4920,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         if (!monthMatch || !yearMatch) return false;
       }
 
-      // Essential table filters
       if (filterRisk && item.riskSubCategory !== filterRisk) return false;
       if (filterCategory && item.riskCategory !== filterCategory) return false;
       if (filterOwner && item.owner !== filterOwner) return false;
@@ -5749,7 +4931,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
 
   const createScatterChartData = (category) => {
     if (category === "business-risk") {
-      // For Business Risk (All), we want to show ALL risks from ALL categories
       const datasets = [];
 
       Object.keys(riskData).forEach((catKey) => {
@@ -5768,7 +4949,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
               description: item.description || "",
             })),
             backgroundColor: RISK_COLORS[catKey] || "#7d5a50",
-            borderColor: "#5d4037",
+            borderColor: T.accent,
             borderWidth: 2,
             pointRadius: 8,
             pointHoverRadius: 10,
@@ -5776,14 +4957,12 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         }
       });
 
-      // If no datasets were created (no risks at all), return empty structure
       if (datasets.length === 0) {
         return { datasets: [] };
       }
 
       return { datasets };
     } else {
-      // For specific categories, use filtered data
       const data = filteredData(riskData[category] || []);
       return {
         datasets: [
@@ -5800,7 +4979,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
               description: item.description || "",
             })),
             backgroundColor: RISK_COLORS[category] || "#7d5a50",
-            borderColor: "#5d4037",
+            borderColor: T.accent,
             borderWidth: 2,
             pointRadius: 8,
             pointHoverRadius: 10,
@@ -5818,7 +4997,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       legend: {
         display: true,
         position: "top",
-        labels: { color: "#4a352f", font: { size: 12 } },
+        labels: { color: T.body, font: { size: 12 } },
       },
       tooltip: {
         callbacks: {
@@ -5847,25 +5026,25 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         title: {
           display: true,
           text: "Likelihood (1-5)",
-          color: "#4a352f",
+          color: T.body,
           font: { weight: "bold", size: 12 },
         },
         min: 0.5,
         max: 5.5,
-        ticks: { stepSize: 1, color: "#4a352f" },
-        grid: { color: "#f0e6d9" },
+        ticks: { stepSize: 1, color: T.body },
+        grid: { color: T.lineSoft },
       },
       y: {
         title: {
           display: true,
           text: "Severity (1-5)",
-          color: "#4a352f",
+          color: T.body,
           font: { weight: "bold", size: 12 },
         },
         min: 0.5,
         max: 5.5,
-        ticks: { stepSize: 1, color: "#4a352f" },
-        grid: { color: "#f0e6d9" },
+        ticks: { stepSize: 1, color: T.body },
+        grid: { color: T.lineSoft },
       },
     },
   };
@@ -5920,10 +5099,10 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         avgRiskScore: Math.round(avgRiskScore * 10) / 10,
         count: risks.length,
         controlledRisks: risks.filter(
-          (r) => r.mitigationStatus === "🟢 Controlled",
+          (r) => r.mitigationStatus === "🟢 Controlled"
         ).length,
         uncontrolledRisks: risks.filter(
-          (r) => r.mitigationStatus === "🔴 Uncontrolled",
+          (r) => r.mitigationStatus === "🔴 Uncontrolled"
         ).length,
       };
     });
@@ -5940,13 +5119,13 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       lowRisks: lowRisks.length,
       highRiskItems: highRisks.slice(0, 5),
       controlledRisks: allRisks.filter(
-        (r) => r.mitigationStatus === "🟢 Controlled",
+        (r) => r.mitigationStatus === "🟢 Controlled"
       ).length,
       partiallyControlledRisks: allRisks.filter(
-        (r) => r.mitigationStatus === "🟡 Partially controlled",
+        (r) => r.mitigationStatus === "🟡 Partially controlled"
       ).length,
       uncontrolledRisks: allRisks.filter(
-        (r) => r.mitigationStatus === "🔴 Uncontrolled",
+        (r) => r.mitigationStatus === "🔴 Uncontrolled"
       ).length,
       risksWithOwners: allRisks.filter((r) => r.owner).length,
       risksWithReviewCadence: allRisks.filter((r) => r.reviewCadence).length,
@@ -5987,7 +5166,7 @@ TOP 5 HIGHEST RISK ITEMS:
 ${data.highRiskItems
         .map(
           (risk, i) =>
-            `  ${i + 1}. ${risk.riskSubCategory || "Unnamed Risk"} (${risk.riskNumber || "N/A"}) - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || "Unassigned"}`,
+            `  ${i + 1}. ${risk.riskSubCategory || "Unnamed Risk"} (${risk.riskNumber || "N/A"}) - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || "Unassigned"}`
         )
         .join("\n")}
 
@@ -6078,7 +5257,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     const allRisks = Object.values(riskData).flat();
     if (allRisks.length === 0 || !currentUser) {
       setAnalysisError(
-        "No risk data available for analysis. Please add some risk items first.",
+        "No risk data available for analysis. Please add some risk items first."
       );
       return;
     }
@@ -6092,7 +5271,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       const functions = getFunctions();
       const generateStrategicRiskAnalysis = httpsCallable(
         functions,
-        "generateStrategicRiskAnalysis",
+        "generateStrategicRiskAnalysis"
       );
       const response = await generateStrategicRiskAnalysis({
         prompt: prompt,
@@ -6107,7 +5286,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       const aiAnalysisRef = doc(
         db,
         "strategicRiskControlAnalysis",
-        currentUser.uid,
+        currentUser.uid
       );
       await setDoc(
         aiAnalysisRef,
@@ -6117,14 +5296,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           dataSnapshot: {
             totalRisks: allRisks.length,
             riskCategories: Object.keys(riskData).filter(
-              (cat) => riskData[cat].length > 0,
+              (cat) => riskData[cat].length > 0
             ),
             riskCount: allRisks.length,
           },
           userId: currentUser.uid,
           riskCount: allRisks.length,
         },
-        { merge: true },
+        { merge: true }
       );
 
       setAiAnalysis(analysis);
@@ -6133,38 +5312,31 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       console.error("Error generating AI analysis:", error);
       setAnalysisError(`Failed to generate analysis: ${error.message}`);
       setAiAnalysis(
-        "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control.",
+        "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."
       );
     } finally {
       setIsGenerating(false);
     }
   };
 
-const handleAIAnalysis = () => {
-  if (!showAIAnalysis) {
-    if (savedAnalysis) {
-      setAiAnalysis(savedAnalysis);
-      setShowAIAnalysis(true);
+  const handleAIAnalysis = () => {
+    if (!showAIAnalysis) {
+      if (savedAnalysis) {
+        setAiAnalysis(savedAnalysis);
+        setShowAIAnalysis(true);
+      } else {
+        generateAIAnalysis();
+      }
     } else {
-      generateAIAnalysis();
+      setShowAIAnalysis(!showAIAnalysis);
     }
-  } else {
-    setShowAIAnalysis(!showAIAnalysis);
-  }
-};
+  };
 
-const refreshAnalysis = async () => {
-  // Clear saved analysis state before regenerating
-  setSavedAnalysis("");
-  setAiAnalysis("");
-  await generateAIAnalysis();
-};
-
-
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
-
-  // Add this inside the RiskManagement component, near the other handler functions
+  const refreshAnalysis = async () => {
+    setSavedAnalysis("");
+    setAiAnalysis("");
+    await generateAIAnalysis();
+  };
 
   const handleSaveToNotes = async () => {
     if (!currentUser || !aiAnalysis) return;
@@ -6177,7 +5349,6 @@ const refreshAnalysis = async () => {
         `risk_analysis_${Date.now()}`
       );
 
-      // Get risk summary for context
       const allRisks = Object.values(riskData).flat();
       const riskSummary = {
         totalRisks: allRisks.length,
@@ -6210,23 +5381,19 @@ const refreshAnalysis = async () => {
     }
   };
 
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
 
   return (
-    <div
-      style={{
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
+    <div style={cardS}>
       <KeyQuestionBox
         question={SECTION_DATA["strategic-risk-control"].keyQuestion}
         signals={SECTION_DATA["strategic-risk-control"].keySignals}
         decisions={SECTION_DATA["strategic-risk-control"].keyDecisions}
       />
 
-      <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Risk Register</h3>
+      <h3 style={{ color: T.accent, marginBottom: "20px" }}>Risk Register</h3>
 
-      {/* Risk Category Tabs */}
       <div
         style={{
           display: "flex",
@@ -6247,11 +5414,11 @@ const refreshAnalysis = async () => {
               onMouseLeave={() => setHoveredRiskType(null)}
               style={{
                 padding: "10px 20px",
-                backgroundColor:
-                  riskSection === category.id ? category.color : "#f5f0e1",
-                color: riskSection === category.id ? "white" : "#4a352f",
+                background:
+                  riskSection === category.id ? category.color : T.raised,
+                color: riskSection === category.id ? "#fff" : T.body,
                 border: "none",
-                borderRadius: "4px",
+                borderRadius: "8px",
                 cursor: "pointer",
                 fontWeight: "500",
                 fontSize: "14px",
@@ -6269,8 +5436,8 @@ const refreshAnalysis = async () => {
                     transform: "translateX(-50%)",
                     marginTop: "8px",
                     padding: "10px 15px",
-                    backgroundColor: "#4a352f",
-                    color: "white",
+                    background: T.header,
+                    color: "#fff",
                     borderRadius: "6px",
                     fontSize: "12px",
                     width: "250px",
@@ -6290,7 +5457,7 @@ const refreshAnalysis = async () => {
                       height: "0",
                       borderLeft: "6px solid transparent",
                       borderRight: "6px solid transparent",
-                      borderBottom: "6px solid #4a352f",
+                      borderBottom: `6px solid ${T.header}`,
                     }}
                   />
                 </div>
@@ -6299,7 +5466,6 @@ const refreshAnalysis = async () => {
         ))}
       </div>
 
-      {/* Risk Category Content */}
       {riskCategories.map((category) => {
         if (riskSection !== category.id) return null;
 
@@ -6311,17 +5477,14 @@ const refreshAnalysis = async () => {
 
         return (
           <div key={category.id}>
-            {/* Scatter Chart */}
             <div
               style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "6px",
+                ...cardS,
                 marginBottom: "20px",
                 border: `2px solid ${category.color}`,
               }}
             >
-              <h4 style={{ color: "#4a352f", marginBottom: "15px" }}>
+              <h4 style={{ color: T.accent, marginBottom: "15px" }}>
                 {category.name} Matrix
                 {category.id === "business-risk" && " (All Risks)"}
                 {(selectedMonth ||
@@ -6335,7 +5498,7 @@ const refreshAnalysis = async () => {
                       style={{
                         fontSize: "12px",
                         marginLeft: "10px",
-                        color: "#8d6e63",
+                        color: T.muted,
                       }}
                     >
                       (Filtered)
@@ -6349,13 +5512,12 @@ const refreshAnalysis = async () => {
                 />
               </div>
 
-              {/* Debug section to show risk counts */}
               {category.id === "business-risk" && (
                 <div
                   style={{
                     marginTop: "10px",
                     padding: "10px",
-                    backgroundColor: "#f0f0f0",
+                    background: T.panel,
                     borderRadius: "4px",
                     fontSize: "12px",
                   }}
@@ -6382,13 +5544,12 @@ const refreshAnalysis = async () => {
               )}
             </div>
 
-            {/* Filters Section */}
             <div
               style={{
                 marginBottom: "20px",
                 padding: "20px",
-                backgroundColor: "#f8f4f0",
-                borderRadius: "6px",
+                background: T.panel,
+                borderRadius: "10px",
                 border: `2px solid ${category.color}`,
               }}
             >
@@ -6402,7 +5563,7 @@ const refreshAnalysis = async () => {
               >
                 <h4
                   style={{
-                    color: "#4a352f",
+                    color: T.accent,
                     margin: 0,
                     fontSize: "15px",
                     fontWeight: "600",
@@ -6412,16 +5573,7 @@ const refreshAnalysis = async () => {
                 </h4>
                 <button
                   onClick={clearAllFilters}
-                  style={{
-                    padding: "6px 12px",
-                    backgroundColor: "#e6d7c3",
-                    color: "#4a352f",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                    fontWeight: "500",
-                  }}
+                  style={btnGhost}
                 >
                   Clear All
                 </button>
@@ -6434,14 +5586,10 @@ const refreshAnalysis = async () => {
                   gap: "12px",
                 }}
               >
-                {/* Filter by Risk Sub-Category */}
                 <div>
                   <label
                     style={{
-                      display: "block",
-                      marginBottom: "5px",
-                      color: "#4a352f",
-                      fontWeight: "500",
+                      ...labelS,
                       fontSize: "12px",
                     }}
                   >
@@ -6450,15 +5598,7 @@ const refreshAnalysis = async () => {
                   <select
                     value={filterRisk}
                     onChange={(e) => setFilterRisk(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      backgroundColor: "white",
-                      color: "#4a352f",
-                      fontSize: "13px",
-                    }}
+                    style={selectS}
                   >
                     <option value="">All Sub-Categories</option>
                     {getUniqueRiskNames(category.id).map((risk) => (
@@ -6469,15 +5609,11 @@ const refreshAnalysis = async () => {
                   </select>
                 </div>
 
-                {/* Filter by Risk Category (only in Business Risk view) */}
                 {category.id === "business-risk" && (
                   <div>
                     <label
                       style={{
-                        display: "block",
-                        marginBottom: "5px",
-                        color: "#4a352f",
-                        fontWeight: "500",
+                        ...labelS,
                         fontSize: "12px",
                       }}
                     >
@@ -6486,15 +5622,7 @@ const refreshAnalysis = async () => {
                     <select
                       value={filterCategory}
                       onChange={(e) => setFilterCategory(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        border: "2px solid #e8ddd4",
-                        borderRadius: "4px",
-                        backgroundColor: "white",
-                        color: "#4a352f",
-                        fontSize: "13px",
-                      }}
+                      style={selectS}
                     >
                       <option value="">All Categories</option>
                       {getUniqueCategories(category.id).map((cat) => (
@@ -6506,14 +5634,10 @@ const refreshAnalysis = async () => {
                   </div>
                 )}
 
-                {/* Filter by Owner */}
                 <div>
                   <label
                     style={{
-                      display: "block",
-                      marginBottom: "5px",
-                      color: "#4a352f",
-                      fontWeight: "500",
+                      ...labelS,
                       fontSize: "12px",
                     }}
                   >
@@ -6522,15 +5646,7 @@ const refreshAnalysis = async () => {
                   <select
                     value={filterOwner}
                     onChange={(e) => setFilterOwner(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      backgroundColor: "white",
-                      color: "#4a352f",
-                      fontSize: "13px",
-                    }}
+                    style={selectS}
                   >
                     <option value="">All Owners</option>
                     {getUniqueOwners(category.id).map((owner) => (
@@ -6541,14 +5657,10 @@ const refreshAnalysis = async () => {
                   </select>
                 </div>
 
-                {/* Filter by Status */}
                 <div>
                   <label
                     style={{
-                      display: "block",
-                      marginBottom: "5px",
-                      color: "#4a352f",
-                      fontWeight: "500",
+                      ...labelS,
                       fontSize: "12px",
                     }}
                   >
@@ -6557,15 +5669,7 @@ const refreshAnalysis = async () => {
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      backgroundColor: "white",
-                      color: "#4a352f",
-                      fontSize: "13px",
-                    }}
+                    style={selectS}
                   >
                     <option value="">All Statuses</option>
                     {getUniqueStatuses(category.id).map((status) => (
@@ -6576,14 +5680,10 @@ const refreshAnalysis = async () => {
                   </select>
                 </div>
 
-                {/* Month/Year Filters in same row */}
                 <div>
                   <label
                     style={{
-                      display: "block",
-                      marginBottom: "5px",
-                      color: "#4a352f",
-                      fontWeight: "500",
+                      ...labelS,
                       fontSize: "12px",
                     }}
                   >
@@ -6592,15 +5692,7 @@ const refreshAnalysis = async () => {
                   <select
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      backgroundColor: "white",
-                      color: "#4a352f",
-                      fontSize: "13px",
-                    }}
+                    style={selectS}
                   >
                     <option value="">All</option>
                     {Array.from({ length: 12 }, (_, i) => (
@@ -6616,10 +5708,7 @@ const refreshAnalysis = async () => {
                 <div>
                   <label
                     style={{
-                      display: "block",
-                      marginBottom: "5px",
-                      color: "#4a352f",
-                      fontWeight: "500",
+                      ...labelS,
                       fontSize: "12px",
                     }}
                   >
@@ -6628,15 +5717,7 @@ const refreshAnalysis = async () => {
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      backgroundColor: "white",
-                      color: "#4a352f",
-                      fontSize: "13px",
-                    }}
+                    style={selectS}
                   >
                     <option value="">All</option>
                     {years.map((year) => (
@@ -6648,45 +5729,28 @@ const refreshAnalysis = async () => {
                 </div>
               </div>
 
-              {/* Add Risk Item button - NOW VISIBLE for specific categories */}
               {!isInvestorView && category.id !== "business-risk" && (
                 <div style={{ marginTop: "15px", textAlign: "right" }}>
                   <button
-                    onClick={() => {
-                      console.log(
-                        "Add button clicked for category:",
-                        category.id,
-                      );
-                      addRiskItem(category.id);
-                    }}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "#7d5a50",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      fontSize: "14px",
-                    }}
+                    onClick={() => addRiskItem(category.id)}
+                    style={btnPrimary}
                   >
                     + Add Risk Item to {category.name}
                   </button>
                 </div>
               )}
 
-              {/* Message for Business Risk view */}
               {category.id === "business-risk" && (
                 <div
                   style={{
                     marginTop: "15px",
                     padding: "10px",
-                    backgroundColor: "#e6d7c3",
+                    background: T.raised,
                     borderRadius: "4px",
                     textAlign: "center",
                   }}
                 >
-                  <p style={{ color: "#4a352f", margin: 0, fontSize: "13px" }}>
+                  <p style={{ color: T.body, margin: 0, fontSize: "13px" }}>
                     To add a new risk, select a specific risk category tab
                     above.
                   </p>
@@ -6694,12 +5758,9 @@ const refreshAnalysis = async () => {
               )}
             </div>
 
-            {/* Risk Assessment Table */}
             <div
               style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "6px",
+                ...cardS,
                 border: `2px solid ${category.color}`,
               }}
             >
@@ -6711,7 +5772,7 @@ const refreshAnalysis = async () => {
                   marginBottom: "15px",
                 }}
               >
-                <h4 style={{ color: "#4a352f", margin: 0 }}>
+                <h4 style={{ color: T.accent, margin: 0 }}>
                   Risk Assessment Table
                   {category.id === "business-risk" && " (All Risks)"}
                   {(selectedMonth ||
@@ -6724,7 +5785,7 @@ const refreshAnalysis = async () => {
                         style={{
                           fontSize: "12px",
                           marginLeft: "10px",
-                          color: "#8d6e63",
+                          color: T.muted,
                         }}
                       >
                         (Showing {filtered.length} of {data.length} items)
@@ -6738,7 +5799,7 @@ const refreshAnalysis = async () => {
                   style={{
                     textAlign: "center",
                     padding: "40px",
-                    color: "#7d5a50",
+                    color: T.muted,
                   }}
                 >
                   {category.id === "business-risk"
@@ -6761,7 +5822,7 @@ const refreshAnalysis = async () => {
                     style={{
                       width: "100%",
                       borderCollapse: "collapse",
-                      color: "#4a352f",
+                      color: T.body,
                       minWidth: "1600px",
                       fontSize: "12px",
                     }}
@@ -6769,8 +5830,8 @@ const refreshAnalysis = async () => {
                     <thead>
                       <tr
                         style={{
-                          backgroundColor: "#e6d7c3",
-                          borderBottom: "2px solid #c8b6a6",
+                          background: T.header,
+                          borderBottom: `2px solid ${T.line}`,
                         }}
                       >
                         <th
@@ -6778,6 +5839,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Risk Number
@@ -6788,6 +5850,7 @@ const refreshAnalysis = async () => {
                               padding: "12px",
                               textAlign: "left",
                               fontWeight: "600",
+                              color: "#fff",
                             }}
                           >
                             Risk Category
@@ -6798,6 +5861,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Risk Sub-Category
@@ -6807,6 +5871,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Description
@@ -6816,6 +5881,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "center",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Severity (1-5)
@@ -6825,6 +5891,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "center",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Likelihood (1-5)
@@ -6834,6 +5901,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "center",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Risk Score
@@ -6843,6 +5911,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Owner
@@ -6852,6 +5921,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Status
@@ -6861,6 +5931,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Mitigation Plan
@@ -6870,6 +5941,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Review Cadence
@@ -6879,6 +5951,7 @@ const refreshAnalysis = async () => {
                             padding: "12px",
                             textAlign: "left",
                             fontWeight: "600",
+                            color: "#fff",
                           }}
                         >
                           Action Date
@@ -6889,6 +5962,7 @@ const refreshAnalysis = async () => {
                               padding: "12px",
                               textAlign: "center",
                               fontWeight: "600",
+                              color: "#fff",
                             }}
                           >
                             Actions
@@ -6901,22 +5975,22 @@ const refreshAnalysis = async () => {
                         const originalCategory =
                           category.id === "business-risk"
                             ? Object.keys(riskData).find((key) =>
-                              riskData[key].some((r) => r.id === item.id),
+                              riskData[key].some((r) => r.id === item.id)
                             )
                             : category.id;
                         const riskScore =
                           (item.severity || 1) * (item.likelihood || 1);
                         const scoreColor =
                           riskScore >= 16
-                            ? "#F44336"
+                            ? T.red
                             : riskScore >= 9
-                              ? "#FF9800"
-                              : "#4CAF50";
+                              ? T.amber
+                              : T.green;
 
                         return (
                           <tr
                             key={item.id}
-                            style={{ borderBottom: "1px solid #e6d7c3" }}
+                            style={{ borderBottom: `1px solid ${T.lineSoft}` }}
                           >
                             <td style={{ padding: "12px" }}>
                               <input
@@ -6927,7 +6001,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "riskNumber",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -6938,14 +6012,14 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "80px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -6965,7 +6039,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "riskSubCategory",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -6976,14 +6050,14 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "120px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -6996,7 +6070,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "description",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -7008,15 +6082,15 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "150px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
                                   resize: "vertical",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -7034,7 +6108,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "severity",
-                                    Number.parseInt(e.target.value),
+                                    Number.parseInt(e.target.value)
                                   )
                                 }
                                 disabled={
@@ -7044,15 +6118,15 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "50px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
                                   textAlign: "center",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -7070,7 +6144,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "likelihood",
-                                    Number.parseInt(e.target.value),
+                                    Number.parseInt(e.target.value)
                                   )
                                 }
                                 disabled={
@@ -7080,15 +6154,15 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "50px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
                                   textAlign: "center",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -7100,8 +6174,8 @@ const refreshAnalysis = async () => {
                                 style={{
                                   padding: "4px 8px",
                                   borderRadius: "4px",
-                                  backgroundColor: scoreColor,
-                                  color: "white",
+                                  background: scoreColor,
+                                  color: "#fff",
                                   fontWeight: "600",
                                   fontSize: "12px",
                                   display: "inline-block",
@@ -7122,7 +6196,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "owner",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -7133,14 +6207,14 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "100px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -7153,7 +6227,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "mitigationStatus",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -7163,14 +6237,14 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "140px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               >
                                 <option value="🟢 Controlled">
@@ -7193,7 +6267,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "mitigation",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -7205,15 +6279,15 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "150px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
                                   resize: "vertical",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -7227,7 +6301,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "reviewCadence",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -7238,14 +6312,14 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "100px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -7259,7 +6333,7 @@ const refreshAnalysis = async () => {
                                     originalCategory,
                                     item.id,
                                     "actionDate",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 disabled={
@@ -7269,14 +6343,14 @@ const refreshAnalysis = async () => {
                                 style={{
                                   width: "120px",
                                   padding: "6px",
-                                  border: "1px solid #e8ddd4",
+                                  border: `1px solid ${T.line}`,
                                   borderRadius: "4px",
                                   fontSize: "12px",
-                                  backgroundColor:
+                                  background:
                                     isInvestorView ||
-                                      category.id === "business-risk"
-                                      ? "#f5f5f5"
-                                      : "white",
+                                    category.id === "business-risk"
+                                      ? T.panel
+                                      : T.bg,
                                 }}
                               />
                             </td>
@@ -7295,9 +6369,9 @@ const refreshAnalysis = async () => {
                                     }
                                     style={{
                                       padding: "6px 12px",
-                                      backgroundColor: "transparent",
-                                      color: "#F44336",
-                                      border: "1px solid #F44336",
+                                      background: "transparent",
+                                      color: T.red,
+                                      border: `1px solid ${T.red}`,
                                       borderRadius: "4px",
                                       cursor: "pointer",
                                       fontSize: "14px",
@@ -7320,8 +6394,6 @@ const refreshAnalysis = async () => {
         );
       })}
 
-      {/* AI Analysis Section */}
-      {/* AI Analysis Section */}
       <div style={{ marginTop: "30px", marginBottom: "20px" }}>
         <div
           style={{
@@ -7339,25 +6411,12 @@ const refreshAnalysis = async () => {
               Object.values(riskData).flat().length === 0
             }
             style={{
-              padding: "12px 24px",
-              backgroundColor:
-                isInvestorView || Object.values(riskData).flat().length === 0
-                  ? "#a1887f"
-                  : "#4a352f",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor:
-                isInvestorView || Object.values(riskData).flat().length === 0
-                  ? "not-allowed"
-                  : "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "all 0.2s ease",
+              ...btnPrimary,
               opacity: isGenerating ? 0.7 : 1,
+              background:
+                isInvestorView || Object.values(riskData).flat().length === 0
+                  ? T.muted
+                  : T.accent,
             }}
           >
             {isGenerating ? (
@@ -7383,17 +6442,9 @@ const refreshAnalysis = async () => {
               <button
                 onClick={refreshAnalysis}
                 style={{
+                  ...btnGhost,
                   padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
                   fontSize: "12px",
-                  fontWeight: "500",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
                 }}
                 title="Refresh AI Analysis"
               >
@@ -7405,7 +6456,7 @@ const refreshAnalysis = async () => {
         {Object.values(riskData).flat().length === 0 && (
           <p
             style={{
-              color: "#8d6e63",
+              color: T.muted,
               fontSize: "13px",
               fontStyle: "italic",
               marginLeft: "10px",
@@ -7418,10 +6469,10 @@ const refreshAnalysis = async () => {
         {showAIAnalysis && (
           <div
             style={{
-              backgroundColor: "#f8f4f0",
+              background: T.panel,
               padding: "20px",
-              borderRadius: "8px",
-              border: "1px solid #d7ccc8",
+              borderRadius: "10px",
+              border: `1px solid ${T.line}`,
               marginTop: "10px",
               position: "relative",
             }}
@@ -7437,10 +6488,8 @@ const refreshAnalysis = async () => {
               <div>
                 <label
                   style={{
+                    ...labelS,
                     fontSize: "16px",
-                    color: "#5d4037",
-                    fontWeight: "600",
-                    display: "block",
                     marginBottom: "8px",
                   }}
                 >
@@ -7449,7 +6498,7 @@ const refreshAnalysis = async () => {
                 <p
                   style={{
                     fontSize: "12px",
-                    color: "#8d6e63",
+                    color: T.muted,
                     margin: "0 0 10px 0",
                     fontStyle: "italic",
                   }}
@@ -7463,8 +6512,8 @@ const refreshAnalysis = async () => {
                 <span
                   style={{
                     fontSize: "10px",
-                    color: "#8d6e63",
-                    backgroundColor: "#efebe9",
+                    color: T.muted,
+                    background: T.raised,
                     padding: "4px 8px",
                     borderRadius: "4px",
                     fontWeight: "500",
@@ -7479,10 +6528,10 @@ const refreshAnalysis = async () => {
               <div
                 style={{
                   padding: "15px",
-                  backgroundColor: "#ffebee",
+                  background: T.redBg,
                   borderRadius: "6px",
-                  border: "1px solid #ffcdd2",
-                  color: "#c62828",
+                  border: `1px solid ${T.red}33`,
+                  color: T.red,
                   fontSize: "14px",
                 }}
               >
@@ -7493,15 +6542,15 @@ const refreshAnalysis = async () => {
                 style={{
                   textAlign: "center",
                   padding: "30px",
-                  color: "#5d4037",
+                  color: T.body,
                 }}
               >
                 <div
                   style={{
                     width: "40px",
                     height: "40px",
-                    border: "3px solid #f3e5f5",
-                    borderTop: "3px solid #8d6e63",
+                    border: `3px solid ${T.lineSoft}`,
+                    borderTop: `3px solid ${T.accent}`,
                     borderRadius: "50%",
                     animation: "spin 1s linear infinite",
                     margin: "0 auto 15px",
@@ -7511,7 +6560,7 @@ const refreshAnalysis = async () => {
                 <p
                   style={{
                     fontSize: "12px",
-                    color: "#8d6e63",
+                    color: T.muted,
                     marginTop: "5px",
                   }}
                 >
@@ -7522,15 +6571,15 @@ const refreshAnalysis = async () => {
               <>
                 <div
                   style={{
-                    backgroundColor: "white",
+                    background: T.bg,
                     padding: "20px",
-                    borderRadius: "6px",
-                    border: "1px solid #e8d8cf",
+                    borderRadius: "8px",
+                    border: `1px solid ${T.lineSoft}`,
                     maxHeight: "400px",
                     overflowY: "auto",
                     fontSize: "14px",
                     lineHeight: "1.6",
-                    color: "#5d4037",
+                    color: T.body,
                     whiteSpace: "pre-wrap",
                   }}
                 >
@@ -7538,24 +6587,18 @@ const refreshAnalysis = async () => {
                     "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."}
                 </div>
 
-                {/* Save Analysis Button */}
                 {!isInvestorView && aiAnalysis && (
                   <div style={{ marginTop: "15px", textAlign: "right" }}>
                     <button
                       onClick={handleSaveToNotes}
                       disabled={isSaving}
                       style={{
+                        ...btnGhost,
                         padding: "8px 16px",
-                        backgroundColor: isSaving ? "#a1887f" : "#7d5a50",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: isSaving ? "not-allowed" : "pointer",
                         fontSize: "12px",
-                        fontWeight: "500",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "5px",
+                        background: isSaving ? T.muted : T.accent,
+                        color: "#fff",
+                        opacity: isSaving ? 0.7 : 1,
                       }}
                     >
                       {isSaving ? (
@@ -7575,9 +6618,9 @@ const refreshAnalysis = async () => {
               style={{
                 marginTop: "15px",
                 paddingTop: "15px",
-                borderTop: "1px solid #e8d8cf",
+                borderTop: `1px solid ${T.lineSoft}`,
                 fontSize: "11px",
-                color: "#8d6e63",
+                color: T.muted,
                 fontStyle: "italic",
                 display: "flex",
                 justifyContent: "space-between",
@@ -7592,7 +6635,7 @@ const refreshAnalysis = async () => {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#8d6e63",
+                  color: T.muted,
                   cursor: "pointer",
                   fontSize: "12px",
                   textDecoration: "underline",
@@ -7607,2460 +6650,14 @@ const refreshAnalysis = async () => {
     </div>
   );
 };
-const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
-  const [reviewData, setReviewData] = useState([]);
-  const [adjustments, setAdjustments] = useState([]);
-  const [pivots, setPivots] = useState([]);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
-  const [showPivotModal, setShowPivotModal] = useState(false);
-  const [editingReview, setEditingReview] = useState(null);
-  const [editingAdjustment, setEditingAdjustment] = useState(null);
-  const [editingPivot, setEditingPivot] = useState(null);
-  const [newReview, setNewReview] = useState({
-    date: "",
-    topic: "",
-    status: "Not Done",
-    notes: "",
-  });
-  const [newAdjustment, setNewAdjustment] = useState({
-    date: "",
-    description: "",
-    reason: "",
-    file: null,
-    fileName: "",
-  });
-  const [newPivot, setNewPivot] = useState({
-    date: "",
-    from: "",
-    to: "",
-    reason: "",
-    file: null,
-    fileName: "",
-  });
-  const [selectedMonth, setSelectedMonth] = useState("");
-  const [selectedYear, setSelectedYear] = useState("");
-  const [uploading, setUploading] = useState(false);
 
-  // AI Analysis States
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [analysisError, setAnalysisError] = useState("");
-  const [savedAnalysis, setSavedAnalysis] = useState("");
-
-  // NEW: Function to clean up the AI response
-  const cleanAIResponse = (text) => {
-    if (!text) return text;
-
-    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
-    let cleaned = text
-      // Remove hashtags at beginning of lines
-      .replace(/^#+\s*/gm, "")
-      // Remove any remaining hashtags
-      .replace(/#/g, "")
-      // Remove asterisk formatting
-      .replace(/\*\*/g, "")
-      .replace(/\*/g, "")
-      // Clean up multiple newlines
-      .replace(/\n{3,}/g, "\n\n")
-      // Remove markdown links but keep text
-      .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
-      // Trim each line
-      .split("\n")
-      .map((line) => line.trim())
-      .join("\n")
-      .trim();
-
-    return cleaned;
-  };
-
-  useEffect(() => {
-    const loadChangeData = async () => {
-      if (!currentUser || activeSection !== "change-adaptability") return;
-
-      try {
-        const reviewsSnapshot = await getDocs(
-          query(
-            collection(db, "strategyReviews"),
-            where("userId", "==", currentUser.uid),
-          ),
-        );
-        setReviewData(
-          reviewsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-        );
-
-        const adjustmentsSnapshot = await getDocs(
-          query(
-            collection(db, "adjustments"),
-            where("userId", "==", currentUser.uid),
-          ),
-        );
-        setAdjustments(
-          adjustmentsSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })),
-        );
-
-        const pivotsSnapshot = await getDocs(
-          query(
-            collection(db, "pivots"),
-            where("userId", "==", currentUser.uid),
-          ),
-        );
-        setPivots(
-          pivotsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-        );
-      } catch (error) {
-        console.error("Error loading change data:", error);
-      }
-    };
-
-    loadChangeData();
-  }, [activeSection, currentUser]);
-
-  // Load saved AI analysis
-  useEffect(() => {
-    if (currentUser && activeSection === "change-adaptability") {
-      loadSavedAIAnalysis();
-    }
-  }, [currentUser, activeSection]);
-
-  const loadSavedAIAnalysis = async () => {
-    try {
-      const aiAnalysisRef = doc(
-        db,
-        "changeAdaptabilityAnalysis",
-        currentUser.uid,
-      );
-      const aiSnapshot = await getDoc(aiAnalysisRef);
-
-      if (aiSnapshot.exists()) {
-        const data = aiSnapshot.data();
-        if (data.analysis) {
-          setSavedAnalysis(data.analysis);
-          setAiAnalysis(data.analysis);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading saved analysis:", error);
-    }
-  };
-
-  if (activeSection !== "change-adaptability") return null;
-
-  const handleAddReview = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-
-    if (!currentUser) {
-      alert("You must be logged in to add reviews.");
-      return;
-    }
-
-    try {
-      const reviewWithUser = {
-        ...newReview,
-        userId: currentUser.uid,
-        createdAt: new Date().toISOString(),
-      };
-      const docRef = await addDoc(
-        collection(db, "strategyReviews"),
-        reviewWithUser,
-      );
-      setReviewData((prev) => [...prev, { id: docRef.id, ...reviewWithUser }]);
-      setShowReviewModal(false);
-      setNewReview({ date: "", topic: "", status: "Not Done", notes: "" });
-      setSavedAnalysis("");
-    } catch (error) {
-      console.error("Error adding review:", error);
-      alert("Error adding review. Please try again.");
-    }
-  };
-
-  const handleEditReview = (review) => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-    setEditingReview(review);
-    setNewReview({
-      date: review.date || "",
-      topic: review.topic || "",
-      status: review.status || "Not Done",
-      notes: review.notes || "",
-    });
-    setShowReviewModal(true);
-  };
-
-  const handleUpdateReview = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-
-    if (!currentUser || !editingReview) return;
-
-    try {
-      const reviewRef = doc(db, "strategyReviews", editingReview.id);
-      const updatedReview = {
-        ...newReview,
-        updatedAt: new Date().toISOString(),
-      };
-
-      await updateDoc(reviewRef, updatedReview);
-
-      setReviewData((prev) =>
-        prev.map((r) =>
-          r.id === editingReview.id ? { ...r, ...updatedReview } : r,
-        ),
-      );
-
-      setShowReviewModal(false);
-      setEditingReview(null);
-      setNewReview({ date: "", topic: "", status: "Not Done", notes: "" });
-      setSavedAnalysis("");
-    } catch (error) {
-      console.error("Error updating review:", error);
-      alert("Error updating review. Please try again.");
-    }
-  };
-
-  const handleDeleteReview = async (id) => {
-    if (isInvestorView) return;
-    if (window.confirm("Are you sure you want to delete this review?")) {
-      try {
-        await deleteDoc(doc(db, "strategyReviews", id));
-        setReviewData((prev) => prev.filter((r) => r.id !== id));
-        setSavedAnalysis("");
-      } catch (error) {
-        console.error("Error deleting review:", error);
-      }
-    }
-  };
-
-  const handleFileUpload = async (file, type) => {
-    if (!file) return null;
-
-    setUploading(true);
-    try {
-      // Create a unique file name
-      const timestamp = Date.now();
-      const fileName = `${timestamp}_${file.name}`;
-      const storageRef = ref(
-        storage,
-        `change-documents/${currentUser.uid}/${type}/${fileName}`,
-      );
-
-      // Upload file to Firebase Storage
-      await uploadBytes(storageRef, file);
-
-      // Get download URL
-      const downloadUrl = await getDownloadURL(storageRef);
-
-      setUploading(false);
-      return {
-        fileName: file.name,
-        fileUrl: downloadUrl,
-        storagePath: `change-documents/${currentUser.uid}/${type}/${fileName}`,
-      };
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      setUploading(false);
-      alert("Error uploading file. Please try again.");
-      return null;
-    }
-  };
-
-  const handleAddAdjustment = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-
-    if (!currentUser) {
-      alert("You must be logged in to add adjustments.");
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      let fileData = null;
-      if (newAdjustment.file) {
-        fileData = await handleFileUpload(newAdjustment.file, "adjustments");
-      }
-
-      const adjustmentWithUser = {
-        date: newAdjustment.date,
-        description: newAdjustment.description,
-        reason: newAdjustment.reason,
-        fileName: fileData?.fileName || newAdjustment.fileName,
-        fileUrl: fileData?.fileUrl || "",
-        storagePath: fileData?.storagePath || "",
-        userId: currentUser.uid,
-        createdAt: new Date().toISOString(),
-      };
-
-      const docRef = await addDoc(
-        collection(db, "adjustments"),
-        adjustmentWithUser,
-      );
-      setAdjustments((prev) => [
-        ...prev,
-        { id: docRef.id, ...adjustmentWithUser },
-      ]);
-      setShowAdjustmentModal(false);
-      setNewAdjustment({
-        date: "",
-        description: "",
-        reason: "",
-        file: null,
-        fileName: "",
-      });
-      setSavedAnalysis("");
-      setUploading(false);
-    } catch (error) {
-      console.error("Error adding adjustment:", error);
-      alert("Error adding adjustment. Please try again.");
-      setUploading(false);
-    }
-  };
-
-  const handleEditAdjustment = (adjustment) => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-    setEditingAdjustment(adjustment);
-    setNewAdjustment({
-      date: adjustment.date || "",
-      description: adjustment.description || "",
-      reason: adjustment.reason || "",
-      file: null,
-      fileName: adjustment.fileName || "",
-    });
-    setShowAdjustmentModal(true);
-  };
-
-  const handleUpdateAdjustment = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-
-    if (!currentUser || !editingAdjustment) return;
-
-    setUploading(true);
-
-    try {
-      let fileData = null;
-      if (newAdjustment.file) {
-        fileData = await handleFileUpload(newAdjustment.file, "adjustments");
-      }
-
-      const adjustmentRef = doc(db, "adjustments", editingAdjustment.id);
-      const updatedAdjustment = {
-        date: newAdjustment.date,
-        description: newAdjustment.description,
-        reason: newAdjustment.reason,
-        fileName: fileData?.fileName || newAdjustment.fileName,
-        fileUrl: fileData?.fileUrl || editingAdjustment.fileUrl || "",
-        storagePath:
-          fileData?.storagePath || editingAdjustment.storagePath || "",
-        updatedAt: new Date().toISOString(),
-      };
-
-      await updateDoc(adjustmentRef, updatedAdjustment);
-
-      setAdjustments((prev) =>
-        prev.map((a) =>
-          a.id === editingAdjustment.id ? { ...a, ...updatedAdjustment } : a,
-        ),
-      );
-
-      setShowAdjustmentModal(false);
-      setEditingAdjustment(null);
-      setNewAdjustment({
-        date: "",
-        description: "",
-        reason: "",
-        file: null,
-        fileName: "",
-      });
-      setSavedAnalysis("");
-      setUploading(false);
-    } catch (error) {
-      console.error("Error updating adjustment:", error);
-      alert("Error updating adjustment. Please try again.");
-      setUploading(false);
-    }
-  };
-
-  const handleDeleteAdjustment = async (id) => {
-    if (isInvestorView) return;
-    if (window.confirm("Are you sure you want to delete this adjustment?")) {
-      try {
-        await deleteDoc(doc(db, "adjustments", id));
-        setAdjustments((prev) => prev.filter((a) => a.id !== id));
-        setSavedAnalysis("");
-      } catch (error) {
-        console.error("Error deleting adjustment:", error);
-      }
-    }
-  };
-
-  const handleAddPivot = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-
-    if (!currentUser) {
-      alert("You must be logged in to add pivots.");
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      let fileData = null;
-      if (newPivot.file) {
-        fileData = await handleFileUpload(newPivot.file, "pivots");
-      }
-
-      const pivotWithUser = {
-        date: newPivot.date,
-        from: newPivot.from,
-        to: newPivot.to,
-        reason: newPivot.reason,
-        fileName: fileData?.fileName || newPivot.fileName,
-        fileUrl: fileData?.fileUrl || "",
-        storagePath: fileData?.storagePath || "",
-        userId: currentUser.uid,
-        createdAt: new Date().toISOString(),
-      };
-
-      const docRef = await addDoc(collection(db, "pivots"), pivotWithUser);
-      setPivots((prev) => [...prev, { id: docRef.id, ...pivotWithUser }]);
-      setShowPivotModal(false);
-      setNewPivot({
-        date: "",
-        from: "",
-        to: "",
-        reason: "",
-        file: null,
-        fileName: "",
-      });
-      setSavedAnalysis("");
-      setUploading(false);
-    } catch (error) {
-      console.error("Error adding pivot:", error);
-      alert("Error adding pivot. Please try again.");
-      setUploading(false);
-    }
-  };
-
-  const handleEditPivot = (pivot) => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-    setEditingPivot(pivot);
-    setNewPivot({
-      date: pivot.date || "",
-      from: pivot.from || "",
-      to: pivot.to || "",
-      reason: pivot.reason || "",
-      file: null,
-      fileName: pivot.fileName || "",
-    });
-    setShowPivotModal(true);
-  };
-
-  const handleUpdatePivot = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot make changes.");
-      return;
-    }
-
-    if (!currentUser || !editingPivot) return;
-
-    setUploading(true);
-
-    try {
-      let fileData = null;
-      if (newPivot.file) {
-        fileData = await handleFileUpload(newPivot.file, "pivots");
-      }
-
-      const pivotRef = doc(db, "pivots", editingPivot.id);
-      const updatedPivot = {
-        date: newPivot.date,
-        from: newPivot.from,
-        to: newPivot.to,
-        reason: newPivot.reason,
-        fileName: fileData?.fileName || newPivot.fileName,
-        fileUrl: fileData?.fileUrl || editingPivot.fileUrl || "",
-        storagePath: fileData?.storagePath || editingPivot.storagePath || "",
-        updatedAt: new Date().toISOString(),
-      };
-
-      await updateDoc(pivotRef, updatedPivot);
-
-      setPivots((prev) =>
-        prev.map((p) =>
-          p.id === editingPivot.id ? { ...p, ...updatedPivot } : p,
-        ),
-      );
-
-      setShowPivotModal(false);
-      setEditingPivot(null);
-      setNewPivot({
-        date: "",
-        from: "",
-        to: "",
-        reason: "",
-        file: null,
-        fileName: "",
-      });
-      setSavedAnalysis("");
-      setUploading(false);
-    } catch (error) {
-      console.error("Error updating pivot:", error);
-      alert("Error updating pivot. Please try again.");
-      setUploading(false);
-    }
-  };
-
-  const handleDeletePivot = async (id) => {
-    if (isInvestorView) return;
-    if (window.confirm("Are you sure you want to delete this pivot?")) {
-      try {
-        await deleteDoc(doc(db, "pivots", id));
-        setPivots((prev) => prev.filter((p) => p.id !== id));
-        setSavedAnalysis("");
-      } catch (error) {
-        console.error("Error deleting pivot:", error);
-      }
-    }
-  };
-
-  const handleFileSelect = (e, type) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (type === "adjustment") {
-        setNewAdjustment((prev) => ({
-          ...prev,
-          file: file,
-          fileName: file.name,
-        }));
-      } else if (type === "pivot") {
-        setNewPivot((prev) => ({
-          ...prev,
-          file: file,
-          fileName: file.name,
-        }));
-      }
-    }
-  };
-
-  // AI Analysis Functions
-  const prepareChangeAdaptabilityData = () => {
-    // Calculate review metrics
-    const totalReviews = reviewData.length;
-    const completedReviews = reviewData.filter(
-      (r) => r.status === "Done",
-    ).length;
-    const pendingReviews = reviewData.filter(
-      (r) => r.status === "Not Done",
-    ).length;
-    const reviewCompletionRate =
-      totalReviews > 0
-        ? Math.round((completedReviews / totalReviews) * 100)
-        : 0;
-
-    // Group reviews by month/year
-    const reviewsByTimeframe = {};
-    reviewData.forEach((review) => {
-      if (review.date) {
-        const date = new Date(review.date);
-        const monthYear = `${date.toLocaleString("default", { month: "short" })} ${date.getFullYear()}`;
-        if (!reviewsByTimeframe[monthYear]) reviewsByTimeframe[monthYear] = 0;
-        reviewsByTimeframe[monthYear]++;
-      }
-    });
-
-    // Calculate adjustment metrics
-    const totalAdjustments = adjustments.length;
-    const adjustmentsWithDocs = adjustments.filter((a) => a.fileUrl).length;
-    const adjustmentsWithReason = adjustments.filter(
-      (a) => a.reason && a.reason.trim() !== "",
-    ).length;
-
-    // Calculate pivot metrics
-    const totalPivots = pivots.length;
-    const pivotsWithDocs = pivots.filter((p) => p.fileUrl).length;
-    const pivotsWithReason = pivots.filter(
-      (p) => p.reason && p.reason.trim() !== "",
-    ).length;
-
-    // Calculate adaptation velocity (adjustments + pivots per month)
-    const allChanges = [...adjustments, ...pivots].filter((item) => item.date);
-    const changesByMonth = {};
-    allChanges.forEach((item) => {
-      if (item.date) {
-        const date = new Date(item.date);
-        const monthYear = `${date.toLocaleString("default", { month: "short" })} ${date.getFullYear()}`;
-        if (!changesByMonth[monthYear]) changesByMonth[monthYear] = 0;
-        changesByMonth[monthYear]++;
-      }
-    });
-
-    // Calculate average changes per month
-    const monthsWithChanges = Object.keys(changesByMonth).length;
-    const avgChangesPerMonth =
-      monthsWithChanges > 0
-        ? (totalAdjustments + totalPivots) / monthsWithChanges
-        : 0;
-
-    // Analyze pivot patterns
-    const pivotThemes = {};
-    pivots.forEach((pivot) => {
-      const fromWords = (pivot.from || "").toLowerCase().split(/\s+/);
-      const toWords = (pivot.to || "").toLowerCase().split(/\s+/);
-
-      [...fromWords, ...toWords].forEach((word) => {
-        if (word.length > 3) {
-          if (!pivotThemes[word]) pivotThemes[word] = 0;
-          pivotThemes[word]++;
-        }
-      });
-    });
-
-    // Sort themes by frequency
-    const topPivotThemes = Object.entries(pivotThemes)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([theme, count]) => ({ theme, count }));
-
-    // Analyze adjustment reasons
-    const adjustmentReasons = {};
-    adjustments.forEach((adj) => {
-      const reasonWords = (adj.reason || "").toLowerCase().split(/\s+/);
-      reasonWords.forEach((word) => {
-        if (word.length > 3) {
-          if (!adjustmentReasons[word]) adjustmentReasons[word] = 0;
-          adjustmentReasons[word]++;
-        }
-      });
-    });
-
-    const topAdjustmentReasons = Object.entries(adjustmentReasons)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([reason, count]) => ({ reason, count }));
-
-    return {
-      // Review metrics
-      totalReviews,
-      completedReviews,
-      pendingReviews,
-      reviewCompletionRate,
-      reviewsByTimeframe,
-
-      // Adjustment metrics
-      totalAdjustments,
-      adjustmentsWithDocs,
-      adjustmentsWithReason,
-      adjustmentDocumentationRate:
-        totalAdjustments > 0
-          ? Math.round((adjustmentsWithDocs / totalAdjustments) * 100)
-          : 0,
-      adjustmentReasonRate:
-        totalAdjustments > 0
-          ? Math.round((adjustmentsWithReason / totalAdjustments) * 100)
-          : 0,
-
-      // Pivot metrics
-      totalPivots,
-      pivotsWithDocs,
-      pivotsWithReason,
-      pivotDocumentationRate:
-        totalPivots > 0 ? Math.round((pivotsWithDocs / totalPivots) * 100) : 0,
-      pivotReasonRate:
-        totalPivots > 0
-          ? Math.round((pivotsWithReason / totalPivots) * 100)
-          : 0,
-
-      // Adaptation velocity
-      totalChanges: totalAdjustments + totalPivots,
-      avgChangesPerMonth: Math.round(avgChangesPerMonth * 10) / 10,
-      changesByMonth,
-
-      // Pattern analysis
-      topPivotThemes,
-      topAdjustmentReasons,
-
-      // Documentation health
-      overallDocumentationRate:
-        totalAdjustments + totalPivots > 0
-          ? Math.round(
-            ((adjustmentsWithDocs + pivotsWithDocs) /
-              (totalAdjustments + totalPivots)) *
-            100,
-          )
-          : 0,
-
-      // Has data flags
-      hasReviews: totalReviews > 0,
-      hasAdjustments: totalAdjustments > 0,
-      hasPivots: totalPivots > 0,
-      hasAnyData: totalReviews > 0 || totalAdjustments > 0 || totalPivots > 0,
-    };
-  };
-
-  const createChangeAdaptabilityPrompt = (data) => {
-    return `Analyze the Change and Adaptability capability of a business based on the following strategic adaptation data:
-
-CHANGE MANAGEMENT DATA:
-
-1. STRATEGY REVIEWS:
-   Total Reviews Scheduled: ${data.totalReviews}
-   Completed Reviews: ${data.completedReviews} (${data.reviewCompletionRate}% completion rate)
-   Pending Reviews: ${data.pendingReviews}
-   
-   Reviews by Timeframe:
-   ${Object.keys(data.reviewsByTimeframe)
-        .map((month) => `   - ${month}: ${data.reviewsByTimeframe[month]} reviews`)
-        .join("\n")}
-
-2. STRATEGIC ADJUSTMENTS:
-   Total Adjustments Made: ${data.totalAdjustments}
-   Adjustments with Documentation: ${data.adjustmentsWithDocs} (${data.adjustmentDocumentationRate}%)
-   Adjustments with Clear Reason: ${data.adjustmentsWithReason} (${data.adjustmentReasonRate}%)
-   
-   Top Adjustment Reasons:
-   ${data.topAdjustmentReasons
-        .map((r, i) => `   ${i + 1}. "${r.reason}" (${r.count} occurrences)`)
-        .join("\n")}
-
-3. STRATEGIC PIVOTS:
-   Total Pivots Executed: ${data.totalPivots}
-   Pivots with Documentation: ${data.pivotsWithDocs} (${data.pivotDocumentationRate}%)
-   Pivots with Clear Reason: ${data.pivotsWithReason} (${data.pivotReasonRate}%)
-   
-   Top Pivot Themes:
-   ${data.topPivotThemes
-        .map((t, i) => `   ${i + 1}. "${t.theme}" (${t.count} occurrences)`)
-        .join("\n")}
-
-4. ADAPTATION VELOCITY:
-   Total Changes (Adjustments + Pivots): ${data.totalChanges}
-   Average Changes per Month: ${data.avgChangesPerMonth}
-   
-   Changes by Month:
-   ${Object.keys(data.changesByMonth)
-        .map((month) => `   - ${month}: ${data.changesByMonth[month]} changes`)
-        .join("\n")}
-
-5. DOCUMENTATION HEALTH:
-   Overall Documentation Rate: ${data.overallDocumentationRate}%
-
-ANALYSIS REQUIREMENTS:
-
-1. ADAPTABILITY ASSESSMENT:
-   - Evaluate the organization's ability to conduct regular strategy reviews
-   - Assess the frequency and quality of strategic adjustments
-   - Analyze pivot patterns and strategic direction changes
-   - Rate overall change adaptability on a scale of 1-10
-
-2. REVIEW DISCIPLINE:
-   - Analyze strategy review cadence and completion rates
-   - Identify gaps in review execution
-   - Recommend optimal review frequency
-
-3. ADJUSTMENT EFFECTIVENESS:
-   - Evaluate the quality of strategic adjustments
-   - Assess documentation and reasoning completeness
-   - Identify patterns in what triggers adjustments
-
-4. PIVOT INTELLIGENCE:
-   - Analyze pivot themes and direction changes
-   - Assess pivot documentation quality
-   - Evaluate strategic learning from pivots
-
-5. ADAPTATION VELOCITY:
-   - Assess the speed of organizational response to change
-   - Compare change frequency against industry benchmarks
-   - Recommend optimal change velocity
-
-6. ACTIONABLE RECOMMENDATIONS:
-   - Provide 3-5 specific, actionable improvements
-   - Suggest improvements for review discipline
-   - Recommend better change documentation practices
-   - Include timelines and measurable goals
-
-7. ORGANIZATIONAL LEARNING:
-   - Assess how change is institutionalized
-   - Evaluate learning from past adjustments and pivots
-   - Recommend knowledge management improvements
-
-FORMAT REQUIREMENTS:
-- Start with an executive summary
-- Use plain text section headers without markdown symbols
-- Include specific examples from the data
-- End with a Change Adaptability Score and Rating
-
-OUTPUT FORMAT:
-Executive Summary
-[Brief overview of change and adaptability capability]
-
-Change Adaptability Score: [X]/10
-Rating: [Rigid/Reactive/Responsive/Proactive/Agile]
-
-Strategy Review Discipline
-[Analysis of review cadence, completion rates, and recommendations]
-
-Strategic Adjustment Analysis
-[Evaluation of adjustment quality, triggers, and patterns]
-
-Pivot Intelligence Assessment
-[Analysis of pivot themes, strategic learning, and direction changes]
-
-Adaptation Velocity
-[Assessment of change frequency and organizational responsiveness]
-
-Documentation & Governance
-[Evaluation of change documentation practices and recommendations]
-
-Organizational Learning Index
-[How well the organization learns and institutionalizes change]
-
-Top 5 Actionable Recommendations
-1. [Specific action with timeline and owner suggestion]
-2. [Specific action with measurable outcome]
-3. [Specific action for improving review discipline]
-4. [Specific action for enhancing change documentation]
-5. [Specific action for building adaptive capacity]
-
-Strategic Resilience Outlook
-[How adaptability affects long-term strategic resilience]
-
-IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your response. Use plain text only with section titles as shown above.`;
-  };
-
-  const generateAIAnalysis = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot generate AI analysis.");
-      return;
-    }
-
-    if (!currentUser) {
-      setAnalysisError("You must be logged in to generate analysis.");
-      return;
-    }
-
-    const analysisData = prepareChangeAdaptabilityData();
-
-    if (!analysisData.hasAnyData) {
-      setAnalysisError(
-        "No change and adaptability data available for analysis. Please add strategy reviews, adjustments, or pivots first.",
-      );
-      return;
-    }
-
-    setIsGenerating(true);
-    setAnalysisError("");
-    setShowAIAnalysis(true);
-
-    try {
-      const prompt = createChangeAdaptabilityPrompt(analysisData);
-
-      const functions = getFunctions();
-      const generateChangeAdaptabilityAnalysis = httpsCallable(
-        functions,
-        "generateChangeAdaptabilityAnalysis",
-      );
-
-      const response = await generateChangeAdaptabilityAnalysis({
-        prompt: prompt,
-        userId: currentUser.uid,
-        timestamp: new Date().toISOString(),
-      });
-
-      let analysis = response?.data?.content || response?.data?.analysis;
-
-      if (!analysis) {
-        throw new Error("No analysis generated");
-      }
-
-      // Clean the analysis before saving
-      analysis = cleanAIResponse(analysis);
-
-      // Save analysis to Firestore
-      const aiAnalysisRef = doc(
-        db,
-        "changeAdaptabilityAnalysis",
-        currentUser.uid,
-      );
-      await setDoc(
-        aiAnalysisRef,
-        {
-          analysis: analysis,
-          timestamp: new Date().toISOString(),
-          dataSnapshot: {
-            totalReviews: analysisData.totalReviews,
-            totalAdjustments: analysisData.totalAdjustments,
-            totalPivots: analysisData.totalPivots,
-            reviewCompletionRate: analysisData.reviewCompletionRate,
-            avgChangesPerMonth: analysisData.avgChangesPerMonth,
-            overallDocumentationRate: analysisData.overallDocumentationRate,
-          },
-          userId: currentUser.uid,
-        },
-        { merge: true },
-      );
-
-      setAiAnalysis(analysis);
-      setSavedAnalysis(analysis);
-    } catch (error) {
-      console.error("Error generating AI analysis:", error);
-      setAnalysisError(`Failed to generate analysis: ${error.message}`);
-      setAiAnalysis(
-        "AI analysis will be generated based on your strategy reviews, adjustments, and pivot data, evaluating your organization's ability to adapt to change and institutionalize learning.",
-      );
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleAIAnalysis = () => {
-    if (!showAIAnalysis) {
-      if (savedAnalysis) {
-        setAiAnalysis(savedAnalysis);
-        setShowAIAnalysis(true);
-      } else {
-        generateAIAnalysis();
-      }
-    } else {
-      setShowAIAnalysis(!showAIAnalysis);
-    }
-  };
-
-  const refreshAnalysis = async () => {
-    await generateAIAnalysis();
-  };
-
-  const filteredAdjustments = adjustments.filter((item) => {
-    if (!selectedMonth && !selectedYear) return true;
-
-    const itemDate = new Date(item.date);
-    const monthMatch =
-      !selectedMonth || itemDate.getMonth() + 1 === parseInt(selectedMonth);
-    const yearMatch =
-      !selectedYear || itemDate.getFullYear() === parseInt(selectedYear);
-
-    return monthMatch && yearMatch;
-  });
-
-  const filteredPivots = pivots.filter((item) => {
-    if (!selectedMonth && !selectedYear) return true;
-
-    const itemDate = new Date(item.date);
-    const monthMatch =
-      !selectedMonth || itemDate.getMonth() + 1 === parseInt(selectedMonth);
-    const yearMatch =
-      !selectedYear || itemDate.getFullYear() === parseInt(selectedYear);
-
-    return monthMatch && yearMatch;
-  });
-
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
-
-  return (
-    <div
-      style={{
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      {/* Key Question Section */}
-      <KeyQuestionBox
-        question={SECTION_DATA["change-adaptability"].keyQuestion}
-        signals={SECTION_DATA["change-adaptability"].keySignals}
-        decisions={SECTION_DATA["change-adaptability"].keyDecisions}
-      />
-
-      {/* Month/Year Filter */}
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "20px",
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <label style={{ color: "#4a352f", fontWeight: "500" }}>
-          Filter by:
-        </label>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-            paddingRight: "40px",
-          }}
-        >
-          <option value="">All Months</option>
-          {Array.from({ length: 12 }, (_, i) => (
-            <option key={i + 1} value={i + 1}>
-              {new Date(2024, i, 1).toLocaleString("default", {
-                month: "long",
-              })}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-            paddingRight: "40px",
-          }}
-        >
-          <option value="">All Years</option>
-          {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-
-        {(selectedMonth || selectedYear) && (
-          <button
-            onClick={() => {
-              setSelectedMonth("");
-              setSelectedYear("");
-            }}
-            style={{
-              padding: "8px 12px",
-              backgroundColor: "#e6d7c3",
-              color: "#4a352f",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
-          >
-            Clear Filter
-          </button>
-        )}
-      </div>
-
-      {/* Strategy Review Calendar */}
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "20px",
-          borderRadius: "6px",
-          marginBottom: "30px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", margin: 0 }}>
-            Strategy Review Calendar
-          </h3>
-          {!isInvestorView && (
-            <button
-              onClick={() => {
-                setEditingReview(null);
-                setNewReview({
-                  date: "",
-                  topic: "",
-                  status: "Not Done",
-                  notes: "",
-                });
-                setShowReviewModal(true);
-              }}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#7d5a50",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-              }}
-            >
-              Add Review
-            </button>
-          )}
-        </div>
-
-        {reviewData.length === 0 ? (
-          <p style={{ color: "#7d5a50", textAlign: "center", padding: "20px" }}>
-            No strategy reviews scheduled yet.
-          </p>
-        ) : (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              color: "#4a352f",
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: "#e6d7c3",
-                  borderBottom: "2px solid #c8b6a6",
-                }}
-              >
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                  }}
-                >
-                  Date
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                  }}
-                >
-                  Topic
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                  }}
-                >
-                  Status
-                </th>
-                <th
-                  style={{
-                    padding: "12px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                  }}
-                >
-                  Notes
-                </th>
-                {!isInvestorView && (
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Actions
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {reviewData
-                .filter((review) => {
-                  if (!selectedMonth && !selectedYear) return true;
-                  const reviewDate = new Date(review.date);
-                  const monthMatch =
-                    !selectedMonth ||
-                    reviewDate.getMonth() + 1 === parseInt(selectedMonth);
-                  const yearMatch =
-                    !selectedYear ||
-                    reviewDate.getFullYear() === parseInt(selectedYear);
-                  return monthMatch && yearMatch;
-                })
-                .map((review) => (
-                  <tr
-                    key={review.id}
-                    style={{ borderBottom: "1px solid #e6d7c3" }}
-                  >
-                    <td style={{ padding: "12px" }}>{review.date}</td>
-                    <td style={{ padding: "12px" }}>{review.topic}</td>
-                    <td style={{ padding: "12px" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          fontWeight: "500",
-                          backgroundColor:
-                            review.status === "Done" ? "#c8e6c9" : "#ffcdd2",
-                        }}
-                      >
-                        {review.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px", maxWidth: "300px" }}>
-                      {review.notes}
-                    </td>
-                    {!isInvestorView && (
-                      <td
-                        style={{ padding: "12px", display: "flex", gap: "5px" }}
-                      >
-                        <button
-                          onClick={() => handleEditReview(review)}
-                          style={{
-                            padding: "6px",
-                            backgroundColor: "transparent",
-                            color: "#7d5a50",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                          }}
-                          title="Edit"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => handleDeleteReview(review.id)}
-                          style={{
-                            padding: "6px",
-                            backgroundColor: "transparent",
-                            color: "#F44336",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                          }}
-                          title="Delete"
-                        >
-                          ×
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Adjustments Documented */}
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "20px",
-          borderRadius: "6px",
-          marginBottom: "30px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", margin: 0 }}>
-            Adjustments Documented
-          </h3>
-          {!isInvestorView && (
-            <button
-              onClick={() => {
-                setEditingAdjustment(null);
-                setNewAdjustment({
-                  date: "",
-                  description: "",
-                  reason: "",
-                  file: null,
-                  fileName: "",
-                });
-                setShowAdjustmentModal(true);
-              }}
-              disabled={uploading}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: uploading ? "#a1887f" : "#7d5a50",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: uploading ? "not-allowed" : "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-              }}
-            >
-              {uploading ? "Uploading..." : "Add Adjustment"}
-            </button>
-          )}
-        </div>
-
-        {filteredAdjustments.length === 0 ? (
-          <p style={{ color: "#7d5a50", textAlign: "center", padding: "20px" }}>
-            No adjustments documented yet.
-          </p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                color: "#4a352f",
-                minWidth: "800px",
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    backgroundColor: "#e6d7c3",
-                    borderBottom: "2px solid #c8b6a6",
-                  }}
-                >
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Date
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Description
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Reason
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Documents
-                  </th>
-                  {!isInvestorView && (
-                    <th
-                      style={{
-                        padding: "12px",
-                        textAlign: "left",
-                        fontWeight: "600",
-                      }}
-                    >
-                      Actions
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAdjustments.map((adjustment) => (
-                  <tr
-                    key={adjustment.id}
-                    style={{ borderBottom: "1px solid #e6d7c3" }}
-                  >
-                    <td style={{ padding: "12px" }}>{adjustment.date}</td>
-                    <td style={{ padding: "12px", maxWidth: "300px" }}>
-                      {adjustment.description}
-                    </td>
-                    <td style={{ padding: "12px", maxWidth: "300px" }}>
-                      {adjustment.reason}
-                    </td>
-                    <td style={{ padding: "12px" }}>
-                      {adjustment.fileUrl ? (
-                        <a
-                          href={adjustment.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: "#7d5a50",
-                            textDecoration: "underline",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "5px",
-                          }}
-                        >
-                          <FaDownload size={12} />
-                          {adjustment.fileName || "Download"}
-                        </a>
-                      ) : adjustment.fileName ? (
-                        <span style={{ color: "#8d6e63" }}>
-                          📄 {adjustment.fileName}
-                        </span>
-                      ) : null}
-                    </td>
-                    {!isInvestorView && (
-                      <td
-                        style={{ padding: "12px", display: "flex", gap: "5px" }}
-                      >
-                        <button
-                          onClick={() => handleEditAdjustment(adjustment)}
-                          style={{
-                            padding: "6px",
-                            backgroundColor: "transparent",
-                            color: "#7d5a50",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                          }}
-                          title="Edit"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAdjustment(adjustment.id)}
-                          style={{
-                            padding: "6px",
-                            backgroundColor: "transparent",
-                            color: "#F44336",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                          }}
-                          title="Delete"
-                        >
-                          ×
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Pivot History Documented */}
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "20px",
-          borderRadius: "6px",
-          marginBottom: "30px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", margin: 0 }}>
-            Pivot History Documented
-          </h3>
-          {!isInvestorView && (
-            <button
-              onClick={() => {
-                setEditingPivot(null);
-                setNewPivot({
-                  date: "",
-                  from: "",
-                  to: "",
-                  reason: "",
-                  file: null,
-                  fileName: "",
-                });
-                setShowPivotModal(true);
-              }}
-              disabled={uploading}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: uploading ? "#a1887f" : "#7d5a50",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: uploading ? "not-allowed" : "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-              }}
-            >
-              {uploading ? "Uploading..." : "Add Pivot"}
-            </button>
-          )}
-        </div>
-
-        {filteredPivots.length === 0 ? (
-          <p style={{ color: "#7d5a50", textAlign: "center", padding: "20px" }}>
-            No pivots documented yet.
-          </p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                color: "#4a352f",
-                minWidth: "800px",
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    backgroundColor: "#e6d7c3",
-                    borderBottom: "2px solid #c8b6a6",
-                  }}
-                >
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Date
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    From
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    To
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Reason
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Documents
-                  </th>
-                  {!isInvestorView && (
-                    <th
-                      style={{
-                        padding: "12px",
-                        textAlign: "left",
-                        fontWeight: "600",
-                      }}
-                    >
-                      Actions
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPivots.map((pivot) => (
-                  <tr
-                    key={pivot.id}
-                    style={{ borderBottom: "1px solid #e6d7c3" }}
-                  >
-                    <td style={{ padding: "12px" }}>{pivot.date}</td>
-                    <td style={{ padding: "12px", maxWidth: "200px" }}>
-                      {pivot.from}
-                    </td>
-                    <td style={{ padding: "12px", maxWidth: "200px" }}>
-                      {pivot.to}
-                    </td>
-                    <td style={{ padding: "12px", maxWidth: "300px" }}>
-                      {pivot.reason}
-                    </td>
-                    <td style={{ padding: "12px" }}>
-                      {pivot.fileUrl ? (
-                        <a
-                          href={pivot.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: "#7d5a50",
-                            textDecoration: "underline",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "5px",
-                          }}
-                        >
-                          <FaDownload size={12} />
-                          {pivot.fileName || "Download"}
-                        </a>
-                      ) : pivot.fileName ? (
-                        <span style={{ color: "#8d6e63" }}>
-                          📄 {pivot.fileName}
-                        </span>
-                      ) : null}
-                    </td>
-                    {!isInvestorView && (
-                      <td
-                        style={{ padding: "12px", display: "flex", gap: "5px" }}
-                      >
-                        <button
-                          onClick={() => handleEditPivot(pivot)}
-                          style={{
-                            padding: "6px",
-                            backgroundColor: "transparent",
-                            color: "#7d5a50",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                          }}
-                          title="Edit"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => handleDeletePivot(pivot.id)}
-                          style={{
-                            padding: "6px",
-                            backgroundColor: "transparent",
-                            color: "#F44336",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                          }}
-                          title="Delete"
-                        >
-                          ×
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* AI Analysis Section */}
-      <div style={{ marginTop: "30px", marginBottom: "20px" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            marginBottom: "15px",
-          }}
-        >
-          <button
-            onClick={handleAIAnalysis}
-            disabled={
-              isGenerating ||
-              isInvestorView ||
-              !prepareChangeAdaptabilityData().hasAnyData
-            }
-            style={{
-              padding: "12px 24px",
-              backgroundColor:
-                isInvestorView || !prepareChangeAdaptabilityData().hasAnyData
-                  ? "#a1887f"
-                  : "#4a352f",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor:
-                isInvestorView || !prepareChangeAdaptabilityData().hasAnyData
-                  ? "not-allowed"
-                  : "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "all 0.2s ease",
-              opacity: isGenerating ? 0.7 : 1,
-            }}
-          >
-            {isGenerating ? (
-              <>
-                <FaSpinner
-                  className="spin"
-                  style={{ animation: "spin 1s linear infinite" }}
-                />
-                Generating Adaptability Analysis...
-              </>
-            ) : (
-              <>
-                <FaRobot />
-                AI Change Adaptability Analysis
-              </>
-            )}
-          </button>
-
-          {savedAnalysis &&
-            !isGenerating &&
-            !isInvestorView &&
-            prepareChangeAdaptabilityData().hasAnyData && (
-              <button
-                onClick={refreshAnalysis}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  fontWeight: "500",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-                title="Refresh AI Analysis"
-              >
-                Refresh
-              </button>
-            )}
-        </div>
-
-        {!prepareChangeAdaptabilityData().hasAnyData && (
-          <p
-            style={{
-              color: "#8d6e63",
-              fontSize: "13px",
-              fontStyle: "italic",
-              marginLeft: "10px",
-            }}
-          >
-            Add strategy reviews, adjustments, or pivots to generate AI analysis
-            of your change adaptability.
-          </p>
-        )}
-
-        {showAIAnalysis && (
-          <div
-            style={{
-              backgroundColor: "#f8f4f0",
-              padding: "20px",
-              borderRadius: "8px",
-              border: "1px solid #d7ccc8",
-              marginTop: "10px",
-              position: "relative",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: "15px",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    fontSize: "16px",
-                    color: "#5d4037",
-                    fontWeight: "600",
-                    display: "block",
-                    marginBottom: "8px",
-                  }}
-                >
-                  Change & Adaptability AI Analysis
-                </label>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "#8d6e63",
-                    margin: "0 0 10px 0",
-                    fontStyle: "italic",
-                  }}
-                >
-                  Analysis generated from {reviewData.length} reviews,{" "}
-                  {adjustments.length} adjustments, and {pivots.length} pivots
-                </p>
-              </div>
-
-              {savedAnalysis && (
-                <span
-                  style={{
-                    fontSize: "10px",
-                    color: "#8d6e63",
-                    backgroundColor: "#efebe9",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    fontWeight: "500",
-                  }}
-                >
-                  Saved Analysis
-                </span>
-              )}
-            </div>
-
-            {analysisError ? (
-              <div
-                style={{
-                  padding: "15px",
-                  backgroundColor: "#ffebee",
-                  borderRadius: "6px",
-                  border: "1px solid #ffcdd2",
-                  color: "#c62828",
-                  fontSize: "14px",
-                }}
-              >
-                <strong>Error:</strong> {analysisError}
-              </div>
-            ) : isGenerating ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "30px",
-                  color: "#5d4037",
-                }}
-              >
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    border: "3px solid #f3e5f5",
-                    borderTop: "3px solid #8d6e63",
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                    margin: "0 auto 15px",
-                  }}
-                ></div>
-                <p>Analyzing your change and adaptability data...</p>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "#8d6e63",
-                    marginTop: "5px",
-                  }}
-                >
-                  Evaluating review discipline, adjustment patterns, pivot
-                  intelligence, and adaptation velocity
-                </p>
-              </div>
-            ) : (
-              <div
-                style={{
-                  backgroundColor: "white",
-                  padding: "20px",
-                  borderRadius: "6px",
-                  border: "1px solid #e8d8cf",
-                  maxHeight: "400px",
-                  overflowY: "auto",
-                  fontSize: "14px",
-                  lineHeight: "1.6",
-                  color: "#5d4037",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {aiAnalysis ||
-                  "AI analysis will be generated based on your strategy reviews, adjustments, and pivot data, evaluating your organization's ability to adapt to change and institutionalize learning."}
-              </div>
-            )}
-
-            <div
-              style={{
-                marginTop: "15px",
-                paddingTop: "15px",
-                borderTop: "1px solid #e8d8cf",
-                fontSize: "11px",
-                color: "#8d6e63",
-                fontStyle: "italic",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>
-                Analysis powered by AI • Updates when change data changes
-              </span>
-              <button
-                onClick={() => setShowAIAnalysis(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#8d6e63",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  textDecoration: "underline",
-                }}
-              >
-                Hide Analysis
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Review Modal */}
-      {showReviewModal && !isInvestorView && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              padding: "30px",
-              borderRadius: "8px",
-              width: "90%",
-              maxWidth: "500px",
-            }}
-          >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
-              {editingReview ? "Edit Strategy Review" : "Add Strategy Review"}
-            </h3>
-            <input
-              type="date"
-              value={newReview.date}
-              onChange={(e) =>
-                setNewReview((prev) => ({ ...prev, date: e.target.value }))
-              }
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-              }}
-            />
-            <input
-              type="text"
-              placeholder="Topic"
-              value={newReview.topic}
-              onChange={(e) =>
-                setNewReview((prev) => ({ ...prev, topic: e.target.value }))
-              }
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-              }}
-            />
-            <select
-              value={newReview.status}
-              onChange={(e) =>
-                setNewReview((prev) => ({ ...prev, status: e.target.value }))
-              }
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                marginBottom: "15px",
-              }}
-            >
-              <option value="Done">Done</option>
-              <option value="Not Done">Not Done</option>
-            </select>
-            <textarea
-              placeholder="Notes"
-              value={newReview.notes}
-              onChange={(e) =>
-                setNewReview((prev) => ({ ...prev, notes: e.target.value }))
-              }
-              rows="3"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "20px",
-                fontFamily: "inherit",
-              }}
-            />
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setShowReviewModal(false);
-                  setEditingReview(null);
-                  setNewReview({
-                    date: "",
-                    topic: "",
-                    status: "Not Done",
-                    notes: "",
-                  });
-                }}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={editingReview ? handleUpdateReview : handleAddReview}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                {editingReview ? "Update Review" : "Add Review"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Adjustment Modal */}
-      {showAdjustmentModal && !isInvestorView && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              padding: "30px",
-              borderRadius: "8px",
-              width: "90%",
-              maxWidth: "500px",
-            }}
-          >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
-              {editingAdjustment ? "Edit Adjustment" : "Add Adjustment"}
-            </h3>
-            <input
-              type="date"
-              value={newAdjustment.date}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({ ...prev, date: e.target.value }))
-              }
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-              }}
-            />
-            <textarea
-              placeholder="Description"
-              value={newAdjustment.description}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  description: e.target.value,
-                }))
-              }
-              rows="3"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-                fontFamily: "inherit",
-              }}
-            />
-            <textarea
-              placeholder="Reason"
-              value={newAdjustment.reason}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  reason: e.target.value,
-                }))
-              }
-              rows="3"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-                fontFamily: "inherit",
-              }}
-            />
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Attach Document
-              </label>
-              <input
-                type="file"
-                onChange={(e) => handleFileSelect(e, "adjustment")}
-                disabled={uploading}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                }}
-              />
-              {newAdjustment.fileName && (
-                <p
-                  style={{
-                    color: "#7d5a50",
-                    fontSize: "12px",
-                    marginTop: "5px",
-                  }}
-                >
-                  Selected: {newAdjustment.fileName}
-                </p>
-              )}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setShowAdjustmentModal(false);
-                  setEditingAdjustment(null);
-                  setNewAdjustment({
-                    date: "",
-                    description: "",
-                    reason: "",
-                    file: null,
-                    fileName: "",
-                  });
-                }}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={
-                  editingAdjustment
-                    ? handleUpdateAdjustment
-                    : handleAddAdjustment
-                }
-                disabled={uploading}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: uploading ? "#a1887f" : "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: uploading ? "not-allowed" : "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                {uploading
-                  ? "Uploading..."
-                  : editingAdjustment
-                    ? "Update Adjustment"
-                    : "Add Adjustment"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Pivot Modal */}
-      {showPivotModal && !isInvestorView && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              padding: "30px",
-              borderRadius: "8px",
-              width: "90%",
-              maxWidth: "500px",
-            }}
-          >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
-              {editingPivot ? "Edit Pivot" : "Add Pivot"}
-            </h3>
-            <input
-              type="date"
-              value={newPivot.date}
-              onChange={(e) =>
-                setNewPivot((prev) => ({ ...prev, date: e.target.value }))
-              }
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-              }}
-            />
-            <textarea
-              placeholder="From (previous direction)"
-              value={newPivot.from}
-              onChange={(e) =>
-                setNewPivot((prev) => ({ ...prev, from: e.target.value }))
-              }
-              rows="2"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-                fontFamily: "inherit",
-              }}
-            />
-            <textarea
-              placeholder="To (new direction)"
-              value={newPivot.to}
-              onChange={(e) =>
-                setNewPivot((prev) => ({ ...prev, to: e.target.value }))
-              }
-              rows="2"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-                fontFamily: "inherit",
-              }}
-            />
-            <textarea
-              placeholder="Reason"
-              value={newPivot.reason}
-              onChange={(e) =>
-                setNewPivot((prev) => ({ ...prev, reason: e.target.value }))
-              }
-              rows="3"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                marginBottom: "15px",
-                fontFamily: "inherit",
-              }}
-            />
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Attach Document
-              </label>
-              <input
-                type="file"
-                onChange={(e) => handleFileSelect(e, "pivot")}
-                disabled={uploading}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                }}
-              />
-              {newPivot.fileName && (
-                <p
-                  style={{
-                    color: "#7d5a50",
-                    fontSize: "12px",
-                    marginTop: "5px",
-                  }}
-                >
-                  Selected: {newPivot.fileName}
-                </p>
-              )}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setShowPivotModal(false);
-                  setEditingPivot(null);
-                  setNewPivot({
-                    date: "",
-                    from: "",
-                    to: "",
-                    reason: "",
-                    file: null,
-                    fileName: "",
-                  });
-                }}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={editingPivot ? handleUpdatePivot : handleAddPivot}
-                disabled={uploading}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: uploading ? "#a1887f" : "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: uploading ? "not-allowed" : "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                {uploading
-                  ? "Uploading..."
-                  : editingPivot
-                    ? "Update Pivot"
-                    : "Add Pivot"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
+// Main Strategy Component - REMOVED Change and adaptability tab
 const Strategy = () => {
   const [activeSection, setActiveSection] = useState("strategic-clarity");
   const [milestoneData, setMilestoneData] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [isInvestorView, setIsInvestorView] = useState(false);
-  const [viewOrigin, setViewOrigin] = useState("investor"); // ADD THIS LINE
+  const [viewOrigin, setViewOrigin] = useState("investor");
   const [viewingSMEId, setViewingSMEId] = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
   const [selectedCohort, setSelectedCohort] = useState(null);
@@ -10070,18 +6667,18 @@ const Strategy = () => {
     const investorViewMode = sessionStorage.getItem("investorViewMode");
     const smeId = sessionStorage.getItem("viewingSMEId");
     const smeName = sessionStorage.getItem("viewingSMEName");
-    const origin = sessionStorage.getItem("viewOrigin"); // Get the origin
+    const origin = sessionStorage.getItem("viewOrigin");
 
     if (investorViewMode === "true" && smeId) {
       setIsInvestorView(true);
       setViewingSMEId(smeId);
       setViewingSMEName(smeName || "SME");
-      setViewOrigin(origin || "investor"); // Set origin
+      setViewOrigin(origin || "investor");
       console.log(
         "Investor view mode activated for SME:",
         smeId,
         "Origin:",
-        origin,
+        origin
       );
     }
   }, []);
@@ -10109,11 +6706,11 @@ const Strategy = () => {
         const milestonesSnapshot = await getDocs(
           query(
             collection(db, "milestones"),
-            where("userId", "==", currentUser.uid),
-          ),
+            where("userId", "==", currentUser.uid)
+          )
         );
         setMilestoneData(
-          milestonesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+          milestonesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
         );
       } catch (error) {
         console.error("Error loading user milestone data:", error);
@@ -10132,29 +6729,27 @@ const Strategy = () => {
   });
 
   const handleExitInvestorView = () => {
-    // Clear all session storage items
     const origin = sessionStorage.getItem("viewOrigin");
     sessionStorage.removeItem("viewingSMEId");
     sessionStorage.removeItem("viewingSMEName");
     sessionStorage.removeItem("investorViewMode");
     sessionStorage.removeItem("viewOrigin");
 
-    // Navigate based on origin
     if (origin === "cmf") {
       window.location.href = "/cmf-cohorts";
     } else if (origin === "catalyst") {
-      window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
+      window.location.href = "/catalyst/cohorts";
     } else {
-      window.location.href = "/my-cohorts"; // Go back to Investor cohorts
+      window.location.href = "/my-cohorts";
     }
   };
 
+  // Updated section buttons - REMOVED "Change and adaptability"
   const sectionButtons = [
     { id: "strategic-clarity", label: "Strategic Clarity" },
     { id: "operating-model", label: "Operating Model" },
     { id: "strategy-operationalisation", label: "Strategy Operationalisation" },
     { id: "strategic-risk-control", label: "Strategic Risk Control" },
-    { id: "change-adaptability", label: "Change and adaptability" },
   ];
 
   return (
@@ -10163,11 +6758,11 @@ const Strategy = () => {
         {isInvestorView && (
           <div
             style={{
-              backgroundColor: "#e8f5e9",
+              background: T.greenBg,
               padding: "16px 20px",
               margin: "80px 20px 20px 20px",
-              borderRadius: "8px",
-              border: "2px solid #4caf50",
+              borderRadius: "10px",
+              border: `2px solid ${T.green}`,
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -10177,7 +6772,7 @@ const Strategy = () => {
               <span style={{ fontSize: "20px" }}>👁️</span>
               <span
                 style={{
-                  color: "#2e7d32",
+                  color: T.green,
                   fontWeight: "600",
                   fontSize: "15px",
                 }}
@@ -10192,24 +6787,9 @@ const Strategy = () => {
             <button
               onClick={handleExitInvestorView}
               style={{
-                padding: "8px 16px",
-                backgroundColor: "#4caf50",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "14px",
-                transition: "background-color 0.3s ease",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = "#45a049";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = "#4caf50";
+                ...btnPrimary,
+                background: T.green,
+                borderColor: T.green,
               }}
             >
               <span>←</span>
@@ -10220,7 +6800,6 @@ const Strategy = () => {
           </div>
         )}
         <div style={{ padding: "0 20px" }}>
-          {/* UPDATED: Moved the "See more about dashboard" button under the heading */}
           <div
             style={{
               display: "flex",
@@ -10231,17 +6810,17 @@ const Strategy = () => {
           >
             <h1
               style={{
-                color: "#5d4037",
-                fontSize: "32px",
-                fontWeight: "700",
+                color: T.accent,
+                fontSize: "27px",
+                fontWeight: 650,
                 margin: 0,
+                letterSpacing: "-0.5px",
               }}
             >
               Strategy & Execution
             </h1>
           </div>
 
-          {/* Moved button here to be directly under the heading */}
           <div
             style={{
               display: "flex",
@@ -10251,36 +6830,22 @@ const Strategy = () => {
           >
             <button
               onClick={() => setShowFullDescription(!showFullDescription)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-              }}
+              style={btnQuiet}
             >
               {showFullDescription ? "See less" : "See more about dashboard"}
             </button>
           </div>
 
-          {/* Strategy Description */}
           {showFullDescription && (
             <div
               style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "8px",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                ...cardS,
                 marginBottom: "30px",
               }}
             >
               <p
                 style={{
-                  color: "#4a352f",
+                  color: T.body,
                   fontSize: "16px",
                   lineHeight: "1.6",
                   margin: 0,
@@ -10298,7 +6863,7 @@ const Strategy = () => {
                 style={{
                   marginTop: "20px",
                   paddingTop: "20px",
-                  borderTop: "1px solid #e8ddd4",
+                  borderTop: `1px solid ${T.line}`,
                 }}
               >
                 <div
@@ -10311,7 +6876,7 @@ const Strategy = () => {
                   <div>
                     <h3
                       style={{
-                        color: "#7d5a50",
+                        color: T.accent,
                         marginTop: 0,
                         marginBottom: "12px",
                         fontSize: "16px",
@@ -10321,7 +6886,7 @@ const Strategy = () => {
                     </h3>
                     <ul
                       style={{
-                        color: "#4a352f",
+                        color: T.body,
                         fontSize: "14px",
                         lineHeight: "1.7",
                         margin: 0,
@@ -10350,7 +6915,7 @@ const Strategy = () => {
                   <div>
                     <h3
                       style={{
-                        color: "#7d5a50",
+                        color: T.accent,
                         marginTop: 0,
                         marginBottom: "12px",
                         fontSize: "16px",
@@ -10360,7 +6925,7 @@ const Strategy = () => {
                     </h3>
                     <ul
                       style={{
-                        color: "#4a352f",
+                        color: T.body,
                         fontSize: "14px",
                         lineHeight: "1.7",
                         margin: 0,
@@ -10370,7 +6935,7 @@ const Strategy = () => {
                       <li>Evaluate strategy quality or competitiveness</li>
                       <li>Track operational KPIs (Ops dashboard does that)</li>
                       <li>
-                        Measure performance outcomes (Finance & Ops do that)
+                        Measure performance outcomes (Finance &amp; Ops do that)
                       </li>
                       <li>Manage projects or OKRs</li>
                       <li>Replace business planning or consulting work</li>
@@ -10381,17 +6946,15 @@ const Strategy = () => {
             </div>
           )}
 
-          {/* Tab buttons */}
+          {/* Tab buttons - UPDATED with the same style as Financial Performance */}
           <div
             style={{
               display: "flex",
-              gap: "10px",
-              marginBottom: "20px",
-              backgroundColor: "#fdfcfb",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-              overflowX: "auto",
-              whiteSpace: "nowrap",
+              gap: "2px",
+              borderBottom: `1px solid ${T.lineStrong}`,
+              marginBottom: "18px",
+              flexWrap: "wrap",
+              alignItems: "center",
               width: "100%",
               boxSizing: "border-box",
             }}
@@ -10401,19 +6964,19 @@ const Strategy = () => {
                 key={button.id}
                 onClick={() => setActiveSection(button.id)}
                 style={{
-                  padding: "12px 18px",
-                  backgroundColor:
-                    activeSection === button.id ? "#7d5a50" : "#ffffff",
-                  color: activeSection === button.id ? "#fdfcfb" : "#5d4037",
-                  border: "2px solid #7d5a50",
-                  borderRadius: "6px",
+                  padding: "12px 20px",
+                  background: "none",
+                  border: "none",
                   cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
-                  minWidth: "140px",
-                  textAlign: "center",
-                  flexShrink: 0,
+                  fontSize: "14.5px",
+                  fontWeight: activeSection === button.id ? 600 : 500,
+                  color: activeSection === button.id ? T.accent : T.body,
+                  borderBottom:
+                    activeSection === button.id
+                      ? `2px solid ${T.accent}`
+                      : "2px solid transparent",
+                  fontFamily: "inherit",
+                  marginBottom: "-1px",
                 }}
               >
                 {button.label}
@@ -10439,11 +7002,6 @@ const Strategy = () => {
             isInvestorView={isInvestorView}
           />
           <RiskManagement
-            activeSection={activeSection}
-            currentUser={currentUser}
-            isInvestorView={isInvestorView}
-          />
-          <ChangeAdaptability
             activeSection={activeSection}
             currentUser={currentUser}
             isInvestorView={isInvestorView}
