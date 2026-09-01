@@ -1904,7 +1904,11 @@ const AddDataWizard = ({
     const bsTimer = useRef(null);
 
     const bsMonths = fyMonths(startYear, fy.startMonth);
-    const [bsMonthKey, setBsMonthKey] = useState(bsMonths[0].key);
+    // FIX: Initialize with first month that has data, or first month
+    const [bsMonthKey, setBsMonthKey] = useState(() => {
+      const defaultKey = bsMonths.find((m) => m.key === currentMonthKey())?.key || bsMonths[0].key;
+      return defaultKey;
+    });
     const bsMeta = bsMonths.find(m => m.key === bsMonthKey) || bsMonths[0];
     const bsMi = bsMeta.month;
 
@@ -2126,14 +2130,23 @@ const AddDataWizard = ({
       commitEquity(localDividends, next, localIrr);
     };
 
+    // FIX: Correctly handle nested details updates for IRR
     const updateIrr = (idx, field, val) => {
       const next = [...localIrr];
-      if (field === "name" || field === "riskRating") next[idx][field] = val;
-      else if (field === "irr") next[idx].irr = Number(val) || 0;
-      else if (field.startsWith("details.")) {
+      if (field === "name") {
+        next[idx].name = val;
+      } else if (field === "riskRating") {
+        next[idx].riskRating = val;
+      } else if (field === "irr") {
+        next[idx].irr = Number(val) || 0;
+      } else if (field.startsWith("details.")) {
         const sub = field.split(".")[1];
-        if (sub === "cashFlows") next[idx].details.cashFlows = val.split(",").map(s => s.trim());
-        else next[idx].details[sub] = val;
+        if (!next[idx].details) next[idx].details = {};
+        if (sub === "cashFlows") {
+          next[idx].details.cashFlows = val.split(",").map(s => s.trim()).filter(Boolean);
+        } else {
+          next[idx].details[sub] = val;
+        }
       }
       commitEquity(localDividends, localInvestors, next);
     };
@@ -2156,23 +2169,31 @@ const AddDataWizard = ({
           <tbody>
             {data.map((row, idx) => (
               <tr key={idx} style={{ background: idx % 2 ? T.panel : T.bg }}>
-                {cols.map(c => (
-                  <td key={c.key} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    {c.type === "select" ? (
-                      <select value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell}>
-                        {c.options.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    ) : c.type === "date" ? (
-                      <input type="date" value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
-                    ) : c.type === "text" ? (
-                      <input value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} placeholder={c.placeholder || ""} />
-                    ) : c.type === "number" ? (
-                      <input type="number" step="any" value={row[c.key] || 0} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
-                    ) : (
-                      <input type="text" value={row[c.key] || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
-                    )}
-                  </td>
-                ))}
+                {cols.map(c => {
+                  // Get the value from nested path if needed
+                  let value = row[c.key];
+                  if (c.key.startsWith("details.")) {
+                    const sub = c.key.split(".")[1];
+                    value = row.details?.[sub] ?? "";
+                  }
+                  return (
+                    <td key={c.key} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
+                      {c.type === "select" ? (
+                        <select value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell}>
+                          {c.options.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      ) : c.type === "date" ? (
+                        <input type="date" value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
+                      ) : c.type === "text" ? (
+                        <input value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} placeholder={c.placeholder || ""} />
+                      ) : c.type === "number" ? (
+                        <input type="number" step="any" value={value || 0} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
+                      ) : (
+                        <input type="text" value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
+                      )}
+                    </td>
+                  );
+                })}
                 <td style={{ padding: "4px 8px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
                   <button onClick={() => removeFn(idx)} style={{ ...btnQuiet, padding: "4px 8px", color: T.red }}><Trash2 size={14} /></button>
                 </td>
