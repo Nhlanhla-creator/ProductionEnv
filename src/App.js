@@ -1238,6 +1238,8 @@ function App() {
         <Route path="/cmf-matches" element={withProtection(CMFMatches, {}, renderCMFRoute)} />
         <Route path="/cmf-cohorts" element={withProtection(CMFCohorts, {}, renderCMFRoute)} />
         <Route path="/cmf-cohorts/new" element={withProtection(CMFOnboardProfile, {}, renderCMFRoute)} />
+        <Route path="/cmf/investments" element={withProtection(CatalystInvestments, {}, renderCMFRoute)} />
+        <Route path="/cmf-portfolio" element={withProtection(CatalystInvestments, {}, renderCMFRoute)} />
         <Route path="/cmf-documents" element={withProtection(CMFDocuments, {}, renderCMFRoute)} />
         <Route path="/cmf-insights" element={withProtection(CatalystInsights, { isCatalystProfile: true }, renderCMFRoute)} />
         <Route path="/cmf-messages" element={withProtection(CatalystMessages, {}, renderCMFRoute)} />

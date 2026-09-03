@@ -5,6 +5,7 @@ const CMF_DOCUMENT_CATEGORIES = {
   required: {
     label: "Required Documents",
     color: "#dc2626",
+    impact: "⚠️ Verification Impact: Mandatory. All documents in this section must be uploaded before submitting your profile. These form the base verification layer.",
     documents: [
       { id: "cipcRegistration", label: "CIPC Registration Document", description: "Certificate of Incorporation or equivalent" },
       { id: "taxCompliancePin", label: "Tax Compliance PIN", description: "SARS Tax Compliance Certificate or PIN" },
@@ -16,6 +17,7 @@ const CMF_DOCUMENT_CATEGORIES = {
   compliance: {
     label: "Compliance & Credentials",
     color: "#d97706",
+    impact: "✨ Verification Impact: High. SARS tax compliance status and active B-BBEE certificates directly qualify your profile for the green 'Verified CMF Profile' badge visible to SMEs.",
     documents: [
       { id: "vatCertificate", label: "VAT Certificate", description: "If VAT registered" },
       { id: "bbbeeCertificate", label: "B-BBEE Certificate", description: "Current B-BBEE verification certificate" },
@@ -28,6 +30,7 @@ const CMF_DOCUMENT_CATEGORIES = {
   capability: {
     label: "Marketing & Capability",
     color: "#059669",
+    impact: "📋 Verification Impact: Secondary. These documents showcase program capacity and track record. Helps SMEs assess CMF program credibility and increases your matching weightings.",
     documents: [
       { id: "capabilityStatement", label: "Capability Statement", description: "Summary of your firm's core capabilities and track record" },
       { id: "caseStudies", label: "Case Studies", description: "Examples of past transactions or engagements" },
@@ -150,6 +153,9 @@ export default function CMFDocumentUpload({ data = {}, updateData }) {
               </span>
             )}
           </div>
+          <p style={{ fontSize: "0.85rem", color: "#4b5563", marginTop: "-0.75rem", marginBottom: "1.25rem", fontStyle: "italic", fontWeight: "500" }}>
+            {category.impact}
+          </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1.5rem" }}>
             {category.documents.map((doc) => (
               <FileUploadField

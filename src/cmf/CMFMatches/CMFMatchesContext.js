@@ -17,7 +17,7 @@ export const useCMFMatches = () => {
 const getNestedField = (data, pathStr) => {
   if (!data) return undefined
   const keys = pathStr.split('.')
-  
+
   // Try at root first
   let val = data
   for (const key of keys) {
@@ -39,7 +39,7 @@ const getNestedField = (data, pathStr) => {
 const formatCustomTerm = (word) => {
   if (!word) return ""
   const lower = String(word).toLowerCase().trim()
-  
+
   const customMap = {
     "ict": "ICT",
     "ict_information_technology": "ICT & Information Technology",
@@ -56,7 +56,7 @@ const formatCustomTerm = (word) => {
     "level_4": "Level 4",
     "south_africa": "South Africa"
   }
-  
+
   if (customMap[lower]) return customMap[lower]
   if (customMap[word]) return customMap[word]
 
@@ -84,26 +84,26 @@ export const CMFMatchesProvider = ({ children }) => {
     const baseScore = 40
 
     // 1. Sector matching (20%)
-    const economicSectors = getNestedField(profileData, "entityOverview.economicSectors") || 
-                            getNestedField(profileData, "programBriefMatchingPreference.sectorFocus") || 
-                            (getNestedField(profileData, "entityOverview.industrySector") ? [getNestedField(profileData, "entityOverview.industrySector")] : [])
+    const economicSectors = getNestedField(profileData, "entityOverview.economicSectors") ||
+      getNestedField(profileData, "programBriefMatchingPreference.sectorFocus") ||
+      (getNestedField(profileData, "entityOverview.industrySector") ? [getNestedField(profileData, "entityOverview.industrySector")] : [])
     const cmfSectors = cmfPref?.sectorFocus || []
     const sectorsArray = Array.isArray(economicSectors) ? economicSectors : (economicSectors ? [economicSectors] : [])
     let sectorMatch = false
     if (cmfSectors.length === 0) {
       sectorMatch = true
     } else {
-      sectorMatch = sectorsArray.some(s => 
+      sectorMatch = sectorsArray.some(s =>
         cmfSectors.some(c => s.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(s.toLowerCase()))
       )
     }
     const sectorScore = sectorMatch ? 20 : 0
 
     // 2. Location matching (15%)
-    let province = getNestedField(profileData, "location") || 
-                   getNestedField(profileData, "entityOverview.contactDetails.province") || 
-                   getNestedField(profileData, "entityOverview.province") || 
-                   ""
+    let province = getNestedField(profileData, "location") ||
+      getNestedField(profileData, "entityOverview.contactDetails.province") ||
+      getNestedField(profileData, "entityOverview.province") ||
+      ""
     const provincesList = getNestedField(profileData, "programBriefMatchingPreference.selectedProvinces")
     if (Array.isArray(provincesList) && provincesList.length > 0) {
       province = provincesList[0]
@@ -113,7 +113,7 @@ export const CMFMatchesProvider = ({ children }) => {
     if (cmfLocations.length === 0) {
       locationMatch = true
     } else {
-      locationMatch = cmfLocations.some(c => 
+      locationMatch = cmfLocations.some(c =>
         String(province).toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(String(province).toLowerCase())
       ) || String(province).toLowerCase() === "national"
     }
@@ -133,7 +133,7 @@ export const CMFMatchesProvider = ({ children }) => {
       else if (normalizedOp === "scaling") mappedCmfStages.push("series a", "series b", "series c+")
       else if (normalizedOp === "turnaround") mappedCmfStages.push("growth/pe", "series b")
       else if (normalizedOp === "mature") mappedCmfStages.push("series c+", "growth/pe", "mbo", "mbi", "lbo")
-      
+
       stageMatch = cmfStages.some(s => mappedCmfStages.includes(s.toLowerCase().trim()))
     }
     const stageScore = stageMatch ? 15 : 0
@@ -157,13 +157,13 @@ export const CMFMatchesProvider = ({ children }) => {
   }
 
   const getMatchReason = (profileData, pct) => {
-    const sectorsList = getNestedField(profileData, "entityOverview.economicSectors") || 
-                       getNestedField(profileData, "programBriefMatchingPreference.sectorFocus") || []
+    const sectorsList = getNestedField(profileData, "entityOverview.economicSectors") ||
+      getNestedField(profileData, "programBriefMatchingPreference.sectorFocus") || []
     const sectors = sectorsList.length > 0 ? sectorsList.map(formatCustomTerm).join(", ") : "various sectors"
-    const location = getNestedField(profileData, "location") || 
-                     getNestedField(profileData, "entityOverview.contactDetails.province") || 
-                     getNestedField(profileData, "entityOverview.province") || 
-                     "South Africa"
+    const location = getNestedField(profileData, "location") ||
+      getNestedField(profileData, "entityOverview.contactDetails.province") ||
+      getNestedField(profileData, "entityOverview.province") ||
+      "South Africa"
     return `${pct}% match fit based on aligning with your focus in ${sectors} and operational presence in ${formatCustomTerm(location)}.`
   }
 
@@ -202,12 +202,12 @@ export const CMFMatchesProvider = ({ children }) => {
   }
 
   const mapFunderProfileToMatch = (funderId, data, matchRecord, cmfPref) => {
-    let name = getNestedField(data, "entityOverview.registeredName") || 
-               getNestedField(data, "entityOverview.tradingName") || 
-               getNestedField(data, "registeredName") || 
-               getNestedField(data, "tradingName") || 
-               getNestedField(data, "companyName") || 
-               getNestedField(data, "name")
+    let name = getNestedField(data, "entityOverview.registeredName") ||
+      getNestedField(data, "entityOverview.tradingName") ||
+      getNestedField(data, "registeredName") ||
+      getNestedField(data, "tradingName") ||
+      getNestedField(data, "companyName") ||
+      getNestedField(data, "name")
 
     if (name) {
       name = name.trim()
@@ -215,10 +215,10 @@ export const CMFMatchesProvider = ({ children }) => {
       name = funderId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
     }
 
-    let type = getNestedField(data, "entityOverview.legalEntityType") || 
-               getNestedField(data, "fundingType") || 
-               getNestedField(data, "legalEntity") ||
-               "Growth Fund"
+    let type = getNestedField(data, "entityOverview.legalEntityType") ||
+      getNestedField(data, "fundingType") ||
+      getNestedField(data, "legalEntity") ||
+      "Growth Fund"
     if (Array.isArray(type) && type.length > 0) {
       type = type[0]
     }
@@ -232,7 +232,7 @@ export const CMFMatchesProvider = ({ children }) => {
     }
 
     const loc = formatCustomTerm(getNestedField(data, "location") || getNestedField(data, "entityOverview.contactDetails.province") || getNestedField(data, "entityOverview.province") || "National")
-    
+
     let sectors = getNestedField(data, "entityOverview.economicSectors") || getNestedField(data, "programBriefMatchingPreference.sectorFocus") || ["Technology", "Logistics", "Retail"]
     if (!Array.isArray(sectors)) {
       sectors = [sectors]
@@ -240,11 +240,11 @@ export const CMFMatchesProvider = ({ children }) => {
     const formattedSectors = sectors.map(formatCustomTerm)
 
     const description = getNestedField(data, "entityOverview.briefDescription") || getNestedField(data, "programBriefMatchingPreference.aboutProgram") || "Growth support and financial investment partner."
-    
-    const contactName = getNestedField(data, "contactDetails.contactName") || 
-                        getNestedField(data, "entityOverview.contactDetails.contactName") || 
-                        (getNestedField(data, "contactDetails.primaryContactName") ? `${getNestedField(data, "contactDetails.primaryContactName")} ${getNestedField(data, "contactDetails.primaryContactSurname") || ""}`.trim() : "Representative")
-    
+
+    const contactName = getNestedField(data, "contactDetails.contactName") ||
+      getNestedField(data, "entityOverview.contactDetails.contactName") ||
+      (getNestedField(data, "contactDetails.primaryContactName") ? `${getNestedField(data, "contactDetails.primaryContactName")} ${getNestedField(data, "contactDetails.primaryContactSurname") || ""}`.trim() : "Representative")
+
     const email = getNestedField(data, "contactDetails.email") || getNestedField(data, "entityOverview.contactDetails.email") || getNestedField(data, "contactDetails.businessEmail") || getNestedField(data, "contactDetails.primaryContactEmail") || "info@funder.org"
 
     return {
@@ -271,12 +271,12 @@ export const CMFMatchesProvider = ({ children }) => {
   }
 
   const mapCatalystProfileToMatch = (catalystId, data, matchRecord, cmfPref) => {
-    let name = getNestedField(data, "entityOverview.registeredName") || 
-               getNestedField(data, "entityOverview.tradingName") || 
-               getNestedField(data, "registeredName") || 
-               getNestedField(data, "tradingName") || 
-               getNestedField(data, "companyName") || 
-               getNestedField(data, "name")
+    let name = getNestedField(data, "entityOverview.registeredName") ||
+      getNestedField(data, "entityOverview.tradingName") ||
+      getNestedField(data, "registeredName") ||
+      getNestedField(data, "tradingName") ||
+      getNestedField(data, "companyName") ||
+      getNestedField(data, "name")
 
     if (name) {
       name = name.trim()
@@ -284,16 +284,16 @@ export const CMFMatchesProvider = ({ children }) => {
       name = catalystId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
     }
 
-    let type = getNestedField(data, "entityOverview.legalEntityType") || 
-               getNestedField(data, "legalEntity") || 
-               "Accelerator/Incubator"
+    let type = getNestedField(data, "entityOverview.legalEntityType") ||
+      getNestedField(data, "legalEntity") ||
+      "Accelerator/Incubator"
     if (Array.isArray(type) && type.length > 0) {
       type = type[0]
     }
     type = formatCustomTerm(type)
-    
+
     const focus = formatCustomTerm(getNestedField(data, "programBriefMatchingPreference.intangibleSupport") || getNestedField(data, "intangibleSupport") || "Technical Advisory & Mentorship")
-    
+
     let loc = getNestedField(data, "location") || getNestedField(data, "entityOverview.province") || "National"
     const provincesList = getNestedField(data, "programBriefMatchingPreference.selectedProvinces")
     if (Array.isArray(provincesList) && provincesList.length > 0) {
@@ -308,11 +308,11 @@ export const CMFMatchesProvider = ({ children }) => {
     const formattedSectors = sectors.map(formatCustomTerm)
 
     const description = getNestedField(data, "entityOverview.briefDescription") || getNestedField(data, "programBriefMatchingPreference.aboutProgram") || "Entrepreneurship and innovation support organization."
-    
-    const contactName = getNestedField(data, "contactDetails.primaryContactName") 
+
+    const contactName = getNestedField(data, "contactDetails.primaryContactName")
       ? `${getNestedField(data, "contactDetails.primaryContactName")} ${getNestedField(data, "contactDetails.primaryContactSurname") || ""}`.trim()
       : (getNestedField(data, "contactDetails.contactName") || "Support Lead")
-      
+
     const email = getNestedField(data, "contactDetails.businessEmail") || getNestedField(data, "contactDetails.email") || getNestedField(data, "contactDetails.primaryContactEmail") || "info@catalyst.africa"
 
     return {
@@ -423,7 +423,7 @@ export const CMFMatchesProvider = ({ children }) => {
       const finalSmeMatches = []
       const finalFunderMatches = []
       const finalCatalystMatches = []
-      
+
       const catalystIds = new Set()
 
       // Process universalProfiles
@@ -432,15 +432,15 @@ export const CMFMatchesProvider = ({ children }) => {
         const profileData = docSnap.data()
 
         // Detect type using getNestedField
-        const entityType1 = (getNestedField(profileData, "entityOverview.entityType") || 
-                             getNestedField(profileData, "fundManageOverview.entityType") || "").toUpperCase()
+        const entityType1 = (getNestedField(profileData, "entityOverview.entityType") ||
+          getNestedField(profileData, "fundManageOverview.entityType") || "").toUpperCase()
         const entityType2 = (getNestedField(profileData, "productsServices.entityType") || "").toUpperCase()
 
         const isSME = entityType1 === "SME" || entityType1 === "SMSE" || entityType1 === "BUSINESS" ||
-                      entityType2 === "SME" || entityType2 === "SMSE" || entityType2 === "BUSINESS"
-        
+          entityType2 === "SME" || entityType2 === "SMSE" || entityType2 === "BUSINESS"
+
         const isFunder = entityType1 === "INVESTOR" || entityType1 === "FUNDER" || entityType1 === "SPONSOR" ||
-                         entityType2 === "INVESTOR" || entityType2 === "FUNDER" || entityType2 === "SPONSOR"
+          entityType2 === "INVESTOR" || entityType2 === "FUNDER" || entityType2 === "SPONSOR"
 
         const isCatalyst = entityType1 === "CATALYST" || entityType2 === "CATALYST"
 
@@ -473,8 +473,15 @@ export const CMFMatchesProvider = ({ children }) => {
           if (matchRecord) {
             finalSmeMatches.push(mapSMEProfileToMatch(profileId, profileData, matchRecord, cmfPref))
           }
-        } 
+        }
         else if (isFunder) {
+          const sponsorType = profileData.sponsorType || profileData.entityOverview?.sponsorType || ""
+          const onboardedBy = profileData.onboardedBy || profileData.sponsorName || profileData.entityOverview?.sponsorName || ""
+          const isCmfOnboarded = sponsorType === "CMF" || !!profileData.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
+          if (isCmfOnboarded && onboardedBy !== user.uid && onboardedBy !== currentEffectiveId) {
+            continue
+          }
+
           if (completeness < 90) continue
           let matchRecord = existingFunderMatchesMap[profileId]
           if (!matchRecord) {
@@ -502,6 +509,13 @@ export const CMFMatchesProvider = ({ children }) => {
           }
         }
         else if (isCatalyst) {
+          const sponsorType = profileData.sponsorType || profileData.entityOverview?.sponsorType || ""
+          const onboardedBy = profileData.onboardedBy || profileData.sponsorName || profileData.entityOverview?.sponsorName || ""
+          const isCmfOnboarded = sponsorType === "CMF" || !!profileData.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
+          if (isCmfOnboarded && onboardedBy !== user.uid && onboardedBy !== currentEffectiveId) {
+            continue
+          }
+
           if (completeness < 90) continue
           let matchRecord = existingCatalystMatchesMap[profileId]
           if (!matchRecord) {
@@ -537,6 +551,14 @@ export const CMFMatchesProvider = ({ children }) => {
         if (finalFunderMatches.some(f => f.id === profileId)) continue
 
         const profileData = docSnap.data()
+
+        const sponsorType = profileData.sponsorType || profileData.entityOverview?.sponsorType || ""
+        const onboardedBy = profileData.onboardedBy || profileData.sponsorName || profileData.entityOverview?.sponsorName || ""
+        const isCmfOnboarded = sponsorType === "CMF" || !!profileData.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
+        if (isCmfOnboarded && onboardedBy !== user.uid && onboardedBy !== currentEffectiveId) {
+          continue
+        }
+
         const completeness = calculateCompleteness(profileData)
         if (completeness < 90) continue
 
@@ -572,6 +594,14 @@ export const CMFMatchesProvider = ({ children }) => {
         if (catalystIds.has(profileId)) continue
 
         const profileData = docSnap.data()
+
+        const sponsorType = profileData.sponsorType || profileData.entityOverview?.sponsorType || ""
+        const onboardedBy = profileData.onboardedBy || profileData.sponsorName || profileData.entityOverview?.sponsorName || ""
+        const isCmfOnboarded = sponsorType === "CMF" || !!profileData.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
+        if (isCmfOnboarded && onboardedBy !== user.uid && onboardedBy !== currentEffectiveId) {
+          continue
+        }
+
         const completeness = calculateCompleteness(profileData)
         if (completeness < 90) continue
 
@@ -659,13 +689,13 @@ export const CMFMatchesProvider = ({ children }) => {
   }
 
   return (
-    <CMFMatchesContext.Provider value={{ 
-      smeMatches, 
-      funderMatches, 
-      catalystMatches, 
-      loading, 
-      updateMatchStage, 
-      reloadMatches: () => cmfUser && loadMatches(cmfUser) 
+    <CMFMatchesContext.Provider value={{
+      smeMatches,
+      funderMatches,
+      catalystMatches,
+      loading,
+      updateMatchStage,
+      reloadMatches: () => cmfUser && loadMatches(cmfUser)
     }}>
       {children}
     </CMFMatchesContext.Provider>

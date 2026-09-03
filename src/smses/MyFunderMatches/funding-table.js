@@ -1075,6 +1075,16 @@ export function FundingTable({
       investorsSnap.forEach((docSnap) => {
         if (removed.has(docSnap.id)) return
         const investor = docSnap.data()
+
+        const sponsorType = investor.sponsorType || investor.entityOverview?.sponsorType || ""
+        const onboardedBy = investor.onboardedBy || investor.sponsorName || investor.entityOverview?.sponsorName || ""
+        const isCmfOnboarded = sponsorType === "CMF" || !!investor.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
+        
+        const smeCmfId = rawProfile.onboardedBy || rawProfile.entityOverview?.sponsorName || ""
+        if (isCmfOnboarded && onboardedBy !== smeCmfId) {
+          return
+        }
+
         const fundList = investor.formData?.fundDetails?.funds || []
         fundList.forEach((fund, index) => {
           const row = mapFund(investor, docSnap.id, fund, index)

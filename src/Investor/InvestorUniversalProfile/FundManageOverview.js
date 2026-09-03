@@ -390,7 +390,7 @@ function MultiSelectDropdown({
   )
 }
 
-export default function EntityOverview({ data = {}, updateData }) {
+export default function EntityOverview({ data = {}, updateData, isLocked = false }) {
   const [dynamicSponsors, setDynamicSponsors] = useState(null)
 
   useEffect(() => {
@@ -503,19 +503,19 @@ export default function EntityOverview({ data = {}, updateData }) {
 
         <div className={styles.gridContainer} style={threeColGrid}>
           <FormField label="Registered Name" required>
-            <input type="text" name="registeredName" value={data.registeredName || ""} onChange={handleChange} className={styles.formInput} required />
+            <input type="text" name="registeredName" value={data.registeredName || ""} onChange={handleChange} className={styles.formInput} required disabled={isLocked} readOnly={isLocked} />
           </FormField>
 
           <FormField label="Trading Name (if different)">
-            <input type="text" name="tradingName" value={data.tradingName || ""} onChange={handleChange} className={styles.formInput} />
+            <input type="text" name="tradingName" value={data.tradingName || ""} onChange={handleChange} className={styles.formInput} disabled={isLocked} readOnly={isLocked} />
           </FormField>
 
           <FormField label="Registration Number" required>
-            <input type="text" name="registrationNumber" value={data.registrationNumber || ""} onChange={handleChange} className={styles.formInput} required />
+            <input type="text" name="registrationNumber" value={data.registrationNumber || ""} onChange={handleChange} className={styles.formInput} required disabled={isLocked} readOnly={isLocked} />
           </FormField>
 
           <FormField label="Financial Year Start Month" required>
-            <select name="financialYearStart" value={data.financialYearStart || ""} onChange={handleChange} className={styles.formSelect} required>
+            <select name="financialYearStart" value={data.financialYearStart || ""} onChange={handleChange} className={styles.formSelect} required disabled={isLocked}>
               <option value="">Select Financial Year Start Month</option>
               {financialYearMonths.map((month) => (
                 <option key={month.value} value={month.value}>{month.label}</option>
@@ -524,11 +524,11 @@ export default function EntityOverview({ data = {}, updateData }) {
           </FormField>
 
           <FormField label="Regulatory License Number">
-            <input type="text" name="regulatoryLicenseNumber" value={data.regulatoryLicenseNumber || ""} onChange={handleChange} className={styles.formInput} />
+            <input type="text" name="regulatoryLicenseNumber" value={data.regulatoryLicenseNumber || ""} onChange={handleChange} className={styles.formInput} disabled={isLocked} readOnly={isLocked} />
           </FormField>
 
           <FormField label="Legal Entity of Firm" required>
-            <select name="legalEntityType" value={data.legalEntityType || ""} onChange={handleChange} className={styles.formSelect} required>
+            <select name="legalEntityType" value={data.legalEntityType || ""} onChange={handleChange} className={styles.formSelect} required disabled={isLocked}>
               <option value="">Select Legal Entity Type</option>
               {legalEntityTypes.map((type) => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -537,7 +537,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           </FormField>
 
           <FormField label="Firm Type" required>
-            <select name="firmType" value={data.firmType || ""} onChange={handleFirmTypeChange} className={styles.formSelect} required>
+            <select name="firmType" value={data.firmType || ""} onChange={handleFirmTypeChange} className={styles.formSelect} required disabled={isLocked}>
               <option value="">Select Firm Type</option>
               {firmTypeCategories.map((category) => (
                 <option key={category.category} value={category.category}>{category.category}</option>
@@ -552,7 +552,7 @@ export default function EntityOverview({ data = {}, updateData }) {
               value={data.firmSubtype || []}
               onChange={(selectedOptions) => updateData({ firmSubtype: selectedOptions })}
               placeholder={data.firmType ? "Select firm subtypes..." : "Select firm type first"}
-              disabled={!data.firmType}
+              disabled={!data.firmType || isLocked}
             />
           </FormField>
 

@@ -8,16 +8,19 @@ import {
   Ticket, MoreVertical, Lock, AlertCircle, Info, Layers, GraduationCap,
   Wrench, SlidersHorizontal, LayoutGrid, Settings, RotateCcw, GripVertical,
   Square, CheckSquare, ArrowUpDown, Download, Archive, StickyNote, Plus, Trash2,
-  Briefcase, Award, Package, FileCheck, Star, Clock, Activity
+  Briefcase, Award, Package, FileCheck, Star, Clock, Activity, Search, ArrowRight, Send
 } from "lucide-react"
 import {
   collection, addDoc, updateDoc, arrayUnion, serverTimestamp,
-  doc, getDoc, getDocs, query, where, deleteDoc
+  doc, getDoc, getDocs, query, where, deleteDoc, setDoc
 } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 import { useCMFMatches } from "../CMFMatches/CMFMatchesContext"
 import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
+import CMFApplicationSummaryModal from "./CMFApplicationSummaryModal"
+import CMFActivityModal from "./CMFActivityModal"
+import CMFSentApplicationsModal from "./CMFSentApplicationsModal"
 
 const BIG_SCORE_LABELS = {
   excellent: { min: 80, label: "Excellent", color: "#22c55e" },
@@ -86,19 +89,126 @@ const toAmount = (value) => {
 
 // ─── Status vocabulary ──────────────────────────────────────────────────────
 const STATUS_META = {
-  "Active": { label: "Active Support", color: "#4caf50", group: "active" },
-  "Active Support": { label: "Active Support", color: "#4caf50", group: "active" },
-  "Exit": { label: "Exited", color: "#9e9e9e", group: "exited" },
-  "Exited": { label: "Exited", color: "#9e9e9e", group: "exited" },
+  "matched": { label: "Matched", color: "#f59e0b", group: "matched" },
+  "match": { label: "Matched", color: "#f59e0b", group: "matched" },
+  "pipeline": { label: "Matched", color: "#f59e0b", group: "matched" },
+
+  "evaluation": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "evaluating": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "in review": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "under review": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "review": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "reviewing": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "screening": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "due diligence": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "applied": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "application sent": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+  "shortlisted": { label: "Evaluation", color: "#8b5cf6", group: "evaluation" },
+
+  "active": { label: "Active Support", color: "#10b981", group: "active" },
+  "active support": { label: "Active Support", color: "#10b981", group: "active" },
+  "in progress": { label: "Active Support", color: "#10b981", group: "active" },
+  "supported": { label: "Active Support", color: "#10b981", group: "active" },
+
+  "exit": { label: "Exited", color: "#6b7280", group: "exited" },
+  "exited": { label: "Exited", color: "#6b7280", group: "exited" },
+  "graduated": { label: "Exited", color: "#6b7280", group: "exited" },
+  "completed": { label: "Exited", color: "#6b7280", group: "exited" },
+
+  "decline": { label: "Decline", color: "#ef4444", group: "declined" },
+  "declined": { label: "Decline", color: "#ef4444", group: "declined" },
+  "rejected": { label: "Decline", color: "#ef4444", group: "declined" },
 }
 
-const getStatusMeta = (status) => STATUS_META[status] || { label: status || "Active Support", color: "#7d5a50", group: "active" }
+const getStatusMeta = (status) => {
+  if (!status) return { label: "Matched", color: "#f59e0b", group: "matched" }
+  const key = String(status).toLowerCase().trim()
+  if (STATUS_META[key]) return STATUS_META[key]
+  
+  if (key.includes("eval") || key.includes("review") || key.includes("screen") || key.includes("diligence") || key.includes("appl") || key.includes("shortlist")) {
+    return { label: "Evaluation", color: "#8b5cf6", group: "evaluation" }
+  }
+  if (key.includes("active") || key.includes("support") || key.includes("progress")) {
+    return { label: "Active Support", color: "#10b981", group: "active" }
+  }
+  if (key.includes("exit") || key.includes("graduat") || key.includes("complete")) {
+    return { label: "Exited", color: "#6b7280", group: "exited" }
+  }
+  if (key.includes("declin") || key.includes("reject")) {
+    return { label: "Decline", color: "#ef4444", group: "declined" }
+  }
+  if (key.includes("match")) {
+    return { label: "Matched", color: "#f59e0b", group: "matched" }
+  }
+  
+  return { label: status, color: "#7d5a50", group: "matched" }
+}
 
 // ─── Attention Required heuristic ──────────────────────────────────────────
 const needsAttention = (cohort) => {
   const hasValidDate = !!toDateSafe(cohort.completionDate)
   const hasFundingInfo = cohort.dealAmount && cohort.dealAmount !== "Not specified"
   return !hasValidDate || !hasFundingInfo
+}
+
+const getDealflowApplicationStatus = (app) => {
+  if (!app) return { label: "—", isSuccess: false }
+  const raw = String(app.status || app.pipelineStage || "").trim()
+  const type = app.type || "Funder"
+  const lower = raw.toLowerCase()
+
+  let label = raw
+  if (!raw || lower === "application sent" || lower === "sent" || lower === "applied") {
+    label = type === "Advisor" ? "Contacted" : "Applied"
+  } else if (lower === "under review" || lower === "in review") {
+    label = type === "Catalyst" ? "Evaluation" : "Under Review"
+  } else if (lower.includes("eval")) {
+    label = "Evaluation"
+  } else if (lower.includes("due diligence") || lower.includes("diligence")) {
+    label = "Due Diligence"
+  } else if (lower.includes("interview") || lower.includes("call")) {
+    label = type === "Intern" ? "Contacted / Interview" : "Interviewing"
+  } else if (lower.includes("decision")) {
+    label = "Decision"
+  } else if (lower.includes("term")) {
+    label = type === "Intern" ? "Term Sheet Signed" : "Termsheet"
+  } else if (lower.includes("offer")) {
+    label = "Offer"
+  } else if (lower.includes("funded")) {
+    label = "Funded"
+  } else if (lower.includes("admitted")) {
+    label = "Admitted"
+  } else if (lower.includes("engaged") || lower.includes("placed")) {
+    label = "Engaged / Placed"
+  } else if (lower.includes("contract")) {
+    label = "Contract Signed"
+  } else if (lower.includes("completed")) {
+    label = "Completed"
+  } else if (lower.includes("accept") || lower.includes("approv")) {
+    label = "Accepted"
+  } else if (lower.includes("declin") || lower.includes("reject")) {
+    label = "Declined"
+  } else if (lower.includes("close")) {
+    label = "Closed"
+  } else if (lower.includes("withdraw")) {
+    label = "Withdrawn"
+  } else {
+    label = raw.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
+  }
+
+  const labelLower = label.toLowerCase()
+  const isSuccess = (
+    labelLower.includes("funded") ||
+    labelLower.includes("accepted") ||
+    labelLower.includes("approved") ||
+    labelLower.includes("admitted") ||
+    labelLower.includes("engaged") ||
+    labelLower.includes("placed") ||
+    labelLower.includes("contract") ||
+    labelLower.includes("completed")
+  )
+
+  return { label, isSuccess }
 }
 
 const Portal = ({ children }) => {
@@ -108,21 +218,24 @@ const Portal = ({ children }) => {
 
 // ─── Stage pipeline ─────────────────────────────────────────────────────────
 const CMF_STAGE_CARDS = [
+  { key: "matched", label: "Matched", icon: Users, note: true, noteText: "Businesses matched to your programme criteria." },
+  { key: "evaluation", label: "Evaluation", icon: Search, note: true, noteText: "Businesses currently under assessment and review." },
   { key: "active", label: "Active Support", icon: TrendingUp, note: true, noteText: "Businesses currently receiving active support and guidance." },
-  { key: "attention", label: "Attention Required", icon: AlertCircle, note: true, noteText: "Businesses with missing or incomplete data that need your attention." },
   { key: "exited", label: "Exited", icon: GraduationCap, note: true, noteText: "Businesses that have completed their support journey." },
+  { key: "declined", label: "Decline", icon: X, note: true, noteText: "Businesses that have been declined or dropped." },
 ]
 
-const CMFStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
+const CMFStagePipeline = ({ counts, activeFilter, setActiveFilter, activeTab = "businesses" }) => {
   const total = counts.total || 1
   const toggle = (key) => setActiveFilter(activeFilter === key ? "all" : key)
+  const tabLabel = activeTab === "businesses" ? "Businesses" : activeTab === "funders" ? "Funders" : activeTab === "catalysts" ? "Catalysts" : "CMFs"
 
   return (
     <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-sm p-4 mb-6">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-[#4a352f]">My CMF Cohorts</h3>
-          <span title="Your active engagements with businesses">
+          <span title="Active engagements">
             <Info size={12} className="text-[#a89482]" />
           </span>
         </div>
@@ -132,7 +245,7 @@ const CMFStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
           style={{ backgroundColor: activeFilter === "all" ? "#f5f0e1" : "transparent" }}
         >
           <span className="text-lg font-extrabold text-[#4a352f]">{counts.total}</span>
-          <span className="text-[10px] text-[#7d5a50] font-semibold uppercase tracking-wide">Total Businesses</span>
+          <span className="text-[10px] text-[#7d5a50] font-semibold uppercase tracking-wide">Total {tabLabel}</span>
         </button>
       </div>
 
@@ -193,15 +306,16 @@ const COLUMN_DEFS = {
   dealType: { label: "Deal Type", minWidth: "100px", filterType: "dealType" },
   supportProvided: { label: "Support Provided", minWidth: "120px", filterType: "supportProvided" },
   applications: { label: "Applications", minWidth: "160px", filterType: "applications" },
+  applicationStatus: { label: "Application Status", minWidth: "150px", filterType: "applicationStatus" },
 }
 
 const DEFAULT_COLUMN_ORDER = [
   "supportValue", "bigScore", "startDate", "sector", "location", "teamSize",
-  "applications", "status", "dealType", "supportProvided"
+  "applications", "applicationStatus", "status", "dealType", "supportProvided"
 ]
 const DEFAULT_COLUMN_VISIBILITY = {
-  supportValue: true, bigScore: false, startDate: true, status: true, dealType: true,
-  sector: true, location: false, teamSize: false, supportProvided: false, applications: true,
+  supportValue: false, bigScore: false, startDate: true, status: true, dealType: true,
+  sector: true, location: false, teamSize: false, supportProvided: false, applications: true, applicationStatus: true,
 }
 const DEFAULT_DENSITY = "comfortable"
 
@@ -219,7 +333,7 @@ const EMPTY_FILTERS = {
 // object, with exactly one active at a time. Editing the table edits the
 // active view and auto-saves immediately.
 const BUILTIN_VIEW_ID = "__default__"
-const VIEWS_STORAGE_KEY = "cmf-cohorts-views-v1"
+const VIEWS_STORAGE_KEY = "cmf-cohorts-views-v2"
 const ACTIVE_FILTER_STORAGE_KEY = "cmf-cohorts-active-filter-v1"
 
 const sanitizeColumnOrder = (order) => {
@@ -375,7 +489,7 @@ const LoadingSkeleton = () => (
 )
 
 export default function CMFCohorts() {
-  const { smeMatches, funderMatches, catalystMatches, loading: contextLoading, reloadMatches } = useCMFMatches()
+  const { smeMatches, funderMatches, catalystMatches, loading: contextLoading, reloadMatches, updateMatchStage } = useCMFMatches()
   const navigate = useNavigate()
   const [drafts, setDrafts] = useState([])
   const [showBridgePopup, setShowBridgePopup] = useState(false)
@@ -384,11 +498,188 @@ export default function CMFCohorts() {
   const [activeCohortTab, setActiveCohortTab] = useState("businesses")
   const [cmfCohorts, setCmfCohorts] = useState([])
   const [onboardedUserIds, setOnboardedUserIds] = useState(new Set())
+  const [applyModal, setApplyModal] = useState(null)
   const [cohortApps, setCohortApps] = useState({})
+  const [cmfSentAppsBySme, setCmfSentAppsBySme] = useState({})
+  const [cmfSentAppsDetailsBySme, setCmfSentAppsDetailsBySme] = useState({})
+  const [sentAppsModal, setSentAppsModal] = useState(null)
   const [selectedAppPreview, setSelectedAppPreview] = useState(null)
   const [activeAppTabIndex, setActiveAppTabIndex] = useState(0)
   const [appMatches, setAppMatches] = useState([])
   const [loadingMatches, setLoadingMatches] = useState(false)
+
+  const fetchCmfSentApplications = async () => {
+    const user = auth.currentUser
+    if (!user) return
+    try {
+      const appsBySme = {}
+      const addApp = (smeId, appRecord) => {
+        if (!smeId) return
+        if (!appsBySme[smeId]) appsBySme[smeId] = []
+        if (!appsBySme[smeId].some((a) => a.id === appRecord.id)) {
+          appsBySme[smeId].push(appRecord)
+        }
+      }
+
+      // 1. Check smeApplications (funders)
+      try {
+        const fundSnap = await getDocs(
+          query(collection(db, "smeApplications"), where("submittedBy", "==", user.uid))
+        )
+        fundSnap.forEach((d) => {
+          const data = d.data()
+          if (data.smeId) {
+            addApp(data.smeId, {
+              id: d.id,
+              type: "Funder",
+              partnerId: data.funderId,
+              partnerName: data.fundName || "Funder",
+              programName: data.fundName || "Growth Fund",
+              status: data.status || data.pipelineStage || "Applied",
+              pipelineStage: data.pipelineStage || data.status || "Applied",
+              fundingNeeded: data.fundingNeeded || "R 2,500,000",
+              facilitatorNotes: data.facilitatorNotes || "",
+              facilitatorName: data.facilitatorName || "CMF Facilitator",
+              createdAt: data.createdAt || data.applicationDate,
+              timestamp: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
+              data
+            })
+          }
+        })
+      } catch (e) {
+        console.warn("Could not query smeApplications for CMF:", e)
+      }
+
+      // 2. Check catalystApplications
+      try {
+        const catSnap = await getDocs(
+          query(collection(db, "catalystApplications"), where("submittedBy", "==", user.uid))
+        )
+        catSnap.forEach((d) => {
+          const data = d.data()
+          if (data.smeId) {
+            addApp(data.smeId, {
+              id: d.id,
+              type: "Catalyst",
+              partnerId: data.catalystId,
+              partnerName: data.programName || "Catalyst Program",
+              programName: data.programName || "Accelerator Programme",
+              status: data.status || data.pipelineStage || "Applied",
+              pipelineStage: data.pipelineStage || data.status || "Applied",
+              fundingNeeded: data.fundingRequired || "Programme Support",
+              facilitatorNotes: data.facilitatorNotes || "",
+              facilitatorName: data.facilitatorName || "CMF Facilitator",
+              createdAt: data.createdAt || data.applicationDate,
+              timestamp: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
+              data
+            })
+          }
+        })
+      } catch (e) {
+        console.warn("Could not query catalystApplications for CMF:", e)
+      }
+
+      // 3. Check SmeAdvisorApplications
+      try {
+        const advSnap = await getDocs(
+          query(collection(db, "SmeAdvisorApplications"), where("submittedBy", "==", user.uid))
+        )
+        advSnap.forEach((d) => {
+          const data = d.data()
+          if (data.smeId) {
+            addApp(data.smeId, {
+              id: d.id,
+              type: "Advisor",
+              partnerId: data.advisorId,
+              partnerName: data.advisorName || "Advisor",
+              programName: "Advisory Services",
+              status: data.status || data.pipelineStage || "Contacted",
+              pipelineStage: data.pipelineStage || data.status || "Contacted",
+              fundingNeeded: "Advisory Engagement",
+              facilitatorNotes: data.facilitatorNotes || "",
+              facilitatorName: data.facilitatorName || "CMF Facilitator",
+              createdAt: data.createdAt || data.applicationDate,
+              timestamp: data.createdAt ? new Date(data.createdAt).getTime() : (data.updatedAt || Date.now()),
+              data
+            })
+          }
+        })
+      } catch (e) {
+        console.warn("Could not query SmeAdvisorApplications for CMF:", e)
+      }
+
+      // 4. Check SmeInternApplications
+      try {
+        const internSnap = await getDocs(
+          query(collection(db, "SmeInternApplications"), where("submittedBy", "==", user.uid))
+        )
+        internSnap.forEach((d) => {
+          const data = d.data()
+          if (data.smeId) {
+            addApp(data.smeId, {
+              id: d.id,
+              type: "Intern",
+              partnerId: data.internId,
+              partnerName: data.internName || "Intern Candidate",
+              programName: "Workplace Internship",
+              status: data.status || data.pipelineStage || "Applied",
+              pipelineStage: data.pipelineStage || data.status || "Applied",
+              fundingNeeded: "Internship Placement",
+              facilitatorNotes: data.facilitatorNotes || "",
+              facilitatorName: data.facilitatorName || "CMF Facilitator",
+              createdAt: data.createdAt || data.applicationDate,
+              timestamp: data.createdAt ? new Date(data.createdAt).getTime() : (data.updatedAt || Date.now()),
+              data
+            })
+          }
+        })
+      } catch (e) {
+        console.warn("Could not query SmeInternApplications for CMF:", e)
+      }
+
+      // 5. Check cmfActivities
+      try {
+        const actSnap = await getDocs(
+          query(collection(db, "cmfActivities"), where("facilitatorId", "==", user.uid))
+        )
+        actSnap.forEach((d) => {
+          const data = d.data()
+          if (data.type === "application" && data.smeId) {
+            const initialStage = data.status || data.pipelineStage || (data.partnerType === "Advisor" ? "Contacted" : "Applied")
+            addApp(data.smeId, {
+              id: d.id,
+              type: data.partnerType || "Partner",
+              partnerId: data.partnerId,
+              partnerName: data.partnerName || "Partner",
+              programName: data.title || "Partner Application",
+              status: initialStage,
+              pipelineStage: initialStage,
+              fundingNeeded: "Support Application",
+              facilitatorNotes: data.details || "",
+              facilitatorName: "CMF Facilitator",
+              createdAt: data.createdAt,
+              timestamp: data.timestamp || (data.createdAt ? new Date(data.createdAt).getTime() : Date.now()),
+              data
+            })
+          }
+        })
+      } catch (e) {
+        console.warn("Could not query cmfActivities:", e)
+      }
+
+      // Sort each SME's applications with newest first
+      const counts = {}
+      Object.keys(appsBySme).forEach((smeId) => {
+        appsBySme[smeId].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        counts[smeId] = appsBySme[smeId].length
+      })
+
+      setCmfSentAppsBySme(counts)
+      setCmfSentAppsDetailsBySme(appsBySme)
+    } catch (err) {
+      console.error("Error loading CMF sent applications:", err)
+    }
+  }
 
   const fetchDrafts = async () => {
     const user = auth.currentUser
@@ -447,6 +738,7 @@ export default function CMFCohorts() {
       if (user) {
         fetchDrafts()
         fetchOnboardedUserIds()
+        fetchCmfSentApplications()
       }
     })
     return () => unsubscribe()
@@ -466,6 +758,7 @@ export default function CMFCohorts() {
   const [showArchived, setShowArchived] = useState(false)
   const [bulkConfirm, setBulkConfirm] = useState(null)
   const [statusModal, setStatusModal] = useState(null)
+  const [showActivityModal, setShowActivityModal] = useState(false)
 
   // ─── Column header filters ────────────────────────────────────────────────
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
@@ -526,12 +819,6 @@ export default function CMFCohorts() {
   const businessesCohorts = useMemo(() => {
     if (!smeMatches || smeMatches.length === 0) return []
     return smeMatches
-      .filter((sme) => {
-        const isDirectOnboarded = onboardedUserIds.has(sme.id)
-        const status = (sme.currentStatus || sme.pipelineStage || "").toLowerCase()
-        const isMatchedCohort = status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
-        return isDirectOnboarded || isMatchedCohort
-      })
       .map((sme) => {
         const isDirectOnboarded = onboardedUserIds.has(sme.id)
         return {
@@ -547,7 +834,7 @@ export default function CMFCohorts() {
           location: formatLabel(sme.location) || "Not specified",
           teamSize: sme.teamSize || "Not specified",
           description: sme.supportRequired || sme.reason || "No description available",
-          currentStatus: sme.currentStatus || sme.pipelineStage || "Active Support",
+          currentStatus: sme.currentStatus || sme.pipelineStage || "Matched",
           lastUpdated: sme.lastActivity || null,
           dealStructure: "Support Program",
           dealDuration: "Ongoing",
@@ -590,8 +877,8 @@ export default function CMFCohorts() {
               const data = docSnap.data()
               tempApps[smeId].push({
                 id: docSnap.id,
-                type: "Advisory",
-                label: "Advisory",
+                type: "Advisor",
+                label: "Advisor",
                 status: data.status || "submitted",
                 data: data,
               })
@@ -930,6 +1217,32 @@ export default function CMFCohorts() {
     setRowMenu(null)
   }
 
+  const handleUpdateStatus = async (cohortId, newStatus) => {
+    try {
+      await updateMatchStage(cohortId, newStatus)
+      const targetCohort = cohorts.find(c => c.id === cohortId)
+      setCohorts((prev) => prev.map((c) => (c.id === cohortId ? { ...c, currentStatus: newStatus } : c)))
+
+      // Log stage change activity
+      const user = auth.currentUser
+      if (user) {
+        addDoc(collection(db, "cmfActivities"), {
+          facilitatorId: user.uid,
+          type: "stage",
+          title: `Updated Status to ${newStatus}`,
+          smeId: cohortId,
+          smeName: targetCohort?.smeName || "Cohort Member",
+          timestamp: Date.now(),
+          createdAt: new Date().toISOString(),
+          details: `Stage updated to ${newStatus} for ${targetCohort?.smeName || "cohort member"}`
+        }).catch(err => console.warn("Failed to log stage activity:", err))
+      }
+    } catch (e) {
+      console.error("Failed to update status:", e)
+      alert("Failed to update status. Please try again.")
+    }
+  }
+
   // ─── Status change ────────────────────────────────────────────────────────
   const openStatusModal = (cohortOrCohorts) => {
     const list = Array.isArray(cohortOrCohorts) ? cohortOrCohorts : [cohortOrCohorts]
@@ -939,7 +1252,14 @@ export default function CMFCohorts() {
 
   const submitStatusChange = async () => {
     if (!statusModal?.targetGroup) return
-    const newStatus = statusModal.targetGroup === "exited" ? "Exited" : "Active Support"
+    const statusMap = {
+      matched: "Matched",
+      evaluation: "Evaluation",
+      active: "Active Support",
+      exited: "Exited",
+      declined: "Decline",
+    }
+    const newStatus = statusModal.targetLabel || statusMap[statusModal.targetGroup] || "Active Support"
     const ids = new Set(statusModal.cohorts.map((c) => c.id))
 
     const run = async () => {
@@ -1364,9 +1684,11 @@ export default function CMFCohorts() {
 
   const counts = useMemo(() => ({
     total: visibleCohorts.length,
-    active: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active" && !needsAttention(c)).length,
-    attention: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active" && needsAttention(c)).length,
+    matched: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "matched").length,
+    evaluation: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "evaluation").length,
+    active: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active").length,
     exited: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "exited").length,
+    declined: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "declined").length,
   }), [visibleCohorts])
 
   // Filter options come from the rows actually loaded, so the options and the
@@ -1375,7 +1697,7 @@ export default function CMFCohorts() {
   const locationOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.location).filter((l) => l && l !== "Not specified"))].sort(), [visibleCohorts])
   const teamSizeOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.teamSize).filter((t) => t && t !== "Not specified"))].sort(), [visibleCohorts])
   const dealTypeOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.dealType).filter((d) => d && d !== "Not specified"))].sort(), [visibleCohorts])
-  const statusOptions = useMemo(() => [...new Set(Object.values(STATUS_META).map((m) => m.label))], [])
+  const statusOptions = useMemo(() => ["Matched", "Evaluation", "Active Support", "Exited", "Decline"], [])
 
   const activeFilterCount = (localFilters.name.trim() ? 1 : 0)
     + (localFilters.supportMin != null || localFilters.supportMax != null ? 1 : 0)
@@ -1388,12 +1710,16 @@ export default function CMFCohorts() {
   const filteredCohorts = useMemo(() => {
     let result = visibleCohorts
 
-    if (activeFilter === "active") {
-      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "active" && !needsAttention(c))
-    } else if (activeFilter === "attention") {
-      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "active" && needsAttention(c))
+    if (activeFilter === "matched") {
+      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "matched")
+    } else if (activeFilter === "evaluation") {
+      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "evaluation")
+    } else if (activeFilter === "active") {
+      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "active")
     } else if (activeFilter === "exited") {
       result = result.filter((c) => getStatusMeta(c.currentStatus).group === "exited")
+    } else if (activeFilter === "declined") {
+      result = result.filter((c) => getStatusMeta(c.currentStatus).group === "declined")
     }
 
     if (localFilters.name.trim()) {
@@ -1434,6 +1760,7 @@ export default function CMFCohorts() {
   const handleRefresh = () => {
     setRefreshing(true)
     fetchOnboardedUserIds()
+    fetchCmfSentApplications()
     if (reloadMatches) reloadMatches().then(() => setRefreshing(false))
     else setTimeout(() => setRefreshing(false), 800)
   }
@@ -1455,12 +1782,32 @@ export default function CMFCohorts() {
     setLoadingMatches(true)
     setAppMatches([])
 
-    const matchColl = appType === "Advisory" ? "smseAdvisoryMatches"
-                    : appType === "Supplier" ? "SmeSupplierApplications"
-                    : appType === "Interns" ? "internMatchResults"
+    const isAdvisor = appType === "Advisor" || appType === "Advisory"
+    const isSupplier = appType === "Supplier"
+    const isIntern = appType === "Intern" || appType === "Interns"
+
+    const matchColl = isAdvisor ? "smseAdvisoryMatches"
+                    : isSupplier ? "SmeSupplierApplications"
+                    : isIntern ? "internMatchResults"
                     : "smseFundingMatches"
 
     try {
+      // Query dealflow collection to get real status
+      let dealflowMap = {}
+      try {
+        const dealflowColl = isAdvisor ? "SmeAdvisorApplications"
+                           : isIntern ? "SmeInternApplications"
+                           : "smeApplications"
+        const dfSnap = await getDocs(query(collection(db, dealflowColl), where("smeId", "==", cohortId)))
+        dfSnap.forEach((docSnap) => {
+          const dfData = docSnap.data()
+          const pId = dfData.advisorId || dfData.funderId || dfData.internId || dfData.catalystId || docSnap.id
+          if (pId) dealflowMap[pId] = dfData.status || dfData.pipelineStage || "Contacted"
+        })
+      } catch (dfErr) {
+        console.warn("Could not query dealflow for status mapping:", dfErr)
+      }
+
       const q = query(collection(db, matchColl), where("smeId", "==", cohortId))
       const snap = await getDocs(q)
       const list = []
@@ -1468,11 +1815,13 @@ export default function CMFCohorts() {
         const d = docSnap.data()
         const recordAppId = d.applicationId || d.appId
         if (!recordAppId || recordAppId === applicationId) {
+          const partnerId = d.advisorId || d.funderId || d.supplierId || d.internId || docSnap.id
+          const realStatus = dealflowMap[partnerId] || d.status || "New Match"
           list.push({
             id: docSnap.id,
             name: d.advisorName || d.funderName || d.supplierName || d.name || d.registeredName || d.tradingName || d.companyName || "Match Partner",
             matchPct: d.matchPct || d.matchScore || d.score || d.matchPercentage || d.finalScore || null,
-            status: d.status || "Matched",
+            status: realStatus,
             ...d
           })
         }
@@ -1517,14 +1866,22 @@ export default function CMFCohorts() {
       case "status": {
         const meta = getStatusMeta(cohort.currentStatus)
         const flagged = meta.group === "active" && needsAttention(cohort)
+        const isActiveSupport = meta.group === "active"
         return (
           <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap" style={{ backgroundColor: meta.color + "20", color: meta.color }}>
+              <span
+                className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap"
+                style={
+                  isActiveSupport
+                    ? { backgroundColor: "#10b98120", color: "#10b981", border: "1px solid #10b98140" }
+                    : { backgroundColor: "#f5f0e1", color: "#7d5a50", border: "1px solid #e6d7c3" }
+                }
+              >
                 {meta.label}
               </span>
               {flagged && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap" style={{ backgroundColor: "#fff3e0", color: "#e65100" }} title="Missing start date or funding information on record">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap" style={{ backgroundColor: "#fff3e0", color: "#e65100" }} title="Action needed">
                   <AlertCircle size={11} /> Attention
                 </span>
               )}
@@ -1545,7 +1902,7 @@ export default function CMFCohorts() {
             className={`${rowPad} border-r border-[#e6d7c3] cursor-pointer hover:bg-[#faf7f2]/60 transition-colors`}
             style={style}
             onClick={(e) => openPopupFromEvent("bigScore", cohort, e)}
-            title="Click to see the BIG Score breakdown"
+            title="BIG Score breakdown"
           >
             <div className="flex flex-col items-center gap-1">
               <div className="relative w-11 h-11">
@@ -1561,36 +1918,89 @@ export default function CMFCohorts() {
         )
       }
       case "applications": {
-        const apps = cohortApps[cohort.id] || []
-        
-        const hasAdvisory = apps.some((a) => a.type === "Advisory")
-        const hasSupplier = apps.some((a) => a.type === "Supplier")
-        const hasInterns  = apps.some((a) => a.type === "Interns")
-        const hasFunding  = apps.some((a) => a.type === "Funding")
-
-        const renderedBadges = []
-        if (hasAdvisory) renderedBadges.push({ type: "Advisory", label: "Advisory", bg: "#7d5a50" })
-        if (hasSupplier) renderedBadges.push({ type: "Supplier", label: "Supplier", bg: "#c5a880" })
-        if (hasInterns)  renderedBadges.push({ type: "Interns", label: "Interns", bg: "#2e7d32" })
-        if (hasFunding)  renderedBadges.push({ type: "Funding", label: "Funding", bg: "#0277bd" })
+        const sentCount = cmfSentAppsBySme[cohort.id] || cmfSentAppsBySme[cohort.smeId] || 0
+        const isActiveSupport = getStatusMeta(cohort.currentStatus).group === "active"
 
         return (
           <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}>
-            <div className="flex flex-wrap gap-1.5 items-center">
-              {renderedBadges.length > 0 ? (
-                renderedBadges.map((badge) => (
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs">
+                {sentCount === 0 ? (
+                  <span className="text-gray-400 italic">None</span>
+                ) : (
                   <button
-                    key={badge.type}
-                    onClick={() => handleOpenAppPreview(badge.type, cohort)}
-                    className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all transform hover:scale-105 active:scale-95 shadow-sm hover:shadow-md cursor-pointer text-white"
-                    style={{ backgroundColor: badge.bg }}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const apps = cmfSentAppsDetailsBySme[cohort.id] || cmfSentAppsDetailsBySme[cohort.smeId] || []
+                      setSentAppsModal({ cohort, applications: apps })
+                    }}
+                    className="font-semibold text-[#4a352f] bg-[#f5f0e1] hover:bg-[#e6d7c3] px-2.5 py-0.5 rounded-full text-[11px] border border-[#e6d7c3] transition-all cursor-pointer flex items-center gap-1 shadow-sm hover:shadow"
+                    title="View applications"
                   >
-                    {badge.label}
+                    <Eye size={10} className="text-[#7d5a50]" />
+                    <span>{sentCount} {sentCount === 1 ? "Sent" : "Sent"}</span>
                   </button>
-                ))
-              ) : (
-                <span className="text-xs text-gray-400 italic">None</span>
-              )}
+                )}
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (isActiveSupport) {
+                    setApplyModal({ cohort })
+                  }
+                }}
+                disabled={!isActiveSupport}
+                title={!isActiveSupport ? "Active Support required" : "Apply"}
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm ${
+                  !isActiveSupport
+                    ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-60"
+                    : "bg-[#7d5a50] hover:bg-[#5d4037] text-white active:scale-95 cursor-pointer"
+                }`}
+              >
+                <Send size={10} /> Apply
+              </button>
+            </div>
+          </td>
+        )
+      }
+      case "applicationStatus": {
+        const apps = cmfSentAppsDetailsBySme[cohort.id] || cmfSentAppsDetailsBySme[cohort.smeId] || []
+        const latestApp = apps[0] || null
+
+        if (!latestApp) {
+          return (
+            <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}>
+              <span className="text-gray-400 italic text-xs">—</span>
+            </td>
+          )
+        }
+
+        const { label: statusLabel, isSuccess } = getDealflowApplicationStatus(latestApp)
+
+        return (
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}>
+            <div
+              onClick={() => setSentAppsModal({ cohort, applications: apps })}
+              className="cursor-pointer group flex flex-col gap-0.5"
+              title="View application"
+            >
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap group-hover:shadow-sm transition-all"
+                  style={
+                    isSuccess
+                      ? { backgroundColor: "#10b98120", color: "#10b981", border: "1px solid #10b98140" }
+                      : { backgroundColor: "#f5f0e1", color: "#7d5a50", border: "1px solid #e6d7c3" }
+                  }
+                >
+                  {statusLabel}
+                </span>
+              </div>
+              <span className="text-[10px] text-[#7d5a50] group-hover:text-[#4a352f] truncate max-w-[150px]">
+                {latestApp.partnerName || latestApp.programName || `${latestApp.type} Track`}
+              </span>
             </div>
           </td>
         )
@@ -1704,8 +2114,15 @@ export default function CMFCohorts() {
               </button>
             )}
             <button
+              onClick={() => setShowActivityModal(true)}
+              className="bg-white text-[#7d5a50] border-2 border-[#c8b6a6] hover:bg-[#f5f0e1] rounded-lg px-3.5 py-2.5 text-xs font-semibold flex items-center gap-1.5 transition-all duration-300 shadow-sm cursor-pointer"
+            >
+              <Activity size={14} />
+              Activity
+            </button>
+            <button
               onClick={() => setShowArchived((v) => !v)}
-              className={`flex items-center gap-1.5 border-2 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${showArchived ? "bg-[#7d5a50] text-white border-[#7d5a50]" : "bg-white text-[#7d5a50] border-[#c8b6a6] hover:bg-[#f5f0e1]"}`}
+              className={`flex items-center gap-1.5 border-2 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all cursor-pointer ${showArchived ? "bg-[#7d5a50] text-white border-[#7d5a50]" : "bg-white text-[#7d5a50] border-[#c8b6a6] hover:bg-[#f5f0e1]"}`}
             >
               <Archive size={14} /> {showArchived ? "Hiding archived: off" : "Show archived"}
             </button>
@@ -1729,7 +2146,7 @@ export default function CMFCohorts() {
           </div>
         </div>
 
-        <CMFStagePipeline counts={counts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
+        <CMFStagePipeline counts={counts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} activeTab={activeCohortTab} />
 
         {/* Toolbar */}
         <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
@@ -1999,7 +2416,7 @@ export default function CMFCohorts() {
                         </th>
                       )
                     })}
-                    <th className={`cmc-th ${rowPad} relative text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', ...widthStyle('action', '170px') }}>
+                    <th className={`cmc-th ${rowPad} relative text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', ...widthStyle('action', '180px') }}>
                       Action
                       <ColumnResizer colKey="action" />
                     </th>
@@ -2051,18 +2468,114 @@ export default function CMFCohorts() {
 
                           {visibleColumnKeys.map((key) => renderCell(key, cohort))}
 
-                          <td className={`${rowPad} text-center`} style={widthStyle('action', '170px')}>
+                          <td className={`${rowPad} text-center`} style={widthStyle('action', '180px')}>
                             <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => primaryAction.handler(cohort)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:shadow-md whitespace-nowrap"
-                                style={{ backgroundColor: "#a67c52" }}
-                              >
-                                {primaryAction.label}
-                              </button>
+                              {activeCohortTab === "businesses" ? (() => {
+                                const isOnboarded = cohort.source === "onboarded" || cohort.isOnboarded;
+                                const meta = getStatusMeta(cohort.currentStatus);
+
+                                let actionConfig = null;
+
+                                if (isOnboarded) {
+                                  // Exception for onboarded business: ONLY show graduate
+                                  if (meta.group === "exited") {
+                                    actionConfig = {
+                                      label: "Graduated",
+                                      icon: GraduationCap,
+                                      disabled: true,
+                                      handler: null,
+                                      title: "Graduated",
+                                    };
+                                  } else {
+                                    actionConfig = {
+                                      label: "Graduate",
+                                      icon: GraduationCap,
+                                      disabled: false,
+                                      handler: () => {
+                                        if (window.confirm(`Graduate/Exit ${cohort.smeName} from active support?`)) {
+                                          handleUpdateStatus(cohort.id, "Exited");
+                                        }
+                                      },
+                                      title: "Graduate",
+                                    };
+                                  }
+                                } else {
+                                  // Matched business progression: ONE button showing next eligible stage
+                                  if (meta.group === "matched") {
+                                    actionConfig = {
+                                      label: "Evaluation",
+                                      icon: ArrowRight,
+                                      disabled: false,
+                                      handler: () => handleUpdateStatus(cohort.id, "Evaluation"),
+                                      title: "Move to Evaluation",
+                                    };
+                                  } else if (meta.group === "evaluation") {
+                                    actionConfig = {
+                                      label: "Active Support",
+                                      icon: ArrowRight,
+                                      disabled: false,
+                                      handler: () => handleUpdateStatus(cohort.id, "Active Support"),
+                                      title: "Admit to Active Support",
+                                    };
+                                  } else if (meta.group === "active") {
+                                    actionConfig = {
+                                      label: "Graduate",
+                                      icon: GraduationCap,
+                                      disabled: false,
+                                      handler: () => {
+                                        if (window.confirm(`Graduate/Exit ${cohort.smeName} from active support?`)) {
+                                          handleUpdateStatus(cohort.id, "Exited");
+                                        }
+                                      },
+                                      title: "Graduate",
+                                    };
+                                  } else if (meta.group === "exited") {
+                                    actionConfig = {
+                                      label: "Graduated",
+                                      icon: GraduationCap,
+                                      disabled: true,
+                                      handler: null,
+                                      title: "Graduated",
+                                    };
+                                  } else if (meta.group === "declined") {
+                                    actionConfig = {
+                                      label: "Declined",
+                                      icon: null,
+                                      disabled: true,
+                                      handler: null,
+                                      title: "Declined",
+                                    };
+                                  }
+                                }
+
+                                return (
+                                  <button
+                                    onClick={actionConfig?.handler}
+                                    disabled={actionConfig?.disabled}
+                                    title={actionConfig?.title}
+                                    className={`w-[124px] inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                                      actionConfig?.disabled
+                                        ? "bg-[#e6d7c3]/60 text-[#8d6e63] cursor-not-allowed border border-[#d9c4b0]"
+                                        : "text-white bg-[#7d5a50] hover:bg-[#5d4037] hover:shadow-md active:scale-95 shadow-sm"
+                                    }`}
+                                    style={{ width: "124px", height: "32px" }}
+                                  >
+                                    {actionConfig?.icon && <actionConfig.icon size={13} className="flex-shrink-0" />}
+                                    <span className="truncate">{actionConfig?.label || "—"}</span>
+                                  </button>
+                                );
+                              })() : (
+                                <button
+                                  onClick={() => primaryAction.handler(cohort)}
+                                  className="w-[124px] inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:shadow-md whitespace-nowrap flex-shrink-0"
+                                  style={{ width: "124px", height: "32px", backgroundColor: "#a67c52" }}
+                                >
+                                  {primaryAction.label}
+                                </button>
+                              )}
                               <button
                                 onClick={(e) => openRowMenu(cohort, e)}
-                                className="p-2 rounded-lg border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] transition-all"
+                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] transition-all flex-shrink-0"
                                 aria-label="More actions"
                               >
                                 <MoreVertical size={16} />
@@ -2323,7 +2836,20 @@ export default function CMFCohorts() {
               {expandedRows.has(rowMenu.cohort.id) ? "Collapse Row" : "Expand Row"}
             </button>
             <div className="border-t border-[#e6d7c3] my-1" />
-            <button onClick={() => handleArchive(rowMenu.cohort)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 text-left">
+            {activeCohortTab === "businesses" && getStatusMeta(rowMenu.cohort.currentStatus).group !== "declined" && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Decline ${rowMenu.cohort.smeName}?`)) {
+                    handleUpdateStatus(rowMenu.cohort.id, "Decline");
+                  }
+                  setRowMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-rose-700 hover:bg-rose-50 text-left"
+              >
+                <X size={12} /> Decline Business
+              </button>
+            )}
+            <button onClick={() => handleArchive(rowMenu.cohort)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#7d5a50] hover:bg-[#faf7f2] text-left">
               <Archive size={12} /> Archive Record
             </button>
           </div>
@@ -2478,20 +3004,36 @@ export default function CMFCohorts() {
               <button onClick={() => setStatusModal(null)}><X size={18} /></button>
             </div>
             <label className="block text-xs font-semibold text-[#5d4037] mb-2">New status</label>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: "active" }))}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold border-2 ${statusModal.targetGroup === "active" ? "border-[#4caf50] bg-[#e8f5e9] text-[#2e7d32]" : "border-[#e6d7c3] text-[#4a352f]"}`}>
-                Active Support
-              </button>
-              <button onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: "exited" }))}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold border-2 ${statusModal.targetGroup === "exited" ? "border-[#9e9e9e] bg-[#f3f4f6] text-[#4a352f]" : "border-[#e6d7c3] text-[#4a352f]"}`}>
-                Exited
-              </button>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+              {[
+                { group: "matched", label: "Matched", color: "#f59e0b", bg: "#fef3c7" },
+                { group: "evaluation", label: "Evaluation", color: "#8b5cf6", bg: "#ede9fe" },
+                { group: "active", label: "Active Support", color: "#10b981", bg: "#e8f5e9" },
+                { group: "exited", label: "Exited", color: "#6b7280", bg: "#f3f4f6" },
+                { group: "declined", label: "Decline", color: "#ef4444", bg: "#fee2e2" },
+              ].map((opt) => (
+                <button
+                  key={opt.group}
+                  type="button"
+                  onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: opt.group, targetLabel: opt.label }))}
+                  className={`px-3 py-2.5 rounded-lg text-xs font-semibold border-2 transition-all text-center ${
+                    statusModal.targetGroup === opt.group
+                      ? "border-[#7d5a50] shadow-sm font-bold"
+                      : "border-[#e6d7c3] text-[#4a352f] hover:bg-[#faf7f2]"
+                  }`}
+                  style={{
+                    backgroundColor: statusModal.targetGroup === opt.group ? opt.bg : undefined,
+                    color: statusModal.targetGroup === opt.group ? opt.color : undefined,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
-            {statusModal.targetGroup === "exited" && (
+            {(statusModal.targetGroup === "exited" || statusModal.targetGroup === "declined") && (
               <textarea value={statusModal.note} onChange={(e) => setStatusModal((prev) => ({ ...prev, note: e.target.value }))}
-                placeholder="Exit note (optional)" rows={3}
-                className="w-full px-3 py-2 border-2 border-[#c8b6a6] rounded-lg text-sm resize-y mb-2" />
+                placeholder="Reason / note (optional)" rows={3}
+                className="w-full px-3 py-2 border-2 border-[#c8b6a6] rounded-lg text-xs resize-y mb-2" />
             )}
             <div className="flex justify-end gap-2 mt-3">
               <button onClick={() => setStatusModal(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">Cancel</button>
@@ -2915,10 +3457,6 @@ export default function CMFCohorts() {
                       <>
                         <div><strong>Amount Requested:</strong> {formatCurrency(activeAppData.applicationOverview?.amountRequested || activeAppData.amountRequested)}</div>
                         <div><strong>Funding Stage:</strong> {activeAppData.applicationOverview?.fundingStage || "Not specified"}</div>
-                        <div><strong>Funding Purpose:</strong> {activeAppData.applicationOverview?.fundingPurpose || "Not specified"}</div>
-                        <div><strong>Own Contribution:</strong> {activeAppData.applicationOverview?.ownContribution ? `R ${activeAppData.applicationOverview.ownContribution}` : "Not specified"}</div>
-                        <div><strong>Revenue Generates:</strong> {activeAppData.financialOverview?.generatesRevenue || "Not specified"}</div>
-                        <div><strong>Annual Revenue:</strong> {activeAppData.financialOverview?.annualRevenue ? `R ${activeAppData.financialOverview.annualRevenue}` : "Not specified"}</div>
                       </>
                     )}
                   </div>
@@ -2956,12 +3494,36 @@ export default function CMFCohorts() {
                 </div>
 
                 {/* Actions Footer */}
-                <div className="flex justify-end pt-2 border-t border-[#e6d7c3]/60">
+                <div className="flex justify-between items-center pt-2 border-t border-[#e6d7c3]/60">
+                  {(() => {
+                    const isActive = getStatusMeta(selectedAppPreview.cohort.currentStatus).group === "active"
+                    return (
+                      <button
+                        onClick={() => {
+                          if (isActive) {
+                            const c = selectedAppPreview.cohort
+                            const t = selectedAppPreview.type === "Supplier" ? "Catalyst" : selectedAppPreview.type
+                            setSelectedAppPreview(null)
+                            setApplyModal({ cohort: c, initialType: t })
+                          }
+                        }}
+                        disabled={!isActive}
+                        title={!isActive ? "Only businesses in Active Support can apply for services or support through CMF" : `Apply on behalf of ${selectedAppPreview.cohort.smeName}`}
+                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-sm ${
+                          !isActive
+                            ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-60"
+                            : "bg-[#7d5a50] hover:bg-[#5d4037] text-white cursor-pointer"
+                        }`}
+                      >
+                        <Send size={13} /> Apply on behalf of {selectedAppPreview.cohort.smeName}
+                      </button>
+                    )
+                  })()}
                   <button 
                     onClick={() => setSelectedAppPreview(null)}
-                    className="px-5 py-2.5 bg-[#5d4037] hover:bg-[#4a352f] text-white font-bold text-sm rounded-xl cursor-pointer transition-all"
+                    className="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl cursor-pointer transition-all"
                   >
-                    Done
+                    Close
                   </button>
                 </div>
               </div>
@@ -2969,6 +3531,45 @@ export default function CMFCohorts() {
           </Portal>
         )
       })()}
+
+      {applyModal && (
+        <Portal>
+          <CMFApplicationSummaryModal
+            cohort={applyModal.cohort}
+            initialPartnerType={applyModal.initialType || "Funder"}
+            funderMatches={funderMatches}
+            catalystMatches={catalystMatches}
+            onboardedUserIds={onboardedUserIds}
+            cohortApps={cohortApps[applyModal.cohort?.id] || []}
+            onClose={() => setApplyModal(null)}
+            onSuccess={() => {
+              fetchCmfSentApplications()
+              if (reloadMatches) reloadMatches()
+            }}
+          />
+        </Portal>
+      )}
+
+      {sentAppsModal && (
+        <Portal>
+          <CMFSentApplicationsModal
+            cohort={sentAppsModal.cohort}
+            applications={sentAppsModal.applications}
+            onClose={() => setSentAppsModal(null)}
+            onOpenApply={() => {
+              const c = sentAppsModal.cohort
+              setSentAppsModal(null)
+              setApplyModal({ cohort: c })
+            }}
+          />
+        </Portal>
+      )}
+
+      {showActivityModal && (
+        <Portal>
+          <CMFActivityModal onClose={() => setShowActivityModal(false)} />
+        </Portal>
+      )}
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

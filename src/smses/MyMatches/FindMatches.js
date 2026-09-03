@@ -44,8 +44,18 @@ const FindMatches = () => {
                 const matchedInvestors = []
 
                 for (const doc of investorsSnapshot.docs) {
-                    const investorData = doc.data().entityOverview
-                    const funds = doc.data().productsServices?.funds || []
+                    const docData = doc.data()
+                    const sponsorType = docData.sponsorType || docData.entityOverview?.sponsorType || ""
+                    const onboardedBy = docData.onboardedBy || docData.sponsorName || docData.entityOverview?.sponsorName || ""
+                    const isCmfOnboarded = sponsorType === "CMF" || !!docData.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
+                    
+                    const smeCmfId = businessDocSnap.data().onboardedBy || businessDocSnap.data().entityOverview?.sponsorName || ""
+                    if (isCmfOnboarded && onboardedBy !== smeCmfId) {
+                        continue
+                    }
+
+                    const investorData = docData.entityOverview
+                    const funds = docData.productsServices?.funds || []
 
                     const matchScore = calculateMatchScore(businessData, { ...investorData, funds })
 
