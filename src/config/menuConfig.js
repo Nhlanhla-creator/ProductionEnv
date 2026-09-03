@@ -806,17 +806,23 @@ export const capitalMarketFacilitatorMenuItems = [
     icon: <User size={18} />,
     route: "/cmf-profile",
   },
-  {
-    id: "matches",
-    label: "My Matches",
-    icon: <Handshake size={18} />,
-    route: "/cmf-matches",
-  },
+  // {
+  //   id: "matches",
+  //   label: "My Matches",
+  //   icon: <Handshake size={18} />,
+  //   route: "/cmf-matches",
+  // },
   {
     id: "cohorts",
     label: "My Cohorts",
     icon: <Users size={18} />,
     route: "/cmf-cohorts",
+  },
+  {
+    id: "investments",
+    label: "My Portfolio",
+    icon: <PieChart size={18} />,
+    route: "/cmf/investments",
   },
   // {
   //   id: "insights",

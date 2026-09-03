@@ -500,7 +500,8 @@ export default function EntityOverview({ data = {}, updateData }) {
                       docData?.name ||
                       docSnap.id
             }
-            list.push({ value: docSnap.id, label: label })
+            const isVerified = type === "CMF" && (docData?.verificationStatus === "Verified" || docData?.isVerified === true || docData?.status === "Verified")
+            list.push({ value: docSnap.id, label: label, isVerified: !!isVerified })
           })
           loadedSponsors[type] = list
         }
@@ -1109,9 +1110,16 @@ export default function EntityOverview({ data = {}, updateData }) {
                 >
                   <option value="">{`Select ${sponsorType}...`}</option>
                   {sponsorOptions.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
+                    <option key={s.value} value={s.value}>
+                      {s.isVerified ? "✓ [Verified] " : ""}{s.label}
+                    </option>
                   ))}
                 </select>
+                {sponsorType === "CMF" && sponsorOptions.find(s => s.value === formData.sponsorName)?.isVerified && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontSize: '12px', fontWeight: 'bold', color: '#16a34a' }}>
+                    <Check size={12} style={{ strokeWidth: 3 }} /> Verified CMF Profile
+                  </div>
+                )}
               </FormField>
             )}
 
