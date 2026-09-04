@@ -14,6 +14,7 @@ import {
   CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
   ExternalLink, Square, CheckSquare, ArrowLeft, Calendar, SlidersHorizontal,
   Database, Sparkles, Sigma, Settings2, EyeOff, Palette, Check, Trash2,
+  FileText, Printer, FileSpreadsheet,
 } from "lucide-react";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -138,23 +139,6 @@ const formatDisplayNumber = (value, units = null) => {
     return n.toLocaleString(LOCALE);
   }
   return String(n);
-};
-
-// NEW: Validate input based on units
-const isValidInput = (value, units) => {
-  if (value === "" || value === null || value === undefined) return true;
-  const cleaned = String(value).replace(/[\s,]/g, '');
-  const n = Number(cleaned);
-  if (!Number.isFinite(n)) return false;
-  
-  if (units === "%") {
-    // Percentages should be between 0 and 100 (or -100 to 100 for variances)
-    return n >= -100 && n <= 100;
-  }
-  if (units === "×") {
-    return n >= 0 && n <= 1000; // Reasonable ratio range
-  }
-  return true;
 };
 
 const parseNum = (v) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isNaN(n) ? null : n; };
@@ -1859,783 +1843,1235 @@ const BalanceSheetTab = ({ fy, docs, readOnly }) => {
   );
 };
 
-/* ─── Add Data Wizard – FIXED: Shows all sections in dropdown ──────────── */
-const AddDataWizard = ({
-  tabs, fy, docs, prefs, onSavePrefs, onBack, onClose,
-  onSaveField, onSaveBalanceSheetCell, onSaveLoans, onSaveDividends, onSaveCapTable,
-  dividends, investors, irrInvestments, loans, readOnly,
-}) => {
-  const [section, setSection] = useState("kpi");
-  const [tabId, setTabId] = useState(null);
-  const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
-  const [periodKey, setPeriodKey] = useState(null);
-  const [draft, setDraft] = useState({});
-  const [saveState, setSaveState] = useState("idle");
-  const timer = useRef(null);
+/* ════════════════════════════════════════════════════════════════════════════
+   Report Generator — Custom Word document export for Financial Performance
+   ════════════════════════════════════════════════════════════════════════ */
 
-  const editableTabs = tabs.filter((t) => !t.custom && t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
-  const months = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
+const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userName, dividends, investors, irrInvestments }) => {
+  const [selectedTabs, setSelectedTabs] = useState(() => 
+    Object.fromEntries(tabs.map((t) => [t.id, true]))
+  );
+  const [includeSummary, setIncludeSummary] = useState(true);
+  const [includeCharts, setIncludeCharts] = useState(true);
+  const [includeAnalysis, setIncludeAnalysis] = useState(true);
+  const [includeEquity, setIncludeEquity] = useState(true);
+  const [includeLoans, setIncludeLoans] = useState(true);
+  const [includeBalanceSheet, setIncludeBalanceSheet] = useState(true);
+  const [includeActions, setIncludeActions] = useState(true);
+  const [periodForReport, setPeriodForReport] = useState(period);
+  const [generating, setGenerating] = useState(false);
+  const [reportTitle, setReportTitle] = useState(`Financial Performance Report - ${new Date().toLocaleDateString()}`);
 
-  // For KPI section
-  const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
+  // Get actions from governanceCalendar
+  const [actions, setActions] = useState([]);
+  const [loadingActions, setLoadingActions] = useState(true);
+
   useEffect(() => {
-    if (section === "kpi" && !tabId && editableTabs.length) setTabId(editableTabs[0].id);
-  }, [section, editableTabs]);
-
-  useEffect(() => {
-    if (!months.length) return;
-    if (months.some((m) => m.key === periodKey)) return;
-    setPeriodKey(months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
-  }, [months]);
-
-  const monthMeta = months.find((m) => m.key === periodKey) || months[0];
-  const monthIndex = months.findIndex((m) => m.key === periodKey);
-  const ctx = monthMeta ? buildContext(docs, monthMeta.year, monthMeta.month) : {};
-
-  const rows = useMemo(() => {
-    if (!tab) return [];
-    const out = [];
-    tab.categories.forEach((cat) => (cat.kpis || []).forEach((k) => out.push({ kpi: k, category: cat.name })));
-    return out;
-  }, [tab]);
-
-  // FIXED: Properly handle draft values with display formatting
-  const getDisplayValue = (kpi, which) => {
-    const dk = `${monthMeta?.year}|${monthMeta?.month}|${kpi.id}|${which}`;
-    if (draft[dk] !== undefined) {
-      // If the draft value exists, show it with formatting
-      const raw = draft[dk];
-      if (raw === "" || raw === null || raw === undefined) return "";
-      // For display, format with thousand separators if it's a number
-      const num = parseNumberInput(raw);
-      if (num !== null) {
-        return formatDisplayNumber(num, kpi.units);
-      }
-      return raw;
-    }
-    
-    // If no draft, get the stored value
-    if (!kpi.field) return "";
-    if (kpi.custom) {
-      const v = kpi.entries?.[monthMeta.key]?.[which];
-      return v === undefined || v === null ? "" : String(v);
-    }
-    const field = which === "actual" ? kpi.field.a : kpi.field.b;
-    if (!field) return "";
-    const d = docs[`${DOC[kpi.field.src]}_${monthMeta.year}`];
-    const v = d?.[field]?.[monthMeta.month];
-    // Format the stored value with thousand separators
-    if (v !== undefined && v !== null && v !== "") {
-      const num = Number(v);
-      if (Number.isFinite(num)) {
-        return formatDisplayNumber(num, kpi.units);
-      }
-      return String(v);
-    }
-    return "";
-  };
-
-  // FIXED: Handle input changes without losing focus
-  const handleInputChange = (kpi, which, e) => {
-    const raw = e.target.value;
-    const dk = `${monthMeta?.year}|${monthMeta?.month}|${kpi.id}|${which}`;
-    
-    // Update draft immediately for display
-    setDraft((p) => ({ ...p, [dk]: raw }));
-    setSaveState("saving");
-    
-    // Clear any pending save
-    if (timer.current) clearTimeout(timer.current);
-    
-    // Schedule save with debounce (but only if the value is valid)
-    timer.current = setTimeout(async () => {
-      // Parse and validate the input
-      const num = parseNumberInput(raw);
-      
-      // If it's a percentage and invalid, show a warning but still save
-      if (kpi.units === "%" && num !== null && (num < -100 || num > 100)) {
-        // Allow invalid values temporarily but they'll be validated
-        console.warn(`Percentage value ${num} is outside -100 to 100 range`);
-      }
-      
-      await onSaveField({ kpi, which, raw: num !== null ? String(num) : raw, year: monthMeta.year, monthIndex: monthMeta.month });
-      onSavePrefs({ tabId, startYear });
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1800);
-    }, 1200); // Increased debounce to prevent focus loss
-  };
-
-  // Clean up timer on unmount
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  // Helper to check if a field should be editable
-  const isEditable = (kpi, which) => {
-    if (kpi.custom) return true;
-    if (!kpi.field) return false;
-    const field = which === "actual" ? kpi.field.a : kpi.field.b;
-    return !!field;
-  };
-
-  // Get derived value for calculated fields
-  const getDerivedValue = (kpi) => {
-    if (kpi.custom || !kpi.actual) return null;
-    return kpi.actual(ctx);
-  };
-
-  const cell = { ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" };
-  const th = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
-    letterSpacing: "0.5px", background: T.header, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2, verticalAlign: "top" };
-  const yearOptions = [
-    { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
-    { value: fy.startYear,     badge: "FY",  label: fyLabel(fy.startYear, fy.startMonth) },
-    { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
-  ];
-
-  // ── Balance Sheet editor inside modal ──
-  const BalanceSheetEditor = () => {
-    const [localBS, setLocalBS] = useState(() => {
-      const bs = docs[`${DOC.bs}_${startYear}`]?.balanceSheetData || BLANK_BS;
-      return JSON.parse(JSON.stringify(bs));
-    });
-    const [bsSaveState, setBsSaveState] = useState("idle");
-    const bsTimer = useRef(null);
-
-    const bsMonths = fyMonths(startYear, fy.startMonth);
-    const [bsMonthKey, setBsMonthKey] = useState(() => {
-      const defaultKey = bsMonths.find((m) => m.key === currentMonthKey())?.key || bsMonths[0].key;
-      return defaultKey;
-    });
-    const bsMeta = bsMonths.find(m => m.key === bsMonthKey) || bsMonths[0];
-    const bsMi = bsMeta.month;
-
-    const setBsCell = (path, key, raw) => {
-      const next = JSON.parse(JSON.stringify(localBS));
-      let node = next;
-      const segs = path.split(".");
-      for (const seg of segs) {
-        const idx = Number(seg);
-        node = Number.isFinite(idx) && String(idx) === seg ? node[idx] : node[seg];
-        if (!node) return;
-      }
-      const arr = Array.isArray(node[key]) ? [...node[key]] : Array(12).fill("");
-      while (arr.length < 12) arr.push("");
-      arr[bsMi] = raw;
-      node[key] = arr;
-      setLocalBS(next);
-      setBsSaveState("saving");
-      if (bsTimer.current) clearTimeout(bsTimer.current);
-      bsTimer.current = setTimeout(async () => {
-        await onSaveBalanceSheetCell({ year: startYear, monthIndex: bsMi, path, key, raw });
-        setBsSaveState("saved");
-        setTimeout(() => setBsSaveState("idle"), 1800);
-      }, 1200);
-    };
-
-    useEffect(() => () => { if (bsTimer.current) clearTimeout(bsTimer.current); }, []);
-
-    const renderSection = (title, obj, path) => {
-      if (!obj) return null;
-      return (
-        <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "12px", fontWeight: 600, color: T.accent, marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.3px" }}>{title}</div>
-          <div style={{ border: `1px solid ${T.line}`, borderRadius: "6px", overflow: "hidden" }}>
-            <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
-              <tbody>
-                {Object.entries(obj).map(([key, arr], i) => {
-                  if (!Array.isArray(arr)) return null;
-                  const negative = NEGATIVE_KEYS.has(key);
-                  const val = arr[bsMi] !== undefined && arr[bsMi] !== "" && arr[bsMi] !== null ? Number(arr[bsMi]) : null;
-                  return (
-                    <tr key={key} style={{ background: i % 2 ? T.panel : T.bg }}>
-                      <td style={{ padding: "6px 10px", fontSize: "13px", color: negative ? T.muted : T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                        {negative && <span style={{ color: T.faint, marginRight: "5px" }}>−</span>}
-                        {prettify(key)}
-                      </td>
-                      <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, width: "40%" }}>
-                        <input type="text" 
-                          value={val !== null ? formatDisplayNumber(val) : ""}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            const num = parseNumberInput(raw);
-                            setBsCell(path, key, num !== null ? String(num) : raw);
-                          }}
-                          style={{ ...cell, minHeight: "28px", padding: "4px 8px", fontSize: "13px" }} 
-                          placeholder="0" />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", flexWrap: "wrap" }}>
-          <div style={{ minWidth: "200px" }}>
-            <label style={labelS}>Month</label>
-            <select value={bsMonthKey} onChange={(e) => setBsMonthKey(e.target.value)} style={selectS}>
-              {bsMonths.map(m => <option key={m.key} value={m.key}>{m.long}</option>)}
-            </select>
-          </div>
-          <span style={{ fontSize: "12.5px", color: bsSaveState === "saved" ? T.green : T.muted, marginTop: "4px" }}>
-            {bsSaveState === "saving" ? "Saving…" : bsSaveState === "saved" ? "Saved" : "Edits save automatically"}
-          </span>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-          <div>
-            <h5 style={{ fontSize: "13px", fontWeight: 700, color: T.accent, margin: "0 0 8px" }}>Assets</h5>
-            {renderSection("Bank", localBS.assets?.bank, "assets.bank")}
-            {renderSection("Current assets", localBS.assets?.currentAssets, "assets.currentAssets")}
-            {renderSection("Fixed assets", localBS.assets?.fixedAssets, "assets.fixedAssets")}
-            {renderSection("Intangible assets", localBS.assets?.intangibleAssets, "assets.intangibleAssets")}
-            {renderSection("Non-current assets", localBS.assets?.nonCurrentAssets, "assets.nonCurrentAssets")}
-          </div>
-          <div>
-            <h5 style={{ fontSize: "13px", fontWeight: 700, color: T.accent, margin: "0 0 8px" }}>Liabilities & Equity</h5>
-            {renderSection("Current liabilities", localBS.liabilities?.currentLiabilities, "liabilities.currentLiabilities")}
-            {renderSection("Non-current liabilities", localBS.liabilities?.nonCurrentLiabilities, "liabilities.nonCurrentLiabilities")}
-            {renderSection("Equity", localBS.equity, "equity")}
-          </div>
-        </div>
-        <div style={{ marginTop: "12px", fontSize: "12.5px", color: T.muted, display: "flex", alignItems: "center", gap: "6px" }}>
-          <Info size={12} /> Custom categories are supported but not shown in this quick editor – use the main Balance Sheet tab for advanced editing.
-        </div>
-      </div>
-    );
-  };
-
-  // ── Loan editor inside modal ──
-  const LoanEditor = () => {
-    const [localLoans, setLocalLoans] = useState(loans.length ? loans : [{ id: uid(), name: "", scheduled: "", paid: "" }]);
-    const [loanSaveState, setLoanSaveState] = useState("idle");
-    const loanTimer = useRef(null);
-
-    const commitLoans = (next) => {
-      setLocalLoans(next);
-      setLoanSaveState("saving");
-      if (loanTimer.current) clearTimeout(loanTimer.current);
-      loanTimer.current = setTimeout(async () => {
-        await onSaveLoans(next);
-        setLoanSaveState("saved");
-        setTimeout(() => setLoanSaveState("idle"), 1800);
-      }, 1200);
-    };
-
-    useEffect(() => () => { if (loanTimer.current) clearTimeout(loanTimer.current); }, []);
-
-    const addLoan = () => setLocalLoans([...localLoans, { id: uid(), name: "", scheduled: "", paid: "" }]);
-    const removeLoan = (id) => {
-      if (!window.confirm("Delete this loan?")) return;
-      commitLoans(localLoans.filter(l => l.id !== id));
-    };
-    const updateLoan = (id, field, val) => {
-      const next = localLoans.map(l => l.id === id ? { ...l, [field]: val } : l);
-      commitLoans(next);
-    };
-
-    return (
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <span style={{ fontSize: "12.5px", color: loanSaveState === "saved" ? T.green : T.muted }}>
-            {loanSaveState === "saving" ? "Saving…" : loanSaveState === "saved" ? "Saved" : "Edits save automatically"}
-          </span>
-          <button onClick={addLoan} style={btnPrimary}><Plus size={13} /> Add Loan</button>
-        </div>
-        <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-            <thead>
-              <tr style={{ background: T.header, color: "#fff" }}>
-                <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Loan Name</th>
-                <th style={{ ...th, textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Scheduled</th>
-                <th style={{ ...th, textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Paid</th>
-                <th style={{ ...th, textAlign: "center" }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {localLoans.map((loan, i) => (
-                <tr key={loan.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <input value={loan.name} onChange={(e) => updateLoan(loan.id, "name", e.target.value)} style={cell} placeholder="Name" />
-                  </td>
-                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <input type="text" value={loan.scheduled ? formatDisplayNumber(parseNumberInput(loan.scheduled) || 0) : ""} 
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        const num = parseNumberInput(raw);
-                        updateLoan(loan.id, "scheduled", num !== null ? String(num) : raw);
-                      }} style={cell} placeholder="0" />
-                  </td>
-                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <input type="text" value={loan.paid ? formatDisplayNumber(parseNumberInput(loan.paid) || 0) : ""}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        const num = parseNumberInput(raw);
-                        updateLoan(loan.id, "paid", num !== null ? String(num) : raw);
-                      }} style={cell} placeholder="0" />
-                  </td>
-                  <td style={{ padding: "4px 8px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
-                    <button onClick={() => removeLoan(loan.id)} style={{ ...btnQuiet, padding: "4px 8px", color: T.red }}><Trash2 size={14} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  // ── Equity Structure editor inside modal ──
-  const EquityEditor = () => {
-    const [localDividends, setLocalDividends] = useState(dividends.length ? dividends : [{ year: new Date().getFullYear(), amountPerShare: 0, totalShares: 0, totalIssued: 0, paymentDate: "", notes: "" }]);
-    const [localInvestors, setLocalInvestors] = useState(investors.length ? investors : [{ name: "", shares: 0, investment: 0 }]);
-    const [localIrr, setLocalIrr] = useState(irrInvestments.length ? irrInvestments : [{ name: "", irr: 0, details: { initialInvestment: "", duration: "", cashFlows: [], riskRating: "Medium" } }]);
-    const [eqSaveState, setEqSaveState] = useState("idle");
-    const eqTimer = useRef(null);
-
-    const commitEquity = (divs, invs, irrs) => {
-      setLocalDividends(divs); setLocalInvestors(invs); setLocalIrr(irrs);
-      setEqSaveState("saving");
-      if (eqTimer.current) clearTimeout(eqTimer.current);
-      eqTimer.current = setTimeout(async () => {
-        await onSaveDividends(divs);
-        await onSaveCapTable({ investors: invs, irrInvestments: irrs });
-        setEqSaveState("saved");
-        setTimeout(() => setEqSaveState("idle"), 1800);
-      }, 1200);
-    };
-
-    useEffect(() => () => { if (eqTimer.current) clearTimeout(eqTimer.current); }, []);
-
-    const updateDividend = (idx, field, val) => {
-      const next = [...localDividends];
-      if (field === "year") next[idx].year = Number(val) || 0;
-      else if (field === "amountPerShare") {
-        const num = parseNumberInput(val);
-        next[idx].amountPerShare = num || 0;
-        next[idx].totalIssued = (num || 0) * (next[idx].totalShares || 0);
-      } else if (field === "totalShares") {
-        const num = parseNumberInput(val);
-        next[idx].totalShares = num || 0;
-        next[idx].totalIssued = (next[idx].amountPerShare || 0) * (num || 0);
-      } else if (field === "totalIssued") {
-        const num = parseNumberInput(val);
-        next[idx].totalIssued = num || 0;
-      } else if (field === "paymentDate" || field === "notes") next[idx][field] = val;
-      commitEquity(next, localInvestors, localIrr);
-    };
-    const addDividend = () => setLocalDividends([...localDividends, { year: new Date().getFullYear(), amountPerShare: 0, totalShares: 0, totalIssued: 0, paymentDate: "", notes: "" }]);
-    const removeDividend = (idx) => {
-      if (!window.confirm("Delete this dividend?")) return;
-      const next = localDividends.filter((_, i) => i !== idx);
-      commitEquity(next, localInvestors, localIrr);
-    };
-
-    const updateInvestor = (idx, field, val) => {
-      const next = [...localInvestors];
-      if (field === "name") {
-        next[idx].name = val;
-      } else {
-        const num = parseNumberInput(val);
-        next[idx][field] = num || 0;
-      }
-      commitEquity(localDividends, next, localIrr);
-    };
-    const addInvestor = () => setLocalInvestors([...localInvestors, { name: "", shares: 0, investment: 0 }]);
-    const removeInvestor = (idx) => {
-      if (!window.confirm("Delete this investor?")) return;
-      const next = localInvestors.filter((_, i) => i !== idx);
-      commitEquity(localDividends, next, localIrr);
-    };
-
-    const updateIrr = (idx, field, val) => {
-      const next = [...localIrr];
-      if (field === "name") {
-        next[idx].name = val;
-      } else if (field === "riskRating") {
-        next[idx].riskRating = val;
-      } else if (field === "irr") {
-        const num = parseNumberInput(val);
-        next[idx].irr = num || 0;
-      } else if (field.startsWith("details.")) {
-        const sub = field.split(".")[1];
-        if (!next[idx].details) next[idx].details = {};
-        if (sub === "cashFlows") {
-          next[idx].details.cashFlows = val.split(",").map(s => s.trim()).filter(Boolean);
-        } else {
-          next[idx].details[sub] = val;
+    const loadActions = async () => {
+      if (!userId) { setLoadingActions(false); return; }
+      try {
+        const snap = await getDoc(doc(db, "governanceCalendar", userId));
+        if (snap.exists()) {
+          const meetings = snap.data().meetings || [];
+          const allActions = meetings.flatMap(m => 
+            (m.actions || []).map(a => ({ ...a, meetingTitle: m.title }))
+          );
+          setActions(allActions);
         }
+      } catch (err) {
+        console.error("Failed to load actions:", err);
+      } finally {
+        setLoadingActions(false);
       }
-      commitEquity(localDividends, localInvestors, next);
     };
-    const addIrr = () => setLocalIrr([...localIrr, { name: "", irr: 0, details: { initialInvestment: "", duration: "", cashFlows: [], riskRating: "Medium" } }]);
-    const removeIrr = (idx) => {
-      if (!window.confirm("Delete this investment?")) return;
-      const next = localIrr.filter((_, i) => i !== idx);
-      commitEquity(localDividends, localInvestors, next);
+    loadActions();
+  }, [userId]);
+
+  const generateReport = async () => {
+    setGenerating(true);
+
+    // Build the report data structure
+    const reportData = {
+      title: reportTitle,
+      generated: new Date().toISOString(),
+      period: PERIOD_LABEL[periodForReport],
+      financialYear: fyLabel(fy.startYear, fy.startMonth),
+      userName: userName || "User",
+      sections: [],
+      summary: null,
+      actions: [],
+      equity: null,
+      loans: null,
+      balanceSheet: null,
     };
 
-    const renderTable = (data, cols, updateFn, addFn, removeFn) => (
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "8px", overflow: "hidden", marginBottom: "16px" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
+    // Process each selected tab
+    const selectedTabList = tabs.filter(t => selectedTabs[t.id]);
+
+    if (includeSummary) {
+      // Build summary statistics
+      const allKpis = selectedTabList.flatMap(t => 
+        t.categories.flatMap(c => c.kpis || [])
+      );
+      const statusCounts = { green: 0, amber: 0, red: 0, none: 0 };
+      allKpis.forEach(k => {
+        const s = getStatus(k, periodForReport, fy);
+        statusCounts[s.key] = (statusCounts[s.key] || 0) + 1;
+      });
+      reportData.summary = {
+        totalKpis: allKpis.length,
+        statusCounts,
+        tabs: selectedTabList.map(t => t.name),
+      };
+    }
+
+    // Build section data for KPI tabs
+    selectedTabList.forEach(tab => {
+      if (tab.custom) return;
+      const section = {
+        name: tab.name,
+        categories: [],
+      };
+
+      tab.categories.forEach(cat => {
+        const catData = {
+          name: cat.name,
+          kpis: [],
+        };
+
+        (cat.kpis || []).forEach(k => {
+          const v = periodValues(k, periodForReport, fy);
+          const status = getStatus(k, periodForReport, fy);
+          const variance = getVariance(k, periodForReport, fy);
+          catData.kpis.push({
+            id: k.id,
+            name: k.name,
+            units: k.units,
+            direction: k.direction,
+            meaning: k.meaning,
+            measured: k.measured,
+            actual: v.actual,
+            budget: v.budget,
+            variance: variance,
+            status: status.label,
+            statusKey: status.key,
+            notes: k.notes || "",
+            source: k.source || "",
+          });
+        });
+
+        section.categories.push(catData);
+      });
+
+      reportData.sections.push(section);
+    });
+
+    // Equity data
+    if (includeEquity) {
+      reportData.equity = {
+        dividends: dividends || [],
+        investors: investors || [],
+        irrInvestments: irrInvestments || [],
+      };
+    }
+
+    // Loans data
+    if (includeLoans) {
+      reportData.loans = meta.loans || [];
+    }
+
+    // Balance Sheet - include a snapshot
+    if (includeBalanceSheet) {
+      const months = fyMonths(fy.startYear, fy.startMonth);
+      const currentMonth = months.find((m) => m.key === currentMonthKey()) || months[0];
+      const bsDoc = docs[`${DOC.bs}_${currentMonth.year}`];
+      const bs = bsDoc?.balanceSheetData || BLANK_BS;
+      const totals = bsTotals({ balanceSheetData: bs }, currentMonth.month);
+      
+      reportData.balanceSheet = {
+        month: currentMonth.long,
+        totals: {
+          assets: totals.assets,
+          liabilities: totals.liabilities,
+          equity: totals.equity,
+          currentAssets: totals.currentAssets,
+          currentLiabilities: totals.currentLiabilities,
+          cash: totals.cash,
+        },
+        hasData: monthHasBs(bs, currentMonth.month),
+      };
+    }
+
+    // Get actions
+    if (includeActions) {
+      const financialActions = actions.filter(a => 
+        a.sourceModule === "Financial Performance" || 
+        a.category === "Financial Performance" ||
+        a.sourceCategory?.includes("Financial")
+      );
+      reportData.actions = financialActions.map(a => ({
+        title: a.title,
+        description: a.description,
+        status: a.status,
+        dueDate: a.dueDate,
+        assignedTo: a.assignedTo,
+        category: a.category,
+        sourceKpi: a.sourceKpi,
+        meetingTitle: a.meetingTitle,
+      }));
+    }
+
+    // Generate the Word document
+    const htmlContent = generateWordHTML(reportData, includeCharts, includeAnalysis);
+    
+    // Create the download
+    const blob = new Blob([htmlContent], { 
+      type: "application/msword;charset=utf-8" 
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${reportTitle.replace(/[^a-zA-Z0-9]/g, "_")}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setGenerating(false);
+    onClose();
+  };
+
+  const generateWordHTML = (data, includeCharts, includeAnalysis) => {
+    const statusColor = (key) => {
+      if (key === "green") return "#166534";
+      if (key === "amber") return "#92400e";
+      if (key === "red") return "#991b1b";
+      return "#6b5b55";
+    };
+
+    const statusBg = (key) => {
+      if (key === "green") return "#f0fdf4";
+      if (key === "amber") return "#fffbeb";
+      if (key === "red") return "#fef2f2";
+      return "#f2eeec";
+    };
+
+    const fmtVal = (v, units) => {
+      if (v === null || v === undefined || v === "") return "—";
+      if (units === "%") return `${trimNum(Number(v))}%`;
+      if (units === "×") return `${Number(v).toFixed(2)}×`;
+      if (units === "R") {
+        const n = Number(v);
+        if (n >= 1_000_000) return `R ${(n / 1_000_000).toFixed(1)}m`;
+        if (n >= 1_000) return `R ${(n / 1_000).toFixed(1)}k`;
+        return `R ${n.toFixed(0)}`;
+      }
+      if (units && !["#","%","R","×"].includes(units)) return `${trimNum(Number(v))} ${units}`;
+      return trimNum(Number(v));
+    };
+
+    const kpiRows = (kpis) => {
+      if (!kpis.length) return "";
+      let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:10pt; margin:8px 0;">
           <thead>
-            <tr style={{ background: T.header, color: "#fff" }}>
-              {cols.map(c => <th key={c.key} style={{ ...th, textAlign: c.align || "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>{c.label}</th>)}
-              <th style={{ ...th, textAlign: "center" }}>Action</th>
+            <tr style="background:#241813; color:#fff;">
+              <th style="padding:6px 10px; text-align:left; border:1px solid #ddd;">KPI</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Units</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Budget</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Actual</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Variance</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Status</th>
             </tr>
           </thead>
-          <tbody>
-            {data.map((row, idx) => (
-              <tr key={idx} style={{ background: idx % 2 ? T.panel : T.bg }}>
-                {cols.map(c => {
-                  // Get the value from nested path if needed
-                  let value = row[c.key];
-                  if (c.key.startsWith("details.")) {
-                    const sub = c.key.split(".")[1];
-                    value = row.details?.[sub] ?? "";
-                  }
-                  return (
-                    <td key={c.key} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                      {c.type === "select" ? (
-                        <select value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell}>
-                          {c.options.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : c.type === "date" ? (
-                        <input type="date" value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
-                      ) : c.type === "text" ? (
-                        <input value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} placeholder={c.placeholder || ""} />
-                      ) : c.type === "number" ? (
-                        <input type="text" value={value ? formatDisplayNumber(parseNumberInput(value) || 0) : ""} 
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            const num = parseNumberInput(raw);
-                            updateFn(idx, c.key, num !== null ? String(num) : raw);
-                          }} style={cell} />
-                      ) : (
-                        <input type="text" value={value || ""} onChange={(e) => updateFn(idx, c.key, e.target.value)} style={cell} />
-                      )}
-                    </td>
-                  );
-                })}
-                <td style={{ padding: "4px 8px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
-                  <button onClick={() => removeFn(idx)} style={{ ...btnQuiet, padding: "4px 8px", color: T.red }}><Trash2 size={14} /></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          <tbody>`;
+      kpis.forEach((k, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        html += `
+          <tr style="background:${bg};">
+            <td style="padding:6px 10px; border:1px solid #ddd; font-weight:500;">${k.name}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${k.units}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(k.budget, k.units)}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; font-weight:600;">${fmtVal(k.actual, k.units)}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${k.variance !== null && k.variance >= 0 ? '#166534' : '#991b1b'};">${k.variance !== null ? fmtVal(k.variance, k.units) : "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">
+              <span style="background:${statusBg(k.statusKey)}; color:${statusColor(k.statusKey)}; padding:2px 12px; border-radius:12px; font-weight:600; font-size:9pt;">${k.status}</span>
+            </td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+      return html;
+    };
+
+    // Build sections HTML
+    let sectionsHtml = "";
+    data.sections.forEach(section => {
+      sectionsHtml += `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">${section.name}</h2>`;
+      
+      section.categories.forEach(cat => {
+        if (cat.kpis.length) {
+          sectionsHtml += `
+            <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">${cat.name}</h3>
+            ${kpiRows(cat.kpis)}
+          `;
+        }
+      });
+    });
+
+    // Equity section
+    let equityHtml = "";
+    if (data.equity && (data.equity.dividends.length || data.equity.investors.length)) {
+      equityHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Equity Structure</h2>`;
+      
+      if (data.equity.dividends.length) {
+        let divRows = "";
+        data.equity.dividends.forEach((d, i) => {
+          const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+          divRows += `
+            <tr style="background:${bg};">
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${d.year}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">R${(d.amountPerShare || 0).toFixed(2)}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${(d.totalShares || 0).toLocaleString()}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">R${(d.totalIssued || 0).toFixed(2)}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${d.paymentDate || "—"}</td>
+            </tr>`;
+        });
+        equityHtml += `
+          <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">Dividend History</h3>
+          <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+            <thead><tr style="background:#241813; color:#fff;">
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Year</th>
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Amount/Share</th>
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Total Shares</th>
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Total Issued</th>
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Payment Date</th>
+            </tr></thead>
+            <tbody>${divRows}</tbody>
+          </table>`;
+      }
+
+      if (data.equity.investors.length) {
+        let invRows = "";
+        const totalShares = data.equity.investors.reduce((s, inv) => s + inv.shares, 0);
+        data.equity.investors.forEach((inv, i) => {
+          const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+          const pct = totalShares > 0 ? ((inv.shares / totalShares) * 100).toFixed(1) : 0;
+          invRows += `
+            <tr style="background:${bg};">
+              <td style="padding:4px 8px; border:1px solid #ddd;">${inv.name}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${pct}%</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">R${(inv.investment || 0).toFixed(1)}</td>
+            </tr>`;
+        });
+        equityHtml += `
+          <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">Cap Table</h3>
+          <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+            <thead><tr style="background:#241813; color:#fff;">
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Investor</th>
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Shares</th>
+              <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Investment</th>
+            </tr></thead>
+            <tbody>${invRows}</tbody>
+          </table>`;
+      }
+    }
+
+    // Loans section
+    let loansHtml = "";
+    if (data.loans && data.loans.length) {
+      let loanRows = "";
+      let totalScheduled = 0, totalPaid = 0;
+      data.loans.forEach((l, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        const scheduled = parseFloat(l.scheduled) || 0;
+        const paid = parseFloat(l.paid) || 0;
+        const varAmount = paid - scheduled;
+        totalScheduled += scheduled;
+        totalPaid += paid;
+        loanRows += `
+          <tr style="background:${bg};">
+            <td style="padding:4px 8px; border:1px solid #ddd;">${l.name}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">R${scheduled.toFixed(0)}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">R${paid.toFixed(0)}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${varAmount <= 0 ? '#166534' : '#991b1b'};">R${varAmount.toFixed(0)}</td>
+          </tr>`;
+      });
+      const totalVar = totalPaid - totalScheduled;
+      loansHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Loan Repayments</h2>
+        <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+          <thead><tr style="background:#241813; color:#fff;">
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Loan Name</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Scheduled</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Paid</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Variance</th>
+          </tr></thead>
+          <tbody>${loanRows}</tbody>
+          <tfoot>
+            <tr style="background:#f4efec;">
+              <td style="padding:4px 8px; border:1px solid #ddd; font-weight:700;">Total</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:700;">R${totalScheduled.toFixed(0)}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:700;">R${totalPaid.toFixed(0)}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:700; color:${totalVar <= 0 ? '#166534' : '#991b1b'};">R${totalVar.toFixed(0)}</td>
+            </tr>
+          </tfoot>
+        </table>`;
+    }
+
+    // Balance Sheet section
+    let bsHtml = "";
+    if (data.balanceSheet && data.balanceSheet.hasData) {
+      const bs = data.balanceSheet;
+      bsHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Balance Sheet</h2>
+        <p style="font-size:10pt; color:#6b5b55;">As at ${bs.month}</p>
+        <table style="width:60%; border-collapse:collapse; font-size:10pt; margin:8px 0;">
+          <tr style="background:#241813; color:#fff;">
+            <th style="padding:6px 12px; border:1px solid #ddd; text-align:left;">Item</th>
+            <th style="padding:6px 12px; border:1px solid #ddd; text-align:right;">Amount (R)</th>
+          </tr>
+          <tr style="background:#faf8f7;">
+            <td style="padding:6px 12px; border:1px solid #ddd;">Total Assets</td>
+            <td style="padding:6px 12px; border:1px solid #ddd; text-align:right; font-weight:600;">${fmtVal(bs.totals.assets, "R")}</td>
+          </tr>
+          <tr style="background:#ffffff;">
+            <td style="padding:6px 12px; border:1px solid #ddd; padding-left:20px;">Current Assets</td>
+            <td style="padding:6px 12px; border:1px solid #ddd; text-align:right;">${fmtVal(bs.totals.currentAssets, "R")}</td>
+          </tr>
+          <tr style="background:#faf8f7;">
+            <td style="padding:6px 12px; border:1px solid #ddd; padding-left:20px;">Cash</td>
+            <td style="padding:6px 12px; border:1px solid #ddd; text-align:right;">${fmtVal(bs.totals.cash, "R")}</td>
+          </tr>
+          <tr style="background:#ffffff;">
+            <td style="padding:6px 12px; border:1px solid #ddd;">Total Liabilities</td>
+            <td style="padding:6px 12px; border:1px solid #ddd; text-align:right; font-weight:600;">${fmtVal(bs.totals.liabilities, "R")}</td>
+          </tr>
+          <tr style="background:#faf8f7;">
+            <td style="padding:6px 12px; border:1px solid #ddd; padding-left:20px;">Current Liabilities</td>
+            <td style="padding:6px 12px; border:1px solid #ddd; text-align:right;">${fmtVal(bs.totals.currentLiabilities, "R")}</td>
+          </tr>
+          <tr style="background:#ffffff;">
+            <td style="padding:6px 12px; border:1px solid #ddd;">Total Equity</td>
+            <td style="padding:6px 12px; border:1px solid #ddd; text-align:right; font-weight:600;">${fmtVal(bs.totals.equity, "R")}</td>
+          </tr>
+          <tr style="background:#f4efec; font-weight:700;">
+            <td style="padding:6px 12px; border:1px solid #ddd;">Net Asset Value</td>
+            <td style="padding:6px 12px; border:1px solid #ddd; text-align:right;">${fmtVal((bs.totals.assets || 0) - (bs.totals.liabilities || 0), "R")}</td>
+          </tr>
         </table>
-        <div style={{ padding: "8px 12px", background: T.panel }}>
-          <button onClick={addFn} style={btnPrimary}><Plus size={12} /> Add</button>
+        <p style="font-size:9pt; color:#6b5b55;">* Current Ratio: ${Number.isFinite(bs.totals.currentAssets) && Number.isFinite(bs.totals.currentLiabilities) && bs.totals.currentLiabilities !== 0 ? (bs.totals.currentAssets / bs.totals.currentLiabilities).toFixed(2) + "×" : "—"}</p>
+      `;
+    }
+
+    // Analysis section
+    let analysisHtml = "";
+    if (includeAnalysis) {
+      analysisHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Analysis & Observations</h2>
+        <div style="font-size:10pt; line-height:1.6;">`;
+      
+      data.sections.forEach(section => {
+        section.categories.forEach(cat => {
+          cat.kpis.forEach(k => {
+            const status = k.statusKey;
+            if (status === "red" || status === "amber") {
+              analysisHtml += `
+                <div style="background:${statusBg(status)}; padding:8px 12px; margin:6px 0; border-radius:4px; border-left:3px solid ${statusColor(status)};">
+                  <strong>${k.name}</strong> — ${k.status}
+                  ${k.variance !== null ? ` (${k.variance >= 0 ? "+" : ""}${fmtVal(k.variance, k.units)})` : ""}
+                  ${k.notes ? `<br><span style="color:#6b5b55; font-size:9pt;">Note: ${k.notes}</span>` : ""}
+                </div>
+              `;
+            }
+          });
+        });
+      });
+
+      // Summary stats
+      const allKpis = data.sections.flatMap(s => 
+        s.categories.flatMap(c => c.kpis || [])
+      );
+      const reds = allKpis.filter(k => k.statusKey === "red");
+      const ambers = allKpis.filter(k => k.statusKey === "amber");
+      const greens = allKpis.filter(k => k.statusKey === "green");
+      
+      analysisHtml += `
+        <div style="background:#faf8f7; padding:12px 16px; margin:12px 0; border-radius:6px;">
+          <p><strong>Summary:</strong> ${greens.length} on budget · ${ambers.length} needs attention · ${reds.length} critical</p>
+          ${reds.length ? `<p style="color:#991b1b;"><strong>Critical items:</strong> ${reds.map(k => k.name).join(", ")}</p>` : ""}
+          ${ambers.length ? `<p style="color:#92400e;"><strong>Needs attention:</strong> ${ambers.map(k => k.name).join(", ")}</p>` : ""}
+          ${reds.length === 0 && ambers.length === 0 && greens.length > 0 ? `<p style="color:#166534;">All KPIs are on budget.</p>` : ""}
+        </div>`;
+      analysisHtml += `</div>`;
+    }
+
+    // Actions section
+    let actionsHtml = "";
+    if (includeActions && data.actions.length) {
+      let actionRows = "";
+      data.actions.forEach(a => {
+        const statusColors = { "Done": "#166534", "In Progress": "#92400e", "Not Done": "#991b1b" };
+        const color = statusColors[a.status] || "#6b5b55";
+        actionRows += `
+          <tr>
+            <td style="padding:6px 10px; border:1px solid #ddd;">${a.title}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; font-size:9pt;">${a.description || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${a.assignedTo || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${a.dueDate || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${color}; font-weight:600;">${a.status}</td>
+          </tr>`;
+      });
+      actionsHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Actions</h2>
+        <p style="font-size:10pt; color:#6b5b55;">${data.actions.length} actions related to Financial Performance</p>
+        <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+          <thead><tr style="background:#241813; color:#fff;">
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Action</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Description</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Owner</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Due Date</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Status</th>
+          </tr></thead>
+          <tbody>${actionRows}</tbody>
+        </table>`;
+    }
+
+    return `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>${data.title}</title>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #2d201c; }
+          h1 { color: #2d201c; font-size: 22pt; font-weight: 600; margin-bottom: 4px; }
+          .subtitle { color: #6b5b55; font-size: 11pt; margin-bottom: 24px; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          @page { margin: 2cm; }
+        </style>
+      </head>
+      <body>
+        <h1>${data.title}</h1>
+        <div class="subtitle">
+          Generated ${new Date(data.generated).toLocaleDateString()} · ${data.period} · FY ${data.financialYear}
+          <br>${data.userName}
         </div>
-      </div>
-    );
 
-    return (
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <span style={{ fontSize: "12.5px", color: eqSaveState === "saved" ? T.green : T.muted }}>
-            {eqSaveState === "saving" ? "Saving…" : eqSaveState === "saved" ? "Saved" : "Edits save automatically"}
-          </span>
-        </div>
+        ${data.summary ? `
+          <div style="background:#faf8f7; padding:12px 16px; border-radius:6px; margin-bottom:16px;">
+            <p style="font-size:11pt; margin:0;">
+              <strong>${data.summary.totalKpis} KPIs</strong> across ${data.summary.tabs.length} sections
+              · ${data.summary.statusCounts.green} on budget
+              · ${data.summary.statusCounts.amber} needs attention
+              · ${data.summary.statusCounts.red} critical
+            </p>
+          </div>
+        ` : ""}
 
-        <h5 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "0 0 10px" }}>Dividend History</h5>
-        {renderTable(
-          localDividends,
-          [
-            { key: "year", label: "Year", type: "number" },
-            { key: "amountPerShare", label: "Amount/Share", type: "number" },
-            { key: "totalShares", label: "Total Shares", type: "number" },
-            { key: "totalIssued", label: "Total Issued", type: "number" },
-            { key: "paymentDate", label: "Payment Date", type: "date" },
-            { key: "notes", label: "Notes", type: "text" },
-          ],
-          updateDividend, addDividend, removeDividend
-        )}
+        ${sectionsHtml}
+        ${loansHtml}
+        ${equityHtml}
+        ${bsHtml}
+        ${analysisHtml}
+        ${actionsHtml}
 
-        <h5 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "20px 0 10px" }}>Cap Table</h5>
-        {renderTable(
-          localInvestors,
-          [
-            { key: "name", label: "Investor", type: "text" },
-            { key: "shares", label: "Shares", type: "number" },
-            { key: "investment", label: "Investment (RM)", type: "number" },
-          ],
-          updateInvestor, addInvestor, removeInvestor
-        )}
-
-        <h5 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "20px 0 10px" }}>IRR Investments</h5>
-        {renderTable(
-          localIrr,
-          [
-            { key: "name", label: "Project", type: "text" },
-            { key: "irr", label: "IRR %", type: "number" },
-            { key: "details.initialInvestment", label: "Initial Investment", type: "text" },
-            { key: "details.duration", label: "Duration", type: "text" },
-            { key: "riskRating", label: "Risk Rating", type: "select", options: ["Low", "Medium", "High"] },
-          ],
-          updateIrr, addIrr, removeIrr
-        )}
-      </div>
-    );
+        <p style="color:#8a7a74; font-size:8pt; text-align:center; margin-top:40px; border-top:1px solid #ded8d4; padding-top:16px;">
+          Financial Performance Report · Generated from RAPS Platform
+        </p>
+      </body>
+      </html>
+    `;
   };
 
-  // ── Render ──
-  // Always show the section selector at the top with all options
   return (
-    <Modal title="Add Data" subtitle={`Editing ${section === "kpi" ? "Financial KPIs" : section === "equity" ? "Equity Structure" : section === "loans" ? "Loan Repayments" : "Balance Sheet"}`} icon={<Database size={17} />}
-      onClose={onClose} width={900}
+    <Modal title="Generate Financial Report" subtitle="Select what to include in the Word document" icon={<FileText size={17} />} onClose={onClose} width={680}
+      footer={<> 
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={generateReport} disabled={generating || !Object.values(selectedTabs).some(v => v)} 
+          style={{ ...btnPrimary, opacity: generating || !Object.values(selectedTabs).some(v => v) ? 0.6 : 1 }}>
+          {generating ? "Generating..." : <><Download size={14} /> Generate Report</>}
+        </button>
+      </>}>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Report Title</label>
+        <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} style={inputS} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+        <div>
+          <label style={labelS}>Period</label>
+          <select value={periodForReport} onChange={(e) => setPeriodForReport(e.target.value)} style={selectS}>
+            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Financial Year</label>
+          <div style={{ padding: "9px 11px", background: T.panel, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", fontSize: "13.5px", color: T.body }}>
+            FY {fyLabel(fy.startYear, fy.startMonth)}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Sections to include</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          {tabs.map((t) => (
+            <label key={t.id} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+              <input type="checkbox" checked={selectedTabs[t.id]} 
+                onChange={() => setSelectedTabs(p => ({ ...p, [t.id]: !p[t.id] }))} />
+              {t.name}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Include</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeSummary} onChange={() => setIncludeSummary(!includeSummary)} />
+            Summary header
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeCharts} onChange={() => setIncludeCharts(!includeCharts)} />
+            Charts (static view)
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeAnalysis} onChange={() => setIncludeAnalysis(!includeAnalysis)} />
+            Analysis & observations
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeEquity} onChange={() => setIncludeEquity(!includeEquity)} />
+            Equity Structure
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeLoans} onChange={() => setIncludeLoans(!includeLoans)} />
+            Loan Repayments
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeBalanceSheet} onChange={() => setIncludeBalanceSheet(!includeBalanceSheet)} />
+            Balance Sheet snapshot
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeActions} onChange={() => setIncludeActions(!includeActions)} />
+            Actions
+          </label>
+        </div>
+      </div>
+
+      <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
+        <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
+        The report will be generated as a Word document (.doc) that can be opened in Microsoft Word, Google Docs, or LibreOffice.
+        {includeCharts && " Charts are rendered as static tables and summaries."}
+      </div>
+    </Modal>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   AddChooser, AddDataWizard, and AddKpiWizard Components
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ─── AddChooser ──────────────────────────────────────────────────────────
+const AddChooser = ({ onClose, onPick }) => {
+  return (
+    <Modal title="Add KPI or Data" subtitle="Choose what you'd like to add to Financial Performance" icon={<Plus size={17} />} onClose={onClose} width={520}
+      footer={<button onClick={onClose} style={btnPrimary}>Cancel</button>}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+        <button onClick={() => onPick("kpi")} style={{ ...cardS, cursor: "pointer", textAlign: "center", transition: "all 0.15s", "&:hover": { borderColor: T.accent } }}>
+          <div style={{ fontSize: "28px", marginBottom: "8px" }}>📊</div>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: T.accent }}>Add KPI</div>
+          <div style={{ fontSize: "12.5px", color: T.muted, marginTop: "4px" }}>Create a custom KPI with its own category</div>
+        </button>
+        <button onClick={() => onPick("data")} style={{ ...cardS, cursor: "pointer", textAlign: "center", transition: "all 0.15s", "&:hover": { borderColor: T.accent } }}>
+          <div style={{ fontSize: "28px", marginBottom: "8px" }}>📝</div>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: T.accent }}>Add Data</div>
+          <div style={{ fontSize: "12.5px", color: T.muted, marginTop: "4px" }}>Enter numbers for KPIs, Balance Sheet, Loans, Equity</div>
+        </button>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── AddKpiWizard ──────────────────────────────────────────────────────
+const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
+  const [form, setForm] = useState({
+    id: uid(), name: "", units: "", category: "", tabId: currentTabId || tabs[0]?.id || "summary",
+    direction: "higher", aggregate: "avg", meaning: "", measured: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (!form.name.trim()) { setError("KPI name is required."); return; }
+    if (!form.units.trim()) { setError("Units are required."); return; }
+    if (!form.category.trim()) { setError("Category is required."); return; }
+    setSaving(true); setError("");
+    try {
+      await onSave({ ...form, kpis: [] });
+      onClose();
+    } catch (err) {
+      setError(errText(err));
+      setSaving(false);
+    }
+  };
+
+  const tabOptions = tabs.filter(t => !t.custom);
+  const catOptions = (tabs.find(t => t.id === form.tabId)?.categories || []).map(c => c.name).filter(Boolean);
+
+  return (
+    <Modal title="Add Custom KPI" subtitle="Define a new metric to track on your dashboard" icon={<Plus size={17} />} onClose={onClose} width={560}
       footer={
         <>
           <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={btnPrimary}>Done</button>
+          <button onClick={onClose} style={btnGhost}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>{saving ? "Saving..." : "Create KPI"}</button>
         </>
-      }
-    >
-      {/* Section selector - always visible with all options */}
-      <div style={{ marginBottom: "16px" }}>
-        <label style={labelS}>Section</label>
-        <select value={section} onChange={(e) => setSection(e.target.value)} style={selectS}>
-          <option value="kpi">Financial KPIs</option>
-          <option value="equity">Equity Structure</option>
-          <option value="loans">Loan Repayments</option>
-          <option value="balanceSheet">Balance Sheet</option>
-        </select>
+      }>
+      {error && <div style={{ color: T.red, marginBottom: "12px", fontSize: "13px", background: T.redBg, padding: "10px 12px", borderRadius: "8px" }}>{error}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+        <div>
+          <label style={labelS}>KPI Name *</label>
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputS} />
+        </div>
+        <div>
+          <label style={labelS}>Units *</label>
+          <input value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} style={inputS} placeholder="e.g. R, %, ×" />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+        <div>
+          <label style={labelS}>Tab</label>
+          <select value={form.tabId} onChange={(e) => setForm({ ...form, tabId: e.target.value, category: "" })} style={selectS}>
+            {tabOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Category *</label>
+          <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputS} placeholder="New or existing category" list="cat-suggestions" />
+          <datalist id="cat-suggestions">
+            {catOptions.map(c => <option key={c} value={c} />)}
+          </datalist>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+        <div>
+          <label style={labelS}>Direction</label>
+          <select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })} style={selectS}>
+            {DIRECTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Aggregate</label>
+          <select value={form.aggregate} onChange={(e) => setForm({ ...form, aggregate: e.target.value })} style={selectS}>
+            <option value="avg">Average across periods</option>
+            <option value="sum">Sum across periods</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ marginBottom: "12px" }}>
+        <label style={labelS}>Meaning</label>
+        <textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })} style={{ ...inputS, resize: "vertical" }} placeholder="What does this KPI tell you about the business?" />
+      </div>
+      <div>
+        <label style={labelS}>How is it measured?</label>
+        <textarea rows="3" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })} style={{ ...inputS, resize: "vertical" }} placeholder="e.g. =SUM(Sales) - SUM(COGS)" />
+      </div>
+    </Modal>
+  );
+};
+
+// ─── AddDataWizard ──────────────────────────────────────────────────────
+const AddDataWizard = ({ tabs, fy, docs, currentTabId, prefs, onSavePrefs, onBack, onClose, onSaveField, onSaveBalanceSheetCell, onSaveLoans, onSaveDividends, onSaveCapTable, dividends, investors, irrInvestments, loans, readOnly }) => {
+  const [mode, setMode] = useState(prefs?.mode || "kpi");
+  const [year, setYear] = useState(prefs?.year || fy.startYear);
+  const [monthIndex, setMonthIndex] = useState(prefs?.monthIndex ?? new Date().getMonth());
+  const [kpiId, setKpiId] = useState(prefs?.kpiId || "");
+  const [categoryName, setCategoryName] = useState("");
+  const [field, setField] = useState("actual");
+  const [raw, setRaw] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  const months = useMemo(() => fyMonths(year, fy.startMonth), [year, fy]);
+  const currentMonth = months.find((m, i) => i === monthIndex) || months[0];
+
+  // Get all KPIs across all tabs
+  const allKpis = useMemo(() => {
+    const list = [];
+    tabs.forEach(tab => {
+      if (tab.custom) return;
+      tab.categories.forEach(cat => {
+        (cat.kpis || []).forEach(k => {
+          list.push({ ...k, tabName: tab.name, categoryName: cat.name });
+        });
+      });
+    });
+    return list;
+  }, [tabs]);
+
+  const selectedKpi = allKpis.find(k => k.id === kpiId);
+
+  // ─── KPI data entry ──────────────────────────────────────────────────
+  const handleKpiSave = async () => {
+    if (!selectedKpi) { setMessage("Select a KPI first."); return; }
+    const num = parseNumberInput(raw);
+    if (num === null) { setMessage("Please enter a valid number."); return; }
+    setSaving(true); setMessage("");
+    try {
+      await onSaveField({
+        kpi: selectedKpi,
+        which: field,
+        raw: String(num),
+        year: currentMonth.year,
+        monthIndex: currentMonth.month,
+      });
+      setSuccess(true);
+      setMessage(`${selectedKpi.name} ${field} saved for ${currentMonth.long}`);
+      setTimeout(() => { setSuccess(false); setMessage(""); }, 2500);
+      onSavePrefs({ mode, year, monthIndex, kpiId });
+    } catch (err) {
+      setMessage(`Error: ${errText(err)}`);
+    } finally { setSaving(false); }
+  };
+
+  // ─── Balance Sheet data entry ────────────────────────────────────────
+  const [bsPath, setBsPath] = useState("");
+  const [bsKey, setBsKey] = useState("");
+  const [bsRaw, setBsRaw] = useState("");
+  const [bsSection, setBsSection] = useState("assets");
+  const bsSections = ["assets", "liabilities", "equity"];
+
+  const handleBsSave = async () => {
+    if (!bsPath || !bsKey) { setMessage("Select a path and a key first."); return; }
+    const num = parseNumberInput(bsRaw);
+    if (num === null) { setMessage("Please enter a valid number."); return; }
+    setSaving(true); setMessage("");
+    try {
+      await onSaveBalanceSheetCell({
+        year: currentMonth.year,
+        monthIndex: currentMonth.month,
+        path: bsPath,
+        key: bsKey,
+        raw: String(num),
+      });
+      setSuccess(true);
+      setMessage(`Balance Sheet cell saved for ${currentMonth.long}`);
+      setTimeout(() => { setSuccess(false); setMessage(""); }, 2500);
+    } catch (err) {
+      setMessage(`Error: ${errText(err)}`);
+    } finally { setSaving(false); }
+  };
+
+  // ─── Loans data entry ────────────────────────────────────────────────
+  const [loanName, setLoanName] = useState("");
+  const [loanScheduled, setLoanScheduled] = useState("");
+  const [loanPaid, setLoanPaid] = useState("");
+
+  const handleLoanSave = async () => {
+    if (!loanName.trim()) { setMessage("Loan name is required."); return; }
+    const scheduled = parseNumberInput(loanScheduled);
+    const paid = parseNumberInput(loanPaid);
+    if (scheduled === null && paid === null) { setMessage("Enter at least one amount."); return; }
+    setSaving(true); setMessage("");
+    try {
+      const newLoans = [...loans, { name: loanName.trim(), scheduled: scheduled !== null ? String(scheduled) : "", paid: paid !== null ? String(paid) : "" }];
+      await onSaveLoans(newLoans);
+      setSuccess(true);
+      setMessage(`Loan "${loanName}" added.`);
+      setLoanName(""); setLoanScheduled(""); setLoanPaid("");
+      setTimeout(() => { setSuccess(false); setMessage(""); }, 2500);
+    } catch (err) {
+      setMessage(`Error: ${errText(err)}`);
+    } finally { setSaving(false); }
+  };
+
+  // ─── Dividends data entry ────────────────────────────────────────────
+  const [divYear, setDivYear] = useState(new Date().getFullYear());
+  const [divAmount, setDivAmount] = useState("");
+  const [divShares, setDivShares] = useState("");
+  const [divPaymentDate, setDivPaymentDate] = useState("");
+
+  const handleDividendSave = async () => {
+    const amount = parseNumberInput(divAmount);
+    const shares = parseNumberInput(divShares);
+    if (amount === null || shares === null) { setMessage("Amount and shares are required."); return; }
+    setSaving(true); setMessage("");
+    try {
+      const newDividends = [...dividends, {
+        year: divYear,
+        amountPerShare: amount,
+        totalShares: shares,
+        totalIssued: amount * shares,
+        paymentDate: divPaymentDate || "",
+        notes: "",
+      }];
+      await onSaveDividends(newDividends);
+      setSuccess(true);
+      setMessage(`Dividend for ${divYear} added.`);
+      setDivAmount(""); setDivShares(""); setDivPaymentDate("");
+      setTimeout(() => { setSuccess(false); setMessage(""); }, 2500);
+    } catch (err) {
+      setMessage(`Error: ${errText(err)}`);
+    } finally { setSaving(false); }
+  };
+
+  // ─── Cap Table data entry ────────────────────────────────────────────
+  const [invName, setInvName] = useState("");
+  const [invShares, setInvShares] = useState("");
+  const [invInvestment, setInvInvestment] = useState("");
+
+  const handleInvestorSave = async () => {
+    if (!invName.trim()) { setMessage("Investor name is required."); return; }
+    const shares = parseNumberInput(invShares);
+    const investment = parseNumberInput(invInvestment);
+    if (shares === null) { setMessage("Shares are required."); return; }
+    setSaving(true); setMessage("");
+    try {
+      const newInvestors = [...investors, { name: invName.trim(), shares, investment: investment || 0 }];
+      await onSaveCapTable({ investors: newInvestors, irrInvestments });
+      setSuccess(true);
+      setMessage(`Investor "${invName}" added.`);
+      setInvName(""); setInvShares(""); setInvInvestment("");
+      setTimeout(() => { setSuccess(false); setMessage(""); }, 2500);
+    } catch (err) {
+      setMessage(`Error: ${errText(err)}`);
+    } finally { setSaving(false); }
+  };
+
+  // ─── IRR data entry ──────────────────────────────────────────────────
+  const [irrName, setIrrName] = useState("");
+  const [irrValue, setIrrValue] = useState("");
+  const [irrInitial, setIrrInitial] = useState("");
+  const [irrDuration, setIrrDuration] = useState("");
+  const [irrRisk, setIrrRisk] = useState("Medium");
+
+  const handleIrrtSave = async () => {
+    if (!irrName.trim()) { setMessage("Project name is required."); return; }
+    const irr = parseNumberInput(irrValue);
+    if (irr === null) { setMessage("IRR percentage is required."); return; }
+    setSaving(true); setMessage("");
+    try {
+      const newIrr = [...irrInvestments, {
+        name: irrName.trim(),
+        irr,
+        details: {
+          initialInvestment: irrInitial || "",
+          duration: irrDuration || "",
+          riskRating: irrRisk,
+        },
+      }];
+      await onSaveCapTable({ investors, irrInvestments: newIrr });
+      setSuccess(true);
+      setMessage(`Investment "${irrName}" added.`);
+      setIrrName(""); setIrrValue(""); setIrrInitial(""); setIrrDuration("");
+      setTimeout(() => { setSuccess(false); setMessage(""); }, 2500);
+    } catch (err) {
+      setMessage(`Error: ${errText(err)}`);
+    } finally { setSaving(false); }
+  };
+
+  const savePrefs = (patch) => {
+    onSavePrefs({ mode, year, monthIndex, kpiId, ...patch });
+  };
+
+  useEffect(() => {
+    savePrefs({ mode, year, monthIndex, kpiId });
+  }, [mode, year, monthIndex, kpiId]);
+
+  return (
+    <Modal title="Add Data" subtitle="Enter numbers for KPIs, Balance Sheet, Loans, or Equity" icon={<Database size={17} />} onClose={onClose} width={620}
+      footer={
+        <>
+          <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+          <button onClick={onClose} style={btnGhost}>Close</button>
+        </>
+      }>
+
+      {/* Mode selector */}
+      <div style={{ display: "flex", gap: "4px", marginBottom: "16px", background: T.raised, borderRadius: "10px", padding: "4px", flexWrap: "wrap" }}>
+        {["kpi", "bs", "loans", "dividends", "investors", "irr"].map(m => {
+          const on = m === mode;
+          const labels = { kpi: "KPI", bs: "Balance Sheet", loans: "Loans", dividends: "Dividends", investors: "Cap Table", irr: "IRR Investments" };
+          return (
+            <button key={m} onClick={() => setMode(m)}
+              style={{ padding: "8px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: on ? 600 : 500,
+                border: "none", cursor: "pointer", fontFamily: "inherit", flex: "1 1 auto",
+                background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
+                boxShadow: on ? "0 1px 4px rgba(45,32,28,0.12)" : "none" }}>
+              {labels[m]}
+            </button>
+          );
+        })}
       </div>
 
-      {section === "kpi" && (
+      {/* Month/Year selector for modes that need it */}
+      {(mode === "kpi" || mode === "bs") && (
+        <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ minWidth: "180px" }}>
+            <label style={labelS}>Month</label>
+            <select value={monthIndex} onChange={(e) => { setMonthIndex(Number(e.target.value)); setSuccess(false); setMessage(""); }}
+              style={selectS}>
+              {months.map((m, i) => <option key={i} value={i}>{m.long}</option>)}
+            </select>
+          </div>
+          <div style={{ minWidth: "100px" }}>
+            <label style={labelS}>Year</label>
+            <select value={year} onChange={(e) => { setYear(Number(e.target.value)); setSuccess(false); setMessage(""); }}
+              style={selectS}>
+              {[fy.startYear - 1, fy.startYear, fy.startYear + 1, fy.startYear + 2].map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          <span style={{ fontSize: "12.5px", color: T.muted, paddingBottom: "9px" }}>
+            FY {fyLabel(year, fy.startMonth)}
+          </span>
+        </div>
+      )}
+
+      {/* ─── KPI mode ────────────────────────────────────────────────── */}
+      {mode === "kpi" && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div>
-              <label style={labelS}>Financial year</label>
-              <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
-                {yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}
+              <label style={labelS}>KPI</label>
+              <select value={kpiId} onChange={(e) => { setKpiId(e.target.value); setSuccess(false); setMessage(""); }}
+                style={selectS}>
+                <option value="">Select a KPI</option>
+                {allKpis.map(k => <option key={k.id} value={k.id}>{k.name} ({k.units})</option>)}
               </select>
             </div>
             <div>
-              <label style={labelS}>Section</label>
-              <select value={tabId || ""} onChange={(e) => setTabId(e.target.value)} style={selectS}>
-                {editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <label style={labelS}>Field</label>
+              <select value={field} onChange={(e) => setField(e.target.value)} style={selectS}>
+                <option value="actual">Actual</option>
+                <option value="budget">Budget</option>
               </select>
             </div>
           </div>
-
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
             <div style={{ flex: 1 }}>
-              <label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label>
-              <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
-                {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
-              </select>
+              <label style={labelS}>Value</label>
+              <input value={raw} onChange={(e) => setRaw(e.target.value)} style={inputS} placeholder="Enter a number..." />
             </div>
-            <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
-              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-            <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
-              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+            <button onClick={handleKpiSave} disabled={saving || !kpiId} style={{ ...btnPrimary, opacity: saving || !kpiId ? 0.6 : 1, marginBottom: "1px" }}>
+              {saving ? "Saving..." : "Save"}
+            </button>
           </div>
-
-          <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-            <Info size={12} /> Calculated KPIs are shown greyed — they follow from what you type above them.
-          </div>
-
-          <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-            <div style={{ maxHeight: "44vh", overflowY: "auto" }}>
-              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
-                    <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
-                    <th style={{ ...th, textAlign: "center", width: "24%" }}>Budget</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ kpi, category }, i) => {
-                    const derivedActual = !kpi.custom && kpi.actual ? kpi.actual(ctx) : null;
-                    const derivedBudget = !kpi.custom && kpi.budget ? kpi.budget(ctx) : null;
-                    const bg = i % 2 ? T.panel : T.bg;
-                    const isEditableActual = isEditable(kpi, "actual");
-                    const isEditableBudget = isEditable(kpi, "budget");
-                    const displayActual = getDisplayValue(kpi, "actual");
-                    const displayBudget = getDisplayValue(kpi, "budget");
-                    
-                    return (
-                      <tr key={kpi.id} style={{ background: bg }}>
-                        <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
-                          borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                          <div style={{ fontWeight: 600 }}>{kpi.name}</div>
-                          <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units} · {kpi.field ? "entered" : "calculated"}</div>
-                        </td>
-                        <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                          {isEditableActual ? (
-                            <input type="text" 
-                              value={displayActual}
-                              onChange={(e) => handleInputChange(kpi, "actual", e)}
-                              onFocus={(e) => e.target.select()}
-                              placeholder="—"
-                              style={{ ...cell, borderColor: kpi.units === "%" && displayActual && (parseNumberInput(displayActual) < -100 || parseNumberInput(displayActual) > 100) ? T.red : undefined }} />
-                          ) : (
-                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.muted, padding: "7px 0" }}>
-                              {derivedActual !== null && derivedActual !== undefined ? fmtValue(derivedActual, kpi, { bare: true }) : "—"}
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                          {isEditableBudget ? (
-                            <input type="text" 
-                              value={displayBudget}
-                              onChange={(e) => handleInputChange(kpi, "budget", e)}
-                              onFocus={(e) => e.target.select()}
-                              placeholder="—"
-                              style={{ ...cell, borderColor: kpi.units === "%" && displayBudget && (parseNumberInput(displayBudget) < -100 || parseNumberInput(displayBudget) > 100) ? T.red : undefined }} />
-                          ) : (
-                            <div style={{ textAlign: "center", fontSize: "13.5px", color: T.faint, padding: "7px 0" }}>
-                              {derivedBudget !== null && derivedBudget !== undefined ? fmtValue(derivedBudget, kpi, { bare: true }) : "—"}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {selectedKpi && (
+            <div style={{ marginTop: "8px", fontSize: "12.5px", color: T.muted }}>
+              {selectedKpi.tabName} · {selectedKpi.categoryName} · {selectedKpi.units}
             </div>
-          </div>
+          )}
+          {message && <div style={{ marginTop: "10px", color: success ? T.green : T.red, fontSize: "13px" }}>{message}</div>}
         </>
       )}
 
-      {section === "equity" && <EquityEditor />}
-      {section === "loans" && <LoanEditor />}
-      {section === "balanceSheet" && <BalanceSheetEditor />}
-    </Modal>
-  );
-};
-
-/* ─── Add KPI Wizard (unchanged) ─────────────────────────────────────────── */
-const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
-  const usable = tabs.filter((t) => !t.custom);
-  const [tabId, setTabId] = useState(usable.some((t) => t.id === currentTabId) ? currentTabId : usable[0]?.id);
-  const [catChoice, setCatChoice] = useState("");
-  const [newCat, setNewCat] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", units: "R", direction: "higher", aggregate: "sum", meaning: "", measured: "" });
-
-  const tab = usable.find((t) => t.id === tabId);
-  const cats = (tab?.categories || []).filter((c) => !c.custom);
-  useEffect(() => { if (cats.length && !catChoice) setCatChoice(cats[0].name); }, [tabId]);
-  const creatingCat = catChoice === "__new__";
-  const catName = creatingCat ? newCat.trim() : catChoice;
-  const canSave = form.name.trim() && catName && form.meaning.trim() && form.measured.trim();
-
-  const commit = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    await onSave({
-      id: `custom_${uid().slice(0, 8)}`, tabId, category: catName,
-      name: form.name.trim(), units: form.units, direction: form.direction, aggregate: form.aggregate,
-      meaning: form.meaning.trim(), measured: form.measured.trim(),
-    });
-    setSaving(false); onClose();
-  };
-
-  return (
-    <Modal title="Add KPI" subtitle="A custom metric you capture by hand each month" icon={<Sparkles size={17} />}
-      onClose={onClose} width={720}
-      footer={
+      {/* ─── Balance Sheet mode ──────────────────────────────────────── */}
+      {mode === "bs" && (
         <>
-          <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
-          <div style={{ flex: 1 }} />
-          <button onClick={commit} disabled={!canSave || saving} style={{ ...btnPrimary, opacity: canSave && !saving ? 1 : 0.5 }}>
-            {saving ? "Saving..." : "Create KPI"}
-          </button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Section</label>
+              <select value={bsSection} onChange={(e) => setBsSection(e.target.value)} style={selectS}>
+                {bsSections.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelS}>Path (e.g. assets.bank)</label>
+              <input value={bsPath} onChange={(e) => setBsPath(e.target.value)} style={inputS} placeholder="assets.currentAssets" />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Field name</label>
+              <input value={bsKey} onChange={(e) => setBsKey(e.target.value)} style={inputS} placeholder="e.g. cash" />
+            </div>
+            <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelS}>Value</label>
+                <input value={bsRaw} onChange={(e) => setBsRaw(e.target.value)} style={inputS} placeholder="Number..." />
+              </div>
+              <button onClick={handleBsSave} disabled={saving || !bsPath || !bsKey} style={{ ...btnPrimary, opacity: saving || !bsPath || !bsKey ? 0.6 : 1, marginBottom: "1px" }}>
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize: "12px", color: T.muted, background: T.panel, padding: "8px 12px", borderRadius: "8px" }}>
+            Path examples: assets.currentAssets, liabilities.currentLiabilities, equity.shareCapital
+          </div>
+          {message && <div style={{ marginTop: "10px", color: success ? T.green : T.red, fontSize: "13px" }}>{message}</div>}
         </>
-      }
-    >
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
-        <div>
-          <label style={labelS}>Section</label>
-          <select value={tabId} onChange={(e) => { setTabId(e.target.value); setCatChoice(""); }} style={selectS}>
-            {usable.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={labelS}>Category</label>
-          <select value={catChoice} onChange={(e) => setCatChoice(e.target.value)} style={selectS}>
-            <option value="">Select…</option>
-            {cats.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-            <option value="__new__">＋ New category…</option>
-          </select>
-          {creatingCat && <input value={newCat} onChange={(e) => setNewCat(e.target.value)} style={{ ...inputS, marginTop: "8px" }} placeholder="New category name" />}
-        </div>
-      </div>
-      <div style={{ marginBottom: "14px" }}>
-        <label style={labelS}>KPI name *</label>
-        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputS} placeholder="e.g. Debtor Days" />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-        <div>
-          <label style={labelS}>Units</label>
-          <select value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} style={selectS}>
-            <option value="R">Currency (R)</option><option value="%">Percent (%)</option>
-            <option value="×">Ratio (×)</option><option value="#">Count (#)</option>
-            <option value="days">Days</option><option value="months">Months</option>
-          </select>
-        </div>
-        <div>
-          <label style={labelS}>What counts as good?</label>
-          <select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })} style={selectS}>
-            {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={labelS}>Rolling up</label>
-          <select value={form.aggregate} onChange={(e) => setForm({ ...form, aggregate: e.target.value })} style={selectS}>
-            <option value="sum">SUM the months — rand, counts</option>
-            <option value="avg">AVERAGE the months — rates, ratios</option>
-          </select>
-        </div>
-      </div>
-      <div style={{ marginBottom: "14px" }}>
-        <label style={labelS}>What does this KPI mean? *</label>
-        <textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })} style={{ ...inputS, resize: "vertical" }} placeholder="In plain words — anyone reading the dashboard should get it from this sentence." />
-      </div>
-      <div>
-        <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}><Sigma size={13} /> How is this KPI measured? *</label>
-        <textarea rows="4" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })} style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }} placeholder={"=SUM(TradeReceivables) / SUM(Sales) * 365"} />
-        <p style={{ fontSize: "12px", color: T.muted, marginTop: "7px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-          <Info size={12} /> Use Excel functions and named ranges — SUM, AVERAGE, COUNTIF, SUMIFS, SUMPRODUCT.
-        </p>
-      </div>
+      )}
+
+      {/* ─── Loans mode ──────────────────────────────────────────────── */}
+      {mode === "loans" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Loan Name</label>
+              <input value={loanName} onChange={(e) => setLoanName(e.target.value)} style={inputS} placeholder="e.g. Bank Loan" />
+            </div>
+            <div>
+              <label style={labelS}>Scheduled Amount</label>
+              <input value={loanScheduled} onChange={(e) => setLoanScheduled(e.target.value)} style={inputS} placeholder="0" />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", marginBottom: "12px" }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>Paid Amount</label>
+              <input value={loanPaid} onChange={(e) => setLoanPaid(e.target.value)} style={inputS} placeholder="0" />
+            </div>
+            <button onClick={handleLoanSave} disabled={saving || !loanName.trim()} style={{ ...btnPrimary, opacity: saving || !loanName.trim() ? 0.6 : 1, marginBottom: "1px" }}>
+              {saving ? "Saving..." : "Add Loan"}
+            </button>
+          </div>
+          {loans.length > 0 && (
+            <div style={{ fontSize: "12.5px", color: T.muted, background: T.panel, padding: "8px 12px", borderRadius: "8px" }}>
+              {loans.length} loan{loans.length > 1 ? "s" : ""} saved.
+            </div>
+          )}
+          {message && <div style={{ marginTop: "10px", color: success ? T.green : T.red, fontSize: "13px" }}>{message}</div>}
+        </>
+      )}
+
+      {/* ─── Dividends mode ───────────────────────────────────────────── */}
+      {mode === "dividends" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Year</label>
+              <input type="number" value={divYear} onChange={(e) => setDivYear(Number(e.target.value))} style={inputS} />
+            </div>
+            <div>
+              <label style={labelS}>Amount per Share</label>
+              <input value={divAmount} onChange={(e) => setDivAmount(e.target.value)} style={inputS} placeholder="0.00" />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Total Shares</label>
+              <input value={divShares} onChange={(e) => setDivShares(e.target.value)} style={inputS} placeholder="0" />
+            </div>
+            <div>
+              <label style={labelS}>Payment Date</label>
+              <input type="date" value={divPaymentDate} onChange={(e) => setDivPaymentDate(e.target.value)} style={inputS} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>Notes (optional)</label>
+              <input style={inputS} placeholder="Any notes about this dividend" />
+            </div>
+            <button onClick={handleDividendSave} disabled={saving || !divAmount || !divShares} style={{ ...btnPrimary, opacity: saving || !divAmount || !divShares ? 0.6 : 1, marginBottom: "1px" }}>
+              {saving ? "Saving..." : "Add Dividend"}
+            </button>
+          </div>
+          {dividends.length > 0 && (
+            <div style={{ fontSize: "12.5px", color: T.muted, background: T.panel, padding: "8px 12px", borderRadius: "8px", marginTop: "8px" }}>
+              {dividends.length} dividend{dividends.length > 1 ? "s" : ""} saved.
+            </div>
+          )}
+          {message && <div style={{ marginTop: "10px", color: success ? T.green : T.red, fontSize: "13px" }}>{message}</div>}
+        </>
+      )}
+
+      {/* ─── Cap Table (Investors) mode ──────────────────────────────── */}
+      {mode === "investors" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Investor Name</label>
+              <input value={invName} onChange={(e) => setInvName(e.target.value)} style={inputS} placeholder="e.g. John Doe" />
+            </div>
+            <div>
+              <label style={labelS}>Shares</label>
+              <input value={invShares} onChange={(e) => setInvShares(e.target.value)} style={inputS} placeholder="0" />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>Investment (R)</label>
+              <input value={invInvestment} onChange={(e) => setInvInvestment(e.target.value)} style={inputS} placeholder="0" />
+            </div>
+            <button onClick={handleInvestorSave} disabled={saving || !invName.trim() || !invShares} style={{ ...btnPrimary, opacity: saving || !invName.trim() || !invShares ? 0.6 : 1, marginBottom: "1px" }}>
+              {saving ? "Saving..." : "Add Investor"}
+            </button>
+          </div>
+          {investors.length > 0 && (
+            <div style={{ fontSize: "12.5px", color: T.muted, background: T.panel, padding: "8px 12px", borderRadius: "8px", marginTop: "8px" }}>
+              {investors.length} investor{investors.length > 1 ? "s" : ""} saved.
+            </div>
+          )}
+          {message && <div style={{ marginTop: "10px", color: success ? T.green : T.red, fontSize: "13px" }}>{message}</div>}
+        </>
+      )}
+
+      {/* ─── IRR Investments mode ────────────────────────────────────── */}
+      {mode === "irr" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Project Name</label>
+              <input value={irrName} onChange={(e) => setIrrName(e.target.value)} style={inputS} placeholder="e.g. Project Alpha" />
+            </div>
+            <div>
+              <label style={labelS}>IRR %</label>
+              <input value={irrValue} onChange={(e) => setIrrValue(e.target.value)} style={inputS} placeholder="15.5" />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Initial Investment</label>
+              <input value={irrInitial} onChange={(e) => setIrrInitial(e.target.value)} style={inputS} placeholder="R 100,000" />
+            </div>
+            <div>
+              <label style={labelS}>Duration</label>
+              <input value={irrDuration} onChange={(e) => setIrrDuration(e.target.value)} style={inputS} placeholder="e.g. 3 years" />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>Risk Rating</label>
+              <select value={irrRisk} onChange={(e) => setIrrRisk(e.target.value)} style={selectS}>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+            </div>
+            <button onClick={handleIrrtSave} disabled={saving || !irrName.trim() || !irrValue} style={{ ...btnPrimary, opacity: saving || !irrName.trim() || !irrValue ? 0.6 : 1, marginBottom: "1px" }}>
+              {saving ? "Saving..." : "Add Investment"}
+            </button>
+          </div>
+          {irrInvestments.length > 0 && (
+            <div style={{ fontSize: "12.5px", color: T.muted, background: T.panel, padding: "8px 12px", borderRadius: "8px", marginTop: "8px" }}>
+              {irrInvestments.length} investment{irrInvestments.length > 1 ? "s" : ""} saved.
+            </div>
+          )}
+          {message && <div style={{ marginTop: "10px", color: success ? T.green : T.red, fontSize: "13px" }}>{message}</div>}
+        </>
+      )}
+
     </Modal>
   );
 };
-
-/* ─── Add Chooser ─────────────────────────────────────────────────────────── */
-const AddChooser = ({ onPick, onClose }) => (
-  <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-      {[
-        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and budget figures against the KPIs you already track, or edit Equity Structure, Loans, and Balance Sheet." },
-        { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI", body: "Create a custom metric under any section or category." },
-      ].map((o) => (
-        <button key={o.key} onClick={() => onPick(o.key)}
-          style={{ padding: "22px 20px", borderRadius: "12px", border: `1px solid ${T.lineStrong}`, background: T.bg,
-            cursor: "pointer", textAlign: "left", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: "10px" }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.accentTint; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.lineStrong; e.currentTarget.style.background = T.bg; }}>
-          <span style={{ color: T.accent }}>{o.icon}</span>
-          <span style={{ fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{o.title}</span>
-          <span style={{ fontSize: "13px", color: T.body, lineHeight: 1.5 }}>{o.body}</span>
-        </button>
-      ))}
-    </div>
-  </Modal>
-);
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Main FinancialPerformance Component
+   Main FinancialPerformance Component (continued)
    ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "finPerf.addData.prefs";
 const META_DOC = "financialKpiMeta";
@@ -2678,6 +3114,7 @@ const FinancialPerformance = () => {
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
   const [manageTabs, setManageTabs] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
 
@@ -3046,6 +3483,8 @@ const FinancialPerformance = () => {
     return <div style={{ padding: "80px", textAlign: "center", color: T.body, fontSize: "14px" }}>Loading financial performance…</div>;
   }
 
+  const userName = user?.displayName || user?.email || "User";
+
   return (
     <div style={{ minHeight: "100vh", padding: "28px", boxSizing: "border-box", background: T.bg, color: T.body }}>
       {isInvestorView && (
@@ -3132,6 +3571,10 @@ const FinancialPerformance = () => {
             <Settings2 size={13} /> Manage Tabs
           </button>
         )}
+        <button onClick={() => setShowReport(true)} title="Generate a Word report"
+          style={{ ...btnGhost, marginLeft: "4px", marginBottom: "4px", padding: "6px 14px", fontSize: "12.5px" }}>
+          <FileText size={13} /> Download Report
+        </button>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
@@ -3446,6 +3889,20 @@ const FinancialPerformance = () => {
       {addFlow === "kpi" && <AddKpiWizard tabs={tabs} currentTabId={activeTabId}
         onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
         onSave={async (kpi) => { await persistMeta({ ...meta, custom: [...(meta.custom || []), kpi] }); notify("success", "KPI created."); }} />}
+
+      {showReport && <FinancialReportGenerator 
+        tabs={visibleTabs} 
+        fy={fy} 
+        docs={docs} 
+        meta={meta}
+        period={period}
+        userId={user?.uid}
+        userName={userName}
+        dividends={dividends}
+        investors={investors}
+        irrInvestments={irrInvestments}
+        onClose={() => setShowReport(false)} 
+      />}
     </div>
   );
 };

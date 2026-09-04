@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Bar, Scatter } from "react-chartjs-2";
 import { db, auth, storage } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
@@ -39,6 +39,54 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import {
+  Eye,
+  LineChart as LineChartIcon,
+  Lightbulb,
+  Plus,
+  StickyNote,
+  X,
+  Save,
+  Pencil,
+  Info,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  ChevronLeft,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  ClipboardList,
+  Download,
+  RefreshCw,
+  Columns3,
+  ExternalLink,
+  Square,
+  CheckSquare,
+  ArrowLeft,
+  Calendar,
+  SlidersHorizontal,
+  Database,
+  Sparkles,
+  Sigma,
+  Settings2,
+  EyeOff,
+  Palette,
+  Check,
+  Users,
+  Trash2,
+  TrendingUp,
+  TrendingDown,
+  Settings,
+  FileText,
+  Printer,
+  FileSpreadsheet,
+} from "lucide-react";
+
+import { createPortal } from "react-dom";
 
 // Register ChartJS components
 ChartJS.register(
@@ -137,6 +185,185 @@ const cardS = {
   padding: "14px 16px",
 };
 
+// ─── Filter Dropdown component ──────────────────────────────────────────
+const FilterDropdown = ({ options, value, onChange, onClose }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        onClose?.();
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "All" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
+      >
+        <SlidersHorizontal size={13} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
+              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── InfoTip component ──────────────────────────────────────────────────
+const InfoTip = ({ text, light = false }) => {
+  const [rect, setRect] = useState(null);
+  if (!text) return null;
+  return (
+    <span
+      style={{ display: "inline-flex" }}
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+    >
+      <Info size={13} strokeWidth={2} color={light ? "rgba(255,255,255,0.75)" : T.faint} style={{ cursor: "help" }} />
+      {rect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 110, 12), window.innerWidth - 250),
+              width: "236px",
+              background: T.ink,
+              color: "#fff",
+              fontSize: "12.5px",
+              padding: "10px 12px",
+              borderRadius: "8px",
+              lineHeight: 1.5,
+              zIndex: 3000,
+              pointerEvents: "none",
+              fontWeight: 400,
+              letterSpacing: "normal",
+              textTransform: "none",
+              boxShadow: "0 10px 30px rgba(45,32,28,0.3)",
+            }}
+          >
+            {text}
+          </div>,
+          document.body
+        )}
+    </span>
+  );
+};
+
+// ─── Modal component ────────────────────────────────────────────────────
+const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }) => (
+  <div
+    onClick={onClose}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(45,32,28,0.55)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1400,
+      padding: "20px",
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: T.bg,
+        borderRadius: "14px",
+        width: "100%",
+        maxWidth: `${width}px`,
+        maxHeight: "92vh",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: "0 24px 60px rgba(45,32,28,0.28)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          padding: "18px 22px 14px",
+          borderBottom: `1px solid ${T.line}`,
+        }}
+      >
+        <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
+          {icon && <span style={{ marginTop: "2px", color: T.accent }}>{icon}</span>}
+          <div>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "17px",
+                color: T.accent,
+                fontWeight: 600,
+                letterSpacing: "-0.2px",
+              }}
+            >
+              {title}
+            </h3>
+            {subtitle && <p style={{ margin: "3px 0 0", fontSize: "13px", color: T.body }}>{subtitle}</p>}
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: T.raised,
+            border: "none",
+            cursor: "pointer",
+            color: T.body,
+            width: 30,
+            height: 30,
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <X size={15} />
+        </button>
+      </div>
+      <div style={{ padding: "18px 22px", overflowY: "auto", flex: 1 }}>{children}</div>
+      {footer && (
+        <div
+          style={{
+            padding: "13px 22px",
+            borderTop: `1px solid ${T.line}`,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "10px",
+            alignItems: "center",
+            background: T.panel,
+            borderRadius: "0 0 14px 14px",
+          }}
+        >
+          {footer}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+// ─── createPortal for InfoTip ──────────────────────────────────────────
+// import { createPortal } from "react-dom"; // moved to top
+
 const SECTION_DATA = {
   "strategic-clarity": {
     name: "Strategic Clarity",
@@ -229,7 +456,7 @@ const getMonths = (year) => {
   );
 };
 
-// Key Question Component
+// ─── Key Question Component ─────────────────────────────────────────────
 const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   const [showMore, setShowMore] = useState(false);
 
@@ -329,7 +556,7 @@ const RISK_TYPE_DEFINITIONS = {
     "Risks related to technology infrastructure, cybersecurity, and digital capabilities",
 };
 
-// AI Analysis Component
+// ─── AI Analysis Component ──────────────────────────────────────────────
 const AIAnalysisButton = ({
   visionMissionData,
   userId,
@@ -753,7 +980,305 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   );
 };
 
-// Strategic Clarity Component
+// ─── STRATEGY REPORT GENERATOR ───────────────────────────────────────────
+const StrategyReportGenerator = ({ 
+  section, 
+  data, 
+  onClose, 
+  userId, 
+  userName, 
+  isInvestorView 
+}) => {
+  const [generating, setGenerating] = useState(false);
+  const [reportTitle, setReportTitle] = useState(`Strategy & Execution Report - ${new Date().toLocaleDateString()}`);
+  const [includeVision, setIncludeVision] = useState(true);
+  const [includeCanvas, setIncludeCanvas] = useState(true);
+  const [includeMilestones, setIncludeMilestones] = useState(true);
+  const [includeRisks, setIncludeRisks] = useState(true);
+
+  const generateReport = async () => {
+    setGenerating(true);
+
+    // Build the report data
+    const reportData = {
+      title: reportTitle,
+      generated: new Date().toISOString(),
+      userName: userName || "User",
+      sections: [],
+    };
+
+    // Get data from each section
+    const sections = [];
+
+    // Strategic Clarity
+    if (includeVision && data.visionMission) {
+      sections.push({
+        name: "Strategic Clarity",
+        content: {
+          vision: data.visionMission.vision || "Not provided",
+          mission: data.visionMission.mission || "Not provided",
+          values: data.visionMission.values || [],
+          operatingPrinciples: data.visionMission.operatingPrinciples || [],
+          strategicPriorities: data.visionMission.strategicPriorities || [],
+          strategicHorizon: data.visionMission.strategicHorizon || "12",
+        }
+      });
+    }
+
+    // Operating Model
+    if (includeCanvas && data.canvas) {
+      sections.push({
+        name: "Operating Model",
+        content: data.canvas
+      });
+    }
+
+    // Milestones
+    if (includeMilestones && data.milestones && data.milestones.length > 0) {
+      sections.push({
+        name: "Strategy Operationalisation",
+        content: {
+          milestones: data.milestones,
+          total: data.milestones.length,
+          completed: data.milestones.filter(m => m.status === "Done").length,
+          inProgress: data.milestones.filter(m => m.status === "In Progress" || m.status === "On Track").length,
+          atRisk: data.milestones.filter(m => m.status === "At Risk").length,
+        }
+      });
+    }
+
+    // Risks
+    if (includeRisks && data.risks) {
+      const allRisks = Object.values(data.risks).flat();
+      sections.push({
+        name: "Strategic Risk Control",
+        content: {
+          risks: allRisks,
+          total: allRisks.length,
+          highRisk: allRisks.filter(r => (r.severity || 1) * (r.likelihood || 1) >= 16).length,
+          controlled: allRisks.filter(r => r.mitigationStatus === "🟢 Controlled").length,
+        }
+      });
+    }
+
+    reportData.sections = sections;
+
+    // Generate Word document
+    const htmlContent = generateWordHTML(reportData);
+    
+    const blob = new Blob([htmlContent], { 
+      type: "application/msword;charset=utf-8" 
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${reportTitle.replace(/[^a-zA-Z0-9]/g, "_")}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setGenerating(false);
+    onClose();
+  };
+
+  const generateWordHTML = (data) => {
+    const fmtVal = (v) => {
+      if (v === null || v === undefined || v === "") return "—";
+      return String(v);
+    };
+
+    let sectionsHtml = "";
+    data.sections.forEach(section => {
+      sectionsHtml += `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">${section.name}</h2>`;
+      
+      if (section.name === "Strategic Clarity") {
+        const c = section.content;
+        sectionsHtml += `
+          <p><strong>Vision:</strong> ${fmtVal(c.vision)}</p>
+          <p><strong>Mission:</strong> ${fmtVal(c.mission)}</p>
+          <p><strong>Values:</strong> ${c.values.length ? c.values.join(", ") : "Not provided"}</p>
+          <p><strong>Operating Principles:</strong> ${c.operatingPrinciples.length ? c.operatingPrinciples.join(", ") : "Not provided"}</p>
+          <p><strong>Strategic Horizon:</strong> ${c.strategicHorizon} months</p>
+          <p><strong>Strategic Priorities:</strong> ${c.strategicPriorities.length || "None"}</p>
+          ${c.strategicPriorities.length ? `
+            <table style="width:100%; border-collapse:collapse; font-size:10pt; margin:8px 0;">
+              <thead><tr style="background:#241813; color:#fff;">
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Priority</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Due Date</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Status</th>
+              </tr></thead>
+              <tbody>
+                ${c.strategicPriorities.map((p, i) => `
+                  <tr style="background:${i % 2 ? "#faf8f7" : "#ffffff"};">
+                    <td style="padding:6px 10px; border:1px solid #ddd;">${fmtVal(p.description)}</td>
+                    <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(p.dueDate)}</td>
+                    <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(p.status)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : ""}
+        `;
+      } else if (section.name === "Operating Model") {
+        const c = section.content;
+        sectionsHtml += `
+          <p><strong>Key Partners:</strong> ${fmtVal(c.keyPartners)}</p>
+          <p><strong>Key Activities:</strong> ${fmtVal(c.keyActivities)}</p>
+          <p><strong>Key Resources:</strong> ${fmtVal(c.keyResources)}</p>
+          <p><strong>Value Propositions:</strong> ${fmtVal(c.valuePropositions)}</p>
+          <p><strong>Customer Relationships:</strong> ${fmtVal(c.customerRelationships)}</p>
+          <p><strong>Channels:</strong> ${fmtVal(c.channels)}</p>
+          <p><strong>Customer Segments:</strong> ${fmtVal(c.customerSegments)}</p>
+          <p><strong>Cost Structure:</strong> ${fmtVal(c.costStructure)}</p>
+          <p><strong>Revenue Streams:</strong> ${fmtVal(c.revenueStreams)}</p>
+        `;
+      } else if (section.name === "Strategy Operationalisation") {
+        const c = section.content;
+        sectionsHtml += `
+          <p><strong>Total Milestones:</strong> ${c.total}</p>
+          <p><strong>Completed:</strong> ${c.completed}</p>
+          <p><strong>In Progress:</strong> ${c.inProgress}</p>
+          <p><strong>At Risk:</strong> ${c.atRisk}</p>
+          ${c.milestones.length ? `
+            <table style="width:100%; border-collapse:collapse; font-size:10pt; margin:8px 0;">
+              <thead><tr style="background:#241813; color:#fff;">
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Goal</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Milestone</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Status</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">% Complete</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Owner</th>
+              </tr></thead>
+              <tbody>
+                ${c.milestones.map((m, i) => `
+                  <tr style="background:${i % 2 ? "#faf8f7" : "#ffffff"};">
+                    <td style="padding:6px 10px; border:1px solid #ddd;">${fmtVal(m.goal)}</td>
+                    <td style="padding:6px 10px; border:1px solid #ddd;">${fmtVal(m.milestoneDescription)}</td>
+                    <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(m.status)}</td>
+                    <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${m.percentageCompletion || 0}%</td>
+                    <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(m.owner)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : ""}
+        `;
+      } else if (section.name === "Strategic Risk Control") {
+        const c = section.content;
+        sectionsHtml += `
+          <p><strong>Total Risks:</strong> ${c.total}</p>
+          <p><strong>High Risk:</strong> ${c.highRisk}</p>
+          <p><strong>Controlled:</strong> ${c.controlled}</p>
+          ${c.risks.length ? `
+            <table style="width:100%; border-collapse:collapse; font-size:10pt; margin:8px 0;">
+              <thead><tr style="background:#241813; color:#fff;">
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Risk</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Severity</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Likelihood</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Score</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Status</th>
+                <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Owner</th>
+              </tr></thead>
+              <tbody>
+                ${c.risks.map((r, i) => {
+                  const score = (r.severity || 1) * (r.likelihood || 1);
+                  return `
+                    <tr style="background:${i % 2 ? "#faf8f7" : "#ffffff"};">
+                      <td style="padding:6px 10px; border:1px solid #ddd;">${fmtVal(r.riskSubCategory || "Unnamed Risk")}</td>
+                      <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${r.severity || 1}</td>
+                      <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${r.likelihood || 1}</td>
+                      <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; font-weight:700;">${score}</td>
+                      <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(r.mitigationStatus)}</td>
+                      <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(r.owner)}</td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          ` : ""}
+        `;
+      }
+    });
+
+    return `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>${data.title}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #2d201c; }
+          h1 { color: #2d201c; font-size: 22pt; font-weight: 600; margin-bottom: 4px; }
+          .subtitle { color: #6b5b55; font-size: 11pt; margin-bottom: 24px; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          @page { margin: 2cm; }
+        </style>
+      </head>
+      <body>
+        <h1>${data.title}</h1>
+        <div class="subtitle">
+          Generated ${new Date(data.generated).toLocaleDateString()}
+          <br>${data.userName}
+        </div>
+
+        ${sectionsHtml}
+
+        <p style="color:#8a7a74; font-size:8pt; text-align:center; margin-top:40px; border-top:1px solid #ded8d4; padding-top:16px;">
+          Strategy & Execution Report · Generated from RAPS Platform
+        </p>
+      </body>
+      </html>
+    `;
+  };
+
+  return (
+    <Modal title="Generate Strategy Report" subtitle="Select what to include in the Word document" icon={<FileText size={17} />} onClose={onClose} width={680}
+      footer={<> 
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={generateReport} disabled={generating || isInvestorView} 
+          style={{ ...btnPrimary, opacity: generating || isInvestorView ? 0.6 : 1 }}>
+          {generating ? "Generating..." : <><Download size={14} /> Generate Report</>}
+        </button>
+      </>}>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Report Title</label>
+        <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} style={inputS} />
+      </div>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Include</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeVision} onChange={() => setIncludeVision(!includeVision)} />
+            Strategic Clarity
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeCanvas} onChange={() => setIncludeCanvas(!includeCanvas)} />
+            Operating Model
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeMilestones} onChange={() => setIncludeMilestones(!includeMilestones)} />
+            Strategy Operationalisation
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeRisks} onChange={() => setIncludeRisks(!includeRisks)} />
+            Strategic Risk Control
+          </label>
+        </div>
+      </div>
+
+      <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
+        <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
+        The report will be generated as a Word document (.doc) that can be opened in Microsoft Word, Google Docs, or LibreOffice.
+      </div>
+    </Modal>
+  );
+};
+
+// ─── Strategic Clarity Component ────────────────────────────────────────
 const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   const [visionMissionData, setVisionMissionData] = useState({
     vision: "",
@@ -1680,7 +2205,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   );
 };
 
-// Business Model Canvas Component
+// ─── Business Model Canvas Component ──────────────────────────────────
 const BusinessModelCanvas = ({
   activeSection,
   currentUser,
@@ -2586,7 +3111,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   );
 };
 
-// Strategy Operationalisation Component
+// ─── Strategic Goals Component ─────────────────────────────────────────
 const StrategicGoals = ({
   activeSection,
   milestoneData,
@@ -4621,12 +5146,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
 // Helper function for getAvailableGoals (used in StrategicGoals)
 const getAvailableGoals = () => {
-  // This is a placeholder - in the actual component, this would be defined properly
-  // The actual implementation is inside the StrategicGoals component
   return ["Goal 1", "Goal 2", "Goal 3", "Goal 4", "Goal 5"];
 };
 
-// Risk Management Component
+// ─── Risk Management Component ──────────────────────────────────────────
 const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [riskData, setRiskData] = useState({
     "financial-risk": [],
@@ -6651,7 +7174,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   );
 };
 
-// Main Strategy Component - REMOVED Change and adaptability tab
+// ─── Main Strategy Component ────────────────────────────────────────────
 const Strategy = () => {
   const [activeSection, setActiveSection] = useState("strategic-clarity");
   const [milestoneData, setMilestoneData] = useState([]);
@@ -6662,6 +7185,61 @@ const Strategy = () => {
   const [viewingSMEName, setViewingSMEName] = useState("");
   const [selectedCohort, setSelectedCohort] = useState(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [visionMissionData, setVisionMissionData] = useState(null);
+  const [canvasData, setCanvasData] = useState(null);
+  const [riskData, setRiskData] = useState({});
+
+  // Load data for report
+  useEffect(() => {
+    const loadReportData = async () => {
+      if (!currentUser) return;
+
+      try {
+        // Load vision/mission
+        const visionSnapshot = await getDocs(
+          query(collection(db, "visionMission"), where("userId", "==", currentUser.uid))
+        );
+        if (!visionSnapshot.empty) {
+          setVisionMissionData(visionSnapshot.docs[0].data());
+        }
+
+        // Load canvas
+        const canvasSnapshot = await getDocs(
+          query(collection(db, "businessModelCanvas"), where("userId", "==", currentUser.uid))
+        );
+        if (!canvasSnapshot.empty) {
+          setCanvasData(canvasSnapshot.docs[0].data());
+        }
+
+        // Load risks
+        const riskSnapshot = await getDocs(
+          query(collection(db, "risks"), where("userId", "==", currentUser.uid))
+        );
+        const loadedRisks = {
+          "financial-risk": [],
+          "market-risk": [],
+          "operational-risk": [],
+          "reputational-risk": [],
+          "compliance-risk": [],
+          "technology-risk": [],
+          "people-risk": [],
+        };
+        riskSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          const category = data.category || "financial-risk";
+          if (loadedRisks[category]) {
+            loadedRisks[category].push({ id: doc.id, ...data });
+          }
+        });
+        setRiskData(loadedRisks);
+      } catch (error) {
+        console.error("Error loading report data:", error);
+      }
+    };
+
+    loadReportData();
+  }, [currentUser]);
 
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode");
@@ -6744,7 +7322,6 @@ const Strategy = () => {
     }
   };
 
-  // Updated section buttons - REMOVED "Change and adaptability"
   const sectionButtons = [
     { id: "strategic-clarity", label: "Strategic Clarity" },
     { id: "operating-model", label: "Operating Model" },
@@ -6819,6 +7396,19 @@ const Strategy = () => {
             >
               Strategy & Execution
             </h1>
+            <button
+              onClick={() => setShowReport(true)}
+              style={{
+                ...btnGhost,
+                padding: "8px 16px",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <FileText size={16} /> Download Report
+            </button>
           </div>
 
           <div
@@ -6946,7 +7536,7 @@ const Strategy = () => {
             </div>
           )}
 
-          {/* Tab buttons - UPDATED with the same style as Financial Performance */}
+          {/* Tab buttons */}
           <div
             style={{
               display: "flex",
@@ -7007,6 +7597,23 @@ const Strategy = () => {
             isInvestorView={isInvestorView}
           />
         </div>
+
+        {/* Report Generator Modal */}
+        {showReport && (
+          <StrategyReportGenerator
+            section={activeSection}
+            data={{
+              visionMission: visionMissionData,
+              canvas: canvasData,
+              milestones: milestoneData,
+              risks: riskData,
+            }}
+            onClose={() => setShowReport(false)}
+            userId={currentUser?.uid}
+            userName={currentUser?.displayName || currentUser?.email || "User"}
+            isInvestorView={isInvestorView}
+          />
+        )}
       </div>
     </div>
   );
