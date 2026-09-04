@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar as CalendarIcon, Plus, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import styled, { keyframes } from 'styled-components';
 import Modal from './Modal';
@@ -6,7 +6,7 @@ import CreateEventForm from './CreateEventForm';
 import MeetingDetails from './MeetingDetails';
 import EventData from './EventData';
 import { db } from '../../firebaseConfig';
-import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDoc, doc, addDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // Color palette
@@ -648,7 +648,7 @@ const EventCounterpart = styled.div`
   opacity: 0.9;
 `;
 
-const Meetings = ({ stats, setStats }) => {
+const Meetings = ({ stats: propStats, setStats: propSetStats }) => {
   const [activeTab, setActiveTab] = useState('upcoming');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -658,8 +658,15 @@ const Meetings = ({ stats, setStats }) => {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [requesterNames, setRequesterNames] = useState({});
+  const [stats, setStats] = useState({
+    created: 0,
+    scheduled: 0,
+    completed: 0,
+    cancelled: 0,
+  });
 
-  const fetchRequesterName = async (requesterId, requesterType) => {
+  // FIX: Wrap fetchRequesterName in useCallback to prevent the warning
+  const fetchRequesterName = useCallback(async (requesterId, requesterType) => {
     if (!requesterId) return requesterType;
     if (requesterNames[requesterId]) return requesterNames[requesterId];
 
@@ -671,11 +678,10 @@ const Meetings = ({ stats, setStats }) => {
         const data = requesterSnap.data();
         let name = requesterType;
 
-        // Get name based on requester type
         if (requesterType === 'SME') {
           name = data?.formData?.entityOverview?.registeredName || 
                  data?.formData?.entityOverview?.tradingName || 
-                  data?.formData?.contactDetails?.primaryContactName || 
+                 data?.formData?.contactDetails?.primaryContactName || 
                  'SME';
         } else if (requesterType === 'Investor') {
           name = data?.formData?.fundManageOverview?.registeredName || 
@@ -699,11 +705,15 @@ const Meetings = ({ stats, setStats }) => {
       console.error('Error fetching requester name:', err);
       return requesterType;
     }
-  };
+  }, [requesterNames]);
 
+  // FIX: Add fetchRequesterName to dependency array
   useEffect(() => {
     const unsubscribeAuth = getAuth().onAuthStateChanged(async (user) => {
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
       const q = query(
         collection(db, "smeCalendarEvents"),
@@ -712,11 +722,14 @@ const Meetings = ({ stats, setStats }) => {
 
       const unsubscribe = onSnapshot(q, async (snapshot) => {
         const meetingsData = [];
+        let createdCount = 0;
+        let scheduledCount = 0;
+        let completedCount = 0;
+        let cancelledCount = 0;
 
         for (const docSnap of snapshot.docs) {
           const data = docSnap.data();
           
-          // Determine requester type and ID
           let requesterType = '';
           let requesterId = '';
           
@@ -754,7 +767,7 @@ const Meetings = ({ stats, setStats }) => {
             });
           }
 
-          meetingsData.push({
+          const meeting = {
             id: docSnap.id,
             docId: docSnap.id,
             title: data.title || 'Meeting',
@@ -767,34 +780,151 @@ const Meetings = ({ stats, setStats }) => {
             location: data.location || 'Virtual',
             slots,
             status: data.status || 'pending',
-            collection: docSnap.ref.parent.id
-          });
+            collection: docSnap.ref.parent.id,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt
+          };
+
+          meetingsData.push(meeting);
+
+          // Update stats
+          if (meeting.status === 'scheduled') scheduledCount++;
+          if (meeting.status === 'pending') createdCount++;
+          if (meeting.status === 'completed') completedCount++;
+          if (meeting.status === 'cancelled') cancelledCount++;
         }
 
         setMeetings(meetingsData);
+        setStats({
+          created: createdCount,
+          scheduled: scheduledCount,
+          completed: completedCount,
+          cancelled: cancelledCount
+        });
+        
+        // Update parent stats if provided
+        if (propSetStats) {
+          propSetStats({
+            created: createdCount,
+            scheduled: scheduledCount,
+            completed: completedCount,
+            cancelled: cancelledCount
+          });
+        }
+        
         setLoading(false);
       });
 
       return unsubscribe;
     });
 
-    return () => unsubscribeAuth();
-  }, []);
+    return () => {
+      if (unsubscribeAuth) {
+        unsubscribeAuth();
+      }
+    };
+  }, [fetchRequesterName, propSetStats]); // <-- FIX: Added fetchRequesterName and propSetStats
 
-  const handleCreateEvent = (newEvent) => {
-    setMeetings([...meetings, newEvent]);
-    setStats(prev => ({ ...prev, created: prev.created + 1 }));
-    setShowCreateModal(false);
+  // Handle create event with Firebase save
+  const handleCreateEvent = async (newEvent) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        console.error('No user logged in');
+        return;
+      }
+
+      // Prepare event data for Firebase
+      const eventData = {
+        title: newEvent.title || 'Meeting',
+        date: newEvent.date || new Date().toISOString(),
+        time: newEvent.time || '',
+        duration: newEvent.duration || '30',
+        location: newEvent.location || '',
+        availability: newEvent.availability || 'Weekdays, 09:00 - 17:00',
+        host: newEvent.host || 'You',
+        funderId: user.uid,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        availableDates: [
+          {
+            date: new Date(newEvent.date || new Date()),
+            timeSlots: [{ start: newEvent.time || '09:00', end: '17:00' }],
+            timeZone: 'Africa/Johannesburg',
+            status: 'available'
+          }
+        ]
+      };
+
+      // Save to Firestore
+      const docRef = await addDoc(collection(db, "smeCalendarEvents"), eventData);
+      
+      // Create local meeting object
+      const savedMeeting = {
+        id: docRef.id,
+        docId: docRef.id,
+        title: eventData.title,
+        requesterType: 'Investor',
+        requesterName: 'You',
+        counterpartId: user.uid,
+        location: eventData.location,
+        status: 'pending',
+        slots: [
+          {
+            id: `${docRef.id}-scheduled`,
+            date: new Date(eventData.date),
+            time: eventData.time,
+            status: 'pending'
+          }
+        ],
+        createdAt: eventData.createdAt,
+        updatedAt: eventData.updatedAt
+      };
+
+      // Update local state
+      setMeetings(prev => [...prev, savedMeeting]);
+      setStats(prev => ({
+        ...prev,
+        created: prev.created + 1
+      }));
+      
+      // Update parent stats if provided
+      if (propSetStats) {
+        propSetStats(prev => ({
+          ...prev,
+          created: prev.created + 1
+        }));
+      }
+
+      setShowCreateModal(false);
+      console.log('Event created successfully with ID:', docRef.id);
+      
+    } catch (error) {
+      console.error('Error creating event:', error);
+      alert('Failed to create event. Please try again.');
+    }
   };
 
   const handleMeetingAction = async (id, action) => {
     try {
       if (action === 'scheduled') {
         setStats(prev => ({ ...prev, scheduled: prev.scheduled + 1 }));
+        if (propSetStats) {
+          propSetStats(prev => ({ ...prev, scheduled: prev.scheduled + 1 }));
+        }
       } else if (action === 'completed') {
         setStats(prev => ({ ...prev, completed: prev.completed + 1 }));
+        if (propSetStats) {
+          propSetStats(prev => ({ ...prev, completed: prev.completed + 1 }));
+        }
       } else if (action === 'cancelled') {
         setStats(prev => ({ ...prev, cancelled: prev.cancelled + 1 }));
+        if (propSetStats) {
+          propSetStats(prev => ({ ...prev, cancelled: prev.cancelled + 1 }));
+        }
       }
     } catch (error) {
       console.error("Error handling meeting action:", error);
@@ -805,7 +935,7 @@ const Meetings = ({ stats, setStats }) => {
 
   const filteredMeetings = meetings.filter(meeting => {
     const now = new Date();
-    const validSlots = meeting.slots.filter(slot => slot.date instanceof Date);
+    const validSlots = meeting.slots?.filter(slot => slot.date instanceof Date) || [];
 
     if (validSlots.length === 0) return false;
 
@@ -844,7 +974,7 @@ const Meetings = ({ stats, setStats }) => {
     dayEnd.setHours(23, 59, 59, 999);
     
     const dayMeetings = meetings.flatMap(meeting => 
-      meeting.slots
+      (meeting.slots || [])
         .filter(slot => slot.date >= dayStart && slot.date <= dayEnd)
         .map(slot => ({ ...meeting, slot }))
         .sort((a, b) => a.slot.date - b.slot.date));
@@ -902,7 +1032,7 @@ const Meetings = ({ stats, setStats }) => {
     endOfWeek.setHours(23, 59, 59, 999);
     
     const weekMeetings = meetings.flatMap(meeting => 
-      meeting.slots
+      (meeting.slots || [])
         .filter(slot => slot.date >= startOfWeek && slot.date <= endOfWeek)
         .map(slot => ({ ...meeting, slot })));
 
@@ -966,7 +1096,7 @@ const Meetings = ({ stats, setStats }) => {
     const nextMonthDays = 42 - (daysInMonth + startDay);
     
     const monthMeetings = meetings.flatMap(meeting => 
-      meeting.slots.map(slot => ({ ...meeting, slot })));
+      (meeting.slots || []).map(slot => ({ ...meeting, slot })));
 
     return (
       <MonthView>
@@ -1050,8 +1180,7 @@ const Meetings = ({ stats, setStats }) => {
 
   return (
     <MeetingsContainer>
-      {/* Added EventData component */}
-      <EventData meetings={meetings} />
+      <EventData meetings={meetings} stats={stats} />
       
       <Header>
         <Title>Meetings</Title>
@@ -1110,13 +1239,13 @@ const Meetings = ({ stats, setStats }) => {
               </tr>
             ) : (
               filteredMeetings.map((meeting, index) => (
-                <TableRow key={index} className={meeting.status}>
+                <TableRow key={meeting.id || index} className={meeting.status}>
                   <TableCell>{meeting.title}</TableCell>
                   <TableCell>{meeting.requesterType}</TableCell>
                   <TableCell>{meeting.requesterName}</TableCell>
                   <TableCell>
                     <span style={{ color: colors.mediumBrown, fontWeight: 600 }}>
-                      {meeting.slots.length} available slots
+                      {(meeting.slots || []).length} available slots
                     </span>
                   </TableCell>
                   <TableCell>{meeting.location}</TableCell>
