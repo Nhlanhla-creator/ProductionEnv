@@ -5,10 +5,8 @@ import Modal from './Modal';
 import CreateEventForm from './CreateEventForm';
 import MeetingDetails from './MeetingDetails';
 import { db } from '../../firebaseConfig';
-import { collection, query, where, onSnapshot, getDocs, doc, getDoc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Color palette
 const colors = {
@@ -650,7 +648,7 @@ const EventCounterpart = styled.div`
 `;
 
 // Main Component
-const Meetings = ({ stats, setStats, matchesList  }) => {
+const Meetings = ({ stats, setStats, matchesList = [] }) => {
   const [activeTab, setActiveTab] = useState('upcoming');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -658,457 +656,132 @@ const Meetings = ({ stats, setStats, matchesList  }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [requesterCache, setRequesterCache] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-  const [notification, setNotification] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Memoize date calculations
   const now = useMemo(() => new Date(), []);
 
-  // Cache requester details to avoid duplicate fetches
-  const fetchRequesterDetails = useCallback(async (requesterIds) => {
-    const uniqueIds = [...new Set(requesterIds.filter(id => id && !requesterCache[id]))];
-    
-    if (uniqueIds.length === 0) return {};
-
-    try {
-      const profilesRef = collection(db, "MyuniversalProfiles");
-      const queries = uniqueIds.map(id => 
-        query(profilesRef, where("__name__", "==", id))
-      );
-
-      const snapshots = await Promise.all(queries.map(q => getDocs(q)));
-      const newCache = { ...requesterCache };
-
-      snapshots.forEach((snapshot, index) => {
-        if (!snapshot.empty) {
-          const doc = snapshot.docs[0];
-          const formData = doc.data()?.formData;
-          const requesterId = uniqueIds[index];
-
-          let requesterName = '';
-          
-          // Determine name based on document structure
-          if (formData?.entityOverview?.registeredName) {
-            requesterName = formData.entityOverview.registeredName;
-          } else if (formData?.contactDetails?.primaryContactName) {
-            requesterName = formData.contactDetails.primaryContactName;
-          } else if (formData?.fundManageOverview?.registeredName) {
-            requesterName = formData.fundManageOverview.registeredName;
-          } else {
-            requesterName = 'Unknown';
-          }
-
-          newCache[requesterId] = requesterName;
-        }
-      });
-
-      setRequesterCache(newCache);
-      return newCache;
-    } catch (err) {
-      console.warn("Error fetching requester details:", err);
-      return requesterCache;
-    }
-  }, [requesterCache]);
-
-
-useEffect(() => {
-  setLoading(true);
-  const auth = getAuth();
-  
-  const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-    if (!user) {
-      setLoading(false);
-      setMeetings([]);
-      return;
-    }
-
-    const fetchMeetings = async () => {
-  try {
-    const smeSnapshot = await getDocs(
-      query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid))
-    );
-
-    const meetingsData = smeSnapshot.docs.map(docSnap => {
-      const data = docSnap.data();
-      const slots = (data.availableDates || []).map(slot => ({
-        ...slot,
-        date: slot.date?.toDate ? slot.date.toDate() : new Date(slot.date),
-        status: slot.status || 'available'
-      }));
-
-      return {
-        docId: docSnap.id,
-        id: `smeCalendarEvents-${docSnap.id}`,
-        name: data.title || 'Meeting',
-        location: data.location || 'Virtual',
-        slots,
-        status: data.status || 'pending',
-        requesterType: 'SME',
-        requesterName: data.toName || 'Unknown',
-      };
-    });
-
-    setMeetings(meetingsData);
-    setLoading(false);
-  } catch (error) {
-    console.error("Error fetching meetings:", error);
-    setMeetings([]);
-    setLoading(false);
-  }
-};
-
-    fetchMeetings();
-
-    const unsub = onSnapshot(
-      query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid)),
-      () => fetchMeetings(),
-      (error) => {
-        if (error.code !== 'permission-denied') {
-          console.error("Listener error:", error);
-        }
-      }
-    );
-
-    return () => {
-      unsub();
-    };
-  });
-
-  return () => unsubscribeAuth();
-}, [fetchRequesterDetails]);
-
-  // Optimize Firestore listener
+  // Fetch meetings from Firebase
   useEffect(() => {
-    setLoading(true);
     const auth = getAuth();
     
-    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (!user) {
+        console.log('No user logged in');
         setLoading(false);
         return;
       }
 
-      // Fetch both collections in parallel
-      const fetchMeetings = async () => {
-        try {
-          const [smeSnapshot, supplierSnapshot] = await Promise.all([
-            getDocs(query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid))),
-            getDocs(query(collection(db, "supplierCalendarEvents"), where("supplierId", "==", user.uid)))
-          ]);
+      console.log('User logged in:', user.uid);
 
-          const allDocs = [...smeSnapshot.docs, ...supplierSnapshot.docs];
+      // Query for SME events
+      const q = query(
+        collection(db, "smeCalendarEvents"),
+        where("smeId", "==", user.uid)
+      );
+
+      // Real-time listener
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const meetingsData = [];
+        
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          console.log('Document data:', data);
           
-          // Collect unique requester IDs first
-          const requesterIds = [];
-          const meetingsData = [];
-          
-          allDocs.forEach(docSnap => {
-            const data = docSnap.data();
-            const counterpartId = data.customerId || data.funderId;
-            
-            if (counterpartId) {
-              requesterIds.push(counterpartId);
-            }
-
-            // Parse dates once and store
-            const slots = (data.availableDates || []).map(slot => ({
-              ...slot,
-              date: slot.date?.toDate ? slot.date.toDate() : new Date(slot.date),
-              status: slot.status || 'available'
-            }));
-
-            meetingsData.push({
-              docId: docSnap.id,
-              id: `${docSnap.ref.parent.id}-${docSnap.id}`,
-              name: data.title || 'Meeting',
-              counterpartId,
-              smeAppId: data.smeAppId,
-              investorAppId: data.investorAppId,
-              location: data.location || 'Virtual',
-              slots,
-              status: data.status || 'pending',
-              collection: docSnap.ref.parent.id,
-              requesterType: data.funderId ? 'Investor' : 
-                           data.customerId ? 'Customer' : 
-                           data.supplierId ? 'Supplier' : 'SME'
-            });
-          });
-
-          // Fetch all requester details in batch
-          const cache = await fetchRequesterDetails(requesterIds);
-          
-          // Enhance meetings with requester names
-          const enhancedMeetings = meetingsData.map(meeting => ({
-            ...meeting,
-            requesterName: cache[meeting.counterpartId] || meeting.requesterType,
-            requesterId: meeting.counterpartId
+          // Parse slots
+          const slots = (data.availableDates || []).map(slot => ({
+            ...slot,
+            date: slot.date?.toDate ? slot.date.toDate() : new Date(slot.date),
+            status: slot.status || 'available'
           }));
 
-          setMeetings(enhancedMeetings || []);
-          setLoading(false);
-        } catch (error) {
-          console.error("Error fetching meetings:", error);
-          setLoading(false);
-        }
-      };
+          meetingsData.push({
+            id: docSnap.id,
+            docId: docSnap.id,
+            name: data.title || 'Meeting',
+            requesterType: 'SME',
+            requesterName: data.toName || 'You',
+            location: data.location || 'Virtual',
+            slots: slots,
+            status: data.status || 'pending',
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt
+          });
+        });
 
-      // Initial fetch
-      fetchMeetings();
+        console.log('Meetings loaded:', meetingsData.length);
+        setMeetings(meetingsData);
+        setLoading(false);
+      }, (error) => {
+        console.error('Error listening to meetings:', error);
+        setLoading(false);
+      });
 
-      // Set up real-time listeners with debouncing
-      let timeoutId;
-      const debouncedUpdate = () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(fetchMeetings, 1000); // Debounce updates
-      };
-
-      const unsub1 = onSnapshot(
-        query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid)),
-        debouncedUpdate
-      );
-
-      const unsub2 = onSnapshot(
-        query(collection(db, "supplierCalendarEvents"), where("supplierId", "==", user.uid)),
-        debouncedUpdate
-      );
-
-      return () => {
-        unsub1();
-        unsub2();
-        clearTimeout(timeoutId);
-      };
+      return () => unsubscribe();
     });
 
     return () => unsubscribeAuth();
-  }, [fetchRequesterDetails]);
+  }, []);
 
-  // Optimize filtering with memoization
-  // Filtered meetings - ADD SAFETY CHECK
-const filteredMeetings = useMemo(() => {
-  // ✅ SAFETY CHECK
-  if (!meetings || !Array.isArray(meetings)) return [];
-  
-  return meetings.filter(meeting => {
-    if (!meeting.slots || meeting.slots.length === 0) return false;
-
-    const hasValidDates = meeting.slots.some(slot => slot.date instanceof Date);
-    if (!hasValidDates) return false;
-
-    switch (activeTab) {
-      case 'upcoming':
-        return meeting.status === 'scheduled' && 
-               meeting.slots.some(slot => slot.date > now);
-      case 'past':
-        return meeting.status === 'completed' || 
-               meeting.slots.every(slot => slot.date < now);
-      case 'pending':
-        return meeting.status === 'pending' || 
-               meeting.slots.some(slot => slot.status === 'pending');
-      default:
-        return true;
-    }
-  });
-}, [meetings, activeTab, now]);
-
-// Calendar meetings - ADD SAFETY CHECK
-const calendarMeetings = useMemo(() => {
-  // ✅ SAFETY CHECK
-  if (!meetings || !Array.isArray(meetings)) return [];
-  
-  return meetings.flatMap(meeting => {
-    if (!meeting.slots || !Array.isArray(meeting.slots)) return [];
-    
-    return meeting.slots.map(slot => ({
-      ...meeting,
-      slot,
-      dateKey: slot.date.toDateString(),
-      hourKey: `${slot.date.getDate()}-${slot.date.getHours()}`
-    }));
-  });
-}, [meetings]);
-
-const handleCreateEvent = useCallback(async (newEvent) => {
-  setSubmitting(true);
-  setNotification(null);
-
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) {
-      setNotification({ type: "error", message: "User not authenticated" });
-      setSubmitting(false);
-      return;
-    }
-
-    // Validate date and time
-    const dateString = newEvent.date;
-    const timeString = newEvent.time;
-
-    if (!dateString || !timeString) {
-      setNotification({ type: "error", message: "Please select a date and time" });
-      setSubmitting(false);
-      return;
-    }
-
-    // Build date
-    const [year, month, day] = dateString.split('-');
-    const [hours, minutes] = timeString.split(':');
-    
-    const eventDate = new Date(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day),
-      parseInt(hours) || 0,
-      parseInt(minutes) || 0
-    );
-
-    if (isNaN(eventDate.getTime())) {
-      setNotification({ type: "error", message: "Invalid date/time format" });
-      setSubmitting(false);
-      return;
-    }
-
-    // Get sender name
-    let senderName = user.displayName || "Someone";
+  // Handle create event with Firebase save
+  const handleCreateEvent = useCallback(async (newEvent) => {
     try {
-      const profileRef = doc(db, "MyuniversalProfiles", user.uid);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
-        const data = profileSnap.data();
-        senderName = data.formData?.entityOverview?.registeredName || 
-                     data.formData?.contactDetails?.primaryContactName ||
-                     user.displayName || "Someone";
+      console.log('=== CREATE EVENT ===');
+      console.log('New event:', newEvent);
+      
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        console.error('No user logged in');
+        alert('Please log in to create events');
+        return;
       }
+
+      // Prepare event data for Firebase
+      const eventData = {
+        title: newEvent.title || 'Meeting',
+        date: newEvent.date || new Date().toISOString(),
+        time: newEvent.time || '',
+        duration: newEvent.duration || '30',
+        location: newEvent.location || '',
+        availability: newEvent.availability || 'Weekdays, 09:00 - 17:00',
+        host: newEvent.host || 'You',
+        smeId: user.uid,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        availableDates: [
+          {
+            date: new Date(newEvent.date || new Date()),
+            timeSlots: [{ start: newEvent.time || '09:00', end: '17:00' }],
+            timeZone: 'Africa/Johannesburg',
+            status: 'available'
+          }
+        ]
+      };
+
+      // Add recipient if provided
+      if (newEvent.to) {
+        eventData.customerId = newEvent.to;
+        eventData.customerName = newEvent.toName || 'Recipient';
+        eventData.toName = newEvent.toName || 'Recipient';
+      }
+
+      console.log('Saving to Firebase:', eventData);
+
+      // Save to Firestore
+      const docRef = await addDoc(collection(db, "smeCalendarEvents"), eventData);
+      console.log('✅ Event created with ID:', docRef.id);
+      
+      setShowCreateModal(false);
+      alert('✅ Event created successfully!');
+      
     } catch (error) {
-      console.error("Error fetching sender name:", error);
+      console.error('❌ Error creating event:', error);
+      alert(`Failed to create event: ${error.message}`);
     }
-
-    // Get recipient details
-    let recipientName = newEvent.toName || "Recipient";
-    let recipientEmail = newEvent.toEmail || "";
-
-    if (newEvent.to && !recipientEmail) {
-      try {
-        const profileRef = doc(db, "MyuniversalProfiles", newEvent.to);
-        const profileSnap = await getDoc(profileRef);
-        if (profileSnap.exists()) {
-          const data = profileSnap.data();
-          recipientEmail = data.formData?.contactDetails?.email || 
-                          data.formData?.entityOverview?.email ||
-                          data.email;
-          recipientName = data.formData?.entityOverview?.registeredName || 
-                         data.formData?.contactDetails?.primaryContactName ||
-                         recipientName;
-        }
-      } catch (error) {
-        console.error("Error fetching recipient details:", error);
-      }
-    }
-
-    if (newEvent.to && !recipientEmail) {
-      try {
-        const userDoc = await getDoc(doc(db, "users", newEvent.to));
-        if (userDoc.exists()) {
-          recipientEmail = userDoc.data().email;
-        }
-      } catch (error) {
-        console.error("Error fetching user email:", error);
-      }
-    }
-
-    // ✅ BUILD EVENT DATA WITH ALL FIELDS
-    const eventData = {
-      title: newEvent.title || "Meeting",
-      date: dateString,
-      time: timeString,
-      duration: newEvent.duration || "30",
-      location: newEvent.location || "Virtual",
-      description: newEvent.description || "",
-      host: senderName,
-      to: newEvent.to || "",
-      toName: recipientName,
-      toEmail: recipientEmail,
-      createdBy: user.uid,
-      createdByName: senderName,
-      createdAt: new Date().toISOString(),
-      status: "pending",
-      smeId: user.uid,
-      smeName: senderName,
-      availableDates: [
-        {
-          date: eventDate.toISOString(),
-          timeSlots: [{ start: timeString, end: timeString }],
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          status: "available"
-        }
-      ]
-    };
-
-    // ✅ SAVE TO FIRESTORE
-    const eventRef = await addDoc(collection(db, "smeCalendarEvents"), eventData);
-
-    // ✅ Also save to recipient's calendar if they exist
-    if (newEvent.to) {
-      await addDoc(collection(db, "smeCalendarEvents"), {
-        ...eventData,
-        smeId: newEvent.to,
-        smeName: recipientName,
-        createdBy: user.uid,
-        createdByName: senderName,
-        isInvitation: true,
-      });
-    }
-
-    // Update local state
-    const savedEvent = {
-      ...newEvent,
-      id: eventRef.id,
-      createdAt: eventData.createdAt,
-      requesterType: 'SME',
-      requesterName: senderName,
-      status: "pending",
-    };
-
-    setMeetings(prev => [...(prev || []), savedEvent]);
-    setStats(prev => ({ ...prev, created: prev.created + 1 }));
-    setShowCreateModal(false);
-
-    // ✅ SEND EMAIL TO RECIPIENT
-    if (recipientEmail) {
-      try {
-        const functions = getFunctions();
-        const sendMeetingInviteEmail = httpsCallable(functions, 'sendMeetingInviteEmail');
-
-        await sendMeetingInviteEmail({
-          to: recipientEmail,
-          name: recipientName,
-          senderName: senderName,
-          meetingTitle: newEvent.title || "Meeting",
-          meetingDate: dateString,
-          meetingTime: timeString,
-          location: newEvent.location || "Virtual",
-          description: newEvent.description || "",
-          linkTo: "https://www.bigmarketplace.africa/calendar"
-        });
-        console.log("✅ Meeting invite email sent to:", recipientEmail);
-      } catch (emailError) {
-        console.error("❌ Failed to send meeting invite email:", emailError);
-      }
-    }
-
-    setNotification({ type: "success", message: "✅ Event created successfully!" });
-    setTimeout(() => setNotification(null), 3000);
-
-  } catch (error) {
-    console.error("Error creating event:", error);
-    setNotification({ type: "error", message: "❌ Failed to create event. Please try again." });
-    setTimeout(() => setNotification(null), 3000);
-  } finally {
-    setSubmitting(false);
-  }
-}, [setStats]);
+  }, []);
 
   const handleMeetingAction = useCallback(async (id, action) => {
     try {
@@ -1120,40 +793,20 @@ const handleCreateEvent = useCallback(async (newEvent) => {
       }
 
       if (action === 'scheduled') {
-        // Only require investorAppId for investor meetings
-        if (meetingToUpdate.requesterType === 'Investor' && !meetingToUpdate.investorAppId) {
-          alert('Please ensure investor details are complete before scheduling');
-          return;
-        }
-
-        setMeetings(prev => prev
-          .map(meeting => {
-            if (meeting.id === id) {
-              return { ...meeting, status: 'scheduled' };
-            }
-            if (
-              meeting.smeAppId === meetingToUpdate.smeAppId &&
-              meeting.investorAppId === meetingToUpdate.investorAppId &&
-              meeting.id !== meetingToUpdate.id
-            ) {
-              return null;
-            }
-            return meeting;
-          })
-          .filter(Boolean)
-        );
-        
-        setStats(prev => ({ ...prev, scheduled: prev.scheduled + 1 }));
+        setMeetings(prev => prev.map(meeting => 
+          meeting.id === id ? { ...meeting, status: 'scheduled' } : meeting
+        ));
+        setStats(prev => ({ ...prev, scheduled: (prev.scheduled || 0) + 1 }));
       } else if (action === 'completed') {
         setMeetings(prev => prev.map(meeting => 
           meeting.id === id ? { ...meeting, status: 'completed' } : meeting
         ));
-        setStats(prev => ({ ...prev, completed: prev.completed + 1 }));
+        setStats(prev => ({ ...prev, completed: (prev.completed || 0) + 1 }));
       } else if (action === 'cancelled') {
         setMeetings(prev => prev.map(meeting => 
           meeting.id === id ? { ...meeting, status: 'cancelled' } : meeting
         ));
-        setStats(prev => ({ ...prev, cancelled: prev.cancelled + 1 }));
+        setStats(prev => ({ ...prev, cancelled: (prev.cancelled || 0) + 1 }));
       }
     } catch (error) {
       console.error("Error handling meeting action:", error);
@@ -1162,7 +815,50 @@ const handleCreateEvent = useCallback(async (newEvent) => {
     }
   }, [meetings, setStats]);
 
-  // Optimize calendar view rendering with memoization
+  // Filter meetings based on active tab
+  const filteredMeetings = useMemo(() => {
+    if (!meetings || meetings.length === 0) return [];
+    
+    return meetings.filter(meeting => {
+      if (!meeting.slots || meeting.slots.length === 0) return false;
+
+      const hasValidDates = meeting.slots.some(slot => slot.date instanceof Date && !isNaN(slot.date));
+      if (!hasValidDates) return false;
+
+      switch (activeTab) {
+        case 'upcoming':
+          return meeting.status === 'scheduled' && 
+                 meeting.slots.some(slot => slot.date > now);
+        
+        case 'past':
+          return meeting.status === 'completed' || 
+                 meeting.slots.every(slot => slot.date < now);
+        
+        case 'pending':
+          return meeting.status === 'pending' || 
+                 meeting.slots.some(slot => slot.status === 'pending');
+        
+        default:
+          return true;
+      }
+    });
+  }, [meetings, activeTab, now]);
+
+  // Calendar data preparation
+  const calendarMeetings = useMemo(() => {
+    if (!meetings || meetings.length === 0) return [];
+    
+    return meetings.flatMap(meeting => 
+      (meeting.slots || []).map(slot => ({
+        ...meeting,
+        slot,
+        dateKey: slot.date?.toDateString() || '',
+        hourKey: `${slot.date?.getDate() || ''}-${slot.date?.getHours() || ''}`
+      }))
+    );
+  }, [meetings]);
+
+  // Calendar view renderers
   const renderDayView = useCallback(() => {
     const dayStart = new Date(currentDate);
     dayStart.setHours(0, 0, 0, 0);
@@ -1174,7 +870,6 @@ const handleCreateEvent = useCallback(async (newEvent) => {
       .filter(({ slot }) => slot.date >= dayStart && slot.date <= dayEnd)
       .sort((a, b) => a.slot.date - b.slot.date);
 
-    // Group by hour for better performance
     const meetingsByHour = {};
     dayMeetings.forEach(meeting => {
       const hour = meeting.slot.date.getHours();
@@ -1292,7 +987,6 @@ const handleCreateEvent = useCallback(async (newEvent) => {
     const startDay = firstDayOfMonth.getDay();
     const daysInMonth = lastDayOfMonth.getDate();
     
-    // Pre-calculate meetings for the month
     const monthMeetingsByDay = {};
     calendarMeetings.forEach(meeting => {
       if (
@@ -1317,18 +1011,15 @@ const handleCreateEvent = useCallback(async (newEvent) => {
             let day, className = '';
             
             if (i < startDay) {
-              // Previous month
               day = i + 1;
               className = 'other-month';
             } else if (i < startDay + daysInMonth) {
-              // Current month
               day = i - startDay + 1;
               const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
               if (date.toDateString() === new Date().toDateString()) {
                 className = 'today';
               }
             } else {
-              // Next month
               day = i - startDay - daysInMonth + 1;
               className = 'other-month';
             }
@@ -1357,7 +1048,7 @@ const handleCreateEvent = useCallback(async (newEvent) => {
     );
   }, [currentDate, calendarMeetings]);
 
-  // Optimize calendar navigation
+  // Calendar navigation
   const navigateDate = useCallback((direction) => {
     setCurrentDate(prev => {
       const newDate = new Date(prev);
@@ -1377,7 +1068,6 @@ const handleCreateEvent = useCallback(async (newEvent) => {
     setCurrentDate(new Date());
   }, []);
 
-  // Memoize the calendar content based on view
   const calendarContent = useMemo(() => {
     switch (calendarView) {
       case 'day': return renderDayView();
@@ -1387,9 +1077,24 @@ const handleCreateEvent = useCallback(async (newEvent) => {
     }
   }, [calendarView, renderDayView, renderWeekView, renderMonthView]);
 
-  // Memoize the main content to prevent unnecessary re-renders
-  const mainContent = useMemo(() => (
-    <>
+  // Render loading state
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100%',
+        color: colors.textDark
+      }}>
+        Loading meetings...
+      </div>
+    );
+  }
+
+  // Main render
+  return (
+    <MeetingsContainer>
       <Header>
         <Title>Meetings</Title>
         <HeaderActions>
@@ -1438,13 +1143,13 @@ const handleCreateEvent = useCallback(async (newEvent) => {
               </tr>
             ) : (
               filteredMeetings.map((meeting, index) => (
-                <TableRow key={`${meeting.id}-${index}`}>
+                <TableRow key={meeting.id || index}>
                   <TableCell>{meeting.name}</TableCell>
                   <TableCell>{meeting.requesterType}</TableCell>
                   <TableCell>{meeting.requesterName}</TableCell>
                   <TableCell>
                     <span style={{ color: colors.mediumBrown, fontWeight: 600 }}>
-                      {meeting.slots.length} available slots
+                      {(meeting.slots || []).length} available slots
                     </span>
                   </TableCell>
                   <TableCell>{meeting.location}</TableCell>
@@ -1465,36 +1170,13 @@ const handleCreateEvent = useCallback(async (newEvent) => {
           </tbody>
         </Table>
       </TableContainer>
-    </>
-  ), [activeTab, filteredMeetings]);
-
-  // Render loading state
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100%',
-        color: colors.textDark
-      }}>
-        Loading meetings...
-      </div>
-    );
-  }
-
-  // Main render
-  return (
-    
-    <MeetingsContainer>
-      {mainContent}
 
       {showCreateModal && (
         <Modal onClose={() => setShowCreateModal(false)}>
           <CreateEventForm
             onSubmit={handleCreateEvent}
             onCancel={() => setShowCreateModal(false)}
-            previousRecipients={matchesList}  // <-- ADD THIS LINE
+            previousRecipients={matchesList}
           />
         </Modal>
       )}
@@ -1554,44 +1236,6 @@ const handleCreateEvent = useCallback(async (newEvent) => {
           </CalendarModal>
         </Modal>
       )}
-
-
-      {submitting && (
-  <div style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 9999,
-  }}>
-    <div style={{
-      backgroundColor: "white",
-      padding: "32px 40px",
-      borderRadius: "12px",
-      textAlign: "center",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-    }}>
-      <div style={{
-        width: "48px",
-        height: "48px",
-        border: "4px solid #f3e5f5",
-        borderTop: "4px solid #7d5a50",
-        borderRadius: "50%",
-        animation: "spin 1s linear infinite",
-        margin: "0 auto 16px",
-      }} />
-      <p style={{ color: "#4a352f", fontSize: "16px", fontWeight: "500", margin: 0 }}>
-        Creating event...
-      </p>
-    </div>
-  </div>
-)}
-
     </MeetingsContainer>
   );
 };

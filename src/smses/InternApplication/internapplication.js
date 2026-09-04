@@ -407,12 +407,15 @@ const getContainerStyle = () => ({
 
   return (
     <div  className="intern-application">
+<<<<<<< HEAD
+=======
       {/* Analysis Progress Overlay */}
       <InternAnalysisProgressOverlay
         progress={analysisProgress}
         isComplete={analysisComplete}
       />
 
+>>>>>>> b17c45810031448364e8fd7bf3871c13f06f9019
       {/* Save Status Indicator */}
       {saveStatus && (
         <div

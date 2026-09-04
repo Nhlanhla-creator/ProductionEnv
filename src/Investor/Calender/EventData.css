@@ -3,6 +3,14 @@
   margin-bottom: 20px;
 }
 
+.event-data-title {
+  color: #3E2723;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  letter-spacing: -0.5px;
+}
+
 .event-data-pipeline {
   display: flex;
   justify-content: space-between;
@@ -81,16 +89,16 @@
   opacity: 1;
 }
 
-
+/* DEFAULT BROWN COLOR SCHEME - All cards use brown/cream colors */
 .created-card {
   background: linear-gradient(135deg, #A1887F 0%, #8D6E63 100%);
 }
 
-.completed-card {
+.scheduled-card {
   background: linear-gradient(135deg, #BCAAA4 0%, #A1887F 100%);
 }
 
-.rescheduled-card {
+.completed-card {
   background: linear-gradient(135deg, #D7CCC8 0%, #BCAAA4 100%);
 }
 
@@ -98,7 +106,7 @@
   background: linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%);
 }
 
-
+/* Decorative circles */
 .pipeline-card:after {
   content: '';
   position: absolute;
@@ -114,16 +122,14 @@
   right: -10px;
 }
 
+.scheduled-card:after {
+  top: -10px;
+  right: -10px;
+}
+
 .completed-card:after {
   top: -10px;
   left: -10px;
-}
-
-.rescheduled-card:after {
-  top: -10px;
-  right: -10px;
-  width: 50px;
-  height: 50px;
 }
 
 .cancelled-card:after {
@@ -135,4 +141,37 @@
 
 .pipeline-card:hover:after {
   transform: scale(1.1);
+}
+
+/* Responsive design */
+@media screen and (max-width: 768px) {
+  .event-data-pipeline {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .pipeline-card {
+    width: calc(50% - 10px);
+    height: 100px;
+  }
+  
+  .pipeline-value {
+    font-size: 1.5rem;
+  }
+  
+  .pipeline-title {
+    font-size: 0.8rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .pipeline-card {
+    width: 100%;
+    height: 90px;
+  }
+  
+  .event-data-title {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+  }
 }

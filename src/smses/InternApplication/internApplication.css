@@ -1,3 +1,24 @@
+html,
+body,
+#root {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  margin: 0;
+}
+
+#root {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
 .tooltip-container {
   position: relative;
   display: inline-block;
@@ -59,7 +80,13 @@
   background-position: center;
 
   width: 100%;
+<<<<<<< HEAD
+  max-width: 1200px;
+
+  margin: 53px auto 0 auto; /* perfectly centers container */
+=======
   margin: 0 auto; /* perfectly centers container */
+>>>>>>> b17c45810031448364e8fd7bf3871c13f06f9019
   padding: 2rem;
   box-sizing: border-box;
 }
@@ -853,6 +880,15 @@
 
 @media (max-width: 768px) {
   .intern-application {
+<<<<<<< HEAD
+  width: 95%;
+  max-width: 1100px;
+
+  margin: 53px auto 0 auto;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+=======
     width: 95%;
     max-width: 1100px;
 
@@ -860,6 +896,7 @@
     padding: 2rem;
     box-sizing: border-box;
   }
+>>>>>>> b17c45810031448364e8fd7bf3871c13f06f9019
 
   .section-content {
     padding: 1.25rem;
