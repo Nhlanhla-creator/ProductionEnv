@@ -14,6 +14,7 @@ import {
   CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
   ExternalLink, Square, CheckSquare, ArrowLeft, Calendar, SlidersHorizontal,
   Database, Sparkles, Sigma, Settings2, EyeOff, Palette, Check, Users, Trash2,
+  FileText, Printer, FileSpreadsheet,
 } from "lucide-react";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -886,8 +887,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
 
   const [form, setForm] = useState({
     title: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
-    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against target ${fmtValue(v.budget, kpi)}${
-      variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${tabName} · ${categoryName}.`,
+    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against target ${fmtValue(v.budget, kpi)}${variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${tabName} · ${categoryName}.`,
     category: "People", assignedTo: "", dueDate: "", status: "In Progress",
   });
 
@@ -2258,6 +2258,624 @@ const AddChooser = ({ onPick, onClose }) => (
 );
 
 /* ════════════════════════════════════════════════════════════════════════════
+   Report Generator — Custom Word document export
+   ════════════════════════════════════════════════════════════════════════ */
+
+const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userName }) => {
+  const [selectedTabs, setSelectedTabs] = useState(() => 
+    Object.fromEntries(tabs.map((t) => [t.id, true]))
+  );
+  const [includeSummary, setIncludeSummary] = useState(true);
+  const [includeCharts, setIncludeCharts] = useState(true);
+  const [includeAnalysis, setIncludeAnalysis] = useState(true);
+  const [includeRecords, setIncludeRecords] = useState(true);
+  const [includeActions, setIncludeActions] = useState(true);
+  const [periodForReport, setPeriodForReport] = useState(period);
+  const [generating, setGenerating] = useState(false);
+  const [reportTitle, setReportTitle] = useState(`People Performance Report - ${new Date().toLocaleDateString()}`);
+
+  // Get actions from governanceCalendar
+  const [actions, setActions] = useState([]);
+  const [loadingActions, setLoadingActions] = useState(true);
+
+  useEffect(() => {
+    const loadActions = async () => {
+      if (!userId) { setLoadingActions(false); return; }
+      try {
+        const snap = await getDoc(doc(db, "governanceCalendar", userId));
+        if (snap.exists()) {
+          const meetings = snap.data().meetings || [];
+          const allActions = meetings.flatMap(m => 
+            (m.actions || []).map(a => ({ ...a, meetingTitle: m.title }))
+          );
+          setActions(allActions);
+        }
+      } catch (err) {
+        console.error("Failed to load actions:", err);
+      } finally {
+        setLoadingActions(false);
+      }
+    };
+    loadActions();
+  }, [userId]);
+
+  const generateReport = async () => {
+    setGenerating(true);
+
+    // Build the report data structure
+    const reportData = {
+      title: reportTitle,
+      generated: new Date().toISOString(),
+      period: PERIOD_LABEL[periodForReport],
+      financialYear: fyLabel(fy.startYear, fy.startMonth),
+      userName: userName || "User",
+      sections: [],
+      summary: null,
+      actions: [],
+    };
+
+    // Process each selected tab
+    const selectedTabList = tabs.filter(t => selectedTabs[t.id]);
+
+    if (includeSummary) {
+      // Build summary statistics
+      const allKpis = selectedTabList.flatMap(t => 
+        t.categories.flatMap(c => c.kpis || [])
+      );
+      const statusCounts = { green: 0, amber: 0, red: 0, none: 0 };
+      allKpis.forEach(k => {
+        const s = getStatus(k, periodForReport, fy);
+        statusCounts[s.key] = (statusCounts[s.key] || 0) + 1;
+      });
+      reportData.summary = {
+        totalKpis: allKpis.length,
+        statusCounts,
+        tabs: selectedTabList.map(t => t.name),
+      };
+    }
+
+    // Build section data
+    selectedTabList.forEach(tab => {
+      const section = {
+        name: tab.name,
+        categories: [],
+      };
+
+      tab.categories.forEach(cat => {
+        const catData = {
+          name: cat.name,
+          kpis: [],
+          isPanel: !!cat.panel,
+          panelData: null,
+        };
+
+        if (cat.panel === "tracking") {
+          const employees = docs.track?.employees || [];
+          catData.panelData = {
+            type: "tracking",
+            employees: employees.map(e => ({
+              name: e.employee || "—",
+              skillsGap: e.skillsGap?.status || "Not Done",
+              idp: e.idp?.status || "Not Done",
+              midTermReview: e.midTermReview?.status || "Not Done",
+              annualReview: e.annualReview?.status || "Not Done",
+            })),
+            completion: {
+              skillsGap: employees.filter(e => e.skillsGap?.status === "Done").length,
+              idp: employees.filter(e => e.idp?.status === "Done").length,
+              midTermReview: employees.filter(e => e.midTermReview?.status === "Done").length,
+              annualReview: employees.filter(e => e.annualReview?.status === "Done").length,
+              total: employees.length,
+            },
+          };
+        } else if (cat.panel === "capacityLoad") {
+          const exec = docs.exec?.executionData || {};
+          catData.panelData = {
+            type: "capacityLoad",
+            data: exec.founderLoad || {},
+          };
+        } else if (cat.panel === "capacitySpan") {
+          const exec = docs.exec?.executionData || {};
+          catData.panelData = {
+            type: "capacitySpan",
+            data: exec.spanOfControl || {},
+          };
+        } else if (cat.panel === "recordsTerm") {
+          const terms = docs.term?.entries || [];
+          const byReason = terms.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
+          catData.panelData = {
+            type: "recordsTerm",
+            entries: terms.map(e => ({ name: e.name, dateEnded: e.dateEnded, reason: e.reason })),
+            byReason,
+          };
+        } else if (cat.panel === "recordsHire") {
+          const hires = docs.hire?.entries || [];
+          const byType = {
+            Permanent: hires.filter(e => e.contractType === "Permanent").length,
+            Contract: hires.filter(e => e.contractType === "Contract").length,
+            Internship: hires.filter(e => e.contractType === "Internship").length,
+          };
+          catData.panelData = {
+            type: "recordsHire",
+            entries: hires.map(e => ({ name: e.name, dateStarted: e.dateStarted, contractType: e.contractType })),
+            byType,
+          };
+        } else {
+          // Regular KPI category
+          (cat.kpis || []).forEach(k => {
+            const v = periodValues(k, periodForReport, fy);
+            const status = getStatus(k, periodForReport, fy);
+            const variance = getVariance(k, periodForReport, fy);
+            catData.kpis.push({
+              id: k.id,
+              name: k.name,
+              units: k.units,
+              direction: k.direction,
+              meaning: k.meaning,
+              measured: k.measured,
+              actual: v.actual,
+              budget: v.budget,
+              variance: variance,
+              status: status.label,
+              statusKey: status.key,
+              benchmark: k.benchmark,
+              notes: k.notes || "",
+            });
+          });
+        }
+
+        section.categories.push(catData);
+      });
+
+      reportData.sections.push(section);
+    });
+
+    // Get actions
+    if (includeActions) {
+      const peopleActions = actions.filter(a => 
+        a.sourceModule === "People Performance" || 
+        a.category === "People" ||
+        a.sourceCategory?.includes("People")
+      );
+      reportData.actions = peopleActions.map(a => ({
+        title: a.title,
+        description: a.description,
+        status: a.status,
+        dueDate: a.dueDate,
+        assignedTo: a.assignedTo,
+        category: a.category,
+        sourceKpi: a.sourceKpi,
+        meetingTitle: a.meetingTitle,
+      }));
+    }
+
+    // Generate the Word document (HTML format that Word can open)
+    const htmlContent = generateWordHTML(reportData, includeCharts, includeAnalysis);
+    
+    // Create the download
+    const blob = new Blob([htmlContent], { 
+      type: "application/msword;charset=utf-8" 
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${reportTitle.replace(/[^a-zA-Z0-9]/g, "_")}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setGenerating(false);
+    onClose();
+  };
+
+  const generateWordHTML = (data, includeCharts, includeAnalysis) => {
+    const statusColor = (key) => {
+      if (key === "green") return "#166534";
+      if (key === "amber") return "#92400e";
+      if (key === "red") return "#991b1b";
+      return "#6b5b55";
+    };
+
+    const statusBg = (key) => {
+      if (key === "green") return "#f0fdf4";
+      if (key === "amber") return "#fffbeb";
+      if (key === "red") return "#fef2f2";
+      return "#f2eeec";
+    };
+
+    const fmtVal = (v, units) => {
+      if (v === null || v === undefined || v === "") return "—";
+      if (units === "%") return `${trimNum(Number(v))}%`;
+      if (units === "R") {
+        const n = Number(v);
+        if (n >= 1_000_000) return `R ${(n / 1_000_000).toFixed(1)}m`;
+        if (n >= 1_000) return `R ${(n / 1_000).toFixed(1)}k`;
+        return `R ${n.toFixed(0)}`;
+      }
+      if (units && !["#","%","R"].includes(units)) return `${trimNum(Number(v))} ${units}`;
+      return trimNum(Number(v));
+    };
+
+    const kpiRows = (kpis) => {
+      if (!kpis.length) return "";
+      let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:10pt; margin:8px 0;">
+          <thead>
+            <tr style="background:#33231e; color:#fff;">
+              <th style="padding:6px 10px; text-align:left; border:1px solid #ddd;">KPI</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Units</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Target</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Actual</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Variance</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Status</th>
+            </tr>
+          </thead>
+          <tbody>`;
+      kpis.forEach((k, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        html += `
+          <tr style="background:${bg};">
+            <td style="padding:6px 10px; border:1px solid #ddd; font-weight:500;">${k.name}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${k.units}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(k.budget, k.units)}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; font-weight:600;">${fmtVal(k.actual, k.units)}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${k.variance !== null && k.variance >= 0 ? '#166534' : '#991b1b'};">${k.variance !== null ? fmtVal(k.variance, k.units) : "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">
+              <span style="background:${statusBg(k.statusKey)}; color:${statusColor(k.statusKey)}; padding:2px 12px; border-radius:12px; font-weight:600; font-size:9pt;">${k.status}</span>
+            </td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+      return html;
+    };
+
+    const panelHtml = (panelData) => {
+      if (!panelData) return "";
+      if (panelData.type === "tracking") {
+        const c = panelData.completion;
+        let rows = "";
+        panelData.employees.forEach(e => {
+          rows += `
+            <tr>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.name}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.skillsGap === "Done" ? "✅" : "❌"}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.idp === "Done" ? "✅" : "❌"}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.midTermReview === "Done" ? "✅" : "❌"}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.annualReview === "Done" ? "✅" : "❌"}</td>
+            </tr>`;
+        });
+        return `
+          <div style="margin:10px 0; font-size:10pt;">
+            <p><strong>Completion:</strong> Skills Gap: ${c.skillsGap}/${c.total} · IDP: ${c.idp}/${c.total} · Mid-term: ${c.midTermReview}/${c.total} · Annual: ${c.annualReview}/${c.total}</p>
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Employee</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Skills Gap</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">IDP</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Mid-term Review</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Annual Review</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+      if (panelData.type === "capacityLoad") {
+        let cells = "";
+        MONTHS.forEach((m, i) => {
+          const val = panelData.data[i];
+          const labels = { 1: "Low", 2: "Medium", 3: "High", 4: "Critical" };
+          const colors = { 1: "#166534", 2: "#92400e", 3: "#991b1b", 4: "#991b1b" };
+          const text = val ? labels[val] || "—" : "—";
+          const color = val ? colors[val] || "#6b5b55" : "#6b5b55";
+          cells += `<td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${color}; font-weight:600;">${text}</td>`;
+        });
+        return `
+          <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+            <thead><tr style="background:#33231e; color:#fff;">
+              ${MONTHS.map(m => `<th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${m}</th>`).join("")}
+            </tr></thead>
+            <tbody><tr>${cells}</tr></tbody>
+          </table>
+          <p style="font-size:8pt; color:#6b5b55;">1=Low · 2=Medium · 3=High · 4=Critical</p>`;
+      }
+      if (panelData.type === "capacitySpan") {
+        let cells = "";
+        MONTHS.forEach((m, i) => {
+          const val = panelData.data[i];
+          const text = val !== undefined && val !== null && val !== "" ? Number(val).toFixed(1) : "—";
+          const color = (val && Number(val) >= 5 && Number(val) <= 8) ? "#166534" : 
+                        (val && (Number(val) < 3 || Number(val) > 12)) ? "#991b1b" : "#92400e";
+          cells += `<td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${color}; font-weight:600;">${text}</td>`;
+        });
+        return `
+          <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+            <thead><tr style="background:#33231e; color:#fff;">
+              ${MONTHS.map(m => `<th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${m}</th>`).join("")}
+            </tr></thead>
+            <tbody><tr>${cells}</tr></tbody>
+          </table>
+          <p style="font-size:8pt; color:#6b5b55;">5-8 direct reports is the working range</p>`;
+      }
+      if (panelData.type === "recordsTerm") {
+        let rows = "";
+        panelData.entries.forEach(e => {
+          rows += `
+            <tr>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.name}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.dateEnded || "—"}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:#991b1b; font-weight:600;">${e.reason || "—"}</td>
+            </tr>`;
+        });
+        const reasons = Object.keys(panelData.byReason || {});
+        return `
+          <div style="margin:10px 0; font-size:10pt;">
+            <p><strong>${panelData.entries.length} exits recorded</strong></p>
+            ${reasons.length ? `<p style="font-size:9pt; color:#6b5b55;">Reasons: ${reasons.map(r => `${r} (${panelData.byReason[r]})`).join(" · ")}</p>` : ""}
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Employee</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">End Date</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Reason</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+      if (panelData.type === "recordsHire") {
+        let rows = "";
+        panelData.entries.forEach(e => {
+          rows += `
+            <tr>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.name}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.dateStarted || "—"}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.contractType || "—"}</td>
+            </tr>`;
+        });
+        const types = panelData.byType || {};
+        return `
+          <div style="margin:10px 0; font-size:10pt;">
+            <p><strong>${panelData.entries.length} hires</strong> · ${types.Permanent || 0} permanent · ${types.Contract || 0} contract · ${types.Internship || 0} internship</p>
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Employee</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Start Date</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Contract Type</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+      return "";
+    };
+
+    // Build the full HTML document
+    let sectionsHtml = "";
+    data.sections.forEach(section => {
+      sectionsHtml += `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">${section.name}</h2>`;
+      
+      section.categories.forEach(cat => {
+        if (cat.isPanel && cat.panelData) {
+          sectionsHtml += `
+            <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">${cat.name}</h3>
+            ${panelHtml(cat.panelData)}
+          `;
+        } else if (cat.kpis.length) {
+          sectionsHtml += `
+            <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">${cat.name}</h3>
+            ${kpiRows(cat.kpis)}
+          `;
+        }
+      });
+    });
+
+    // Analysis section
+    let analysisHtml = "";
+    if (includeAnalysis) {
+      analysisHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Analysis & Observations</h2>
+        <div style="font-size:10pt; line-height:1.6;">`;
+      
+      data.sections.forEach(section => {
+        section.categories.forEach(cat => {
+          if (!cat.isPanel) {
+            cat.kpis.forEach(k => {
+              const status = k.statusKey;
+              if (status === "red" || status === "amber") {
+                analysisHtml += `
+                  <div style="background:${statusBg(status)}; padding:8px 12px; margin:6px 0; border-radius:4px; border-left:3px solid ${statusColor(status)};">
+                    <strong>${k.name}</strong> — ${k.status}
+                    ${k.variance !== null ? ` (${k.variance >= 0 ? "+" : ""}${fmtVal(k.variance, k.units)})` : ""}
+                    ${k.notes ? `<br><span style="color:#6b5b55; font-size:9pt;">Note: ${k.notes}</span>` : ""}
+                  </div>
+                `;
+              }
+            });
+          }
+        });
+      });
+
+      // Summary stats
+      const allKpis = data.sections.flatMap(s => 
+        s.categories.flatMap(c => c.kpis || [])
+      );
+      const reds = allKpis.filter(k => k.statusKey === "red");
+      const ambers = allKpis.filter(k => k.statusKey === "amber");
+      const greens = allKpis.filter(k => k.statusKey === "green");
+      
+      analysisHtml += `
+        <div style="background:#faf8f7; padding:12px 16px; margin:12px 0; border-radius:6px;">
+          <p><strong>Summary:</strong> ${greens.length} on target · ${ambers.length} needs attention · ${reds.length} critical</p>
+          ${reds.length ? `<p style="color:#991b1b;"><strong>Critical items:</strong> ${reds.map(k => k.name).join(", ")}</p>` : ""}
+          ${ambers.length ? `<p style="color:#92400e;"><strong>Needs attention:</strong> ${ambers.map(k => k.name).join(", ")}</p>` : ""}
+        </div>`;
+      analysisHtml += `</div>`;
+    }
+
+    // Actions section
+    let actionsHtml = "";
+    if (includeActions && data.actions.length) {
+      let actionRows = "";
+      data.actions.forEach(a => {
+        const statusColors = { "Done": "#166534", "In Progress": "#92400e", "Not Done": "#991b1b" };
+        const color = statusColors[a.status] || "#6b5b55";
+        actionRows += `
+          <tr>
+            <td style="padding:6px 10px; border:1px solid #ddd;">${a.title}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; font-size:9pt;">${a.description || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${a.assignedTo || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${a.dueDate || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${color}; font-weight:600;">${a.status}</td>
+          </tr>`;
+      });
+      actionsHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Actions</h2>
+        <p style="font-size:10pt; color:#6b5b55;">${data.actions.length} actions related to People Performance</p>
+        <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+          <thead><tr style="background:#33231e; color:#fff;">
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Action</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Description</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Owner</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Due Date</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Status</th>
+          </tr></thead>
+          <tbody>${actionRows}</tbody>
+        </table>`;
+    }
+
+    return `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>${data.title}</title>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #2d201c; }
+          h1 { color: #2d201c; font-size: 22pt; font-weight: 600; margin-bottom: 4px; }
+          .subtitle { color: #6b5b55; font-size: 11pt; margin-bottom: 24px; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          @page { margin: 2cm; }
+        </style>
+      </head>
+      <body>
+        <h1>${data.title}</h1>
+        <div class="subtitle">
+          Generated ${new Date(data.generated).toLocaleDateString()} · ${data.period} · FY ${data.financialYear}
+          <br>${data.userName}
+        </div>
+
+        ${data.summary ? `
+          <div style="background:#faf8f7; padding:12px 16px; border-radius:6px; margin-bottom:16px;">
+            <p style="font-size:11pt; margin:0;">
+              <strong>${data.summary.totalKpis} KPIs</strong> across ${data.summary.tabs.length} sections
+              · ${data.summary.statusCounts.green} on target
+              · ${data.summary.statusCounts.amber} needs attention
+              · ${data.summary.statusCounts.red} critical
+            </p>
+          </div>
+        ` : ""}
+
+        ${sectionsHtml}
+        ${analysisHtml}
+        ${actionsHtml}
+
+        <p style="color:#8a7a74; font-size:8pt; text-align:center; margin-top:40px; border-top:1px solid #ded8d4; padding-top:16px;">
+          People Performance Report · Generated from RAPS Platform
+        </p>
+      </body>
+      </html>
+    `;
+  };
+
+  return (
+    <Modal title="Generate Report" subtitle="Select what to include in the Word document" icon={<FileText size={17} />} onClose={onClose} width={680}
+      footer={<> 
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={generateReport} disabled={generating || !Object.values(selectedTabs).some(v => v)} 
+          style={{ ...btnPrimary, opacity: generating || !Object.values(selectedTabs).some(v => v) ? 0.6 : 1 }}>
+          {generating ? "Generating..." : <><Download size={14} /> Generate Report</>}
+        </button>
+      </>}>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Report Title</label>
+        <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} style={inputS} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+        <div>
+          <label style={labelS}>Period</label>
+          <select value={periodForReport} onChange={(e) => setPeriodForReport(e.target.value)} style={selectS}>
+            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Financial Year</label>
+          <div style={{ padding: "9px 11px", background: T.panel, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", fontSize: "13.5px", color: T.body }}>
+            FY {fyLabel(fy.startYear, fy.startMonth)}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Sections to include</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          {tabs.map((t) => (
+            <label key={t.id} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+              <input type="checkbox" checked={selectedTabs[t.id]} 
+                onChange={() => setSelectedTabs(p => ({ ...p, [t.id]: !p[t.id] }))} />
+              {t.name}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Include</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeSummary} onChange={() => setIncludeSummary(!includeSummary)} />
+            Summary header
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeCharts} onChange={() => setIncludeCharts(!includeCharts)} />
+            Charts (static view)
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeAnalysis} onChange={() => setIncludeAnalysis(!includeAnalysis)} />
+            Analysis & observations
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeRecords} onChange={() => setIncludeRecords(!includeRecords)} />
+            Records (development, terminations, hires)
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeActions} onChange={() => setIncludeActions(!includeActions)} />
+            Actions
+          </label>
+        </div>
+      </div>
+
+      <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
+        <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
+        The report will be generated as a Word document (.doc) that can be opened in Microsoft Word, Google Docs, or LibreOffice.
+        {includeCharts && " Charts are rendered as static tables and summaries."}
+      </div>
+    </Modal>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
    Main
    ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "peoplePerf.addData.prefs";
@@ -2297,6 +2915,7 @@ const PeoplePerformance = () => {
   const [addFlow, setAddFlow] = useState(null);
   const [manageTabs, setManageTabs] = useState(false);
   const [recordsMode, setRecordsMode] = useState(null);
+  const [showReport, setShowReport] = useState(false);  // NEW: Report generator state
 
   const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
 
@@ -2652,6 +3271,7 @@ const PeoplePerformance = () => {
   }
 
   const panels = (activeTab?.categories || []).map((c) => c.panel).filter(Boolean);
+  const userName = user?.displayName || user?.email || "User";
 
   return (
     <div style={{ minHeight: "100vh", padding: "28px", boxSizing: "border-box", background: T.bg, color: T.body }}>
@@ -2739,6 +3359,10 @@ const PeoplePerformance = () => {
             <Settings2 size={13} /> Manage Tabs
           </button>
         )}
+        <button onClick={() => setShowReport(true)} title="Generate a Word report"
+          style={{ ...btnGhost, marginLeft: "4px", marginBottom: "4px", padding: "6px 14px", fontSize: "12.5px" }}>
+          <FileText size={13} /> Download Report
+        </button>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
@@ -3063,6 +3687,17 @@ const PeoplePerformance = () => {
       {addFlow === "kpi" && <AddKpiWizard tabs={tabs} currentTabId={activeTabId}
         onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
         onSave={async (kpi) => { await persistMeta({ ...meta, custom: [...(meta.custom || []), kpi] }); notify("success", "KPI created."); }} />}
+
+      {showReport && <ReportGenerator 
+        tabs={visibleTabs} 
+        fy={fy} 
+        docs={docs} 
+        meta={meta}
+        period={period}
+        userId={user?.uid}
+        userName={userName}
+        onClose={() => setShowReport(false)} 
+      />}
     </div>
   );
 };
