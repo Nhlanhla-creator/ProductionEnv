@@ -504,14 +504,14 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
       const userId = auth.currentUser?.uid;
       if (!userId) return;
       const boardMembers = directors.map(director => ({
-        name: director.name,
+        name: director.name || "",
         roles: director.roles || [],
-        nationality: director.nationality,
-        execType: director.execType,
-        race: director.race,
-        gender: director.gender,
-        isYouth: director.isYouth,
-        isDisabled: director.isDisabled,
+        nationality: director.nationality || "",
+        execType: director.execType || "",
+        race: director.race || "",
+        gender: director.gender || "",
+        isYouth: Boolean(director.isYouth),
+        isDisabled: Boolean(director.isDisabled),
         committeeMembership: director.committeeMembership || [],
         doa: director.doa || "",
       }));
@@ -530,6 +530,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
         const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
         if (isOnboarding) {
           setFormData({
+            ...data,
             shareholders: data.shareholders || [],
             directors: data.directors || [],
             executives: data.executives || [],

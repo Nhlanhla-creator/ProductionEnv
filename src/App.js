@@ -191,6 +191,9 @@ import { CMFMatchesProvider } from "./cmf/CMFMatches/CMFMatchesContext"
 import CMFCohorts from "./cmf/CMFCohorts/CMFCohorts"
 import CMFDocuments from "./cmf/CMFDocuments/CMFDocuments"
 import CMFOnboardProfile from "./cmf/CMFOnboardProfile/CMFOnboardProfile"
+import CMFBillingInfo from "./cmf/CMFBillingAndPayments/billing-info"
+import CMFSubscriptions from "./cmf/CMFBillingAndPayments/subscriptions"
+import CMFBillingHistory from "./cmf/CMFBillingAndPayments/billing-history"
 
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
@@ -1245,9 +1248,10 @@ function App() {
         <Route path="/cmf-messages" element={withProtection(CatalystMessages, {}, renderCMFRoute)} />
         <Route path="/cmf-calendar" element={withProtection(Calendar, {}, renderCMFRoute)} />
         <Route path="/cmf-settings" element={withProtection(Settings, {}, renderCMFRoute)} />
-        <Route path="/cmf/billing/info" element={withProtection(BillingInformationSMSE, {}, renderCMFRoute)} />
-        <Route path="/cmf/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderCMFRoute)} />
-        <Route path="/cmf/billing/history" element={withProtection(BillingHistorySMSE, {}, renderCMFRoute)} />
+        <Route path="/cmf/billing" element={<Navigate to="/cmf/billing/subscriptions" replace />} />
+        <Route path="/cmf/billing/info" element={withProtection(CMFBillingInfo, {}, renderCMFRoute)} />
+        <Route path="/cmf/billing/subscriptions" element={withProtection(CMFSubscriptions, {}, renderCMFRoute)} />
+        <Route path="/cmf/billing/history" element={withProtection(CMFBillingHistory, {}, renderCMFRoute)} />
 
         {/* Redirects */}
         <Route path="/universal-profile" element={<Navigate to="/investor-profile" replace />} />

@@ -74,6 +74,30 @@ export const mockSuccessFeeData = {
       invoiceId: "WIL-002",
     },
   ],
+  cmf: [
+    {
+      id: "SF001",
+      transactionId: "CMF-001",
+      counterparty: "AgroTech Capital / Zamani Foods",
+      dealValue: "4,500,000.00",
+      successFeeAmount: "135,000.00",
+      date: "2025-07-14",
+      time: "11:20",
+      status: "Paid",
+      invoiceId: "INV-CMF-001",
+    },
+    {
+      id: "SF002",
+      transactionId: "CMF-002",
+      counterparty: "VentureSpark / GreenLogistics",
+      dealValue: "8,000,000.00",
+      successFeeAmount: "240,000.00",
+      date: "2025-08-02",
+      time: "15:45",
+      status: "Pending",
+      invoiceId: "INV-CMF-002",
+    },
+  ],
 }
 
 // Growth Tools mock data - SME only

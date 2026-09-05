@@ -431,6 +431,15 @@ const mockCMFs = [
   }
 ]
 
+// Utility helper to detect File or Blob objects reliably across environments
+const isFileOrBlob = (val) => {
+  if (!val || typeof val !== "object") return false
+  if (typeof File !== "undefined" && val instanceof File) return true
+  if (typeof Blob !== "undefined" && val instanceof Blob) return true
+  const tag = Object.prototype.toString.call(val)
+  return tag === "[object File]" || tag === "[object Blob]" || val.constructor?.name === "File" || val.constructor?.name === "Blob"
+}
+
 export default function CMFOnboardProfile() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -584,14 +593,14 @@ export default function CMFOnboardProfile() {
 
   // Set Profile Type when route param changes
   useEffect(() => {
-    if (typeParam) {
+    if (typeParam && !draftIdParam) {
       setProfileType(typeParam)
       // Reset form states aligned with the profile type schema
       setFormData(getInitialFormData(typeParam))
       setCompletedSections(getInitialCompletedSections(typeParam))
       setActiveStep(1)
     }
-  }, [typeParam])
+  }, [typeParam, draftIdParam])
 
   // Resolve logged in CMF user
   useEffect(() => {
@@ -605,9 +614,15 @@ export default function CMFOnboardProfile() {
             const draftDoc = await getDoc(doc(db, "cmfOnboardingDrafts", draftIdParam))
             if (draftDoc.exists()) {
               const draftData = draftDoc.data()
-              setProfileType(draftData.profileType)
-              setFormData(draftData.formData)
-              setCompletedSections(draftData.completedSections || {})
+              if (draftData.profileType) {
+                setProfileType(draftData.profileType)
+              }
+              if (draftData.formData) {
+                setFormData(draftData.formData)
+              }
+              if (draftData.completedSections) {
+                setCompletedSections(draftData.completedSections)
+              }
               if (draftData.activeStep) {
                 setActiveStep(draftData.activeStep)
               }
@@ -1027,14 +1042,14 @@ export default function CMFOnboardProfile() {
 
     const hasFile = (val) => {
       if (!val) return false;
-      if (val instanceof File) return true;
+      if (isFileOrBlob(val)) return true;
       if (Array.isArray(val)) {
         return val.length > 0 && val.some(item => hasFile(item));
       }
       if (typeof val === "object") {
         return !!(val.name || val.url || val.path || val.downloadURL);
       }
-      return false;
+      return typeof val === "string" && val.trim().length > 0;
     };
 
     // Validate documents section
@@ -1148,6 +1163,53 @@ export default function CMFOnboardProfile() {
     return Math.round((completedCount / sections.length) * 100)
   }, [completedSections, sections])
 
+  // Sanitize and serialize form data for draft storage (uploading files to storage or preserving metadata)
+  const sanitizeDraftData = async (data, draftId, pathPrefix = "") => {
+    if (isFileOrBlob(data)) {
+      try {
+        const uid = currentUser?.uid || auth.currentUser?.uid || "cmf_facilitator"
+        const safeName = (data.name || "file").replace(/[^a-zA-Z0-9._-]/g, "_")
+        const storagePath = `cmfDraftFiles/${uid}/${draftId}/${pathPrefix}_${safeName}`
+        const fileRef = ref(storage, storagePath)
+        await uploadBytes(fileRef, data)
+        const downloadURL = await getDownloadURL(fileRef)
+        return {
+          name: data.name || "uploaded_file",
+          size: data.size || 0,
+          type: data.type || "application/octet-stream",
+          lastModified: data.lastModified || Date.now(),
+          downloadURL,
+          url: downloadURL,
+          storagePath,
+          isDraftFile: true
+        }
+      } catch (uploadErr) {
+        console.warn("Storage upload failed for draft file, preserving metadata only:", uploadErr)
+        return {
+          name: data.name || "uploaded_file",
+          size: data.size || 0,
+          type: data.type || "application/octet-stream",
+          lastModified: data.lastModified || Date.now(),
+          isDraftFilePlaceholder: true
+        }
+      }
+    } else if (Array.isArray(data)) {
+      return await Promise.all(data.map((item, idx) => sanitizeDraftData(item, draftId, `${pathPrefix}_${idx}`)))
+    } else if (data !== null && typeof data === "object") {
+      const cleanedObj = {}
+      for (const key of Object.keys(data)) {
+        const val = data[key]
+        if (val !== undefined) {
+          cleanedObj[key] = await sanitizeDraftData(val, draftId, `${pathPrefix}_${key}`)
+        }
+      }
+      return cleanedObj
+    } else if (data === undefined) {
+      return null
+    }
+    return data
+  }
+
   // Save draft to DB
   const handleSaveDraft = async () => {
     if (!currentUser) return
@@ -1156,13 +1218,35 @@ export default function CMFOnboardProfile() {
       const draftId = draftIdParam || `draft_${Date.now()}`
       const draftDocRef = doc(db, "cmfOnboardingDrafts", draftId)
 
+      const draftTitle =
+        formData.entityOverview?.registeredName ||
+        formData.fundManageOverview?.registeredName ||
+        formData.entityOverview?.tradingName ||
+        formData.fundManageOverview?.tradingName ||
+        formData.contactDetails?.contactName ||
+        formData.contactDetails?.primaryContactName ||
+        `${profileType} Partner Draft`
+
+      const sanitizedFormData = await sanitizeDraftData(formData, draftId)
+      setFormData(sanitizedFormData)
+
+      const sanitizedCompletedSections = {}
+      if (completedSections && typeof completedSections === "object") {
+        for (const k of Object.keys(completedSections)) {
+          if (completedSections[k] !== undefined) {
+            sanitizedCompletedSections[k] = Boolean(completedSections[k])
+          }
+        }
+      }
+
       await setDoc(draftDocRef, {
         id: draftId,
+        title: draftTitle,
         facilitatorId: currentUser.uid,
-        profileType,
-        formData,
-        completedSections,
-        activeStep,
+        profileType: profileType || "Business",
+        formData: sanitizedFormData,
+        completedSections: sanitizedCompletedSections,
+        activeStep: Number(activeStep) || 1,
         updatedAt: Date.now()
       })
 
@@ -1170,7 +1254,7 @@ export default function CMFOnboardProfile() {
       navigate("/cmf-cohorts")
     } catch (err) {
       console.error("Error saving draft:", err)
-      alert("Failed to save draft.")
+      alert("Failed to save draft: " + (err?.message || "Unknown error"))
     } finally {
       setSaving(false)
     }
@@ -1191,10 +1275,13 @@ export default function CMFOnboardProfile() {
   // Upload files and replace with URLs
   const uploadFilesAndReplaceWithURLs = async (data, sectionName, targetUserId) => {
     const uploadRecursive = async (item, pathPrefix) => {
-      if (item instanceof File) {
-        const fileRef = ref(storage, `onboardedFiles/${targetUserId}/${sectionName}/${pathPrefix}`)
+      if (isFileOrBlob(item)) {
+        const safeName = (item.name || "file").replace(/[^a-zA-Z0-9._-]/g, "_")
+        const fileRef = ref(storage, `onboardedFiles/${targetUserId}/${sectionName}/${pathPrefix}_${safeName}`)
         await uploadBytes(fileRef, item)
         return await getDownloadURL(fileRef)
+      } else if (item && typeof item === "object" && (item.isDraftFile || item.isUploaded) && (item.downloadURL || item.url)) {
+        return item.downloadURL || item.url
       } else if (Array.isArray(item)) {
         return await Promise.all(item.map((entry, idx) => uploadRecursive(entry, `${pathPrefix}/${idx}`)))
       } else if (typeof item === "object" && item !== null) {
