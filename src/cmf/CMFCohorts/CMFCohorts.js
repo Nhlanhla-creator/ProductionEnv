@@ -3259,18 +3259,28 @@ export default function CMFCohorts() {
                   No saved drafts found.
                 </div>
               ) : (
-                drafts.map((draft) => {
-                  const title = draft.formData?.registeredName || draft.formData?.contactName || "Unnamed Draft"
-                  return (
-                    <div key={draft.id} className="flex items-center justify-between p-3.5 rounded-xl border border-[#e6d7c3]/80 hover:bg-[#faf7f2]/50 transition-all">
-                      <button
-                        onClick={() => {
-                          setShowDraftsPopup(false)
-                          navigate(`/cmf-cohorts/new?draftId=${draft.id}`)
-                        }}
-                        className="text-left flex-1 cursor-pointer"
-                      >
-                        <h4 className="text-xs font-bold text-[#4a352f] m-0">{title}</h4>
+              drafts.map((draft) => {
+                const title =
+                  draft.title ||
+                  draft.formData?.entityOverview?.registeredName ||
+                  draft.formData?.fundManageOverview?.registeredName ||
+                  draft.formData?.entityOverview?.tradingName ||
+                  draft.formData?.fundManageOverview?.tradingName ||
+                  draft.formData?.contactDetails?.contactName ||
+                  draft.formData?.contactDetails?.primaryContactName ||
+                  draft.formData?.registeredName ||
+                  draft.formData?.contactName ||
+                  "Unnamed Draft"
+                return (
+                  <div key={draft.id} className="flex items-center justify-between p-3.5 rounded-xl border border-[#e6d7c3]/80 hover:bg-[#faf7f2]/50 transition-all">
+                    <button
+                      onClick={() => {
+                        setShowDraftsPopup(false)
+                        navigate(`/cmf-cohorts/new?type=${draft.profileType || "Business"}&draftId=${draft.id}`)
+                      }}
+                      className="text-left flex-1 cursor-pointer"
+                    >
+                      <h4 className="text-xs font-bold text-[#4a352f] m-0">{title}</h4>
                         <div className="flex items-center gap-2 mt-1 text-[10px] text-[#7d5a50]">
                           <span className="bg-[#f5f0e1] px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase">{draft.profileType}</span>
                           <span>Updated: {new Date(draft.updatedAt).toLocaleDateString()}</span>

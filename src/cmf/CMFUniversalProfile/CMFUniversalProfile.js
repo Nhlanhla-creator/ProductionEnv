@@ -35,29 +35,25 @@ const sections = [
 const sectionValidations = {
   instructions: () => true,
   entityOverview: (data) => {
-    return (
-      data.registeredName &&
-      data.registrationNumber &&
-      data.entityType &&
-      data.legalStructure &&
-      data.entitySize &&
-      data.financialYearEnd &&
-      data.yearsInOperation >= 0 &&
-      data.operationStage &&
-      Array.isArray(data.economicSectors) && data.economicSectors.length > 0 &&
-      Array.isArray(data.operatingCountries) && data.operatingCountries.length > 0 &&
-      data.businessDescription
-    )
+    if (!data) return false
+    const hasName = Boolean((data.registeredName && String(data.registeredName).trim()) || (data.tradingName && String(data.tradingName).trim()))
+    const hasReg = Boolean((data.registrationNumber && String(data.registrationNumber).trim()) || (data.entityType && String(data.entityType).trim()))
+    const hasDesc = Boolean(data.businessDescription && String(data.businessDescription).trim())
+    return Boolean(hasName && hasReg && hasDesc)
   },
   ownershipManagement: () => true,
   contactDetails: (data) => {
-    const requiredFields = [
-      data.contactTitle, data.contactName, data.position,
-      data.businessPhone, data.mobile, data.email, data.physicalAddress,
-    ]
-    const hasAllRequired = requiredFields.every((field) => typeof field === "string" && field.trim() !== "")
-    const postalAddressValid = data.sameAsPhysical || (typeof data.postalAddress === "string" && data.postalAddress.trim() !== "")
-    return hasAllRequired && postalAddressValid
+    if (!data) return false
+    const hasName = Boolean(data.contactName && String(data.contactName).trim())
+    const hasEmail = Boolean(data.email && String(data.email).trim())
+    const hasPhone = Boolean(
+      (data.businessPhone && String(data.businessPhone).trim()) ||
+      (data.mobile && String(data.mobile).trim()) ||
+      (data.businessWhatsApp && String(data.businessWhatsApp).trim())
+    )
+    const hasAddress = Boolean(data.physicalAddress && String(data.physicalAddress).trim())
+    const postalAddressValid = data.sameAsPhysical || Boolean(data.postalAddress && String(data.postalAddress).trim())
+    return Boolean(hasName && hasEmail && hasPhone && hasAddress && postalAddressValid)
   },
   legalCompliance: () => true,
   productsServices: () => true,
@@ -113,16 +109,18 @@ export default function CMFUniversalProfile() {
 
   const ROLE_PERMISSIONS = {
     owner: { canEditAll: true, sections: sections.map(s => s.id) },
-    companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "productsServices", "documents", "generalInvestmentPreference"] },
-    manager: { canEditAll: false, sections: ["contactDetails", "productsServices", "documents"] },
-    employee: { canEditAll: false, sections: ["contactDetails", "documents"] },
+    companyadmin: { canEditAll: true, sections: sections.map(s => s.id) },
+    cmf: { canEditAll: true, sections: sections.map(s => s.id) },
+    manager: { canEditAll: false, sections: ["instructions", "entityOverview", "contactDetails", "productsServices", "documents", "generalInvestmentPreference", "howDidYouHear"] },
+    employee: { canEditAll: false, sections: ["instructions", "contactDetails", "documents"] },
     viewer: { canEditAll: false, sections: [] },
   }
 
   const canEditSection = (sectionId) => {
-    if (!userRole) return false
+    // If not a company member or role is owner/admin/cmf or not strictly viewer, user has full editing permissions
+    if (!isCompanyMember || userRole === "owner" || userRole === "companyadmin" || userRole === "cmf" || !userRole) return true
     const permissions = ROLE_PERMISSIONS[userRole]
-    if (!permissions) return false
+    if (!permissions) return true
     return permissions.canEditAll || permissions.sections.includes(sectionId)
   }
 
@@ -165,7 +163,7 @@ export default function CMFUniversalProfile() {
       pendingLegalJudgments: "", pendingLegalJudgmentsDetails: "",
     },
     productsServices: {
-      offeringType: "", productCategories: [], serviceCategories: [],
+      offeringType: "", offerings: [], productCategories: [], serviceCategories: [],
       deliveryModes: [], minLeadTime: "", minLeadTimeUnit: "days",
       maxLeadTime: "", maxLeadTimeUnit: "days", targetMarket: "", keyClients: [],
     },
@@ -211,57 +209,78 @@ export default function CMFUniversalProfile() {
 
   useEffect(() => {
     // Force subcomponents to use passed data props instead of fetching from universalProfiles
-    const prevOnboarding = sessionStorage.getItem("isOnboarding")
     sessionStorage.setItem("isOnboarding", "true")
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-            const userDocRef = doc(db, "users", user.uid)
-            const userDocSnap = await getDoc(userDocRef)
-            if (userDocSnap.exists()) {
-              const userData = userDocSnap.data()
-              const userCompanyId = userData.companyId
-              const userCompanyRole = userData.userRole
-              if (userCompanyId) {
-                const companyDocRef = doc(db, "companies", userCompanyId)
-                const companyDocSnap = await getDoc(companyDocRef)
-                if (companyDocSnap.exists()) {
-                  const companyData = companyDocSnap.data()
-                  const ownerId = companyData.createdBy
-                  setUserRole(userCompanyRole || "viewer")
-                  if (ownerId === user.uid) {
-                    setIsCompanyMember(false); setEffectiveUserId(`${user.uid}_cmf`); setEditPermissions(ROLE_PERMISSIONS.owner)
-                  } else {
-                    setIsCompanyMember(true); setCompanyOwnerId(ownerId); setEffectiveUserId(`${ownerId}_cmf`); setEditPermissions(ROLE_PERMISSIONS[userCompanyRole] || ROLE_PERMISSIONS.viewer)
-                  }
+          sessionStorage.setItem("isOnboarding", "true")
+          const userDocRef = doc(db, "users", user.uid)
+          const userDocSnap = await getDoc(userDocRef)
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data()
+            const userCompanyId = userData.companyId
+            const userCompanyRole = userData.userRole
+            if (userCompanyId) {
+              const companyDocRef = doc(db, "companies", userCompanyId)
+              const companyDocSnap = await getDoc(companyDocRef)
+              if (companyDocSnap.exists()) {
+                const companyData = companyDocSnap.data()
+                const ownerId = companyData.createdBy
+                if (ownerId === user.uid) {
+                  setIsCompanyMember(false)
+                  setUserRole("owner")
+                  setEffectiveUserId(`${user.uid}_cmf`)
+                  setEditPermissions(ROLE_PERMISSIONS.owner)
+                } else {
+                  setIsCompanyMember(true)
+                  setCompanyOwnerId(ownerId)
+                  const assignedRole = userCompanyRole || "companyadmin"
+                  setUserRole(assignedRole)
+                  setEffectiveUserId(`${ownerId}_cmf`)
+                  setEditPermissions(ROLE_PERMISSIONS[assignedRole] || ROLE_PERMISSIONS.owner)
                 }
               } else {
-                setIsCompanyMember(false); setEffectiveUserId(`${user.uid}_cmf`); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
+                setIsCompanyMember(false)
+                setEffectiveUserId(`${user.uid}_cmf`)
+                setUserRole("owner")
+                setEditPermissions(ROLE_PERMISSIONS.owner)
               }
+            } else {
+              setIsCompanyMember(false)
+              setEffectiveUserId(`${user.uid}_cmf`)
+              setUserRole("owner")
+              setEditPermissions(ROLE_PERMISSIONS.owner)
             }
-            const savedData = localStorage.getItem(getUserSpecificKey(LOCAL_STORAGE_KEY_PREFIX))
-            const savedCompletedSections = localStorage.getItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY))
-            const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("cmfProfileSubmitted"))
-            const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("cmfHasSeenWelcomePopup")) === "true"
-            if (savedData) setFormData(JSON.parse(savedData))
-            if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
-            if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
-            if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("cmfHasSeenWelcomePopup"), "true") }
+          } else {
+            setIsCompanyMember(false)
+            setEffectiveUserId(`${user.uid}_cmf`)
+            setUserRole("owner")
+            setEditPermissions(ROLE_PERMISSIONS.owner)
+          }
+          const savedData = localStorage.getItem(getUserSpecificKey(LOCAL_STORAGE_KEY_PREFIX))
+          const savedCompletedSections = localStorage.getItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY))
+          const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("cmfProfileSubmitted"))
+          const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("cmfHasSeenWelcomePopup")) === "true"
+          if (savedData) {
+            try { setFormData(JSON.parse(savedData)) } catch (e) { console.warn("Failed to parse savedData", e) }
+          }
+          if (savedCompletedSections) {
+            try { setCompletedSections(JSON.parse(savedCompletedSections)) } catch (e) { console.warn("Failed to parse savedCompletedSections", e) }
+          }
+          if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
+          if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("cmfHasSeenWelcomePopup"), "true") }
         } catch (error) {
           console.error("Error checking company membership:", error)
-          setEffectiveUserId(`${user.uid}_cmf`); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
+          setEffectiveUserId(`${user.uid}_cmf`)
+          setUserRole("owner")
+          setEditPermissions(ROLE_PERMISSIONS.owner)
         }
       } else { navigate("/auth") }
       setLoading(false)
     })
     return () => {
       unsubscribe()
-      if (prevOnboarding !== null) {
-        sessionStorage.setItem("isOnboarding", prevOnboarding)
-      } else {
-        sessionStorage.removeItem("isOnboarding")
-      }
     }
   }, [])
 
@@ -278,15 +297,51 @@ export default function CMFUniversalProfile() {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
   }
 
+  const isFileOrBlob = (val) => {
+    if (!val) return false
+    return (
+      val instanceof File ||
+      val instanceof Blob ||
+      (typeof val === "object" && typeof val.name === "string" && typeof val.size === "number" && typeof val.slice === "function")
+    )
+  }
+
+  const sanitizeForFirestore = (val) => {
+    if (val === undefined || val === null) return null
+    if (isFileOrBlob(val)) return null
+    if (typeof val === "function") return null
+    if (typeof val === "object" && typeof val.item === "function" && typeof val.length === "number") {
+      return Array.from(val).map(sanitizeForFirestore)
+    }
+    if (Array.isArray(val)) {
+      return val.map(sanitizeForFirestore)
+    }
+    if (typeof val === "object") {
+      const sanitized = {}
+      for (const [k, v] of Object.entries(val)) {
+        if (v !== undefined) {
+          sanitized[k] = sanitizeForFirestore(v)
+        }
+      }
+      return sanitized
+    }
+    return val
+  }
+
   const markSectionAsCompleted = async (section) => {
     const updated = { ...completedSections, [section]: true }
     setCompletedSections(updated)
     const userId = effectiveUserId || auth.currentUser?.uid
     if (userId) {
-      const docRef = doc(db, FIRESTORE_COLLECTION, userId)
-      await setDoc(docRef, { completedSections: updated }, { merge: true })
+      try {
+        const docRef = doc(db, FIRESTORE_COLLECTION, userId)
+        await setDoc(docRef, { completedSections: updated }, { merge: true })
+      } catch (err) {
+        console.warn("Could not mark section completed in Firestore:", err)
+      }
       localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(updated))
     }
+    return updated
   }
 
   const navigateToNextSection = () => {
@@ -303,103 +358,179 @@ export default function CMFUniversalProfile() {
 
   const uploadFilesAndReplaceWithURLs = async (data, section) => {
     const uploadRecursive = async (item, pathPrefix) => {
-      if (item instanceof File) {
-        const fileRef = ref(storage, `cmfProfile/${auth.currentUser?.uid}/${pathPrefix}`)
-        await uploadBytes(fileRef, item); return await getDownloadURL(fileRef)
+      if (isFileOrBlob(item)) {
+        try {
+          const safeName = (item.name || "file").replace(/[^a-zA-Z0-9._-]/g, "_")
+          const fileRef = ref(storage, `cmfProfile/${auth.currentUser?.uid}/${pathPrefix}_${Date.now()}_${safeName}`)
+          await uploadBytes(fileRef, item)
+          return await getDownloadURL(fileRef)
+        } catch (uploadErr) {
+          console.error("Error uploading file in CMF profile:", uploadErr)
+          return null
+        }
+      } else if (typeof item === "object" && item !== null && typeof item.item === "function" && typeof item.length === "number") {
+        const filesArray = Array.from(item)
+        return await Promise.all(filesArray.map((entry, idx) => uploadRecursive(entry, `${pathPrefix}/${idx}`)))
       } else if (Array.isArray(item)) {
         return await Promise.all(item.map((entry, idx) => uploadRecursive(entry, `${pathPrefix}/${idx}`)))
       } else if (typeof item === "object" && item !== null) {
-        const updated = {}; for (const key in item) { updated[key] = await uploadRecursive(item[key], `${pathPrefix}/${key}`) }; return updated
-      } else { return item }
+        const updated = {}
+        for (const key in item) {
+          if (Object.prototype.hasOwnProperty.call(item, key)) {
+            updated[key] = await uploadRecursive(item[key], `${pathPrefix}/${key}`)
+          }
+        }
+        return updated
+      } else {
+        return item === undefined ? null : item
+      }
     }
-    return await uploadRecursive(data, section)
+    const uploaded = await uploadRecursive(data, section)
+    return sanitizeForFirestore(uploaded)
   }
 
-  const saveDataToFirebase = async (section = null, isFinalSubmit = false) => {
+  const saveDataToFirebase = async (section = null, isFinalSubmit = false, nextCompletedSections = null) => {
     setLoading(true)
-    const userId = effectiveUserId || auth.currentUser?.uid
+    const userId = effectiveUserId || (auth.currentUser?.uid ? `${auth.currentUser.uid}_cmf` : null)
     const currentUser = auth.currentUser
-    if (!userId) { setLoading(false); throw new Error("User not logged in.") }
+    if (!userId || !currentUser) {
+      setLoading(false)
+      throw new Error("User not logged in.")
+    }
     if (section && !canEditSection(section)) {
       alert(`You don't have permission to edit the ${sections.find((s) => s.id === section)?.label.replace(/\n/g, " ")} section.`)
-      setLoading(false); return
+      setLoading(false)
+      return
     }
+
+    try {
       const docRef = doc(db, FIRESTORE_COLLECTION, userId)
-  const latestSnap = await getDoc(docRef)
-  if (latestSnap.exists()) {
-    const latestData = latestSnap.data()
-    if (latestData.documents) {
-      // Update formData with the latest documents
-      setFormData(prev => ({
-        ...prev,
-        documents: latestData.documents
-      }))
+      const latestSnap = await getDoc(docRef)
+      if (latestSnap.exists()) {
+        const latestData = latestSnap.data()
+        if (latestData.documents) {
+          setFormData(prev => ({
+            ...prev,
+            documents: latestData.documents
+          }))
+        }
+      }
+
+      const sectionData = section ? formData[section] : formData
+      const uploaded = section
+        ? { ...(section !== "instructions" && { [section]: await uploadFilesAndReplaceWithURLs(sectionData, section) }) }
+        : await uploadFilesAndReplaceWithURLs(sectionData, "full")
+
+      let userName = currentUser.email
+      try {
+        const userDocRef = doc(db, "users", currentUser.uid)
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists()) {
+          userName = userDocSnap.data().username || userDocSnap.data().email || currentUser.email
+        }
+      } catch (userErr) {
+        console.warn("Could not fetch user name:", userErr)
+      }
+
+      const editLogEntry = {
+        editedBy: currentUser.uid,
+        editedByName: userName,
+        editedByEmail: currentUser.email,
+        role: userRole || "owner",
+        section: section || "full_profile",
+        sectionName: section ? sections.find((s) => s.id === section)?.label.replace(/\n/g, " ") : "Full Profile",
+        timestamp: new Date().toISOString(),
+        action: isFinalSubmit ? "submitted" : "updated",
+      }
+
+      const existingHistory = latestSnap.exists() ? latestSnap.data().editHistory || [] : []
+      const sectionsToSave = nextCompletedSections || completedSections
+
+      const dataToSave = sanitizeForFirestore({
+        ...uploaded,
+        completedSections: sectionsToSave,
+        lastEditedBy: currentUser.uid,
+        lastEditedByName: userName,
+        lastEditedAt: new Date().toISOString(),
+        lastEditedByRole: userRole || "owner",
+        editHistory: [...existingHistory, editLogEntry],
+      })
+
+      // Primary profile save
+      await setDoc(docRef, dataToSave, { merge: true })
+
+      // Dual-sync to base currentUser.uid if effectiveUserId is ${currentUser.uid}_cmf
+      if (currentUser.uid && userId !== currentUser.uid) {
+        try {
+          const fallbackDocRef = doc(db, FIRESTORE_COLLECTION, currentUser.uid)
+          await setDoc(fallbackDocRef, dataToSave, { merge: true })
+        } catch (dualErr) {
+          console.warn("Could not dual-sync to fallback UID doc:", dualErr)
+        }
+      }
+
+      setEditHistory([...existingHistory, editLogEntry])
+      setProfileData(prev => ({ ...(prev || {}), ...dataToSave }))
+      localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(sectionsToSave))
+      localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_KEY_PREFIX), JSON.stringify(formData))
+    } catch (saveErr) {
+      console.error("Error saving CMF profile data to Firestore:", saveErr)
+      alert("Failed to save to cloud: " + (saveErr?.message || "Unknown error"))
+    } finally {
+      setLoading(false)
     }
   }
-  
 
-
-    const sectionData = section ? formData[section] : formData
-    const uploaded = section
-      ? { ...(section !== "instructions" && { [section]: await uploadFilesAndReplaceWithURLs(sectionData, section) }) }
-      : await uploadFilesAndReplaceWithURLs(sectionData, "full")
-    const userDocRef = doc(db, "users", currentUser.uid)
-    const userDocSnap = await getDoc(userDocRef)
-    const userName = userDocSnap.exists() ? userDocSnap.data().username || userDocSnap.data().email || currentUser.email : currentUser.email
-    const editLogEntry = {
-      editedBy: currentUser.uid, editedByName: userName, editedByEmail: currentUser.email,
-      role: userRole, section: section || "full_profile",
-      sectionName: section ? sections.find((s) => s.id === section)?.label.replace(/\n/g, " ") : "Full Profile",
-      timestamp: new Date().toISOString(), action: isFinalSubmit ? "submitted" : "updated",
+  const handleSaveSection = async () => {
+    if (activeSection === "documents") {
+      alert("Documents are saved automatically when uploaded.")
+      return
     }
-    const profileSnap = await getDoc(docRef)
-    const existingHistory = profileSnap.exists() ? profileSnap.data().editHistory || [] : []
-    const dataToSave = {
-      ...uploaded, completedSections,
-      ...(isFinalSubmit || !section ? { completedSections } : {}),
-      lastEditedBy: currentUser.uid, lastEditedByName: userName,
-      lastEditedAt: new Date().toISOString(), lastEditedByRole: userRole,
-      editHistory: [...existingHistory, editLogEntry],
-    }
-    await setDoc(docRef, dataToSave, { merge: true })
-    setEditHistory([...existingHistory, editLogEntry])
-    setLoading(false)
+    const updated = { ...completedSections, [activeSection]: true }
+    setCompletedSections(updated)
+    localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(updated))
+    await saveDataToFirebase(activeSection, false, updated)
+    alert("Section saved!")
   }
 
-const handleSaveSection = async () => {
-  if (activeSection === "documents") {
-    alert("Documents are saved automatically when uploaded.");
-    return;
-  }
-  await saveDataToFirebase(activeSection);
-  alert("Section saved!");
-}
   const handleSaveAndContinue = async () => {
-  // If on documents tab, just navigate to the next section
-  if (activeSection === "documents") {
-    markSectionAsCompleted("documents");
-    navigateToNextSection();
-    return;
+    // If on documents tab, just navigate to the next section
+    if (activeSection === "documents") {
+      const updated = await markSectionAsCompleted("documents")
+      navigateToNextSection()
+      return
+    }
+
+    const sectionData = formData[activeSection] || {}
+    const isValid = sectionValidations[activeSection]?.(sectionData)
+    if (!isValid) {
+      const errors = []
+      if (activeSection === "entityOverview") {
+        errors.push("Entity Overview requires Registered or Trading Name, Registration Number or Entity Type, and Business Description.")
+      } else if (activeSection === "contactDetails") {
+        errors.push("Contact Details requires Contact Name, Email, Phone/Mobile, and Physical Address.")
+      } else {
+        errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`)
+      }
+      if (activeSection !== "instructions") {
+        setValidationModal({ open: true, title: "Please review the following issues:", messages: errors })
+        return
+      }
+    }
+
+    const updated = { ...completedSections, [activeSection]: true }
+    setCompletedSections(updated)
+    localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(updated))
+    await saveDataToFirebase(activeSection, false, updated)
+    navigateToNextSection()
   }
-  
-  const sectionData = formData[activeSection] || {};
-  const isValid = sectionValidations[activeSection]?.(sectionData);
-  if (!isValid) {
-    const errors = [];
-    if (activeSection === "entityOverview") errors.push("Entity Overview section is incomplete. Please fill in all required fields.");
-    else if (activeSection === "contactDetails") errors.push("Contact Details section is incomplete. Please fill in all required fields.");
-    else errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`);
-    if (activeSection !== "instructions") setValidationModal({ open: true, title: "Please review the following issues:", messages: errors });
-    return;
-  }
-  markSectionAsCompleted(activeSection);
-  await saveDataToFirebase(activeSection);
-  navigateToNextSection();
-}
 
   const handleSubmitProfile = async () => {
-    markSectionAsCompleted("declarationConsent")
-    const { allValid, sectionStatus } = validateAllSections(formData, completedSections)
+    const updated = { ...completedSections, declarationConsent: true }
+    setCompletedSections(updated)
+    localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(updated))
+
+    const { allValid, sectionStatus } = validateAllSections(formData, updated)
     if (!allValid) {
       const issues = Object.entries(sectionStatus)
         .filter(([_, status]) => !status.valid || !status.completed)
@@ -408,7 +539,7 @@ const handleSaveSection = async () => {
       return
     }
     try {
-      await saveDataToFirebase(null, true)
+      await saveDataToFirebase(null, true, updated)
       setProfileSubmitted(true)
       const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("cmfHasSeenCongratulationsPopup")) === "true"
       if (!hasSeenCongratulationsPopup) {
@@ -441,9 +572,9 @@ const handleSaveSection = async () => {
       case "legalCompliance": return <LegalCompliance {...commonProps} />
       case "productsServices": return <ProductsServices {...commonProps} />
       case "howDidYouHear": return <HowDidYouHear {...commonProps} />
-      case "documents": 
+      case "documents":
         return (
-          <CMFDocuments 
+          <CMFDocuments
             onClose={async () => {
               // Refresh profile data from Firestore
               const userId = effectiveUserId || auth.currentUser?.uid;
@@ -482,9 +613,23 @@ const handleSaveSection = async () => {
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
-        setLoading(true); if (!effectiveUserId) return
-        const docRef = doc(db, FIRESTORE_COLLECTION, effectiveUserId)
-        const docSnap = await getDoc(docRef)
+        setLoading(true)
+        const targetId = effectiveUserId || (auth.currentUser?.uid ? `${auth.currentUser.uid}_cmf` : null)
+        if (!targetId) return
+
+        let docRef = doc(db, FIRESTORE_COLLECTION, targetId)
+        let docSnap = await getDoc(docRef)
+
+        // Fallback: check currentUser.uid if targetId was ${uid}_cmf
+        if (!docSnap.exists() && auth.currentUser?.uid && targetId !== auth.currentUser.uid) {
+          const fallbackRef = doc(db, FIRESTORE_COLLECTION, auth.currentUser.uid)
+          const fallbackSnap = await getDoc(fallbackRef)
+          if (fallbackSnap.exists()) {
+            docRef = fallbackRef
+            docSnap = fallbackSnap
+          }
+        }
+
         if (docSnap.exists()) {
           const data = docSnap.data()
           setProfileData(data)
@@ -497,7 +642,7 @@ const handleSaveSection = async () => {
             Object.keys(data).forEach(key => {
               if (merged[key] && typeof merged[key] === "object" && !Array.isArray(merged[key])) {
                 merged[key] = { ...merged[key], ...data[key] }
-              } else {
+              } else if (data[key] !== undefined) {
                 merged[key] = data[key]
               }
             })
@@ -506,10 +651,14 @@ const handleSaveSection = async () => {
           const isComplete = data?.declarationConsent?.accuracy && data?.declarationConsent?.dataProcessing && data?.declarationConsent?.termsConditions
           if (isComplete && !isEditing) { setProfileSubmitted(true); setShowSummary(true) }
         }
-      } catch (err) { console.error("Error fetching CMF profile data:", err); setError("Failed to load profile data. Please try again later.") }
-      finally { setLoading(false) }
+      } catch (err) {
+        console.error("Error fetching CMF profile data:", err)
+        setError("Failed to load profile data. Please try again later.")
+      } finally {
+        setLoading(false)
+      }
     }
-    if (effectiveUserId) fetchProfileData()
+    fetchProfileData()
   }, [isEditing, effectiveUserId])
 
   if (loading) {
@@ -581,7 +730,7 @@ const handleSaveSection = async () => {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ margin: 0 }}>My CMF Profile — Capital and Market Facilitator</h1>
-        {profileSubmitted && (
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <button
             onClick={() => {
               setIsEditing(false);
@@ -597,9 +746,9 @@ const handleSaveSection = async () => {
               fontWeight: "600",
             }}
           >
-            ← Back to Profile Summary
+            {profileSubmitted ? "← Back to Profile Summary" : "👁 View Profile Summary"}
           </button>
-        )}
+        </div>
       </div>
 
       <div className="profile-tracker">
@@ -631,44 +780,44 @@ const handleSaveSection = async () => {
 
       <div className="content-card">
         {renderActiveSection()}
-      <div className="action-buttons">
-  {activeSection !== "instructions" && (
-    <button type="button" onClick={navigateToPreviousSection} className="btn btn-secondary">
-      <ChevronLeft size={16} /> Previous
-    </button>
-  )}
-  
-  {activeSection !== "documents" && (
-    <button type="button" onClick={handleSaveSection} className="btn btn-secondary">
-      <Save size={16} /> Save
-    </button>
-  )}
-  
-  {activeSection === "documents" && (
-    <span style={{ color: "#2e7d32", fontSize: "14px", fontWeight: "500" }}>
-      ✅ Documents are saved automatically
-    </span>
-  )}
-  
-  {activeSection !== "declarationConsent" ? (
-    activeSection === "documents" ? (
-      <button type="button" onClick={() => {
-        markSectionAsCompleted("documents");
-        navigateToNextSection();
-      }} className="btn btn-primary">
-        Continue <ChevronRight size={16} />
-      </button>
-    ) : (
-      <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">
-        Save & Continue <ChevronRight size={16} />
-      </button>
-    )
-  ) : (
-    <button type="button" onClick={handleSubmitProfile}
-      disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions}
-      className="btn btn-primary">Submit Profile</button>
-  )}
-</div>
+        <div className="action-buttons">
+          {activeSection !== "instructions" && (
+            <button type="button" onClick={navigateToPreviousSection} className="btn btn-secondary">
+              <ChevronLeft size={16} /> Previous
+            </button>
+          )}
+
+          {activeSection !== "documents" && (
+            <button type="button" onClick={handleSaveSection} className="btn btn-secondary">
+              <Save size={16} /> Save
+            </button>
+          )}
+
+          {activeSection === "documents" && (
+            <span style={{ color: "#2e7d32", fontSize: "14px", fontWeight: "500" }}>
+              ✅ Documents are saved automatically
+            </span>
+          )}
+
+          {activeSection !== "declarationConsent" ? (
+            activeSection === "documents" ? (
+              <button type="button" onClick={() => {
+                markSectionAsCompleted("documents");
+                navigateToNextSection();
+              }} className="btn btn-primary">
+                Continue <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">
+                Save & Continue <ChevronRight size={16} />
+              </button>
+            )
+          ) : (
+            <button type="button" onClick={handleSubmitProfile}
+              disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions}
+              className="btn btn-primary">Submit Profile</button>
+          )}
+        </div>
       </div>
     </div>
   )
