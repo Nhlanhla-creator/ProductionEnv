@@ -2,41 +2,34 @@ import { useState, useRef } from "react"
 import { Upload, X, FileText, CheckCircle, AlertCircle } from "lucide-react"
 
 const CMF_DOCUMENT_CATEGORIES = {
-  required: {
-    label: "Required Documents",
-    color: "#dc2626",
-    impact: "⚠️ Verification Impact: Mandatory. All documents in this section must be uploaded before submitting your profile. These form the base verification layer.",
-    documents: [
-      { id: "cipcRegistration", label: "CIPC Registration Document", description: "Certificate of Incorporation or equivalent" },
-      { id: "taxCompliancePin", label: "Tax Compliance PIN", description: "SARS Tax Compliance Certificate or PIN" },
-      { id: "companyProfile", label: "Company Profile (PDF)", description: "Formal company overview document" },
-      { id: "logo", label: "Company Logo", description: "High-resolution logo file (PNG, SVG or vector preferred)" },
-      { id: "proofOfAddress", label: "Proof of Address", description: "Not older than 3 months" },
-    ],
-  },
   compliance: {
     label: "Compliance & Credentials",
     color: "#d97706",
-    impact: "✨ Verification Impact: High. SARS tax compliance status and active B-BBEE certificates directly qualify your profile for the green 'Verified CMF Profile' badge visible to SMEs.",
+    impact: "✨ Verification Impact: High. CIPC registration, Tax PIN, proof of address, and active B-BBEE certificates directly qualify your profile for the green 'Verified CMF Profile' badge visible to SMEs.",
     documents: [
-      { id: "vatCertificate", label: "VAT Certificate", description: "If VAT registered" },
-      { id: "bbbeeCertificate", label: "B-BBEE Certificate", description: "Current B-BBEE verification certificate" },
-      { id: "fspLicence", label: "FSP Licence / FSP Partner Details", description: "Financial Services Provider licence or partnership agreement (if applicable)" },
-      { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", description: "Current PI insurance schedule (if applicable)" },
-      { id: "isoCertifications", label: "ISO Certifications", description: "Relevant ISO certification documents (if applicable)" },
-      { id: "industryAccreditations", label: "Industry Accreditations", description: "Other relevant professional registrations or accreditations" },
+      { id: "cipcRegistration", label: "CIPC Registration Document", description: "Certificate of Incorporation or equivalent", required: true },
+      { id: "taxCompliancePin", label: "Tax Compliance PIN", description: "SARS Tax Compliance Certificate or PIN", required: true },
+      { id: "proofOfAddress", label: "Proof of Address", description: "Not older than 3 months", required: true },
+      { id: "vatCertificate", label: "VAT Certificate", description: "If VAT registered", required: false },
+      { id: "bbbeeCertificate", label: "B-BBEE Certificate", description: "Current B-BBEE verification certificate", required: false },
+      { id: "fspLicence", label: "FSP Licence / FSP Partner Details", description: "Financial Services Provider licence or partnership agreement (if applicable)", required: false },
+      { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", description: "Current PI insurance schedule (if applicable)", required: false },
+      { id: "isoCertifications", label: "ISO Certifications", description: "Relevant ISO certification documents (if applicable)", required: false },
+      { id: "industryAccreditations", label: "Industry Accreditations", description: "Other relevant professional registrations or accreditations", required: false },
     ],
   },
   capability: {
     label: "Marketing & Capability",
     color: "#059669",
-    impact: "📋 Verification Impact: Secondary. These documents showcase program capacity and track record. Helps SMEs assess CMF program credibility and increases your matching weightings.",
+    impact: "📋 Verification Impact: Secondary. These documents showcase program capacity, brand identity, and track record. Helps SMEs assess CMF credibility and increases your matching weightings.",
     documents: [
-      { id: "capabilityStatement", label: "Capability Statement", description: "Summary of your firm's core capabilities and track record" },
-      { id: "caseStudies", label: "Case Studies", description: "Examples of past transactions or engagements" },
-      { id: "clientReferences", label: "Client References", description: "Contact details or letters from key clients" },
-      { id: "brochure", label: "Brochure", description: "Marketing or product brochure" },
-      { id: "serviceCatalogue", label: "Service Catalogue", description: "Detailed listing of services offered" },
+      { id: "companyProfile", label: "Company Profile (PDF)", description: "Formal company overview document", required: true },
+      { id: "logo", label: "Company Logo", description: "High-resolution logo file (PNG, SVG or vector preferred)", required: true },
+      { id: "capabilityStatement", label: "Capability Statement", description: "Summary of your firm's core capabilities and track record", required: false },
+      { id: "caseStudies", label: "Case Studies", description: "Examples of past transactions or engagements", required: false },
+      { id: "clientReferences", label: "Client References", description: "Contact details or letters from key clients", required: false },
+      { id: "brochure", label: "Brochure", description: "Marketing or product brochure", required: false },
+      { id: "serviceCatalogue", label: "Service Catalogue", description: "Detailed listing of services offered", required: false },
     ],
   },
 }
@@ -140,37 +133,45 @@ export default function CMFDocumentUpload({ data = {}, updateData }) {
         </p>
       </div>
 
-      {Object.entries(CMF_DOCUMENT_CATEGORIES).map(([catKey, category]) => (
-        <div key={catKey} style={{ marginBottom: "2.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
-            <div style={{ width: "4px", height: "28px", backgroundColor: category.color, borderRadius: "2px" }} />
-            <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "700", color: "#1f2937" }}>
-              {category.label}
-            </h3>
-            {catKey === "required" && (
-              <span style={{ fontSize: "0.75rem", backgroundColor: "#fee2e2", color: "#dc2626", padding: "2px 8px", borderRadius: "9999px", fontWeight: "600" }}>
-                All required
-              </span>
-            )}
+      {Object.entries(CMF_DOCUMENT_CATEGORIES).map(([catKey, category]) => {
+        const reqCount = category.documents.filter((d) => d.required).length
+        const optCount = category.documents.filter((d) => !d.required).length
+
+        return (
+          <div key={catKey} style={{ marginBottom: "2.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+              <div style={{ width: "4px", height: "28px", backgroundColor: category.color, borderRadius: "2px" }} />
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "700", color: "#1f2937" }}>
+                {category.label}
+              </h3>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <span style={{ fontSize: "0.75rem", backgroundColor: "#fee2e2", color: "#dc2626", padding: "2px 8px", borderRadius: "9999px", fontWeight: "600" }}>
+                  {reqCount} Required
+                </span>
+                <span style={{ fontSize: "0.75rem", backgroundColor: "#f3f4f6", color: "#6b7280", padding: "2px 8px", borderRadius: "9999px", fontWeight: "600" }}>
+                  {optCount} Optional
+                </span>
+              </div>
+            </div>
+            <p style={{ fontSize: "0.85rem", color: "#4b5563", marginTop: "-0.75rem", marginBottom: "1.25rem", fontStyle: "italic", fontWeight: "500" }}>
+              {category.impact}
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1.5rem" }}>
+              {category.documents.map((doc) => (
+                <FileUploadField
+                  key={doc.id}
+                  docId={doc.id}
+                  label={doc.label}
+                  description={doc.description}
+                  isRequired={doc.required}
+                  files={data[doc.id] || []}
+                  onFilesChange={(files) => handleFilesChange(doc.id, files)}
+                />
+              ))}
+            </div>
           </div>
-          <p style={{ fontSize: "0.85rem", color: "#4b5563", marginTop: "-0.75rem", marginBottom: "1.25rem", fontStyle: "italic", fontWeight: "500" }}>
-            {category.impact}
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1.5rem" }}>
-            {category.documents.map((doc) => (
-              <FileUploadField
-                key={doc.id}
-                docId={doc.id}
-                label={doc.label}
-                description={doc.description}
-                isRequired={catKey === "required"}
-                files={data[doc.id] || []}
-                onFilesChange={(files) => handleFilesChange(doc.id, files)}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -183,22 +183,7 @@ const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
     } else {
       onBack?.()
     }
-<<<<<<< HEAD
-  }, [apiKey])
-
-const getContainerStyles = () => ({
-   width: "100%",
-  minHeight: "100vh",
-  maxWidth: "100%",
-  overflowX: "visible",
-  overflowY: "visible",
-  boxSizing: "border-box",
-  position: "relative",
-  flex: 1,
-})
-=======
   }
->>>>>>> b17c45810031448364e8fd7bf3871c13f06f9019
 
 
   const runGuaranteesAnalysisIfNeeded = async () => {
@@ -617,70 +602,6 @@ const getContainerStyles = () => ({
   }
 
   const renderActiveSection = () => {
-<<<<<<< HEAD
-    // Prevent Enterprise Readiness from loading without API key
-    if (activeSection === "enterpriseReadiness") {
-      if (isApiKeyLoading) {
-        return (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              minHeight: "200px",
-              fontSize: "16px",
-              color: "#666",
-              width: "100%",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            <div>Loading Enterprise Readiness resources...</div>
-            <div style={{ fontSize: "14px", color: "#999" }}>Preparing AI evaluation tools...</div>
-          </div>
-        )
-      }
-      if (!apiKey) {
-        return (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              minHeight: "200px",
-              fontSize: "16px",
-              color: "#e74c3c",
-              width: "100%",
-              flexDirection: "column",
-              gap: "15px",
-              textAlign: "center",
-              padding: "20px",
-            }}
-          >
-            <div>⚠️ API Key Required</div>
-            <div style={{ fontSize: "14px", color: "#666", maxWidth: "400px" }}>
-              The Enterprise Readiness section requires API access for AI-powered evaluations. Please ensure your API
-              configuration is properly set up.
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#3498db",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Retry Loading
-            </button>
-          </div>
-        )
-      }
-    }
-=======
->>>>>>> b17c45810031448364e8fd7bf3871c13f06f9019
     switch (activeSection) {
       case "applicationOverview":
         return renderApplicationOverview(formData.applicationOverview, updateFormData)
