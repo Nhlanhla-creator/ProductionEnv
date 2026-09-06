@@ -18,22 +18,24 @@ import CMFVerificationScoreCard, {
 } from "./CMFVerificationScoreCard"
 
 const documentUploadList = [
-  { id: "cipcRegistration", label: "CIPC Registration Document" },
-  { id: "taxCompliancePin", label: "Tax Compliance PIN" },
-  { id: "companyProfile", label: "Company Profile (PDF)" },
-  { id: "logo", label: "Company Logo" },
-  { id: "proofOfAddress", label: "Proof of Address" },
-  { id: "vatCertificate", label: "VAT Certificate" },
-  { id: "bbbeeCertificate", label: "B-BBEE Certificate" },
-  { id: "fspLicence", label: "FSP Licence / Partner Details" },
-  { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance" },
-  { id: "isoCertifications", label: "ISO Certifications" },
-  { id: "industryAccreditations", label: "Industry Accreditations" },
-  { id: "capabilityStatement", label: "Capability Statement" },
-  { id: "caseStudies", label: "Case Studies" },
-  { id: "clientReferences", label: "Client References" },
-  { id: "brochure", label: "Brochure" },
-  { id: "serviceCatalogue", label: "Service Catalogue" },
+  // Compliance
+  { id: "cipcRegistration", label: "CIPC Registration Document", category: "Compliance", required: true },
+  { id: "taxCompliancePin", label: "Tax Compliance PIN", category: "Compliance", required: true },
+  { id: "proofOfAddress", label: "Proof of Address", category: "Compliance", required: true },
+  { id: "vatCertificate", label: "VAT Certificate", category: "Compliance", required: false },
+  { id: "bbbeeCertificate", label: "B-BBEE Certificate", category: "Compliance", required: false },
+  { id: "fspLicence", label: "FSP Licence / Partner Details", category: "Compliance", required: false },
+  { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", category: "Compliance", required: false },
+  { id: "isoCertifications", label: "ISO Certifications", category: "Compliance", required: false },
+  { id: "industryAccreditations", label: "Industry Accreditations", category: "Compliance", required: false },
+  // Marketing
+  { id: "companyProfile", label: "Company Profile (PDF)", category: "Marketing", required: true },
+  { id: "logo", label: "Company Logo", category: "Marketing", required: true },
+  { id: "capabilityStatement", label: "Capability Statement", category: "Marketing", required: false },
+  { id: "caseStudies", label: "Case Studies", category: "Marketing", required: false },
+  { id: "clientReferences", label: "Client References", category: "Marketing", required: false },
+  { id: "brochure", label: "Brochure", category: "Marketing", required: false },
+  { id: "serviceCatalogue", label: "Service Catalogue", category: "Marketing", required: false },
 ]
 
 export default function CMFProfileSummary({ data, formData, onEdit }) {
@@ -1138,37 +1140,65 @@ export default function CMFProfileSummary({ data, formData, onEdit }) {
                           transition: "all 0.3s ease",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                          <div
-                            style={{
-                              width: "20px",
-                              height: "20px",
-                              borderRadius: "4px",
-                              background:
-                                documents[docItem.id] && documents[docItem.id].length > 0
-                                  ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                                  : "#e5e5e5",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "#fff",
-                              fontSize: "12px",
-                              fontWeight: "bold",
-                            }}
-                          >
-                            {documents[docItem.id] && documents[docItem.id].length > 0 ? "✓" : ""}
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div
+                              style={{
+                                width: "20px",
+                                height: "20px",
+                                borderRadius: "4px",
+                                background:
+                                  documents[docItem.id] && documents[docItem.id].length > 0
+                                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
+                                    : "#e5e5e5",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#fff",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {documents[docItem.id] && documents[docItem.id].length > 0 ? "✓" : ""}
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "13px",
+                                color: "#7d5a50",
+                                fontWeight: "600",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              {docItem.label}
+                            </span>
                           </div>
-                          <span
-                            style={{
-                              fontSize: "13px",
-                              color: "#7d5a50",
-                              fontWeight: "600",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            {docItem.label}
-                          </span>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontWeight: "600",
+                                backgroundColor: docItem.category === "Compliance" ? "#fef3c7" : "#dbeafe",
+                                color: docItem.category === "Compliance" ? "#92400e" : "#1e40af",
+                              }}
+                            >
+                              {docItem.category}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontWeight: "600",
+                                backgroundColor: docItem.required ? "#fee2e2" : "#f3f4f6",
+                                color: docItem.required ? "#dc2626" : "#6b7280",
+                              }}
+                            >
+                              {docItem.required ? "Required" : "Optional"}
+                            </span>
+                          </div>
                         </div>
                         {renderDocumentStatus(documents[docItem.id])}
                       </div>
