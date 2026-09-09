@@ -82,13 +82,13 @@ const Header = ({ onLoginClick }) => {
     };
   }, [isMobileMenuOpen]);
 
-  // Logged in  -> go back to the correct portal.
+  // Logged in -> go back to the correct portal.
   // Logged out -> normal login behaviour.
   const handleLoginClick = () => {
     setIsMobileMenuOpen(false);
     setOpenDropdown(null);
 
-    if (isLoggedIn) {
+    if (isLoggedIn && dashboardRoute) {
       navigate(dashboardRoute);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -111,8 +111,6 @@ const Header = ({ onLoginClick }) => {
       const element = document.getElementById(path.substring(1));
       if (element) element.scrollIntoView({ behavior: 'smooth' });
     } else {
-      // IMPORTANT: navigate(), never window.location.href — a hard reload is
-      // what makes people feel like they've been logged out.
       navigate(path);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -245,7 +243,7 @@ const Header = ({ onLoginClick }) => {
       padding: '6px 0',
       minWidth: '260px',
       zIndex: 200,
-      display: 'none',  // Hide completely when closed to prevent click interception
+      display: 'none',
       opacity: 0,
       visibility: 'hidden',
       transition: 'opacity 0.25s ease, visibility 0.25s ease',
@@ -436,7 +434,7 @@ const Header = ({ onLoginClick }) => {
       marginTop: '0.6rem',
       textAlign: 'center',
       fontSize: '0.9rem',
-      backgroundColor: isLoggedIn ? '#1E7A47' : '#A78B71',
+      backgroundColor: isLoggedIn && dashboardRoute ? '#1E7A47' : '#A78B71',
       color: 'white',
       border: 'none',
       borderRadius: '6px',
@@ -444,6 +442,8 @@ const Header = ({ onLoginClick }) => {
       cursor: 'pointer',
       transition: 'all 0.3s',
       letterSpacing: '0.3px',
+      // Hide the button for admin users (no dashboard route)
+      display: (isLoggedIn && !dashboardRoute) ? 'none' : 'block',
     },
     closeButton: {
       position: 'absolute',
@@ -616,7 +616,6 @@ const Header = ({ onLoginClick }) => {
                 }}>▼</span>
               </button>
 
-              {/* Aligned right to prevent overlapping login button */}
               <div style={{
                 ...styles.dropdownMenu,
                 ...(openDropdown === 'solutions' ? styles.dropdownMenuOpen : {}),
@@ -677,7 +676,6 @@ const Header = ({ onLoginClick }) => {
                 }}>▼</span>
               </button>
 
-              {/* Aligned right to prevent overlapping login button */}
               <div style={{
                 ...styles.dropdownMenu,
                 ...(openDropdown === 'howItWorks' ? styles.dropdownMenuOpen : {}),
@@ -766,38 +764,65 @@ const Header = ({ onLoginClick }) => {
 
         {/* Desktop right-hand button: session-aware */}
         <div style={styles.desktopLoginContainer}>
-          <button
-            className="login-btn"
-            onClick={handleLoginClick}
-            disabled={authLoading}
-            style={{
-              ...(isLoggedIn ? styles.dashboardButton : styles.loginButton),
-              ...(authLoading ? { opacity: 0.55, cursor: 'default' } : {}),
-            }}
-            onMouseEnter={(e) => {
-              if (authLoading) return;
-              e.currentTarget.style.backgroundColor = isLoggedIn ? '#155A34' : '#8a6d52';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
-            }}
-            onMouseLeave={(e) => {
-              if (authLoading) return;
-              e.currentTarget.style.backgroundColor = isLoggedIn ? '#1E7A47' : '#A78B71';
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            {authLoading ? (
-              '...'
-            ) : isLoggedIn ? (
-              <>
-                <span style={styles.sessionDot} />
-                {portalLabel}
-              </>
-            ) : (
-              'Login/Register'
-            )}
-          </button>
+          {isLoggedIn && dashboardRoute ? (
+            <button
+              className="login-btn"
+              onClick={handleLoginClick}
+              disabled={authLoading}
+              style={{
+                ...styles.dashboardButton,
+                ...(authLoading ? { opacity: 0.55, cursor: 'default' } : {}),
+              }}
+              onMouseEnter={(e) => {
+                if (authLoading) return;
+                e.currentTarget.style.backgroundColor = '#155A34';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+              }}
+              onMouseLeave={(e) => {
+                if (authLoading) return;
+                e.currentTarget.style.backgroundColor = '#1E7A47';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              {authLoading ? (
+                '...'
+              ) : (
+                <>
+                  <span style={styles.sessionDot} />
+                  {portalLabel || 'My Dashboard'}
+                </>
+              )}
+            </button>
+          ) : isLoggedIn && !dashboardRoute ? (
+            // Admin user - show nothing or a different button
+            null
+          ) : (
+            <button
+              className="login-btn"
+              onClick={handleLoginClick}
+              disabled={authLoading}
+              style={{
+                ...styles.loginButton,
+                ...(authLoading ? { opacity: 0.55, cursor: 'default' } : {}),
+              }}
+              onMouseEnter={(e) => {
+                if (authLoading) return;
+                e.currentTarget.style.backgroundColor = '#8a6d52';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+              }}
+              onMouseLeave={(e) => {
+                if (authLoading) return;
+                e.currentTarget.style.backgroundColor = '#A78B71';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              {authLoading ? '...' : 'Login/Register'}
+            </button>
+          )}
         </div>
 
         {/* Mobile Menu Button */}
@@ -842,13 +867,13 @@ const Header = ({ onLoginClick }) => {
         </button>
 
         {/* Logged-in shortcut, pinned at the top of the mobile drawer */}
-        {isLoggedIn && !authLoading && (
+        {isLoggedIn && dashboardRoute && !authLoading && (
           <>
             <button
               style={{ ...styles.mobileNavButton, backgroundColor: '#1E7A47' }}
               onClick={handleLoginClick}
             >
-              ← {portalLabel}
+              ← {portalLabel || 'My Dashboard'}
             </button>
             <div style={styles.divider} />
           </>
@@ -1029,18 +1054,37 @@ const Header = ({ onLoginClick }) => {
 
         <div style={styles.divider} />
 
-        <button
-          style={styles.mobileLoginButton}
-          onClick={handleLoginClick}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = isLoggedIn ? '#155A34' : '#8a6d52';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = isLoggedIn ? '#1E7A47' : '#A78B71';
-          }}
-        >
-          {isLoggedIn ? portalLabel : 'Login/Register'}
-        </button>
+        {/* Mobile Login/Dashboard Button - Hidden for admin users */}
+        {isLoggedIn && dashboardRoute ? (
+          <button
+            style={styles.mobileLoginButton}
+            onClick={handleLoginClick}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#155A34';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#1E7A47';
+            }}
+          >
+            {portalLabel || 'My Dashboard'}
+          </button>
+        ) : isLoggedIn && !dashboardRoute ? (
+          // Admin user - show nothing
+          null
+        ) : (
+          <button
+            style={styles.mobileLoginButton}
+            onClick={handleLoginClick}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#8a6d52';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#A78B71';
+            }}
+          >
+            Login/Register
+          </button>
+        )}
       </div>
 
       {/* CSS Styles */}

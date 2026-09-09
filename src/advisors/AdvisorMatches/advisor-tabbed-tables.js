@@ -48,13 +48,8 @@ const formatDate = (value) => {
   return d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "N/A";
 };
 
-// Any wording a negative terminal stage might carry, across every engagement
-// template. Used twice: to pick the terminal stage ids out of the active stage
-// list, and as a fallback against the row's raw status string.
 const NEGATIVE_STATUS_RE = /declin|withdraw|unsuccess|reject|not proceed/i;
 
-// Renders straight to <body> so `position: fixed` popups can't be trapped by an
-// ancestor that establishes a containing block.
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null;
   return createPortal(children, document.body);
@@ -79,18 +74,11 @@ const HeaderInfoTooltip = ({ text }) => {
 };
 
 // ─── Columns ──────────────────────────────────────────────────────────────────
-// Deal-shaped columns (contract value, duration, next review) were dropped when
-// this table moved from successful engagements to declined ones — none of them
-// carry a value on an application that never became an engagement. What matters
-// on a decline is when it came in, when it closed, and why.
 const DEFAULT_COLUMN_ORDER = [
   "dealType", "appliedDate", "declinedDate", "currentStatus", "reason",
   "sector", "location", "compensationModel", "revenueBand", "smeStage"
 ];
 
-// Every column carries a tooltip, matching the pipeline table — a header label
-// alone doesn't say where a value came from, and on this table several of them
-// (Date Declined, Reason Given) are derived rather than stored.
 const COLUMN_DEFS = {
   dealType: { label: "Support Required", minWidth: "134px", filter: "select", type: "badge", tooltip: "The kind of advisory help this business asked for when it applied." },
   appliedDate: { label: "Date Applied", minWidth: "112px", filter: "date", type: "date", tooltip: "When the business first applied to work with you." },
@@ -121,12 +109,7 @@ const EXPORT_HEADERS = {
 };
 
 // ─── Views ────────────────────────────────────────────────────────────────────
-// A "view" bundles column visibility, order, sort and density into one named
-// object, with exactly one active at a time. Editing the table edits the active
-// view, so there's no hidden layout that can drift out of sync.
 const BUILTIN_VIEW_ID = "__default__";
-// New key: the old "successful deals" views stored a column set that no longer
-// exists here, so they're deliberately not carried over.
 const VIEWS_STORAGE_KEY = "advisor-declined-deals-views-v1";
 const DEFAULT_SORT = { key: "declinedDate", direction: "desc" };
 
@@ -178,7 +161,7 @@ const loadViewsState = () => {
 const persistViewsState = (state) => {
   if (typeof window === "undefined") return;
   try { window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state)); }
-  catch { /* private browsing / quota — works this session, just won't persist */ }
+  catch { /* private browsing / quota */ }
 };
 
 const generateViewId = () => {
@@ -228,11 +211,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
   const ds = DENSITY[density] || DENSITY.comfortable;
 
   // ─── Column resizing ──────────────────────────────────────────────────────
-  // Drag the divider on a header's right edge to resize the column; double-click
-  // it to snap that column back to auto width. Every header carries one —
-  // including the pinned Business Name and the Actions column. Widths are stored
-  // per view alongside visibility/order/sort/density, so they persist and travel
-  // with whichever view is active.
   const [resizingColumn, setResizingColumn] = useState(null);
 
   const widthStyle = (key, fallbackMin, fallbackMax) => {
@@ -263,8 +241,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
-    // the 6px handle mid-drag, and so text can't be selected while resizing.
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   };
@@ -297,14 +273,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
 
     try {
       setLoading(true);
-      // Rows resolve through the shared stage config rather than a hard-coded
-      // status string, so a renamed stage or a different engagement template
-      // can't quietly empty this table. Anything that ends negatively —
-      // "Declined", "Withdrawn", "Not Proceeding" — lands here.
-      //
-      // getActiveStages needs the current pipeline settings passed in; calling
-      // it bare returns the fallback stage list, whose terminal ids may not
-      // match the template the advisor is actually running.
       const stages = getActiveStages(loadPipelineSettings());
       const declinedIds = new Set(
         stages
@@ -321,32 +289,20 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
         const stageId = mapStatusToStageId(rawStatus, stages);
         const stage = stages.find((s) => s.id === stageId);
 
-        // Two ways in. mapStatusToStageId falls back to the first stage for
-        // anything it doesn't recognise, so a row declined under a different
-        // template would otherwise be misread as "New Match" and vanish. The
-        // raw-status check catches those.
         const matchedStage = declinedIds.has(stageId);
         if (!matchedStage && !NEGATIVE_STATUS_RE.test(rawStatus)) return;
 
         rows.push({
           id: docSnap.id,
-          // The universalProfiles document id — `id` above is only the
-          // AdvisorApplications doc id (advisorId_smeId), which the shared
-          // profile modal can't look a business up by.
           smeId: data.smeId,
           smseName: data.smeName || "N/A",
           compensationModel: formatLabel(data.advisorCompensationModel) || "N/A",
           dealType: formatLabel(data.smeSupport) || "N/A",
           appliedDate: data.createdAt || null,
-          // `updatedAt` is written by serverTimestamp on every stage change, so
-          // for a terminal row it is the moment the decline was recorded.
           declinedDate: data.updatedAt || data.createdAt || null,
           reason: data.declineReason || data.lastMessage || "No reason recorded",
           sector: formatLabel(data.smeSector) || "N/A",
           location: formatLabel(data.smeLocation) || "N/A",
-          // Prefer the configured stage name, but keep whatever the document
-          // actually says when the stage list doesn't know it — showing the
-          // real outcome beats showing a guess.
           currentStatus: (matchedStage && stage?.name) || rawStatus || "Declined",
           smeStage: formatLabel(data.smeStage) || "N/A",
           revenueBand: data.revenue || "N/A",
@@ -368,10 +324,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
 
   useEffect(() => { fetchDeals(); }, [fetchDeals]);
 
-  // Declining an application in the pipeline table lands it here — refresh on
-  // that signal rather than making the advisor reload the page. This only works
-  // because the wrapper keeps both tables mounted; an unmounted table has no
-  // listener to fire.
   useEffect(() => {
     const refresh = () => fetchDeals();
     window.addEventListener(PIPELINE_REFRESH_EVENT, refresh);
@@ -391,7 +343,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
       persistViewsState(next);
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnVisibility, columnOrder, sortConfig, density, columnWidths]);
 
   const switchToView = (id) => {
@@ -514,9 +465,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
   const selectOptions = (key) =>
     [...new Set(deals.map((d) => (d[key] || "").toString()).filter((v) => v && v !== "N/A"))].sort();
 
-  // Three-state, same as the pipeline table: ascending, descending, then back to
-  // this table's default (most recently declined first) rather than to no order
-  // at all — otherwise rows fall back to fetch order, which reads as random.
   const toggleSort = (key, event) => {
     event?.stopPropagation();
     setSortConfig((prev) => {
@@ -600,7 +548,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
       case "badge":
         return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#f5f0e1] text-[#4a352f]">{value || "—"}</span>;
       case "status":
-        // Red rather than green — these are negative outcomes.
         return (
           <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
             style={{ backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fecaca" }}>
@@ -787,13 +734,7 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
                 .asd-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
                 .asd-th-draggable { cursor: grab; }
                 .asd-th-draggable:active { cursor: grabbing; }
-                /* Wrap header labels onto at most 2 lines rather than forcing
-                   the column wider. Only lays out cleanly because each column
-                   carries a real min-width. */
                 .asd-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; text-align: left; }
-                /* Column resizing: an explicit header width only holds if the
-                   cells below can shrink, so long values wrap rather than
-                   forcing the column wider than the width that was dragged. */
                 .bigt-fit th, .bigt-fit td { overflow: hidden; }
                 .bigt-fit td { word-break: break-word; }
               `}</style>
@@ -835,9 +776,6 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
                       );
                     })}
 
-                    {/* Actions resizes too — it's the only column whose width
-                        isn't driven by its content, so it's the one most likely
-                        to need tightening on a narrow screen. */}
                     <th className="asd-th py-3 px-3 relative text-center whitespace-nowrap sticky top-0 z-20"
                       style={{ backgroundColor: "#4a352f", ...widthStyle("__actions__", "110px") }}>
                       <div className="flex items-start gap-1 justify-center">
@@ -999,11 +937,7 @@ const DeclinedAdvisorDealsTable = ({ onCountChange }) => {
         );
       })()}
 
-      {/* ─── Business Profile pop-up ───────────────────────────────────────
-          The same shared modal the advisor pipeline table opens from its
-          business-name eye icon, so a business looks identical whichever tab
-          you reach it from. smeId is the universalProfiles document id;
-          deal.id is only the AdvisorApplications row key. */}
+      {/* ─── Business Profile pop-up ─────────────────────────────────────── */}
       {selectedDeal && (
         <BusinessDetailsModal
           business={{
@@ -1035,9 +969,6 @@ const AdvisorTabbedTables = ({ filters, stageFilter, loading }) => {
 
   return (
     <div className="w-full font-sans">
-      {/* Tabs. The old version mutated e.target.style on hover, which broke
-          whenever the pointer landed on the icon or count badge instead of the
-          button — leaving tabs stuck in their hover colour. */}
       <div className="flex gap-2 p-2 bg-gradient-to-r from-[#f5f0e1] to-[#faf7f2] rounded-t-2xl border border-[#e6d7c3] border-b-0 shadow-sm overflow-x-auto">
         {TABS.map(({ id, label, icon, count }) => {
           const isActive = activeTab === id;
@@ -1053,11 +984,6 @@ const AdvisorTabbedTables = ({ filters, stageFilter, loading }) => {
         })}
       </div>
 
-      {/* Both tables stay mounted and the inactive one is hidden, rather than
-          unmounted. Two things depend on this: the tab count badges are fed by
-          onCountChange, which never fires from a table that hasn't rendered;
-          and the declined table's PIPELINE_REFRESH_EVENT listener has to exist
-          at the moment an application is declined over on the matches tab. */}
       <div className="bg-white rounded-b-2xl border border-[#e6d7c3] border-t-0 shadow-lg min-h-[500px]">
         <div style={{ display: activeTab === "my-matches" ? "block" : "none" }}>
           <AdvisorTable filters={filters} stageFilter={stageFilter} onMatchesCountChange={handleMatchesCount} />

@@ -6,7 +6,7 @@ import CreateEventForm from './createEventForm';
 import MeetingDetails from './meetingDetails';
 import { db } from '../../firebaseConfig';
 import { getAuth } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, getDoc, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, addDoc, updateDoc, getDocs } from 'firebase/firestore';
 
 // Color palette
 const colors = {
@@ -693,6 +693,8 @@ const Meetings = ({ stats, setStats }) => {
   const [loading, setLoading] = useState(true);
   const [sponsorNames, setSponsorNames] = useState({});
   const [isProcessing, setIsProcessing] = useState(false);
+  const [recipients, setRecipients] = useState([]);
+  const [fetchingRecipients, setFetchingRecipients] = useState(true);
 
   const fetchSponsorName = async (sponsorId) => {
     try {
@@ -716,7 +718,6 @@ const Meetings = ({ stats, setStats }) => {
   };
 
   const getRequesterInfo = (meeting) => {
-    // For interns, the people they interact with are SME, Program Sponsor, and other Interns
     if (meeting.sponsorId) {
       return {
         requestedBy: 'Program Sponsor',
@@ -724,7 +725,6 @@ const Meetings = ({ stats, setStats }) => {
       };
     }
     
-    // If it's from an SME (could be determined by other fields)
     if (meeting.smeId || meeting.type === 'sme') {
       return {
         requestedBy: 'SME',
@@ -732,7 +732,6 @@ const Meetings = ({ stats, setStats }) => {
       };
     }
     
-    // If it's from another intern
     if (meeting.internId || meeting.type === 'intern') {
       return {
         requestedBy: 'Intern',
@@ -740,18 +739,106 @@ const Meetings = ({ stats, setStats }) => {
       };
     }
     
-    // Default fallback
     return {
       requestedBy: 'Program Sponsor',
       requesterName: meeting.sponsorName || 'Program Sponsor'
     };
   };
 
+  // Fetch recipients from Firebase - FIXED to properly fetch and display
+  useEffect(() => {
+    const fetchRecipients = async () => {
+      try {
+        setFetchingRecipients(true);
+        const user = getAuth().currentUser;
+        if (!user) {
+          setFetchingRecipients(false);
+          return;
+        }
+        
+        const recipientsList = [];
+        
+        // Fetch sponsors
+        try {
+          const sponsorsQuery = query(collection(db, "sponsorProfiles"));
+          const sponsorSnapshot = await getDocs(sponsorsQuery);
+          
+          sponsorSnapshot.forEach(doc => {
+            const data = doc.data();
+            const name = data?.organizationName || data?.contactName || data?.name || 'Sponsor';
+            const email = data?.email || data?.contactEmail || '';
+            recipientsList.push({
+              id: doc.id,
+              name: name,
+              email: email,
+              type: 'sponsor'
+            });
+          });
+        } catch (err) {
+          console.error("Error fetching sponsors:", err);
+        }
+        
+        // Fetch interns (excluding self)
+        try {
+          const internsQuery = query(collection(db, "internProfiles"));
+          const internSnapshot = await getDocs(internsQuery);
+          
+          internSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (doc.id !== user.uid) {
+              const name = data?.name || data?.fullName || 'Intern';
+              const email = data?.email || '';
+              recipientsList.push({
+                id: doc.id,
+                name: name,
+                email: email,
+                type: 'intern'
+              });
+            }
+          });
+        } catch (err) {
+          console.error("Error fetching interns:", err);
+        }
+        
+        // Fetch SMEs if available
+        try {
+          const smesQuery = query(collection(db, "smeProfiles"));
+          const smeSnapshot = await getDocs(smesQuery);
+          
+          smeSnapshot.forEach(doc => {
+            const data = doc.data();
+            const name = data?.name || data?.companyName || 'SME';
+            const email = data?.email || '';
+            recipientsList.push({
+              id: doc.id,
+              name: name,
+              email: email,
+              type: 'sme'
+            });
+          });
+        } catch (err) {
+          console.error("Error fetching SMEs:", err);
+        }
+        
+        console.log("Fetched recipients:", recipientsList); // Debug log
+        setRecipients(recipientsList);
+        setFetchingRecipients(false);
+      } catch (error) {
+        console.error("Error fetching recipients:", error);
+        setFetchingRecipients(false);
+      }
+    };
+    
+    fetchRecipients();
+  }, []);
+
   useEffect(() => {
     const unsubscribeAuth = getAuth().onAuthStateChanged(async (user) => {
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-      // Query for calendar events first
       const q = query(
         collection(db, "internCalendarEvents"),
         where("internId", "==", user.uid)
@@ -785,51 +872,78 @@ const Meetings = ({ stats, setStats }) => {
           };
         }));
 
-        // Now query for applications with available dates
-        const applicationsQuery = query(
-          collection(db, "internshipApplications"),
-          where("applicantId", "==", user.uid),
-          where("status", "in", ["Contacted/Interview", "Interview Scheduled"])
-        );
+        // Query for applications with available dates
+        try {
+          const applicationsQuery = query(
+            collection(db, "internshipApplications"),
+            where("applicantId", "==", user.uid),
+            where("status", "in", ["Contacted/Interview", "Interview Scheduled"])
+          );
 
-        const appUnsubscribe = onSnapshot(applicationsQuery, async (appSnapshot) => {
-          const availabilityMap = new Map();
-          
-          for (const doc of appSnapshot.docs) {
-            const data = doc.data();
-            const sponsorName = await fetchSponsorName(data.sponsorId);
+          const appUnsubscribe = onSnapshot(applicationsQuery, async (appSnapshot) => {
+            const availabilityMap = new Map();
             
-            // Only process if we don't already have a scheduled meeting with this sponsor
-            const hasScheduledMeeting = meetingsData.some(
-              m => m.sponsorId === data.sponsorId && m.status === 'confirmed'
-            );
-            
-            if (!hasScheduledMeeting && data.availableDates && data.availableDates.length > 0) {
-              availabilityMap.set(data.sponsorId, {
-                ...data,
-                docId: doc.id,
-                sponsorName
-              });
+            for (const doc of appSnapshot.docs) {
+              const data = doc.data();
+              const sponsorName = await fetchSponsorName(data.sponsorId);
+              
+              const hasScheduledMeeting = meetingsData.some(
+                m => m.sponsorId === data.sponsorId && m.status === 'confirmed'
+              );
+              
+              if (!hasScheduledMeeting && data.availableDates && data.availableDates.length > 0) {
+                availabilityMap.set(data.sponsorId, {
+                  ...data,
+                  docId: doc.id,
+                  sponsorName
+                });
+              }
             }
-          }
 
-          // Convert the map to availability meetings
-          const availabilityMeetings = [];
-          for (const [sponsorId, appData] of availabilityMap) {
-            for (const availability of appData.availableDates) {
-              try {
-                const date = new Date(availability.date);
-                
-                if (availability.timeSlots && availability.timeSlots.length > 0) {
-                  for (const timeSlot of availability.timeSlots) {
+            const availabilityMeetings = [];
+            for (const [sponsorId, appData] of availabilityMap) {
+              for (const availability of appData.availableDates) {
+                try {
+                  const date = new Date(availability.date);
+                  
+                  if (availability.timeSlots && availability.timeSlots.length > 0) {
+                    for (const timeSlot of availability.timeSlots) {
+                      availabilityMeetings.push({
+                        id: `${appData.docId}-${availability.date}-${timeSlot.start}-${timeSlot.end}`,
+                        title: `Interview with ${appData.sponsorName}`,
+                        sponsorName: appData.sponsorName,
+                        sponsorId: appData.sponsorId,
+                        date,
+                        timeSlot,
+                        timeZone: availability.timeZone || "Africa/Johannesburg",
+                        location: appData.interviewDetails?.location || "Virtual",
+                        status: "pending",
+                        applicationId: appData.docId,
+                        type: "availability",
+                        allSlots: appData.availableDates.map(slot => ({
+                          date: new Date(slot.date),
+                          timeSlots: slot.timeSlots || [{ 
+                            start: "09:00", 
+                            end: "17:00",
+                            timeZone: slot.timeZone || "Africa/Johannesburg"
+                          }],
+                          timeZone: slot.timeZone || "Africa/Johannesburg",
+                          status: slot.status || "available"
+                        }))
+                      });
+                    }
+                  } else {
                     availabilityMeetings.push({
-                      id: `${appData.docId}-${availability.date}-${timeSlot.start}-${timeSlot.end}`,
+                      id: `${appData.docId}-${availability.date}`,
                       title: `Interview with ${appData.sponsorName}`,
                       sponsorName: appData.sponsorName,
                       sponsorId: appData.sponsorId,
                       date,
-                      timeSlot,
-                      timeZone: availability.timeZone || "Africa/Johannesburg",
+                      timeSlot: { 
+                        start: "09:00", 
+                        end: "17:00",
+                        timeZone: availability.timeZone || "Africa/Johannesburg"
+                      },
                       location: appData.interviewDetails?.location || "Virtual",
                       status: "pending",
                       applicationId: appData.docId,
@@ -846,50 +960,26 @@ const Meetings = ({ stats, setStats }) => {
                       }))
                     });
                   }
-                } else {
-                  availabilityMeetings.push({
-                    id: `${appData.docId}-${availability.date}`,
-                    title: `Interview with ${appData.sponsorName}`,
-                    sponsorName: appData.sponsorName,
-                    sponsorId: appData.sponsorId,
-                    date,
-                    timeSlot: { 
-                      start: "09:00", 
-                      end: "17:00",
-                      timeZone: availability.timeZone || "Africa/Johannesburg"
-                    },
-                    location: appData.interviewDetails?.location || "Virtual",
-                    status: "pending",
-                    applicationId: appData.docId,
-                    type: "availability",
-                    allSlots: appData.availableDates.map(slot => ({
-                      date: new Date(slot.date),
-                      timeSlots: slot.timeSlots || [{ 
-                        start: "09:00", 
-                        end: "17:00",
-                        timeZone: slot.timeZone || "Africa/Johannesburg"
-                      }],
-                      timeZone: slot.timeZone || "Africa/Johannesburg",
-                      status: slot.status || "available"
-                    }))
-                  });
+                } catch (error) {
+                  console.error("Error processing availability:", error);
                 }
-              } catch (error) {
-                console.error("Error processing availability:", error);
               }
             }
-          }
 
-          // Combine both scheduled meetings and availability slots
-          const allMeetings = [...meetingsData, ...availabilityMeetings]
-            .filter(meeting => meeting.date !== null)
-            .sort((a, b) => a.date - b.date);
+            const allMeetings = [...meetingsData, ...availabilityMeetings]
+              .filter(meeting => meeting.date !== null)
+              .sort((a, b) => a.date - b.date);
 
-          setMeetings(allMeetings);
+            setMeetings(allMeetings);
+            setLoading(false);
+          });
+
+          return () => appUnsubscribe();
+        } catch (err) {
+          console.error("Error fetching applications:", err);
+          setMeetings(meetingsData);
           setLoading(false);
-        });
-
-        return () => appUnsubscribe();
+        }
       });
 
       return () => unsubscribe();
@@ -898,10 +988,70 @@ const Meetings = ({ stats, setStats }) => {
     return () => unsubscribeAuth();
   }, []);
 
-  const handleCreateEvent = (newEvent) => {
-    setMeetings([...meetings, newEvent]);
-    setStats(prev => ({ ...prev, created: prev.created + 1 }));
-    setShowCreateModal(false);
+  // Updated handleCreateEvent with better error handling and logging
+  const handleCreateEvent = async (newEvent) => {
+    try {
+      const user = getAuth().currentUser;
+      if (!user) {
+        alert('You must be logged in to create an event');
+        return;
+      }
+
+      console.log("Creating event with data:", newEvent); // Debug log
+
+      // Calculate end time based on duration
+      const calculateEndTime = (startTime, duration) => {
+        if (!startTime) return '17:00';
+        const [hours, minutes] = startTime.split(':').map(Number);
+        const totalMinutes = hours * 60 + minutes + parseInt(duration);
+        const endHours = Math.floor(totalMinutes / 60);
+        const endMinutes = totalMinutes % 60;
+        return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+      };
+
+      // Prepare data for Firebase
+      const eventData = {
+        title: newEvent.title,
+        internId: user.uid,
+        sponsorId: newEvent.to || null,
+        scheduledDate: new Date(`${newEvent.date}T${newEvent.time}`).toISOString(),
+        scheduledTimeSlot: {
+          start: newEvent.time || '09:00',
+          end: calculateEndTime(newEvent.time, newEvent.duration),
+          timeZone: 'Africa/Johannesburg'
+        },
+        location: newEvent.location || 'Virtual',
+        status: 'confirmed',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        notes: '',
+        applicationId: null
+      };
+
+      console.log("Saving to Firebase:", eventData); // Debug log
+
+      // Save to Firebase
+      const docRef = await addDoc(collection(db, "internCalendarEvents"), eventData);
+      
+      console.log("Event created with ID:", docRef.id); // Debug log
+      
+      // Update local state
+      const newMeeting = {
+        id: docRef.id,
+        ...eventData,
+        date: new Date(eventData.scheduledDate),
+        sponsorName: newEvent.toName || 'Unknown'
+      };
+      
+      setMeetings(prev => [...prev, newMeeting]);
+      setStats(prev => ({ ...prev, created: prev.created + 1 }));
+      setShowCreateModal(false);
+      
+      alert('Event created successfully!');
+    } catch (error) {
+      console.error("Error creating event:", error);
+      alert(`Failed to create event: ${error.message || 'Please try again.'}`);
+    }
   };
 
   const handleMeetingAction = async (id, action) => {
@@ -911,7 +1061,6 @@ const Meetings = ({ stats, setStats }) => {
       
       if (action === 'accept') {
         if (meeting?.type === 'availability') {
-          // Create a new calendar event for accepted availability
           const newEvent = {
             title: meeting.title,
             internId: getAuth().currentUser.uid,
@@ -927,7 +1076,6 @@ const Meetings = ({ stats, setStats }) => {
 
           await addDoc(collection(db, "internCalendarEvents"), newEvent);
           
-          // Update the application status
           await updateDoc(doc(db, "internshipApplications", meeting.applicationId), {
             'interviewDetails.date': meeting.date.toISOString(),
             'interviewDetails.time': meeting.timeSlot.start,
@@ -936,7 +1084,6 @@ const Meetings = ({ stats, setStats }) => {
             'updatedAt': new Date().toISOString()
           });
         } else {
-          // Update existing calendar event
           await updateDoc(doc(db, "internCalendarEvents", id), {
             status: 'confirmed',
             updatedAt: new Date().toISOString()
@@ -950,13 +1097,11 @@ const Meetings = ({ stats, setStats }) => {
       } 
       else if (action === 'decline') {
         if (meeting.type === 'availability') {
-          // Just update the application status
           await updateDoc(doc(db, "internshipApplications", meeting.applicationId), {
             'status': 'Interview Declined',
             'updatedAt': new Date().toISOString()
           });
         } else {
-          // Update calendar event
           await updateDoc(doc(db, "internCalendarEvents", id), {
             status: 'declined',
             updatedAt: new Date().toISOString()
@@ -971,6 +1116,7 @@ const Meetings = ({ stats, setStats }) => {
       setSelectedMeeting(null);
     } catch (error) {
       console.error("Error updating meeting status:", error);
+      alert('Failed to update meeting status. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -1348,7 +1494,7 @@ const Meetings = ({ stats, setStats }) => {
           <CreateEventForm
             onSubmit={handleCreateEvent}
             onCancel={() => setShowCreateModal(false)}
-            isIntern="true"
+            previousRecipients={recipients}
           />
         </Modal>
       )}
