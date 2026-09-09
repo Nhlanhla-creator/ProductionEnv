@@ -620,7 +620,7 @@ const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
           existingUniversalDocs
         )
       case "guarantees":
-      return renderGuarantees(formData.guarantees, updateFormData, guaranteesAiRef)
+        return renderGuarantees(formData.guarantees, updateFormData, guaranteesAiRef)
       case "growthPotential":
         return renderGrowthPotential(formData.growthPotential, updateFormData)
       case "socialImpact":
@@ -636,7 +636,7 @@ const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
 
   const handleSaveSection = async () => {
     try {
-       await runGuaranteesAnalysisIfNeeded()
+      await runGuaranteesAnalysisIfNeeded()
       const ok = await saveSectionToFirebase(activeSection, false)
       if (ok) {
         alert("Section saved successfully!")
@@ -661,7 +661,7 @@ const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
       return
     }
 
-     await runGuaranteesAnalysisIfNeeded()
+    await runGuaranteesAnalysisIfNeeded()
 
     const ok = await saveSectionToFirebase(activeSection, true)
     if (ok && nextSection) {
@@ -1406,7 +1406,7 @@ The BIG Fundability Team
               className="btn btn-primary"
             >
              {isAnalyzingGuarantees ? "Analyzing guarantees…" : "Save & Continue"}
-+              <ChevronRight size={16} />
+              <ChevronRight size={16} />
             </button>
           ) : (
             <button

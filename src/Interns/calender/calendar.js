@@ -1,11 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import EventData from './eventData';
 import Meetings from './internCalendar';
 import './calendar.css';
+import { getAuth } from 'firebase/auth';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
 const Calendar = () => {
-  const [showWelcome, setShowWelcome] = useState(true);
   const [events, setEvents] = useState([]);
   const [stats, setStats] = useState({
     created: 0,
@@ -13,50 +14,56 @@ const Calendar = () => {
     rescheduled: 0,
     cancelled: 0
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const sampleEvents = [
-      {
-        id: '1',
-        title: 'Team Meeting',
-        date: new Date(new Date().setHours(14, 0, 0, 0)).toISOString(),
-        time: '14:00',
-        duration: '60',
-        location: 'Conference Room A',
-        description: 'Weekly team sync',
-        host: 'You',
-        invitees: ['john@example.com', 'jane@example.com'],
-        status: 'pending'
-      },
-      {
-        id: '2',
-        title: 'Client Call',
-        date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(),
-        time: '10:30',
-        duration: '30',
-        location: 'Zoom',
-        description: 'Discuss project requirements',
-        host: 'You',
-        invitees: ['client@example.com'],
-        status: 'pending'
-      }
-    ];
+    const user = getAuth().currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-    setEvents(sampleEvents);
-    setStats({
-      created: 2,
-      completed: 0,
-      rescheduled: 0,
-      cancelled: 0
+    // Listen to real events from Firebase
+    const q = query(
+      collection(db, "internCalendarEvents"),
+      where("internId", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const eventsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setEvents(eventsData);
+      
+      // Update stats
+      const created = eventsData.length;
+      const completed = eventsData.filter(e => e.status === 'completed' || e.status === 'confirmed').length;
+      const cancelled = eventsData.filter(e => e.status === 'cancelled' || e.status === 'declined').length;
+      const rescheduled = eventsData.filter(e => e.rescheduled === true).length;
+      
+      setStats({ created, completed, rescheduled, cancelled });
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching events:", error);
+      setLoading(false);
     });
+
+    return () => unsubscribe();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="calendar-system" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <div>Loading calendar...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="calendar-system">
-      {/* Main Dashboard */}
       <div className="dashboard-content">
         <EventData stats={stats} />
-        
         <div className="dashboard-panels">
           <div className="meetings-panel">
             <Meetings 
