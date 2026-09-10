@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 
 // Make sure Instructions.js exists in the same directory
-import Instructions from "./Instructions"
+import Instructions from "./Instructions​"
 import JobOverview from "./JobOverview"
 import InternshipRequest from "./InternshipRequest"
 import MatchingAgreement from "./MatchingAgreement"
@@ -33,7 +33,6 @@ import {
 } from "firebase/firestore"
 
 import { onAuthStateChanged } from "firebase/auth"
-import { getFunctions, httpsCallable } from "firebase/functions"
 
 import "./internApplication.css"
 
@@ -90,15 +89,7 @@ export default function InternApplication({
     instructions: () => true,
     jobOverview: () => true,
     internshipRequest: () => true,
-    matchingAgreement: (data) => {
-      if (!data) return false
-      return Boolean(
-        data.writtenEvaluation &&
-        data.mentorshipSupport &&
-        data.codeOfConduct &&
-        data.consentDeclaration
-      )
-    },
+    matchingAgreement: () => true,
   }
 
   useEffect(() => {
@@ -316,45 +307,11 @@ export default function InternApplication({
   const handleSubmitApplication = useCallback(async () => {
     if (!user) return
 
-    const agreementData = formData.matchingAgreement || {}
-    const isAgreementValid = sectionValidations.matchingAgreement(agreementData)
-
-    if (!isAgreementValid) {
-      const missing = []
-      if (!agreementData.writtenEvaluation) {
-        missing.push("Written Evaluation Commitment")
-      }
-      if (!agreementData.mentorshipSupport) {
-        missing.push("Mentorship & Support Commitment")
-      }
-      if (!agreementData.codeOfConduct) {
-        missing.push("Code of Conduct & Compliance")
-      }
-      if (!agreementData.consentDeclaration) {
-        missing.push("Program Requirements & Information Sharing Consent")
-      }
-
-      setValidationModal({
-        open: true,
-        title: "Matching Agreement Incomplete",
-        messages: [
-          "You must agree to all commitments in the Matching Agreement before submitting your application:",
-          ...missing.map((item) => `• ${item}`),
-        ],
-      })
-      return
-    }
-
     try {
       setSaveStatus("saving")
 
       // Save current section first
       const sectionData = formData[activeSection]
-      const updatedCompletedSections = {
-        ...completedSections,
-        matchingAgreement: true,
-      }
-      setCompletedSections(updatedCompletedSections)
 
       const baseData = {
         [activeSection]: sectionData,
@@ -376,7 +333,7 @@ export default function InternApplication({
           {
             ...baseData,
             createdAt: serverTimestamp(),
-            completedSections: updatedCompletedSections,
+            completedSections: completedSections,
           }
         )
 
@@ -395,7 +352,7 @@ export default function InternApplication({
 
       await updateDoc(ref, {
         [activeSection]: sectionData,
-        completedSections: updatedCompletedSections,
+        completedSections,
         status: "submitted",
         submittedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
@@ -432,17 +389,23 @@ export default function InternApplication({
         internsCount,
       })
 
-      const functionsInstance = getFunctions()
-      const analyzeInternMatches = httpsCallable(
-        functionsInstance,
-        "analyzeInternMatches"
+      const controller = new AbortController()
+
+      const fetchPromise = fetch(
+        "http://localhost:8000/api/interns/analyze-matches",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            applicationId: currentId,
+          }),
+          signal: controller.signal,
+        }
       )
 
-      const analysisPromise = analyzeInternMatches({
-        applicationId: currentId,
-      })
-
-      // STEP 4: Wait up to 15 seconds before transitioning to "wrappingUp"
+      // STEP 4: Wait up to 15 seconds
       const fifteenSecondTimer = new Promise(
         (_, reject) =>
           setTimeout(
@@ -453,7 +416,7 @@ export default function InternApplication({
 
       try {
         await Promise.race([
-          analysisPromise,
+          fetchPromise,
           fifteenSecondTimer,
         ])
       } catch (raceErr) {
@@ -463,28 +426,14 @@ export default function InternApplication({
             stage: "wrappingUp",
           })
 
-          // Wait up to another 45 seconds for completion
-          const wrapUpTimer = new Promise(
-            (_, reject) =>
-              setTimeout(
-                () => reject(new Error("wrapUpTimeout")),
-                45000
-              )
-          )
+          // Abort after another 30 seconds
+          const abortTimer = setTimeout(() => {
+            controller.abort()
+          }, 30000)
 
-          try {
-            await Promise.race([
-              analysisPromise,
-              wrapUpTimer,
-            ])
-          } catch (wrapErr) {
-            console.warn(
-              "Intern analysis wrapped up or running in background:",
-              wrapErr?.message || wrapErr
-            )
-          }
-        } else {
-          console.error("Error executing analyzeInternMatches:", raceErr)
+          await fetchPromise.catch(() => {})
+
+          clearTimeout(abortTimer)
         }
       }
 
@@ -1093,18 +1042,6 @@ export default function InternApplication({
         ) : (
           <button
             onClick={handleSubmitApplication}
-            disabled={
-              !sectionValidations.matchingAgreement(
-                formData.matchingAgreement
-              )
-            }
-            title={
-              !sectionValidations.matchingAgreement(
-                formData.matchingAgreement
-              )
-                ? "Please agree to all commitments in the Matching Agreement before submitting"
-                : "Submit Application"
-            }
             style={{
               display: "flex",
               alignItems: "center",
@@ -1113,16 +1050,6 @@ export default function InternApplication({
               fontSize: "clamp(0.8rem, 2vw, 1rem)",
               minWidth: "140px",
               justifyContent: "center",
-              opacity: !sectionValidations.matchingAgreement(
-                formData.matchingAgreement
-              )
-                ? 0.55
-                : 1,
-              cursor: !sectionValidations.matchingAgreement(
-                formData.matchingAgreement
-              )
-                ? "not-allowed"
-                : "pointer",
             }}
             className="btn btn-primary"
           >

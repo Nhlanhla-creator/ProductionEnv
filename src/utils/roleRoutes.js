@@ -6,7 +6,7 @@
 //      This is trusted on its own: ProtectedRoute already admitted them
 //      there, which is better evidence than string-matching a role field.
 //   2. Their highest-priority role, if we have no memory.
-//   3. SME dashboard as a last resort.
+//   3. Null if no dashboard should be shown (admin only)
 
 export const PUBLIC_HOME = "/";
 
@@ -16,16 +16,17 @@ const LAST_PORTAL_KEY = "big:lastPortalRole";
 const DEBUG_PORTAL = false;
 
 // Canonical role key -> the route the user returns to from the public site
+// Admin has no dashboard, but associator does
 export const DASHBOARD_ROUTES = {
-  admin: "/admin/dashboard",
-  associator: "/associator-dashboard",
+  admin: null, // No dashboard for admin
+  associator: "/associator-profile", // Associator has a profile page
   cmf: "/cmf-profile",
   investor: "/investor-profile",
   catalyst: "/support-profile",
   programsponsor: "/program-sponsor-profile",
-  advisor: "/advisor-dashboard",
-  intern: "/intern-dashboard",
-  sme: "/dashboard",
+  advisor: "/advisor-profile",
+  intern: "/intern-profile",
+  sme: "/profile",
 };
 
 // Fallback only — used when we have no memory of the last portal.
@@ -238,7 +239,7 @@ export const rememberPortal = (pathname) => {
 export const getRememberedPortal = (userRoles = []) => {
   try {
     const stored = sessionStorage.getItem(LAST_PORTAL_KEY);
-    if (!stored || !DASHBOARD_ROUTES[stored]) return null;
+    if (!stored || !DASHBOARD_ROUTES.hasOwnProperty(stored)) return null;
 
     if (DEBUG_PORTAL) {
       console.log(
@@ -264,17 +265,48 @@ export const clearRememberedPortal = () => {
   }
 };
 
+/**
+ * Check if a user should see the dashboard button
+ * @param {string|array} userRoles - User role(s)
+ * @returns {boolean} - True if dashboard should be shown
+ */
+export const shouldShowDashboard = (userRoles = []) => {
+  const route = getDashboardRoute(userRoles);
+  return route !== null && route !== undefined;
+};
+
 // ─── Public API used by Header ───────────────────────────────────────────────
 
 /**
  * The route a logged-in user should return to.
+ * Returns null only for admin (no dashboard)
  */
 export const getDashboardRoute = (userRoles = []) => {
   const role = getRememberedPortal(userRoles) || getPrimaryRole(userRoles);
-  return (role && DASHBOARD_ROUTES[role]) || "/dashboard";
+  
+  // If no role, return null
+  if (!role) return null;
+  
+  // Check if this role has a dashboard route
+  const route = DASHBOARD_ROUTES[role];
+  
+  // If route is null or undefined, return null (hide dashboard button)
+  if (route === null || route === undefined) return null;
+  
+  return route;
 };
 
 /**
- * Label for the "back to dashboard" button. Same wording for every portal.
+ * Label for the "back to dashboard" button.
+ * Returns null only for admin (no dashboard)
  */
-export const getPortalLabel = () => DEFAULT_PORTAL_LABEL;
+export const getPortalLabel = (userRoles = []) => {
+  // Check if user should see dashboard
+  const route = getDashboardRoute(userRoles);
+  
+  // If no route, return null (hide button)
+  if (!route) return null;
+  
+  // All roles use the same label
+  return DEFAULT_PORTAL_LABEL;
+};
