@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 
 // Make sure Instructions.js exists in the same directory
-import Instructions from "./Instructions​"
+import Instructions from "./Instructions"
 import JobOverview from "./JobOverview"
 import InternshipRequest from "./InternshipRequest"
 import MatchingAgreement from "./MatchingAgreement"
@@ -33,6 +33,7 @@ import {
 } from "firebase/firestore"
 
 import { onAuthStateChanged } from "firebase/auth"
+import { getFunctions, httpsCallable } from "firebase/functions"
 
 import "./internApplication.css"
 
@@ -89,7 +90,15 @@ export default function InternApplication({
     instructions: () => true,
     jobOverview: () => true,
     internshipRequest: () => true,
-    matchingAgreement: () => true,
+    matchingAgreement: (data) => {
+      const agreements = data?.matchingAgreement || {}
+      return Boolean(
+        agreements.writtenEvaluation &&
+        agreements.mentorshipSupport &&
+        agreements.codeOfConduct &&
+        agreements.consentDeclaration
+      )
+    },
   }
 
   useEffect(() => {
@@ -304,8 +313,27 @@ export default function InternApplication({
     navigateToNextSection,
   ])
 
+  const isAgreementCompleted = Boolean(
+    formData.matchingAgreement?.writtenEvaluation &&
+    formData.matchingAgreement?.mentorshipSupport &&
+    formData.matchingAgreement?.codeOfConduct &&
+    formData.matchingAgreement?.consentDeclaration
+  )
+
   const handleSubmitApplication = useCallback(async () => {
     if (!user) return
+
+    // Ensure all matching agreements are accepted
+    if (!isAgreementCompleted) {
+      setValidationModal({
+        open: true,
+        title: "Agreement Required",
+        messages: [
+          "Please read and agree to all terms in the Matching Agreement before submitting your application.",
+        ],
+      })
+      return
+    }
 
     try {
       setSaveStatus("saving")
@@ -333,7 +361,10 @@ export default function InternApplication({
           {
             ...baseData,
             createdAt: serverTimestamp(),
-            completedSections: completedSections,
+            completedSections: {
+              ...completedSections,
+              matchingAgreement: true,
+            },
           }
         )
 
@@ -342,6 +373,11 @@ export default function InternApplication({
       }
 
       if (!currentId) return
+
+      const updatedCompletedSections = {
+        ...completedSections,
+        [activeSection]: true,
+      }
 
       // Submit application
       const ref = doc(
@@ -352,7 +388,7 @@ export default function InternApplication({
 
       await updateDoc(ref, {
         [activeSection]: sectionData,
-        completedSections,
+        completedSections: updatedCompletedSections,
         status: "submitted",
         submittedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
@@ -389,21 +425,13 @@ export default function InternApplication({
         internsCount,
       })
 
-      const controller = new AbortController()
+      // Call Firebase Cloud Function analyzeInternMatches
+      const functions = getFunctions()
+      const analyzeInternMatchesFn = httpsCallable(functions, "analyzeInternMatches")
 
-      const fetchPromise = fetch(
-        "http://localhost:8000/api/interns/analyze-matches",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            applicationId: currentId,
-          }),
-          signal: controller.signal,
-        }
-      )
+      const callPromise = analyzeInternMatchesFn({
+        applicationId: currentId,
+      })
 
       // STEP 4: Wait up to 15 seconds
       const fifteenSecondTimer = new Promise(
@@ -416,7 +444,7 @@ export default function InternApplication({
 
       try {
         await Promise.race([
-          fetchPromise,
+          callPromise,
           fifteenSecondTimer,
         ])
       } catch (raceErr) {
@@ -426,14 +454,11 @@ export default function InternApplication({
             stage: "wrappingUp",
           })
 
-          // Abort after another 30 seconds
-          const abortTimer = setTimeout(() => {
-            controller.abort()
-          }, 30000)
-
-          await fetchPromise.catch(() => {})
-
-          clearTimeout(abortTimer)
+          await callPromise.catch((err) => {
+            console.error("Background analyzeInternMatches error:", err)
+          })
+        } else {
+          console.error("Error executing analyzeInternMatches:", raceErr)
         }
       }
 
@@ -470,6 +495,7 @@ export default function InternApplication({
     onSubmitted,
     activeSection,
     isNew,
+    isAgreementCompleted,
   ])
 
   const handleEditApplication = useCallback(() => {
@@ -1042,6 +1068,7 @@ export default function InternApplication({
         ) : (
           <button
             onClick={handleSubmitApplication}
+            disabled={!isAgreementCompleted}
             style={{
               display: "flex",
               alignItems: "center",
@@ -1050,6 +1077,8 @@ export default function InternApplication({
               fontSize: "clamp(0.8rem, 2vw, 1rem)",
               minWidth: "140px",
               justifyContent: "center",
+              opacity: !isAgreementCompleted ? 0.6 : 1,
+              cursor: !isAgreementCompleted ? "not-allowed" : "pointer",
             }}
             className="btn btn-primary"
           >
