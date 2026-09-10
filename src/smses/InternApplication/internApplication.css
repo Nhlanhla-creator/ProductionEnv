@@ -1,9 +1,11 @@
 html,
-body {
+body,
+#root {
   width: 100%;
   margin: 0;
   padding: 0;
 }
+
 .tooltip-container {
   position: relative;
   display: inline-block;
@@ -66,7 +68,7 @@ body {
 
   width: 100%;
   max-width: 1200px;
-  margin: 53px auto 0 auto; /* perfectly centers container */
+  margin: 53px auto 0 auto;
   padding: 2rem;
   box-sizing: border-box;
 }
@@ -74,13 +76,13 @@ body {
 /* Remove all blue styling from links */
 .intern-application a {
   color: var(--up-brown-700);
-  text-decoration: none; /* Remove underline */
+  text-decoration: none;
   transition: color var(--up-transition-speed) ease;
 }
 
 .intern-application a:hover {
   color: var(--up-brown-900);
-  text-decoration: none; /* Ensure no underline on hover */
+  text-decoration: none;
 }
 
 .intern-application a:focus {
@@ -179,22 +181,22 @@ body {
   background: linear-gradient(90deg, transparent, var(--up-brown-200) 20%, var(--up-brown-200) 80%, transparent);
 }
 
-.intern-application .section-tracker:-webkit-scrollbar {
+.intern-application .section-tracker::-webkit-scrollbar {
   height: 8px;
 }
 
-.intern-application .section-tracker:-webkit-scrollbar-track {
+.intern-application .section-tracker::-webkit-scrollbar-track {
   background: var(--up-brown-50);
   border-radius: 4px;
 }
 
-.intern-application .section-tracker:-webkit-scrollbar-thumb {
+.intern-application .section-tracker::-webkit-scrollbar-thumb {
   background: linear-gradient(45deg, var(--up-brown-600), var(--up-brown-700));
   border-radius: 4px;
   border: 1px solid var(--up-brown-500);
 }
 
-.intern-application .section-tracker:-webkit-scrollbar-thumb:hover {
+.intern-application .section-tracker::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(45deg, var(--up-brown-700), var(--up-brown-800));
 }
 
@@ -500,10 +502,10 @@ body {
   box-shadow: 0 0 0 3px rgba(141, 110, 99, 0.2);
 }
 
-.intern-application input:placeholder,
-.intern-application textarea:placeholder,
-.intern-application .form-input:placeholder,
-.intern-application .form-textarea:placeholder {
+.intern-application input::placeholder,
+.intern-application textarea::placeholder,
+.intern-application .form-input::placeholder,
+.intern-application .form-textarea::placeholder {
   color: var(--up-brown-400);
 }
 
@@ -1016,6 +1018,7 @@ input[type="radio"]:focus {
   outline: none !important;
   box-shadow: 0 0 0 2px rgba(141, 110, 99, 0.3) !important;
 }
+
 /* Enhanced Matching Agreement Styles */
 .matching-agreement-container {
   max-width: 900px;
@@ -1351,6 +1354,7 @@ input[type="radio"]:focus {
     gap: 0.75rem;
   }
 }
+
 /* Enhanced Button Styles */
 .form-actions-enhanced {
   display: flex;

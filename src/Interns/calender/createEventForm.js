@@ -16,12 +16,20 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
   const [showLocation, setShowLocation] = useState(false);
   const [showAvailability, setShowAvailability] = useState(false);
   const [showHost, setShowHost] = useState(false);
-  const [showRecipient, setShowRecipient] = useState(false);
+  const [showRecipient, setShowRecipient] = useState(true); // Changed to true by default
   const [filteredRecipients, setFilteredRecipients] = useState([]);
   const [showRecipientDropdown, setShowRecipientDropdown] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setFilteredRecipients(previousRecipients);
+    if (previousRecipients && previousRecipients.length > 0) {
+      setFilteredRecipients(previousRecipients);
+      setLoading(false);
+    } else {
+      // If no recipients from Firebase, show a message
+      setFilteredRecipients([]);
+      setLoading(false);
+    }
   }, [previousRecipients]);
 
   const handleChange = (e) => {
@@ -38,9 +46,9 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
     }));
 
     // Filter recipients based on input
-    if (inputValue.length > 0) {
+    if (inputValue.length > 0 && previousRecipients.length > 0) {
       const filtered = previousRecipients.filter(recipient =>
-        recipient.name.toLowerCase().includes(inputValue.toLowerCase())
+        recipient.name && recipient.name.toLowerCase().includes(inputValue.toLowerCase())
       );
       setFilteredRecipients(filtered);
     } else {
@@ -60,12 +68,33 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Detailed validation with specific error messages
+    if (!eventData.title || !eventData.title.trim()) {
+      alert('Please enter a meeting title');
+      return;
+    }
+    if (!eventData.to) {
+      alert('Please select a recipient from the list');
+      return;
+    }
+    if (!eventData.date) {
+      alert('Please select a date');
+      return;
+    }
+    if (!eventData.time) {
+      alert('Please select a time');
+      return;
+    }
+
+    // Prepare the event data
     const fullEvent = {
       ...eventData,
       id: Date.now().toString(),
-      status: 'pending',
+      status: 'confirmed',
       date: `${eventData.date}T${eventData.time}`,
     };
+    
     onSubmit(fullEvent);
   };
 
@@ -127,6 +156,10 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
       transition: 'all 0.3s ease',
       boxSizing: 'border-box'
     },
+    inputError: {
+      border: '2px solid #F44336',
+      background: 'rgba(244, 67, 54, 0.05)'
+    },
     select: {
       width: '100%',
       padding: '12px 16px',
@@ -182,10 +215,19 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
       transition: 'background-color 0.2s ease',
       borderBottom: '1px solid rgba(140, 104, 66, 0.1)'
     },
+    recipientOptionHover: {
+      background: 'rgba(140, 104, 66, 0.1)'
+    },
     tip: {
       marginTop: '8px',
       fontSize: '0.85rem',
       color: '#8D6E63',
+      fontStyle: 'italic'
+    },
+    errorTip: {
+      marginTop: '8px',
+      fontSize: '0.85rem',
+      color: '#F44336',
       fontStyle: 'italic'
     },
     formActions: {
@@ -224,6 +266,26 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
       letterSpacing: '0.5px',
       minWidth: '120px',
       boxShadow: '0 4px 15px rgba(58, 35, 20, 0.3)'
+    },
+    loadingText: {
+      color: '#8D6E63',
+      fontStyle: 'italic',
+      padding: '10px 0'
+    },
+    noRecipients: {
+      color: '#F44336',
+      padding: '10px 0',
+      fontSize: '0.9rem'
+    },
+    recipientDisplay: {
+      padding: '8px 12px',
+      background: 'rgba(140, 104, 66, 0.1)',
+      borderRadius: '8px',
+      border: '1px solid rgba(140, 104, 66, 0.2)',
+      color: '#3E2723',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
     }
   };
 
@@ -251,7 +313,7 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
             onMouseEnter={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.15)'}
             onMouseLeave={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.1)'}
           >
-            <span>To</span>
+            <span>To {eventData.toName && <span style={{ color: '#5D4037', fontWeight: 'bold' }}>- {eventData.toName}</span>}</span>
             <span style={{ fontSize: '0.8rem', color: '#8D6E63' }}>
               {showRecipient ? '▲' : '▼'}
             </span>
@@ -259,32 +321,55 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
           {showRecipient && (
             <div style={{ padding: '20px' }}>
               <div style={styles.formGroup} className="recipient-group">
-                <div style={styles.recipientSelectContainer}>
-                  <input
-                    style={styles.input}
-                    type="text"
-                    value={eventData.toName}
-                    onChange={handleRecipientInput}
-                    onFocus={() => setShowRecipientDropdown(true)}
-                    placeholder="Search or select recipient"
-                  />
-                  {showRecipientDropdown && filteredRecipients.length > 0 && (
-                    <div style={styles.recipientDropdown}>
-                      {filteredRecipients.map((recipient, index) => (
-                        <div
-                          key={index}
-                          style={styles.recipientOption}
-                          onClick={() => selectRecipient(recipient)}
-                          onMouseEnter={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.1)'}
-                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                        >
-                          {recipient.name}
+                {loading ? (
+                  <div style={styles.loadingText}>Loading recipients...</div>
+                ) : previousRecipients.length === 0 ? (
+                  <div style={styles.noRecipients}>
+                    ⚠️ No recipients found. Please contact your administrator.
+                  </div>
+                ) : (
+                  <>
+                    <div style={styles.recipientSelectContainer}>
+                      <input
+                        style={{
+                          ...styles.input,
+                          ...(eventData.to ? {} : styles.inputError)
+                        }}
+                        type="text"
+                        value={eventData.toName}
+                        onChange={handleRecipientInput}
+                        onFocus={() => setShowRecipientDropdown(true)}
+                        placeholder="Search or select recipient"
+                      />
+                      {showRecipientDropdown && filteredRecipients.length > 0 && (
+                        <div style={styles.recipientDropdown}>
+                          {filteredRecipients.map((recipient, index) => (
+                            <div
+                              key={index}
+                              style={styles.recipientOption}
+                              onClick={() => selectRecipient(recipient)}
+                              onMouseEnter={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.1)'}
+                              onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                            >
+                              {recipient.name}
+                              {recipient.email && (
+                                <span style={{ fontSize: '0.8rem', color: '#8D6E63', marginLeft: '8px' }}>
+                                  ({recipient.email})
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
-                <div style={styles.tip}>💡 Select who this meeting is for</div>
+                    {!eventData.to && (
+                      <div style={styles.errorTip}>⚠️ Please select a recipient from the list</div>
+                    )}
+                    {eventData.to && (
+                      <div style={styles.tip}>✅ Recipient selected: {eventData.toName}</div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -338,7 +423,7 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
             onMouseEnter={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.15)'}
             onMouseLeave={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.1)'}
           >
-            <span>Location</span>
+            <span>Location {eventData.location && <span style={{ color: '#5D4037', fontWeight: 'bold' }}>- {eventData.location}</span>}</span>
             <span style={{ fontSize: '0.8rem', color: '#8D6E63' }}>
               {showLocation ? '▲' : '▼'}
             </span>
@@ -391,7 +476,7 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
             onMouseEnter={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.15)'}
             onMouseLeave={(e) => e.target.style.background = 'rgba(140, 104, 66, 0.1)'}
           >
-            <span>Host</span>
+            <span>Host {eventData.host && <span style={{ color: '#5D4037', fontWeight: 'bold' }}>- {eventData.host}</span>}</span>
             <span style={{ fontSize: '0.8rem', color: '#8D6E63' }}>
               {showHost ? '▲' : '▼'}
             </span>

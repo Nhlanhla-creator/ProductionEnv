@@ -1178,6 +1178,29 @@ export default function EntityOverview({ data = {}, updateData }) {
         </div>
       )}
 
+      {/* Business Description */}
+      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+        <FormField label="Brief Business Description">
+          <textarea
+            name="businessDescription"
+            value={formData.businessDescription || ""}
+            onChange={handleChange}
+            rows={4}
+            style={{ ...inputStyle, resize: 'vertical' }}
+            maxLength={1500}
+            placeholder="Brief overview of your business..."
+          />
+          <div style={{
+            fontSize: '12px',
+            color: '#666',
+            marginTop: '4px',
+            textAlign: 'right'
+          }}>
+            {(formData.businessDescription || "").length}/1500 characters
+          </div>
+        </FormField>
+      </div>
+
       {/* ============================================================ */}
       {/* SECTION 3: Brand Assets - Includes Brands, Franchises & Agencies */}
       {/* ============================================================ */}

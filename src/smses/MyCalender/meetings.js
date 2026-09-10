@@ -5,7 +5,7 @@ import Modal from './Modal';
 import CreateEventForm from './CreateEventForm';
 import MeetingDetails from './MeetingDetails';
 import { db } from '../../firebaseConfig';
-import { collection, query, where, onSnapshot, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // Color palette
@@ -684,8 +684,11 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const meetingsData = [];
         
+        console.log('Snapshot size:', snapshot.size);
+        
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
+          console.log('Document ID:', docSnap.id);
           console.log('Document data:', data);
           
           // Parse slots
@@ -695,7 +698,7 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
             status: slot.status || 'available'
           }));
 
-          meetingsData.push({
+          const meeting = {
             id: docSnap.id,
             docId: docSnap.id,
             name: data.title || 'Meeting',
@@ -705,11 +708,16 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
             slots: slots,
             status: data.status || 'pending',
             createdAt: data.createdAt,
-            updatedAt: data.updatedAt
-          });
+            updatedAt: data.updatedAt,
+            to: data.to || data.customerId || '',
+            toName: data.toName || data.customerName || 'Recipient'
+          };
+          
+          console.log('Meeting object:', meeting);
+          meetingsData.push(meeting);
         });
 
-        console.log('Meetings loaded:', meetingsData.length);
+        console.log('Total meetings loaded:', meetingsData.length);
         setMeetings(meetingsData);
         setLoading(false);
       }, (error) => {
@@ -738,6 +746,8 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
         return;
       }
 
+      console.log('Current user ID:', user.uid);
+
       // Prepare event data for Firebase
       const eventData = {
         title: newEvent.title || 'Meeting',
@@ -763,9 +773,10 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
 
       // Add recipient if provided
       if (newEvent.to) {
+        eventData.to = newEvent.to;
+        eventData.toName = newEvent.toName || 'Recipient';
         eventData.customerId = newEvent.to;
         eventData.customerName = newEvent.toName || 'Recipient';
-        eventData.toName = newEvent.toName || 'Recipient';
       }
 
       console.log('Saving to Firebase:', eventData);
@@ -774,8 +785,11 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
       const docRef = await addDoc(collection(db, "smeCalendarEvents"), eventData);
       console.log('✅ Event created with ID:', docRef.id);
       
+      // Close modal
       setShowCreateModal(false);
-      alert('✅ Event created successfully!');
+      
+      // Show success message
+      alert('✅ Event created successfully! It should appear in the list.');
       
     } catch (error) {
       console.error('❌ Error creating event:', error);
@@ -815,33 +829,59 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
     }
   }, [meetings, setStats]);
 
-  // Filter meetings based on active tab
+  // Filter meetings based on active tab - WITH DEBUG LOGS
   const filteredMeetings = useMemo(() => {
-    if (!meetings || meetings.length === 0) return [];
+    console.log('=== FILTERING MEETINGS ===');
+    console.log('All meetings:', meetings);
+    console.log('Active tab:', activeTab);
     
-    return meetings.filter(meeting => {
-      if (!meeting.slots || meeting.slots.length === 0) return false;
+    if (!meetings || meetings.length === 0) {
+      console.log('No meetings to filter');
+      return [];
+    }
+    
+    const filtered = meetings.filter(meeting => {
+      if (!meeting.slots || meeting.slots.length === 0) {
+        console.log('Meeting has no slots:', meeting.name);
+        return false;
+      }
 
       const hasValidDates = meeting.slots.some(slot => slot.date instanceof Date && !isNaN(slot.date));
-      if (!hasValidDates) return false;
+      if (!hasValidDates) {
+        console.log('Meeting has no valid dates:', meeting.name);
+        return false;
+      }
 
+      let include = false;
       switch (activeTab) {
         case 'upcoming':
-          return meeting.status === 'scheduled' && 
-                 meeting.slots.some(slot => slot.date > now);
+          include = meeting.status === 'scheduled' && 
+                   meeting.slots.some(slot => slot.date > now);
+          console.log(`Meeting "${meeting.name}" - upcoming: ${include}, status: ${meeting.status}`);
+          break;
         
         case 'past':
-          return meeting.status === 'completed' || 
-                 meeting.slots.every(slot => slot.date < now);
+          include = meeting.status === 'completed' || 
+                   meeting.slots.every(slot => slot.date < now);
+          console.log(`Meeting "${meeting.name}" - past: ${include}, status: ${meeting.status}`);
+          break;
         
         case 'pending':
-          return meeting.status === 'pending' || 
-                 meeting.slots.some(slot => slot.status === 'pending');
+          include = meeting.status === 'pending' || 
+                   meeting.slots.some(slot => slot.status === 'pending');
+          console.log(`Meeting "${meeting.name}" - pending: ${include}, status: ${meeting.status}`);
+          break;
         
         default:
-          return true;
+          include = true;
       }
+      
+      return include;
     });
+    
+    console.log('Filtered meetings count:', filtered.length);
+    console.log('Filtered meetings:', filtered);
+    return filtered;
   }, [meetings, activeTab, now]);
 
   // Calendar data preparation
@@ -1138,7 +1178,7 @@ const Meetings = ({ stats, setStats, matchesList = [] }) => {
             {filteredMeetings.length === 0 ? (
               <tr>
                 <NoMeetings colSpan="7">
-                  No {activeTab} meetings found
+                  No {activeTab} meetings found. Total meetings in DB: {meetings.length}
                 </NoMeetings>
               </tr>
             ) : (
