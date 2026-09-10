@@ -147,7 +147,22 @@ const ProgramSponsorUniversalProfile = () => {
     setActiveSection("entityOverview")
   }
 
+  const isDeclarationConsentValid = (data) => {
+    return Boolean(
+      data?.accuracy &&
+      data?.dataProcessing &&
+      data?.termsConditions &&
+      data?.communicationConsent &&
+      data?.reportingCompliance &&
+      data?.programSponsorshipDeclaration
+    )
+  }
+
   const handleSubmitProfile = async () => {
+    if (!isDeclarationConsentValid(formData.declarationConsent)) {
+      alert("Please accept all required declarations and consents before submitting.")
+      return
+    }
     await markSectionComplete("declarationConsent")
     await saveToFirebase(formData, new Set([...completedSections, "declarationConsent"]))
     setShowSummary(true)
@@ -237,7 +252,21 @@ const ProgramSponsorUniversalProfile = () => {
                 Save & Continue <ChevronRight size={16} />
               </button>
             ) : (
-              <button type="button" className="btn btn-primary" onClick={handleSubmitProfile}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSubmitProfile}
+                disabled={!isDeclarationConsentValid(formData.declarationConsent)}
+                title={
+                  !isDeclarationConsentValid(formData.declarationConsent)
+                    ? "Please accept all required declarations and consents before submitting"
+                    : "Submit Profile"
+                }
+                style={{
+                  opacity: !isDeclarationConsentValid(formData.declarationConsent) ? 0.55 : 1,
+                  cursor: !isDeclarationConsentValid(formData.declarationConsent) ? "not-allowed" : "pointer",
+                }}
+              >
                 Submit Profile
               </button>
             )}

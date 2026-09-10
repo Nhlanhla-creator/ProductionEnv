@@ -233,7 +233,17 @@ const InternApplicationsList = ({
     // Flattened structure - all fields are now at top level
     const completedSections = data.completedSections || {}
     const sectionsArr = Object.values(completedSections)
-    const isComplete = sectionsArr.length > 0 && sectionsArr.every((v) => v === true)
+    const ma = data.matchingAgreement || {}
+    const isMatchingAgreementSigned = Boolean(
+      ma.writtenEvaluation &&
+      ma.mentorshipSupport &&
+      ma.codeOfConduct &&
+      ma.consentDeclaration
+    )
+    const isComplete =
+      sectionsArr.length >= 4 &&
+      sectionsArr.every((v) => v === true) &&
+      isMatchingAgreementSigned
 
     // Use internshipTitle for the name, default to "Internship Application"
     let name = "Internship Application"

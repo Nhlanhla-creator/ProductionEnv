@@ -13,17 +13,17 @@ const MatchingAgreement = ({ data, updateData }) => {
 
   const [errors, setErrors] = useState({})
 
-  // Initialize form data from props only once
+  // Initialize form data from props whenever data changes
   useEffect(() => {
     if (data) {
       setFormData({
-        writtenEvaluation: data.writtenEvaluation || false,
-        mentorshipSupport: data.mentorshipSupport || false,
-        codeOfConduct: data.codeOfConduct || false,
-        consentDeclaration: data.consentDeclaration || false,
+        writtenEvaluation: !!data.writtenEvaluation,
+        mentorshipSupport: !!data.mentorshipSupport,
+        codeOfConduct: !!data.codeOfConduct,
+        consentDeclaration: !!data.consentDeclaration,
       })
     }
-  }, []) // Empty dependency array - only run once on mount
+  }, [data])
 
   const handleChange = useCallback(
     (field, value) => {

@@ -38,8 +38,7 @@ const sectionValidations = {
     if (!data) return false
     const hasName = Boolean((data.registeredName && String(data.registeredName).trim()) || (data.tradingName && String(data.tradingName).trim()))
     const hasReg = Boolean((data.registrationNumber && String(data.registrationNumber).trim()) || (data.entityType && String(data.entityType).trim()))
-    const hasDesc = Boolean(data.businessDescription && String(data.businessDescription).trim())
-    return Boolean(hasName && hasReg && hasDesc)
+    return Boolean(hasName && hasReg)
   },
   ownershipManagement: () => true,
   contactDetails: (data) => {
@@ -60,7 +59,10 @@ const sectionValidations = {
   howDidYouHear: () => true,
   documents: () => true,
   generalInvestmentPreference: () => true,
-  declarationConsent: () => true,
+  declarationConsent: (data) => {
+    if (!data) return false
+    return Boolean(data.accuracy && data.dataProcessing)
+  },
 }
 
 const validateAllSections = (formData, completedSections) => {
@@ -266,7 +268,18 @@ export default function CMFUniversalProfile() {
             try { setFormData(JSON.parse(savedData)) } catch (e) { console.warn("Failed to parse savedData", e) }
           }
           if (savedCompletedSections) {
-            try { setCompletedSections(JSON.parse(savedCompletedSections)) } catch (e) { console.warn("Failed to parse savedCompletedSections", e) }
+            try {
+              const parsedSections = JSON.parse(savedCompletedSections)
+              let parsedFormData = null
+              if (savedData) {
+                try { parsedFormData = JSON.parse(savedData) } catch (e) {}
+              }
+              const consentValid = Boolean(parsedFormData?.declarationConsent?.accuracy && parsedFormData?.declarationConsent?.dataProcessing)
+              if (!consentValid && parsedSections) {
+                parsedSections.declarationConsent = false
+              }
+              setCompletedSections(parsedSections)
+            } catch (e) { console.warn("Failed to parse savedCompletedSections", e) }
           }
           if (savedSubmissionStatus === "true") { setProfileSubmitted(true); setShowSummary(true) }
           if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("cmfHasSeenWelcomePopup"), "true") }
@@ -294,7 +307,22 @@ export default function CMFUniversalProfile() {
   }, [formData, completedSections, profileSubmitted])
 
   const updateFormData = (section, data) => {
-    setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
+    setFormData((prev) => {
+      const updatedSection = { ...prev[section], ...data }
+      const updatedFormData = { ...prev, [section]: updatedSection }
+      if (section === "declarationConsent") {
+        const isConsentValid = Boolean(updatedSection?.accuracy && updatedSection?.dataProcessing)
+        if (!isConsentValid) {
+          setCompletedSections(prevSections => {
+            if (!prevSections.declarationConsent) return prevSections
+            const nextSections = { ...prevSections, declarationConsent: false }
+            localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(nextSections))
+            return nextSections
+          })
+        }
+      }
+      return updatedFormData
+    })
   }
 
   const isFileOrBlob = (val) => {
@@ -506,9 +534,11 @@ export default function CMFUniversalProfile() {
     if (!isValid) {
       const errors = []
       if (activeSection === "entityOverview") {
-        errors.push("Entity Overview requires Registered or Trading Name, Registration Number or Entity Type, and Business Description.")
+        errors.push("Entity Overview requires Registered or Trading Name, and Registration Number or Entity Type.")
       } else if (activeSection === "contactDetails") {
         errors.push("Contact Details requires Contact Name, Email, Phone/Mobile, and Physical Address.")
+      } else if (activeSection === "declarationConsent") {
+        errors.push("Declaration & Consent requires confirming accuracy and consenting to data processing.")
       } else {
         errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`)
       }
@@ -526,6 +556,16 @@ export default function CMFUniversalProfile() {
   }
 
   const handleSubmitProfile = async () => {
+    const isConsentValid = Boolean(formData.declarationConsent?.accuracy && formData.declarationConsent?.dataProcessing)
+    if (!isConsentValid) {
+      setValidationModal({
+        open: true,
+        title: "Declaration & Consent Required",
+        messages: ["You must accept the Declaration of Accuracy and Data Processing consent before submitting your profile."]
+      })
+      return
+    }
+
     const updated = { ...completedSections, declarationConsent: true }
     setCompletedSections(updated)
     localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(updated))
@@ -633,9 +673,15 @@ export default function CMFUniversalProfile() {
         if (docSnap.exists()) {
           const data = docSnap.data()
           setProfileData(data)
+          const consentValid = Boolean(data?.declarationConsent?.accuracy && data?.declarationConsent?.dataProcessing)
           if (data.completedSections) {
-            setCompletedSections((prev) => ({ ...prev, instructions: true, ...data.completedSections }))
-            localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(data.completedSections))
+            const cleanCompleted = {
+              ...data.completedSections,
+              instructions: true,
+              declarationConsent: consentValid ? Boolean(data.completedSections.declarationConsent) : false,
+            }
+            setCompletedSections((prev) => ({ ...prev, ...cleanCompleted }))
+            localStorage.setItem(getUserSpecificKey(LOCAL_STORAGE_SECTIONS_KEY), JSON.stringify(cleanCompleted))
           }
           setFormData((prev) => {
             const merged = { ...prev }
@@ -768,13 +814,21 @@ export default function CMFUniversalProfile() {
           </div>
         )}
         <div className="profile-tracker-inner">
-          {sections.map((section) => (
-            <button key={section.id} onClick={() => setActiveSection(section.id)}
-              className={`profile-tracker-button ${activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"}`}>
-              {section.label.split("\n").map((line, i) => <span key={i} className="tracker-label-line">{line}</span>)}
-              {completedSections[section.id] && <CheckCircle className="check-icon" />}
-            </button>
-          ))}
+          {sections.map((section) => {
+            const isCompleted = section.id === "instructions"
+              ? true
+              : section.id === "declarationConsent"
+                ? Boolean(completedSections.declarationConsent && formData.declarationConsent?.accuracy && formData.declarationConsent?.dataProcessing)
+                : Boolean(completedSections[section.id] && sectionValidations[section.id]?.(formData[section.id] || {}))
+
+            return (
+              <button key={section.id} onClick={() => setActiveSection(section.id)}
+                className={`profile-tracker-button ${activeSection === section.id ? "active" : isCompleted ? "completed" : "pending"}`}>
+                {section.label.split("\n").map((line, i) => <span key={i} className="tracker-label-line">{line}</span>)}
+                {isCompleted && <CheckCircle className="check-icon" />}
+              </button>
+            )
+          })}
         </div>
       </div>
 
