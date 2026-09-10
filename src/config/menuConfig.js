@@ -31,7 +31,6 @@ import {
   LayoutDashboard,
   ListChecks,
   Handshake,
-
 } from "lucide-react";
 
 export const advisorMenuItems = [
