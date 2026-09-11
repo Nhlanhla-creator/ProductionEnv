@@ -34,11 +34,8 @@ const isProdDomain =
   typeof window !== 'undefined' && 
   (window.location.hostname === 'www.bigmarketplace.africa' || 
    window.location.hostname === 'bigmarketplace.africa' || 
-   window.location.hostname === 'www.bigmarketplace.biz' || 
-   window.location.hostname === 'bigmarketplace.biz' || 
    window.location.hostname === 'production-environment-cf7da.firebaseapp.com' ||
-   window.location.hostname.endsWith('.africa') ||
-   window.location.hostname.endsWith('.biz'));
+   window.location.hostname.endsWith('.africa'));
 
 const firebaseConfig = isProdDomain ? prodConfig : devConfig;
 
@@ -51,9 +48,13 @@ const app = firebase.app();
 
 // Export Firebase services
 const functions = getFunctions(app, 'us-central1');
-if (process.env.REACT_APP_USE_FUNCTIONS_EMULATOR === 'true') {
+if (window.location.hostname === 'localhost') {
   connectFunctionsEmulator(functions, 'localhost', 5001);
   console.log('Using Firebase Functions emulator');
+}
+
+if(process.env.NODE_ENV === "development"){
+  connectFunctionsEmulator(getFunctions(app),"localhost",5001)
 }
 
 // Export Firebase services
@@ -65,6 +66,7 @@ const storage = firebase.storage();
 const createUserWithEmailAndPassword = (auth, email, password) => {
   return auth.createUserWithEmailAndPassword(email, password);
 };
+
 
 const signInWithEmailAndPassword = (auth, email, password) => {
   return auth.signInWithEmailAndPassword(email, password);
