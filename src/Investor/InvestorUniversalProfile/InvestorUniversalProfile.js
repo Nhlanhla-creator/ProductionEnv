@@ -41,7 +41,7 @@ const sectionValidations = {
   fundDetails: () => true,
   applicationBrief: () => true,
   documentUpload: () => true,
-  declarationConsent: () => true,
+  declarationConsent: (data) => Boolean(data?.accuracy && data?.dataProcessing && data?.termsConditions),
 }
 
 const validateFundManageOverview = (data) => {
@@ -520,6 +520,10 @@ export default function UniversalProfile() {
   }
 
   const handleSubmitProfile = async () => {
+    if (!sectionValidations.declarationConsent(formData.declarationConsent || {})) {
+      alert("Please accept all required declarations and consents before submitting your profile.")
+      return
+    }
     try {
       setSectionLoading(true)
       await markSectionAsCompleted("declarationConsent")
@@ -701,7 +705,21 @@ export default function UniversalProfile() {
               Save & Continue <ChevronRight size={16} />
             </button>
           ) : (
-            <button type="button" className={`${styles.btn} ${styles.btnPrimary} btn btn-primary`} onClick={handleSubmitProfile} disabled={sectionLoading}>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnPrimary} btn btn-primary`}
+              onClick={handleSubmitProfile}
+              disabled={sectionLoading || !sectionValidations.declarationConsent(formData.declarationConsent || {})}
+              title={
+                !sectionValidations.declarationConsent(formData.declarationConsent || {})
+                  ? "Please accept all required declarations and consents before submitting"
+                  : "Submit Profile"
+              }
+              style={{
+                opacity: !sectionValidations.declarationConsent(formData.declarationConsent || {}) ? 0.55 : 1,
+                cursor: !sectionValidations.declarationConsent(formData.declarationConsent || {}) ? "not-allowed" : "pointer",
+              }}
+            >
               Submit Profile
             </button>
           )}

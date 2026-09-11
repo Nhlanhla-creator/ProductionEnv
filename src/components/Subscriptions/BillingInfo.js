@@ -195,9 +195,85 @@ const BillingInfo = ({
     setLoading(false);
   };
 
+  // Default fetch function for CMF
+  const defaultFetchCMFData = async () => {
+    setLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // 1. Check billingProfiles (editable billing data)
+      const billingRef = doc(db, "billingProfiles", user.uid);
+      const billingSnap = await getDoc(billingRef);
+      const billingData = billingSnap.exists() ? billingSnap.data() : {};
+
+      // 2. Check cmfProfiles
+      const cmfRef = doc(db, "cmfProfiles", `${user.uid}_cmf`);
+      const cmfSnap = await getDoc(cmfRef);
+      let profileData = {};
+      if (cmfSnap.exists()) {
+        profileData = cmfSnap.data().formData || cmfSnap.data() || {};
+      } else {
+        const altSnap = await getDoc(doc(db, "cmfProfiles", user.uid));
+        if (altSnap.exists()) {
+          profileData = altSnap.data().formData || altSnap.data() || {};
+        }
+      }
+
+      const mergedData = {
+        fullName:
+          billingData.fullName ||
+          profileData?.contactDetails?.contactName ||
+          user.displayName ||
+          "",
+        companyName:
+          billingData.companyName ||
+          profileData?.entityOverview?.registeredName ||
+          profileData?.entityOverview?.tradingName ||
+          "",
+        email:
+          billingData.email ||
+          profileData?.contactDetails?.email ||
+          user.email ||
+          "",
+        address:
+          billingData.address ||
+          profileData?.contactDetails?.physicalAddress ||
+          "",
+        city:
+          billingData.city ||
+          profileData?.contactDetails?.city ||
+          "",
+        stateRegion:
+          billingData.stateRegion ||
+          profileData?.contactDetails?.province ||
+          "",
+        country:
+          billingData.country ||
+          profileData?.contactDetails?.country ||
+          "South Africa",
+        postalCode:
+          billingData.postalCode ||
+          profileData?.contactDetails?.postalAddress ||
+          "",
+        taxId:
+          billingData.taxId ||
+          profileData?.legalCompliance?.taxNumber ||
+          "",
+      };
+
+      setFormData((prev) => ({ ...prev, ...mergedData }));
+    } catch (err) {
+      console.error("Failed to fetch CMF billing info:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Determine which fetch function to use
   const getFetchFunction = () => {
     if (customFetchData) return customFetchData;
+    if (userType === "cmf") return defaultFetchCMFData;
     return userType === "catalyst"
       ? defaultFetchCatalystData
       : defaultFetchSMSEData;

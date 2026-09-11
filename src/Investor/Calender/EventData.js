@@ -1,41 +1,39 @@
 import React from 'react';
 import './EventData.css';
 
-const EventData = ({ meetings = [] }) => {
-  const stats = {
-    created: meetings?.filter(m => m?.status === 'scheduled')?.length || 0,
+const EventData = ({ meetings = [], stats = null }) => {
+  // Use provided stats or calculate from meetings
+  const calculatedStats = stats || {
+    created: meetings?.filter(m => m?.status === 'pending' || m?.status === 'scheduled')?.length || 0,
+    scheduled: meetings?.filter(m => m?.status === 'scheduled')?.length || 0,
     completed: meetings?.filter(m => m?.status === 'completed')?.length || 0,
     cancelled: meetings?.filter(m => m?.status === 'cancelled')?.length || 0,
-    rescheduled: meetings?.filter(m => 
-      m?.createdAt && m?.updatedAt && 
-      new Date(m.createdAt).getTime() !== new Date(m.updatedAt).getTime()
-    )?.length || 0,
   };
 
   const cards = [
     {
-      title: 'Events scheduled',
-      value: stats.created,
-      description: 'Scheduled events awaiting completion',
+      title: 'Events Created',
+      value: calculatedStats.created || 0,
+      description: 'Total events created',
       className: 'created-card',
     },
     {
+      title: 'Events Scheduled',
+      value: calculatedStats.scheduled || 0,
+      description: 'Scheduled events awaiting completion',
+      className: 'scheduled-card',
+    },
+    {
       title: 'Events Completed',
-      value: stats.completed,
+      value: calculatedStats.completed || 0,
       description: 'Events successfully finished',
       className: 'completed-card',
     },
     {
       title: 'Events Cancelled',
-      value: stats.cancelled,
+      value: calculatedStats.cancelled || 0,
       description: 'Events that got called off',
       className: 'cancelled-card',
-    },
-    {
-      title: 'Events Rescheduled',
-      value: stats.rescheduled,
-      description: 'Events that were rescheduled',
-      className: 'rescheduled-card',
     },
   ];
 

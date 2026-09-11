@@ -47,26 +47,25 @@ const CreateEventForm = ({ onSubmit, onCancel }) => {
           />
         </div>
 
-       <div className="form-row">
-  <div className="form-group">
-    <label>Date</label>
-    <input type="date" name="date" value={eventData.date} onChange={handleChange} required />
-  </div>
-  <div className="form-group">
-    <label>Time</label>
-    <input type="time" name="time" value={eventData.time} onChange={handleChange} required />
-  </div>
-  <div className="form-group">
-    <label>Duration</label>
-    <select name="duration" value={eventData.duration} onChange={handleChange}>
-      <option value="30">30 min</option>
-      <option value="45">45 min</option>
-      <option value="60">60 min</option>
-      <option value="custom">Custom</option>
-    </select>
-  </div>
-</div>
-
+        <div className="form-row">
+          <div className="form-group">
+            <label>Date</label>
+            <input type="date" name="date" value={eventData.date} onChange={handleChange} required />
+          </div>
+          <div className="form-group">
+            <label>Time</label>
+            <input type="time" name="time" value={eventData.time} onChange={handleChange} required />
+          </div>
+          <div className="form-group">
+            <label>Duration</label>
+            <select name="duration" value={eventData.duration} onChange={handleChange}>
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">60 min</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+        </div>
 
         <div className="collapsible">
           <div className="collapsible-header" onClick={() => setShowLocation(!showLocation)}>
@@ -117,6 +116,7 @@ const CreateEventForm = ({ onSubmit, onCancel }) => {
           )}
         </div>
 
+        {/* FIXED: Added the form actions with Create Event button */}
         <div className="form-actions">
           <button type="button" onClick={onCancel} className="cancel-btn">Cancel</button>
           <button type="submit" className="submit-btn">Create Event</button>

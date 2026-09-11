@@ -59,6 +59,8 @@ import {
   TrendingUp,
   TrendingDown,
   Settings,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Chart as ChartJS,
@@ -451,7 +453,9 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better" },
 ];
 
-/* ─── KPI info popup ────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   KPI Info Modal
+   ════════════════════════════════════════════════════════════════════════ */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
   const [meaning, setMeaning] = useState(kpi.meaning || "");
@@ -583,6 +587,47 @@ const ACTIONS_KEY = "__actions__";
 const columnLines = (key, period) =>
   ["budget", "actual", "variance"].includes(key) ? [PERIOD_PREFIX[period], COLUMN_DEFS[key].label] : [COLUMN_DEFS[key].label];
 
+// ── Filter Dropdown component ──
+const FilterDropdown = ({ options, value, onChange, onClose }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        onClose?.();
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "All" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
+      >
+        <SlidersHorizontal size={13} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
+              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ════════════════════════════════════════════════════════════════════════════
    Marketing & Sales KPI Registry
    ════════════════════════════════════════════════════════════════════════ */
@@ -620,8 +665,7 @@ const TAB_DEFS = [
             meaning: "The total value of all opportunities in your pipeline.",
             measured: "=SUM(Rev Potential) for all active opportunities",
             source: "Captured from pipeline records",
-            actual: (c) => c.pipelineValue,
-            budget: (c) => c.pipelineBudget,
+            field: { src: "pipeline", a: ["pipelineData", "pipelineValue", "actual"], b: ["pipelineData", "pipelineValue", "budget"] },
           }),
           K({
             id: "riskAdjustedValue",
@@ -633,8 +677,7 @@ const TAB_DEFS = [
             meaning: "The value of opportunities weighted by their probability of closing.",
             measured: "=SUM(Rev Potential × Probability %) for all active opportunities",
             source: "Captured from pipeline records",
-            actual: (c) => c.riskValue,
-            budget: (c) => c.riskBudget,
+            field: { src: "pipeline", a: ["pipelineData", "riskValue", "actual"], b: ["pipelineData", "riskValue", "budget"] },
           }),
           K({
             id: "pipelineCoverage",
@@ -646,8 +689,7 @@ const TAB_DEFS = [
             meaning: "The ratio of risk-adjusted pipeline value to target revenue.",
             measured: "=Risk Adjusted Value ÷ Target Revenue × 100%",
             source: "Calculated from pipeline data",
-            actual: (c) => c.coverage,
-            budget: (c) => c.coverageBudget,
+            field: { src: "pipeline", a: ["pipelineData", "coverage", "actual"], b: ["pipelineData", "coverage", "budget"] },
           }),
           K({
             id: "newLeads",
@@ -659,8 +701,7 @@ const TAB_DEFS = [
             meaning: "The number of new leads added to the pipeline in the period.",
             measured: "=COUNT of new records in the period",
             source: "Captured from pipeline records",
-            actual: (c) => c.newLeads,
-            budget: (c) => c.newLeadsBudget,
+            field: { src: "pipeline", a: ["pipelineData", "newLeads", "actual"], b: ["pipelineData", "newLeads", "budget"] },
           }),
           K({
             id: "conversionRate",
@@ -672,8 +713,7 @@ const TAB_DEFS = [
             meaning: "The percentage of opportunities that convert to closed deals.",
             measured: "=Converted Opportunities ÷ Total Opportunities × 100%",
             source: "Calculated from pipeline data",
-            actual: (c) => c.conversionRate,
-            budget: (c) => c.conversionBudget,
+            field: { src: "pipeline", a: ["pipelineData", "conversionRate", "actual"], b: ["pipelineData", "conversionRate", "budget"] },
           }),
           K({
             id: "salesVelocity",
@@ -685,8 +725,7 @@ const TAB_DEFS = [
             meaning: "The average number of days from lead creation to close.",
             measured: "=AVERAGE(Days between Created At and Signed Date)",
             source: "Calculated from pipeline records",
-            actual: (c) => c.salesVelocity,
-            budget: (c) => c.velocityBudget,
+            field: { src: "pipeline", a: ["pipelineData", "salesVelocity", "actual"], b: ["pipelineData", "salesVelocity", "budget"] },
           }),
         ],
       },
@@ -703,8 +742,7 @@ const TAB_DEFS = [
             meaning: "The total amount spent on marketing across all channels.",
             measured: "=SUM of all channel marketing spend",
             source: "Captured from marketing data",
-            actual: (c) => c.totalSpend,
-            budget: (c) => c.spendBudget,
+            field: { src: "concentration", a: ["concentrationData", "totalSpend", "actual"], b: ["concentrationData", "totalSpend", "budget"] },
           }),
           K({
             id: "overallROI",
@@ -716,8 +754,7 @@ const TAB_DEFS = [
             meaning: "The return on investment from marketing activities.",
             measured: "=(Total Revenue - Total Spend) ÷ Total Spend × 100%",
             source: "Calculated from marketing data",
-            actual: (c) => c.totalROI,
-            budget: (c) => c.roiBudget,
+            field: { src: "concentration", a: ["concentrationData", "totalROI", "actual"], b: ["concentrationData", "totalROI", "budget"] },
           }),
         ],
       },
@@ -734,8 +771,7 @@ const TAB_DEFS = [
             meaning: "The percentage of customers who make repeat purchases.",
             measured: "=Repeat Customers ÷ Total Customers × 100%",
             source: "Captured from customer data",
-            actual: (c) => c.repeatRate,
-            budget: (c) => c.repeatBudget,
+            field: { src: "sustainability", a: ["sustainabilityData", "repeatRate", "actual"], b: ["sustainabilityData", "repeatRate", "budget"] },
           }),
           K({
             id: "netRetention",
@@ -747,8 +783,7 @@ const TAB_DEFS = [
             meaning: "The net customer retention rate (repeat rate minus churn rate).",
             measured: "=Repeat Customer Rate - Churn Rate",
             source: "Calculated from customer data",
-            actual: (c) => c.netRetention,
-            budget: (c) => c.netRetentionBudget,
+            field: { src: "sustainability", a: ["sustainabilityData", "netRetention", "actual"], b: ["sustainabilityData", "netRetention", "budget"] },
           }),
           K({
             id: "campaignROI",
@@ -760,8 +795,7 @@ const TAB_DEFS = [
             meaning: "The return on investment from marketing campaigns.",
             measured: "=(Campaign Revenue - Campaign Cost) ÷ Campaign Cost × 100%",
             source: "Calculated from campaign data",
-            actual: (c) => c.campaignROI,
-            budget: (c) => c.campaignROIBudget,
+            field: { src: "sustainability", a: ["sustainabilityData", "campaignROI", "actual"], b: ["sustainabilityData", "campaignROI", "budget"] },
           }),
         ],
       },
@@ -884,8 +918,691 @@ const getVariance = (kpi, period, fy) => {
   return Number.isFinite(b) && Number.isFinite(a) ? a - b : null;
 };
 
-// ==================== PIPELINE TABLE ====================
+/* ════════════════════════════════════════════════════════════════════════════
+   Report Generator — Custom Word document export for Marketing & Sales
+   ════════════════════════════════════════════════════════════════════════ */
 
+const MarketingReportGenerator = ({ 
+  tabs, 
+  fy, 
+  period, 
+  onClose, 
+  userId, 
+  userName, 
+  pipelineRecords,
+  getStatusFn,
+  periodValuesFn,
+  getVarianceFn,
+  statusFromPairFn,
+  trimNumFn,
+  fmtValueFn,
+  fyLabelFn,
+}) => {
+  const [selectedTabs, setSelectedTabs] = useState(() => 
+    Object.fromEntries(tabs.map((t) => [t.id, true]))
+  );
+  const [includeSummary, setIncludeSummary] = useState(true);
+  const [includeCharts, setIncludeCharts] = useState(true);
+  const [includeAnalysis, setIncludeAnalysis] = useState(true);
+  const [includePipeline, setIncludePipeline] = useState(true);
+  const [includeConcentration, setIncludeConcentration] = useState(true);
+  const [includeCampaigns, setIncludeCampaigns] = useState(true);
+  const [includeActions, setIncludeActions] = useState(true);
+  const [periodForReport, setPeriodForReport] = useState(period);
+  const [generating, setGenerating] = useState(false);
+  const [reportTitle, setReportTitle] = useState(`Marketing & Sales Report - ${new Date().toLocaleDateString()}`);
+
+  // Get actions from governanceCalendar
+  const [actions, setActions] = useState([]);
+  const [loadingActions, setLoadingActions] = useState(true);
+
+  useEffect(() => {
+    const loadActions = async () => {
+      if (!userId) { setLoadingActions(false); return; }
+      try {
+        const snap = await getDoc(doc(db, "governanceCalendar", userId));
+        if (snap.exists()) {
+          const meetings = snap.data().meetings || [];
+          const allActions = meetings.flatMap(m => 
+            (m.actions || []).map(a => ({ ...a, meetingTitle: m.title }))
+          );
+          setActions(allActions);
+        }
+      } catch (err) {
+        console.error("Failed to load actions:", err);
+      } finally {
+        setLoadingActions(false);
+      }
+    };
+    loadActions();
+  }, [userId]);
+
+  // Helper functions using the passed props
+  const getStatusLocal = (kpi, period, fy) => getStatusFn(kpi, period, fy);
+  const periodValuesLocal = (kpi, period, fy) => periodValuesFn(kpi, period, fy);
+  const getVarianceLocal = (kpi, period, fy) => getVarianceFn(kpi, period, fy);
+  const trimNumLocal = (n) => trimNumFn(n);
+  const fmtValueLocal = (raw, kpi, options) => fmtValueFn(raw, kpi, options);
+  const fyLabelLocal = (sy, sm) => fyLabelFn(sy, sm);
+
+  const generateReport = async () => {
+    setGenerating(true);
+
+    // Build the report data structure
+    const reportData = {
+      title: reportTitle,
+      generated: new Date().toISOString(),
+      period: PERIOD_LABEL[periodForReport],
+      financialYear: fyLabelLocal(fy.startYear, fy.startMonth),
+      userName: userName || "User",
+      sections: [],
+      summary: null,
+      actions: [],
+      pipeline: null,
+      concentration: null,
+      campaigns: null,
+    };
+
+    // Process each selected tab
+    const selectedTabList = tabs.filter(t => selectedTabs[t.id]);
+
+    if (includeSummary) {
+      // Build summary statistics
+      const allKpis = selectedTabList.flatMap(t => 
+        t.categories.flatMap(c => c.kpis || [])
+      );
+      const statusCounts = { green: 0, amber: 0, red: 0, none: 0 };
+      allKpis.forEach(k => {
+        const s = getStatusLocal(k, periodForReport, fy);
+        statusCounts[s.key] = (statusCounts[s.key] || 0) + 1;
+      });
+      reportData.summary = {
+        totalKpis: allKpis.length,
+        statusCounts,
+        tabs: selectedTabList.map(t => t.name),
+      };
+    }
+
+    // Build section data for KPI tabs
+    selectedTabList.forEach(tab => {
+      const section = {
+        name: tab.name,
+        categories: [],
+      };
+
+      tab.categories.forEach(cat => {
+        const catData = {
+          name: cat.name,
+          kpis: [],
+          isPanel: !!cat.panel,
+        };
+
+        // Skip panel data in summary tab
+        if (cat.panel) return;
+
+        (cat.kpis || []).forEach(k => {
+          const v = periodValuesLocal(k, periodForReport, fy);
+          const status = getStatusLocal(k, periodForReport, fy);
+          const variance = getVarianceLocal(k, periodForReport, fy);
+          catData.kpis.push({
+            id: k.id,
+            name: k.name,
+            units: k.units,
+            direction: k.direction,
+            meaning: k.meaning,
+            measured: k.measured,
+            actual: v.actual,
+            budget: v.budget,
+            variance: variance,
+            status: status.label,
+            statusKey: status.key,
+            benchmark: k.benchmark,
+            notes: k.notes || "",
+            source: k.source || "",
+          });
+        });
+
+        section.categories.push(catData);
+      });
+
+      reportData.sections.push(section);
+    });
+
+    // Pipeline data
+    if (includePipeline && pipelineRecords && pipelineRecords.length) {
+      reportData.pipeline = pipelineRecords.map(r => ({
+        tier: r.tier || "",
+        accountWebsite: r.accountWebsite || "",
+        sector: r.sector || "",
+        revPotential: r.revPotential || 0,
+        probability: r.probability || 0,
+        nextCta: r.nextCta || "",
+        byWhen: r.byWhen || "",
+        keyContact: r.keyContact || "",
+        notes: r.notes || "",
+      }));
+    }
+
+    // Concentration data (sample data - in real app this would come from docs)
+    if (includeConcentration) {
+      reportData.concentration = {
+        channels: [
+          { name: "Social Media", revenue: 1200000, percentage: 35.2 },
+          { name: "PPC", revenue: 800000, percentage: 23.5 },
+          { name: "Email", revenue: 500000, percentage: 14.7 },
+        ],
+        customers: [
+          { name: "Acme Corp", revenue: 850000, percentage: 24.9 },
+          { name: "TechGlobal", revenue: 650000, percentage: 19.0 },
+          { name: "EcoSolutions", revenue: 450000, percentage: 13.2 },
+        ],
+        segments: [
+          { name: "Enterprise", revenue: 1500000, percentage: 44.0 },
+          { name: "SMB", revenue: 800000, percentage: 23.5 },
+          { name: "Startup", revenue: 400000, percentage: 11.7 },
+        ],
+      };
+    }
+
+    // Campaign data (sample data)
+    if (includeCampaigns) {
+      reportData.campaigns = [
+        { name: "Q1 Campaign", cost: 25000, revenue: 45000 },
+        { name: "Q2 Campaign", cost: 30000, revenue: 55000 },
+        { name: "Summer Sale", cost: 15000, revenue: 35000 },
+        { name: "Holiday Campaign", cost: 40000, revenue: 80000 },
+      ];
+    }
+
+    // Get actions
+    if (includeActions) {
+      const marketingActions = actions.filter(a => 
+        a.sourceModule === "Marketing & Sales" || 
+        a.category === "Marketing & Sales" ||
+        a.sourceCategory?.includes("Marketing")
+      );
+      reportData.actions = marketingActions.map(a => ({
+        title: a.title,
+        description: a.description,
+        status: a.status,
+        dueDate: a.dueDate,
+        assignedTo: a.assignedTo,
+        category: a.category,
+        sourceKpi: a.sourceKpi,
+        meetingTitle: a.meetingTitle,
+      }));
+    }
+
+    // Generate the Word document
+    const htmlContent = generateWordHTML(reportData, includeCharts, includeAnalysis);
+    
+    // Create the download
+    const blob = new Blob([htmlContent], { 
+      type: "application/msword;charset=utf-8" 
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${reportTitle.replace(/[^a-zA-Z0-9]/g, "_")}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setGenerating(false);
+    onClose();
+  };
+
+  const generateWordHTML = (data, includeCharts, includeAnalysis) => {
+    const statusColor = (key) => {
+      if (key === "green") return "#166534";
+      if (key === "amber") return "#92400e";
+      if (key === "red") return "#991b1b";
+      return "#6b5b55";
+    };
+
+    const statusBg = (key) => {
+      if (key === "green") return "#f0fdf4";
+      if (key === "amber") return "#fffbeb";
+      if (key === "red") return "#fef2f2";
+      return "#f2eeec";
+    };
+
+    const fmtVal = (v, units) => {
+      if (v === null || v === undefined || v === "") return "—";
+      if (units === "%") return `${trimNumLocal(Number(v))}%`;
+      if (units === "R") {
+        const n = Number(v);
+        if (n >= 1_000_000) return `R ${(n / 1_000_000).toFixed(1)}m`;
+        if (n >= 1_000) return `R ${(n / 1_000).toFixed(1)}k`;
+        return `R ${n.toFixed(0)}`;
+      }
+      if (units && !["#", "%", "R"].includes(units)) return `${trimNumLocal(Number(v))} ${units}`;
+      return trimNumLocal(Number(v));
+    };
+
+    const kpiRows = (kpis) => {
+      if (!kpis.length) return "";
+      let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:10pt; margin:8px 0;">
+          <thead>
+            <tr style="background:#33231e; color:#fff;">
+              <th style="padding:6px 10px; text-align:left; border:1px solid #ddd;">KPI</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Units</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Target</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Actual</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Variance</th>
+              <th style="padding:6px 10px; text-align:center; border:1px solid #ddd;">Status</th>
+            </tr>
+          </thead>
+          <tbody>`;
+      kpis.forEach((k, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        html += `
+          <tr style="background:${bg};">
+            <td style="padding:6px 10px; border:1px solid #ddd; font-weight:500;">${k.name}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${k.units}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(k.budget, k.units)}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; font-weight:600;">${fmtVal(k.actual, k.units)}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${k.variance !== null && k.variance >= 0 ? '#166534' : '#991b1b'};">${k.variance !== null ? fmtVal(k.variance, k.units) : "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">
+              <span style="background:${statusBg(k.statusKey)}; color:${statusColor(k.statusKey)}; padding:2px 12px; border-radius:12px; font-weight:600; font-size:9pt;">${k.status}</span>
+            </td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+      return html;
+    };
+
+    // Build sections HTML
+    let sectionsHtml = "";
+    data.sections.forEach(section => {
+      sectionsHtml += `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">${section.name}</h2>`;
+      
+      section.categories.forEach(cat => {
+        if (cat.kpis.length) {
+          sectionsHtml += `
+            <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">${cat.name}</h3>
+            ${kpiRows(cat.kpis)}
+          `;
+        }
+      });
+    });
+
+    // Pipeline section
+    let pipelineHtml = "";
+    if (data.pipeline && data.pipeline.length) {
+      let pipeRows = "";
+      data.pipeline.slice(0, 20).forEach((item, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        pipeRows += `
+          <tr style="background:${bg};">
+            <td style="padding:4px 8px; border:1px solid #ddd;">${item.tier || "—"}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd;">${item.accountWebsite || "—"}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd;">${item.sector || "—"}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${item.revPotential ? fmtVal(item.revPotential, "R") : "—"}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${item.probability || 0}%</td>
+            <td style="padding:4px 8px; border:1px solid #ddd;">${item.nextCta || "—"}</td>
+          </tr>`;
+      });
+      pipelineHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Pipeline Visibility</h2>
+        <p style="font-size:10pt; color:#6b5b55;">${data.pipeline.length} opportunities in pipeline</p>
+        <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+          <thead><tr style="background:#33231e; color:#fff;">
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Tier</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Account</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Sector</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Rev Potential</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Probability</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Next CTA</th>
+          </tr></thead>
+          <tbody>${pipeRows}</tbody>
+        </table>`;
+    }
+
+    // Concentration section
+    let concentrationHtml = "";
+    if (data.concentration) {
+      const c = data.concentration;
+      concentrationHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Revenue Concentration</h2>`;
+      
+      // Top 3 Channels
+      let channelRows = "";
+      c.channels.forEach((item, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        channelRows += `
+          <tr style="background:${bg};">
+            <td style="padding:4px 8px; border:1px solid #ddd;">${item.name}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(item.revenue, "R")}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:600;">${item.percentage}%</td>
+          </tr>`;
+      });
+      
+      // Top 3 Customers
+      let customerRows = "";
+      c.customers.forEach((item, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        customerRows += `
+          <tr style="background:${bg};">
+            <td style="padding:4px 8px; border:1px solid #ddd;">${item.name}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(item.revenue, "R")}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:600;">${item.percentage}%</td>
+          </tr>`;
+      });
+      
+      // Top 3 Segments
+      let segmentRows = "";
+      c.segments.forEach((item, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        segmentRows += `
+          <tr style="background:${bg};">
+            <td style="padding:4px 8px; border:1px solid #ddd;">${item.name}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(item.revenue, "R")}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:600;">${item.percentage}%</td>
+          </tr>`;
+      });
+      
+      concentrationHtml += `
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;">
+          <div>
+            <h4 style="color:#4a352f; font-size:11pt; margin:8px 0;">Top 3 Channels</h4>
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Channel</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Revenue</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">%</th>
+              </tr></thead>
+              <tbody>${channelRows}</tbody>
+            </table>
+          </div>
+          <div>
+            <h4 style="color:#4a352f; font-size:11pt; margin:8px 0;">Top 3 Customers</h4>
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Customer</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Revenue</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">%</th>
+              </tr></thead>
+              <tbody>${customerRows}</tbody>
+            </table>
+          </div>
+          <div>
+            <h4 style="color:#4a352f; font-size:11pt; margin:8px 0;">Top 3 Segments</h4>
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Segment</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Revenue</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">%</th>
+              </tr></thead>
+              <tbody>${segmentRows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    // Campaigns section
+    let campaignsHtml = "";
+    if (data.campaigns && data.campaigns.length) {
+      let campRows = "";
+      data.campaigns.forEach((item, i) => {
+        const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        const roi = item.cost > 0 ? ((item.revenue - item.cost) / item.cost * 100) : 0;
+        campRows += `
+          <tr style="background:${bg};">
+            <td style="padding:4px 8px; border:1px solid #ddd; font-weight:500;">${item.name}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(item.cost, "R")}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(item.revenue, "R")}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${roi >= 0 ? '#166534' : '#991b1b'}; font-weight:600;">${roi.toFixed(1)}%</td>
+          </tr>`;
+      });
+      campaignsHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Campaign Performance</h2>
+        <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+          <thead><tr style="background:#33231e; color:#fff;">
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Campaign</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Cost</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Revenue</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">ROI %</th>
+          </tr></thead>
+          <tbody>${campRows}</tbody>
+        </table>`;
+    }
+
+    // Analysis section
+    let analysisHtml = "";
+    if (includeAnalysis) {
+      analysisHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Analysis & Observations</h2>
+        <div style="font-size:10pt; line-height:1.6;">`;
+      
+      data.sections.forEach(section => {
+        section.categories.forEach(cat => {
+          cat.kpis.forEach(k => {
+            const status = k.statusKey;
+            if (status === "red" || status === "amber") {
+              analysisHtml += `
+                <div style="background:${statusBg(status)}; padding:8px 12px; margin:6px 0; border-radius:4px; border-left:3px solid ${statusColor(status)};">
+                  <strong>${k.name}</strong> — ${k.status}
+                  ${k.variance !== null ? ` (${k.variance >= 0 ? "+" : ""}${fmtVal(k.variance, k.units)})` : ""}
+                  ${k.notes ? `<br><span style="color:#6b5b55; font-size:9pt;">Note: ${k.notes}</span>` : ""}
+                </div>
+              `;
+            }
+          });
+        });
+      });
+
+      // Summary stats
+      const allKpis = data.sections.flatMap(s => 
+        s.categories.flatMap(c => c.kpis || [])
+      );
+      const reds = allKpis.filter(k => k.statusKey === "red");
+      const ambers = allKpis.filter(k => k.statusKey === "amber");
+      const greens = allKpis.filter(k => k.statusKey === "green");
+      
+      // Pipeline summary
+      let pipelineSummary = "";
+      if (data.pipeline && data.pipeline.length) {
+        const totalPipelineValue = data.pipeline.reduce((sum, p) => sum + (p.revPotential || 0), 0);
+        const avgProbability = data.pipeline.reduce((sum, p) => sum + (p.probability || 0), 0) / data.pipeline.length;
+        pipelineSummary = `
+          <div style="background:#faf8f7; padding:8px 12px; margin:6px 0; border-radius:4px;">
+            <strong>Pipeline Summary:</strong> ${data.pipeline.length} opportunities · Total value: ${fmtVal(totalPipelineValue, "R")} · Avg probability: ${avgProbability.toFixed(1)}%
+          </div>`;
+      }
+      
+      analysisHtml += `
+        <div style="background:#faf8f7; padding:12px 16px; margin:12px 0; border-radius:6px;">
+          <p><strong>KPI Summary:</strong> ${greens.length} on target · ${ambers.length} needs attention · ${reds.length} critical</p>
+          ${reds.length ? `<p style="color:#991b1b;"><strong>Critical items:</strong> ${reds.map(k => k.name).join(", ")}</p>` : ""}
+          ${ambers.length ? `<p style="color:#92400e;"><strong>Needs attention:</strong> ${ambers.map(k => k.name).join(", ")}</p>` : ""}
+          ${reds.length === 0 && ambers.length === 0 && greens.length > 0 ? `<p style="color:#166534;">All KPIs are on target.</p>` : ""}
+          ${pipelineSummary}
+        </div>`;
+      analysisHtml += `</div>`;
+    }
+
+    // Actions section
+    let actionsHtml = "";
+    if (includeActions && data.actions.length) {
+      let actionRows = "";
+      data.actions.forEach(a => {
+        const statusColors = { "Done": "#166534", "In Progress": "#92400e", "Not Done": "#991b1b" };
+        const color = statusColors[a.status] || "#6b5b55";
+        actionRows += `
+          <tr>
+            <td style="padding:6px 10px; border:1px solid #ddd;">${a.title}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; font-size:9pt;">${a.description || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${a.assignedTo || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${a.dueDate || "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${color}; font-weight:600;">${a.status}</td>
+          </tr>`;
+      });
+      actionsHtml = `
+        <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Actions</h2>
+        <p style="font-size:10pt; color:#6b5b55;">${data.actions.length} actions related to Marketing & Sales</p>
+        <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
+          <thead><tr style="background:#33231e; color:#fff;">
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Action</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:left;">Description</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Owner</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Due Date</th>
+            <th style="padding:6px 10px; border:1px solid #ddd; text-align:center;">Status</th>
+          </tr></thead>
+          <tbody>${actionRows}</tbody>
+        </table>`;
+    }
+
+    return `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>${data.title}</title>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #2d201c; }
+          h1 { color: #2d201c; font-size: 22pt; font-weight: 600; margin-bottom: 4px; }
+          .subtitle { color: #6b5b55; font-size: 11pt; margin-bottom: 24px; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          @page { margin: 2cm; }
+        </style>
+      </head>
+      <body>
+        <h1>${data.title}</h1>
+        <div class="subtitle">
+          Generated ${new Date(data.generated).toLocaleDateString()} · ${data.period} · FY ${data.financialYear}
+          <br>${data.userName}
+        </div>
+
+        ${data.summary ? `
+          <div style="background:#faf8f7; padding:12px 16px; border-radius:6px; margin-bottom:16px;">
+            <p style="font-size:11pt; margin:0;">
+              <strong>${data.summary.totalKpis} KPIs</strong> across ${data.summary.tabs.length} sections
+              · ${data.summary.statusCounts.green} on target
+              · ${data.summary.statusCounts.amber} needs attention
+              · ${data.summary.statusCounts.red} critical
+            </p>
+          </div>
+        ` : ""}
+
+        ${sectionsHtml}
+        ${pipelineHtml}
+        ${concentrationHtml}
+        ${campaignsHtml}
+        ${analysisHtml}
+        ${actionsHtml}
+
+        <p style="color:#8a7a74; font-size:8pt; text-align:center; margin-top:40px; border-top:1px solid #ded8d4; padding-top:16px;">
+          Marketing & Sales Performance Report · Generated from RAPS Platform
+        </p>
+      </body>
+      </html>
+    `;
+  };
+
+  return (
+    <Modal title="Generate Marketing & Sales Report" subtitle="Select what to include in the Word document" icon={<FileText size={17} />} onClose={onClose} width={680}
+      footer={<> 
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={generateReport} disabled={generating || !Object.values(selectedTabs).some(v => v)} 
+          style={{ ...btnPrimary, opacity: generating || !Object.values(selectedTabs).some(v => v) ? 0.6 : 1 }}>
+          {generating ? "Generating..." : <><Download size={14} /> Generate Report</>}
+        </button>
+      </>}>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Report Title</label>
+        <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} style={inputS} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+        <div>
+          <label style={labelS}>Period</label>
+          <select value={periodForReport} onChange={(e) => setPeriodForReport(e.target.value)} style={selectS}>
+            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Financial Year</label>
+          <div style={{ padding: "9px 11px", background: T.panel, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", fontSize: "13.5px", color: T.body }}>
+            FY {fyLabelLocal(fy.startYear, fy.startMonth)}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Sections to include</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          {tabs.map((t) => (
+            <label key={t.id} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+              <input type="checkbox" checked={selectedTabs[t.id]} 
+                onChange={() => setSelectedTabs(p => ({ ...p, [t.id]: !p[t.id] }))} />
+              {t.name}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelS}>Include</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeSummary} onChange={() => setIncludeSummary(!includeSummary)} />
+            Summary header
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeCharts} onChange={() => setIncludeCharts(!includeCharts)} />
+            Charts (static view)
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeAnalysis} onChange={() => setIncludeAnalysis(!includeAnalysis)} />
+            Analysis & observations
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includePipeline} onChange={() => setIncludePipeline(!includePipeline)} />
+            Pipeline opportunities
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeConcentration} onChange={() => setIncludeConcentration(!includeConcentration)} />
+            Revenue concentration
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeCampaigns} onChange={() => setIncludeCampaigns(!includeCampaigns)} />
+            Campaign performance
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={includeActions} onChange={() => setIncludeActions(!includeActions)} />
+            Actions
+          </label>
+        </div>
+      </div>
+
+      <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
+        <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
+        The report will be generated as a Word document (.doc) that can be opened in Microsoft Word, Google Docs, or LibreOffice.
+        {includeCharts && " Charts are rendered as static tables and summaries."}
+      </div>
+    </Modal>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Additional Components (Pipeline Table, Concentration, etc.)
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ── Pipeline Table ──
 const AVAILABLE_FIELDS = [
   { id: "tier", label: "Tier Category", type: "dropdown", options: ["Core anchor", "Land & expand", "Flagship", "Coopetition", "Capital corridor", "Provincial Multiplier"] },
   { id: "accountWebsite", label: "Account Website", type: "text" },
@@ -923,115 +1640,6 @@ const AVAILABLE_FIELDS = [
 
 const DEFAULT_VISIBLE_FIELDS = ["tier", "accountWebsite", "sector", "revPotential", "probability", "nextCta", "byWhen"];
 
-// ── Filter Dropdown component (reused) ──
-const FilterDropdown = ({ options, value, onChange, onClose }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [onClose]);
-
-  return (
-    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: value && value !== "" ? "#fff" : "rgba(255,255,255,0.5)", display: "inline-flex", alignItems: "center" }}
-      >
-        <SlidersHorizontal size={13} />
-      </button>
-      {open && (
-        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", boxShadow: "0 8px 20px rgba(0,0,0,0.15)", zIndex: 100, minWidth: "150px", maxHeight: "200px", overflowY: "auto" }}>
-          {options.map((opt) => (
-            <div
-              key={opt}
-              onClick={() => { onChange(opt); setOpen(false); onClose?.(); }}
-              style={{ padding: "8px 14px", cursor: "pointer", fontSize: "13px", color: T.body, background: value === opt ? T.accentTint : "transparent", borderBottom: `1px solid ${T.lineSoft}` }}
-            >
-              {opt}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── Column Selector (unchanged) ──
-const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
-      <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[600px] w-[90%] max-h-[80vh] overflow-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-mediumBrown text-lg font-semibold">Select Columns to Display</h3>
-          <button onClick={onClose} className="text-mediumBrown hover:text-warmBrown"><X size={20} /></button>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {AVAILABLE_FIELDS.map((field) => (
-            <label key={field.id} className="flex items-center gap-2 text-sm text-mediumBrown cursor-pointer">
-              <input type="checkbox" checked={visibleFields.includes(field.id)} onChange={() => onToggleField(field.id)} className="w-4 h-4 rounded border-[#e8ddd4] accent-mediumBrown" />
-              {field.label}
-            </label>
-          ))}
-        </div>
-        <div className="flex justify-end mt-5">
-          <button onClick={onClose} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm">Done</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Cell renderers ──
-const BooleanCell = ({ value, onChange, isEditing }) => {
-  if (isEditing) {
-    return (
-      <select value={value ? "yes" : "no"} onChange={(e) => onChange(e.target.value === "yes")} className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white">
-        <option value="yes">Yes</option>
-        <option value="no">No</option>
-      </select>
-    );
-  }
-  return <span className={`text-sm font-medium ${value ? "text-green-600" : "text-red-500"}`}>{value ? "✓ Yes" : "✗ No"}</span>;
-};
-
-const DropdownCell = ({ value, options, onChange, isEditing }) => {
-  if (isEditing) {
-    return (
-      <select value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white">
-        <option value="">Select...</option>
-        {options.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-      </select>
-    );
-  }
-  return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
-};
-
-const TextCell = ({ value, onChange, isEditing, type }) => {
-  if (isEditing) {
-    if (type === "currency" || type === "number") {
-      return <input type="number" step="0.01" value={value || ""} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
-    }
-    if (type === "date") {
-      return <input type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
-    }
-    return <input type="text" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
-  }
-  if (type === "currency") {
-    return <span className="text-sm text-mediumBrown">{value ? `R ${Number(value).toLocaleString()}` : "-"}</span>;
-  }
-  return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
-};
-
-// ── Main Pipeline Table with drag-drop and filter dropdown ──
 const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   const [records, setRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
@@ -1044,12 +1652,8 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [widths, setWidths] = useState(() => Object.fromEntries(AVAILABLE_FIELDS.map((f) => [f.id, 150])));
-  const resizing = useRef(null);
-
-  // --- Column order state for drag-drop ---
   const [colOrder, setColOrder] = useState(DEFAULT_VISIBLE_FIELDS);
 
-  // Sync colOrder when visibleFields changes (keep only visible fields in order)
   useEffect(() => {
     setColOrder((prev) => prev.filter((f) => visibleFields.includes(f)));
   }, [visibleFields]);
@@ -1074,10 +1678,8 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
 
   useEffect(() => { if (currentUser) loadRecords(); }, [currentUser]);
 
-  // Filtering and sorting
   useEffect(() => {
     let filtered = [...records];
-    // Apply filters (exact match for dropdown)
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value.trim() !== "") {
         filtered = filtered.filter((record) => {
@@ -1168,14 +1770,12 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
 
   const getFieldConfig = (fieldId) => AVAILABLE_FIELDS.find((f) => f.id === fieldId);
 
-  // Get unique filter options for a column
   const getFilterOptions = (fieldId) => {
     const values = records.map(r => r[fieldId]).filter(v => v !== undefined && v !== null && v !== "");
     const unique = Array.from(new Set(values.map(v => String(v)))).sort();
     return ["All", ...unique];
   };
 
-  // Drag-drop handlers
   const handleDragStart = (e, key) => {
     e.dataTransfer.setData("text/plain", key);
     e.dataTransfer.effectAllowed = "move";
@@ -1201,10 +1801,8 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX, startWidth = widths[key];
-    resizing.current = key;
     const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
     const onUp = () => {
-      resizing.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       window.removeEventListener("mousemove", onMove);
@@ -1225,6 +1823,71 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
     borderRight: "1px solid rgba(255,255,255,0.14)",
     position: "relative",
     verticalAlign: "top",
+  };
+
+  const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
+    if (!isOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
+        <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[600px] w-[90%] max-h-[80vh] overflow-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-mediumBrown text-lg font-semibold">Select Columns to Display</h3>
+            <button onClick={onClose} className="text-mediumBrown hover:text-warmBrown"><X size={20} /></button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {AVAILABLE_FIELDS.map((field) => (
+              <label key={field.id} className="flex items-center gap-2 text-sm text-mediumBrown cursor-pointer">
+                <input type="checkbox" checked={visibleFields.includes(field.id)} onChange={() => onToggleField(field.id)} className="w-4 h-4 rounded border-[#e8ddd4] accent-mediumBrown" />
+                {field.label}
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end mt-5">
+            <button onClick={onClose} className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm">Done</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const BooleanCell = ({ value, onChange, isEditing }) => {
+    if (isEditing) {
+      return (
+        <select value={value ? "yes" : "no"} onChange={(e) => onChange(e.target.value === "yes")} className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white">
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      );
+    }
+    return <span className={`text-sm font-medium ${value ? "text-green-600" : "text-red-500"}`}>{value ? "✓ Yes" : "✗ No"}</span>;
+  };
+
+  const DropdownCell = ({ value, options, onChange, isEditing }) => {
+    if (isEditing) {
+      return (
+        <select value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white">
+          <option value="">Select...</option>
+          {options.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+        </select>
+      );
+    }
+    return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
+  };
+
+  const TextCell = ({ value, onChange, isEditing, type }) => {
+    if (isEditing) {
+      if (type === "currency" || type === "number") {
+        return <input type="number" step="0.01" value={value || ""} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
+      }
+      if (type === "date") {
+        return <input type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
+      }
+      return <input type="text" value={value || ""} onChange={(e) => onChange(e.target.value)} className="w-full p-1 rounded border border-[#e8ddd4] text-sm" />;
+    }
+    if (type === "currency") {
+      return <span className="text-sm text-mediumBrown">{value ? `R ${Number(value).toLocaleString()}` : "-"}</span>;
+    }
+    return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
   };
 
   const renderCell = (record, fieldId, isEditing) => {
@@ -1349,1243 +2012,1186 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange }) => {
   );
 };
 
-// ==================== TREND CHART MODAL ====================
-const CHART_VERSION = 2;
-const DEFAULT_CHART = {
-  v: CHART_VERSION,
-  actualType: "bar",
-  budgetType: "scatter",
-  varianceType: "scatter",
-  actualColor: "#1e40af",
-  budgetColor: "#4a352f",
-  showValues: false,
-  showAxis: false,
-};
-const CHART_TYPES = [
-  { value: "bar", label: "Bars" },
-  { value: "line", label: "Line" },
-  { value: "area", label: "Area" },
-  { value: "scatter", label: "Circles" },
-];
-const SWATCHES = ["#1e40af", "#4a352f", "#166534", "#991b1b", "#92400e", "#6d28d9", "#0e7490", "#be185d"];
-
-const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, readOnly }) => {
-  const [noteText, setNoteText] = useState("");
-  const [noteState, setNoteState] = useState("idle");
-  const [showCustomise, setShowCustomise] = useState(false);
-  const noteTimer = useRef(null);
-  const prefs = kpi.chart?.v === CHART_VERSION ? { ...DEFAULT_CHART, ...kpi.chart } : { ...DEFAULT_CHART };
-
-  const { labels, actual, budget, noteKey, caption } = useMemo(() => {
-    if (period === "quarter") {
-      const qs = fyQuarters(fy.startYear, fy.startMonth);
-      const rows = qs.map((q) => {
-        const ms = q.months.map((m) => monthEntry(kpi, m.year, m.month));
-        return { actual: rollUp(ms.map((r) => Number(r.actual)), kpi.aggregate), budget: rollUp(ms.map((r) => Number(r.budget)), kpi.aggregate) };
-      });
-      return {
-        labels: qs.map((q) => `${q.label} ${fyLabel(fy.startYear, fy.startMonth)}`),
-        actual: rows.map((r) => r.actual),
-        budget: rows.map((r) => r.budget),
-        noteKey: `Q:${fy.startYear}`,
-        caption: `Quarters of FY ${fyLabel(fy.startYear, fy.startMonth)}`,
-      };
-    }
-    const months = fyMonths(fy.startYear, fy.startMonth);
-    const rows = months.map((m) => monthEntry(kpi, m.year, m.month));
-    return {
-      labels: months.map((m) => m.label),
-      actual: rows.map((r) => parseNum(r.actual)),
-      budget: rows.map((r) => parseNum(r.budget)),
-      noteKey: currentMonthKey(),
-      caption: `FY ${fyLabel(fy.startYear, fy.startMonth)} · ${months[0].long} → ${months[11].long}`,
-    };
-  }, [kpi, period, fy]);
-
-  const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
+// ── TOP 3 CONCENTRATION ──
+const Top3Concentration = ({ data, isInvestorView, onDataChange }) => {
+  const [localData, setLocalData] = useState(data || {
+    channels: [
+      { name: "Social Media", revenue: 1200000, percentage: 35.2 },
+      { name: "PPC", revenue: 800000, percentage: 23.5 },
+      { name: "Email", revenue: 500000, percentage: 14.7 },
+    ],
+    customers: [
+      { name: "Acme Corp", revenue: 850000, percentage: 24.9 },
+      { name: "TechGlobal", revenue: 650000, percentage: 19.0 },
+      { name: "EcoSolutions", revenue: 450000, percentage: 13.2 },
+    ],
+    segments: [
+      { name: "Enterprise", revenue: 1500000, percentage: 44.0 },
+      { name: "SMB", revenue: 800000, percentage: 23.5 },
+      { name: "Startup", revenue: 400000, percentage: 11.7 },
+    ],
+  });
 
   useEffect(() => {
-    setNoteText(kpi.periodNotes?.[noteKey] || "");
-    setNoteState("idle");
-  }, [noteKey, kpi.id]);
+    if (data) setLocalData(data);
+  }, [data]);
 
-  const onNoteChange = (text) => {
-    setNoteText(text);
-    setNoteState("saving");
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-    noteTimer.current = setTimeout(() => {
-      onSaveNote(noteKey, text);
-      setNoteState("saved");
-      setTimeout(() => setNoteState("idle"), 1800);
-    }, 700);
-  };
-  useEffect(() => () => {
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-  }, []);
-
-  const setPref = (patch) => onSaveChart({ ...prefs, ...patch, v: CHART_VERSION });
-  const varColors = variance.map((v) =>
-    v === null ? "rgba(138,122,116,0.4)" : varianceFavourable(kpi, v) ? T.green : T.red
+  const renderTable = (data, title, type) => (
+    <div>
+      <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>{title}</h4>
+      <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: T.header }}>
+              <th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Name</th>
+              <th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th>
+              <th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
+                <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{item.name}</td>
+                <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {item.revenue.toLocaleString()}</td>
+                <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>{item.percentage}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 
-  const buildSeries = (type, data, color, extra = {}) => {
-    if (type === "scatter") {
-      return {
-        type: "scatter",
-        data,
-        showLine: false,
-        pointStyle: "circle",
-        pointRadius: 6,
-        pointHoverRadius: 9,
-        pointBackgroundColor: Array.isArray(color) ? color.map((c) => `${c}22`) : "#ffffff",
-        pointBorderColor: color,
-        pointBorderWidth: 2.4,
-        ...extra,
-      };
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+      {renderTable(localData.channels || [], "Top 3 Channels", "channels")}
+      {renderTable(localData.customers || [], "Top 3 Customers", "customers")}
+      {renderTable(localData.segments || [], "Top 3 Segments", "segments")}
+    </div>
+  );
+};
+
+// ── CHANNEL PERFORMANCE TABLE ──
+const ChannelPerformanceTable = ({ data, isInvestorView, onDataChange }) => {
+  const [localData, setLocalData] = useState(data || [
+    { name: "Social Media", revenue: 150000, spend: 45000 },
+    { name: "Email", revenue: 120000, spend: 30000 },
+    { name: "PPC", revenue: 80000, spend: 35000 },
+    { name: "SEO", revenue: 60000, spend: 15000 },
+    { name: "Referral", revenue: 50000, spend: 10000 },
+    { name: "Direct", revenue: 40000, spend: 5000 },
+  ]);
+
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [filteredData, setFilteredData] = useState(localData);
+  const [widths, setWidths] = useState(() => ({
+    name: 200,
+    revenue: 150,
+    spend: 150,
+    net: 120,
+    roi: 120,
+    pct: 120,
+  }));
+  const [colOrder, setColOrder] = useState(["name", "revenue", "spend", "net", "roi", "pct"]);
+
+  useEffect(() => {
+    if (data) setLocalData(data);
+  }, [data]);
+
+  useEffect(() => {
+    let filtered = [...localData];
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value.trim() !== "") {
+        filtered = filtered.filter((item) => {
+          const itemVal = item[key];
+          if (itemVal === undefined || itemVal === null) return false;
+          return String(itemVal) === value;
+        });
+      }
+    });
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const av = a[sortConfig.key] ?? "";
+        const bv = b[sortConfig.key] ?? "";
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av;
+        }
+        const cmp = String(av).localeCompare(String(bv));
+        return sortConfig.direction === "asc" ? cmp : -cmp;
+      });
     }
-    if (type === "line" || type === "area") {
-      return {
-        type: "line",
-        data,
-        borderColor: color,
-        backgroundColor: type === "area" ? `${color}22` : "transparent",
-        borderWidth: 2.5,
-        fill: type === "area",
-        tension: 0.25,
-        spanGaps: true,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-        pointStyle: "circle",
-        pointBackgroundColor: "#ffffff",
-        pointBorderColor: color,
-        pointBorderWidth: 2.2,
-        ...extra,
-      };
-    }
-    return {
-      type: "bar",
-      data,
-      backgroundColor: Array.isArray(color) ? color.map((c) => `${c}b3`) : `${color}b3`,
-      borderWidth: 0,
-      borderRadius: 4,
-      barPercentage: 0.6,
-      categoryPercentage: 0.78,
-      ...extra,
-    };
+    setFilteredData(filtered);
+  }, [filters, sortConfig, localData]);
+
+  const getFilterOptions = (key) => {
+    const values = localData.map((item) => item[key]).filter((v) => v !== undefined && v !== null && v !== "");
+    const unique = Array.from(new Set(values.map((v) => String(v)))).sort();
+    return ["All", ...unique];
   };
 
-  const varianceData = {
-    labels,
-    datasets: [
-      { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors), __signed: true, __labelColor: T.body },
-    ],
+  const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
+
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
   };
-  const varianceOptions = {
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
+  };
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX, startWidth = widths[key];
+    const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
+    const onUp = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const thS = {
+    padding: 0,
+    background: T.header,
+    borderBottom: `2px solid ${T.header}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)",
+    position: "relative",
+    verticalAlign: "top",
+  };
+
+  const totalRevenue = localData.reduce((sum, item) => sum + item.revenue, 0);
+
+  const labels = {
+    name: "Channel",
+    revenue: "Revenue",
+    spend: "Marketing Spend",
+    net: "Net Profit",
+    roi: "ROI %",
+    pct: "% of Revenue",
+  };
+
+  return (
+    <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <thead>
+          <tr>
+            {colOrder.map((key) => {
+              const sorted = sortConfig.key === key;
+              const currentFilter = filters[key] || "All";
+              const filterOpts = getFilterOptions(key);
+              return (
+                <th
+                  key={key}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, key)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, key)}
+                  style={{ ...thS, width: widths[key] || 150, userSelect: "none" }}
+                >
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", width: "100%" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", color: "#fff", cursor: "grab" }}>{labels[key] || key}</span>
+                      <button onClick={() => toggleSort(key)} title="Sort" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", borderRadius: "4px", color: sorted ? "#fff" : "rgba(255,255,255,0.6)", display: "inline-flex", alignItems: "center" }}>
+                        {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} />}
+                      </button>
+                      <FilterDropdown
+                        options={filterOpts}
+                        value={currentFilter}
+                        onChange={(val) => setFilters((p) => ({ ...p, [key]: val === "All" ? "" : val }))}
+                        onClose={() => {}}
+                      />
+                    </div>
+                  </div>
+                  <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredData.map((item, idx) => {
+            const net = item.revenue - item.spend;
+            const roi = item.spend > 0 ? (net / item.spend) * 100 : 0;
+            const pct = totalRevenue > 0 ? (item.revenue / totalRevenue) * 100 : 0;
+            return (
+              <tr key={idx} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: idx % 2 ? T.panel : T.bg }}>
+                {colOrder.map((key) => (
+                  <td key={key} style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: key === "name" ? "left" : "right" }}>
+                    {key === "name" && <span style={{ fontWeight: 600 }}>{item.name}</span>}
+                    {key === "revenue" && `R ${item.revenue.toLocaleString()}`}
+                    {key === "spend" && `R ${item.spend.toLocaleString()}`}
+                    {key === "net" && <span style={{ color: net >= 0 ? T.green : T.red, fontWeight: 600 }}>R {net.toLocaleString()}</span>}
+                    {key === "roi" && <span style={{ color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</span>}
+                    {key === "pct" && `${pct.toFixed(1)}%`}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// ── CONCENTRATION RISK BAR CHART ──
+const ConcentrationRiskBarChart = ({ data, isInvestorView }) => {
+  const [localData, setLocalData] = useState(data || {
+    channels: [
+      { name: "Social Media", revenue: 150000, spend: 45000 },
+      { name: "Email", revenue: 120000, spend: 30000 },
+      { name: "PPC", revenue: 80000, spend: 35000 },
+      { name: "SEO", revenue: 60000, spend: 15000 },
+      { name: "Referral", revenue: 50000, spend: 10000 },
+      { name: "Direct", revenue: 40000, spend: 5000 },
+    ],
+  });
+
+  useEffect(() => {
+    if (data) setLocalData(data);
+  }, [data]);
+
+  const chartData = useMemo(() => {
+    const sorted = [...localData.channels].sort((a, b) => b.revenue - a.revenue);
+    return {
+      labels: sorted.map(ch => ch.name),
+      datasets: [
+        {
+          label: "Revenue",
+          data: sorted.map(ch => ch.revenue),
+          backgroundColor: sorted.map((_, i) => {
+            const colors = ["#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
+            return colors[i % colors.length];
+          }),
+          borderColor: sorted.map((_, i) => {
+            const colors = ["#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"];
+            return colors[i % colors.length];
+          }),
+          borderWidth: 1,
+          borderRadius: 4,
+          barPercentage: 0.6,
+        },
+        {
+          label: "Marketing Spend",
+          data: sorted.map(ch => ch.spend),
+          backgroundColor: "rgba(234, 88, 12, 0.8)",
+          borderColor: "#c2410c",
+          borderWidth: 1,
+          borderRadius: 4,
+          barPercentage: 0.6,
+        },
+      ],
+    };
+  }, [localData]);
+
+  const options = {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: prefs.showValues ? 20 : 6, bottom: 0 } },
     plugins: {
-      legend: { display: false },
-      datalabels: { display: false },
-      tooltip: {
-        backgroundColor: T.ink,
-        padding: 10,
-        cornerRadius: 8,
-        callbacks: {
-          title: (items) => labels[items[0].dataIndex],
-          label: (c) =>
-            c.parsed.y === null || c.parsed.y === undefined
-              ? "Variance: no data"
-              : `Variance: ${fmtValue(c.parsed.y, kpi, { signed: true })} (${varianceFavourable(kpi, c.parsed.y) ? "favourable" : "unfavourable"})`,
+      legend: {
+        position: "top",
+        labels: {
+          font: { size: 12, weight: "500" },
+          color: T.body,
+          padding: 16,
+          usePointStyle: true,
+          pointStyle: "circle",
         },
       },
-    },
-    scales: { y: { display: false, grid: { display: false } }, x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
-  };
-
-  const mainData = {
-    labels,
-    datasets: [
-      { label: "Target", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1, __labelColor: prefs.budgetColor },
-      { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2, __labelColor: prefs.actualColor },
-    ],
-  };
-  const mainOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: prefs.showValues ? 20 : 6 } },
-    plugins: {
-      legend: { display: false },
-      datalabels: { display: false },
       tooltip: {
         backgroundColor: T.ink,
-        padding: 11,
+        padding: 12,
         cornerRadius: 8,
         callbacks: {
-          label: (c) =>
-            c.parsed.y === null || c.parsed.y === undefined ? `${c.dataset.label}: no data` : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}`,
+          label: (context) => {
+            const label = context.dataset.label || "";
+            const value = context.parsed.y;
+            return `${label}: R ${value.toLocaleString()}`;
+          },
         },
       },
     },
     scales: {
       y: {
-        display: prefs.showAxis,
-        grid: { display: prefs.showAxis, color: T.lineSoft },
-        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) },
+        beginAtZero: true,
+        grid: { color: T.lineSoft },
+        ticks: {
+          color: T.body,
+          font: { size: 11 },
+          callback: (value) => `R ${(value / 1000).toFixed(0)}k`,
+        },
       },
       x: {
-        display: true,
         grid: { display: false },
-        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+        ticks: {
+          color: T.body,
+          font: { size: 11 },
+          maxRotation: 45,
+          minRotation: 0,
+        },
       },
     },
   };
 
-  const avgBudget = mean(budget),
-    avgActual = mean(actual),
-    avgVar = mean(variance);
-  const onTarget = variance.filter((v) => v !== null && varianceFavourable(kpi, v)).length;
-  const counted = variance.filter((v) => v !== null).length;
+  const totalRevenue = localData.channels.reduce((sum, ch) => sum + ch.revenue, 0);
+  const totalSpend = localData.channels.reduce((sum, ch) => sum + ch.spend, 0);
+  const avgROI = localData.channels.length > 0 
+    ? localData.channels.reduce((sum, ch) => sum + ((ch.revenue - ch.spend) / ch.spend * 100), 0) / localData.channels.length 
+    : 0;
 
-  const stat = (label, value, color) => (
-    <div key={label} style={{ ...cardS, padding: "11px 14px", flex: "1 1 150px" }}>
-      <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{label}</div>
-      <div
-        style={{
-          fontSize: "18px",
-          fontWeight: 700,
-          color: color || T.ink,
-          marginTop: "3px",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
+  const top3Revenue = localData.channels
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 3)
+    .reduce((sum, ch) => sum + ch.revenue, 0);
+  const top3Concentration = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0;
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginBottom: "20px" }}>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Total Revenue</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink }}>R {totalRevenue.toLocaleString()}</div>
+        </div>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Total Spend</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink }}>R {totalSpend.toLocaleString()}</div>
+        </div>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Top 3 Concentration</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: top3Concentration > 70 ? T.red : top3Concentration > 50 ? T.amber : T.green }}>{top3Concentration.toFixed(1)}%</div>
+        </div>
+        <div style={{ ...cardS, padding: "12px 14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>Avg ROI</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: avgROI > 100 ? T.green : avgROI > 50 ? T.amber : T.red }}>{avgROI.toFixed(1)}%</div>
+        </div>
+      </div>
+
+      <div style={{ height: "320px", marginBottom: "20px" }}>
+        <Chart type="bar" data={chartData} options={options} />
+      </div>
+
+      <div style={{ fontSize: "12.5px", color: T.muted, padding: "12px 14px", background: T.panel, borderRadius: "8px", border: `1px solid ${T.lineSoft}` }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+          <Info size={14} style={{ marginTop: "2px", flexShrink: 0 }} />
+          <div>
+            <strong>Concentration Risk Analysis:</strong> 
+            {" "}Top 3 channels represent {top3Concentration.toFixed(1)}% of total revenue.
+            {top3Concentration > 70 
+              ? " High concentration risk — consider diversifying revenue streams." 
+              : top3Concentration > 50 
+              ? " Moderate concentration risk — monitor top channels closely." 
+              : " Low concentration risk — revenue is well distributed."}
+          </div>
+        </div>
       </div>
     </div>
   );
-  const dot = (color, filled) => (
-    <span
-      style={{
-        width: 11,
-        height: 11,
-        borderRadius: "50%",
-        border: `2.4px solid ${color}`,
-        background: filled ? color : "#ffffff",
-        display: "inline-block",
-      }}
-    />
-  );
-  const barChip = (color) => <span style={{ width: 11, height: 11, borderRadius: "3px", background: `${color}b3`, display: "inline-block" }} />;
-  const key = (label, swatch) => (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: T.body }}>
-      {swatch}
-      {label}
-    </span>
-  );
+};
+
+// ── CAMPAIGN PERFORMANCE TABLE ──
+const CampaignPerformanceTable = ({ data, isInvestorView, onDataChange }) => {
+  const [localData, setLocalData] = useState(data || [
+    { name: "Q1 Campaign", cost: 25000, revenue: 45000 },
+    { name: "Q2 Campaign", cost: 30000, revenue: 55000 },
+    { name: "Summer Sale", cost: 15000, revenue: 35000 },
+    { name: "Holiday Campaign", cost: 40000, revenue: 80000 },
+  ]);
+
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [filteredData, setFilteredData] = useState(localData);
+  const [widths, setWidths] = useState(() => ({
+    name: 200,
+    cost: 150,
+    revenue: 150,
+    roi: 120,
+  }));
+  const [colOrder, setColOrder] = useState(["name", "cost", "revenue", "roi"]);
+
+  useEffect(() => {
+    if (data) setLocalData(data);
+  }, [data]);
+
+  useEffect(() => {
+    let filtered = [...localData];
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value.trim() !== "") {
+        filtered = filtered.filter((item) => {
+          const itemVal = item[key];
+          if (itemVal === undefined || itemVal === null) return false;
+          return String(itemVal) === value;
+        });
+      }
+    });
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const av = a[sortConfig.key] ?? "";
+        const bv = b[sortConfig.key] ?? "";
+        if (typeof av === "number" && typeof bv === "number") {
+          return sortConfig.direction === "asc" ? av - bv : bv - av;
+        }
+        const cmp = String(av).localeCompare(String(bv));
+        return sortConfig.direction === "asc" ? cmp : -cmp;
+      });
+    }
+    setFilteredData(filtered);
+  }, [filters, sortConfig, localData]);
+
+  const getFilterOptions = (key) => {
+    const values = localData.map((item) => item[key]).filter((v) => v !== undefined && v !== null && v !== "");
+    const unique = Array.from(new Set(values.map((v) => String(v)))).sort();
+    return ["All", ...unique];
+  };
+
+  const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
+
+  const handleDragStart = (e, key) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (e, targetKey) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (!sourceKey || sourceKey === targetKey) return;
+    const srcIdx = colOrder.indexOf(sourceKey);
+    const tgtIdx = colOrder.indexOf(targetKey);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newOrder = [...colOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(tgtIdx, 0, sourceKey);
+    setColOrder(newOrder);
+  };
+
+  const startResize = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX, startWidth = widths[key];
+    const onMove = (ev) => setWidths((p) => ({ ...p, [key]: Math.max(80, startWidth + (ev.clientX - startX)) }));
+    const onUp = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const thS = {
+    padding: 0,
+    background: T.header,
+    borderBottom: `2px solid ${T.header}`,
+    borderRight: "1px solid rgba(255,255,255,0.14)",
+    position: "relative",
+    verticalAlign: "top",
+  };
+
+  const labels = {
+    name: "Campaign",
+    cost: "Cost",
+    revenue: "Revenue",
+    roi: "ROI %",
+  };
 
   return (
-    <Modal
-      title={`${kpi.name} — (${kpi.units})`}
-      subtitle={caption}
-      icon={<LineChartIcon size={17} />}
-      onClose={onClose}
-      width={960}
-      footer={
-        <>
-          <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}>
-            <Palette size={13} /> Customise chart
-          </button>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={btnPrimary}>
-            Close
-          </button>
-        </>
-      }
-    >
-      {showCustomise && (
-        <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
-            {[
-              ["actualType", "Actual as"],
-              ["budgetType", "Target as"],
-              ["varianceType", "Variance as"],
-            ].map(([k, l]) => (
-              <div key={k}>
-                <label style={labelS}>{l}</label>
-                <select value={prefs[k]} onChange={(e) => setPref({ [k]: e.target.value })} style={selectS}>
-                  {CHART_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-            <div>
-              <label style={labelS}>Show</label>
-              <select
-                value={`${prefs.showValues}|${prefs.showAxis}`}
-                onChange={(e) => {
-                  const [v, a] = e.target.value.split("|");
-                  setPref({ showValues: v === "true", showAxis: a === "true" });
-                }}
-                style={selectS}
-              >
-                <option value="true|false">Value labels, no axis</option>
-                <option value="false|true">Axis, no value labels</option>
-                <option value="true|true">Both</option>
-                <option value="false|false">Neither</option>
-              </select>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "22px", flexWrap: "wrap", marginTop: "12px" }}>
-            {[
-              { k: "actualColor", l: "Actual colour" },
-              { k: "budgetColor", l: "Target colour" },
-            ].map((c) => (
-              <div key={c.k}>
-                <label style={labelS}>{c.l}</label>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  {SWATCHES.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setPref({ [c.k]: s })}
-                      title={s}
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: "6px",
-                        background: s,
-                        cursor: "pointer",
-                        border: prefs[c.k] === s ? `2px solid ${T.ink}` : `1px solid ${T.line}`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {prefs[c.k] === s && <Check size={12} color="#fff" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+    <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <thead>
+          <tr>
+            {colOrder.map((key) => {
+              const sorted = sortConfig.key === key;
+              const currentFilter = filters[key] || "All";
+              const filterOpts = getFilterOptions(key);
+              return (
+                <th
+                  key={key}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, key)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, key)}
+                  style={{ ...thS, width: widths[key] || 150, userSelect: "none" }}
+                >
+                  <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", width: "100%" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", color: "#fff", cursor: "grab" }}>{labels[key] || key}</span>
+                      <button onClick={() => toggleSort(key)} title="Sort" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", borderRadius: "4px", color: sorted ? "#fff" : "rgba(255,255,255,0.6)", display: "inline-flex", alignItems: "center" }}>
+                        {sorted ? (sortConfig.direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} />}
+                      </button>
+                      <FilterDropdown
+                        options={filterOpts}
+                        value={currentFilter}
+                        onChange={(val) => setFilters((p) => ({ ...p, [key]: val === "All" ? "" : val }))}
+                        onClose={() => {}}
+                      />
+                    </div>
+                  </div>
+                  <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredData.map((item, idx) => {
+            const roi = item.cost > 0 ? ((item.revenue - item.cost) / item.cost) * 100 : 0;
+            return (
+              <tr key={idx} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: idx % 2 ? T.panel : T.bg }}>
+                {colOrder.map((key) => (
+                  <td key={key} style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: key === "name" ? "left" : "right" }}>
+                    {key === "name" && <span style={{ fontWeight: 600 }}>{item.name}</span>}
+                    {key === "cost" && `R ${item.cost.toLocaleString()}`}
+                    {key === "revenue" && `R ${item.revenue.toLocaleString()}`}
+                    {key === "roi" && <span style={{ color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</span>}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
-      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            flexWrap: "wrap",
-            marginBottom: "2px",
-          }}
-        >
-          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Target vs Actual</span>
-          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            {key("Variance", (
-              <span style={{ display: "inline-flex", gap: "3px" }}>
-                {dot(T.green)}
-                {dot(T.red)}
-              </span>
-            ))}
-            {key("Target", prefs.budgetType === "bar" ? barChip(prefs.budgetColor) : dot(prefs.budgetColor))}
-            {key("Actual", prefs.actualType === "bar" ? barChip(prefs.actualColor) : dot(prefs.actualColor, true))}
-          </span>
-        </div>
-        <div style={{ height: "112px", marginBottom: "-16px" }}>
-          <Chart
-            type="bar"
-            data={varianceData}
-            options={varianceOptions}
-          />
-        </div>
-        <div style={{ height: "300px" }}>
-          <Chart type="bar" data={mainData} options={mainOptions} />
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "14px" }}>
-        {stat("Average target", fmtValue(avgBudget, kpi))}
-        {stat("Average actual", fmtValue(avgActual, kpi))}
-        {stat("Average variance", fmtValue(avgVar, kpi, { signed: true }), avgVar === null ? T.ink : varianceFavourable(kpi, avgVar) ? T.green : T.red)}
-        {stat("Periods on target", counted ? `${onTarget} of ${counted}` : "—")}
-      </div>
-
-      <div style={{ ...cardS, marginBottom: "14px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "8px",
-          }}
-        >
-          <span style={{ ...labelS, marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-            <StickyNote size={13} /> Notes
-          </span>
-          <span style={{ fontSize: "11.5px", color: noteState === "saved" ? T.green : T.muted }}>
-            {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved" : "Saves automatically"}
-          </span>
-        </div>
-        <textarea
-          rows="3"
-          value={noteText}
-          readOnly={readOnly}
-          onChange={(e) => onNoteChange(e.target.value)}
-          placeholder="e.g. Q4 campaign drove strong lead growth but conversion dropped."
-          style={{ ...inputS, resize: "vertical" }}
-        />
-      </div>
-
-      <div style={cardS}>
-        <div style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
-          <Lightbulb size={13} /> Observations and Opportunities — {PERIOD_LABEL[period].toLowerCase()}
-        </div>
-        <AnalysisBody kpi={kpi} period={period} fy={fy} scope="period" compact />
+// ── ADD CHOOSER ──
+const AddChooser = ({ onClose, onPick }) => {
+  return (
+    <Modal title="Add KPI or Data" subtitle="Choose what you want to add" icon={<Plus size={17} />} onClose={onClose} width={480}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+        <button onClick={() => onPick("kpi")} style={{ ...cardS, padding: "24px 16px", cursor: "pointer", textAlign: "center", background: T.panel, border: `1px solid ${T.lineStrong}`, transition: "all 0.15s" }}>
+          <div style={{ fontSize: "28px", marginBottom: "10px" }}>📊</div>
+          <div style={{ fontSize: "16px", fontWeight: 600, color: T.accent }}>Custom KPI</div>
+          <div style={{ fontSize: "13px", color: T.muted, marginTop: "4px" }}>Add a new KPI to any tab</div>
+        </button>
+        <button onClick={() => onPick("data")} style={{ ...cardS, padding: "24px 16px", cursor: "pointer", textAlign: "center", background: T.panel, border: `1px solid ${T.lineStrong}`, transition: "all 0.15s" }}>
+          <div style={{ fontSize: "28px", marginBottom: "10px" }}>📝</div>
+          <div style={{ fontSize: "16px", fontWeight: 600, color: T.accent }}>Enter Data</div>
+<div style={{ fontSize: "13px", color: T.muted, marginTop: "4px" }}>Add data for existing KPIs</div>
+        </button>
       </div>
     </Modal>
   );
 };
 
-// ==================== ANALYSIS MODAL ====================
-const localAnalysis = (kpi, period, v, fy) => {
-  const status = statusFromPair(kpi, v.budget, v.actual);
-  const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
-  const fav = varianceFavourable(kpi, variance);
-  return {
-    observations: [
-      `${PERIOD_LABEL[period]} actual sits at ${fmtValue(v.actual, kpi)}${v.budget === null ? " with no target captured." : ` against a target of ${fmtValue(v.budget, kpi)}.`}`,
-      variance === null
-        ? "Variance cannot be computed until a target exists for this period."
-        : `That is a ${fav ? "favourable" : "unfavourable"} variance of ${fmtValue(Math.abs(variance), kpi)}.`,
-      kpi.benchmark !== null ? `The recommended benchmark for this measure is ${fmtValue(kpi.benchmark, kpi)}.` : "No published benchmark for this measure — judge it against your own history.",
-      `${DIRECTIONS.find((d) => d.value === kpi.direction)?.label} for this KPI.`,
-    ],
-    issues:
-      status.key === "green"
-        ? ["No material issue at this timeframe."]
-        : status.key === "none"
-        ? ["Capture a target so performance can be judged rather than just reported."]
-        : [`Target is not being met${variance === null ? "" : ` — off by ${fmtValue(Math.abs(variance), kpi)}`}.`, status.key === "red" ? "Severity warrants a named owner and a dated action." : "Unattended, this compounds quietly across periods."],
-    opportunities:
-      status.key === "green"
-        ? ["Consider tightening the target — the current one may no longer be stretching.", "Document what is working and apply it to the weaker measures in this category."]
-        : ["Raise an action against this KPI so it carries into the next governance meeting.", kpi.direction === "higher" ? "Find the largest single constraint and remove it before adding anything." : "Trace the biggest contributors to this number and address the largest one first."],
+// ── ADD KPI WIZARD ──
+const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
+  const [step, setStep] = useState(1);
+  const [selectedTabId, setSelectedTabId] = useState(currentTabId || tabs[0]?.id);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [kpiName, setKpiName] = useState("");
+  const [kpiUnits, setKpiUnits] = useState("%");
+  const [kpiDirection, setKpiDirection] = useState("higher");
+  const [kpiAggregate, setKpiAggregate] = useState("avg");
+  const [kpiMeaning, setKpiMeaning] = useState("");
+  const [kpiMeasured, setKpiMeasured] = useState("");
+
+  const selectedTab = tabs.find(t => t.id === selectedTabId);
+  const categories = selectedTab?.categories?.map(c => c.name) || [];
+
+  const handleSave = () => {
+    if (!kpiName.trim()) return;
+    const category = newCategory.trim() || selectedCategory;
+    if (!category) return;
+    onSave({
+      id: `custom_${uid()}`,
+      name: kpiName.trim(),
+      units: kpiUnits,
+      direction: kpiDirection,
+      aggregate: kpiAggregate,
+      meaning: kpiMeaning.trim(),
+      measured: kpiMeasured.trim(),
+      tabId: selectedTabId,
+      category,
+      custom: true,
+    });
+    onClose();
   };
+
+  return (
+    <Modal title="Add Custom KPI" icon={<Plus size={17} />} onClose={onClose} width={580}
+      footer={(
+        <>
+          {step > 1 && <button onClick={() => setStep(s => s - 1)} style={btnGhost}>Back</button>}
+          {step < 2 && <button onClick={() => setStep(2)} style={btnPrimary} disabled={!selectedTabId || (!selectedCategory && !newCategory.trim())}>Next</button>}
+          {step === 2 && (
+            <>
+              <button onClick={onClose} style={btnGhost}>Cancel</button>
+              <button onClick={handleSave} style={btnPrimary} disabled={!kpiName.trim()}>Create KPI</button>
+            </>
+          )}
+        </>
+      )}
+    >
+      {step === 1 && (
+        <div>
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelS}>Select Tab</label>
+            <select value={selectedTabId} onChange={(e) => setSelectedTabId(e.target.value)} style={selectS}>
+              {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelS}>Category</label>
+            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} style={selectS}>
+              <option value="">Select existing category</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "13px", color: T.muted }}>or create new:</span>
+              <input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="New category name" style={{ ...inputS, width: "auto", flex: 1 }} />
+            </div>
+          </div>
+        </div>
+      )}
+      {step === 2 && (
+        <div>
+          <div style={{ marginBottom: "12px" }}>
+            <label style={labelS}>KPI Name</label>
+            <input value={kpiName} onChange={(e) => setKpiName(e.target.value)} placeholder="e.g. Customer Acquisition Cost" style={inputS} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={labelS}>Units</label>
+              <select value={kpiUnits} onChange={(e) => setKpiUnits(e.target.value)} style={selectS}>
+                <option value="%">%</option>
+                <option value="R">R</option>
+                <option value="#">#</option>
+                <option value="days">days</option>
+                <option value="hours">hours</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelS}>Direction</label>
+              <select value={kpiDirection} onChange={(e) => setKpiDirection(e.target.value)} style={selectS}>
+                {DIRECTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: "12px" }}>
+            <label style={labelS}>Aggregation</label>
+            <select value={kpiAggregate} onChange={(e) => setKpiAggregate(e.target.value)} style={selectS}>
+              <option value="avg">Average across periods</option>
+              <option value="sum">Sum across periods</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: "12px" }}>
+            <label style={labelS}>Meaning</label>
+            <textarea value={kpiMeaning} onChange={(e) => setKpiMeaning(e.target.value)} rows="2" placeholder="What does this KPI mean?" style={{ ...inputS, resize: "vertical" }} />
+          </div>
+          <div>
+            <label style={labelS}>Measurement</label>
+            <textarea value={kpiMeasured} onChange={(e) => setKpiMeasured(e.target.value)} rows="3" placeholder="How is it measured? Formula or description..." style={{ ...inputS, resize: "vertical", fontFamily: "monospace" }} />
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
 };
 
-const summaryAnalysis = (kpi, fy) => {
-  const rows = PERIODS.map((p) => {
-    const v = periodValues(kpi, p.key, fy);
-    return {
-      key: p.key,
-      label: p.label,
-      v,
-      status: statusFromPair(kpi, v.budget, v.actual),
-      variance: Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null,
-    };
-  });
-  const withData = rows.filter((r) => r.status.key !== "none");
-  const reds = withData.filter((r) => r.status.key === "red");
-  const greens = withData.filter((r) => r.status.key === "green");
-  const mth = rows.find((r) => r.key === "month"),
-    yr = rows.find((r) => r.key === "year");
-  return {
-    observations: [
-      ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no target)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
-      `${withData.length} of ${rows.length} timeframes have both an actual and a target.`,
-    ],
-    issues:
-      reds.length === 0 && withData.every((r) => r.status.key === "green")
-        ? ["No timeframe is outside tolerance."]
-        : [
-            ...reds.map((r) => `${r.label} is critical${r.variance === null ? "" : ` — off by ${fmtValue(Math.abs(r.variance), kpi)}`}.`),
-            ...withData.filter((r) => r.status.key === "amber").map((r) => `${r.label} needs attention.`),
-          ],
-    opportunities:
-      reds.length > 0
-        ? ["Raise a dated action — more than one timeframe shows the same gap.", "Check whether the target is still realistic before chasing the actual."]
-        : ["Focus on the timeframe drifting first; the others usually follow.", "Keep the target under review as the team grows."],
-  };
-};
+// ── ADD DATA WIZARD ──
+const AddDataWizard = ({ tabs, fy, docs, currentTabId, prefs, onSavePrefs, onBack, onClose, onSaveField }) => {
+  const [selectedTabId, setSelectedTabId] = useState(currentTabId || tabs[0]?.id);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedKpiId, setSelectedKpiId] = useState("");
+  const [monthIndex, setMonthIndex] = useState(new Date().getMonth());
+  const [values, setValues] = useState({ actual: "", budget: "" });
+  const [preferredTab, setPreferredTab] = useState(prefs?.lastTab || currentTabId || tabs[0]?.id);
 
-const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) => {
-  const [loading, setLoading] = useState(true);
-  const [analysis, setAnalysis] = useState(null);
-  const [source, setSource] = useState("ai");
-  const [reason, setReason] = useState("");
+  const selectedTab = tabs.find(t => t.id === selectedTabId);
+  const categories = selectedTab?.categories?.filter(c => c.kpis?.length) || [];
+  const kpis = selectedTab?.categories?.find(c => c.name === selectedCategory)?.kpis || [];
+  const selectedKpi = kpis.find(k => k.id === selectedKpiId);
 
-  const build = useCallback(() => {
-    setLoading(true);
-    const v = periodValues(kpi, period, fy);
-    (async () => {
-      try {
-        const callable = httpsCallable(functions, "generateKpiAnalysis");
-        const res = await callable({
-          module: "Marketing & Sales",
-          kpiName: kpi.name,
-          meaning: kpi.meaning,
-          measured: kpi.measured,
-          units: kpi.units,
-          direction: kpi.direction,
-          benchmark: kpi.benchmark,
-          scope,
-          timeframe: scope === "summary" ? "All timeframes" : PERIOD_LABEL[period],
-          financialYearStartMonth: fy.startMonth,
-          budget: v.budget,
-          actual: v.actual,
-          variance: getVariance(kpi, period, fy),
-          status: getStatus(kpi, period, fy).label,
-          notes: kpi.notes || "",
-          entries: kpi.entries || {},
-        });
-        const d = res?.data;
-        if (d?.observations && d?.opportunities) {
-          setAnalysis({ observations: d.observations || [], issues: d.issues || [], opportunities: d.opportunities || [] });
-          setSource("ai");
-          return;
-        }
-        throw new Error("The function replied, but not in the expected shape.");
-      } catch (err) {
-        console.error("AI analysis unavailable:", err);
-        setReason(err?.code === "functions/not-found" ? "The generateKpiAnalysis function isn't deployed yet." : errText(err));
-        setSource("local");
-        setAnalysis(scope === "summary" ? summaryAnalysis(kpi, fy) : localAnalysis(kpi, period, v, fy));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [kpi, period, fy, scope]);
+  // Auto-select category when tab changes
+  useEffect(() => {
+    if (selectedTabId && categories.length) {
+      setSelectedCategory(categories[0].name);
+    }
+  }, [selectedTabId, categories]);
 
   useEffect(() => {
-    build();
-  }, [build]);
+    if (selectedCategory && categories.some(c => c.name === selectedCategory)) {
+      const cat = categories.find(c => c.name === selectedCategory);
+      if (cat?.kpis?.length) {
+        setSelectedKpiId(cat.kpis[0].id);
+      }
+    }
+  }, [selectedCategory, categories]);
 
-  const Section = ({ label, items, color }) => (
-    <div style={{ marginBottom: compact ? "12px" : "18px" }}>
-      <div
-        style={{
-          fontSize: "11px",
-          fontWeight: 700,
-          letterSpacing: "0.7px",
-          textTransform: "uppercase",
-          color,
-          marginBottom: "6px",
-        }}
-      >
-        {label}
+  useEffect(() => {
+    if (selectedKpi) {
+      const v = periodValues(selectedKpi, "month", fy);
+      setValues({ actual: v.actual ?? "", budget: v.budget ?? "" });
+    }
+  }, [selectedKpi, fy]);
+
+  const handleSave = () => {
+    if (!selectedKpi) return;
+    onSaveField({
+      kpi: selectedKpi,
+      which: "actual",
+      raw: values.actual,
+      monthIndex,
+    });
+    if (values.budget !== "") {
+      onSaveField({
+        kpi: selectedKpi,
+        which: "budget",
+        raw: values.budget,
+        monthIndex,
+      });
+    }
+    onSavePrefs({ ...prefs, lastTab: selectedTabId, lastCategory: selectedCategory, lastKpi: selectedKpiId });
+    onClose();
+  };
+
+  return (
+    <Modal title="Add Data" icon={<Database size={17} />} onClose={onClose} width={520}
+      footer={(
+        <>
+          <button onClick={onBack} style={btnGhost}>Back</button>
+          <button onClick={handleSave} style={btnPrimary} disabled={!selectedKpi}>Save Data</button>
+        </>
+      )}
+    >
+      <div style={{ marginBottom: "14px" }}>
+        <label style={labelS}>Select Tab</label>
+        <select value={selectedTabId} onChange={(e) => setSelectedTabId(e.target.value)} style={selectS}>
+          {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
       </div>
-      <ul
-        style={{
-          margin: 0,
-          paddingLeft: "18px",
-          color: T.body,
-          fontSize: compact ? "13px" : "14px",
-          lineHeight: 1.65,
-        }}
-      >
-        {items.map((it, i) => (
-          <li key={i} style={{ marginBottom: "3px" }}>
-            {it}
-          </li>
-        ))}
-      </ul>
+      {selectedTabId && categories.length > 0 && (
+        <>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={labelS}>Category</label>
+            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} style={selectS}>
+              {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          {selectedCategory && kpis.length > 0 && (
+            <>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={labelS}>KPI</label>
+                <select value={selectedKpiId} onChange={(e) => setSelectedKpiId(e.target.value)} style={selectS}>
+                  {kpis.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+                </select>
+              </div>
+              {selectedKpi && (
+                <>
+                  <div style={{ marginBottom: "14px" }}>
+                    <label style={labelS}>Month</label>
+                    <select value={monthIndex} onChange={(e) => setMonthIndex(Number(e.target.value))} style={selectS}>
+                      {fyMonths(fy.startYear, fy.startMonth).map((m, i) => (
+                        <option key={i} value={i}>{m.long}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={labelS}>Actual</label>
+                      <input type="number" step="any" value={values.actual} onChange={(e) => setValues(p => ({ ...p, actual: e.target.value }))} style={inputS} />
+                    </div>
+                    <div>
+                      <label style={labelS}>Target</label>
+                      <input type="number" step="any" value={values.budget} onChange={(e) => setValues(p => ({ ...p, budget: e.target.value }))} style={inputS} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </>
+      )}
+      {selectedTabId && categories.length === 0 && (
+        <div style={{ padding: "20px", textAlign: "center", color: T.muted }}>No KPIs in this tab</div>
+      )}
+    </Modal>
+  );
+};
+
+// ── TREND CHART MODAL ──
+const TrendChartModal = ({ kpi, period, fy, readOnly, onClose, onSaveNote, onSaveChart }) => {
+  const [noteKey, setNoteKey] = useState("");
+  const [noteText, setNoteText] = useState("");
+  const [chartType, setChartType] = useState("line");
+
+  const months = fyMonths(fy.startYear, fy.startMonth);
+  const data = months.map(m => {
+    const entry = kpi.entries?.[m.key] || { actual: null, budget: null };
+    return { ...m, actual: Number(entry.actual), budget: Number(entry.budget) };
+  });
+
+  const chartData = {
+    labels: data.map(d => d.label),
+    datasets: [
+      {
+        label: "Actual",
+        data: data.map(d => d.actual || null),
+        borderColor: T.accent,
+        backgroundColor: T.accent + "33",
+        fill: true,
+        tension: 0.2,
+        pointRadius: 4,
+        pointBackgroundColor: T.accent,
+      },
+      {
+        label: "Target",
+        data: data.map(d => d.budget || null),
+        borderColor: T.faint,
+        backgroundColor: "transparent",
+        borderDash: [5, 5],
+        tension: 0.2,
+        pointRadius: 3,
+        pointBackgroundColor: T.faint,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "top",
+        labels: { font: { size: 12 }, color: T.body, usePointStyle: true },
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `${ctx.dataset.label}: ${fmtValue(ctx.parsed.y, kpi, { bare: true })}`,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: T.lineSoft },
+        ticks: { color: T.body, font: { size: 10 }, callback: (v) => fmtValue(v, kpi, { bare: true }) },
+      },
+      x: {
+        grid: { display: false },
+        ticks: { color: T.body, font: { size: 10 } },
+      },
+    },
+  };
+
+  const periodNotes = kpi.periodNotes || {};
+  const allKeys = months.map(m => m.key);
+  const hasNotes = Object.keys(periodNotes).some(k => periodNotes[k]?.trim());
+
+  return (
+    <Modal title={`Trend: ${kpi.name}`} subtitle={`${kpi.units} · ${DIRECTIONS.find(d => d.value === kpi.direction)?.label}`} icon={<LineChartIcon size={17} />} onClose={onClose} width={720}
+      footer={(
+        <>
+          {!readOnly && (
+            <>
+              <button onClick={() => {
+                // Save chart config
+                onSaveChart({ type: chartType });
+              }} style={btnGhost}><Save size={13} /> Save Chart</button>
+            </>
+          )}
+          <button onClick={onClose} style={btnPrimary}>Close</button>
+        </>
+      )}
+    >
+      <div style={{ marginBottom: "16px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => setChartType("line")} style={{ ...btnGhost, padding: "4px 12px", fontSize: "12px", background: chartType === "line" ? T.accentTint : "transparent" }}>Line</button>
+          <button onClick={() => setChartType("bar")} style={{ ...btnGhost, padding: "4px 12px", fontSize: "12px", background: chartType === "bar" ? T.accentTint : "transparent" }}>Bar</button>
+        </div>
+      </div>
+      <div style={{ height: "260px", marginBottom: "18px" }}>
+        <Chart type={chartType} data={chartData} options={options} />
+      </div>
+      <div>
+        <label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}><StickyNote size={13} /> Period Notes</label>
+        {allKeys.map(key => {
+          const text = periodNotes[key] || "";
+          return (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 600, width: "80px", color: T.muted }}>{key.replace("M:", "")}</span>
+              {readOnly ? (
+                <span style={{ fontSize: "13px", color: text ? T.body : T.faint }}>{text || "—"}</span>
+              ) : (
+                <input value={text} onChange={(e) => {
+                  const newNotes = { ...periodNotes, [key]: e.target.value };
+                  onSaveNote(key, e.target.value);
+                }} placeholder="Add note..." style={{ ...inputS, fontSize: "13px", flex: 1 }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+};
+
+// ── ANALYSIS MODAL ──
+const AnalysisModal = ({ kpi, period, fy, onClose }) => {
+  const months = fyMonths(fy.startYear, fy.startMonth);
+  const data = months.map(m => {
+    const entry = kpi.entries?.[m.key] || { actual: null, budget: null };
+    return { ...m, actual: Number(entry.actual), budget: Number(entry.budget) };
+  });
+
+  const actuals = data.map(d => d.actual).filter(v => Number.isFinite(v));
+  const budgets = data.map(d => d.budget).filter(v => Number.isFinite(v));
+
+  const avgActual = actuals.length ? actuals.reduce((a, b) => a + b, 0) / actuals.length : null;
+  const avgBudget = budgets.length ? budgets.reduce((a, b) => a + b, 0) / budgets.length : null;
+  const totalActual = actuals.length ? actuals.reduce((a, b) => a + b, 0) : null;
+  const totalBudget = budgets.length ? budgets.reduce((a, b) => a + b, 0) : null;
+  const maxActual = actuals.length ? Math.max(...actuals) : null;
+  const maxBudget = budgets.length ? Math.max(...budgets) : null;
+  const minActual = actuals.length ? Math.min(...actuals) : null;
+  const minBudget = budgets.length ? Math.min(...budgets) : null;
+
+  const lastActual = actuals.length ? actuals[actuals.length - 1] : null;
+  const lastBudget = budgets.length ? budgets[budgets.length - 1] : null;
+  const status = getStatus(kpi, period, fy);
+  const variance = getVariance(kpi, period, fy);
+
+  const statCard = (label, actual, budget, fmt) => (
+    <div style={{ ...cardS, padding: "10px 14px", textAlign: "center" }}>
+      <div style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3px", color: T.muted }}>{label}</div>
+      <div style={{ fontSize: "15px", fontWeight: 600, color: T.ink }}>{fmt(actual)}</div>
+      {budget !== null && <div style={{ fontSize: "11px", color: T.muted }}>Target: {fmt(budget)}</div>}
     </div>
   );
 
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "10px",
-          marginBottom: "12px",
-          flexWrap: "wrap",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "12px",
-            color: source === "ai" ? T.muted : T.amber,
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "6px",
-            lineHeight: 1.5,
-          }}
-        >
-          <Info size={12} style={{ marginTop: "2px", flexShrink: 0 }} />
-          {loading
-            ? "Reviewing…"
-            : source === "ai"
-            ? `Generated from your data · ${scope === "summary" ? "all timeframes" : PERIOD_LABEL[period]}`
-            : `Rules-based summary built from your figures. ${reason}`}
-        </span>
-        <button
-          onClick={build}
-          disabled={loading}
-          style={{ ...btnQuiet, padding: "3px 9px", fontSize: "12.5px", opacity: loading ? 0.5 : 1 }}
-        >
-          <RefreshCw size={12} /> Regenerate
-        </button>
+    <Modal title={`Analysis: ${kpi.name}`} subtitle={`${kpi.units} · ${DIRECTIONS.find(d => d.value === kpi.direction)?.label}`} icon={<Lightbulb size={17} />} onClose={onClose} width={680} footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "8px", marginBottom: "18px" }}>
+        {statCard("Period", getStatus(kpi, period, fy).label, null, v => v)}
+        {statCard("Variance", variance !== null ? fmtValue(variance, kpi, { signed: true, bare: true }) : "—", null, v => v)}
+        {statCard("Avg Actual", avgActual, avgBudget, v => v !== null ? fmtValue(v, kpi, { bare: true }) : "—")}
+        {statCard("Total Actual", totalActual, totalBudget, v => v !== null ? fmtValue(v, kpi, { bare: true }) : "—")}
+        {statCard("Last Actual", lastActual, lastBudget, v => v !== null ? fmtValue(v, kpi, { bare: true }) : "—")}
+        {statCard("Max Actual", maxActual, maxBudget, v => v !== null ? fmtValue(v, kpi, { bare: true }) : "—")}
+        {statCard("Min Actual", minActual, minBudget, v => v !== null ? fmtValue(v, kpi, { bare: true }) : "—")}
       </div>
-      {loading ? (
-        <div style={{ padding: "22px 0", color: T.muted, fontSize: "13.5px", textAlign: "center" }}>Reviewing {kpi.name}…</div>
-      ) : (
-        analysis && (
+      <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
+        <div style={{ fontSize: "12.5px", color: T.body, lineHeight: 1.7 }}>
+          <strong>KPI Details:</strong> {kpi.meaning || "No meaning defined."}
+          {kpi.measured && <><br /><strong>Measurement:</strong> {kpi.measured}</>}
+          {kpi.source && <><br /><strong>Source:</strong> {kpi.source}</>}
+        </div>
+      </div>
+      <div style={{ fontSize: "12.5px", color: T.muted, padding: "10px 14px", background: T.raised, borderRadius: "8px" }}>
+        {actuals.length === 0 ? "No data recorded yet." : `${actuals.length} months of data`}
+        {kpi.notes && <><br /><strong>Notes:</strong> {kpi.notes}</>}
+        {kpi.periodNotes && Object.keys(kpi.periodNotes).filter(k => kpi.periodNotes[k]?.trim()).length > 0 && (
           <>
-            <Section label="Observations" items={analysis.observations} color={T.accent} />
-            <Section label="Issues" items={analysis.issues} color={T.red} />
-            <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
+            <br /><strong>Period notes:</strong>
+            {Object.entries(kpi.periodNotes).filter(([_, v]) => v?.trim()).map(([k, v]) => (
+              <div key={k} style={{ fontSize: "12px", color: T.body }}>• {k.replace("M:", "")}: {v}</div>
+            ))}
           </>
-        )
-      )}
-    </div>
+        )}
+      </div>
+    </Modal>
   );
 };
 
-const AnalysisModal = ({ kpi, period, fy, onClose }) => (
-  <Modal
-    title="Observations and Opportunities"
-    subtitle={`${kpi.name} · across all timeframes`}
-    icon={<Lightbulb size={17} />}
-    onClose={onClose}
-    width={700}
-    footer={<button onClick={onClose} style={btnPrimary}>Close</button>}
-  >
-    <AnalysisBody kpi={kpi} period={period} fy={fy} scope="summary" />
-  </Modal>
-);
-
-// ==================== ADD ACTION MODAL ====================
+// ── ADD ACTION MODAL ──
 const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClose, onSaved }) => {
-  const [meetings, setMeetings] = useState([]);
-  const [loadingMeetings, setLoadingMeetings] = useState(true);
-  const [meetingId, setMeetingId] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
 
-  const status = getStatus(kpi, period, fy);
-  const variance = getVariance(kpi, period, fy);
-  const v = periodValues(kpi, period, fy);
-
-  const [form, setForm] = useState({
-    title: status.key === "green" ? `Sustain performance on ${kpi.name}` : `Close the gap on ${kpi.name}`,
-    description: `${PERIOD_LABEL[period]} actual ${fmtValue(v.actual, kpi)} against target ${fmtValue(v.budget, kpi)}${variance === null ? "" : ` (variance ${fmtValue(variance, kpi, { signed: true })})`}. Raised from ${tabName} · ${categoryName}.`,
-    category: "Marketing & Sales",
-    assignedTo: "",
-    dueDate: "",
-    status: "In Progress",
-  });
-
-  const meetingDate = (m) => {
-    const dates = (m.instances || []).map((i) => new Date(i.date)).filter((d) => !Number.isNaN(d.getTime())).sort((a, b) => a - b);
-    if (!dates.length) return null;
-    const now = new Date();
-    return (dates.find((d) => d >= now) || dates[dates.length - 1]).toISOString();
-  };
-  const selected = meetings.find((m) => m.id === meetingId) || null;
-
-  const applyDefaults = (id, prev, force = false) => {
-    const m = meetings.find((x) => x.id === id);
-    if (!m) return prev;
-    const d = meetingDate(m);
-    const names = (m.participants || []).map((p) => (typeof p === "string" ? p : p.name || p.email || ""));
-    return {
-      ...prev,
-      category: force || !prev.dueDate ? (m.category || m.department || "Marketing & Sales") : prev.category,
-      dueDate: force || !prev.dueDate ? (d ? new Date(d).toISOString().split("T")[0] : "") : prev.dueDate,
-      assignedTo: names.includes(prev.assignedTo) ? prev.assignedTo : "",
-    };
-  };
-
-  useEffect(() => {
-    (async () => {
-      if (!userId) {
-        setLoadingMeetings(false);
-        return;
-      }
-      try {
-        const snap = await getDoc(doc(db, "governanceCalendar", userId));
-        const list = snap.exists() ? snap.data().meetings || [] : [];
-        setMeetings(list);
-        const dated = list.map((m) => ({ m, d: meetingDate(m) })).filter((x) => x.d);
-        const now = new Date();
-        const up = dated.filter((x) => new Date(x.d) >= now).sort((a, b) => new Date(a.d) - new Date(b.d))[0];
-        const latest = dated.sort((a, b) => new Date(b.d) - new Date(a.d))[0];
-        setMeetingId(up?.m.id || latest?.m.id || list[0]?.id || "");
-      } catch (err) {
-        console.error("Failed to load meetings:", err);
-        setMessage(`Could not load your meetings: ${errText(err)}`);
-      } finally {
-        setLoadingMeetings(false);
-      }
-    })();
-  }, [userId]);
-
-  useEffect(() => {
-    if (meetingId) setForm((p) => applyDefaults(meetingId, p, true));
-  }, [meetingId, meetings.length]);
-
-  const save = async () => {
-    if (!form.title.trim()) return;
+  const handleSave = async () => {
+    if (!title.trim() || !userId) return;
     setSaving(true);
-    setMessage("");
     try {
-      const snap = await getDoc(doc(db, "governanceCalendar", userId));
-      let list = snap.exists() ? snap.data().meetings || [] : [];
       const action = {
         id: uid(),
-        title: form.title.trim(),
-        description: form.description.trim(),
-        category: form.category,
-        assignedTo: form.assignedTo.trim(),
-        dueDate: form.dueDate,
-        status: form.status,
-        archived: false,
+        title: title.trim(),
+        description: description.trim(),
+        status: "Not Done",
+        assignedTo: assignedTo.trim() || "",
+        dueDate: dueDate || "",
+        sourceKpi: kpi.name,
+        sourceCategory: categoryName,
+        sourceTab: tabName,
+        sourceModule: "Marketing & Sales",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        revisedDate: null,
-        sourceModule: "Marketing & Sales",
-        sourceKpi: kpi.name,
-        sourceCategory: `${tabName} · ${categoryName}`,
       };
-      let targetId = meetingId;
-      if (!targetId) {
-        const meta = RAPS_CATEGORIES.find((c) => c.name === "Marketing & Sales");
-        const holder = {
-          id: uid(),
-          title: "Marketing & Sales Actions",
-          category: "Marketing & Sales",
-          department: "Marketing & Sales",
-          categoryColor: meta.color,
-          categoryBg: "#FCE4EC",
-          departmentColor: meta.color,
-          departmentBg: "#FCE4EC",
-          departments: [],
-          purpose: "Actions raised from Marketing & Sales.",
-          agenda: "",
-          preparations: "",
-          participants: [],
-          isRecurring: false,
-          recurrencePattern: null,
-          instances: [{ instanceId: uid(), date: new Date().toISOString(), time: "09:00", status: "scheduled" }],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          highlights: "",
-          lowlights: "",
-          opportunities: "",
-          priorities: "",
-          actions: [],
-        };
-        list = [...list, holder];
-        targetId = holder.id;
-      }
-      const updated = list.map((m) =>
-        m.id === targetId
-          ? { ...m, actions: [...(m.actions || []), { ...action, meetingId: m.id }], updatedAt: new Date().toISOString() }
-          : m
+
+      // Save to governance calendar
+      const gcRef = doc(db, "governanceCalendar", userId);
+      const gcSnap = await getDoc(gcRef);
+      let data = gcSnap.exists() ? gcSnap.data() : { meetings: [] };
+      let meetings = data.meetings || [];
+
+      // Find or create a Marketing & Sales meeting
+      let marketingMeeting = meetings.find(m => 
+        m.title?.includes("Marketing") || m.title?.includes("Sales") || m.category === "Marketing & Sales"
       );
-      await setDoc(doc(db, "governanceCalendar", userId), { meetings: updated, updatedAt: new Date().toISOString(), userId }, { merge: true });
-      onSaved(updated.find((m) => m.id === targetId)?.title || "your calendar");
+      
+      if (!marketingMeeting) {
+        marketingMeeting = {
+          id: uid(),
+          title: "Marketing & Sales Review",
+          date: new Date().toISOString().split("T")[0],
+          category: "Marketing & Sales",
+          actions: [],
+          attendees: [],
+        };
+        meetings.push(marketingMeeting);
+      }
+
+      if (!marketingMeeting.actions) marketingMeeting.actions = [];
+      marketingMeeting.actions.push(action);
+
+      await setDoc(gcRef, { ...data, meetings, updatedAt: new Date().toISOString() }, { merge: true });
+
+      onSaved?.(marketingMeeting.title);
       onClose();
     } catch (err) {
-      console.error("Failed to save action:", err);
-      setMessage(`Could not save the action: ${errText(err)}`);
+      console.error("Error saving action:", err);
+      alert("Failed to save action");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal
-      title="Add Action"
-      subtitle={`${kpi.name} · ${PERIOD_LABEL[period]}`}
-      icon={<Plus size={17} />}
-      onClose={onClose}
-      width={640}
-      footer={
+    <Modal title={`Action for ${kpi.name}`} subtitle={`${categoryName} · Status: ${getStatus(kpi, period, fy).label}`} icon={<Plus size={17} />} onClose={onClose} width={520}
+      footer={(
         <>
           <button onClick={onClose} style={btnGhost}>Cancel</button>
-          <button onClick={save} disabled={saving || !form.title.trim()} style={{ ...btnPrimary, opacity: saving || !form.title.trim() ? 0.6 : 1 }}>
-            {saving ? "Saving..." : "Save Action"}
+          <button onClick={handleSave} disabled={!title.trim() || saving} style={{ ...btnPrimary, opacity: !title.trim() || saving ? 0.6 : 1 }}>
+            {saving ? "Saving..." : "Add Action"}
           </button>
         </>
-      }
+      )}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", borderRadius: "10px", background: status.bg, border: `1px solid ${status.color}33`, marginBottom: "16px" }}>
-        <StatusIcon status={status} size={20} />
-        <div style={{ fontSize: "14px", color: T.body }}><strong style={{ color: T.accent }}>{kpi.name}</strong> is {status.label.toLowerCase()} for {PERIOD_LABEL[period].toLowerCase()}.</div>
+      <div style={{ marginBottom: "12px" }}>
+        <label style={labelS}>Action Title *</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Increase marketing spend" style={inputS} />
       </div>
-      <div style={{ marginBottom: "14px" }}><label style={labelS}>Action *</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={inputS} /></div>
-      <div style={{ marginBottom: "14px" }}><label style={labelS}>Description</label><textarea rows="3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inputS, resize: "vertical" }} /></div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+      <div style={{ marginBottom: "12px" }}>
+        <label style={labelS}>Description</label>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows="3" placeholder="What needs to be done?" style={{ ...inputS, resize: "vertical" }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
         <div>
-          <label style={labelS}>Attach to meeting</label>
-          {loadingMeetings ? <div style={{ fontSize: "13px", color: T.body }}>Loading...</div> : meetings.length === 0 ? (
-            <div style={{ fontSize: "12.5px", color: T.body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "9px 11px" }}>No meetings yet — filed under "Marketing & Sales Actions".</div>
-          ) : (
-            <select value={meetingId} onChange={(e) => { setMeetingId(e.target.value); setForm((p) => applyDefaults(e.target.value, p)); }} style={selectS}>
-              {meetings.map((m) => { const d = meetingDate(m); return <option key={m.id} value={m.id}>{m.title}{d ? ` — ${fmtDMY(d)}` : ""}</option>; })}
-            </select>
-          )}
+          <label style={labelS}>Assigned To</label>
+          <input value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder="Person responsible" style={inputS} />
         </div>
         <div>
-          <label style={labelS}>Category</label>
-          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={selectS}>
-            {RAPS_CATEGORIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-          </select>
+          <label style={labelS}>Due Date</label>
+          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputS} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-        <div>
-          <label style={labelS}>By whom</label>
-          {(selected?.participants || []).length > 0 ? (
-            <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={selectS}>
-              <option value="">Unassigned</option>
-              {selected.participants.map((p, i) => { const n = typeof p === "string" ? p : p.name || p.email || "Participant"; return <option key={i} value={n}>{n}</option>; })}
-            </select>
-          ) : <input value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} style={inputS} placeholder="Owner" />}
-        </div>
-        <div><label style={labelS}>By when</label><input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inputS} /></div>
-        <div><label style={labelS}>Status</label><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={selectS}>{ACTION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+      <div style={{ ...cardS, background: T.panel, marginTop: "12px", fontSize: "12.5px", color: T.muted }}>
+        <Info size={13} style={{ marginRight: "6px" }} />
+        This action will be added to the Integrated Actions module and tracked in your Marketing & Sales review.
       </div>
-      {message && <div style={{ color: T.red, fontSize: "13px", marginTop: "12px" }}>{message}</div>}
     </Modal>
   );
 };
 
-// ==================== NOTES MODAL ====================
-const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
+// ── NOTES MODAL ──
+const NotesModal = ({ kpi, readOnly, onClose, onSave }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
-  const [state, setState] = useState("idle");
-  const timer = useRef(null);
-  const change = (t) => {
-    setNotes(t);
-    setState("saving");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      onSave(t);
-      setState("saved");
-      setTimeout(() => setState("idle"), 1800);
-    }, 700);
-  };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  return (
-    <Modal title={`Notes — ${kpi.name}`} icon={<StickyNote size={17} />} onClose={onClose} footer={<><span style={{ flex: 1, fontSize: "12.5px", color: state === "saved" ? T.green : T.muted, textAlign: "left" }}>{state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Saves automatically"}</span><button onClick={onClose} style={btnPrimary}>Close</button></>}>
-      <label style={labelS}>Context, anomalies or anything worth remembering about this KPI</label>
-      <textarea rows="9" value={notes} readOnly={readOnly} onChange={(e) => change(e.target.value)} style={{ ...inputS, resize: "vertical" }} />
-    </Modal>
-  );
-};
-
-// ==================== ADD CHOOSER ====================
-const AddChooser = ({ onPick, onClose }) => (
-  <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-      {[
-        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and target figures against the KPIs you already track." },
-        { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI", body: "Create a custom marketing & sales metric under any section or category." },
-      ].map((o) => (
-        <button key={o.key} onClick={() => onPick(o.key)} style={{ padding: "22px 20px", borderRadius: "12px", border: `1px solid ${T.lineStrong}`, background: T.bg, cursor: "pointer", textAlign: "left", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: "10px" }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.accentTint; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.lineStrong; e.currentTarget.style.background = T.bg; }}>
-          <span style={{ color: T.accent }}>{o.icon}</span>
-          <span style={{ fontSize: "15.5px", fontWeight: 600, color: T.accent }}>{o.title}</span>
-          <span style={{ fontSize: "13px", color: T.body, lineHeight: 1.5 }}>{o.body}</span>
-        </button>
-      ))}
-    </div>
-  </Modal>
-);
-
-// ==================== ADD DATA WIZARD ====================
-const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, currentTabId }) => {
-  const editableTabs = tabs.filter((t) => t.categories.some((c) => (c.kpis || []).some((k) => k.field)));
-  const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
-  const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
-  const [periodKey, setPeriodKey] = useState(null);
-  const [draft, setDraft] = useState({});
-  const [saveState, setSaveState] = useState("idle");
-  const timer = useRef(null);
-
-  const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
-  const months = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
-
-  useEffect(() => {
-    if (!months.length) return;
-    if (months.some((m) => m.key === periodKey)) return;
-    setPeriodKey(months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
-  }, [months]);
-
-  const monthMeta = months.find((m) => m.key === periodKey) || months[0];
-  const monthIndex = months.findIndex((m) => m.key === periodKey);
-
-  const rows = useMemo(() => {
-    if (!tab) return [];
-    const out = [];
-    tab.categories.forEach((cat) => (cat.kpis || []).forEach((k) => out.push({ kpi: k, category: cat.name })));
-    return out;
-  }, [tab]);
-
-  const draftKey = (kpiId, which) => `${monthMeta?.month}|${kpiId}|${which}`;
-
-  const value = (kpi, which) => {
-    const dk = draftKey(kpi.id, which);
-    if (draft[dk] !== undefined) return draft[dk];
-    if (!kpi.field) return "";
-    const path = which === "actual" ? kpi.field.a : kpi.field.b;
-    if (!path) return "";
-    const raw = kpi.field.scalar ? atPath(docs[kpi.field.src], path) : atPath(docs[kpi.field.src], path)?.[monthMeta.month];
-    return raw === undefined || raw === null ? "" : String(raw);
-  };
-
-  const setValue = (kpi, which, raw) => {
-    const dk = draftKey(kpi.id, which);
-    setDraft((p) => ({ ...p, [dk]: raw }));
-    setSaveState("saving");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      await onSaveField({ kpi, which, raw, monthIndex: monthMeta.month });
-      onSavePrefs({ tabId, startYear });
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1800);
-    }, 800);
-  };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  const cell = { ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" };
-  const th = { ...panelTh, position: "sticky", top: 0, zIndex: 2, verticalAlign: "top" };
-  const yearOptions = [
-    { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
-    { value: fy.startYear, badge: "FY", label: fyLabel(fy.startYear, fy.startMonth) },
-    { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
-  ];
-
-  if (!tab) {
-    return <Modal title="Add Data" icon={<Database size={17} />} onClose={onClose} width={520} footer={<button onClick={onClose} style={btnPrimary}>Close</button>}><p style={{ fontSize: "14px", color: T.body, margin: 0 }}>Nothing here takes direct input.</p></Modal>;
-  }
 
   return (
-    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />} onClose={onClose} width={800} footer={<><button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button><span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}</span><button onClick={onClose} style={btnPrimary}>Done</button></>}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-        <div><label style={labelS}>Financial year</label><select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>{yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}</select></div>
-        <div><label style={labelS}>Section</label><select value={tabId} onChange={(e) => setTabId(e.target.value)} style={selectS}>{editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
-      </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
-        <div style={{ flex: 1 }}><label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label><select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>{months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}</select></div>
-        <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-        <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1} style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
-      </div>
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-            <thead><tr><th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th><th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th><th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th></tr></thead>
-            <tbody>
-              {rows.map(({ kpi, category }, i) => (
-                <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                  <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink, borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <div style={{ fontWeight: 600 }}>{kpi.name}</div>
-                    <div style={{ fontSize: "11.5px", color: T.muted }}>{category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}</div>
-                  </td>
-                  {["actual", "budget"].map((which) => {
-                    const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
-                    return (
-                      <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
-                        {!path ? <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>{which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}</div>
-                        : kpi.options ? <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}><option value="">—</option>{kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
-                        : <input type="number" step="any" value={value(kpi, which)} placeholder="—" onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </Modal>
-  );
-};
-
-// ==================== ADD KPI WIZARD ====================
-const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
-  const [tabId, setTabId] = useState(tabs.some((t) => t.id === currentTabId) ? currentTabId : tabs[0]?.id);
-  const [catChoice, setCatChoice] = useState("");
-  const [newCat, setNewCat] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", units: "#", direction: "higher", aggregate: "avg", meaning: "", measured: "" });
-
-  const tab = tabs.find((t) => t.id === tabId);
-  const cats = tab?.categories || [];
-  useEffect(() => { if (cats.length && !catChoice) setCatChoice(cats[0].name); }, [tabId]);
-  const creatingCat = catChoice === "__new__";
-  const catName = creatingCat ? newCat.trim() : catChoice;
-  const canSave = form.name.trim() && catName && form.meaning.trim() && form.measured.trim();
-
-  const commit = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    await onSave({ id: `custom_${uid().slice(0, 8)}`, tabId, category: catName, name: form.name.trim(), units: form.units, direction: form.direction, aggregate: form.aggregate, meaning: form.meaning.trim(), measured: form.measured.trim() });
-    setSaving(false);
-    onClose();
-  };
-
-  return (
-    <Modal title="Add KPI" subtitle="A custom marketing & sales metric you capture by hand each month" icon={<Sparkles size={17} />} onClose={onClose} width={720} footer={<><button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button><div style={{ flex: 1 }} /><button onClick={commit} disabled={!canSave || saving} style={{ ...btnPrimary, opacity: canSave && !saving ? 1 : 0.5 }}>{saving ? "Saving..." : "Create KPI"}</button></>}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
-        <div><label style={labelS}>Section</label><select value={tabId} onChange={(e) => { setTabId(e.target.value); setCatChoice(""); }} style={selectS}>{tabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
-        <div><label style={labelS}>Category</label><select value={catChoice} onChange={(e) => setCatChoice(e.target.value)} style={selectS}><option value="">Select…</option>{cats.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}<option value="__new__">＋ New category…</option></select>{creatingCat && <input value={newCat} onChange={(e) => setNewCat(e.target.value)} style={{ ...inputS, marginTop: "8px" }} placeholder="New category name" />}</div>
-      </div>
-      <div style={{ marginBottom: "14px" }}><label style={labelS}>KPI name *</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputS} placeholder="e.g. Lead Conversion Rate" /></div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-        <div><label style={labelS}>Units</label><select value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} style={selectS}><option value="#">Count (#)</option><option value="%">Percent (%)</option><option value="R">Currency (R)</option><option value="hrs">Hours</option><option value="days">Days</option><option value="units">Units</option></select></div>
-        <div><label style={labelS}>What counts as good?</label><select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })} style={selectS}>{DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}</select></div>
-        <div><label style={labelS}>Rolling up</label><select value={form.aggregate} onChange={(e) => setForm({ ...form, aggregate: e.target.value })} style={selectS}><option value="avg">AVERAGE the months — rates, ratios</option><option value="sum">SUM the months — counts, hours, rand</option></select></div>
-      </div>
-      <div style={{ marginBottom: "14px" }}><label style={labelS}>What does this KPI mean? *</label><textarea rows="2" value={form.meaning} onChange={(e) => setForm({ ...form, meaning: e.target.value })} style={{ ...inputS, resize: "vertical" }} placeholder="In plain words — anyone reading the dashboard should get it from this sentence." /></div>
-      <div><label style={{ ...labelS, display: "flex", alignItems: "center", gap: "6px" }}><Sigma size={13} /> How is this KPI measured? *</label><textarea rows="4" value={form.measured} onChange={(e) => setForm({ ...form, measured: e.target.value })} style={{ ...inputS, resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "13px" }} placeholder={"=SUM(Converted) / SUM(TotalLeads) * 100"} /><p style={{ fontSize: "12px", color: T.muted, marginTop: "7px", marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}><Info size={12} /> Use Excel functions and named ranges — SUM, AVERAGE, COUNTIF, COUNTIFS.</p></div>
-    </Modal>
-  );
-};
-
-// ==================== UNIVERSAL ADD DATA MODAL ====================
-const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, loading, fromDate, toDate }) => {
-  const [activeTab, setActiveTab] = useState(currentTab);
-  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-  const getRangeMonths = (fromYM, toYM) => {
-    const SHORTS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const result = [];
-    let [y, m] = fromYM.split("-").map(Number);
-    const [toY, toM] = toYM.split("-").map(Number);
-    while (y < toY || (y === toY && m <= toM)) {
-      result.push({ year: y, monthIdx: m - 1, label: `${SHORTS[m - 1]} ${y}` });
-      m++;
-      if (m > 12) { m = 1; y++; }
-    }
-    return result;
-  };
-
-  const rangeMonths = fromDate && toDate ? getRangeMonths(fromDate, toDate) : null;
-  const rangeYears = rangeMonths ? [...new Set(rangeMonths.map((r) => r.year))] : [toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()];
-  const [selectedYear, setSelectedYear] = useState(rangeYears[rangeYears.length - 1]);
-
-  useEffect(() => { setSelectedYear(rangeYears[rangeYears.length - 1]); }, [fromDate, toDate]);
-
-  const tabs = [
-    { id: "revenue-concentration", label: "Revenue Concentration" },
-    { id: "demand-sustainability", label: "Demand Sustainability" },
-  ];
-
-  const [revenueConcentrationData, setRevenueConcentrationData] = useState({
-    revenueChannels: [
-      { name: "Social Media", revenue: "", spend: "" },
-      { name: "Email", revenue: "", spend: "" },
-      { name: "PPC", revenue: "", spend: "" },
-      { name: "SEO", revenue: "", spend: "" },
-      { name: "Referral", revenue: "", spend: "" },
-      { name: "Direct", revenue: "", spend: "" },
-    ],
-    customerSegments: [
-      { name: "Enterprise", revenue: "", customerCount: "" },
-      { name: "SMB", revenue: "", customerCount: "" },
-      { name: "Startup", revenue: "", customerCount: "" },
-      { name: "Non-Profit", revenue: "", customerCount: "" },
-      { name: "Education", revenue: "", customerCount: "" },
-    ],
-    revenueByCustomer: [
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-      { name: "", revenue: "" },
-    ],
-    notes: "",
-  });
-
-  const [demandSustainabilityData, setDemandSustainabilityData] = useState({
-    repeatCustomerRate: "",
-    churnRate: "",
-    campaigns: [
-      { name: "Q1 Campaign", cost: "", revenue: "" },
-      { name: "Q2 Campaign", cost: "", revenue: "" },
-      { name: "Summer Sale", cost: "", revenue: "" },
-      { name: "Holiday Campaign", cost: "", revenue: "" },
-    ],
-    notes: "",
-  });
-
-  useEffect(() => { if (isOpen && user) loadDataForTab(activeTab); }, [isOpen, activeTab, user, selectedYear]);
-
-  const loadDataForTab = async (tabId) => {
-    try {
-      switch (tabId) {
-        case "revenue-concentration":
-          const concDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`));
-          if (concDoc.exists()) {
-            const d = concDoc.data();
-            setRevenueConcentrationData({
-              revenueChannels: d.revenueChannels || revenueConcentrationData.revenueChannels,
-              customerSegments: d.customerSegments || revenueConcentrationData.customerSegments,
-              revenueByCustomer: d.revenueByCustomer || revenueConcentrationData.revenueByCustomer,
-              notes: d.notes || "",
-            });
-          }
-          break;
-        case "demand-sustainability":
-          const sustDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`));
-          if (sustDoc.exists()) {
-            const d = sustDoc.data();
-            setDemandSustainabilityData({
-              repeatCustomerRate: d.repeatCustomerRate?.toString() || "",
-              churnRate: d.churnRate?.toString() || "",
-              campaigns: d.campaigns || demandSustainabilityData.campaigns,
-              notes: d.notes || "",
-            });
-          }
-          break;
-      }
-    } catch (error) { console.error(`Error loading data for ${tabId}:`, error); }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) { alert("Please log in to save data"); return; }
-    try {
-      switch (activeTab) {
-        case "revenue-concentration":
-          const validCustomers = revenueConcentrationData.revenueByCustomer.filter((c) => c.name.trim() !== "" || parseFloat(c.revenue) > 0);
-          await setDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`), {
-            userId: user.uid, year: selectedYear,
-            revenueChannels: revenueConcentrationData.revenueChannels.map((c) => ({ name: c.name, revenue: Number.parseFloat(c.revenue) || 0, spend: Number.parseFloat(c.spend) || 0 })),
-            customerSegments: revenueConcentrationData.customerSegments.map((s) => ({ name: s.name, revenue: Number.parseFloat(s.revenue) || 0, customerCount: Number.parseFloat(s.customerCount) || 0 })),
-            revenueByCustomer: validCustomers.map((c) => ({ name: c.name, revenue: Number.parseFloat(c.revenue) || 0 })),
-            notes: revenueConcentrationData.notes, lastUpdated: new Date().toISOString(),
-          });
-          break;
-        case "demand-sustainability":
-          await setDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`), {
-            userId: user.uid, year: selectedYear,
-            repeatCustomerRate: Number.parseFloat(demandSustainabilityData.repeatCustomerRate) || 0,
-            churnRate: Number.parseFloat(demandSustainabilityData.churnRate) || 0,
-            campaigns: demandSustainabilityData.campaigns.map((c) => ({ name: c.name, cost: Number.parseFloat(c.cost) || 0, revenue: Number.parseFloat(c.revenue) || 0 })),
-            notes: demandSustainabilityData.notes, lastUpdated: new Date().toISOString(),
-          });
-          break;
-      }
-      if (onSave) onSave();
-      alert("Data saved successfully!");
-    } catch (error) { console.error("Error saving data:", error); alert("Error saving data. Please try again."); }
-  };
-
-  const inputCls = "w-full p-2 rounded border border-[#e8ddd4] text-sm";
-  const labelCls = "text-xs text-mediumBrown font-semibold";
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
-      <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[1400px] max-h-[90vh] overflow-auto w-[95%]">
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-mediumBrown m-0">Add Marketing & Sales Data</h3>
-          <button onClick={onClose} className="bg-transparent border-0 text-2xl text-mediumBrown cursor-pointer p-0 leading-none">×</button>
-        </div>
-        <div className="flex gap-1 mb-5 flex-wrap border-b-2 border-[#e8ddd4] pb-2.5">
-          {tabs.map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-5 py-2.5 border-0 rounded-t-md cursor-pointer font-semibold text-sm transition-all duration-300 -mb-0.5 ${activeTab === tab.id ? "bg-mediumBrown text-[#fdfcfb] border-b-2 border-mediumBrown" : "bg-[#e8ddd4] text-mediumBrown border-b-2 border-transparent"}`}>
-              {tab.label}
+    <Modal title={`Notes for ${kpi.name}`} icon={<StickyNote size={17} />} onClose={onClose} width={480}
+      footer={(
+        <>
+          {!readOnly && (
+            <button onClick={() => { onSave(notes); onClose(); }} style={btnPrimary}>
+              <Save size={13} /> Save Notes
             </button>
-          ))}
-        </div>
-
-        {rangeYears.length > 1 && (
-          <div className="flex gap-2 mb-5 flex-wrap items-center">
-            <span className="text-mediumBrown text-sm font-semibold mr-1">Year:</span>
-            {rangeYears.map((yr) => (
-              <button key={yr} onClick={() => setSelectedYear(yr)} className={`px-4 py-1.5 border-0 rounded-md cursor-pointer font-semibold text-sm ${selectedYear === yr ? "bg-mediumBrown text-[#fdfcfb]" : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"}`}>
-                {yr}
-              </button>
-            ))}
+          )}
+          <button onClick={onClose} style={btnGhost}>Close</button>
+        </>
+      )}
+    >
+      <div>
+        <label style={labelS}>General notes</label>
+        {readOnly ? (
+          <div style={{ ...cardS, minHeight: "100px", whiteSpace: "pre-wrap", fontSize: "13.5px", color: notes ? T.body : T.faint }}>
+            {notes || "No notes yet."}
           </div>
+        ) : (
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows="6" placeholder="Add general notes about this KPI..." style={{ ...inputS, resize: "vertical" }} />
         )}
-
-        {activeTab === "revenue-concentration" && (
-          <div>
-            <h4 className="text-mediumBrown mb-5">Revenue Concentration Data</h4>
-            <h5 className="text-mediumBrown mb-3 font-semibold">Revenue by Channel</h5>
-            {revenueConcentrationData.revenueChannels.map((channel, index) => (
-              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={channel.name} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={channel.revenue} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={channel.spend} onChange={(e) => { const n = [...revenueConcentrationData.revenueChannels]; n[index].spend = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueChannels: n }); }} placeholder="Marketing Spend (R)" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">Customer Segments</h5>
-            {revenueConcentrationData.customerSegments.map((segment, index) => (
-              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={segment.name} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={segment.revenue} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={segment.customerCount} onChange={(e) => { const n = [...revenueConcentrationData.customerSegments]; n[index].customerCount = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, customerSegments: n }); }} placeholder="# Customers" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <h5 className="text-mediumBrown mt-7 mb-3 font-semibold">Revenue by Customer</h5>
-            {revenueConcentrationData.revenueByCustomer.map((cust, index) => (
-              <div key={index} className="grid grid-cols-[1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={cust.name} onChange={(e) => { const n = [...revenueConcentrationData.revenueByCustomer]; n[index].name = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueByCustomer: n }); }} placeholder="Customer name" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={cust.revenue} onChange={(e) => { const n = [...revenueConcentrationData.revenueByCustomer]; n[index].revenue = e.target.value; setRevenueConcentrationData({ ...revenueConcentrationData, revenueByCustomer: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <button type="button" onClick={() => setRevenueConcentrationData((prev) => ({ ...prev, revenueByCustomer: [...prev.revenueByCustomer, { name: "", revenue: "" }] }))} className="mt-2 px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown rounded text-sm">+ Add another customer</button>
-            <div className="mb-5 mt-7">
-              <label className="block mb-2.5 text-mediumBrown font-semibold">Notes:</label>
-              <textarea value={revenueConcentrationData.notes} onChange={(e) => setRevenueConcentrationData({ ...revenueConcentrationData, notes: e.target.value })} placeholder="Add any additional notes..." className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]" />
-            </div>
-          </div>
-        )}
-
-        {activeTab === "demand-sustainability" && (
-          <div>
-            <h4 className="text-mediumBrown mb-5">Demand Sustainability Data</h4>
-            <div className="grid grid-cols-2 gap-[15px] mb-7">
-              <div><label className={labelCls}>Repeat Customer Rate (%)</label><input type="number" value={demandSustainabilityData.repeatCustomerRate} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, repeatCustomerRate: e.target.value })} className={inputCls} /></div>
-              <div><label className={labelCls}>Churn Rate (%)</label><input type="number" value={demandSustainabilityData.churnRate} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, churnRate: e.target.value })} className={inputCls} /></div>
-            </div>
-            <h5 className="text-mediumBrown mb-3 font-semibold">Campaigns</h5>
-            {demandSustainabilityData.campaigns.map((campaign, index) => (
-              <div key={index} className="grid grid-cols-[2fr_1fr_1fr] gap-2.5 mb-2.5">
-                <input type="text" value={campaign.name} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].name = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={campaign.cost} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].cost = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} placeholder="Cost (R)" className="p-2 rounded border border-[#e8ddd4]" />
-                <input type="number" value={campaign.revenue} onChange={(e) => { const n = [...demandSustainabilityData.campaigns]; n[index].revenue = e.target.value; setDemandSustainabilityData({ ...demandSustainabilityData, campaigns: n }); }} placeholder="Revenue (R)" className="p-2 rounded border border-[#e8ddd4]" />
-              </div>
-            ))}
-            <div className="mb-5">
-              <label className="block mb-2.5 text-mediumBrown font-semibold">Notes:</label>
-              <textarea value={demandSustainabilityData.notes} onChange={(e) => setDemandSustainabilityData({ ...demandSustainabilityData, notes: e.target.value })} placeholder="Add any additional notes..." className="w-full p-2.5 rounded border border-[#e8ddd4] min-h-[80px] text-[13px]" />
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2.5 justify-end mt-5">
-          <button onClick={onClose} className="px-5 py-2.5 bg-[#e8ddd4] text-mediumBrown border-0 rounded-md cursor-pointer font-semibold">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} className={`px-5 py-2.5 bg-mediumBrown text-[#fdfcfb] border-0 rounded-md font-semibold ${loading ? "opacity-70 cursor-wait" : "cursor-pointer"}`}>
-            {loading ? "Saving..." : "Save Data"}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 
-// ==================== MAIN COMPONENT ====================
+// ── MARKETING DATA MODAL ──
+const MarketingDataModal = ({ mode, onClose, onSave, isInvestorView }) => {
+  const [data, setData] = useState(null);
 
+  const renderPanel = () => {
+    switch (mode) {
+      case "top3":
+        return <Top3Concentration data={data} isInvestorView={isInvestorView} />;
+      case "channelPerf":
+        return <ChannelPerformanceTable data={data} isInvestorView={isInvestorView} />;
+      case "riskAnalysis":
+        return <ConcentrationRiskBarChart data={data} isInvestorView={isInvestorView} />;
+      case "campaignPerf":
+        return <CampaignPerformanceTable data={data} isInvestorView={isInvestorView} />;
+      default:
+        return <div>Unknown panel</div>;
+    }
+  };
+
+  return (
+    <Modal title={`Edit Marketing Data`} subtitle={`${mode} view`} icon={<Database size={17} />} onClose={onClose} width={820}
+      footer={(
+        <>
+          {!isInvestorView && (
+            <button onClick={() => onSave(mode, data)} style={btnPrimary}><Save size={13} /> Save Data</button>
+          )}
+          <button onClick={onClose} style={btnGhost}>Close</button>
+        </>
+      )}
+    >
+      {renderPanel()}
+    </Modal>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Main MarketingSales Component
+   ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "marketingSales.addData.prefs";
 const META_DOC = "marketingSalesKpiMeta";
 
@@ -2618,7 +3224,6 @@ const MarketingSales = () => {
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const resizing = useRef(null);
 
-  // --- Column order state for drag-drop on main KPI table ---
   const [colOrder, setColOrder] = useState(COLUMN_ORDER);
 
   const [infoKpi, setInfoKpi] = useState(null);
@@ -2628,17 +3233,10 @@ const MarketingSales = () => {
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
   const [manageTabs, setManageTabs] = useState(false);
-  const [showAddDataModal, setShowAddDataModal] = useState(false);
-  const [pipelineRecords, setPipelineRecords] = useState([]);
-  const [loadingData, setLoadingData] = useState(false);
+  const [marketingPanel, setMarketingPanel] = useState(null);
+  const [showReport, setShowReport] = useState(false);
 
-  const _now = new Date();
-  const _toYM = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
-  const _fromD = new Date(_now.getFullYear(), _now.getMonth() - 11, 1);
-  const _fromYM = `${_fromD.getFullYear()}-${String(_fromD.getMonth() + 1).padStart(2, "0")}`;
-  const [filterMode, setFilterMode] = useState("range");
-  const [fromDate, setFromDate] = useState(_fromYM);
-  const [toDate, setToDate] = useState(_toYM);
+  const [pipelineRecords, setPipelineRecords] = useState([]);
 
   const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
 
@@ -2653,6 +3251,15 @@ const MarketingSales = () => {
   };
   useEffect(() => {
     try { const raw = window.localStorage.getItem(PREFS_KEY); if (raw) setDataPrefs(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    window.__setMarketingPanel = (mode) => {
+      setMarketingPanel(mode);
+    };
+    return () => {
+      delete window.__setMarketingPanel;
+    };
   }, []);
 
   useEffect(() => {
@@ -2756,6 +3363,31 @@ const MarketingSales = () => {
     const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
     if (!path) return;
     await writeDoc(kpi.field.src, (d) => setAtPath(d, path, raw, { scalar: !!kpi.field.scalar, monthIndex }));
+  };
+
+  const saveMarketingPanelData = async (mode, data) => {
+    if (!user?.uid || isInvestorView) return;
+    try {
+      const srcMap = {
+        top3: "concentration",
+        channelPerf: "concentration",
+        riskAnalysis: "concentration",
+        campaignPerf: "sustainability",
+        pipelineTable: "pipeline",
+      };
+      const src = srcMap[mode];
+      if (!src) {
+        notify("error", "Unknown panel type");
+        return;
+      }
+      await writeDoc(src, (d) => {
+        d[mode] = data;
+      });
+      notify("success", "Marketing data saved.");
+    } catch (err) {
+      console.error("Error saving marketing data:", err);
+      notify("error", `Could not save: ${errText(err)}`);
+    }
   };
 
   const tabs = useMemo(() => {
@@ -2900,12 +3532,10 @@ const MarketingSales = () => {
     return groups;
   }, [rows]);
 
-  // Determine visible columns based on visibility and colOrder (drag-drop)
   const visibleColumns = colOrder.filter((k) => visibility[k]);
   const totalWidth = visibleColumns.reduce((s, k) => s + widths[k], 0) + widths[ACTIONS_KEY];
   const activeFilterCount = Object.values(filters).filter((v) => v !== "all").length;
 
-  // Resize handler for main table
   const startResize = (e, key) => {
     e.preventDefault();
     e.stopPropagation();
@@ -2925,7 +3555,6 @@ const MarketingSales = () => {
     window.addEventListener("mouseup", onUp);
   };
 
-  // Drag-drop handlers for main table
   const handleDragStart = (e, key) => {
     e.dataTransfer.setData("text/plain", key);
     e.dataTransfer.effectAllowed = "move";
@@ -3012,6 +3641,7 @@ const MarketingSales = () => {
   }
 
   const panels = (activeTab?.categories || []).map((c) => c.panel).filter(Boolean);
+  const userName = user?.displayName || user?.email || "User";
 
   return (
     <div style={{ minHeight: "100vh", padding: "28px", boxSizing: "border-box", background: T.bg, color: T.body }}>
@@ -3088,9 +3718,14 @@ const MarketingSales = () => {
           );
         })}
         {!isInvestorView && (
-          <button onClick={() => setManageTabs(true)} title="Show or hide dashboard tabs" style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
-            <Settings2 size={13} /> Manage Tabs
-          </button>
+          <>
+            <button onClick={() => setManageTabs(true)} title="Show or hide dashboard tabs" style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
+              <Settings2 size={13} /> Manage Tabs
+            </button>
+            <button onClick={() => setShowReport(true)} title="Generate a Word report" style={{ ...btnGhost, marginLeft: "4px", marginBottom: "4px", padding: "6px 14px", fontSize: "12.5px" }}>
+              <FileText size={13} /> Download Report
+            </button>
+          </>
         )}
       </div>
 
@@ -3134,7 +3769,7 @@ const MarketingSales = () => {
           )}
           <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
-            <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
+            <ClipboardList size={14} /> Marketing & Sales Overview <ExternalLink size={11} />
           </button>
           {!isInvestorView && (
             <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add KPI/Data</button>
@@ -3197,23 +3832,15 @@ const MarketingSales = () => {
                               </button>
                             )}
                             {def.filter && (
-                              <button onClick={() => setOpenFilter(isOpen ? null : key)} title="Filter" style={{ ...iconBtn(filtered ? "#fff" : "rgba(255,255,255,0.6)"), background: filtered ? "rgba(255,255,255,0.16)" : "transparent" }}>
-                                <SlidersHorizontal size={13} />
-                              </button>
+                              <FilterDropdown
+                                options={optionsFor(key)}
+                                value={filters[key] || "All"}
+                                onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))}
+                                onClose={() => {}}
+                              />
                             )}
                           </span>
                         </div>
-
-                        {isOpen && def.filter && (
-                          <div onMouseLeave={() => setOpenFilter(null)} style={{ position: "absolute", top: "100%", left: 0, marginTop: "2px", background: T.bg, border: `1px solid ${T.lineStrong}`, borderRadius: "10px", minWidth: "215px", maxHeight: "260px", overflowY: "auto", zIndex: 600, boxShadow: "0 12px 30px rgba(45,32,28,0.18)", padding: "6px" }}>
-                            {optionsFor(key).map((opt) => (
-                              <div key={opt} onClick={() => { setFilters((p) => ({ ...p, [key]: opt })); setOpenFilter(null); }} style={{ padding: "8px 10px", cursor: "pointer", fontSize: "13.5px", borderRadius: "7px", background: filters[key] === opt ? T.accentTint : "transparent", color: filters[key] === opt ? T.accent : T.body, fontWeight: filters[key] === opt ? 600 : 400 }}>
-                                {opt === "all" ? `All ${def.label.toLowerCase()}s` : opt}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
                         <div onMouseDown={(e) => startResize(e, key)} title="Drag to resize" style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
                       </th>
                     );
@@ -3305,129 +3932,28 @@ const MarketingSales = () => {
       {!isKpiTableTab && panels.includes("top3") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Top 3 Concentration</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Channels</h4>
-              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Channel</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                  <tbody>
-                    {["Social Media", "PPC", "Email"].map((channel, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{channel}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,200,000</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>35.2%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div>
-              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Customers</h4>
-              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Customer</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                  <tbody>
-                    {["Acme Corp", "TechGlobal", "EcoSolutions"].map((customer, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{customer}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 850,000</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>24.9%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div>
-              <h4 style={{ color: T.body, fontSize: "13px", marginBottom: "10px", fontWeight: 600 }}>Top 3 Segments</h4>
-              <div style={{ border: `1px solid ${T.lineSoft}`, borderRadius: "8px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr style={{ background: T.header }}><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "left" }}>Segment</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>Revenue</th><th style={{ padding: "8px 12px", color: "#fff", fontSize: "11px", textAlign: "right" }}>%</th></tr></thead>
-                  <tbody>
-                    {["Enterprise", "SMB", "Startup"].map((segment, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body }}>{segment}</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R 1,500,000</td>
-                        <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>44.0%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <Top3Concentration isInvestorView={isInvestorView} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("channelPerf") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Channel Performance</h3>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Channel</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Marketing Spend</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Net Profit</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>% of Revenue</th></tr></thead>
-              <tbody>
-                {["Social Media", "Email", "PPC", "SEO", "Referral", "Direct"].map((channel, i) => {
-                  const revenue = [150000, 120000, 80000, 60000, 50000, 40000][i];
-                  const spend = [45000, 30000, 35000, 15000, 10000, 5000][i];
-                  const net = revenue - spend;
-                  const roi = spend > 0 ? (net / spend) * 100 : 0;
-                  const pct = [22.0, 17.6, 11.7, 8.8, 7.3, 5.9][i];
-                  return (
-                    <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{channel}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {spend.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: net >= 0 ? T.green : T.red, fontWeight: 600 }}>R {net.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>{pct}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ChannelPerformanceTable isInvestorView={isInvestorView} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("riskAnalysis") && (
         <div style={{ ...cardS, background: T.panel, marginBottom: "20px" }}>
-          <h4 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "13px", fontWeight: 600 }}>Concentration Risk Analysis</h4>
-          <div style={{ fontSize: "13px", color: T.body, fontWeight: 600, marginBottom: "6px" }}>Channel Concentration Risk</div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ flex: 1, background: T.line, height: "20px", borderRadius: "10px", overflow: "hidden" }}>
-              <div style={{ width: "51.3%", height: "100%", background: T.amber, borderRadius: "10px" }} />
-            </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: T.body, minWidth: "45px" }}>51.3%</span>
-          </div>
-          <div style={{ fontSize: "12px", color: T.muted, marginTop: "6px" }}>Top 3 channels generate 51.3% of total revenue - Moderate risk: Could benefit from further diversification</div>
+          <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Concentration Risk Analysis</h3>
+          <ConcentrationRiskBarChart isInvestorView={isInvestorView} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("campaignPerf") && (
         <div style={{ ...cardS, marginBottom: "20px" }}>
           <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "15px", fontSize: "15px", fontWeight: 600 }}>Campaign Performance</h3>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr style={{ background: T.header }}><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "left" }}>Campaign</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Cost</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>Revenue</th><th style={{ padding: "10px 14px", color: "#fff", fontSize: "12px", textAlign: "right" }}>ROI %</th></tr></thead>
-              <tbody>
-                {["Q1 Campaign", "Q2 Campaign", "Summer Sale", "Holiday Campaign"].map((campaign, i) => {
-                  const cost = [25000, 30000, 15000, 40000][i];
-                  const revenue = [45000, 55000, 35000, 80000][i];
-                  const roi = cost > 0 ? ((revenue - cost) / cost) * 100 : 0;
-                  return (
-                    <tr key={i} style={{ borderBottom: `1px solid ${T.lineSoft}`, background: i % 2 ? T.panel : T.bg }}>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, fontWeight: 600 }}>{campaign}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {cost.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", color: T.body, textAlign: "right" }}>R {revenue.toLocaleString()}</td>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", textAlign: "right", color: roi >= 0 ? T.green : T.red, fontWeight: 600 }}>{roi.toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <CampaignPerformanceTable isInvestorView={isInvestorView} />
         </div>
       )}
 
@@ -3443,6 +3969,15 @@ const MarketingSales = () => {
       {analysisKpi && <AnalysisModal kpi={analysisKpi} period={period} fy={fy} onClose={() => setAnalysisKpi(null)} />}
       {actionKpi && <AddActionModal kpi={actionKpi.kpi} period={period} fy={fy} categoryName={actionKpi.categoryName} tabName={actionKpi.tabName} userId={user?.uid} onClose={() => setActionKpi(null)} onSaved={(m) => notify("success", `Action added to "${m}" and Integrated Actions.`)} />}
       {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)} onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
+
+      {marketingPanel && (
+        <MarketingDataModal 
+          mode={marketingPanel} 
+          onClose={() => setMarketingPanel(null)} 
+          onSave={saveMarketingPanelData}
+          isInvestorView={isInvestorView}
+        />
+      )}
 
       {manageTabs && (
         <Modal title="Manage Dashboard Tabs" subtitle="Show or hide a tab from the dashboard" icon={<Settings2 size={17} />} onClose={() => setManageTabs(false)} width={560} footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
@@ -3468,14 +4003,42 @@ const MarketingSales = () => {
       {addFlow === "choose" && <AddChooser onClose={() => setAddFlow(null)} onPick={(k) => setAddFlow(k)} />}
 
       {addFlow === "data" && (
-        <AddDataWizard tabs={tabs} fy={fy} docs={docs} currentTabId={activeTabId} prefs={dataPrefs} onSavePrefs={savePrefs} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)} onSaveField={saveKpiField} />
+        <AddDataWizard 
+          tabs={tabs} 
+          fy={fy} 
+          docs={docs} 
+          currentTabId={activeTabId} 
+          prefs={dataPrefs} 
+          onSavePrefs={savePrefs} 
+          onBack={() => setAddFlow("choose")} 
+          onClose={() => setAddFlow(null)} 
+          onSaveField={saveKpiField}
+        />
       )}
 
       {addFlow === "kpi" && (
         <AddKpiWizard tabs={tabs} currentTabId={activeTabId} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)} onSave={async (kpi) => { await persistMeta({ ...meta, custom: [...(meta.custom || []), kpi] }); notify("success", "KPI created."); }} />
       )}
 
-      <UniversalAddDataModal isOpen={showAddDataModal} onClose={() => setShowAddDataModal(false)} currentTab={activeTabId} user={user} onSave={() => { setLoadingData(true); setTimeout(() => setLoadingData(false), 1000); }} loading={loadingData} fromDate={fromDate} toDate={toDate} />
+      {/* Report Generator */}
+      {showReport && (
+        <MarketingReportGenerator 
+          tabs={visibleTabs} 
+          fy={fy} 
+          period={period}
+          userId={user?.uid}
+          userName={userName}
+          pipelineRecords={pipelineRecords}
+          getStatusFn={getStatus}
+          periodValuesFn={periodValues}
+          getVarianceFn={getVariance}
+          statusFromPairFn={statusFromPair}
+          trimNumFn={trimNum}
+          fmtValueFn={fmtValue}
+          fyLabelFn={fyLabel}
+          onClose={() => setShowReport(false)} 
+        />
+      )}
     </div>
   );
 };

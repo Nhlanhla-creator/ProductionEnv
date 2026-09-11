@@ -620,7 +620,7 @@ const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
           existingUniversalDocs
         )
       case "guarantees":
-      return renderGuarantees(formData.guarantees, updateFormData, guaranteesAiRef)
+        return renderGuarantees(formData.guarantees, updateFormData, guaranteesAiRef)
       case "growthPotential":
         return renderGrowthPotential(formData.growthPotential, updateFormData)
       case "socialImpact":
@@ -636,7 +636,7 @@ const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
 
   const handleSaveSection = async () => {
     try {
-       await runGuaranteesAnalysisIfNeeded()
+      await runGuaranteesAnalysisIfNeeded()
       const ok = await saveSectionToFirebase(activeSection, false)
       if (ok) {
         alert("Section saved successfully!")
@@ -661,7 +661,7 @@ const [isAnalyzingGuarantees, setIsAnalyzingGuarantees] = useState(false)
       return
     }
 
-     await runGuaranteesAnalysisIfNeeded()
+    await runGuaranteesAnalysisIfNeeded()
 
     const ok = await saveSectionToFirebase(activeSection, true)
     if (ok && nextSection) {
@@ -962,73 +962,91 @@ The BIG Fundability Team
   }
 
   return (
-    <div style={getContainerStyles()} className="funding-application-container">
-      {validationModal.open && (
+  <div
+    style={{
+      ...getContainerStyles(),
+      width: "100%",
+      minHeight: "100vh",
+      maxWidth: "100%",
+      overflowX: "visible",
+      padding: "0 20px",
+      margin: "0 auto",
+      boxSizing: "border-box",
+      display: "flex",
+      flexDirection: "column",
+      flex: 1,
+    }}
+    className="funding-application-container"
+  >
+
+    {validationModal.open && (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 9999,
+          padding: "20px",
+          boxSizing: "border-box",
+        }}
+      >
         <div
           style={{
-            position: "fixed",
-            top: "0",
-            left: "0",
-            width: "100vw",
-            height: "100vh",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: "9999",
+            backgroundColor: "white",
+            borderRadius: "8px",
             padding: "20px",
-            boxSizing: "border-box",
+            maxWidth: "90vw",
+            maxHeight: "90vh",
+            overflow: "auto",
+            position: "relative",
+            width: "100%",
+            maxWidth: "500px",
           }}
-          className="popup-overlay"
+          className="validation-popup"
         >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "8px",
-              padding: "20px",
-              maxWidth: "90vw",
-              maxHeight: "90vh",
-              overflow: "auto",
-              position: "relative",
-              width: "100%",
-              maxWidth: "500px",
-            }}
-            className="validation-popup"
+          <button
+            onClick={() =>
+              setValidationModal({
+                open: false,
+                title: "",
+                messages: [],
+              })
+            }
           >
+            <X size={24} />
+          </button>
+
+          <div className="popup-content">
+            <h2>{validationModal.title}</h2>
+
+            <ul>
+              {validationModal.messages.map((msg, idx) => (
+                <li key={idx}>{msg}</li>
+              ))}
+            </ul>
+
             <button
-              style={{
-                position: "absolute",
-                top: "10px",
-                right: "10px",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "5px",
-              }}
-              className="close-popup"
-              onClick={() => setValidationModal({ open: false, title: "", messages: [] })}
+              onClick={() =>
+                setValidationModal({
+                  open: false,
+                  title: "",
+                  messages: [],
+                })
+              }
             >
-              <X size={24} />
+              Got it
             </button>
-            <div className="popup-content">
-              <h2 className="text-lg font-semibold">{validationModal.title}</h2>
-              <ul className="list-disc pl-5 mt-2 text-sm text-red-600">
-                {validationModal.messages.map((msg, idx) => (
-                  <li key={idx}>{msg}</li>
-                ))}
-              </ul>
-              <div className="mt-4 flex justify-end">
-                <button
-                  className="btn btn-primary"
-                  onClick={() => setValidationModal({ open: false, title: "", messages: [] })}
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
+
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* Welcome Popup for first-time users */}
       {showWelcomePopup && (
@@ -1218,7 +1236,7 @@ The BIG Fundability Team
           width: "100%",
           textAlign: "center",
           margin: "20px 0",
-          fontSize: "clamp(1.5rem, 4vw, 2.5rem)",
+          fontSize: "clamp(1.2rem, 3vw, 2rem)",
           lineHeight: "1.2",
           wordBreak: "break-word",
         }}
@@ -1229,11 +1247,13 @@ The BIG Fundability Team
       <div
         style={{
           width: "100%",
-          maxWidth: "100%",
-          overflowX: "auto",
-          padding: "10px 0",
-          margin: "20px 0",
-          boxSizing: "border-box",
+    maxWidth: "100%",
+    overflowX: "auto",
+    overflowY: "hidden",
+    padding: "10px 0",
+    margin: "20px 0",
+    boxSizing: "border-box",
+    WebkitOverflowScrolling: "touch",
         }}
         className="profile-tracker"
       >
@@ -1254,22 +1274,23 @@ The BIG Fundability Team
               key={section.id}
               onClick={() => setActiveSection(section.id)}
               style={{
-                minWidth: "80px",
-                maxWidth: "120px",
-                padding: "8px 6px",
-                fontSize: "clamp(0.7rem, 1.5vw, 0.9rem)",
-                lineHeight: "1.2",
-                textAlign: "center",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                wordBreak: "break-word",
-                hyphens: "auto",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                minHeight: "60px",
+                minWidth: "90px",
+  maxWidth: "100px",
+  height: "70px",
+  padding: "6px 8px",
+  fontSize: "12px",
+  fontWeight: "500",
+  lineHeight: "1.1",
+  textAlign: "center",
+  cursor: "pointer",
+  transition: "all 0.3s ease",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  position: "relative",
+  borderRadius: "12px",
+  overflow: "hidden",
               }}
               className={`profile-tracker-button ${
                 activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"
@@ -1300,14 +1321,17 @@ The BIG Fundability Team
       <div
         style={{
           width: "100%",
-          maxWidth: "100%",
-          padding: "20px",
-          margin: "0 auto",
-          backgroundColor: "white",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          boxSizing: "border-box",
-          overflow: "hidden",
+    maxWidth: "100%",
+    minWidth: 0,
+    padding: "20px",
+    margin: "0 auto",
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+    boxSizing: "border-box",
+    overflowX: "auto",
+    overflowY: "visible",
+    flex: 1,
         }}
         className="content-card"
       >
@@ -1382,7 +1406,7 @@ The BIG Fundability Team
               className="btn btn-primary"
             >
              {isAnalyzingGuarantees ? "Analyzing guarantees…" : "Save & Continue"}
-+              <ChevronRight size={16} />
+              <ChevronRight size={16} />
             </button>
           ) : (
             <button

@@ -35,59 +35,39 @@ export const STAGE_GROUP_COLORS = {
 export const getStageColors = (group) =>
   STAGE_GROUP_COLORS[group] || STAGE_GROUP_COLORS.neutral;
 
-// ─── Default (BIG) CMF stages ────────────────────────────────────────────────
-// `aliases` exist so historical values ("Matching", "Shortlisted", "Admitted"…)
-// keep resolving to the right stage even after a stage has been renamed.
+// ─── Default CMF stages ──────────────────────────────────────────────────────
+// Aliases map legacy or alternative status strings to the standard CMF stages.
 export const DEFAULT_STAGES = [
   {
     id: "matched", name: "Matched", group: "entry", icon: "Target", terminal: false,
     tooltip: "Businesses matched to your programme criteria.",
-    aliases: ["matched", "matching", "match", "new"],
-  },
-  {
-    id: "applied", name: "Applied", group: "application", icon: "FileText", terminal: false,
-    tooltip: "Formal applications received and awaiting review.",
-    aliases: ["applied", "application", "application received", "application sent", "pending"],
+    aliases: ["matched", "matching", "match", "new", "pipeline"],
   },
   {
     id: "evaluation", name: "Evaluation", group: "review", icon: "Search", terminal: false,
-    tooltip: "Applications currently under evaluation.",
-    aliases: ["evaluation", "review", "under review", "screening", "in review"],
+    tooltip: "Businesses currently under assessment and evaluation.",
+    aliases: [
+      "evaluation", "review", "under review", "screening", "in review", "evaluating",
+      "applied", "application", "application received", "application sent", "pending",
+      "due diligence", "diligence", "dd", "shortlisted", "verification",
+      "decision", "approved", "decided", "award", "admission",
+      "offer", "term sheet", "termsheet"
+    ],
   },
   {
-    id: "dueDiligence", name: "Due Diligence", group: "diligence", icon: "Shield", terminal: false,
-    tooltip: "Detailed compliance and capability assessment.",
-    aliases: ["due diligence", "diligence", "dd", "shortlisted", "verification"],
+    id: "active", name: "Active Support", group: "engagement", icon: "CheckCircle", terminal: false,
+    tooltip: "Business onboarded and actively receiving support and guidance.",
+    aliases: ["active", "active support", "admitted", "onboarded", "engaged", "in programme", "contracted", "supported", "in progress"],
   },
   {
-    id: "decision", name: "Decision", group: "decision", icon: "AlertCircle", terminal: false,
-    tooltip: "Awaiting the final approve or decline decision.",
-    aliases: ["decision", "approved", "decided", "award", "admission"],
-  },
-  {
-    id: "offer", name: "Offer", group: "decision", icon: "FileCheck", terminal: false,
-    tooltip: "Offer or agreement extended to the business.",
-    aliases: ["offer", "term sheet", "termsheet", "offer extended", "contract issued"],
-  },
-  {
-    id: "active", name: "Active", group: "engagement", icon: "CheckCircle", terminal: false,
-    tooltip: "Business onboarded and actively participating in the programme.",
-    aliases: ["active", "admitted", "onboarded", "engaged", "in programme", "contracted"],
-  },
-  {
-    id: "completed", name: "Completed", group: "success", icon: "TrendingUp", terminal: true,
+    id: "completed", name: "Exited", group: "success", icon: "TrendingUp", terminal: true,
     tooltip: "Programme concluded — business graduated or exited.",
-    aliases: ["completed", "exited", "graduated", "closed", "delivered", "complete"],
+    aliases: ["completed", "exited", "graduated", "closed", "delivered", "complete", "exit"],
   },
   {
-    id: "declined", name: "Declined", group: "negative", icon: "XCircle", terminal: true,
-    tooltip: "Application declined — no further stages.",
-    aliases: ["declined", "rejected", "unsuccessful"],
-  },
-  {
-    id: "withdrawn", name: "Withdrawn", group: "negative", icon: "LogOut", terminal: true,
-    tooltip: "The business withdrew from the programme.",
-    aliases: ["withdrawn", "withdrew", "cancelled"],
+    id: "declined", name: "Decline", group: "negative", icon: "XCircle", terminal: true,
+    tooltip: "Application or engagement declined — no further stages.",
+    aliases: ["declined", "decline", "rejected", "unsuccessful", "withdrawn", "cancelled"],
   },
 ];
 
@@ -107,51 +87,31 @@ export const PROGRAMME_TEMPLATES = {
   esd: {
     label: "Enterprise & Supplier Development",
     stages: withOrder([
-      pick("matched"), pick("applied"), pick("evaluation"), pick("dueDiligence"),
-      pick("decision"), pick("offer"),
-      {
-        id: "onboarding", name: "Onboarding", group: "engagement", icon: "Users", terminal: false,
-        tooltip: "Contracting, baseline assessment and programme induction.",
-        aliases: ["onboarding", "induction", "intake"],
-      },
-      pick("active", { name: "In Programme" }),
+      pick("matched"),
+      pick("evaluation", { name: "Assessment" }),
+      pick("active", { name: "Active Support" }),
       pick("completed", { name: "Graduated" }),
-      pick("declined"), pick("withdrawn"),
+      pick("declined", { name: "Declined" }),
     ]),
   },
   procurement: {
     label: "Procurement",
     stages: withOrder([
-      pick("matched"), pick("applied"),
-      {
-        id: "prequalification", name: "Prequalification", group: "review", icon: "Layers", terminal: false,
-        tooltip: "Minimum requirements and documentation checked.",
-        aliases: ["prequalification", "prequal", "pre-qualification"],
-      },
+      pick("matched"),
       pick("evaluation", { name: "Bid Evaluation" }),
-      pick("dueDiligence", { name: "Vendor Vetting" }),
-      pick("decision", { name: "Award Decision" }),
-      pick("offer", { name: "Contract Issued" }),
-      pick("active", { name: "Contracted" }),
+      pick("active", { name: "Contracted Support" }),
       pick("completed", { name: "Delivered" }),
-      pick("declined"), pick("withdrawn"),
+      pick("declined", { name: "Declined" }),
     ]),
   },
   incubation: {
     label: "Incubation & Acceleration",
     stages: withOrder([
-      pick("matched"), pick("applied"),
-      {
-        id: "interview", name: "Interview", group: "review", icon: "Users", terminal: false,
-        tooltip: "Founder interview and pitch session.",
-        aliases: ["interview", "pitch", "panel"],
-      },
+      pick("matched"),
       pick("evaluation", { name: "Selection Panel" }),
-      pick("decision", { name: "Admission" }),
-      pick("offer", { name: "Offer Issued" }),
       pick("active", { name: "In Cohort" }),
       pick("completed", { name: "Graduated" }),
-      pick("declined"), pick("withdrawn"),
+      pick("declined", { name: "Declined" }),
     ]),
   },
 };
