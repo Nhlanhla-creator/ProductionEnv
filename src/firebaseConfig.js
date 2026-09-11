@@ -67,6 +67,7 @@ const createUserWithEmailAndPassword = (auth, email, password) => {
   return auth.createUserWithEmailAndPassword(email, password);
 };
 
+
 const signInWithEmailAndPassword = (auth, email, password) => {
   return auth.signInWithEmailAndPassword(email, password);
 };
