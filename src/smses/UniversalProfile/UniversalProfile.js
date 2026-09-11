@@ -86,7 +86,7 @@ const sectionValidations = {
   productsServices: () => true,
   howDidYouHear: () => true,
   documents: () => true,
-  declarationConsent: () => true,
+  declarationConsent: (data) => Boolean(data?.accuracy && data?.dataProcessing && data?.termsConditions),
 }
 
 const validateAllSections = (formData, completedSections) => {

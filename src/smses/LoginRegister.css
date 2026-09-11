@@ -350,6 +350,7 @@
 
 /* Main Page Styles */
 .auth-page {
+  width: 100%;
   min-height: 100vh;
   background-image: url("../assets/brown.jpg");
   background-size: cover;
@@ -359,6 +360,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
+  box-sizing: border-box;
   font-family: "Quicksand", sans-serif;
 }
 

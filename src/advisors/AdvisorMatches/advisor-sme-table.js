@@ -35,7 +35,6 @@ const BIG_SCORE_LABELS = {
   critical: { min: 0, label: "Critical", color: "#dc2626" }
 };
 
-// Match % maps to a plain label + fit bar rather than a raw number alone
 const MATCH_LABELS = {
   excellent: { min: 80, label: "Excellent Fit", color: "#22c55e" },
   strong: { min: 60, label: "Strong Fit", color: "#86efac" },
@@ -76,10 +75,6 @@ const formatLabel = (value) => {
 };
 
 // ─── Match scoring ────────────────────────────────────────────────────────────
-// Ported verbatim from the SME-side advisor table so both sides produce the
-// same eight criteria and the same verdicts. That table never reads a stored
-// breakdown — it recomputes on every render — which is why its popup always
-// has content and a fetch-based approach here always came back empty.
 const CATEGORY_LABEL = {
   stageFit: "Stage Fit",
   skillAlignment: "Support Type Alignment",
@@ -173,11 +168,6 @@ const calculateAdvisorMatch = (smeProfile, advisorProfile) => {
   return { score: Math.round((matchedCount / Object.keys(breakdown).length) * 100), breakdown };
 };
 
-// Stage lookups take the currently *active* stage list as a parameter (BIG
-// Default, or whichever PROGRAMME_TEMPLATES entry the advisor has switched to,
-// with any customization applied) — rather than a hard-coded list. Without
-// this, switching to e.g. the Project template (which introduces a "Proposal"
-// stage) would leave that stage invisible in this table.
 const getStageById = (id, stages = DEFAULT_STAGES) =>
   stages.find((s) => s.id === id) || stages[0];
 
@@ -187,7 +177,6 @@ const getStatusStyle = (status, stages = DEFAULT_STAGES) => {
   return { bg: colors.bgColor, text: colors.color, border: colors.borderColor, dot: colors.color, stage };
 };
 
-// Reads whatever the advisor configured in the pipeline's "Stage Actions" panel.
 const getStageFields = (stageName, stages = DEFAULT_STAGES) => {
   const id = mapStatusToStageId(stageName, stages);
   const overrides = loadPipelineSettings().customization?.stageActions || {};
@@ -214,15 +203,12 @@ const formatDate = (value) => {
   return d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "N/A";
 };
 
-// Days in stage derives from `updatedAt` (written by serverTimestamp on every
-// stage change), falling back to the application date for rows never moved.
 const calculateDaysInStage = (updatedAt, createdAt) => {
   const d = toDate(updatedAt) || toDate(createdAt);
   if (!d) return 0;
   return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
 };
 
-// ─── Attention indicator ──────────────────────────────────────────────────────
 const getAttentionReasons = (sme, stages = DEFAULT_STAGES) => {
   const reasons = [];
   if ((sme.daysInStage || 0) >= 14) reasons.push("Stalled for 14+ days");
@@ -235,13 +221,11 @@ const getAttentionReasons = (sme, stages = DEFAULT_STAGES) => {
   return reasons;
 };
 
-// Small helper component so all popups can be portaled straight to <body>.
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null;
   return createPortal(children, document.body);
 };
 
-// ─── Column header info tooltip ───────────────────────────────────────────────
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
   if (!text) return null;
@@ -271,17 +255,11 @@ const HeaderInfoTooltip = ({ text }) => {
 };
 
 // ─── Reorderable column definitions ───────────────────────────────────────────
-// These are the columns that live *between* the pinned "Business Name" (always
-// first) and "Actions" (always last) columns. Users can drag these to reorder
-// them; the array below is only the default/fallback order.
 const DEFAULT_COLUMN_ORDER = [
   "bigScore", "match", "fundingStage", "supportRequired", "status", "applied",
   "daysInStage", "lastActivity", "location", "sector", "revenueBand", "compensationModel"
 ];
 
-// `sortKey` is the field on the mapped row that the arrows sort by — it isn't
-// always the column key (match sorts on matchPercentage, Date Applied on the
-// raw Date rather than the formatted label).
 const COLUMN_DEFS = {
   bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", sortKey: "bigScore", tooltip: "A standardized score that validates your business's readiness and trustworthiness — across compliance, governance, and legitimacy." },
   match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", sortKey: "matchPercentage", tooltip: "Match Score measures fit between the business's needs and your advisory expertise." },
@@ -297,15 +275,12 @@ const COLUMN_DEFS = {
   compensationModel: { label: "Compensation", align: "left", minWidth: "110px", filterType: "compensationModel", sortKey: "compensationModel", tooltip: "How this business expects to compensate an advisor." }
 };
 
-// Maps a column key to the field on the mapped row object — these don't always
-// match (e.g. "sme" shows `name`, "match" shows `matchPercentage`).
 const EXPORT_FIELD_MAP = {
   sme: "name", bigScore: "bigScore", match: "matchPercentage",
   fundingStage: "fundingStage", supportRequired: "supportRequired",
   status: "statusLabel", applied: "applicationDateLabel", daysInStage: "daysInStage",
   lastActivity: "lastActivityLabel", location: "location", sector: "sector",
   revenueBand: "revenueBand", compensationModel: "compensationModel"
-  // Note: "action" is intentionally omitted — it's a UI-only column.
 };
 
 const EXPORT_HEADERS = {
@@ -317,10 +292,6 @@ const EXPORT_HEADERS = {
 };
 
 // ─── Custom Views ─────────────────────────────────────────────────────────────
-// A "view" bundles every layout preference — column visibility, column order,
-// sort, and density — into one named, describable object, with exactly one view
-// active at a time. Editing the table always edits the active view; there's no
-// separate hidden "current layout" that can silently drift out of sync.
 const DEFAULT_COLUMN_VISIBILITY = {
   sme: true, bigScore: true, match: true, fundingStage: true,
   supportRequired: true, status: true, applied: true, action: true,
@@ -333,8 +304,6 @@ const DEFAULT_DENSITY = "comfortable";
 const BUILTIN_VIEW_ID = "__default__";
 const VIEWS_STORAGE_KEY = "advisor-sme-table-views-v2";
 
-// Keeps a stored column order valid against the columns this build actually
-// knows about: drops keys that no longer exist, appends newly-introduced ones.
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
   const known = new Set(DEFAULT_COLUMN_ORDER);
@@ -423,11 +392,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [updatedStages, setUpdatedStages] = useState({});
-  // Rows with an in-flight save/unsave write, so the bookmark can't be
-  // double-fired.
   const [savingRows, setSavingRows] = useState({});
-  // "Saved" toolbar toggle, same behaviour as the SME-side advisor table:
-  // narrows the table to bookmarked rows and is how you get them back.
   const [showSavedOnly, setShowSavedOnly] = useState(false);
 
   // ─── Views ────────────────────────────────────────────────────────────────
@@ -447,8 +412,6 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const [editingViewMeta, setEditingViewMeta] = useState(null);
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
-  // Every filter that used to be a free-text box is now a list of selected
-  // values, so the header popovers can offer what's actually in the table.
   const [localFilters, setLocalFilters] = useState({
     name: [], fundingStage: [], bigScoreRange: [0, 100], matchRange: [0, 100], status: [],
     sector: [], daysInStageRange: [null, null], appliedRange: [null, null],
@@ -458,28 +421,20 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
 
   const [hoveredRowKey, setHoveredRowKey] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  // Fixed page size — the rows-per-page dropdown was removed from the footer.
   const [pageSize] = useState(25);
 
-  // Column drag-to-reorder state
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [dragHintRect, setDragHintRect] = useState(null);
 
-  // Popups
   const [activePopup, setActivePopup] = useState(null);
   const [selectedSMEForPopup, setSelectedSMEForPopup] = useState(null);
   const [showDetails, setShowDetails] = useState(null);
-  // Match breakdown shown in the "Why this match?" popup. Held separately
-  // from the row because it often has to be fetched — see loadMatchBreakdown.
   const [matchBreakdownData, setMatchBreakdownData] = useState(null);
   const [matchLoading, setMatchLoading] = useState(false);
   const [matchComputedScore, setMatchComputedScore] = useState(null);
-  // The advisor's own profile is the same for every row, so it's fetched once
-  // and reused rather than re-read each time a popup opens.
   const advisorProfileRef = useRef(null);
 
-  // Stage update form
   const [stageUpdateData, setStageUpdateData] = useState({
     nextStage: "", message: "", meetingTime: "", meetingLocation: "", meetingPurpose: "", termSheetFile: null
   });
@@ -490,23 +445,16 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange, onSME
   const [tempDates, setTempDates] = useState([]);
   const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" });
   const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
-const [bigScoreLoading, setBigScoreLoading] = useState(false);
+  const [bigScoreLoading, setBigScoreLoading] = useState(false);
   const [bigScoreData, setBigScoreData] = useState({
     compliance: { score: 0 }, legitimacy: { score: 0 },
     fundability: { score: 0 }, governanceLeadership: { score: 0 }, operational: { score: 0 }
   });
-  // bigEvaluations is per business and doesn't change while the table is open,
-  // so a reopened popup reuses the fetch instead of re-reading Firestore.
   const bigScoreCacheRef = useRef({});
-// bigEvaluations keyed by the business's user id. Feeds both the donut in
-  // the table and the breakdown popup, so the two can never disagree.
   const [bigScoresByUser, setBigScoresByUser] = useState({});
   const [bigScoresLoading, setBigScoresLoading] = useState(false);
 
   // ─── Engagement-aware pipeline stages ─────────────────────────────────────
-  // Pipeline settings live in the shared localStorage key
-  // AdvisorDealFlowPipeline.jsx writes to, so the table's stage list always
-  // matches whatever engagement type is actually selected.
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
 
   useEffect(() => {
@@ -526,8 +474,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
 
-  // Auto-save: any edit to columns/order/sort/density writes straight back into
-  // the active view (and persists immediately).
   useEffect(() => {
     setViewsState((prev) => {
       const current = prev.views[prev.activeViewId];
@@ -537,7 +483,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
       persistViewsState(next);
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnVisibility, columnOrder, sortConfig, density, columnWidths]);
 
   const switchToView = (viewId) => {
@@ -638,9 +583,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
         const snapshot = await getDocs(
           query(collection(db, "AdvisorApplications"), where("advisorId", "==", user.uid))
         );
-        // BIG Score components are kept *per row* here. Previously a single
-        // shared state object was overwritten inside the map, so every row's
-        // breakdown popup showed the last-fetched application's scores.
         const rows = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
           return {
@@ -658,11 +600,10 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
           };
         });
         setRawApps(rows);
-        onMatchesCountChange?.(rows.length);
+        // REMOVED: onMatchesCountChange?.(rows.length); - now handled by useEffect below
       } catch (error) {
         console.error("Failed to fetch advisor applications:", error);
         setRawApps([]);
-        onMatchesCountChange?.(0);
         setNotification({ type: "error", message: "Failed to load applications" });
       } finally {
         setLoading(false);
@@ -670,13 +611,9 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     };
 
     fetchAdvisorApplications();
-  }, [onMatchesCountChange]);
+  }, []); // Removed onMatchesCountChange from dependencies
 
-
-  // Pulls the live BIG Score for every business in the table. The score copied
-  // onto the application document is a snapshot from apply time and drifts as
-  // the business improves its profile, so the row donut, the sort, and the
-  // "BIG Score below threshold" attention flag all read this instead.
+  // Pulls the live BIG Score for every business in the table.
   useEffect(() => {
     if (rawApps.length === 0) return;
 
@@ -717,7 +654,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     return () => { cancelled = true; };
   }, [rawApps]);
 
-
   // ─── Row mapping ──────────────────────────────────────────────────────────
   const smes = useMemo(() => {
     let mapped = rawApps.map((a) => {
@@ -728,9 +664,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
         id: a.id,
         docId: a.docId,
         smeId: a.smeId,
-        // The business's own auth/profile user id, used when opening their
-        // dashboard. Falls back to smeId, which is what the platform uses as
-        // the universalProfiles document id.
         userId: a.userId || a.smeUserId || a.smeId || a.id,
         name: a.smeName || "Unnamed Business",
         location: formatLabel(a.smeLocation) || "N/A",
@@ -739,13 +672,10 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
         supportRequired: formatLabel(a.smeSupport) || "N/A",
         revenueBand: a.revenue || "N/A",
         compensationModel: formatLabel(a.advisorCompensationModel) || "N/A",
-       // Live evaluation wins; the application's copied score is the fallback
-        // while the fetch is in flight or when no evaluation exists.
         bigScore: liveBig?.bigScore ?? a.bigScore ?? 0,
         bigScoreLive: liveBig || null,
         bigScoreBreakdown: a.bigScoreBreakdown,
         matchPercentage: a.matchPercentage || 0,
-       
         matchBreakdown: a.matchBreakdown || a.breakdown || a.matchDetails || {},
         applicationDateLabel: formatDate(a.createdAt),
         applicationDateRaw: toDate(a.createdAt),
@@ -756,20 +686,45 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
         statusLabel: getStatusStyle(currentStatus, activeStages).stage.name,
         nextStage: getNextStage(currentStatus, activeStages),
         availableDates: a.availableDates || [],
-        // Bookmark flag, stored on the application document itself so it
-        // follows the advisor across devices rather than living in this
-        // browser's localStorage.
         saved: !!a.saved,
         raw: a,
       };
     });
 
+    // Apply stageFilter here - this is the key fix
     if (stageFilter) {
       mapped = mapped.filter((s) => mapStatusToStageId(s.pipelineStage, activeStages) === stageFilter);
     }
 
     return mapped;
-  }, [rawApps, updatedStages, activeStages,bigScoresByUser,stageFilter]);
+  }, [rawApps, updatedStages, activeStages, bigScoresByUser, stageFilter]);
+
+  // ─── FIX: Count should reflect filtered rows ─────────────────────────────
+  // The count should be based on smes.length after all filtering is applied
+  const prevCountRef = useRef(0);
+
+  useEffect(() => {
+    // Count is simply smes.length - the stageFilter is already applied in the useMemo above
+    const currentCount = smes.length;
+    
+    // Only update if the count changed
+    if (prevCountRef.current !== currentCount) {
+      prevCountRef.current = currentCount;
+      onMatchesCountChange?.(currentCount);
+    }
+  }, [smes, onMatchesCountChange]);
+
+  // Also update when loading finishes
+  useEffect(() => {
+    if (!loading) {
+      // Force a count update when loading completes
+      const currentCount = smes.length;
+      if (prevCountRef.current !== currentCount) {
+        prevCountRef.current = currentCount;
+        onMatchesCountChange?.(currentCount);
+      }
+    }
+  }, [loading, smes, onMatchesCountChange]);
 
   useEffect(() => { onSMEsLoaded?.(smes); }, [smes, onSMEsLoaded]);
 
@@ -780,11 +735,8 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     const matchesAny = (selected, value) =>
       !selected?.length || selected.some((v) => (value || "").toString().toLowerCase().includes(v.toLowerCase()));
 
-    // Saved-only view. Kept out of activeFilterCount deliberately — it's a
-    // view toggle with its own visible chip, not a column filter.
     if (showSavedOnly) result = result.filter((s) => s.saved);
 
-    // External filters panel (owned by the parent).
     if (filters?.location) {
       result = result.filter((s) => (s.location || "").toLowerCase().includes(filters.location.toLowerCase()));
     }
@@ -798,7 +750,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
       result = result.filter((s) => filters.stages.some((st) => (s.fundingStage || "").toLowerCase().includes(st.toLowerCase())));
     }
 
-    // Per-column header filters.
     result = result.filter((s) => matchesAny(localFilters.name, s.name));
 
     if (localFilters.fundingStage?.length > 0) {
@@ -855,7 +806,7 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedSMEs.length / pageSize));
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  // ─── Filter options, taken from the rows themselves ───────────────────────
+  // ─── Filter options ───────────────────────────────────────────────────────
   const uniqueOf = (accessor) =>
     [...new Set(smes.map(accessor).filter((v) => v && v !== "N/A" && v !== "-"))].sort();
 
@@ -868,8 +819,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
   const revenueBandOptions = useMemo(() => uniqueOf((s) => s.revenueBand), [smes]);
   const compensationModelOptions = useMemo(() => uniqueOf((s) => s.compensationModel), [smes]);
 
-  // Counted off every mapped row, not the filtered list, so the chip still
-  // reads the true total while a filter is narrowing the table.
   const savedCount = useMemo(() => smes.filter((s) => s.saved).length, [smes]);
 
   const activeFilterCount = localFilters.name.length
@@ -895,11 +844,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
   };
 
   // ─── Save / bookmark ──────────────────────────────────────────────────────
-  // Writes `saved` onto the application document. The UI flips first and rolls
-  // back if the write fails, so the star never lags behind the click. Note this
-  // deliberately does NOT touch `updatedAt`: that field drives "Days in Stage"
-  // and "Last Activity", and bookmarking is not pipeline activity — stamping it
-  // here would silently reset every stalled-row indicator.
   const toggleSaved = async (sme) => {
     const key = sme.docId;
     if (!key || savingRows[key]) return;
@@ -931,13 +875,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     }
   };
 
-  // Sends the advisor to this business's own /dashboard, restricted to just the
-  // BIG Score tab (no "Improve My BIG Score" tools tab, no ability to switch),
-  // with a visible "Back" control to return. Same session-storage "investor
-  // view" pattern the catalyst table and the Growth Suite / Documents
-  // navigation already rely on (viewingSMEId / viewingSMEName /
-  // investorViewMode / viewOrigin), plus the viewOnlyBigScore flag that
-  // Dashboard.jsx checks to lock the view down to that one tab.
   const handleViewBigScorePage = (sme) => {
     sessionStorage.setItem("viewingSMEId", sme.userId || sme.smeId || sme.id);
     sessionStorage.setItem("viewingSMEName", sme.name);
@@ -1010,10 +947,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
   );
 
   // ─── Sort arrows ──────────────────────────────────────────────────────────
-  // The table already sorted, but only through the saved view — there was no
-  // way to change it from the header. Third press returns to the table's
-  // default (attention first, then BIG Score) rather than to no order at all,
-  // so rows never fall back to fetch order.
   const toggleSort = (key, event) => {
     event.stopPropagation();
     setSortConfig((prev) => {
@@ -1040,13 +973,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
   };
 
   // ─── Match breakdown ──────────────────────────────────────────────────────
-  // Computed here, not fetched. Nothing writes a breakdown to Firestore: the
-  // SME-side table runs calculateAdvisorMatch on every render and throws the
-  // result away, and handleConnect only persists the headline percentage. So
-  // this popup recomputes from the same two profiles the SME side uses —
-  // universalProfiles + advisoryApplications for the business's needs, and the
-  // signed-in advisor's own advisorProfiles document — and gets identical
-  // verdicts.
   const loadMatchBreakdown = async (sme) => {
     setMatchBreakdownData(null);
     setMatchComputedScore(null);
@@ -1055,7 +981,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
       const user = auth.currentUser;
       if (!user) { setMatchBreakdownData({}); return; }
 
-      // The business's own id, not the AdvisorApplications row key.
       const smeId = sme.smeId || sme.id;
 
       const [advisorSnap, smeSnap, needsSnap] = await Promise.all([
@@ -1088,16 +1013,13 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     }
   };
 
-  // The AdvisorApplications row carries a headline `bigScore` and a set of
-  // component fields copied at apply time; the components are frequently
-  // missing or out of date. bigEvaluations/{userId} is the live record the
-  // business's own dashboard renders, so the popup reads that instead.
- const loadBigScore = (sme) => {
+  const loadBigScore = (sme) => {
     const userId = sme.userId || sme.smeId || sme.id;
     const live = bigScoresByUser[userId];
     setBigScoreLoading(bigScoresLoading && !live);
     setBigScoreData(live || (bigScoresLoading ? {} : { _missing: true }));
   };
+
   // ─── Popups ───────────────────────────────────────────────────────────────
   const openPopup = (type, sme, rect, options = {}) => {
     let popupWidth, popupHeight;
@@ -1105,9 +1027,6 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
       case "bigScore": popupWidth = 380; popupHeight = 450; break;
       case "match": popupWidth = 380; popupHeight = 420; break;
       case "stage": popupWidth = 450; popupHeight = 520; break;
-      // Height tracks the current row count — the in-popup "BIG Score
-      // Breakdown" item was removed (the donut in the table already opens it),
-      // so the flip-upward calculation below stays accurate.
       case "quickActions": popupWidth = 230; popupHeight = 340; break;
       default: popupWidth = 300; popupHeight = 300;
     }
@@ -1123,7 +1042,7 @@ const [bigScoreLoading, setBigScoreLoading] = useState(false);
     setActivePopup({ type, smeKey: sme.id, position: { x, y }, rect });
 
     if (type === "match") loadMatchBreakdown(sme);
-if (type === "bigScore") loadBigScore(sme);
+    if (type === "bigScore") loadBigScore(sme);
     if (type === "stage") {
       const presetStage = options.presetStage || sme.nextStage || getNextStage(sme.currentStatus, activeStages);
       const presetId = mapStatusToStageId(presetStage, activeStages);
@@ -1152,8 +1071,6 @@ if (type === "bigScore") loadBigScore(sme);
     setMatchLoading(false);
   };
 
-  // Forward-only through the live stages, with terminal outcomes always
-  // reachable.
   const getStageProgressionError = (targetStageName, sme) => {
     const targetId = mapStatusToStageId(targetStageName, activeStages);
     const currentId = mapStatusToStageId(sme.currentStatus, activeStages);
@@ -1245,8 +1162,6 @@ if (type === "bigScore") loadBigScore(sme);
       }
       await updateDoc(docRef, updateData);
 
-      // Mirror onto the related collections. Failures here are logged rather
-      // than thrown, so a missing mirror doc can't roll back a valid update.
       try {
         await updateDoc(doc(db, "AdvisoryMatches", documentSmeId), {
           status: stageName,
@@ -1277,7 +1192,6 @@ if (type === "bigScore") loadBigScore(sme);
         }
       }
 
-      // In-app message to the business (inbox + sent copies).
       const subject = `Update: ${stageName} Stage for Your Application`;
       const isNegative = targetStage?.group === "negative";
       let content = isNegative
@@ -1322,7 +1236,6 @@ if (type === "bigScore") loadBigScore(sme);
         addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
       ]);
 
-      // Email notification (best effort — never blocks the stage update).
       try {
         const emailjsConfig = {
           serviceId: API_KEYS.SERVICE_ID_MESSAGES,
@@ -1387,9 +1300,6 @@ if (type === "bigScore") loadBigScore(sme);
   // ─── Export ───────────────────────────────────────────────────────────────
   const handleExport = () => {
     try {
-      // Respect the table's current visual order: pinned "Business Name"
-      // first, then the reorderable columns in whatever order they've been
-      // dragged into, skipping the UI-only "Action" column and hidden columns.
       const visibleCols = [
         "sme",
         ...columnOrder.filter((key) => key !== "sme" && key !== "action" && columnVisibility[key])
@@ -1460,10 +1370,6 @@ if (type === "bigScore") loadBigScore(sme);
   const ds = densityStyles[density] || densityStyles.comfortable;
 
   // ─── Column resizing ──────────────────────────────────────────────────────
-  // Drag the divider on a header's right edge to resize the column; double-click
-  // it to snap that column back to auto width. Widths are stored per view
-  // alongside visibility/order/sort/density, so they persist and travel with
-  // whichever view is active.
   const [resizingColumn, setResizingColumn] = useState(null);
 
   const widthStyle = (key, fallbackMin, fallbackMax) => {
@@ -1494,8 +1400,6 @@ if (type === "bigScore") loadBigScore(sme);
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-    // Held on <body> so the cursor doesn't flicker back as the pointer leaves
-    // the 6px handle mid-drag, and so text can't be selected while resizing.
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   };
@@ -1521,7 +1425,6 @@ if (type === "bigScore") loadBigScore(sme);
     return () => clearTimeout(t);
   }, [notification]);
 
-  // Every chip-list filter is driven by this one array.
   const FILTER_OPTION_SETS = [
     { type: "name", label: "Business name", options: nameOptions },
     { type: "location", label: "Location", options: locationOptions },
@@ -1550,8 +1453,6 @@ if (type === "bigScore") loadBigScore(sme);
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]" title="Determined by the pipeline's engagement type setting">
               <Briefcase size={12} /> {activeProgrammeLabel} pipeline
             </span>
-            {/* Always-visible active view name (+ description, if any) — no
-                hover required, so it's never ambiguous which view is live. */}
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
               <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
               Viewing: {activeView.name}
@@ -1559,8 +1460,6 @@ if (type === "bigScore") loadBigScore(sme);
                 <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
               )}
             </span>
-            {/* Saved matches. The bookmark on each row writes here; this is
-                where you get them back. */}
             {(showSavedOnly || savedCount > 0) && (
               <button
                 onClick={() => { setShowSavedOnly((v) => !v); setCurrentPage(1); }}
@@ -1583,8 +1482,6 @@ if (type === "bigScore") loadBigScore(sme);
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-
-            {/* ─── Customize Table (Views + Hide/Unhide + Density + Reset) ── */}
             <div className="relative">
               <button
                 onClick={(e) => {
@@ -1621,7 +1518,6 @@ if (type === "bigScore") loadBigScore(sme);
                       className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
                       style={{ left, width: panelWidth, top, bottom, maxHeight }}
                     >
-                      {/* ─── Views ─────────────────────────────────────── */}
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
                       <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
 
@@ -1711,7 +1607,6 @@ if (type === "bigScore") loadBigScore(sme);
 
                       <div className="border-t border-[#e6d7c3] my-4" />
 
-                      {/* ─── Hide/Unhide ─────────────────────────────── */}
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
                       <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
                         <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
@@ -1778,15 +1673,7 @@ if (type === "bigScore") loadBigScore(sme);
                 .adt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
                 .adt-th-draggable { cursor: grab; }
                 .adt-th-draggable:active { cursor: grabbing; }
-                /* Wrap header labels onto at most 2 lines instead of forcing
-                   the column wider than needed. This only lays out cleanly
-                   because each column also has a real min-width in
-                   COLUMN_DEFS — without that floor, the browser sizes
-                   wrapped-text columns to their smallest possible content. */
                 .adt-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
-                /* Column resizing: an explicit header width only holds if the
-                   cells below can shrink, so long values wrap rather than
-                   forcing the column wider than the width that was dragged. */
                 .bigt-fit th, .bigt-fit td { overflow: hidden; }
                 .bigt-fit td { word-break: break-word; }
               `}</style>
@@ -1803,7 +1690,6 @@ if (type === "bigScore") loadBigScore(sme);
                       <ColumnResizer colKey="__name__" />
                     </th>
 
-                    {/* ─── Reorderable columns ──────────────────────── */}
                     {columnOrder.filter((key) => columnVisibility[key]).map((key) => {
                       const col = COLUMN_DEFS[key];
                       if (!col) return null;
@@ -2007,10 +1893,6 @@ if (type === "bigScore") loadBigScore(sme);
                                   <span className="truncate">{isTerminal ? statusStyle.stage.name : nextStageLabel}</span>
                                 </button>
 
-                                {/* Save match — same bookmark, colours and
-                                    borderless treatment as the SME-side
-                                    advisor table. Dims while the write is in
-                                    flight. */}
                                 <button
                                   onClick={(e) => { e.stopPropagation(); toggleSaved(sme); }}
                                   disabled={isSaving}
@@ -2042,9 +1924,7 @@ if (type === "bigScore") loadBigScore(sme);
               </table>
             </div>
 
-            {/* Pagination — the "Showing X–Y of N Businesses" readout and the
-                rows-per-page dropdown were both removed; page size is fixed at
-                25 and only the page buttons remain. */}
+            {/* Pagination */}
             <div className="flex items-center justify-end px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
               <div className="flex items-center gap-1">
                 <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] disabled:opacity-50">First</button>
@@ -2210,9 +2090,6 @@ if (type === "bigScore") loadBigScore(sme);
               </>
             )}
 
-            {/* Chip-list filters: the values actually present in the table,
-                with a search box only once the list is long enough to need
-                one. */}
             {FILTER_OPTION_SETS.map(({ type, label, options }) => {
               if (headerFilterOpen.type !== type) return null;
               const shown = options.filter((o) => o.toString().toLowerCase().includes(chipSearch.toLowerCase()));
@@ -2331,8 +2208,6 @@ if (type === "bigScore") loadBigScore(sme);
               )}
           
             </div>
-            {/* Same jump-off as the catalyst table: opens the business's own
-                dashboard, locked to the BIG Score tab. */}
             <div className="px-4 pb-4">
               <button
                 onClick={() => handleViewBigScorePage(selectedSMEForPopup)}
@@ -2389,8 +2264,6 @@ if (type === "bigScore") loadBigScore(sme);
                       <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden mb-2">
                         <div className="h-full rounded-full" style={{ width: matched ? "100%" : "0%", backgroundColor: color }} />
                       </div>
-                      {/* Mirror of the SME-side wording, flipped to this side's
-                          point of view: the business states a need, you offer. */}
                       <div className="text-[11px] text-[#7d5a50] leading-relaxed">
                         <div><span className="font-semibold">Business needs:</span> {smeValue}</div>
                         <div className="mt-0.5"><span className="font-semibold">You offer:</span> {advisorValue}</div>
@@ -2595,14 +2468,9 @@ if (type === "bigScore") loadBigScore(sme);
                 <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
               </div>
               <button onClick={() => { setShowDetails(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
-              {/* "BIG Score Breakdown" used to sit here. It's gone: the donut
-                  in the BIG Score column already opens that popup, and the row
-                  below covers the full page. */}
               <button onClick={() => { handleViewBigScorePage(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
               <button onClick={() => openPopup("match", sme, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
               <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
-              {/* Both entry points call the same toggleSaved, so the row
-                  bookmark and this item can't drift apart. */}
               <button
                 onClick={() => { closePopup(); toggleSaved(sme); }}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
@@ -2639,10 +2507,7 @@ if (type === "bigScore") loadBigScore(sme);
         );
       })()}
 
-      {/* ─── Business Profile pop-up ───────────────────────────────────────
-          Same component shape as the Advisor table's name pop-up, so both
-          tables open an identical-looking profile. smeId is the
-          universalProfiles document id; sme.id is only the row key. */}
+      {/* ─── Business Profile pop-up ─────────────────────────────────────── */}
       {showDetails && (
         <BusinessDetailsModal
           business={{
@@ -2658,7 +2523,5 @@ if (type === "bigScore") loadBigScore(sme);
   );
 }
 
-// Default export alongside the named export so this component resolves whether
-// the importing file uses `import AdvisorTable from "./AdvisorTable"` or
-// `import { AdvisorTable } from "./AdvisorTable"`.
+// Default export alongside the named export
 export default AdvisorTable;

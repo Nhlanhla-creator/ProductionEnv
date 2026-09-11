@@ -997,6 +997,16 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
         if (catalystId === effectiveUserId) return []
 
         const data = docSnap.data()
+
+        const sponsorType = data.sponsorType || data.entityOverview?.sponsorType || data.formData?.entityOverview?.sponsorType || ""
+        const onboardedBy = data.onboardedBy || data.sponsorName || data.entityOverview?.sponsorName || data.formData?.entityOverview?.sponsorName || ""
+        const isCmfOnboarded = sponsorType === "CMF" || !!data.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
+        
+        const smeCmfId = smeData.onboardedBy || smeData.entityOverview?.sponsorName || ""
+        if (isCmfOnboarded && onboardedBy !== smeCmfId) {
+          return []
+        }
+
         const formData = data.formData || {}
         const overview = formData.entityOverview || {}
         const matchPrefs = formData.generalMatchingPreference || {}

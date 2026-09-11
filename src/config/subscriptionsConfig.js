@@ -571,6 +571,211 @@ export const smseAddOns = [
   },
 ];
 
+// CMF Plans (Capital & Market Facilitator)
+export const cmfPlans = {
+  pilot: {
+    name: "Pilot",
+    price: { monthly: 2500, annually: 2500 },
+    currency: "ZAR",
+    tag: "Approved applicants",
+    billedText: {
+      monthly: "90-day pilot · monthly billing",
+      annually: "90-day pilot · monthly billing",
+    },
+    displayPrice: {
+      monthly: "R2,500",
+      annually: "R2,500",
+    },
+    periodText: "/ month",
+    description: "Test the CMF workflow with a small, mutually agreed SME cohort.",
+    actionLabel: "Apply for a CMF Pilot",
+    features: {
+      "Active Managed SMEs": "Up to 5 Active Managed SMEs",
+      "Team Users": "2 CMF team users",
+      "Client Dashboards": "1 private client dashboard",
+      "Support & Tools": "Core CMF tools and pilot support",
+    },
+    highlights: [
+      "Up to 5 Active Managed SMEs",
+      "2 CMF team users",
+      "1 private client dashboard",
+      "Core CMF tools and pilot support",
+    ],
+    comparison: {
+      workspaceView: true,
+      bigScore: "Included for active Premium SMEs",
+      vaultAccess: "Included with SME consent",
+      growthSuite: "Included for active Premium SMEs",
+      marketIntelligence: true,
+      opportunityPipeline: true,
+      inviteFunders: true,
+      reporting: "Basic",
+      support: "Pilot",
+    },
+  },
+  launch: {
+    name: "Launch",
+    price: { monthly: 4500, annually: 45000 },
+    currency: "ZAR",
+    tag: "Best for small cohorts",
+    isFeatured: true,
+    isPopular: true,
+    billedText: {
+      monthly: "Monthly billing",
+      annually: "R45,000 billed annually",
+    },
+    displayPrice: {
+      monthly: "R4,500",
+      annually: "R3,750",
+    },
+    periodText: "/ month",
+    description: "For independent facilitators managing a focused SME portfolio.",
+    actionLabel: "Choose Launch",
+    features: {
+      "Active Managed SMEs": "Up to 5 Active Managed SMEs",
+      "Team Users": "2 CMF team users",
+      "Client Dashboards": "1 private client dashboard",
+      "Support & Tools": "Standard portfolio reporting",
+    },
+    highlights: [
+      "Up to 5 Active Managed SMEs",
+      "2 CMF team users",
+      "1 private client dashboard",
+      "Standard portfolio reporting",
+    ],
+    comparison: {
+      workspaceView: true,
+      bigScore: "Included for active Premium SMEs",
+      vaultAccess: "Included with SME consent",
+      growthSuite: "Included for active Premium SMEs",
+      marketIntelligence: true,
+      opportunityPipeline: true,
+      inviteFunders: true,
+      reporting: "Standard",
+      support: "Email",
+    },
+  },
+  growth: {
+    name: "Growth",
+    price: { monthly: 8500, annually: 85000 },
+    currency: "ZAR",
+    tag: "Growing practice",
+    billedText: {
+      monthly: "Monthly billing",
+      annually: "R85,000 billed annually",
+    },
+    displayPrice: {
+      monthly: "R8,500",
+      annually: "R7,083",
+    },
+    periodText: "/ month",
+    description: "For established teams managing several clients and SME cohorts.",
+    actionLabel: "Choose Growth",
+    features: {
+      "Active Managed SMEs": "Up to 15 Active Managed SMEs",
+      "Team Users": "5 CMF team users",
+      "Client Dashboards": "3 private client dashboards",
+      "Support & Tools": "Enhanced reporting and priority support",
+    },
+    highlights: [
+      "Up to 15 Active Managed SMEs",
+      "5 CMF team users",
+      "3 private client dashboards",
+      "Enhanced reporting and priority support",
+    ],
+    comparison: {
+      workspaceView: true,
+      bigScore: "Included for active Premium SMEs",
+      vaultAccess: "Included with SME consent",
+      growthSuite: "Included for active Premium SMEs",
+      marketIntelligence: true,
+      opportunityPipeline: true,
+      inviteFunders: true,
+      reporting: "Enhanced",
+      support: "Priority",
+    },
+  },
+  partner: {
+    name: "Partner",
+    price: { monthly: 15000, annually: 150000 },
+    currency: "ZAR",
+    tag: "Multi-client practice",
+    isPartner: true,
+    billedText: {
+      monthly: "Monthly billing",
+      annually: "R150,000 billed annually",
+    },
+    displayPrice: {
+      monthly: "R15,000",
+      annually: "R12,500",
+    },
+    periodText: "/ month",
+    description: "For larger facilitator teams running multiple mandates and portfolios.",
+    actionLabel: "Choose Partner",
+    features: {
+      "Active Managed SMEs": "Up to 30 Active Managed SMEs",
+      "Team Users": "10 CMF team users",
+      "Client Dashboards": "10 private client dashboards",
+      "Support & Tools": "Advanced reporting and dedicated support",
+    },
+    highlights: [
+      "Up to 30 Active Managed SMEs",
+      "10 CMF team users",
+      "10 private client dashboards",
+      "Advanced reporting and dedicated support",
+    ],
+    comparison: {
+      workspaceView: true,
+      bigScore: "Included for active Premium SMEs",
+      vaultAccess: "Included with SME consent",
+      growthSuite: "Included for active Premium SMEs",
+      marketIntelligence: true,
+      opportunityPipeline: true,
+      inviteFunders: true,
+      reporting: "Advanced",
+      support: "Dedicated",
+    },
+  },
+};
+
+export const cmfFeatureOrder = [
+  "Active Managed SMEs",
+  "Team Users",
+  "Client Dashboards",
+  "Support & Tools",
+];
+
+export const cmfPlanOrder = { pilot: 0, launch: 1, growth: 2, partner: 3 };
+
+export const cmfComparisonRows = [
+  { key: "workspaceView", label: "CMF workspace and portfolio view", isBoolean: true },
+  { key: "bigScore", label: "BIG Score and score history", fullSpanValue: "Included for active Premium SMEs" },
+  { key: "vaultAccess", label: "Compliance Vault access", fullSpanValue: "Included with SME consent" },
+  { key: "growthSuite", label: "Growth Suite collaboration", fullSpanValue: "Included for active Premium SMEs" },
+  { key: "marketIntelligence", label: "Market intelligence and matching", isBoolean: true },
+  { key: "opportunityPipeline", label: "Opportunity register and pipeline", isBoolean: true },
+  { key: "inviteFunders", label: "Invite own funders and collaborators", isBoolean: true },
+  { key: "reporting", label: "Portfolio reporting" },
+  { key: "support", label: "Support" },
+];
+
+export const cmfAddOns = [
+  {
+    id: "api-access",
+    name: "API Access to BIG Score engine",
+    price: "From R1,500/month",
+    amount: 1500,
+    description: "Integrate BIG Score directly into your systems with our comprehensive API access.",
+  },
+  {
+    id: "branded-portfolio",
+    name: "Branded SME Portfolio Pages",
+    price: "R2,000 setup + R500/month",
+    amount: 2500,
+    description: "Custom branded pages for your SME portfolio with your company's branding and styling.",
+  },
+];
+
 // Card Backgrounds and Default User Data
 const cardBackgrounds = {
   investor: {
@@ -588,6 +793,12 @@ const cardBackgrounds = {
     core: "linear-gradient(135deg, #F5F2F0 0%, #EFEBE9 100%)",
     scaled: "linear-gradient(135deg, #8D6E63 0%, #5D4037 100%)",
     enterprise: "linear-gradient(135deg, #A67C52 0%, #8D6E63 100%)",
+  },
+  cmf: {
+    pilot: "linear-gradient(135deg, #FFFDFB 0%, #F4ECE6 100%)",
+    launch: "linear-gradient(135deg, #65473A 0%, #4A352F 100%)",
+    growth: "linear-gradient(135deg, #FFFDFB 0%, #F4ECE6 100%)",
+    partner: "linear-gradient(135deg, #A97D55 0%, #8D6E63 100%)",
   },
 };
 
@@ -613,6 +824,13 @@ const defaultUserData = {
     role: "catalyst",
     fullName: "",
   },
+  cmf: {
+    name: "",
+    company: "",
+    email: "",
+    role: "cmf",
+    fullName: "",
+  },
 };
 
 // Helper functions
@@ -621,6 +839,7 @@ export const getPlanData = (userType) => {
     case "investor": return investorPlans;
     case "smse": return smsePlans;
     case "catalyst": return catalystPlans;
+    case "cmf": return cmfPlans;
     default: return investorPlans;
   }
 };
@@ -630,6 +849,7 @@ export const getFeatureOrder = (userType) => {
     case "investor": return investorFeatureOrder;
     case "smse": return smseFeatureOrder;
     case "catalyst": return catalystFeatureOrder;
+    case "cmf": return cmfFeatureOrder;
     default: return investorFeatureOrder;
   }
 };
@@ -639,6 +859,7 @@ export const getPlanOrder = (userType) => {
     case "investor": return investorPlanOrder;
     case "smse": return smsePlanOrder;
     case "catalyst": return catalystPlanOrder;
+    case "cmf": return cmfPlanOrder;
     default: return investorPlanOrder;
   }
 };
@@ -661,6 +882,7 @@ export const getPopularPlanKey = (userType) => {
     case "investor": return "engage";
     case "smse": return "standard";
     case "catalyst": return "scaled";
+    case "cmf": return "launch";
     default: return "engage";
   }
 };
@@ -674,6 +896,7 @@ export const getAddOns = (userType) => {
     case "investor": return investorAddOns;
     case "smse": return smseAddOns;
     case "catalyst": return catalystAddOns;
+    case "cmf": return cmfAddOns;
     default: return investorAddOns;
   }
 };

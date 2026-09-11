@@ -332,7 +332,7 @@ function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "
   )
 }
 
-export default function CatalystEntityOverview({ data = {}, updateData }) {
+export default function CatalystEntityOverview({ data = {}, updateData, isLocked = false }) {
   const [dynamicSponsors, setDynamicSponsors] = useState(null)
 
   useEffect(() => {
@@ -447,6 +447,8 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               onChange={handleChange}
               className={styles.formInput}
               required
+              disabled={isLocked}
+              readOnly={isLocked}
             />
           </FormField>
 
@@ -457,6 +459,8 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               value={data.tradingName || ""}
               onChange={handleChange}
               className={styles.formInput}
+              disabled={isLocked}
+              readOnly={isLocked}
             />
           </FormField>
 
@@ -468,6 +472,8 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               onChange={handleChange}
               className={styles.formInput}
               required
+              disabled={isLocked}
+              readOnly={isLocked}
             />
           </FormField>
 
@@ -478,6 +484,7 @@ export default function CatalystEntityOverview({ data = {}, updateData }) {
               onChange={handleChange}
               className={styles.formSelect}
               required
+              disabled={isLocked}
             >
               <option value="">Select Legal Entity Type</option>
               {legalEntityTypes.map((type) => (

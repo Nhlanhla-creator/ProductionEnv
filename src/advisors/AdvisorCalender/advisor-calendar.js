@@ -6,27 +6,26 @@ import Modal from "./Modal.js"
 import CreateEventForm from "./CreateEventForm.js"
 import MeetingDetails from "./MeetingDetails.js"
 import "./Meetings.css"
-import { db } from "../../firebaseConfig.js" // Adjust the import path as necessary
+import { db } from "../../firebaseConfig.js"
 import { getAuth } from "firebase/auth"
-import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  doc, 
+  getDoc, 
+  addDoc, 
+  updateDoc 
+} from "firebase/firestore"
 
 const CalendarPopup = ({ events, availabilities, onClose, onDateSelect }) => {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(null)
 
   const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
   ]
 
   const getDaysInMonth = (date) => {
@@ -157,7 +156,6 @@ const CalendarPopup = ({ events, availabilities, onClose, onDateSelect }) => {
             </div>
           ))}
 
-          {/* Show availability safely */}
           {(() => {
             const availability = getAvailabilityForDate(selectedDate.getDate())
             if (availability?.timeSlots?.length > 0) {
@@ -182,7 +180,7 @@ const CalendarPopup = ({ events, availabilities, onClose, onDateSelect }) => {
   )
 }
 
-const Meetings = ({ stats, setStats }) => {
+const Meetings = ({ stats, setStats, events: externalEvents, setEvents: setExternalEvents }) => {
   const [activeTab, setActiveTab] = useState("upcoming")
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
@@ -193,7 +191,6 @@ const Meetings = ({ stats, setStats }) => {
   })
   const [meetings, setMeetings] = useState([])
   const [loading, setLoading] = useState(true)
-
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   useEffect(() => {
@@ -211,17 +208,18 @@ const Meetings = ({ stats, setStats }) => {
       attributeFilter: ["class"],
     })
 
-    // Check initial state
     setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-
     return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
-    const unsubscribeAuth = getAuth().onAuthStateChanged(async (user) => {
-      if (!user) return
+    const auth = getAuth()
+    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        setLoading(false)
+        return
+      }
 
-      // Query both collections
       const q1 = query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid))
       const q2 = query(collection(db, "supplierCalendarEvents"), where("supplierId", "==", user.uid))
 
@@ -231,7 +229,7 @@ const Meetings = ({ stats, setStats }) => {
 
         for (const docSnap of allDocs) {
           const data = docSnap.data()
-          const counterpartId = data.customerId || data.funderId
+          const counterpartId = data.customerId || data.funderId || data.recipient
           const groupKey = `${counterpartId}-${data.title}`
 
           if (!groupedMeetings[groupKey]) {
@@ -239,7 +237,6 @@ const Meetings = ({ stats, setStats }) => {
             let requesterType = ""
             let requesterId = ""
 
-            // Determine requester type and ID
             if (data.funderId) {
               requesterType = "Investor"
               requesterId = data.funderId
@@ -249,53 +246,42 @@ const Meetings = ({ stats, setStats }) => {
             } else if (data.smeId) {
               requesterType = "SME"
               requesterId = data.smeId
+            } else if (data.recipient) {
+              requesterType = "Recipient"
+              requesterId = data.recipient
             } else if (docSnap.ref.parent.id === "supplierCalendarEvents") {
               requesterType = "Supplier"
             } else {
               requesterType = "SME"
             }
 
-            // Fetch requester details if we have an ID
             if (requesterId) {
               try {
                 const requesterDoc = await getDoc(doc(db, "MyuniversalProfiles", requesterId))
                 if (requesterDoc.exists()) {
                   const formData = requesterDoc.data()?.formData
-
-                  // For SME, get the registeredName from entityOverview
                   if (requesterType === "SME") {
-                    requesterName =
-                      formData?.entityOverview?.registeredName || formData?.contactDetails?.primaryContactName || "SME"
-                  }
-                  // For Investor, get from fundManageOverview
-                  else if (requesterType === "Investor") {
-                    requesterName =
-                      formData?.fundManageOverview?.registeredName ||
-                      formData?.contactDetails?.primaryContactName ||
-                      "Investor"
-                  }
-                  // For Customer, get from appropriate section
-                  else if (requesterType === "Customer") {
-                    requesterName =
-                      formData?.entityOverview?.registeredName ||
-                      formData?.contactDetails?.primaryContactName ||
-                      "Customer"
-                  }
-                  // Fallback for any other type
-                  else {
-                    requesterName =
-                      formData?.entityOverview?.registeredName ||
-                      formData?.contactDetails?.primaryContactName ||
-                      requesterType
+                    requesterName = formData?.entityOverview?.registeredName || 
+                                   formData?.contactDetails?.primaryContactName || "SME"
+                  } else if (requesterType === "Investor") {
+                    requesterName = formData?.fundManageOverview?.registeredName ||
+                                   formData?.contactDetails?.primaryContactName || "Investor"
+                  } else if (requesterType === "Recipient") {
+                    requesterName = formData?.contactDetails?.primaryContactName ||
+                                   formData?.entityOverview?.registeredName ||
+                                   formData?.fundManageOverview?.registeredName ||
+                                   "Recipient"
+                  } else {
+                    requesterName = formData?.entityOverview?.registeredName ||
+                                   formData?.contactDetails?.primaryContactName || requesterType
                   }
                 }
               } catch (err) {
                 console.warn("Error fetching requester details:", err)
-                requesterName = requesterType // Fallback to type
+                requesterName = requesterType
               }
             }
 
-            // If we still don't have a name, use the type
             if (!requesterName) {
               requesterName = requesterType
             }
@@ -303,8 +289,8 @@ const Meetings = ({ stats, setStats }) => {
             groupedMeetings[groupKey] = {
               id: groupKey,
               docId: docSnap.id,
-              title: data.title || "Meeting", // Keep title for backward compatibility
-              meetingPurpose: data.title || "Meeting", // Add meetingPurpose
+              title: data.title || "Meeting",
+              meetingPurpose: data.title || "Meeting",
               requesterName,
               requesterType,
               requesterId,
@@ -312,28 +298,47 @@ const Meetings = ({ stats, setStats }) => {
               smeAppId: data.smeAppId,
               investorAppId: data.investorAppId,
               location: data.location || "Virtual",
+              description: data.description || "",
               slots: [],
               isExpanded: false,
               status: data.status || "pending",
               collection: docSnap.ref.parent.id,
-              date: null, // Will be set based on slots
+              date: null,
               timeSlots: [],
               timeZone: "Africa/Johannesburg",
+              recipient: data.recipient || "",
+              recipientName: data.recipientName || "",
             }
           }
-          // Process available dates/slots
-          ;(data.availableDates || []).forEach((slot) => {
-            const parsedDate = slot.date?.toDate ? slot.date.toDate() : new Date(slot.date)
-            groupedMeetings[groupKey].slots.push({
-              id: `${docSnap.id}-${slot.date}`,
-              ...slot,
-              date: parsedDate,
-              location: data.location,
-              status: slot.status || "available",
-            })
-          })
+          
+          if (data.dateTime) {
+            const parsedDate = new Date(data.dateTime)
+            if (!isNaN(parsedDate)) {
+              groupedMeetings[groupKey].slots.push({
+                id: `${docSnap.id}-${data.dateTime}`,
+                date: parsedDate,
+                location: data.location,
+                status: data.status || "available",
+                startTime: data.time || "TBD",
+                endTime: data.endTime || "TBD",
+                timeZone: data.timeZone || "Africa/Johannesburg",
+              })
+            }
+          }
 
-          // Set the earliest date as the main date for compatibility with existing code
+          if (data.availableDates) {
+            (data.availableDates || []).forEach((slot) => {
+              const parsedDate = slot.date?.toDate ? slot.date.toDate() : new Date(slot.date)
+              groupedMeetings[groupKey].slots.push({
+                id: `${docSnap.id}-${slot.date}`,
+                ...slot,
+                date: parsedDate,
+                location: data.location,
+                status: slot.status || "available",
+              })
+            })
+          }
+
           if (groupedMeetings[groupKey].slots.length > 0) {
             const sortedSlots = groupedMeetings[groupKey].slots.sort((a, b) => a.date - b.date)
             groupedMeetings[groupKey].date = sortedSlots[0].date
@@ -349,7 +354,11 @@ const Meetings = ({ stats, setStats }) => {
           }
         }
 
-        setMeetings(Object.values(groupedMeetings))
+        const meetingsList = Object.values(groupedMeetings)
+        setMeetings(meetingsList)
+        if (setExternalEvents) {
+          setExternalEvents(meetingsList)
+        }
         setLoading(false)
       }
 
@@ -379,39 +388,148 @@ const Meetings = ({ stats, setStats }) => {
       }
     })
 
-    return () => unsubscribeAuth()
-  }, [])
+    return () => {
+      if (unsubscribeAuth) {
+        unsubscribeAuth()
+      }
+    }
+  }, [setExternalEvents])
 
-  const handleCreateEvent = (newEvent) => {
-    setMeetings([...meetings, newEvent])
-    setStats((prev) => ({ ...prev, created: prev.created + 1 }))
-    setShowCreateModal(false)
+  // ============================================
+  // UPDATED: handleCreateEvent with availableDates
+  // ============================================
+  const handleCreateEvent = async (newEvent) => {
+    try {
+      const auth = getAuth()
+      const user = auth.currentUser
+      
+      if (!user) {
+        alert('Please log in to create an event')
+        return
+      }
+
+      const eventData = {
+        title: newEvent.title,
+        recipient: newEvent.recipient,
+        recipientName: newEvent.recipientName || '',
+        dateTime: newEvent.dateTime,
+        date: newEvent.date,
+        time: newEvent.time,
+        duration: newEvent.duration,
+        location: newEvent.location || '',
+        description: newEvent.description || '',
+        status: 'pending',
+        smeId: user.uid,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        timeZone: 'Africa/Johannesburg',
+        availableDates: [{
+          date: newEvent.dateTime,
+          timeSlots: [{ start: newEvent.time, end: newEvent.time }],
+          timeZone: 'Africa/Johannesburg',
+          status: 'pending'
+        }]
+      }
+
+      const docRef = await addDoc(collection(db, 'smeCalendarEvents'), eventData)
+      
+      const savedEvent = { 
+        ...newEvent, 
+        id: docRef.id, 
+        docId: docRef.id,
+        status: 'pending',
+        requesterName: 'You',
+        requesterType: 'Advisor',
+        slots: [{
+          id: `${docRef.id}-${newEvent.dateTime}`,
+          date: new Date(newEvent.dateTime),
+          location: newEvent.location || 'Virtual',
+          status: 'pending',
+          startTime: newEvent.time,
+          endTime: newEvent.time,
+          timeZone: 'Africa/Johannesburg',
+        }],
+        date: new Date(newEvent.dateTime),
+        timeSlots: [{
+          start: newEvent.time,
+          end: newEvent.time,
+          timeZone: 'Africa/Johannesburg',
+        }]
+      }
+
+      setMeetings(prevMeetings => [...prevMeetings, savedEvent])
+      if (setExternalEvents) {
+        setExternalEvents(prev => [...prev, savedEvent])
+      }
+      setStats(prev => ({ 
+        ...prev, 
+        created: (prev.created || 0) + 1 
+      }))
+      
+      setShowCreateModal(false)
+      
+    } catch (error) {
+      console.error('Error saving event:', error)
+      alert('Failed to create event. Please try again.')
+    }
   }
 
-  const handleMeetingAction = (id, action) => {
-    const updatedMeetings = meetings.map((meeting) => {
-      if (meeting.id === id) {
-        return { ...meeting, status: action }
+  // ============================================
+  // UPDATED: handleMeetingAction with better error handling
+  // ============================================
+  const handleMeetingAction = async (id, action) => {
+    try {
+      const auth = getAuth()
+      const user = auth.currentUser
+      
+      if (!user) {
+        console.error('No user logged in')
+        return
       }
-      return meeting
-    })
 
-    setMeetings(updatedMeetings)
+      const meeting = meetings.find(m => m.id === id)
+      if (!meeting) {
+        console.error('Meeting not found')
+        return
+      }
 
-    if (action === "completed") {
-      setStats((prev) => ({ ...prev, completed: prev.completed + 1 }))
-    } else if (action === "cancelled") {
-      setStats((prev) => ({ ...prev, cancelled: prev.cancelled + 1 }))
-    } else if (action === "rescheduled") {
-      setStats((prev) => ({ ...prev, rescheduled: prev.rescheduled + 1 }))
+      const meetingRef = doc(db, 'smeCalendarEvents', meeting.docId || id)
+      await updateDoc(meetingRef, {
+        status: action,
+        updatedAt: new Date().toISOString()
+      })
+
+      const updatedMeetings = meetings.map((meeting) => {
+        if (meeting.id === id) {
+          return { ...meeting, status: action }
+        }
+        return meeting
+      })
+
+      setMeetings(updatedMeetings)
+      if (setExternalEvents) {
+        setExternalEvents(updatedMeetings)
+      }
+
+      if (action === "completed") {
+        setStats((prev) => ({ ...prev, completed: (prev.completed || 0) + 1 }))
+      } else if (action === "cancelled") {
+        setStats((prev) => ({ ...prev, cancelled: (prev.cancelled || 0) + 1 }))
+      } else if (action === "rescheduled") {
+        setStats((prev) => ({ ...prev, rescheduled: (prev.rescheduled || 0) + 1 }))
+      }
+
+      setSelectedMeeting(null)
+      
+    } catch (error) {
+      console.error('Error updating meeting:', error)
+      alert('Failed to update meeting status. Please try again.')
     }
-
-    setSelectedMeeting(null)
   }
 
   const filteredMeetings = meetings.filter((meeting) => {
     const now = new Date()
-    const validSlots = meeting.slots.filter((slot) => slot.date instanceof Date)
+    const validSlots = meeting.slots?.filter((slot) => slot.date instanceof Date) || []
 
     if (validSlots.length === 0) return false
 
@@ -426,22 +544,6 @@ const Meetings = ({ stats, setStats }) => {
     }
     return true
   })
-
-  const formatMeetingTime = (meeting) => {
-    if (!meeting.slots || meeting.slots.length === 0) return "No date scheduled"
-
-    // Show the first available slot's date and time
-    const firstSlot = meeting.slots.sort((a, b) => a.date - b.date)[0]
-    return (
-      firstSlot.date.toLocaleString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }) + ` (${firstSlot.timeZone || meeting.timeZone})`
-    )
-  }
 
   if (loading) {
     return <div className="loading-container">Loading meetings...</div>
@@ -461,6 +563,9 @@ const Meetings = ({ stats, setStats }) => {
           <button className="calendar-btn" onClick={() => setShowCalendar(true)}>
             <CalendarIcon size={16} />
             Calendar
+          </button>
+          <button className="create-btn" onClick={() => setShowCreateModal(true)}>
+            Create Event
           </button>
         </div>
       </div>
@@ -533,7 +638,7 @@ const Meetings = ({ stats, setStats }) => {
                     {meeting.requesterName}
                   </td>
                   <td className="event-date" data-label="Date" style={{ padding: "12px 8px" }}>
-                    {meeting.slots.length > 0 ? (
+                    {meeting.slots && meeting.slots.length > 0 ? (
                       <span style={{ color: "#8D6E63", fontWeight: 600, fontSize: "0.8rem" }}>
                         {meeting.slots.length} available slots
                       </span>
@@ -542,7 +647,7 @@ const Meetings = ({ stats, setStats }) => {
                     )}
                   </td>
                   <td className="event-location" data-label="Location" style={{ padding: "12px 8px" }}>
-                    {meeting.location}
+                    {meeting.location || "Virtual"}
                   </td>
                   <td data-label="Status" style={{ padding: "12px 8px" }}>
                     <span className={`status-badge ${meeting.status}`} style={{ fontSize: "0.75rem" }}>

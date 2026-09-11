@@ -500,7 +500,8 @@ export default function EntityOverview({ data = {}, updateData }) {
                       docData?.name ||
                       docSnap.id
             }
-            list.push({ value: docSnap.id, label: label })
+            const isVerified = type === "CMF" && (docData?.verificationStatus === "Verified" || docData?.isVerified === true || docData?.status === "Verified")
+            list.push({ value: docSnap.id, label: label, isVerified: !!isVerified })
           })
           loadedSponsors[type] = list
         }
@@ -1109,9 +1110,16 @@ export default function EntityOverview({ data = {}, updateData }) {
                 >
                   <option value="">{`Select ${sponsorType}...`}</option>
                   {sponsorOptions.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
+                    <option key={s.value} value={s.value}>
+                      {s.isVerified ? "✓ [Verified] " : ""}{s.label}
+                    </option>
                   ))}
                 </select>
+                {sponsorType === "CMF" && sponsorOptions.find(s => s.value === formData.sponsorName)?.isVerified && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontSize: '12px', fontWeight: 'bold', color: '#16a34a' }}>
+                    <Check size={12} style={{ strokeWidth: 3 }} /> Verified CMF Profile
+                  </div>
+                )}
               </FormField>
             )}
 
@@ -1169,6 +1177,29 @@ export default function EntityOverview({ data = {}, updateData }) {
           {selectedSponsorLabel} is recorded as your sponsor, but will not be able to view your profile.
         </div>
       )}
+
+      {/* Business Description */}
+      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+        <FormField label="Brief Business Description">
+          <textarea
+            name="businessDescription"
+            value={formData.businessDescription || ""}
+            onChange={handleChange}
+            rows={4}
+            style={{ ...inputStyle, resize: 'vertical' }}
+            maxLength={1500}
+            placeholder="Brief overview of your business..."
+          />
+          <div style={{
+            fontSize: '12px',
+            color: '#666',
+            marginTop: '4px',
+            textAlign: 'right'
+          }}>
+            {(formData.businessDescription || "").length}/1500 characters
+          </div>
+        </FormField>
+      </div>
 
       {/* ============================================================ */}
       {/* SECTION 3: Brand Assets - Includes Brands, Franchises & Agencies */}

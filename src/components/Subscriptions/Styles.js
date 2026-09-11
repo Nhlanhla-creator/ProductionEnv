@@ -603,6 +603,12 @@ const getBillingHistoryStyles = (userType = "investor") => {
       showGrowthTools: true,
       successFeeColumnNames: { transactionId: "Transaction ID", counterparty: "Investor", dealValue: "Deal Value", successFeeAmount: "Success Fee Amount" },
     },
+    cmf: {
+      tabLabels: ["Subscription History", "Facilitation Fee History"],
+      tabKeys: ["billing-history", "billing-info"],
+      showGrowthTools: false,
+      successFeeColumnNames: { transactionId: "Transaction ID", counterparty: "Counterparty (SME / Funder)", dealValue: "Deal Value", successFeeAmount: "Facilitation Fee Amount" },
+    },
   };
 
   const userConfig = userTypeConfigs[userType] || userTypeConfigs.investor;

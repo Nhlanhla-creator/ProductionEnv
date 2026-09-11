@@ -393,10 +393,23 @@ const ReusableBillingHistory = ({
         const db = getFirestore();
 
         // Get user profile data
-        const userDocRef = doc(db, "MyuniversalProfiles", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          setFirebaseData(userDocSnap.data().formData || {});
+        if (userType === "cmf") {
+          const cmfRef = doc(db, "cmfProfiles", `${user.uid}_cmf`);
+          const cmfSnap = await getDoc(cmfRef);
+          if (cmfSnap.exists()) {
+            setFirebaseData(cmfSnap.data().formData || cmfSnap.data() || {});
+          } else {
+            const altSnap = await getDoc(doc(db, "cmfProfiles", user.uid));
+            if (altSnap.exists()) {
+              setFirebaseData(altSnap.data().formData || altSnap.data() || {});
+            }
+          }
+        } else {
+          const userDocRef = doc(db, "MyuniversalProfiles", user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            setFirebaseData(userDocSnap.data().formData || {});
+          }
         }
 
         // Get subscription history

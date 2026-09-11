@@ -26,41 +26,11 @@ import {
   Pin,
   PinOff,
 } from "lucide-react"
-import { collection, doc, getDoc, query, where, onSnapshot } from "firebase/firestore"
+import { collection, doc, getDoc, query, where, onSnapshot, updateDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { db, auth } from "../../firebaseConfig"
 import AdvisorTable, { SME_ADVISOR_COLLECTION, normalizeAdvisorStatus } from "./advisor-table"
 
-/* ════════════════════════════════════════════════════════════════════════════
-   This file no longer imports ./matchTableKit.
-
-   The kit rendered the header row, and its own <style> block set
-   `position: relative` on every <th>, which overrode the sticky positioning:
-   the header scrolled away while the pinned body cells stayed frozen. Its
-   default widths were also too narrow for labels that share their cell with a
-   grip, a sort control, a filter control and an info control (~74px of
-   chrome), so the browser broke them mid-word — "ENGAGEMENT MOD..",
-   "BUSINESS STA..".
-
-   This table now owns its head, toolbar, filters and row actions.
-
-   Every column resizes — including the pinned Advisor Name column and the
-   Action column, whose widths live under reserved keys in the same
-   columnWidths map — and every column carries a tooltip, shown from the ⓘ in
-   its header, so what a column means never has to be guessed from a two-word
-   label.
-
-   AdvisorTable (the matches tab) still uses the kit and shares a page with
-   this table, so every selector here is prefixed ad- (advisor deals) and the
-   sticky headers declare `position: sticky !important` to survive the kit's
-   global <th> rule regardless of mount order.
-   ════════════════════════════════════════════════════════════════════════ */
-
-/* The old shell read and wrote `smseAdvisoryMatches`, which nothing in the
-   codebase ever created — the table wrote AdvisoryMatches, AdvisorApplications
-   and SmeAdvisorApplications. That is why both tab badges sat at zero and
-   Successful Deals was always empty. Both tabs now read the one SME-side
-   collection the table writes. */
 const ENGAGED_STATUSES = ["Accepted", "Engaged/Placed"]
 
 const useEffectiveUserId = () => {
@@ -99,15 +69,13 @@ const useEffectiveUserId = () => {
   return { effectiveUserId, resolved }
 }
 
-/* ─── Shared helpers (previously imported from the kit) ──────────────────── */
+/* ─── Shared helpers ──────────────────────────────────────────────────── */
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
 }
 
-/* ─── Column header info tooltip ──────────────────────────────────────────
-   Portaled to <body> because the header cell is sticky and would otherwise
-   clip the bubble. */
+/* ─── Column header info tooltip ────────────────────────────────────────── */
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null)
   if (!text) return null
@@ -196,32 +164,48 @@ export const toISODateOnly = (value) => {
 }
 
 /* ─── Stars ─────────────────────────────────────────────────────────────── */
-const StarRating = ({ rating, size = 13 }) => (
-  <div className="flex gap-0.5">
-    {[1, 2, 3, 4, 5].map((v) => (
-      <Star
-        key={v}
-        size={size}
-        style={{
-          color: v <= (rating || 0) ? "#a67c52" : "#e6d7c3",
-          fill: v <= (rating || 0) ? "#a67c52" : "none",
-        }}
-      />
-    ))}
-  </div>
-)
+const StarRating = ({ 
+  rating, 
+  size = 13, 
+  interactive = false, 
+  onRatingChange = null,
+  dealId = null
+}) => {
+  const [hoverRating, setHoverRating] = useState(0);
+  
+  const handleStarClick = (value) => {
+    if (interactive && onRatingChange && dealId) {
+      onRatingChange(dealId, value);
+    }
+  };
+  
+  const displayRating = hoverRating > 0 && interactive ? hoverRating : (rating || 0);
+  
+  return (
+    <div 
+      className={`flex gap-0.5 ${interactive ? 'cursor-pointer' : ''}`}
+      onMouseLeave={() => interactive && setHoverRating(0)}
+    >
+      {[1, 2, 3, 4, 5].map((v) => (
+        <Star
+          key={v}
+          size={size}
+          onClick={() => handleStarClick(v)}
+          onMouseEnter={() => interactive && setHoverRating(v)}
+          style={{
+            color: v <= displayRating ? "#a67c52" : "#e6d7c3",
+            fill: v <= displayRating ? "#a67c52" : "none",
+            transition: 'color 0.15s, fill 0.15s',
+            cursor: interactive ? 'pointer' : 'default',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    Successful deals — column configuration.
-
-   Advisor Name is the pinned first column and Action the last, so neither
-   appears here — but both resize like everything else, via the reserved width
-   keys further down. Every column carries a tooltip, shown from the ⓘ in its
-   header.
-
-   Date Contacted carries no filterType — the kit version rendered a filter
-   button for it that opened an empty popover, because no filter body was ever
-   written for that column.
    ════════════════════════════════════════════════════════════════════════ */
 const COLUMN_DEFS = {
   engagementModel: {
@@ -246,9 +230,8 @@ const COLUMN_DEFS = {
   },
   rating: {
     label: "Rating", align: "center", width: 158, filterType: "rating", visible: true, priority: 1, sortable: true,
-    tooltip: "The performance rating recorded against this engagement, out of five.",
+    tooltip: "The performance rating recorded against this engagement, out of five. Click to rate.",
   },
-
   matchPercentage: {
     label: "Match %", align: "center", width: 138, filterType: "matchPercentage", visible: false, priority: 4, sortable: true,
     tooltip: "How strongly you and the advisor matched at the point the connection was made.",
@@ -274,9 +257,6 @@ const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(
 const DEFAULT_PINNED = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, null]))
 const DEFAULT_DENSITY = "comfortable"
 
-/* Advisor Name and Action can't be hidden or reordered, so they aren't in
-   COLUMN_DEFS — but they resize like everything else, and their widths live
-   under these reserved keys inside the same columnWidths map. */
 const NAME_KEY = "__name__"
 const ACTION_KEY = "__action__"
 const FIXED_WIDTHS = { [NAME_KEY]: 226, [ACTION_KEY]: 184 }
@@ -306,8 +286,6 @@ const EMPTY_FILTERS = {
 
 /* ─── Saved views + filter persistence ──────────────────────────────────── */
 const BUILTIN_VIEW_ID = "__default__"
-// v3: the two fixed columns now store their widths in this map too, so a v2
-// view would leave them undefined.
 const VIEWS_STORAGE_KEY = "advisor-deals-views-v3"
 const FILTERS_STORAGE_KEY = "advisor-deals-filters-v1"
 
@@ -421,6 +399,12 @@ const statusStyle = (s) => STATUS_COLORS[s] || { color: "#F5F5F5", textColor: "#
 const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNotify }) => {
   const [selectedDeal, setSelectedDeal] = useState(null)
   const [hoveredRow, setHoveredRow] = useState(null)
+  const [localDeals, setLocalDeals] = useState(deals)
+
+  // Update local deals when props change
+  useEffect(() => {
+    setLocalDeals(deals)
+  }, [deals])
 
   // Filters + sort, restored from the last visit
   const initialFilterState = useMemo(() => loadFilterState(), [])
@@ -461,6 +445,30 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
   }, [])
 
   const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+
+  /* ─── Rating update function ────────────────────────────────────────── */
+  const handleRatingChange = useCallback(async (dealId, newRating) => {
+    try {
+      // Update local state immediately for UI responsiveness
+      setLocalDeals(prev => 
+        prev.map(d => 
+          d.id === dealId ? { ...d, performanceRating: newRating } : d
+        )
+      );
+      
+      // Update Firebase
+      await updateDoc(doc(db, SME_ADVISOR_COLLECTION, dealId), {
+        performanceRating: newRating
+      });
+      
+      onNotify?.("success", `Rating updated to ${newRating}/5`);
+    } catch (error) {
+      console.error("Failed to update rating:", error);
+      // Revert local state on error
+      setLocalDeals(deals);
+      onNotify?.("error", "Failed to update rating. Please try again.");
+    }
+  }, [deals, onNotify]);
 
   /* ─── View + filter persistence ─────────────────────────────────────── */
   useEffect(() => {
@@ -619,11 +627,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
     setDragOverColumn(null)
   }
 
-  /* ─── Widths + resize ───────────────────────────────────────────────────
-     widthOf is declared here, above startResize, because startResize calls it —
-     a const referenced before its initializer throws at render. It covers the
-     reorderable columns *and* the two fixed ones, so every column in the table
-     can be dragged wider. */
+  /* ─── Widths + resize ─────────────────────────────────────────────────── */
   const widthOf = useCallback(
     (key) => columnWidths[key] ?? COLUMN_DEFS[key]?.width ?? FIXED_WIDTHS[key] ?? 148,
     [columnWidths],
@@ -729,8 +733,8 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
 
   /* ─── Data ──────────────────────────────────────────────────────────── */
   const uniqueOf = useCallback(
-    (accessor) => [...new Set(deals.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
-    [deals],
+    (accessor) => [...new Set(localDeals.map(accessor).filter((v) => v && v !== "-" && v !== "Not specified"))].sort(),
+    [localDeals],
   )
   const engagementOptions = useMemo(() => uniqueOf((d) => d.engagementModel), [uniqueOf])
   const sectorOptions = useMemo(() => uniqueOf((d) => d.sectorExperience), [uniqueOf])
@@ -748,7 +752,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
     const includesText = (needle, value) =>
       !needle.trim() || (value || "").toString().toLowerCase().includes(needle.toLowerCase().trim())
 
-    const rows = deals.filter((d) => {
+    const rows = localDeals.filter((d) => {
       if (!includesText(f.name, d.advisorName)) return false
       if (!matchesAny(f.engagementModel, d.engagementModel)) return false
       if (!matchesAny(f.sectorExperience, d.sectorExperience)) return false
@@ -798,7 +802,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
     }
 
     return rows
-  }, [deals, localFilters, sortConfig])
+  }, [localDeals, localFilters, sortConfig])
 
   useEffect(() => {
     if (onCountChange) onCountChange(filteredDeals.length)
@@ -870,7 +874,6 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
 
   const stickyOffsets = useMemo(() => {
     const offsets = {}
-    // Left-pinned columns stack to the right of the frozen Advisor Name column.
     let leftAcc = nameWidth
     orderedColumns.forEach((key) => {
       if (pinned[key] === "left") {
@@ -878,7 +881,6 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
         leftAcc += widthOf(key)
       }
     })
-    // Action is not pinned, so right-pinned columns stick to the table edge.
     let rightAcc = 0
     ;[...orderedColumns].reverse().forEach((key) => {
       if (pinned[key] === "right") {
@@ -967,9 +969,15 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
         return (
           <td key={key} style={{ ...style, textAlign: "center" }}>
             <div className="flex flex-col items-center gap-1">
-              <StarRating rating={rating} size={13} />
+              <StarRating 
+                rating={rating} 
+                size={14} 
+                interactive={true}
+                dealId={d.id}
+                onRatingChange={handleRatingChange}
+              />
               <span className="text-[11px] font-semibold text-[#7d5a50]">
-                {rating > 0 ? `${rating}/5` : "Not rated"}
+                {rating > 0 ? `${rating}/5` : "Click to rate"}
               </span>
             </div>
           </td>
@@ -1296,22 +1304,10 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
       <div className="bg-white rounded-b-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
         <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
           <style>{`
-            /* No 'position: relative' here — that is what the shared kit had,
-               and it silently overrode the sticky positioning on every <th>,
-               so the header scrolled away while the pinned body cells stayed.
-               'position: sticky !important' below wins even when the kit's own
-               style block is on the page via the matches tab. Sticky is itself
-               a positioned ancestor, so the absolutely placed grip and resize
-               handle still anchor correctly.
-               Prefix is ad- (advisor deals) to avoid colliding with the other
-               match tables' styles when they share a page. */
             .ad-th { position: sticky !important; color: #faf7f2 !important; vertical-align: top !important; }
             .ad-th-draggable { cursor: grab; }
             .ad-th-draggable:active { cursor: grabbing; }
             .ad-th-row { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
-            /* overflow-wrap: normal stops the browser splitting inside a word,
-               which is what turned "Engagement Model" into "ENGAGEMENT MOD.."
-               and "Status" into "STA TUS" in narrow columns. */
             .ad-th-label {
               flex: 1 1 auto; min-width: 0;
               display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -1320,8 +1316,6 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
               line-height: 1.2; letter-spacing: 0.02em;
             }
             .ad-th-tools { display: flex; align-items: center; flex-shrink: 0; }
-            /* The drag grip leaves the flex flow and only appears on hover,
-               buying every header ~14px more room for its label. */
             .ad-th-grip { position: absolute; left: 3px; top: 10px; opacity: 0; transition: opacity .15s; }
             .ad-th:hover .ad-th-grip { opacity: .45; }
             .ad-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
@@ -1330,9 +1324,6 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
 
           <table
             style={{
-              /* separate (not collapse) — collapsed borders are dropped by
-                 sticky cells, which made the pinned column lose its edge and
-                 mispaint over its neighbour while scrolling. */
               borderCollapse: "separate",
               borderSpacing: 0,
               background: "white",
@@ -1345,7 +1336,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
           >
             <thead>
               <tr>
-                {/* Advisor Name — pinned first column, resizable like the rest */}
+                {/* Advisor Name — pinned first column */}
                 <th
                   className="ad-th font-semibold uppercase tracking-wider text-xs top-0 left-0 z-30 text-left"
                   style={{
@@ -1420,8 +1411,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                   )
                 })}
 
-                {/* Action scrolls horizontally with the table — only top-0, so
-                    it still holds position on vertical scroll. */}
+                {/* Action column */}
                 <th
                   className="ad-th text-center font-semibold uppercase tracking-wider text-xs top-0 z-20"
                   style={{
@@ -1452,14 +1442,14 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                         <Trophy size={26} className="text-[#7d5a50] opacity-50" />
                       </div>
                       <p className="text-sm font-semibold text-[#4a352f] m-0">
-                        {deals.length === 0 ? "No successful deals yet" : "No deals match these filters"}
+                        {localDeals.length === 0 ? "No successful deals yet" : "No deals match these filters"}
                       </p>
                       <p className="text-xs text-[#a89482] m-0">
-                        {deals.length === 0
+                        {localDeals.length === 0
                           ? "When an advisor accepts and the engagement begins, it appears here."
                           : "Clear a filter to widen the results."}
                       </p>
-                      {activeFilterCount > 0 && deals.length > 0 && (
+                      {activeFilterCount > 0 && localDeals.length > 0 && (
                         <button onClick={clearAllFilters} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#7d5a50] text-white">
                           Clear all filters
                         </button>
@@ -1478,7 +1468,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                       onMouseLeave={() => setHoveredRow(null)}
                       style={{ backgroundColor: rowBg, transition: "background-color .15s" }}
                     >
-                      {/* Advisor Name — pinned left, sector underneath. */}
+                      {/* Advisor Name — pinned left */}
                       <td
                         className="sticky left-0 z-10"
                         style={{
@@ -1507,7 +1497,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
 
                       {orderedColumns.map((key) => renderCell(key, d, rowBg))}
 
-                      {/* Action — scrolls with the table */}
+                      {/* Action column with View Deal button */}
                       <td
                         style={{
                           ...tableCellStyle,
@@ -1788,7 +1778,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
         </PopupPortal>
       )}
 
-      {/* Deal detail */}
+      {/* Deal detail modal */}
       {selectedDeal &&
         createPortal(
           <div
@@ -1845,7 +1835,7 @@ const SuccessfulAdvisorDealsTable = ({ deals = [], loading, onCountChange, onNot
                   <div className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold mb-2">Rating</div>
                   {Number(selectedDeal.performanceRating) > 0 ? (
                     <div className="flex items-center gap-3">
-                      <StarRating rating={Number(selectedDeal.performanceRating)} size={18} />
+                      <StarRating rating={Number(selectedDeal.performanceRating)} size={18} interactive={false} />
                       <span className="text-base font-bold text-[#7d5a50]">{selectedDeal.performanceRating}/5</span>
                     </div>
                   ) : (
@@ -1931,7 +1921,7 @@ const AdvisorTabbedTables = ({ filters, stageFilter, onConnectionRequested }) =>
 
   return (
     <div style={{ maxWidth: "100%", margin: "0 auto", padding: 0 }}>
-      {/* Inline banner, same as the other match tables */}
+      {/* Inline banner */}
       {notification && (
         <div
           className={`px-4 py-3 rounded-xl text-sm font-medium border mb-3 ${
@@ -1980,7 +1970,6 @@ const AdvisorTabbedTables = ({ filters, stageFilter, onConnectionRequested }) =>
       </div>
 
       <div className="bg-white rounded-b-2xl p-6 border border-[#e6d7c3] border-t-0 shadow-lg" style={{ minHeight: "600px" }}>
-        {/* Both stay mounted so the tab badges stay accurate */}
         <div style={{ display: activeTab === "my-matches" ? "block" : "none" }}>
           <AdvisorTable
             filters={filters}

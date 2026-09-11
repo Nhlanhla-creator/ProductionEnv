@@ -33,25 +33,24 @@ const MULTI_UPLOAD_DOCUMENTS = [
 ]
 
 const CMF_DOCUMENT_CONFIGS = [
-  // Required - SINGLE documents
-  { id: "cipcRegistration", label: "CIPC Registration Document", category: "Required", description: "Certificate of Incorporation or equivalent", multiple: false },
-  { id: "taxCompliancePin", label: "Tax Compliance PIN", category: "Required", description: "SARS Tax Compliance Certificate or PIN", multiple: false },
-  { id: "companyProfile", label: "Company Profile (PDF)", category: "Required", description: "Formal company overview document", multiple: false },
-  { id: "logo", label: "Company Logo", category: "Required", description: "High-resolution logo file (PNG, SVG or vector)", multiple: false },
-  { id: "proofOfAddress", label: "Proof of Address", category: "Required", description: "Not older than 3 months", multiple: false },
-  // Compliance - MIX of single and multi
-  { id: "vatCertificate", label: "VAT Certificate", category: "Compliance", description: "If VAT registered", multiple: false },
-  { id: "bbbeeCertificate", label: "B-BBEE Certificate", category: "Compliance", description: "Current B-BBEE verification certificate", multiple: false },
-  { id: "fspLicence", label: "FSP Licence / Partner Details", category: "Compliance", description: "Financial Services Provider licence or agreement", multiple: false },
-  { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", category: "Compliance", description: "Current PI insurance schedule", multiple: false },
-  { id: "isoCertifications", label: "ISO Certifications", category: "Compliance", description: "Relevant ISO certification documents", multiple: true },
-  { id: "industryAccreditations", label: "Industry Accreditations", category: "Compliance", description: "SAVCA / GIIN or professional accreditations", multiple: true },
-  // Marketing & Capability - MIX of single and multi
-  { id: "capabilityStatement", label: "Capability Statement", category: "Marketing", description: "Track record and capability overview", multiple: false },
-  { id: "caseStudies", label: "Case Studies", category: "Marketing", description: "Examples of past transactions or engagements", multiple: false },
-  { id: "clientReferences", label: "Client References", category: "Marketing", description: "Reference letters or client contacts", multiple: true },
-  { id: "brochure", label: "Brochure", category: "Marketing", description: "Marketing or product brochure", multiple: false },
-  { id: "serviceCatalogue", label: "Service Catalogue", category: "Marketing", description: "Listing of de-risking & facilitation services", multiple: false },
+  // Compliance Documents
+  { id: "cipcRegistration", label: "CIPC Registration Document", category: "Compliance", required: true, description: "Certificate of Incorporation or equivalent", multiple: false },
+  { id: "taxCompliancePin", label: "Tax Compliance PIN", category: "Compliance", required: true, description: "SARS Tax Compliance Certificate or PIN", multiple: false },
+  { id: "proofOfAddress", label: "Proof of Address", category: "Compliance", required: true, description: "Not older than 3 months", multiple: false },
+  { id: "vatCertificate", label: "VAT Certificate", category: "Compliance", required: false, description: "If VAT registered", multiple: false },
+  { id: "bbbeeCertificate", label: "B-BBEE Certificate", category: "Compliance", required: false, description: "Current B-BBEE verification certificate", multiple: false },
+  { id: "fspLicence", label: "FSP Licence / Partner Details", category: "Compliance", required: false, description: "Financial Services Provider licence or agreement", multiple: false },
+  { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", category: "Compliance", required: false, description: "Current PI insurance schedule", multiple: false },
+  { id: "isoCertifications", label: "ISO Certifications", category: "Compliance", required: false, description: "Relevant ISO certification documents", multiple: true },
+  { id: "industryAccreditations", label: "Industry Accreditations", category: "Compliance", required: false, description: "SAVCA / GIIN or professional accreditations", multiple: true },
+  // Marketing & Capability Documents
+  { id: "companyProfile", label: "Company Profile (PDF)", category: "Marketing", required: true, description: "Formal company overview document", multiple: false },
+  { id: "logo", label: "Company Logo", category: "Marketing", required: true, description: "High-resolution logo file (PNG, SVG or vector)", multiple: false },
+  { id: "capabilityStatement", label: "Capability Statement", category: "Marketing", required: false, description: "Track record and capability overview", multiple: false },
+  { id: "caseStudies", label: "Case Studies", category: "Marketing", required: false, description: "Examples of past transactions or engagements", multiple: false },
+  { id: "clientReferences", label: "Client References", category: "Marketing", required: false, description: "Reference letters or client contacts", multiple: true },
+  { id: "brochure", label: "Brochure", category: "Marketing", required: false, description: "Marketing or product brochure", multiple: false },
+  { id: "serviceCatalogue", label: "Service Catalogue", category: "Marketing", required: false, description: "Listing of de-risking & facilitation services", multiple: false },
 ]
 
 export default function CMFDocuments({onClose}) {
@@ -724,7 +723,7 @@ export default function CMFDocuments({onClose}) {
     return (
       <>
         <tr style={{ backgroundColor: "#f5f2f0", borderBottom: "1px solid #e8d8cf" }}>
-          <td colSpan="7" style={{ padding: "12px 20px", textAlign: "center", color: "#8d6e63", fontSize: "12px", fontWeight: "500" }}>
+          <td colSpan="8" style={{ padding: "12px 20px", textAlign: "center", color: "#8d6e63", fontSize: "12px", fontWeight: "500" }}>
             Documents
           </td>
         </tr>
@@ -739,7 +738,7 @@ export default function CMFDocuments({onClose}) {
                 borderBottom: "1px solid #e8d8cf"
               }}
             >
-              <td style={{
+              <td colSpan="3" style={{
                 padding: "12px 20px 12px 40px",
                 fontSize: "13px",
                 color: "#6d4c41",
@@ -945,7 +944,7 @@ export default function CMFDocuments({onClose}) {
           )
         })}
         <tr style={{ backgroundColor: "#f5f2f0", borderBottom: "1px solid #e8d8cf" }}>
-          <td colSpan="7" style={{ padding: "12px 20px", textAlign: "center" }}>
+          <td colSpan="8" style={{ padding: "12px 20px", textAlign: "center" }}>
             <button
               onClick={() => handleAddNewDocument(docId)}
               style={{
@@ -1230,10 +1229,9 @@ export default function CMFDocuments({onClose}) {
               boxSizing: "border-box",
             }}
           >
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
               {[
                 { id: "all", label: "All Documents" },
-                { id: "required", label: "Required" },
                 { id: "compliance", label: "Compliance" },
                 { id: "marketing", label: "Marketing" },
               ].map((cat) => (
@@ -1341,6 +1339,9 @@ export default function CMFDocuments({onClose}) {
                       </th>
                       <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                         Category
+                      </th>
+                      <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                        Required
                       </th>
                       <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                         Uploaded File
@@ -1497,20 +1498,39 @@ export default function CMFDocuments({onClose}) {
                                   fontWeight: "700",
                                   textTransform: "uppercase",
                                   backgroundColor:
-                                    cfg.category === "Required"
-                                      ? "#fee2e2"
-                                      : cfg.category === "Compliance"
+                                    cfg.category === "Compliance"
                                       ? "#fef3c7"
-                                      : "#d1fae5",
+                                      : "#dbeafe",
                                   color:
-                                    cfg.category === "Required"
-                                      ? "#dc2626"
-                                      : cfg.category === "Compliance"
-                                      ? "#d97706"
-                                      : "#059669",
+                                    cfg.category === "Compliance"
+                                      ? "#92400e"
+                                      : "#1e40af",
+                                  border:
+                                    cfg.category === "Compliance"
+                                      ? "1px solid #fde68a"
+                                      : "1px solid #bfdbfe",
                                 }}
                               >
                                 {cfg.category}
+                              </span>
+                            </td>
+
+                            {/* Required Badge */}
+                            <td style={{ padding: "16px 20px", textAlign: "center", verticalAlign: "middle" }}>
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "4px 10px",
+                                  borderRadius: "12px",
+                                  fontSize: "11px",
+                                  fontWeight: cfg.required ? "700" : "600",
+                                  textTransform: "uppercase",
+                                  backgroundColor: cfg.required ? "#fee2e2" : "#f3f4f6",
+                                  color: cfg.required ? "#dc2626" : "#6b7280",
+                                  border: cfg.required ? "1px solid #fca5a5" : "1px solid #e5e7eb",
+                                }}
+                              >
+                                {cfg.required ? "Mandatory" : "Optional"}
                               </span>
                             </td>
 
