@@ -2,7 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  getDoc,
+  doc,
+} from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import MessagesComponent from "../../components/Messages/MessagesComponent";
 
@@ -82,20 +89,63 @@ const Messages = () => {
           }
         });
 
-        // 5. CATALYSTS from Catalyst Table (where I am the SME)
-        const catalystsQuery = query(
-          collection(db, "smeCatalystApplications"),
-          where("smeId", "==", user.uid)
-        );
-        const catalystsSnapshot = await getDocs(catalystsQuery);
-        catalystsSnapshot.forEach(doc => {
-          const data = doc.data();
-          const id = data.catalystId;
-          const name = data.acceleratorName;
-          if (id && name && !recipientsMap.has(id)) {
-            recipientsMap.set(id, { id, name });
-          }
-        });
+      // 5. CATALYSTS from Catalyst Table (where I am the SME)
+const catalystsQuery = query(
+  collection(db, "catalystApplications"),
+  where("smeId", "==", user.uid)
+);
+
+const catalystsSnapshot = await getDocs(catalystsQuery);
+
+for (const applicationDoc of catalystsSnapshot.docs) {
+  const data = applicationDoc.data();
+
+  const id = data.catalystId;
+
+  if (!id) {
+    console.warn(
+      "Catalyst application missing catalystId:",
+      applicationDoc.id,
+      data
+    );
+    continue;
+  }
+
+  let name =
+    data.catalystName ||
+    data.acceleratorName ||
+    null;
+
+  // Fetch Catalyst's actual profile name if not stored on application
+  if (!name) {
+    try {
+      const catalystProfile = await getDoc(
+        doc(db, "catalystProfiles", id)
+      );
+
+      if (catalystProfile.exists()) {
+        const profile = catalystProfile.data();
+
+        name =
+          profile.catalystName ||
+          profile.name ||
+          "Catalyst";
+      }
+    } catch (error) {
+      console.error(
+        "Error fetching Catalyst profile:",
+        error
+      );
+    }
+  }
+
+  if (!recipientsMap.has(id)) {
+    recipientsMap.set(id, {
+      id,
+      name: name || "Catalyst",
+    });
+  }
+}
 
         // 6. INTERNS from Intern Table (where I am the sponsor)
         const internsQuery = query(
@@ -139,12 +189,12 @@ const Messages = () => {
     fetchAllRecipients();
   }, []);
 
-  const config = {
-    showSidebarOffset: false,
-    supportAttachments: false,
-    showSearchIcon: true,
-    hasRecipientDropdown: true,
-  };
+ const config = {
+  showSidebarOffset: false,
+  supportAttachments: true,   // was false
+  showSearchIcon: true,
+  hasRecipientDropdown: true,
+};
 
   if (loading) {
     return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>Loading...</div>;

@@ -83,6 +83,48 @@ function Header({
     return () => observer.disconnect()
   }, [])
 
+  // Look up a display name for `uid` — messageSenderCollection first
+  // (entity/fund-style profiles), then the `users` collection (name
+  // fields, then email), so a sender who never filled in
+  // MyuniversalProfiles still gets a real name instead of "Unnamed Funder".
+  const resolveSenderName = async (uid) => {
+    if (!uid) return "Unknown Funder"
+
+    try {
+      const senderDoc = await getDoc(doc(db, messageSenderCollection, uid))
+      if (senderDoc.exists()) {
+        const data = senderDoc.data()
+        const fundName = data?.formData?.productsServices?.funds?.[0]?.name
+        const contactName = data?.formData?.contactDetails?.primaryContactName
+        const registeredName = data?.formData?.entityOverview?.registeredName
+        const companyName = data?.company
+
+        const resolved = fundName || contactName || registeredName || companyName
+        if (resolved) return resolved
+      }
+    } catch (err) {
+      console.error("Error fetching sender name:", err)
+    }
+
+    // Fall back to the users collection before giving up
+    try {
+      const userDoc = await getDoc(doc(db, "users", uid))
+      if (userDoc.exists()) {
+        const data = userDoc.data()
+        const resolved =
+          data?.displayName ||
+          data?.name ||
+          data?.username ||
+          data?.email
+        if (resolved) return resolved
+      }
+    } catch (err) {
+      console.error("Error fetching sender from users collection:", err)
+    }
+
+    return "Unnamed Funder"
+  }
+
   // Profile & roles managed by hooks (useHeaderProfile, useRoles)
 
   // Fetch unread messages and recent messages if enabled
@@ -90,7 +132,10 @@ function Header({
   useEffect(() => {
     if (!effectiveUser) return
 
-    // Query for unread messages
+    // Query for unread messages. `deleted` doesn't get cleared when a
+    // message is trashed, so read==false alone still matches trashed
+    // messages — filter those out client-side to match the count shown
+    // in the Messages page inbox tab (!read && !deleted).
     const unreadQuery = query(
       collection(db, "messages"),
       where("to", "==", effectiveUser.uid),
@@ -98,7 +143,10 @@ function Header({
     )
 
     const unsubscribeUnread = onSnapshot(unreadQuery, (snapshot) => {
-      setUnreadMessages(snapshot.size)
+      const activeCount = snapshot.docs.filter((docSnap) => !docSnap.data().deleted).length
+      setUnreadMessages(activeCount)
+    }, (err) => {
+      console.error("Error listening for unread messages:", err)
     })
 
     // If advanced messages is enabled, fetch recent messages with sender info
@@ -108,34 +156,17 @@ function Header({
         where("to", "==", effectiveUser.uid),
         where("read", "==", false),
         orderBy("date", "desc"),
-        limit(5)
+        limit(10) // fetch a few extra since trashed ones get filtered out below
       )
 
       const unsubscribeRecent = onSnapshot(recentQuery, async (snapshot) => {
+        const activeDocs = snapshot.docs.filter((docSnap) => !docSnap.data().deleted).slice(0, 5)
+
         const messagesWithSenders = await Promise.all(
-          snapshot.docs.map(async (docSnap) => {
+          activeDocs.map(async (docSnap) => {
             const msg = docSnap.data()
-            
-            // Try to fetch sender name
-            let senderName = "Unknown Funder"
-            if (msg.from) {
-              try {
-                const senderDoc = await getDoc(doc(db, messageSenderCollection, msg.from))
-                if (senderDoc.exists()) {
-                  const data = senderDoc.data()
-                  // Try different paths for sender name
-                  const fundName = data?.formData?.productsServices?.funds?.[0]?.name
-                  const contactName = data?.formData?.contactDetails?.primaryContactName
-                  const registeredName = data?.formData?.entityOverview?.registeredName
-                  const companyName = data?.company
-                  
-                  senderName = fundName || contactName || registeredName || companyName || "Unnamed Funder"
-                }
-              } catch (err) {
-                console.error("Error fetching sender name:", err)
-              }
-            }
-            
+            const senderName = await resolveSenderName(msg.from)
+
             return {
               ...msg,
               id: docSnap.id,
@@ -144,7 +175,7 @@ function Header({
             }
           })
         )
-        
+
         setRecentMessages(messagesWithSenders)
       })
 

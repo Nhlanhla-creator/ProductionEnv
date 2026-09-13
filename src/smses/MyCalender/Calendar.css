@@ -1,123 +1,104 @@
+/* =========================================================
+   CALENDAR PAGE
+========================================================= */
+
+.calendar-system,
+.calendar-system *,
+.calendar-system *::before,
+.calendar-system *::after {
+  box-sizing: border-box;
+}
 
 .calendar-system {
-  padding: 20px;
-}
-
-
-.event-data-container {
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 24px;
-  margin-bottom: 24px;
-}
-
-
-.dashboard-panels {
-  display: flex;
-  gap: 24px;
-}
-
-
-.meetings-panel {
-  flex: 2;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 24px;
-}
-
-
-.meetings-panel table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+  min-width: 0;
+  min-height: 100vh;
+
+  background: #f8f7f5;
+
+  margin: 0;
+  padding: 0;
+
+  overflow-x: hidden;
+
+  color: #3e2723;
 }
 
-.meetings-panel th {
-  text-align: left;
-  padding: 12px 16px;
-  background-color: #f8f5f2;
-  color: #5D4037;
-  font-weight: 600;
-}
+.calendar-page-shell {
+  width: 100%;
+  max-width: 1600px;
 
-.meetings-panel td {
-  padding: 12px 16px;
-  border-bottom: 1px solid #ede7e0;
-}
-
-.meetings-panel tr:last-child td {
-  border-bottom: none;
-}
-
-
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.welcome-modal {
-  background: #f5f3f0;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
-  padding: 24px;
-  text-align: center;
-}
-
-.welcome-modal h2 {
-  color: #5D4037;
-  margin-bottom: 15px;
-}
-
-.welcome-modal p {
-  margin-bottom: 20px;
-  color: #555;
-}
-
-
-.setup-required {
-  max-width: 600px;
   margin: 0 auto;
-  padding: 30px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  text-align: center;
+
+  padding: clamp(14px, 2vw, 30px);
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 20px;
+
+  min-width: 0;
 }
 
-.setup-required h2 {
-  color: #5D4037;
-  margin-bottom: 20px;
+/* =========================================================
+   STATISTICS
+========================================================= */
+
+.calendar-stats-section {
+  width: 100%;
+  min-width: 0;
 }
 
+/* =========================================================
+   MEETINGS
+========================================================= */
+
+.calendar-meetings-section {
+  width: 100%;
+  min-width: 0;
+
+  overflow: hidden;
+}
+
+/* Helps any child table/component stay contained */
+.calendar-meetings-section > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
 
 @media (max-width: 1024px) {
-  .dashboard-panels {
-    flex-direction: column;
-  }
-  
-  .meetings-panel,
-  .availability-panel {
-    flex: auto;
-    width: 100%;
+  .calendar-page-shell {
+    padding: 18px;
+    gap: 18px;
   }
 }
+
+/* =========================================================
+   MOBILE
+========================================================= */
 
 @media (max-width: 768px) {
   .calendar-system {
-    margin-left: 0;
-    width: 100%;
-    padding: 15px;
+    min-height: 100dvh;
+  }
+
+  .calendar-page-shell {
+    padding: 12px;
+    gap: 14px;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 480px) {
+  .calendar-page-shell {
+    padding: 10px;
   }
 }

@@ -1,78 +1,73 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { subscribeToNotifications } from '../admin/pages/services/notifications';
-
-const STORAGE_KEY = 'qa_read_notification_ids';
-
-/**
- * Read the set of notification IDs that this browser session has marked read.
- */
-const getReadIds = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? new Set(JSON.parse(raw)) : new Set();
-  } catch {
-    return new Set();
-  }
-};
+import { useState, useEffect, useCallback } from 'react';
+import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 /**
- * Persist read IDs to localStorage.
- */
-const persistReadIds = (ids) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
-  } catch (err) {
-    console.warn('Could not persist read IDs:', err);
-  }
-};
-
-/**
- * Custom hook for cross-session notifications.
+ * Custom hook for notifications.
  *
- * Notifications live in Firestore (shared across all sessions).
- * Read/unread state is tracked per-device in localStorage so
- * each session's badge is independent.
+ * Notifications ARE messages: this reads the same "messages" collection
+ * useMessages() reads, filtered to whatever's addressed to this user via
+ * `to == user.uid`. Read/unread state lives on the message doc itself in
+ * Firestore (the `read` field), not in localStorage — so it's consistent
+ * across every device/session for this user, not just the current browser.
  */
-export const useNotifications = () => {
+export const useNotifications = (user) => {
   const [notifications, setNotifications] = useState([]);
-  const [readIds, setReadIds] = useState(() => getReadIds());
-  const unsubRef = useRef(null);
 
-  // Subscribe to Firestore notifications
   useEffect(() => {
-    unsubRef.current = subscribeToNotifications((notifs) => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'messages'),
+      where('to', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notifs = snapshot.docs
+        // A user's own "sent" copies are addressed to the recipient, not to
+        // themselves, so this should never match — filtered anyway as a
+        // safety net in case that ever changes.
+        .filter((docSnap) => docSnap.data().type !== 'sent')
+        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
       setNotifications(notifs);
     });
 
-    return () => {
-      if (unsubRef.current) unsubRef.current();
-    };
+    return () => unsubscribe();
+  }, [user]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAsRead = useCallback(async (id) => {
+    try {
+      await updateDoc(doc(db, 'messages', id), { read: true });
+    } catch (err) {
+      console.error('Could not mark notification as read:', err);
+    }
   }, []);
 
-  // Derived unread count
-  const unreadCount = notifications.filter(n => !readIds.has(n.id)).length;
-
-  // Mark a single notification as read (localStorage only)
-  const markAsRead = useCallback((id) => {
-    setReadIds(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      persistReadIds(next);
-      return next;
-    });
-  }, []);
-
-  // Mark all as read
-  const markAllAsRead = useCallback(() => {
-    setReadIds(() => {
-      const next = new Set(notifications.map(n => n.id));
-      persistReadIds(next);
-      return next;
-    });
+  const markAllAsRead = useCallback(async () => {
+    const unread = notifications.filter((n) => !n.read);
+    if (unread.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      unread.forEach((n) => batch.update(doc(db, 'messages', n.id), { read: true }));
+      await batch.commit();
+    } catch (err) {
+      console.error('Could not mark all notifications as read:', err);
+    }
   }, [notifications]);
 
-  // Check if a specific notification is read
-  const isRead = useCallback((id) => readIds.has(id), [readIds]);
+  const isRead = useCallback(
+    (id) => {
+      const match = notifications.find((n) => n.id === id);
+      return match ? !!match.read : true;
+    },
+    [notifications]
+  );
 
   return {
     notifications,

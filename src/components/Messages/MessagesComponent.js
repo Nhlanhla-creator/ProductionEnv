@@ -60,7 +60,7 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
   const [trashCount, setTrashCount] = useState(0);
   const [attachmentFiles, setAttachmentFiles] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Selection state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState(new Set());
@@ -70,7 +70,9 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
   const [visibleCount, setVisibleCount] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const messagesListRef = useRef(null);
+// Pagination - load 20 at a time
 
+const messageViewerRef = useRef(null);
   // Advisor-specific state
   const [recipients, setRecipients] = useState([]);
   const [showRecipientDropdown, setShowRecipientDropdown] = useState(false);
@@ -79,9 +81,9 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
   const fileInputRef = useRef(null);
   const storage = getStorage();
 
- 
+
   // Use recipientsList when hasRecipientDropdown is true
- useEffect(() => {
+  useEffect(() => {
     if (hasRecipientDropdown && recipientsList.length > 0) {
       setRecipients(recipientsList);
     }
@@ -114,17 +116,110 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
     };
   };
 
-  const formatDate = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleString("en-ZA", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const getDateMilliseconds = (value) => {
+  if (!value) return 0;
 
+  try {
+    // Firestore Timestamp
+    if (typeof value?.toMillis === "function") {
+      return value.toMillis();
+    }
+
+    // Firestore Timestamp fallback
+    if (typeof value?.toDate === "function") {
+      return value.toDate().getTime();
+    }
+
+    // Serialized Firestore timestamp
+    if (
+      typeof value === "object" &&
+      typeof value.seconds === "number"
+    ) {
+      return value.seconds * 1000;
+    }
+
+    if (
+      typeof value === "object" &&
+      typeof value._seconds === "number"
+    ) {
+      return value._seconds * 1000;
+    }
+
+    // ISO string / JS Date / number
+    const parsed = new Date(value).getTime();
+
+    return Number.isNaN(parsed)
+      ? 0
+      : parsed;
+  } catch (error) {
+    console.warn(
+      "Could not parse message date:",
+      value,
+      error
+    );
+
+    return 0;
+  }
+};
+
+
+// Finds the best/latest timestamp available on a message
+const getMessageTimestamp = (message) => {
+  if (!message) return 0;
+
+  const possibleDates = [
+    message.updatedAt,
+    message.lastUpdated,
+    message.date,
+    message.createdAt,
+    message.sentAt,
+    message.timestamp,
+    message.submittedAt,
+  ];
+
+  for (const value of possibleDates) {
+    const milliseconds =
+      getDateMilliseconds(value);
+
+    if (milliseconds > 0) {
+      return milliseconds;
+    }
+  }
+
+  return 0;
+};
+
+
+const formatDate = (value) => {
+  const milliseconds =
+    getDateMilliseconds(value);
+
+  if (!milliseconds) {
+    return "Unknown date";
+  }
+
+  const date = new Date(milliseconds);
+
+  return date.toLocaleString("en-ZA", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getMessageDateForDisplay = (message) => {
+  return (
+    message.updatedAt ||
+    message.lastUpdated ||
+    message.date ||
+    message.createdAt ||
+    message.sentAt ||
+    message.timestamp ||
+    message.submittedAt
+  );
+};
   const isInTrash = useCallback((msg) => {
     if (!msg.deleted) return false;
     if (!msg.deletedAt) return true;
@@ -142,9 +237,17 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
 
     let isMounted = true;
 
-    const toQuery = query(collection(db, "messages"), where("to", "==", user.uid));
-    const fromQuery = query(collection(db, "messages"), where("from", "==", user.uid));
+    const toQuery = query(
+      collection(db, "messages"),
+      where("to", "==", user.uid),
+      where("type", "==", "inbox")
+    );
 
+    const fromQuery = query(
+      collection(db, "messages"),
+      where("from", "==", user.uid),
+      where("type", "==", "sent")
+    );
     const unsubscribeTo = onSnapshot(toQuery, (snapshot) => {
       if (!isMounted) return;
       const toMessages = [];
@@ -157,7 +260,7 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
         const drafts = prev.filter((msg) => msg.type === "drafts");
         return [...toMessages, ...fromMessages, ...drafts];
       });
-      
+
       const unread = toMessages.filter((msg) => !msg.read && !msg.deleted).length;
       setUnreadCount(unread);
       setLoading(false);
@@ -189,21 +292,67 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
     setTrashCount(count);
   }, [messages, isInTrash]);
 
-  const filteredMessages = useMemo(() => {
-    return messages
-      .filter((msg) => {
-        if (activeTab === "trash") {
-          return isInTrash(msg);
-        }
-        return msg.type === activeTab && !msg.deleted;
-      })
-      .filter((msg) =>
-        debouncedSearch === "" ||
-        msg.subject?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        msg.sender?.toLowerCase().includes(debouncedSearch.toLowerCase())
-      )
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [messages, activeTab, debouncedSearch, isInTrash]);
+  useEffect(() => {
+  if (messageViewerRef.current) {
+    messageViewerRef.current.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+  }
+}, [selectedMessage?.id]);
+
+const filteredMessages = useMemo(() => {
+  return [...messages]
+    .filter((msg) => {
+      if (activeTab === "trash") {
+        return isInTrash(msg);
+      }
+
+      return (
+        msg.type === activeTab &&
+        !msg.deleted
+      );
+    })
+    .filter((msg) => {
+      if (!debouncedSearch) {
+        return true;
+      }
+
+      const search =
+        debouncedSearch.toLowerCase();
+
+      return (
+        msg.subject
+          ?.toLowerCase()
+          .includes(search) ||
+        msg.sender
+          ?.toLowerCase()
+          .includes(search) ||
+        msg.fromName
+          ?.toLowerCase()
+          .includes(search) ||
+        msg.toName
+          ?.toLowerCase()
+          .includes(search) ||
+        msg.content
+          ?.toLowerCase()
+          .includes(search)
+      );
+    })
+
+    // ALWAYS newest message first
+    .sort((a, b) => {
+      return (
+        getMessageTimestamp(b) -
+        getMessageTimestamp(a)
+      );
+    });
+}, [
+  messages,
+  activeTab,
+  debouncedSearch,
+  isInTrash,
+]);
 
   const visibleMessages = useMemo(() => {
     return filteredMessages.slice(0, visibleCount);
@@ -213,7 +362,7 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
 
   const loadMoreMessages = useCallback(() => {
     if (isLoadingMore || !hasMoreMessages) return;
-    
+
     setIsLoadingMore(true);
     setTimeout(() => {
       setVisibleCount(prev => Math.min(prev + 20, filteredMessages.length));
@@ -224,14 +373,14 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
   useEffect(() => {
     const messagesList = messagesListRef.current;
     if (!messagesList) return;
-    
+
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = messagesList;
       if (scrollTop + clientHeight >= scrollHeight - 100 && hasMoreMessages && !isLoadingMore) {
         loadMoreMessages();
       }
     };
-    
+
     messagesList.addEventListener('scroll', handleScroll);
     return () => messagesList.removeEventListener('scroll', handleScroll);
   }, [hasMoreMessages, isLoadingMore, loadMoreMessages]);
@@ -250,107 +399,103 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
 
 
   const getCurrentUserName = async (uid) => {
-  // Try to get from users collection first
-  try {
-    const userDoc = await getDoc(doc(db, "users", uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      if (data?.displayName) return data.displayName;
-      if (data?.name) return data.name;
-    }
-  } catch (e) {}
-  
-  // Try MyuniversalProfiles
-  try {
-    const profileDoc = await getDoc(doc(db, "MyuniversalProfiles", uid));
-    if (profileDoc.exists()) {
-      const data = profileDoc.data();
-      // Try all possible name fields
-      const names = [
-        data?.formData?.contactDetails?.contactName,
-        data?.formData?.entityOverview?.tradingName,
-        data?.formData?.entityOverview?.registeredName,
-        data?.company,
-        data?.name,
-        data?.displayName
-      ];
-      for (const name of names) {
-        if (name && typeof name === 'string' && name.trim()) {
-          return name.trim();
-        }
-      }
-    }
-  } catch (e) {}
-  
-  // Try universalProfiles
-  try {
-    const profileDoc = await getDoc(doc(db, "universalProfiles", uid));
-    if (profileDoc.exists()) {
-      const data = profileDoc.data();
-      const names = [
-        data?.smeName,
-        data?.formData?.contactDetails?.contactName,
-        data?.formData?.entityOverview?.tradingName,
-        data?.formData?.entityOverview?.registeredName,
-        data?.name,
-        data?.displayName
-      ];
-      for (const name of names) {
-        if (name && typeof name === 'string' && name.trim()) {
-          return name.trim();
-        }
-      }
-    }
-  } catch (e) {}
-  
-  // Try catalystProfiles
-  try {
-    const profileDoc = await getDoc(doc(db, "catalystProfiles", uid));
-    if (profileDoc.exists()) {
-      const data = profileDoc.data();
-      const names = [
-        data?.catalystName,
-        data?.name,
-        data?.displayName
-      ];
-      for (const name of names) {
-        if (name && typeof name === 'string' && name.trim()) {
-          return name.trim();
-        }
-      }
-    }
-  } catch (e) {}
-  
-  // Try cmfProfiles
-  try {
-    const profileDoc = await getDoc(doc(db, "cmfProfiles", uid));
-    if (profileDoc.exists()) {
-      const data = profileDoc.data();
-      const names = [
-        data?.cmfName,
-        data?.name,
-        data?.displayName
-      ];
-      for (const name of names) {
-        if (name && typeof name === 'string' && name.trim()) {
-          return name.trim();
-        }
-      }
-    }
-  } catch (e) {}
-  
-  // If all else fails, use email prefix
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (user?.email) {
-      return user.email.split('@')[0] || "User";
-    }
-  } catch (e) {}
-  
-  return "User";
-};
+    if (!uid) return "User";
 
+    // Remembered so we can fall back to *this* uid's own email later,
+    // instead of the previous bug of falling back to whichever account
+    // happens to be logged in right now.
+    let usersDocEmail = null;
+
+    // 1. users collection — name-type fields first, then note the email
+    try {
+      const userDoc = await getDoc(doc(db, "users", uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        if (data?.displayName) return data.displayName;
+        if (data?.name) return data.name;
+        if (data?.username) return data.username;
+        if (data?.email) usersDocEmail = data.email;
+      }
+    } catch (e) { }
+
+    // 2. MyuniversalProfiles (SMEs / entities)
+    try {
+      const profileDoc = await getDoc(doc(db, "MyuniversalProfiles", uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        const names = [
+          data?.formData?.contactDetails?.contactName,
+          data?.formData?.entityOverview?.tradingName,
+          data?.formData?.entityOverview?.registeredName,
+          data?.company,
+          data?.name,
+          data?.displayName
+        ];
+        for (const name of names) {
+          if (name && typeof name === 'string' && name.trim()) {
+            return name.trim();
+          }
+        }
+      }
+    } catch (e) { }
+
+    // 3. universalProfiles
+    try {
+      const profileDoc = await getDoc(doc(db, "universalProfiles", uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        const names = [
+          data?.smeName,
+          data?.formData?.contactDetails?.contactName,
+          data?.formData?.entityOverview?.tradingName,
+          data?.formData?.entityOverview?.registeredName,
+          data?.name,
+          data?.displayName
+        ];
+        for (const name of names) {
+          if (name && typeof name === 'string' && name.trim()) {
+            return name.trim();
+          }
+        }
+      }
+    } catch (e) { }
+
+    // 4. catalystProfiles
+    try {
+      const profileDoc = await getDoc(doc(db, "catalystProfiles", uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        const names = [data?.catalystName, data?.name, data?.displayName];
+        for (const name of names) {
+          if (name && typeof name === 'string' && name.trim()) {
+            return name.trim();
+          }
+        }
+      }
+    } catch (e) { }
+
+    // 5. cmfProfiles
+    try {
+      const profileDoc = await getDoc(doc(db, "cmfProfiles", uid));
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        const names = [data?.cmfName, data?.name, data?.displayName];
+        for (const name of names) {
+          if (name && typeof name === 'string' && name.trim()) {
+            return name.trim();
+          }
+        }
+      }
+    } catch (e) { }
+
+    // 6. Fall back to the email captured from `users` in step 1 — this is
+    // the target uid's own email, never the currently signed-in user's.
+    if (usersDocEmail) {
+      return usersDocEmail.split('@')[0] || usersDocEmail;
+    }
+
+    return "User";
+  };
 
   const handleMessageSelect = async (msg) => {
     if (selectMode) {
@@ -374,22 +519,15 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
       );
     }
 
-    if (msg.from) {
+
+        if (msg.from) {
       try {
-        const senderDoc = await getDoc(doc(db, "universalProfiles", msg.from));
-        if (senderDoc.exists()) {
-          const data = senderDoc.data();
-          const senderName =
-            data?.smeName ||
-            data?.formData?.entityOverview?.tradingName ||
-            data?.formData?.entityOverview?.registeredName ||
-            data?.formData?.contactDetails?.contactName ||
-            msg.fromName ||
-            "Unknown Sender";
-          setSenderName(senderName);
-        } else {
-          setSenderName(msg.fromName || "Unknown Sender");
-        }
+        const fetchedName = await getCurrentUserName(msg.from);
+        setSenderName(
+          (fetchedName && fetchedName !== "User" ? fetchedName : null) ||
+          msg.fromName ||
+          "Unknown Sender"
+        );
       } catch (error) {
         console.error("Error fetching sender name:", error);
         setSenderName(msg.fromName || "Unknown Sender");
@@ -431,18 +569,18 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
       }
       await batch.commit();
 
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         selectedMessages.has(msg.id) ? { ...msg, deleted: true, deletedAt: now } : msg
       ));
-      
+
       setSelectedMessages(new Set());
       setSelectMode(false);
       setSelectAll(false);
-      
+
       if (selectedMessage && selectedMessages.has(selectedMessage.id)) {
         setSelectedMessage(null);
       }
-      
+
       alert(`${selectedMessages.size} message(s) moved to trash`);
     } catch (error) {
       console.error("Error deleting messages:", error);
@@ -473,11 +611,11 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
       setSelectedMessages(new Set());
       setSelectMode(false);
       setSelectAll(false);
-      
+
       if (selectedMessage && selectedMessages.has(selectedMessage.id)) {
         setSelectedMessage(null);
       }
-      
+
       alert(`${selectedMessages.size} message(s) permanently deleted`);
     } catch (error) {
       console.error("Error permanently deleting messages:", error);
@@ -504,14 +642,14 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
       }
       await batch.commit();
 
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         selectedMessages.has(msg.id) ? { ...msg, deleted: false, deletedAt: null } : msg
       ));
-      
+
       setSelectedMessages(new Set());
       setSelectMode(false);
       setSelectAll(false);
-      
+
       alert(`${selectedMessages.size} message(s) restored to inbox`);
     } catch (error) {
       console.error("Error restoring messages:", error);
@@ -526,7 +664,7 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
     try {
       const now = new Date().toISOString();
       await updateDoc(doc(db, "messages", id), { deleted: true, deletedAt: now });
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg.id === id ? { ...msg, deleted: true, deletedAt: now } : msg
       ));
       if (selectedMessage?.id === id) setSelectedMessage(null);
@@ -556,7 +694,7 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
 
     try {
       await updateDoc(doc(db, "messages", id), { deleted: false, deletedAt: null });
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg.id === id ? { ...msg, deleted: false, deletedAt: null } : msg
       ));
       if (selectedMessage?.id === id) {
@@ -588,35 +726,35 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
     return urls;
   };
 
- // Updated handleReply - use the stored name from the message
-const handleReply = async () => {
-  if (!selectedMessage) return;
+  // Updated handleReply - use the stored name from the message
+  const handleReply = async () => {
+    if (!selectedMessage) return;
 
-  // Use the stored fromName from the message
-  let name = selectedMessage.fromName || "Unknown";
-  
-  // If the stored name is missing, try to fetch it
-  if (name === "Unknown" || name === "Unknown SME") {
-    try {
-      const fetchedName = await getCurrentUserName(selectedMessage.from);
-      if (fetchedName && fetchedName !== "User") {
-        name = fetchedName;
+    // Use the stored fromName from the message
+    let name = selectedMessage.fromName || "Unknown";
+
+    // If the stored name is missing, try to fetch it
+    if (name === "Unknown" || name === "Unknown SME") {
+      try {
+        const fetchedName = await getCurrentUserName(selectedMessage.from);
+        if (fetchedName && fetchedName !== "User") {
+          name = fetchedName;
+        }
+      } catch (error) {
+        console.error("Error fetching recipient name:", error);
       }
-    } catch (error) {
-      console.error("Error fetching recipient name:", error);
     }
-  }
 
-  setNewMessage({
-    to: selectedMessage.from,
-    toName: name,
-    subject: `Re: ${selectedMessage.subject}`,
-    content: "",
-    attachments: [],
-  });
-  setAttachmentFiles([]);
-  setIsComposing(true);
-};
+    setNewMessage({
+      to: selectedMessage.from,
+      toName: name,
+      subject: `Re: ${selectedMessage.subject}`,
+      content: "",
+      attachments: [],
+    });
+    setAttachmentFiles([]);
+    setIsComposing(true);
+  };
 
 
   const handleForward = () => {
@@ -626,7 +764,11 @@ const handleReply = async () => {
       toName: "",
       subject: `Fwd: ${selectedMessage.subject}`,
       content: `\n\n----- Forwarded Message -----\nFrom: ${senderName || selectedMessage.fromName
-        }\nDate: ${formatDate(selectedMessage.date)}\n\n${selectedMessage.content
+        }\nDate: ${formatDate(
+  getMessageDateForDisplay(
+    selectedMessage
+  )
+)}\n\n${selectedMessage.content
         }`,
       attachments: [],
     });
@@ -634,130 +776,141 @@ const handleReply = async () => {
     setIsComposing(true);
   };
 
- const handleSend = async () => {
-  const auth = getAuth();
-  const user = auth.currentUser;
-  if (!user) return;
+  const handleSend = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
 
-  if (!newMessage.subject || !newMessage.content.trim()) {
-    alert("Please fill in subject and message");
-    return;
-  }
+    if (!newMessage.subject || !newMessage.content.trim()) {
+      alert("Please fill in subject and message");
+      return;
+    }
 
-  // ─── GET SENDER'S NAME ──────────────────────────────────────────────────
-  let fromName = "Investment Team";
-  
+    // ─── GET SENDER'S NAME ──────────────────────────────────────────────────
+      // ─── GET SENDER'S NAME ──────────────────────────────────────────────────
+  let fromName = "User";
   try {
-   
-    
-    // 2. If not found, try MyuniversalProfiles (for SMEs)
-    if (!fromName || fromName === "SME") {
-      const profileDoc = await getDoc(doc(db, "universalProfiles", user.uid));
-      if (profileDoc.exists()) {
-        const data = profileDoc.data();
-        fromName = data?.formData?.entityOverview?.tradingName || 
-                   data?.formData?.entityOverview?.registeredName || 
-                   data?.formData?.contactDetails?.contactName ||
-                   data?.company ||
-                   null;
-      }
-    }
-    
-    // 3. If still not found, try universalProfiles
-    if (!fromName || fromName === "Funder") {
-      const profileDoc = await getDoc(doc(db, "MyuniversalProfiles", user.uid));
-      if (profileDoc.exists()) {
-        const data = profileDoc.data();
-        fromName = data?.smeName || 
-                   data?.formData?.entityOverview?.tradingName ||
-                   data?.formData?.entityOverview?.registeredName ||
-                   data?.formData?.contactDetails?.contactName ||
-                   null;
-      }
-    }
-    
-    // 4. Try cmfProfiles (for CMFs)
-    if (!fromName || fromName === "CMF") {
-      const profileDoc = await getDoc(doc(db, "cmfProfiles", user.uid));
-      if (profileDoc.exists()) {
-        const data = profileDoc.data();
-        fromName = data?.cmfName || data?.name || null;
-      }
-    }
-    
-    // 5. Try catalystProfiles (for Catalysts)
-    if (!fromName || fromName === "Catalyst") {
-      const profileDoc = await getDoc(doc(db, "catalystProfiles", user.uid));
-      if (profileDoc.exists()) {
-        const data = profileDoc.data();
-        fromName = data?.catalystName || data?.name || null;
-      }
-    }
-    
-    // 6. Final fallback - use email prefix or the current user's email
-    if (!fromName || fromName === "Investment Team") {
-      fromName = user.email?.split('@')[0] || "User";
-    }
-    
+    fromName = await getCurrentUserName(user.uid);
   } catch (error) {
     console.error("Error fetching sender profile:", error);
-    // Fallback
-    fromName = user.email?.split('@')[0] || "Investment Team";
+    fromName = user.email?.split('@')[0] || "User";
   }
 
-  // Make sure fromName is never empty
   if (!fromName || fromName.trim() === "") {
     fromName = "User";
   }
 
-  // ─── SEND MESSAGE ──────────────────────────────────────────────────────
-  let attachmentURLs = [];
-  if (supportAttachments && attachmentFiles.length > 0) {
-    attachmentURLs = await uploadFilesAndGetURLs(attachmentFiles, user.uid);
-  }
+    try {
 
-  const messagePayload = {
-    from: user.uid,
-    fromName: fromName,
-    to: newMessage.to,
-    toName: newMessage.toName,
-    subject: newMessage.subject,
-    content: newMessage.content,
-    attachments: attachmentURLs,
-    date: new Date().toISOString(),
+
+      // 2. If not found, try MyuniversalProfiles (for SMEs)
+      if (!fromName || fromName === "SME") {
+        const profileDoc = await getDoc(doc(db, "universalProfiles", user.uid));
+        if (profileDoc.exists()) {
+          const data = profileDoc.data();
+          fromName = data?.formData?.entityOverview?.tradingName ||
+            data?.formData?.entityOverview?.registeredName ||
+            data?.formData?.contactDetails?.contactName ||
+            data?.company ||
+            null;
+        }
+      }
+
+      // 3. If still not found, try universalProfiles
+      if (!fromName || fromName === "Funder") {
+        const profileDoc = await getDoc(doc(db, "MyuniversalProfiles", user.uid));
+        if (profileDoc.exists()) {
+          const data = profileDoc.data();
+          fromName = data?.smeName ||
+            data?.formData?.entityOverview?.tradingName ||
+            data?.formData?.entityOverview?.registeredName ||
+            data?.formData?.contactDetails?.contactName ||
+            null;
+        }
+      }
+
+      // 4. Try cmfProfiles (for CMFs)
+      if (!fromName || fromName === "CMF") {
+        const profileDoc = await getDoc(doc(db, "cmfProfiles", user.uid));
+        if (profileDoc.exists()) {
+          const data = profileDoc.data();
+          fromName = data?.cmfName || data?.name || null;
+        }
+      }
+
+      // 5. Try catalystProfiles (for Catalysts)
+      if (!fromName || fromName === "Catalyst") {
+        const profileDoc = await getDoc(doc(db, "catalystProfiles", user.uid));
+        if (profileDoc.exists()) {
+          const data = profileDoc.data();
+          fromName = data?.catalystName || data?.name || null;
+        }
+      }
+
+      // 6. Final fallback - use email prefix or the current user's email
+      if (!fromName || fromName === "Investment Team") {
+        fromName = user.email?.split('@')[0] || "User";
+      }
+
+    } catch (error) {
+      console.error("Error fetching sender profile:", error);
+      // Fallback
+      fromName = user.email?.split('@')[0] || "Investment Team";
+    }
+
+    // Make sure fromName is never empty
+    if (!fromName || fromName.trim() === "") {
+      fromName = "User";
+    }
+
+    // ─── SEND MESSAGE ──────────────────────────────────────────────────────
+    let attachmentURLs = [];
+    if (supportAttachments && attachmentFiles.length > 0) {
+      attachmentURLs = await uploadFilesAndGetURLs(attachmentFiles, user.uid);
+    }
+
+    const messagePayload = {
+      from: user.uid,
+      fromName: fromName,
+      to: newMessage.to,
+      toName: newMessage.toName,
+      subject: newMessage.subject,
+      content: newMessage.content,
+      attachments: attachmentURLs,
+      date: new Date().toISOString(),
+    };
+
+    try {
+      await addDoc(collection(db, "messages"), {
+        ...messagePayload,
+        type: "inbox",
+        read: false,
+        sender: fromName,
+      });
+
+      await addDoc(collection(db, "messages"), {
+        ...messagePayload,
+        type: "sent",
+        read: true,
+        sender: "You",
+      });
+
+      setIsComposing(false);
+      setNewMessage({
+        to: "",
+        toName: "",
+        subject: "",
+        content: "",
+        attachments: [],
+      });
+      setAttachmentFiles([]);
+      setActiveTab("sent");
+      alert("Message sent!");
+    } catch (error) {
+      console.error("Send failed:", error);
+      alert("Failed to send message.");
+    }
   };
-
-  try {
-    await addDoc(collection(db, "messages"), {
-      ...messagePayload,
-      type: "inbox",
-      read: false,
-      sender: fromName,
-    });
-
-    await addDoc(collection(db, "messages"), {
-      ...messagePayload,
-      type: "sent",
-      read: true,
-      sender: "You",
-    });
-
-    setIsComposing(false);
-    setNewMessage({
-      to: "",
-      toName: "",
-      subject: "",
-      content: "",
-      attachments: [],
-    });
-    setAttachmentFiles([]);
-    setActiveTab("sent");
-    alert("Message sent!");
-  } catch (error) {
-    console.error("Send failed:", error);
-    alert("Failed to send message.");
-  }
-};
 
   const handleFileAttachment = (event) => {
     const files = Array.from(event.target.files);
@@ -786,10 +939,10 @@ const handleReply = async () => {
         storage,
         `signed_documents/${user.uid}/${messageId}/${Date.now()}_${file.name}`
       );
-      
+
       await uploadBytes(signedFileRef, file);
       const signedDocumentUrl = await getDownloadURL(signedFileRef);
-      
+
       setSelectedMessage({
         ...selectedMessage,
         tempSignedDocument: {
@@ -800,7 +953,7 @@ const handleReply = async () => {
       });
 
       alert("Document uploaded successfully! You can now proceed with acceptance.");
-      
+
     } catch (error) {
       console.error("Error uploading signed document:", error);
       alert("Failed to upload signed document. Please try again.");
@@ -819,7 +972,7 @@ const handleReply = async () => {
     const confirmAccept = window.confirm(
       "Are you sure you want to accept this termsheet with the uploaded signed document?"
     );
-    
+
     if (!confirmAccept) return;
 
     try {
@@ -864,7 +1017,7 @@ const handleReply = async () => {
             termsheetSignedDocument: signedDocumentUrl,
             termsheetRespondedAt: new Date().toISOString(),
           });
-        } catch (e) {}
+        } catch (e) { }
 
         try {
           const catalystAppRef = doc(db, "catalystApplications", messageData.applicationId);
@@ -874,7 +1027,7 @@ const handleReply = async () => {
             supportAgreementSignedDocument: signedDocumentUrl,
             supportAgreementRespondedAt: new Date().toISOString(),
           });
-        } catch (e) {}
+        } catch (e) { }
 
         const smeQuery = query(
           collection(db, "smeApplications"),
@@ -911,7 +1064,7 @@ const handleReply = async () => {
       }
 
       let statusText = "";
-      switch(status) {
+      switch (status) {
         case "accepted":
           statusText = "Accepted with Signed Document";
           break;
@@ -1091,10 +1244,10 @@ const handleReply = async () => {
               </button>
             )}
           </div>
-          
+
           <div className="search-bar">
             {renderSearchInput()}
-            
+
             {!selectMode && (
               <button
                 className="new-message-btn"
@@ -1141,7 +1294,7 @@ const handleReply = async () => {
                 {selectedMessages.size} selected
               </span>
             </div>
-            
+
             <div style={{ display: "flex", gap: "8px" }}>
               {activeTab === "trash" ? (
                 <>
@@ -1208,7 +1361,7 @@ const handleReply = async () => {
                   Delete
                 </button>
               )}
-              
+
               <button
                 onClick={exitSelectMode}
                 style={{
@@ -1284,11 +1437,11 @@ const handleReply = async () => {
               {visibleMessages.length > 0 ? (
                 <>
                   {visibleMessages.map((message) => {
-                   const displayName = message.type === "inbox"
-                ? message.from === "system" 
-                  ? "BIG Marketplace Team 🌍"
-                  : message.fromName || message.sender || "Investment Team"
-                : message.toName || message.recipient || message.recipientName || "Unknown SME";
+                    const displayName = message.type === "inbox"
+                      ? message.from === "system"
+                        ? "BIG Marketplace Team 🌍"
+                        : message.fromName || message.sender || "Investment Team"
+                      : message.toName || message.recipient || message.recipientName || "Unknown SME";
                     const isSelected = selectedMessages.has(message.id);
 
                     return (
@@ -1311,9 +1464,11 @@ const handleReply = async () => {
                         <div className="message-content-wrapper">
                           <div className="message-sender-line">
                             <span className="message-sender">{displayName}</span>
-                            <span className="message-date">
-                              {formatDate(message.date)}
-                            </span>
+                           <span className="message-date">
+  {formatDate(
+    getMessageDateForDisplay(message)
+  )}
+</span>
                           </div>
                           <div className="message-subject-line">
                             {message.subject}
@@ -1370,7 +1525,7 @@ const handleReply = async () => {
                     );
                   })}
                   {hasMoreMessages && (
-                    <div 
+                    <div
                       ref={(el) => {
                         if (el && !isLoadingMore) {
                           const observer = new IntersectionObserver(
@@ -1393,8 +1548,8 @@ const handleReply = async () => {
                 </>
               ) : (
                 <div className="no-messages">
-                  {activeTab === "trash" 
-                    ? "No messages in trash" 
+                  {activeTab === "trash"
+                    ? "No messages in trash"
                     : debouncedSearch
                       ? "No messages match your search"
                       : "No messages found"}
@@ -1403,7 +1558,10 @@ const handleReply = async () => {
             </div>
           </div>
 
-          <div className="message-content">
+          <div
+  className="message-content"
+  ref={messageViewerRef}
+>
             {isComposing ? (
               <div className="compose-message">
                 <div className="compose-header">
@@ -1418,64 +1576,64 @@ const handleReply = async () => {
                   </button>
                 </div>
                 <div className="compose-form">
-                 <div className="form-group">
-            <label>To:</label>
-            {hasRecipientDropdown ? (
-              <div className="recipient-select-wrapper" style={{ position: 'relative' }}>
-                <select
-                  value={newMessage.to}
-                  onChange={(e) => {
-                    const selectedId = e.target.value;
-                    const selectedRecipient = recipients.find(r => r.id === selectedId);
-                    setNewMessage({
-                      ...newMessage,
-                      to: selectedId,
-                      toName: selectedRecipient?.name || ''
-                    });
-                  }}
-                  className="recipient-select-dropdown"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    paddingRight: '2rem',
-                    borderRadius: '8px',
-                    border: '1px solid #D7CCC8',
-                    backgroundColor: '#FEFCFA',
-                    fontSize: '0.95rem',
-                    color: '#3E2723',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    appearance: 'none',
-                    WebkitAppearance: 'none',
-                  }}
-                >
-                  <option value="">Select a recipient...</option>
-                  {recipients.map((recipient) => (
-                    <option key={recipient.id} value={recipient.id}>
-                      {recipient.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="select-arrow" style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  pointerEvents: 'none',
-                  color: '#5a3921'
-                }}>
-                  ▼
-                </div>
-              </div>
-            ) : (
-              <input
-                type="text"
-                value={newMessage.toName}
-                disabled
-                placeholder="Recipient Name"
-              />
-            )}
-          </div>
+                  <div className="form-group">
+                    <label>To:</label>
+                    {hasRecipientDropdown ? (
+                      <div className="recipient-select-wrapper" style={{ position: 'relative' }}>
+                        <select
+                          value={newMessage.to}
+                          onChange={(e) => {
+                            const selectedId = e.target.value;
+                            const selectedRecipient = recipients.find(r => r.id === selectedId);
+                            setNewMessage({
+                              ...newMessage,
+                              to: selectedId,
+                              toName: selectedRecipient?.name || ''
+                            });
+                          }}
+                          className="recipient-select-dropdown"
+                          style={{
+                            width: '100%',
+                            padding: '0.75rem',
+                            paddingRight: '2rem',
+                            borderRadius: '8px',
+                            border: '1px solid #D7CCC8',
+                            backgroundColor: '#FEFCFA',
+                            fontSize: '0.95rem',
+                            color: '#3E2723',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                          }}
+                        >
+                          <option value="">Select a recipient...</option>
+                          {recipients.map((recipient) => (
+                            <option key={recipient.id} value={recipient.id}>
+                              {recipient.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="select-arrow" style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          pointerEvents: 'none',
+                          color: '#5a3921'
+                        }}>
+                          ▼
+                        </div>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={newMessage.toName}
+                        disabled
+                        placeholder="Recipient Name"
+                      />
+                    )}
+                  </div>
 
                   <div className="form-group">
                     <label>Subject:</label>
@@ -1601,7 +1759,11 @@ const handleReply = async () => {
                     <div>
                       <span className="meta-label">Date:</span>{" "}
                       <span className="date">
-                        {formatDate(selectedMessage.date)}
+                        {formatDate(
+  getMessageDateForDisplay(
+    selectedMessage
+  )
+)}
                       </span>
                     </div>
                   </div>
@@ -1661,173 +1823,173 @@ const handleReply = async () => {
                     })()}
 
                   {/* Terms sheet section */}
-                  {(selectedMessage.subject?.includes("Termsheet Shared") || 
+                  {(selectedMessage.subject?.includes("Termsheet Shared") ||
                     selectedMessage.subject?.includes("Support Approved") ||
-                    selectedMessage.subject?.includes("Support Agreement")) && 
+                    selectedMessage.subject?.includes("Support Agreement")) &&
                     !selectedMessage.termsheetResponse && (
-                    <div className="termsheet-actions">
-                      <h4>
-                        {selectedMessage.subject?.includes("Support") 
-                          ? "Support Agreement Response Required"
-                          : "Termsheet Response Required"}
-                      </h4>
-                      <p>
-                        {selectedMessage.subject?.includes("Support")
-                          ? "Please review the attached support agreement and indicate your decision:"
-                          : "Please review the attached termsheet and indicate your decision:"}
-                      </p>
+                      <div className="termsheet-actions">
+                        <h4>
+                          {selectedMessage.subject?.includes("Support")
+                            ? "Support Agreement Response Required"
+                            : "Termsheet Response Required"}
+                        </h4>
+                        <p>
+                          {selectedMessage.subject?.includes("Support")
+                            ? "Please review the attached support agreement and indicate your decision:"
+                            : "Please review the attached termsheet and indicate your decision:"}
+                        </p>
 
-                      {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
-                        <div className="termsheet-document">
-                          <a
-                            href={selectedMessage.attachments[0]}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="document-link"
-                          >
-                            <FileText size={20} />
-                            {selectedMessage.subject?.includes("Support")
-                              ? "View Support Agreement Document"
-                              : "View Termsheet Document"}
-                          </a>
-                          
+                        {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
+                          <div className="termsheet-document">
+                            <a
+                              href={selectedMessage.attachments[0]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="document-link"
+                            >
+                              <FileText size={20} />
+                              {selectedMessage.subject?.includes("Support")
+                                ? "View Support Agreement Document"
+                                : "View Termsheet Document"}
+                            </a>
+
+                            <button
+                              className="download-doc-btn"
+                              onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = selectedMessage.attachments[0];
+                                link.download = selectedMessage.attachments[0].split('/').pop().split('?')[0] || 'document.pdf';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                              }}
+                            >
+                              <Download size={16} />
+                              Download
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="termsheet-upload-section">
+                          <p className="upload-instruction">
+                            Please download the document, sign it, and upload the signed version here before accepting.
+                          </p>
+
+                          <div className="upload-controls">
+                            <input
+                              type="file"
+                              id="signed-document-upload"
+                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                              style={{ display: 'none' }}
+                              onChange={(e) => handleSignedDocumentUpload(e, selectedMessage.id)}
+                            />
+                            <button
+                              className="upload-btn"
+                              onClick={() => document.getElementById('signed-document-upload')?.click()}
+                            >
+                              <Paperclip size={16} />
+                              {selectedMessage.tempSignedDocument ? 'Replace Signed Document' : 'Upload Signed Document'}
+                            </button>
+
+                            {selectedMessage.tempSignedDocument && (
+                              <div className="uploaded-file-info">
+                                <FileText size={16} />
+                                <span>{selectedMessage.tempSignedDocument.name}</span>
+                                <button
+                                  className="remove-file-btn"
+                                  onClick={() => {
+                                    const updatedMessage = { ...selectedMessage };
+                                    delete updatedMessage.tempSignedDocument;
+                                    setSelectedMessage(updatedMessage);
+                                  }}
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="termsheet-response-buttons three-options">
                           <button
-                            className="download-doc-btn"
+                            className={`accept-btn ${!selectedMessage.tempSignedDocument ? 'disabled' : ''}`}
                             onClick={() => {
-                              const link = document.createElement('a');
-                              link.href = selectedMessage.attachments[0];
-                              link.download = selectedMessage.attachments[0].split('/').pop().split('?')[0] || 'document.pdf';
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
+                              if (selectedMessage.tempSignedDocument) {
+                                handleAcceptWithUploadedDocument(selectedMessage);
+                              }
+                            }}
+                            disabled={!selectedMessage.tempSignedDocument}
+                            title={!selectedMessage.tempSignedDocument ? 'Please upload signed document first' : ''}
+                          >
+                            <span className="btn-icon">✓</span>
+                            Accept
+                          </button>
+
+                          <button
+                            className="conditions-btn"
+                            onClick={() => {
+                              const conditions = prompt(
+                                selectedMessage.subject?.includes("Support")
+                                  ? "Please outline your conditions for accepting the support agreement:"
+                                  : "Please outline your conditions for accepting the termsheet:"
+                              );
+                              if (conditions && conditions.trim() !== "") {
+                                if (!selectedMessage.tempSignedDocument) {
+                                  alert("Please upload the signed document first.");
+                                  return;
+                                }
+                                handleTermsheetResponse(
+                                  selectedMessage.id,
+                                  "accepted_with_conditions",
+                                  selectedMessage.attachments?.[0],
+                                  conditions,
+                                  selectedMessage.tempSignedDocument.url
+                                );
+                              } else if (conditions !== null) {
+                                alert("Please provide your conditions for acceptance.");
+                              }
                             }}
                           >
-                            <Download size={16} />
-                            Download
+                            <span className="btn-icon">⚡</span>
+                            Accept with Conditions
                           </button>
-                        </div>
-                      )}
 
-                      <div className="termsheet-upload-section">
-                        <p className="upload-instruction">
-                          Please download the document, sign it, and upload the signed version here before accepting.
-                        </p>
-                        
-                        <div className="upload-controls">
-                          <input
-                            type="file"
-                            id="signed-document-upload"
-                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                            style={{ display: 'none' }}
-                            onChange={(e) => handleSignedDocumentUpload(e, selectedMessage.id)}
-                          />
                           <button
-                            className="upload-btn"
-                            onClick={() => document.getElementById('signed-document-upload')?.click()}
+                            className="decline-btn"
+                            onClick={() => {
+                              const feedback = prompt(
+                                selectedMessage.subject?.includes("Support")
+                                  ? "Please provide feedback on why you're declining the support agreement:"
+                                  : "Please provide feedback on why you're declining the termsheet:"
+                              );
+                              if (feedback && feedback.trim() !== "") {
+                                handleTermsheetResponse(
+                                  selectedMessage.id,
+                                  "declined",
+                                  selectedMessage.attachments?.[0],
+                                  feedback
+                                );
+                              } else if (feedback !== null) {
+                                alert("Please provide feedback for declining.");
+                              }
+                            }}
                           >
-                            <Paperclip size={16} />
-                            {selectedMessage.tempSignedDocument ? 'Replace Signed Document' : 'Upload Signed Document'}
+                            <span className="btn-icon">✗</span>
+                            Decline
                           </button>
-                          
-                          {selectedMessage.tempSignedDocument && (
-                            <div className="uploaded-file-info">
-                              <FileText size={16} />
-                              <span>{selectedMessage.tempSignedDocument.name}</span>
-                              <button
-                                className="remove-file-btn"
-                                onClick={() => {
-                                  const updatedMessage = {...selectedMessage};
-                                  delete updatedMessage.tempSignedDocument;
-                                  setSelectedMessage(updatedMessage);
-                                }}
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </div>
-
-                      <div className="termsheet-response-buttons three-options">
-                        <button
-                          className={`accept-btn ${!selectedMessage.tempSignedDocument ? 'disabled' : ''}`}
-                          onClick={() => {
-                            if (selectedMessage.tempSignedDocument) {
-                              handleAcceptWithUploadedDocument(selectedMessage);
-                            }
-                          }}
-                          disabled={!selectedMessage.tempSignedDocument}
-                          title={!selectedMessage.tempSignedDocument ? 'Please upload signed document first' : ''}
-                        >
-                          <span className="btn-icon">✓</span>
-                          Accept
-                        </button>
-
-                        <button
-                          className="conditions-btn"
-                          onClick={() => {
-                            const conditions = prompt(
-                              selectedMessage.subject?.includes("Support")
-                                ? "Please outline your conditions for accepting the support agreement:"
-                                : "Please outline your conditions for accepting the termsheet:"
-                            );
-                            if (conditions && conditions.trim() !== "") {
-                              if (!selectedMessage.tempSignedDocument) {
-                                alert("Please upload the signed document first.");
-                                return;
-                              }
-                              handleTermsheetResponse(
-                                selectedMessage.id,
-                                "accepted_with_conditions",
-                                selectedMessage.attachments?.[0],
-                                conditions,
-                                selectedMessage.tempSignedDocument.url
-                              );
-                            } else if (conditions !== null) {
-                              alert("Please provide your conditions for acceptance.");
-                            }
-                          }}
-                        >
-                          <span className="btn-icon">⚡</span>
-                          Accept with Conditions
-                        </button>
-
-                        <button
-                          className="decline-btn"
-                          onClick={() => {
-                            const feedback = prompt(
-                              selectedMessage.subject?.includes("Support")
-                                ? "Please provide feedback on why you're declining the support agreement:"
-                                : "Please provide feedback on why you're declining the termsheet:"
-                            );
-                            if (feedback && feedback.trim() !== "") {
-                              handleTermsheetResponse(
-                                selectedMessage.id,
-                                "declined",
-                                selectedMessage.attachments?.[0],
-                                feedback
-                              );
-                            } else if (feedback !== null) {
-                              alert("Please provide feedback for declining.");
-                            }
-                          }}
-                        >
-                          <span className="btn-icon">✗</span>
-                          Decline
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
                   {selectedMessage.termsheetResponse && (
-                    <div className={`termsheet-status ${selectedMessage.termsheetResponse.status === "accepted" ? "accepted" : 
+                    <div className={`termsheet-status ${selectedMessage.termsheetResponse.status === "accepted" ? "accepted" :
                       selectedMessage.termsheetResponse.status === "accepted_with_conditions" ? "conditions" : "declined"}`}>
                       <h4>
-                        {selectedMessage.termsheetResponse.status === "accepted" && 
+                        {selectedMessage.termsheetResponse.status === "accepted" &&
                           "✓ " + (selectedMessage.subject?.includes("Support") ? "Agreement Accepted" : "Termsheet Accepted")}
-                        {selectedMessage.termsheetResponse.status === "accepted_with_conditions" && 
+                        {selectedMessage.termsheetResponse.status === "accepted_with_conditions" &&
                           "⚡ " + (selectedMessage.subject?.includes("Support") ? "Agreement Accepted with Conditions" : "Termsheet Accepted with Conditions")}
-                        {selectedMessage.termsheetResponse.status === "declined" && 
+                        {selectedMessage.termsheetResponse.status === "declined" &&
                           "✗ " + (selectedMessage.subject?.includes("Support") ? "Agreement Declined" : "Termsheet Declined")}
                       </h4>
                       {selectedMessage.termsheetResponse.feedback && (
@@ -1839,9 +2001,9 @@ const handleReply = async () => {
                       {selectedMessage.termsheetResponse.signedDocumentUrl && (
                         <p className="signed-document-info">
                           <FileText size={16} />
-                          <a 
-                            href={selectedMessage.termsheetResponse.signedDocumentUrl} 
-                            target="_blank" 
+                          <a
+                            href={selectedMessage.termsheetResponse.signedDocumentUrl}
+                            target="_blank"
                             rel="noopener noreferrer"
                           >
                             View Signed Document
@@ -1850,7 +2012,7 @@ const handleReply = async () => {
                       )}
                     </div>
                   )}
-                  
+
                   {supportAttachments &&
                     selectedMessage.attachments &&
                     selectedMessage.attachments.length > 0 && (
@@ -1881,7 +2043,92 @@ const handleReply = async () => {
                         </div>
                       </div>
                     )}
+
+                  {Array.isArray(selectedMessage.attachments) &&
+                    selectedMessage.attachments.length > 0 && (
+                      <div
+                        className="attachments"
+                        style={{
+                          marginTop: "20px",
+                          padding: "16px",
+                          border: "1px solid #ddd",
+                          borderRadius: "8px",
+                          background: "#fafafa",
+                        }}
+                      >
+                        <h4 style={{ marginBottom: "12px" }}>
+                          <Paperclip size={16} />
+                          {" "}
+                          Attachments ({selectedMessage.attachments.length})
+                        </h4>
+
+                        <div className="attachment-list">
+                          {selectedMessage.attachments.map((file, index) => {
+                            const fileUrl =
+                              typeof file === "string"
+                                ? file
+                                : file?.url;
+
+                            const displayName =
+                              selectedMessage.attachmentNames?.[index] ||
+                              file?.name ||
+                              `Attachment ${index + 1}`;
+
+                            if (!fileUrl) {
+                              console.warn(
+                                "Attachment has no URL:",
+                                file
+                              );
+
+                              return (
+                                <div key={index}>
+                                  Attachment {index + 1} has no URL
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div
+                                key={index}
+                                className="attachment-item"
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  padding: "10px",
+                                }}
+                              >
+                                <FileText size={18} />
+
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    color: "#5a3921",
+                                    textDecoration: "underline",
+                                  }}
+                                >
+                                  {displayName}
+                                </a>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    window.open(fileUrl, "_blank")
+                                  }
+                                  title="Open attachment"
+                                >
+                                  <Download size={16} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                 </div>
+
 
                 <div className="message-actions">
                   <button className="reply-btn" onClick={handleReply}>
@@ -1956,7 +2203,9 @@ const handleReply = async () => {
         </div>
       </div>
     </div>
+    
   );
+  
 };
 
 export default MessagesComponent;
