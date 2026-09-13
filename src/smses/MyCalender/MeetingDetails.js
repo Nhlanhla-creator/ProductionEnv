@@ -85,20 +85,20 @@ const TimeSlot = styled.div`
   border-radius: 10px;
   border: 1px solid #D7CCC8;
   cursor: ${props => props.status === 'available' ? 'pointer' : 'default'};
-  background-color: ${props => 
+  background-color: ${props =>
     props.status === 'scheduled' ? 'rgba(76, 175, 80, 0.1)' :
-    props.status === 'pending' ? 'rgba(255, 152, 0, 0.1)' :
-    props.status === 'cancelled' ? 'rgba(244, 67, 54, 0.1)' :
-    'white'};
+      props.status === 'pending' ? 'rgba(255, 152, 0, 0.1)' :
+        props.status === 'cancelled' ? 'rgba(244, 67, 54, 0.1)' :
+          'white'};
   ${props => props.selected && 'border: 2px solid #5D4037'};
 
   &:hover {
-    background-color: ${props => 
-      props.status === 'available' ? '#EFEBE9' : 
+    background-color: ${props =>
+    props.status === 'available' ? '#EFEBE9' :
       props.status === 'scheduled' ? 'rgba(76, 175, 80, 0.1)' :
-      props.status === 'pending' ? 'rgba(255, 152, 0, 0.1)' :
-      props.status === 'cancelled' ? 'rgba(244, 67, 54, 0.1)' :
-      'white'};
+        props.status === 'pending' ? 'rgba(255, 152, 0, 0.1)' :
+          props.status === 'cancelled' ? 'rgba(244, 67, 54, 0.1)' :
+            'white'};
   }
 `;
 
@@ -116,11 +116,11 @@ const SlotTime = styled.div`
 const SlotStatus = styled.div`
   font-size: 0.8rem;
   margin-top: 5px;
-  color: ${props => 
+  color: ${props =>
     props.status === 'scheduled' ? '#4CAF50' :
-    props.status === 'pending' ? '#FF9800' :
-    props.status === 'cancelled' ? '#F44336' :
-    '#8D6E63'};
+      props.status === 'pending' ? '#FF9800' :
+        props.status === 'cancelled' ? '#F44336' :
+          '#8D6E63'};
   font-weight: 600;
 `;
 
@@ -222,26 +222,46 @@ const ResponseMessage = styled.div`
   text-align: center;
 `;
 
+const getSlotKey = (slot) => {
+  if (!slot) return null;
+  const dateKey = slot.date instanceof Date ? slot.date.getTime() : slot.date;
+  const startKey = slot.timeSlots?.[0]?.start || '';
+  return `${dateKey}_${startKey}`;
+};
+
 const MeetingDetails = ({ meeting, onAction, onClose }) => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [responseMessage, setResponseMessage] = useState('');
   const [showResponse, setShowResponse] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [requesterName, setRequesterName] = useState('');
+  const [
+    requesterName,
+    setRequesterName
+  ] = useState(
+    meeting?.requesterName ||
+    ""
+  );
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
 
   useEffect(() => {
     const fetchRequesterDetails = async () => {
+      if (meeting?.requesterName) {
+        setRequesterName(
+          meeting.requesterName
+        );
+
+        return;
+      }
       try {
         if (meeting?.requesterId) {
           const requesterRef = doc(db, "MyuniversalProfiles", meeting.requesterId);
           const requesterSnap = await getDoc(requesterRef);
           if (requesterSnap.exists()) {
             const data = requesterSnap.data();
-            const name = data?.formData?.entityOverview?.registeredName || 
-                        data?.formData?.personalDetails?.fullName || 
-                        meeting.requesterType;
+            const name = data?.formData?.entityOverview?.registeredName ||
+              data?.formData?.personalDetails?.fullName ||
+              meeting.requesterType;
             setRequesterName(name);
           }
         }
@@ -292,28 +312,124 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
       if (!selectedSlot?.timeSlots?.length) throw new Error("No time slots available");
       if (!meeting?.requesterId) throw new Error("Requester reference missing");
 
-      const slotIdParts = selectedSlot.id.split('-');
-      const calendarEventId = slotIdParts[0];
+      const calendarEventId =
+        meeting.docId;
 
-      const calendarEventRef = doc(db, meeting.collection, calendarEventId);
-      const calendarEventSnap = await getDoc(calendarEventRef);
+      if (!calendarEventId) {
+        throw new Error(
+          "Calendar event document ID is missing"
+        );
+      }
+
+      const calendarCollection =
+        meeting.collection ||
+        "smeCalendarEvents";
+
+      const calendarEventRef =
+        doc(
+          db,
+          calendarCollection,
+          calendarEventId
+        );
+
+      const calendarEventSnap =
+        await getDoc(calendarEventRef);
 
       if (!calendarEventSnap.exists()) {
         throw new Error("Calendar event not found - please refresh and try again");
       }
 
+      const selectedDateIso =
+        selectedSlot.date.toISOString();
+
+      const originalAvailableDates =
+        calendarEventSnap.data().availableDates ||
+        [];
+
+      const updatedAvailableDates =
+        originalAvailableDates.map((slot) => {
+          let slotIso = null;
+
+          try {
+            slotIso =
+              slot.date?.toDate
+                ? slot.date
+                  .toDate()
+                  .toISOString()
+                : new Date(
+                  slot.date
+                ).toISOString();
+          } catch {
+            slotIso = slot.date;
+          }
+
+          return {
+            ...slot,
+
+            status:
+              slotIso === selectedDateIso
+                ? "scheduled"
+                : "unavailable",
+          };
+        });
+
+
       const updates = {
         status: "scheduled",
-        scheduledDate: selectedSlot.date.toISOString(),
-        scheduledTimeSlot: selectedSlot.timeSlots[0],
-        updatedAt: new Date().toISOString(),
-        availableDates: calendarEventSnap.data().availableDates.map(slot => ({
-          ...slot,
-          status: slot.date === selectedSlot.date.toISOString() ? "scheduled" : "unavailable"
-        }))
+        meetingStatus: "scheduled",
+
+        scheduledDate:
+          selectedDateIso,
+
+        scheduledTimeSlot:
+          selectedSlot.timeSlots[0],
+
+        updatedAt:
+          new Date().toISOString(),
+
+        availableDates:
+          updatedAvailableDates,
       };
 
       await updateDoc(calendarEventRef, updates);
+
+      const calendarData =
+        calendarEventSnap.data();
+
+
+      if (
+        calendarData.originEventId &&
+        calendarData.originEventId !==
+        calendarEventId
+      ) {
+        try {
+          const originCollection =
+            calendarData.originCollection ||
+            calendarCollection;
+
+          const originRef =
+            doc(
+              db,
+              originCollection,
+              calendarData.originEventId
+            );
+
+          const originSnap =
+            await getDoc(originRef);
+
+          if (originSnap.exists()) {
+            await updateDoc(
+              originRef,
+              updates
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Could not sync confirmed meeting to requester:",
+            error
+          );
+        }
+      }
 
       const messageContent =
         `Your meeting with ${meeting.smeName || "an SME"} has been confirmed.\n\n` +
@@ -338,7 +454,7 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
       await addDoc(collection(db, "messages"), confirmationMessage);
 
       try {
-        const calendarData = calendarEventSnap.data();
+        // const calendarData = calendarEventSnap.data();
         if (calendarData.smeAppId) {
           const smeAppRef = doc(db, "smeApplications", calendarData.smeAppId);
           await updateDoc(smeAppRef, {
@@ -346,6 +462,49 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
             lastUpdated: new Date().toISOString()
           });
         }
+
+        if (
+          calendarData.catalystApplicationId
+        ) {
+          const catalystAppRef =
+            doc(
+              db,
+              "catalystApplications",
+              calendarData.catalystApplicationId
+            );
+
+          await updateDoc(
+            catalystAppRef,
+            {
+              meetingStatus:
+                "scheduled",
+
+              meetingDetails: {
+                status:
+                  "scheduled",
+
+                date:
+                  selectedDateIso,
+
+                timeSlot:
+                  selectedSlot.timeSlots[0],
+
+                location:
+                  meeting.location,
+
+                timeZone:
+                  selectedSlot.timeZone,
+              },
+
+              lastActivity:
+                new Date().toISOString(),
+
+              updatedAt:
+                new Date(),
+            }
+          );
+        }
+
 
         if (calendarData.investorAppId) {
           const investorAppRef = doc(db, "investorApplications", calendarData.investorAppId);
@@ -360,7 +519,10 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
 
       showResponseMessage('Meeting confirmed! Requester notified.');
       if (onAction) {
-        onAction(selectedSlot.id, 'scheduled');
+        onAction(
+          meeting.id,
+          "scheduled"
+        );
       }
     } catch (error) {
       console.error("Error in handleAccept:", error);
@@ -379,12 +541,12 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
       showResponseMessage('Please provide a reason for declining');
       return;
     }
-    
+
     setIsProcessing(true);
     try {
       const auth = getAuth();
       const user = auth.currentUser;
-      
+
       if (user) {
         const declineMessage = {
           from: user.uid,
@@ -398,16 +560,101 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
           type: "inbox",
           meetingId: meeting.id
         };
-        
+
         await addDoc(collection(db, "messages"), declineMessage);
 
-        const meetingRef = doc(db, meeting.collection, meeting.id);
+       const meetingRef =
+  doc(
+    db,
+    meeting.collection,
+    meeting.docId
+  );
+
+  const meetingSnap =
+  await getDoc(meetingRef);
+
+const calendarData =
+  meetingSnap.data();
+
+
+const cancelUpdates = {
+  status:
+    "cancelled",
+
+  meetingStatus:
+    "cancelled",
+
+  declineReason,
+
+  updatedAt:
+    new Date()
+      .toISOString(),
+};
+
+
+await updateDoc(
+  meetingRef,
+  cancelUpdates
+);
+
+
+if (
+  calendarData?.originEventId &&
+  calendarData.originEventId !==
+    meeting.docId
+) {
+  try {
+    const originRef =
+      doc(
+        db,
+        calendarData
+          .originCollection ||
+          meeting.collection,
+
+        calendarData
+          .originEventId
+      );
+
+    await updateDoc(
+      originRef,
+      cancelUpdates
+    );
+  } catch (error) {
+    console.error(
+      "Could not sync declined meeting:",
+      error
+    );
+  }
+}
+        
+        if (
+          calendarData?.catalystApplicationId
+        ) {
+          await updateDoc(
+            doc(
+              db,
+              "catalystApplications",
+              calendarData.catalystApplicationId
+            ),
+            {
+              meetingStatus:
+                "declined",
+
+              meetingDeclineReason:
+                declineReason,
+
+              lastActivity:
+                new Date().toISOString(),
+            }
+          );
+        }
         await updateDoc(meetingRef, {
           status: 'cancelled',
           updatedAt: new Date().toISOString()
         });
       }
-      
+
+
       showResponseMessage('Meeting declined. Requester has been notified.');
       if (onAction) {
         onAction(meeting.id, 'cancelled');
@@ -463,7 +710,7 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
                   <TimeSlot
                     key={index}
                     status={slot.status}
-                    selected={selectedSlot?.id === slot.id}
+                    selected={!!selectedSlot && getSlotKey(selectedSlot) === getSlotKey(slot)}
                     onClick={() => slot.status === 'available' && setSelectedSlot(slot)}
                   >
                     <SlotDate>{formatDate(slot.date)}</SlotDate>
@@ -488,7 +735,7 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
                 placeholder="Please explain why you need to decline this meeting..."
               />
               <FormActions>
-                <CancelButton 
+                <CancelButton
                   onClick={() => {
                     setShowDeclineForm(false);
                     setDeclineReason('');
@@ -497,8 +744,8 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
                 >
                   Cancel
                 </CancelButton>
-                <SubmitButton 
-                  onClick={handleDeclineSubmit} 
+                <SubmitButton
+                  onClick={handleDeclineSubmit}
                   disabled={isProcessing}
                 >
                   {isProcessing ? 'Processing...' : 'Submit Decline'}
@@ -507,32 +754,96 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
             </DeclineForm>
           )}
 
-          {showResponse ? (
-            <ResponseMessage>
-              <p>{responseMessage}</p>
-              <SubmitButton onClick={handleClose}>
-                Close
-              </SubmitButton>
-            </ResponseMessage>
-          ) : (
-            !showDeclineForm && (
-              <ActionButtons>
-                <AcceptButton
-                  onClick={handleAccept}
-                  disabled={isProcessing || !selectedSlot || selectedSlot.status !== 'available'}
-                  className={isProcessing || !selectedSlot || selectedSlot.status !== 'available' ? 'disabled' : ''}
-                >
-                  {isProcessing ? 'Processing...' : 'Confirm Selected Slot'}
-                </AcceptButton>
-                <DeclineButton
-                  onClick={handleDecline}
-                  disabled={isProcessing}
-                >
-                  Decline All
-                </DeclineButton>
-              </ActionButtons>
-            )
-          )}
+         {showResponse ? (
+  <ResponseMessage>
+    <p>{responseMessage}</p>
+
+    <SubmitButton
+      onClick={handleClose}
+    >
+      Close
+    </SubmitButton>
+  </ResponseMessage>
+) : meeting.canRespond ? (
+  !showDeclineForm && (
+    <ActionButtons>
+      <AcceptButton
+        onClick={
+          handleAccept
+        }
+        disabled={
+          isProcessing ||
+          !selectedSlot ||
+          selectedSlot.status !==
+            "available"
+        }
+        className={
+          isProcessing ||
+          !selectedSlot ||
+          selectedSlot.status !==
+            "available"
+            ? "disabled"
+            : ""
+        }
+      >
+        {isProcessing
+          ? "Processing..."
+          : "Confirm Selected Slot"}
+      </AcceptButton>
+
+      <DeclineButton
+        onClick={
+          handleDecline
+        }
+        disabled={
+          isProcessing
+        }
+      >
+        Decline Request
+      </DeclineButton>
+    </ActionButtons>
+  )
+) : (
+  <ResponseMessage>
+    {meeting.isOutgoingRequest ? (
+      <>
+        <strong>
+          Awaiting response
+        </strong>
+
+        <p>
+          The invitee has not
+          selected a meeting
+          date yet.
+        </p>
+      </>
+    ) : meeting.effectiveStatus ===
+      "scheduled" ? (
+      <>
+        <strong>
+          Meeting confirmed
+        </strong>
+
+        <p>
+          This meeting has
+          already been
+          scheduled.
+        </p>
+      </>
+    ) : (
+      <p>
+        No action is required
+        for this meeting.
+      </p>
+    )}
+
+    <SubmitButton
+      onClick={handleClose}
+    >
+      Close
+    </SubmitButton>
+  </ResponseMessage>
+)}
         </MeetingBody>
       </MeetingDetailsContent>
     </MeetingDetailsModal>

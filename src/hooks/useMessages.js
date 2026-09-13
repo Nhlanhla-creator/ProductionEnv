@@ -11,7 +11,11 @@ export function useMessages(user) {
   const [recentMessages, setRecentMessages] = useState([])
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setUnreadCount(0)
+      setRecentMessages([])
+      return
+    }
 
     const q = query(
       collection(db, "messages"),
@@ -20,15 +24,18 @@ export function useMessages(user) {
     )
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setUnreadCount(snapshot.size)
-      
-      // Get recent messages (limit to 5)
-      const messages = snapshot.docs.slice(0, 5).map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-      
-      setRecentMessages(messages)
+      // `deleted` (trash) doesn't reset `read`, so an unread message the
+      // user moved to trash still matches this query. Filter it out here
+      // rather than in the query so this stays a single-field index and
+      // matches the same rule the inbox tab uses (!read && !deleted).
+      const active = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((msg) => !msg.deleted)
+
+      setUnreadCount(active.length)
+      setRecentMessages(active.slice(0, 5))
+    }, (error) => {
+      console.error("Error listening for unread messages:", error)
     })
 
     return () => unsubscribe()

@@ -1013,3 +1013,92 @@ button:disabled {
 :-webkit-scrollbar-thumb:hover {
   background: var(--brown-5);
 }
+
+
+/* =========================================
+   INDEPENDENT MESSAGE PANEL SCROLLING
+   ========================================= */
+
+.messages-page {
+  height: calc(100vh - 80px);
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+}
+
+
+/* Header stays outside the scrolling areas */
+.messages-header {
+  flex: 0 0 auto;
+}
+
+
+/* Main two-column area */
+.messages-container {
+  flex: 1 1 auto;
+
+  min-height: 0;
+  height: 100%;
+
+  display: flex;
+
+  overflow: hidden;
+}
+
+
+/* ===========================
+   LEFT SIDE
+   =========================== */
+
+.messages-sidebar {
+  display: flex;
+  flex-direction: column;
+
+  min-height: 0;
+  height: 100%;
+
+  overflow: hidden;
+}
+
+
+/* Tabs remain stationary */
+.messages-tabs {
+  flex: 0 0 auto;
+}
+
+
+/* ONLY the message list scrolls */
+.messages-list {
+  flex: 1 1 auto;
+
+  min-height: 0;
+  height: 100%;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+
+/* ===========================
+   RIGHT SIDE
+   =========================== */
+
+.message-content {
+  flex: 1 1 auto;
+
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}

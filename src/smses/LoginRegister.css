@@ -14,6 +14,256 @@
   animation: slideIn 0.3s ease-out;
 }
 
+/* Wizard styles */
+.wizard-step {
+  padding: 10px 0;
+}
+.wizard-step h3 {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+  color: #4a352f;
+}
+.wizard-step p {
+  color: #6b5a4e;
+  margin-bottom: 16px;
+}
+.actor-options {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.actor-card {
+  flex: 1;
+  min-width: 150px;
+  padding: 20px;
+  border: 2px solid #e6d7c3;
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fefcf8;
+}
+.actor-card:hover {
+  border-color: #b8a08a;
+}
+.actor-card.selected {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+.actor-card h4 {
+  margin: 8px 0 4px;
+}
+.actor-card p {
+  font-size: 0.85rem;
+  color: #7a6a5a;
+}
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.role-card {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  background: #fff;
+  transition: all 0.15s;
+}
+.role-card.selected {
+  border-color: #4f46e5;
+  background: #f0f2ff;
+}
+.role-card .role-icon {
+  margin-bottom: 6px;
+}
+.role-card h4 {
+  margin: 4px 0;
+  font-size: 1rem;
+}
+.role-card p {
+  font-size: 0.8rem;
+  color: #555;
+  margin: 4px 0;
+}
+.role-badge {
+  font-size: 0.7rem;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: #4b5563;
+}
+.learn-more {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.primary-role-select {
+  margin: 16px 0;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+.primary-role-select .radio-group {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.objective-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+.objective-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.objective-card.selected-primary {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+.objective-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.objective-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.objective-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.service-badge {
+  background: #e5e7eb;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  color: #4b5563;
+}
+.secondary-objectives {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+.secondary-objectives .checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.leadership-question {
+  margin: 16px 0;
+  padding: 12px;
+  background: #fefcf8;
+  border-radius: 8px;
+}
+.leadership-question label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+}
+.leadership-question .radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.wizard-help {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.help-btn, .contact-btn {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.9rem;
+}
+
+.role-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.role-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+.role-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+.role-card.selected {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+.role-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.role-card-title { font-weight: 600; }
+.role-card-definition { font-size: 0.9rem; color: #4b5563; margin-bottom: 4px; }
+.role-card-usedby { font-size: 0.8rem; color: #6b7280; }
+.role-card-details { margin-top: 8px; padding: 8px; background: #f9fafb; border-radius: 6px; }
+.role-benefits { list-style: none; padding: 0; margin: 4px 0; }
+.role-benefits li::before { content: "✓ "; color: #4f46e5; }
+.role-examples { font-size: 0.85rem; color: #4b5563; }
+.role-check { color: #4f46e5; font-weight: bold; margin-left: auto; }
+.role-card-actions { margin-top: 8px; text-align: right; font-size: 0.75rem; color: #9ca3af; }
+.help-link { background: none; border: none; color: #4f46e5; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin-left: 12px; }
+.help-modal { max-width: 600px; width: 90%; padding: 24px; background: white; border-radius: 16px; }
+.help-form textarea { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; margin-bottom: 12px; }
+.help-recommendations { margin-top: 20px; }
+.help-rec-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.rec-header { display: flex; align-items: center; gap: 6px; flex: 1; }
+.rec-title { font-weight: 600; }
+.rec-reason { flex: 2; font-size: 0.9rem; }
+.leadership-step .leadership-question { margin-bottom: 16px; }
+.leadership-step select { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+.setup-plan-step .setup-progress { margin: 12px 0; display: flex; align-items: center; gap: 12px; }
+.setup-plan-step .progress-bar { height: 8px; background: #4f46e5; border-radius: 4px; flex: 1; }
+.setup-modules { list-style: none; padding: 0; }
+.setup-modules li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+.module-name { flex: 1; font-weight: 500; }
+.module-reason { flex: 2; font-size: 0.85rem; color: #6b7280; }
+.module-effort { font-size: 0.75rem; color: #9ca3af; }
+.module-status { margin-left: auto; }
+.small-btn { padding: 4px 12px; background: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer; }
+.objective-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+.objective-item.selected { border-color: #4f46e5; background: #eef2ff; }
+.objective-item.primary { border-color: #4f46e5; background: #e0e7ff; }
+.objective-main { display: flex; align-items: center; gap: 8px; flex: 1; }
+.objective-title { font-weight: 500; }
+.objective-service { font-size: 0.75rem; color: #6b7280; background: #f3f4f6; padding: 2px 8px; border-radius: 12px; }
+
+
 .password-requirements .requirements-title {
   font-size: 13px;
   font-weight: 600;
@@ -350,7 +600,6 @@
 
 /* Main Page Styles */
 .auth-page {
-  width: 100%;
   min-height: 100vh;
   background-image: url("../assets/brown.jpg");
   background-size: cover;
@@ -360,7 +609,6 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  box-sizing: border-box;
   font-family: "Quicksand", sans-serif;
 }
 

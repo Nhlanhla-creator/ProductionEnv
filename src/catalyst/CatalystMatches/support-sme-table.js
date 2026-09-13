@@ -867,6 +867,79 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   //    Stage" and the stalled-row highlighting; bookmarking isn't pipeline
   //    activity, and stamping it here would quietly reset every attention flag
   //    in the table.
+
+const sendMessageToSME = async ({
+  catalystUser,
+  sme,
+  applicationId,
+  subject,
+  content,
+  attachments = [],
+  attachmentNames = [],
+}) => {
+  // Allow a document-only message too
+  if (!content?.trim() && attachments.length === 0) return;
+
+  let catalystName =
+    catalystUser.email?.split("@")[0] ||
+    "Catalyst";
+
+  try {
+    const profileSnap = await getDoc(
+      doc(db, "catalystProfiles", catalystUser.uid)
+    );
+
+    if (profileSnap.exists()) {
+      const data = profileSnap.data();
+
+      catalystName =
+        data.catalystName ||
+        data.name ||
+        catalystName;
+    }
+  } catch (error) {
+    console.error(
+      "Could not load Catalyst name:",
+      error
+    );
+  }
+
+  const messagePayload = {
+    from: catalystUser.uid,
+    fromName: catalystName,
+
+    to: sme.userId || sme.id,
+    toName: sme.name,
+
+    subject,
+    content: content || "",
+
+    // IMPORTANT
+    attachments,
+    attachmentNames,
+
+    date: new Date().toISOString(),
+    applicationId,
+  };
+
+  await Promise.all([
+    // SME inbox copy
+    addDoc(collection(db, "messages"), {
+      ...messagePayload,
+      type: "inbox",
+      read: false,
+      sender: catalystName,
+    }),
+
+    // Catalyst sent copy
+    addDoc(collection(db, "messages"), {
+      ...messagePayload,
+      type: "sent",
+      read: true,
+      sender: "You",
+    }),
+  ]);
+};
   const toggleSaved = async (sme) => {
     const rowKey = rowKeyOf(sme.id, sme.programIndex);
     if (savingRows[rowKey]) return;
@@ -888,10 +961,18 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     try {
       await setDoc(
-        doc(db, "catalystApplications", documentId),
-        { saved: nextSaved, savedAt: nextSaved ? serverTimestamp() : null },
-        { merge: true }
-      );
+  doc(db, "catalystApplications", documentId),
+  {
+    catalystId: user.uid,
+    smeId: sme.id,
+    smeName: sme.name,
+    programIndex: sme.programIndex ?? "0",
+
+    saved: nextSaved,
+    savedAt: nextSaved ? serverTimestamp() : null,
+  },
+  { merge: true }
+);
       if (!isMountedRef.current) return;
       setNotification({
         type: "success",
@@ -1207,16 +1288,218 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     });
   }, []);
 
+
+  const getCatalystDisplayName = async (user) => {
+  let name =
+    user?.displayName ||
+    user?.email?.split("@")[0] ||
+    "Catalyst";
+
+  try {
+    const snap = await getDoc(
+      doc(db, "catalystProfiles", user.uid)
+    );
+
+    if (snap.exists()) {
+      const data = snap.data();
+
+      name =
+        data.catalystName ||
+        data.name ||
+        data.displayName ||
+        name;
+    }
+  } catch (error) {
+    console.warn(
+      "Could not load Catalyst display name:",
+      error
+    );
+  }
+
+  return name;
+};
+
+
+/**
+ * Converts Catalyst availability into the exact shape
+ * the SME calendar expects.
+ *
+ * Important:
+ * We also put the start time into the Date itself because
+ * the SME day/week calendar uses slot.date.getHours().
+ */
+const buildMeetingAvailableDates = (
+  availabilityList,
+  fallbackMeetingTime
+) => {
+  const slots = [];
+
+  // Preferred: multiple proposed dates
+  if (
+    Array.isArray(availabilityList) &&
+    availabilityList.length > 0
+  ) {
+    availabilityList.forEach((availability) => {
+      if (!availability?.date) return;
+
+      const date =
+        availability.date instanceof Date
+          ? new Date(availability.date)
+          : new Date(availability.date);
+
+      if (isNaN(date.getTime())) return;
+
+      const timeSlots =
+        Array.isArray(availability.timeSlots)
+          ? availability.timeSlots
+          : [];
+
+      const firstTime = timeSlots[0];
+
+      // Put the proposed start time into the Date as well.
+      if (firstTime?.start) {
+        const [hour, minute] =
+          firstTime.start.split(":").map(Number);
+
+        if (
+          Number.isFinite(hour) &&
+          Number.isFinite(minute)
+        ) {
+          date.setHours(hour, minute, 0, 0);
+        }
+      }
+
+      slots.push({
+        date: date.toISOString(),
+        timeSlots,
+        timeZone:
+          availability.timeZone ||
+          timeZone,
+        status: "available",
+      });
+    });
+
+    return slots;
+  }
+
+  // Fallback:
+  // if user supplied only the datetime-local field,
+  // create one 30 minute slot.
+  if (fallbackMeetingTime) {
+    const startDate = new Date(
+      fallbackMeetingTime
+    );
+
+    if (!isNaN(startDate.getTime())) {
+      const endDate = new Date(
+        startDate.getTime() + 30 * 60 * 1000
+      );
+
+      const pad = (number) =>
+        String(number).padStart(2, "0");
+
+      const start = `${pad(
+        startDate.getHours()
+      )}:${pad(startDate.getMinutes())}`;
+
+      const end = `${pad(
+        endDate.getHours()
+      )}:${pad(endDate.getMinutes())}`;
+
+      slots.push({
+        date: startDate.toISOString(),
+
+        timeSlots: [
+          {
+            start,
+            end,
+          },
+        ],
+
+        timeZone,
+        status: "available",
+      });
+    }
+  }
+
+  return slots;
+};
+
   const handleStageUpdate = async () => {
     const sme = selectedSMEForPopup;
     if (!sme) return;
 
     const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
-    const errors = {};
-    if (!stageUpdateData.nextStage) errors.nextStage = "Please select a stage";
-    if (stageFields.showMessage && !stageUpdateData.message.trim()) errors.message = "Please provide a message";
-    if (Object.keys(errors).length > 0) { setStageFormErrors(errors); return; }
+   const errors = {};
 
+if (!stageUpdateData.nextStage) {
+  errors.nextStage =
+    "Please select a stage";
+}
+
+if (
+  stageFields.showMessage &&
+  !stageUpdateData.message.trim()
+) {
+  errors.message =
+    "Please provide a message";
+}
+
+
+// ─────────────────────────────────────────────
+// MEETING REQUEST VALIDATION
+// A meeting request is enabled when this stage exposes
+// either the meeting section OR the availability section.
+const meetingFeatureEnabled =
+  stageFields.showMeeting ||
+  stageFields.showAvailability;
+
+// A request should only be created if the Catalyst
+// actually proposed a date/time.
+const hasMeetingSlot =
+  Boolean(stageUpdateData.meetingTime) ||
+  availabilities.length > 0;
+
+const meetingRequested =
+  meetingFeatureEnabled &&
+  hasMeetingSlot;
+
+const proposedMeetingSlots =
+  buildMeetingAvailableDates(
+    availabilities,
+    stageUpdateData.meetingTime
+  );
+
+if (meetingRequested) {
+  // Only require these if the actual meeting-details
+  // section is visible to the Catalyst.
+  if (stageFields.showMeeting) {
+    if (
+      !stageUpdateData.meetingLocation?.trim()
+    ) {
+      errors.meetingLocation =
+        "Please provide the meeting location or Virtual";
+    }
+
+    if (
+      !stageUpdateData.meetingPurpose?.trim()
+    ) {
+      errors.meetingPurpose =
+        "Please provide the purpose of the meeting";
+    }
+  }
+
+  if (proposedMeetingSlots.length === 0) {
+    errors.availability =
+      "Please propose at least one meeting date and time";
+  }
+}
+
+
+if (Object.keys(errors).length > 0) {
+  setStageFormErrors(errors);
+  return;
+}
     const user = auth.currentUser;
     if (!user) {
       setNotification({ type: "error", message: "You've been signed out. Please sign in again." });
@@ -1236,6 +1519,13 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       location: stageUpdateData.meetingLocation,
       purpose: stageUpdateData.meetingPurpose,
     };
+    const meetingLocation =
+  stageUpdateData.meetingLocation?.trim() ||
+  "Virtual";
+
+const meetingPurpose =
+  stageUpdateData.meetingPurpose?.trim() ||
+  `${activeProgrammeLabel} Meeting`;
     const termSheetFile = stageUpdateData.termSheetFile;
     const availabilitySnapshot = availabilities;
 
@@ -1246,14 +1536,23 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     setIsStageSubmitting(true);
 
-    const payload = {
-      status: chosenStage,
-      pipelineStage: chosenStage,
-      nextStage: followingStage,
-      updatedAt: serverTimestamp(),
-      lastMessage: messageText,
-      lastActivity: new Date().toISOString(),
-    };
+   const payload = {
+  // RELATIONSHIP
+  catalystId: user.uid,
+  smeId: smeId,
+  smeName: sme.name,
+  programIndex: programIndex ?? "0",
+
+  // PIPELINE
+  status: chosenStage,
+  pipelineStage: chosenStage,
+  nextStage: followingStage,
+
+  // ACTIVITY
+  updatedAt: serverTimestamp(),
+  lastMessage: messageText,
+  lastActivity: new Date().toISOString(),
+};
 
     if (stageFields.showMeeting && meetingSnapshot.location && meetingSnapshot.purpose) {
       payload.meetingDetails = meetingSnapshot;
@@ -1269,17 +1568,257 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     // setDoc + merge instead of updateDoc: updateDoc rejects outright when the
     // document doesn't exist yet, which surfaced as a silent failure.
-    const performWrite = async () => {
-      const finalPayload = { ...payload };
-      if (stageFields.showTermSheet && termSheetFile) {
-        const path = `termSheets/${user.uid}/${smeId}_${Date.now()}_${termSheetFile.name}`;
-        const fileRef = ref(storage, path);
-        await uploadBytes(fileRef, termSheetFile);
-        finalPayload.termSheetUrl = await getDownloadURL(fileRef);
-        finalPayload.termSheetName = termSheetFile.name;
-      }
-      await setDoc(doc(db, "catalystApplications", documentId), finalPayload, { merge: true });
+
+
+    
+ const performWrite = async () => {
+  const finalPayload = {
+    ...payload,
+  };
+
+  // ───────────────────────────────────────────
+  // DOCUMENT
+  // ───────────────────────────────────────────
+
+  if (
+    stageFields.showTermSheet &&
+    termSheetFile
+  ) {
+    const path =
+      `termSheets/${user.uid}/` +
+      `${smeId}_${Date.now()}_${termSheetFile.name}`;
+
+    const fileRef = ref(storage, path);
+
+    await uploadBytes(
+      fileRef,
+      termSheetFile
+    );
+
+    finalPayload.termSheetUrl =
+      await getDownloadURL(fileRef);
+
+    finalPayload.termSheetName =
+      termSheetFile.name;
+  }
+
+
+  // ───────────────────────────────────────────
+  // MEETING REQUEST
+  // ───────────────────────────────────────────
+
+  let meetingEventId = null;
+
+  console.log(
+  "📅 MEETING REQUEST CHECK",
+  {
+    showMeeting:
+      stageFields.showMeeting,
+
+    showAvailability:
+      stageFields.showAvailability,
+
+    meetingTime:
+      stageUpdateData.meetingTime,
+
+    location:
+      stageUpdateData.meetingLocation,
+
+    purpose:
+      stageUpdateData.meetingPurpose,
+
+    availabilities,
+
+    proposedMeetingSlots,
+
+    meetingRequested,
+  }
+);
+ 
+  if (meetingRequested) {
+    const catalystName =
+      await getCatalystDisplayName(user);
+
+    // Deterministic ID prevents duplicate meeting
+    // requests if the write is retried.
+ 
+   
+meetingEventId =
+  `catalyst_${documentId}`;
+
+const calendarEvent = {
+  // ──────────────────────────────────────
+  // SME RECEIVING THE REQUEST
+  // ──────────────────────────────────────
+ smeId: sme.userId || smeId,
+  smeName: sme.name,
+
+  // ──────────────────────────────────────
+  // CATALYST REQUESTING THE MEETING
+  // ──────────────────────────────────────
+  catalystId: user.uid,
+
+  requesterId: user.uid,
+  requesterName: catalystName,
+  requesterType: "Catalyst",
+
+  createdBy: user.uid,
+  createdByName: catalystName,
+
+  // ──────────────────────────────────────
+  // APPLICATION RELATIONSHIP
+  // ──────────────────────────────────────
+  catalystApplicationId: documentId,
+  applicationId: documentId,
+
+  programIndex:
+    programIndex ?? "0",
+
+  programmeName:
+    activeProgrammeLabel,
+
+  // ──────────────────────────────────────
+  // MEETING DETAILS
+  // ──────────────────────────────────────
+  title: meetingPurpose,
+
+  purpose: meetingPurpose,
+
+  description:
+    messageText?.trim() ||
+    `Meeting request from ${catalystName}`,
+
+  location: meetingLocation,
+
+  availableDates:
+    proposedMeetingSlots,
+
+  timeZone:
+    proposedMeetingSlots[0]?.timeZone ||
+    timeZone,
+
+  // ──────────────────────────────────────
+  // WORKFLOW
+  // ──────────────────────────────────────
+  status: "pending",
+  meetingStatus: "pending",
+
+  requestType:
+    "meeting_request",
+
+  source:
+    "catalyst",
+
+  isInvitation:
+    true,
+
+  createdAt:
+    serverTimestamp(),
+
+  updatedAt:
+    serverTimestamp(),
+};
+
+await setDoc(
+  doc(
+    db,
+    "smeCalendarEvents",
+    meetingEventId
+  ),
+  calendarEvent,
+  { merge: true }
+);
+
+console.log(
+  "✅ MEETING REQUEST CREATED",
+  {
+    meetingEventId,
+    smeId,
+    catalystId: user.uid,
+    availableDates:
+      proposedMeetingSlots,
+    location:
+      meetingLocation,
+    purpose:
+      meetingPurpose,
+  }
+);
+    // await setDoc(
+    //   doc(
+    //     db,
+    //     "smeCalendarEvents",
+    //     meetingEventId
+    //   ),
+    //   calendarEvent,
+    //   { merge: true }
+    // );
+
+
+    // Keep reference on Catalyst application
+    finalPayload.meetingRequestId =
+      meetingEventId;
+
+    finalPayload.meetingStatus =
+      "pending";
+
+    finalPayload.meetingDetails = {
+      ...meetingSnapshot,
+
+      availableDates:
+        proposedMeetingSlots,
     };
+  }
+
+
+  // ───────────────────────────────────────────
+  // SAVE CATALYST APPLICATION
+  // ───────────────────────────────────────────
+
+  await setDoc(
+    doc(
+      db,
+      "catalystApplications",
+      documentId
+    ),
+    finalPayload,
+    { merge: true }
+  );
+
+
+  // ───────────────────────────────────────────
+  // MESSAGE SME
+  // ───────────────────────────────────────────
+
+  if (messageText?.trim()) {
+    try {
+      await sendMessageToSME({
+        catalystUser: user,
+        sme,
+        applicationId: documentId,
+
+        subject: meetingRequested
+          ? `Meeting Request - ${activeProgrammeLabel}`
+          : `${activeProgrammeLabel} - ${chosenStage}`,
+
+        content: meetingRequested
+          ? `${messageText}
+
+A meeting has been requested.
+
+Purpose: ${meetingSnapshot.purpose}
+Location: ${meetingSnapshot.location}
+
+Please open your Calendar to select and confirm one of the proposed time slots.`
+          : messageText,
+      });
+    } catch (messageError) {
+      console.error(
+        "Stage saved but message failed:",
+        messageError
+      );
+    }
+  }
+};
 
     const tracked = performWrite()
       .then(() => ({ status: "ok" }))
@@ -2445,18 +2984,62 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           <input type="datetime-local" value={stageUpdateData.meetingTime} onChange={(e) => setStageUpdateData(prev => ({ ...prev, meetingTime: e.target.value }))}
                             className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-xs" />
                         </div>
+                       <div>
+  <label className="block text-xs text-[#4a352f] mb-1">
+    Location
+  </label>
+
+  <input
+    type="text"
+    value={stageUpdateData.meetingLocation}
+    onChange={(e) =>
+      setStageUpdateData((prev) => ({
+        ...prev,
+        meetingLocation: e.target.value,
+      }))
+    }
+    placeholder="Virtual, Teams, Zoom, Office, etc."
+    className={`w-full px-3 py-2 border-2 rounded-lg text-xs ${
+      stageFormErrors.meetingLocation
+        ? "border-red-500"
+        : "border-[#c8b6a6]"
+    }`}
+  />
+
+  {stageFormErrors.meetingLocation && (
+    <p className="text-red-500 text-xs mt-1">
+      {stageFormErrors.meetingLocation}
+    </p>
+  )}
+</div>
                         <div>
-                          <label className="block text-xs text-[#4a352f] mb-1">Location</label>
-                          <input type="text" value={stageUpdateData.meetingLocation} onChange={(e) => setStageUpdateData(prev => ({ ...prev, meetingLocation: e.target.value }))}
-                            placeholder="Office, Virtual, etc."
-                            className="w-full px-3 py-2 border-2 rounded-lg text-xs border-[#c8b6a6]" />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-[#4a352f] mb-1">Purpose</label>
-                          <input type="text" value={stageUpdateData.meetingPurpose} onChange={(e) => setStageUpdateData(prev => ({ ...prev, meetingPurpose: e.target.value }))}
-                            placeholder="Initial discussion, strategy review, etc."
-                            className="w-full px-3 py-2 border-2 rounded-lg text-xs border-[#c8b6a6]" />
-                        </div>
+  <label className="block text-xs text-[#4a352f] mb-1">
+    Purpose
+  </label>
+
+  <input
+    type="text"
+    value={stageUpdateData.meetingPurpose}
+    onChange={(e) =>
+      setStageUpdateData((prev) => ({
+        ...prev,
+        meetingPurpose: e.target.value,
+      }))
+    }
+    placeholder="Initial discussion, strategy review, programme onboarding, etc."
+    className={`w-full px-3 py-2 border-2 rounded-lg text-xs ${
+      stageFormErrors.meetingPurpose
+        ? "border-red-500"
+        : "border-[#c8b6a6]"
+    }`}
+  />
+
+  {stageFormErrors.meetingPurpose && (
+    <p className="text-red-500 text-xs mt-1">
+      {stageFormErrors.meetingPurpose}
+    </p>
+  )}
+</div>
                       </div>
                     )}
 
@@ -2470,6 +3053,11 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                         </div>
                         {availabilities.length > 0 ? (
                           <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                            {stageFormErrors.availability && (
+  <p className="text-red-500 text-xs mt-2">
+    {stageFormErrors.availability}
+  </p>
+)}
                             {availabilities.map((a, i) => (
                               <div key={i} className="flex items-center justify-between bg-white p-2 rounded-lg border border-[#e6d7c3]">
                                 <div>
