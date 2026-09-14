@@ -18,7 +18,7 @@ import { loadTeamMembers, getFirstName } from './services/team';
 // ============================================================================
 
 const Delivery = () => {
-  const [activeCategory, setActiveCategory] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('sprints');
   const [expandedSprints, setExpandedSprints] = useState({});
   const [showSyncStatus, setShowSyncStatus] = useState(false);
   

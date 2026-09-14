@@ -26,6 +26,14 @@ export const SprintCard = memo(({
     setIsEditingSubtitle(false);
   };
 
+  const tasks = Array.isArray(sprint?.tasks) ? sprint.tasks : [];
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(task => {
+    const status = (task?.status || '').trim().toLowerCase();
+    return status === 'done' || status === 'completed';
+  }).length;
+  const isCompleted = totalTasks > 0 && completedTasks === totalTasks;
+
   return (
     <div style={styles.sprintCard}>
       <div
@@ -62,8 +70,14 @@ export const SprintCard = memo(({
               {sprint.subtitle}
             </span>
           )}
-          <span style={styles.taskCount}>
-            {sprint.tasks.length} task{sprint.tasks.length !== 1 ? 's' : ''}
+          <span 
+            style={{
+              ...styles.taskCount,
+              ...(isCompleted ? styles.taskCountComplete : styles.taskCountIncomplete)
+            }}
+            title={`${completedTasks} of ${totalTasks} tasks completed`}
+          >
+            {completedTasks} / {totalTasks} task{totalTasks !== 1 ? 's' : ''}
           </span>
         </div>
       </div>

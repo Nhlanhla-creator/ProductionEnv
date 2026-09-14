@@ -19,11 +19,11 @@ export const Sidebar = ({ activeCategory, setActiveCategory }) => {
 
   return (
     <div style={styles.categorySidebar}>
-      <div style={categoryBtn('meetings')} onClick={() => setActiveCategory(activeCategory === 'meetings' ? null : 'meetings')}>
-        <span>Meetings</span>
-      </div>
-      <div style={categoryBtn('sprints')} onClick={() => setActiveCategory(activeCategory === 'sprints' ? null : 'sprints')}>
+      <div style={categoryBtn('sprints')} onClick={() => setActiveCategory('sprints')}>
         <span>Sprints</span>
+      </div>
+      <div style={categoryBtn('meetings')} onClick={() => setActiveCategory('meetings')}>
+        <span>Meetings</span>
       </div>
     </div>
   );
