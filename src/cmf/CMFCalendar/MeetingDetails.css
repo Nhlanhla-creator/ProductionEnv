@@ -1,0 +1,136 @@
+.meeting-details-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(90, 57, 33, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.meeting-details-card {
+  background-color: #F5E9DC;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(90, 57, 33, 0.2);
+  width: 100%;
+  max-width: 600px;
+  overflow: hidden;
+  position: relative;
+}
+
+.meeting-header {
+  background-color: #8C6842;
+  color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.meeting-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.close-btn:hover {
+  transform: scale(1.1);
+}
+
+.meeting-content {
+  padding: 25px;
+}
+
+.meeting-info {
+  margin-bottom: 25px;
+}
+
+.info-row {
+  display: flex;
+  margin-bottom: 15px;
+  align-items: flex-start;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  width: 130px;
+  flex-shrink: 0;
+  color: #5A3921;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.info-label svg {
+  margin-right: 8px;
+  color: #8D6E63;
+}
+
+.info-value {
+  flex: 1;
+  color: #3E2723;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.invitees-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.invitee-tag {
+  background-color: #E8D8C5;
+  color: #5A3921;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+}
+
+.meeting-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 25px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(141, 110, 99, 0.2);
+}
+
+.action-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.action-btn.accept {
+  background: linear-gradient(135deg, #2e7d32, #1b5e20);
+  color: white;
+}
+
+.action-btn.decline {
+  background: #f44336;
+  color: white;
+}
+
+.action-btn.complete {
+  background: #0284c7;
+  color: white;
+}

@@ -1,0 +1,85 @@
+/* =========================================================
+   CMF CALENDAR PAGE STYLES
+========================================================= */
+
+.cmf-calendar-system,
+.cmf-calendar-system *,
+.cmf-calendar-system *::before,
+.cmf-calendar-system *::after {
+  box-sizing: border-box;
+}
+
+.cmf-calendar-system {
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+  background: #f8f7f5;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  color: #3e2723;
+}
+
+.cmf-calendar-page-shell {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: clamp(14px, 2vw, 30px);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+/* =========================================================
+   STATISTICS SECTION
+========================================================= */
+
+.cmf-calendar-stats-section {
+  width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   MEETINGS SECTION
+========================================================= */
+
+.cmf-calendar-meetings-section {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cmf-calendar-meetings-section > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   RESPONSIVE DESIGN
+========================================================= */
+
+@media (max-width: 1024px) {
+  .cmf-calendar-page-shell {
+    padding: 18px;
+    gap: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .cmf-calendar-system {
+    min-height: 100dvh;
+  }
+
+  .cmf-calendar-page-shell {
+    padding: 12px;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cmf-calendar-page-shell {
+    padding: 10px;
+  }
+}

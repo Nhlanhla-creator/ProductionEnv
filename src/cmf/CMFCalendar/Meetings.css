@@ -1,0 +1,311 @@
+.meetings-container {
+  background: linear-gradient(135deg, #F5F0E8, #EDE4D3);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 
+    0 20px 60px rgba(58, 35, 20, 0.15),
+    0 8px 25px rgba(92, 57, 33, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(140, 104, 66, 0.2);
+  min-height: 600px;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.meetings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 3px solid rgba(140, 104, 66, 0.2);
+  position: relative;
+}
+
+.meetings-header:after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #8C6842, #5A3921);
+  border-radius: 2px;
+}
+
+.meetings-header h2 {
+  color: #3A2314;
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(58, 35, 20, 0.1);
+  letter-spacing: -1px;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.calendar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #8C6842, #5A3921);
+  color: #F5F0E8;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(58, 35, 20, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.calendar-btn:hover {
+  background: linear-gradient(135deg, #A07B52, #6B4428);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(58, 35, 20, 0.4);
+}
+
+.meetings-tabs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 25px;
+  background: rgba(140, 104, 66, 0.1);
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(140, 104, 66, 0.2);
+}
+
+.meetings-tabs button {
+  flex: 1;
+  padding: 14px 20px;
+  border: none;
+  background: transparent;
+  color: #5A3921;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meetings-tabs button:hover {
+  background: rgba(140, 104, 66, 0.15);
+  color: #3A2314;
+}
+
+.meetings-tabs button.active {
+  background: linear-gradient(135deg, #8C6842, #5A3921);
+  color: #F5F0E8;
+  box-shadow: 0 4px 15px rgba(58, 35, 20, 0.2);
+  transform: translateY(-1px);
+}
+
+.date-range-selector {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 25px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(245, 240, 232, 0.6), rgba(237, 228, 211, 0.4));
+  border-radius: 16px;
+  border: 1px solid rgba(140, 104, 66, 0.2);
+}
+
+.date-range-selector input[type="date"] {
+  padding: 12px 16px;
+  border: 2px solid rgba(140, 104, 66, 0.3);
+  border-radius: 12px;
+  background: rgba(245, 240, 232, 0.8);
+  color: #3A2314;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.date-range-selector input[type="date"]:focus {
+  outline: none;
+  border-color: #8C6842;
+  background: #F5F0E8;
+  box-shadow: 0 0 0 4px rgba(140, 104, 66, 0.15);
+}
+
+.date-range-selector span {
+  color: #5A3921;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.table-container {
+  background: rgba(245, 240, 232, 0.4);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(140, 104, 66, 0.15);
+  overflow-x: auto;
+  box-shadow: inset 0 2px 8px rgba(58, 35, 20, 0.05);
+}
+
+.meetings-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+
+.meetings-table thead {
+  background: linear-gradient(135deg, #8C6842, #5A3921);
+}
+
+.meetings-table th {
+  padding: 18px 16px;
+  text-align: left;
+  color: #F5F0E8;
+  font-weight: 700;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: none;
+  position: relative;
+}
+
+.meetings-table th:first-child {
+  border-radius: 12px 0 0 12px;
+}
+
+.meetings-table th:last-child {
+  border-radius: 0 12px 12px 0;
+}
+
+.meetings-table tbody tr {
+  background: rgba(245, 240, 232, 0.3);
+  border-bottom: 1px solid rgba(140, 104, 66, 0.1);
+  transition: all 0.3s ease;
+}
+
+.meetings-table tbody tr:hover {
+  background: rgba(245, 240, 232, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(58, 35, 20, 0.1);
+}
+
+.meetings-table tbody tr:nth-child(even) {
+  background: rgba(237, 228, 211, 0.3);
+}
+
+.meetings-table tbody tr:nth-child(even):hover {
+  background: rgba(237, 228, 211, 0.6);
+}
+
+.meetings-table td {
+  padding: 16px;
+  color: #3A2314;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: none;
+  vertical-align: middle;
+}
+
+.event-title {
+  font-weight: 700;
+  color: #5A3921;
+  font-size: 1rem;
+}
+
+.event-date {
+  color: #8C6842;
+  font-weight: 600;
+}
+
+.event-location {
+  color: #5A3921;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid;
+}
+
+.status-badge.pending {
+  background: linear-gradient(135deg, #D4B896, #8C6842);
+  color: #3A2314;
+  border-color: rgba(140, 104, 66, 0.4);
+}
+
+.status-badge.completed {
+  background: linear-gradient(135deg, #8C6842, #5A3921);
+  color: #F5F0E8;
+  border-color: rgba(58, 35, 20, 0.4);
+}
+
+.status-badge.cancelled {
+  background: linear-gradient(135deg, #8B4513, #654321);
+  color: #F5F0E8;
+  border-color: rgba(101, 67, 33, 0.4);
+}
+
+.status-badge.rescheduled {
+  background: linear-gradient(135deg, #A0501B, #754A26);
+  color: #F5F0E8;
+  border-color: rgba(117, 74, 38, 0.4);
+}
+
+.view-meeting-btn {
+  background: linear-gradient(135deg, #8C6842, #5A3921);
+  color: #F5F0E8;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.view-meeting-btn:hover {
+  background: linear-gradient(135deg, #A07B52, #6B4428);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(58, 35, 20, 0.3);
+}
+
+@media (max-width: 768px) {
+  .meetings-container {
+    padding: 16px;
+  }
+
+  .meetings-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-buttons {
+    flex-direction: column;
+  }
+
+  .meetings-tabs {
+    flex-direction: column;
+  }
+}
