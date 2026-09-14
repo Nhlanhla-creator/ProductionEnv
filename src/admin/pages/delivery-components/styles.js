@@ -135,10 +135,26 @@ export const styles = {
   },
   taskCount: {
     fontSize: 12,
-    color: "#999",
-    background: "var(--pale-brown)",
+    fontWeight: 600,
     padding: "4px 10px",
     borderRadius: 12,
+    display: "inline-flex",
+    alignItems: "center",
+    whiteSpace: "nowrap",
+    letterSpacing: "0.2px",
+    transition: "all 0.2s ease",
+  },
+  taskCountComplete: {
+    background: "#dcfce7",
+    color: "#15803d",
+    border: "1px solid #bbf7d0",
+    boxShadow: "0 1px 2px rgba(16, 185, 129, 0.12)",
+  },
+  taskCountIncomplete: {
+    background: "#fee2e2",
+    color: "#b91c1c",
+    border: "1px solid #fecaca",
+    boxShadow: "0 1px 2px rgba(239, 68, 68, 0.12)",
   },
   sprintContent: {
     borderTop: "1px solid #e0e0e0",
