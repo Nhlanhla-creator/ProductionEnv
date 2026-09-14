@@ -1,0 +1,118 @@
+.event-data-container,
+.event-data-container *,
+.event-data-container *::before,
+.event-data-container *::after {
+  box-sizing: border-box;
+}
+
+.event-data-container {
+  width: 100%;
+  min-width: 0;
+}
+
+.event-data-pipeline {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* =========================================================
+   CARD
+========================================================= */
+
+.pipeline-card {
+  min-width: 0;
+  min-height: 138px;
+  padding: 20px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid rgba(93, 64, 55, 0.1);
+  box-shadow: 0 8px 30px rgba(62, 39, 35, 0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pipeline-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(62, 39, 35, 0.08);
+}
+
+.pipeline-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pipeline-value {
+  color: #3e2723;
+  font-size: clamp(1.7rem, 2.5vw, 2.25rem);
+  line-height: 1;
+  font-weight: 750;
+}
+
+.pipeline-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 50%;
+  background: #8d6e63;
+}
+
+.pipeline-title {
+  color: #4e342e;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  font-weight: 650;
+  margin-bottom: 5px;
+}
+
+.pipeline-description {
+  color: #88766f;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* Individual cards */
+
+.scheduled-card .pipeline-dot {
+  background: #5f8d63;
+}
+
+.completed-card .pipeline-dot {
+  background: #547da1;
+}
+
+.cancelled-card .pipeline-dot {
+  background: #a96161;
+}
+
+.rescheduled-card .pipeline-dot {
+  background: #a68152;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1100px) {
+  .event-data-pipeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .event-data-pipeline {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .pipeline-card {
+    min-height: 110px;
+    padding: 16px;
+  }
+}

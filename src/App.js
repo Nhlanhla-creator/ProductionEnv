@@ -194,6 +194,7 @@ import CMFOnboardProfile from "./cmf/CMFOnboardProfile/CMFOnboardProfile"
 import CMFBillingInfo from "./cmf/CMFBillingAndPayments/billing-info"
 import CMFSubscriptions from "./cmf/CMFBillingAndPayments/subscriptions"
 import CMFBillingHistory from "./cmf/CMFBillingAndPayments/billing-history"
+import CMFCalendar from "./cmf/CMFCalendar/CMFCalendar"
 
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
@@ -1246,7 +1247,7 @@ function App() {
         <Route path="/cmf-documents" element={withProtection(CMFDocuments, {}, renderCMFRoute)} />
         <Route path="/cmf-insights" element={withProtection(CatalystInsights, { isCatalystProfile: true }, renderCMFRoute)} />
         <Route path="/cmf-messages" element={withProtection(CatalystMessages, {}, renderCMFRoute)} />
-        <Route path="/cmf-calendar" element={withProtection(Calendar, {}, renderCMFRoute)} />
+        <Route path="/cmf-calendar" element={withProtection(CMFCalendar, {}, renderCMFRoute)} />
         <Route path="/cmf-settings" element={withProtection(Settings, {}, renderCMFRoute)} />
         <Route path="/cmf/billing" element={<Navigate to="/cmf/billing/subscriptions" replace />} />
         <Route path="/cmf/billing/info" element={withProtection(CMFBillingInfo, {}, renderCMFRoute)} />

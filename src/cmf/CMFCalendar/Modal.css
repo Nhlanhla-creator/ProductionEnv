@@ -1,0 +1,65 @@
+/* Modal.css for CMF Calendar */
+.cmf-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(35, 25, 21, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5000;
+  backdrop-filter: blur(4px);
+  padding: clamp(10px, 2vw, 24px);
+}
+
+.cmf-modal-content {
+  background-color: transparent;
+  border-radius: 16px;
+  padding: 0;
+  width: min(1200px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: cmfModalFadeIn 0.3s ease-out;
+}
+
+.cmf-modal-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(93, 64, 55, 0.15);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #5d4037;
+  z-index: 1001;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(62, 39, 35, 0.1);
+}
+
+.cmf-modal-close:hover {
+  background: #ffffff;
+  color: #3e2723;
+  transform: scale(1.06);
+}
+
+@keyframes cmfModalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
