@@ -7,6 +7,7 @@ import HomeHeader from "./main_pages/SMEs/HomeHeader"
 import { useAuth } from "./context/useAuth"
 import ProtectedRoute from "./context/ProtectedRoute"
 import EmailVerification from "./EmailVerification"
+import CMFCalendar from "./cmf/CMFCalendar/CMFCalendar"
 
 // Admin Components
 import PortalMemory from "./components/PortalMemory"
@@ -194,7 +195,6 @@ import CMFOnboardProfile from "./cmf/CMFOnboardProfile/CMFOnboardProfile"
 import CMFBillingInfo from "./cmf/CMFBillingAndPayments/billing-info"
 import CMFSubscriptions from "./cmf/CMFBillingAndPayments/subscriptions"
 import CMFBillingHistory from "./cmf/CMFBillingAndPayments/billing-history"
-import CMFCalendar from "./cmf/CMFCalendar/CMFCalendar"
 
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
@@ -1038,7 +1038,7 @@ function App() {
         <Route path="/investor-opportunities" element={withProtection(FindMatches, {}, renderInvestorRoute)} />
         <Route path="/investor-portfolio" element={<div>Coming Soon</div>} />
         <Route path="/investor-messages" element={withProtection(InvestorMessages, {}, renderInvestorRoute)} />
-        <Route path="/investor-calendar" element={withProtection(InvestorCalendar, {}, renderInvestorRoute)} />
+        <Route path="/investor-calendar" element={withProtection(Calendar, { role: "investor" }, renderInvestorRoute)} />
         <Route path="/investor-settings" element={withProtection(InvestorSettings, {}, renderInvestorRoute)} />
         <Route path="/my-investments" element={withProtection(MyInvestments, {}, renderInvestorRoute)} />
         <Route path="/my-cohorts" element={withProtection(MyCohorts, {}, renderInvestorRoute)} />
@@ -1051,7 +1051,7 @@ function App() {
         <Route path="/intern-table" element={withProtection(InternTable, {}, renderInternRoute)} />
         <Route path="/intern-messages" element={withProtection(InternMessages, {}, renderInternRoute)} />
         <Route path="/intern-documents" element={withProtection(InternDocuments, {}, renderInternRoute)} />
-        <Route path="/intern-calendar" element={withProtection(InternCalendar, {}, renderInternRoute)} />
+          <Route path="/intern-calendar" element={withProtection(Calendar, { role: "intern" }, renderInternRoute)} />
         <Route path="/intern-settings" element={withProtection(Settings, {}, renderInternRoute)} />
 
         {/* Protected Program Sponsor Dashboard Routes */}
@@ -1062,7 +1062,7 @@ function App() {
         <Route path="/program-sponsor-table" element={withProtection(ProgramSponsorInternTable, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor-documents" element={withProtection(ProgramSponsorDocuments, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor-messages" element={withProtection(ProgramSponsorMessages, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-calendar" element={withProtection(ProgramSponsorCalendar, {}, renderProgramSponsorRoute)} />
+         <Route path="/program-sponsor-calendar" element={withProtection(Calendar, { role: "programSponsor" }, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor-settings" element={withProtection(ProgramSponsorSettings, {}, renderProgramSponsorRoute)} />
 
         {/* Program Sponsor Billing Routes */}
@@ -1076,7 +1076,7 @@ function App() {
         <Route path="/support-matches" element={withProtection(SupportMatchesPage, {}, renderSupportProgramRoute)} />
         <Route path="/support-documents" element={withProtection(CatalystDocuments, {}, renderSupportProgramRoute)} />
         <Route path="/support-messages" element={withProtection(CatalystMessages, {}, renderSupportProgramRoute)} />
-        <Route path="/support-calendar" element={withProtection(Calendar, {}, renderSupportProgramRoute)} />
+        <Route path="/support-calendar" element={withProtection(Calendar, { role: "support" }, renderSupportProgramRoute)} />
         <Route path="/support-analytics" element={withProtection(GrowthEnabler, {}, renderSupportProgramRoute)} />
         <Route path="/support-settings" element={withProtection(CatalystSettings, {}, renderSupportProgramRoute)} />
         <Route path="/catalyst/cohorts" element={withProtection(CatalystCohorts, {}, renderSupportProgramRoute)} />
@@ -1090,7 +1090,7 @@ function App() {
         <Route path="/advisor-profile" element={withProtection(AdvisorProfile, {}, renderAdvisorRoute)} />
         <Route path="/advisor-documents" element={withProtection(AdvisorDocuments, {}, renderAdvisorRoute)} />
         <Route path="/advisor-messages" element={withProtection(AdvisorMessages, {}, renderAdvisorRoute)} />
-        <Route path="/advisor-calendar" element={withProtection(Calendar, {}, renderAdvisorRoute)} />
+          <Route path="/advisor-calendar" element={withProtection(Calendar, { role: "advisor" }, renderAdvisorRoute)} />
         <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
 <Route path="/advisor-cohorts" element={withProtection(AdvisorCohorts, {}, renderAdvisorRoute)} />
 
@@ -1205,7 +1205,7 @@ function App() {
         <Route path="/associator-matches" element={withProtection(AssociatorMatches, {}, renderAssociatorRoute)} />
         <Route path="/associator-ecosystem" element={withProtection(AssociatorEcosystem, {}, renderAssociatorRoute)} />
         <Route path="/associator-messages" element={withProtection(AssociatorMessages, {}, renderAssociatorRoute)} />
-        <Route path="/associator-calendar" element={withProtection(AssociatorCalendar, {}, renderAssociatorRoute)} />
+        <Route path="/associator-calendar" element={withProtection(Calendar, { role: "associator" }, renderAssociatorRoute)} />
         <Route path="/associator-documents" element={withProtection(AssociatorDocuments, {}, renderAssociatorRoute)} />
         <Route path="/associator-billings" element={withProtection(AssociatorBillings, {}, renderAssociatorRoute)} />
         <Route path="/associator-portfolio" element={withProtection(AssociatorPortfolio, {}, renderAssociatorRoute)} />
@@ -1247,7 +1247,7 @@ function App() {
         <Route path="/cmf-documents" element={withProtection(CMFDocuments, {}, renderCMFRoute)} />
         <Route path="/cmf-insights" element={withProtection(CatalystInsights, { isCatalystProfile: true }, renderCMFRoute)} />
         <Route path="/cmf-messages" element={withProtection(CatalystMessages, {}, renderCMFRoute)} />
-        <Route path="/cmf-calendar" element={withProtection(CMFCalendar, {}, renderCMFRoute)} />
+        <Route path="/cmf-calendar" element={withProtection(Calendar, { role: "cmf" }, renderCMFRoute)} />
         <Route path="/cmf-settings" element={withProtection(Settings, {}, renderCMFRoute)} />
         <Route path="/cmf/billing" element={<Navigate to="/cmf/billing/subscriptions" replace />} />
         <Route path="/cmf/billing/info" element={withProtection(CMFBillingInfo, {}, renderCMFRoute)} />
