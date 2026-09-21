@@ -38,7 +38,7 @@ function Header({
   roleOptions = [],
   onRoleSwitch,
   enableAdvancedMessages = true,
-  messagesRoute = "/messages",
+  messagesRoute = "/support-messages",
   messageSenderCollection = "MyuniversalProfiles",
   customDocId = null,
 }) {

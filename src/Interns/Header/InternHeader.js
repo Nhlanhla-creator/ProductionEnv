@@ -34,7 +34,7 @@ function InternHeader() {
       userCollection={config.collection}
       logoField={config.logoField}
       enableAdvancedMessages={true}
-      messagesRoute="/messages"
+      messagesRoute="/intern-messages"
       messageSenderCollection="MyuniversalProfiles"
     />
   )
