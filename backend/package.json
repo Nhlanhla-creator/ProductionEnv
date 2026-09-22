@@ -2,7 +2,7 @@
   "name": "bigmarketplace-backend",
   "version": "2.0.0",
   "description": "Backend for BigMarketplace with Peach Payments integration",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
     "start": "node server.js",
     "build": "",
@@ -29,6 +29,7 @@
     "express-rate-limit": "^7.5.1",
     "firebase": "^12.0.0",
     "firebase-admin": "^11.11.1",
+    "firebase-functions": "^7.4.0",
     "helmet": "^7.2.0",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.5",

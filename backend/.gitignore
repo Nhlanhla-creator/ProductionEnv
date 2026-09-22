@@ -1,3 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment files and credentials
 .env
-src/.env
+.env*
+*.env
+*.bak
+*.json.bak
+*serviceAccountKey*.json
+*credentials*.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+firebase-debug.log*
+firestore-debug.log*
+
+# Debug and local testing scripts
+debug-environment.js
+debug-token.js
+
+# Deployment cache
 .vercel
+.firebase/

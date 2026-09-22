@@ -20,6 +20,8 @@ import DeclarationConsent from "./declaration-consent"
 import ProfileSummary from "./ProfileSummary"
 import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { useOnboardingVetting } from "../../hooks/useOnboardingVetting";
+import { useVerificationNudges } from "../../hooks/useVerificationNudges";
 
 const sections = [
   { id: "instructions", label: "Instructions" },
@@ -130,6 +132,8 @@ export default function UniversalProfile() {
   const [userRole, setUserRole] = useState(null)
   const [editPermissions, setEditPermissions] = useState({})
   const [editHistory, setEditHistory] = useState([])
+  const { notifyVettingStatusUpdate } = useOnboardingVetting(auth.currentUser);
+  const { notifyApplicationDraftSaved } = useVerificationNudges(auth.currentUser);
   const [showEditHistory, setShowEditHistory] = useState(false)
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
@@ -480,7 +484,25 @@ if (operationalSections.includes(section)) {
     setLoading(false)
   }
 
-  const handleSaveSection = async () => { await saveDataToFirebase(activeSection); alert("Section saved!") }
+  const handleSaveSection = async () => {
+    await saveDataToFirebase(activeSection);
+    // Dispatch Application Draft Saved nudge (SP8.20)
+    try {
+      const totalSecs = sections.length;
+      const completedCount = Object.values(completedSections).filter(Boolean).length;
+      const completionPct = Math.round((completedCount / totalSecs) * 100);
+      const companyName = formData.entityOverview?.registeredName || "there";
+      notifyApplicationDraftSaved({
+        companyName,
+        completionPercentage: completionPct,
+        lastEditedSection: sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ") || activeSection,
+        resumeUrl: window.location.href,
+      }).catch((err) => console.error("Draft saved notification error:", err));
+    } catch (nudgeErr) {
+      console.warn("Could not dispatch draft saved nudge:", nudgeErr);
+    }
+    alert("Section saved!");
+  }
 
   const handleSaveAndContinue = async () => {
     const sectionData = formData[activeSection] || {}
@@ -547,6 +569,14 @@ if (operationalSections.includes(section)) {
       if (userEmail) {
         await sendConsentConfirmationEmail(userEmail, smeName);
       }
+
+      // Dispatch Vetting Status Queued notification (SP8.24)
+      notifyVettingStatusUpdate({
+        companyName: smeName,
+        vettingStage: "queued",
+        estimatedDaysRemaining: 3,
+        analystNotes: "Universal Profile submitted. Application queued for verification checks.",
+      }).catch(err => console.error("Vetting status dispatch error:", err));
 
       setProfileSubmitted(true)
       const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
@@ -704,6 +734,106 @@ if (operationalSections.includes(section)) {
   return (
     <div className="universal-profile-container">
       {renderCmfBanner()}
+
+      {/* Dynamic Vetting & Verification Status Banner (SP8.17, SP8.18, SP8.24, SP8.25) */}
+      {profileData?.status === "approved" && (
+        <div style={{
+          background: "#ecfdf5",
+          border: "1.5px solid #10b981",
+          borderRadius: "10px",
+          padding: "1rem 1.25rem",
+          marginBottom: "1.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          color: "#065f46",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <CheckCircle size={24} color="#10b981" />
+            <div>
+              <strong style={{ fontSize: "1rem" }}>Profile Approved & Marketplace Activated! 🎉</strong>
+              <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "#047857" }}>
+                Your business listing is officially live and discoverable by corporate buyers and institutional funders.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("/marketplace")}
+            style={{
+              backgroundColor: "#10b981",
+              color: "white",
+              border: "none",
+              padding: "0.5rem 1rem",
+              borderRadius: "6px",
+              fontWeight: "600",
+              fontSize: "0.85rem",
+              cursor: "pointer",
+            }}
+          >
+            Go to Marketplace →
+          </button>
+        </div>
+      )}
+
+      {profileData?.evidenceRequested && profileData.evidenceRequested.length > 0 && (
+        <div style={{
+          background: "#fffbeb",
+          border: "1.5px solid #f59e0b",
+          borderRadius: "10px",
+          padding: "1rem 1.25rem",
+          marginBottom: "1.5rem",
+          color: "#92400e",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+            <span style={{ fontSize: "1.25rem" }}>📄</span>
+            <strong>Action Required: Supporting Documents Requested</strong>
+          </div>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.875rem" }}>
+            Our vetting analysts require the following supporting evidence to complete verification:
+          </p>
+          <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.85rem" }}>
+            {profileData.evidenceRequested.map((docItem, idx) => (
+              <li key={idx} style={{ marginBottom: "0.25rem" }}><strong>{docItem}</strong></li>
+            ))}
+          </ul>
+          <div style={{ marginTop: "0.75rem" }}>
+            <button
+              onClick={() => navigate("/my-documents")}
+              style={{
+                backgroundColor: "#f59e0b",
+                color: "white",
+                border: "none",
+                padding: "0.4rem 0.9rem",
+                borderRadius: "6px",
+                fontWeight: "600",
+                fontSize: "0.85rem",
+                cursor: "pointer",
+              }}
+            >
+              Upload Documents Now →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {profileData?.status === "rejected" && (
+        <div style={{
+          background: "#fef2f2",
+          border: "1.5px solid #ef4444",
+          borderRadius: "10px",
+          padding: "1rem 1.25rem",
+          marginBottom: "1.5rem",
+          color: "#991b1b",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+            <span style={{ fontSize: "1.25rem" }}>⚠️</span>
+            <strong>Profile Needs Revision</strong>
+          </div>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.875rem" }}>
+            {profileData.rejectionReason || "Some required verification details require your attention. Please update the flagged sections and resubmit."}
+          </p>
+        </div>
+      )}
       {validationModal.open && (
         <div className="popup-overlay">
           <div className="validation-popup">
@@ -752,7 +882,27 @@ if (operationalSections.includes(section)) {
         </div>
       )}
 
-      <h1>My Universal Profile</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
+        <h1 style={{ margin: 0 }}>My Universal Profile</h1>
+        {(profileData?.is_verified || profileData?.scoreState?.is_verified || profileData?.status === "approved") && (
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            backgroundColor: "#fef9c3",
+            border: "1.5px solid #eab308",
+            padding: "0.4rem 0.9rem",
+            borderRadius: "9999px",
+            color: "#854d0e",
+            fontWeight: "600",
+            fontSize: "0.9rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
+          }}>
+            <span>🏅</span>
+            <span>BIG Score Verified</span>
+          </div>
+        )}
+      </div>
 
       <div className="profile-tracker">
         {isCompanyMember && (

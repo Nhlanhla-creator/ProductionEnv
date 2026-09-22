@@ -1,54 +1,67 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
+# Dependencies
+node_modules/
+**/node_modules/
 /.pnp
 .pnp.js
 
-# testing
-/coverage
-
-# production
+# Production and Build
 /build
+/dist
+out/
+.vercel
+.firebase/
 
-# API Keys Config
+# Environment variables and secrets
+.env
+.env*
+**/.env
+**/.env*
+!**/.env.example
+*.pem
+*serviceAccountKey*.json
+*credentials*.json
 
+# Testing and Scratch
+/coverage
+scratch/
+**/scratch/
 
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
+# Logs
+*.log
+**/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 
-# Ignore Python virtual environments
-venv/
-.env
-
-# Ignore Node modules
-node_modules/
-
-# Optional: ignore build artifacts
-dist/
-build/
-*.log
+# OS Files
 .DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-.env
-.vercel
-.env*.local
+# Python virtual environments
+venv/
 
+# Internal documentation and notes
 PRODUCTION_PUSH_PLAN.md
 IMPLEMENTATION_SUMMARY.md
-*.md
 
+# Admin, Migration, and One-Off Debug Scripts
+admin-reset.js
+check-env.js
+reassignuid.js
+test-config.js
+update-password.js
 analyzeAdvisorMatches.js
 analyzeSupplierMatches.js
 analyzeInternMatches.js
 analyzeFundingMatches.js
 fundingMatches.js
 simple-bulk-update.js
+backend/debug-environment.js
+backend/debug-token.js

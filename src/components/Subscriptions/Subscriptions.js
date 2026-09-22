@@ -22,6 +22,7 @@ import {
 import { colors } from "../../shared/theme"
 import { getSubStyles } from "./Styles"
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useBillingNotifications } from "../../hooks/useBillingNotifications";
 import { 
   getPlanData, 
   getFeatureOrder, 
@@ -137,6 +138,16 @@ const ReusableSubscription = ({
   const db = getFirestore()
   const user = auth.currentUser
   const navigate = useNavigate()
+
+  const {
+    notifySubscriptionStarted,
+    notifyPaymentFailed,
+    notifySubscriptionCancelled,
+    notifySubscriptionRenewalReminder,
+    notifyPlanUpgrade,
+    failedPayment,
+    clearFailedPayment,
+  } = useBillingNotifications(user, userType)
 
   const [currentSubscription, setCurrentSubscription] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -563,6 +574,35 @@ const checkAndHandleExpiredVoucher = async () => {
           const planKey = getCurrentPlanKey()
           setSelectedPlan(planKey)
           
+          // Check 3-day renewal reminder (SP8.47)
+          if (subscriptionFromUser.autoRenew && subscriptionFromUser.amount > 0) {
+            let renewalDate = subscriptionFromUser.renewalDate || subscriptionFromUser.trialEndDate;
+            if (!renewalDate && subscriptionFromUser.createdAt) {
+              const created = new Date(subscriptionFromUser.createdAt);
+              const months = subscriptionFromUser.cycle === "annually" ? 12 : 1;
+              created.setMonth(created.getMonth() + months);
+              renewalDate = created.toISOString();
+            }
+            if (renewalDate) {
+              const daysUntilRenewal = Math.ceil((new Date(renewalDate) - new Date()) / (1000 * 60 * 60 * 24));
+              if (daysUntilRenewal > 0 && daysUntilRenewal <= 3) {
+                const reminderKey = `renewal_reminder_sent_${userId}_${subscriptionFromUser.plan}_${renewalDate.slice(0, 10)}`;
+                if (!localStorage.getItem(reminderKey)) {
+                  localStorage.setItem(reminderKey, "true");
+                  notifySubscriptionRenewalReminder({
+                    planName: subscriptionFromUser.plan,
+                    billingCycle: subscriptionFromUser.cycle || "monthly",
+                    amount: subscriptionFromUser.amount,
+                    currency: "ZAR",
+                    renewalDate,
+                    userType,
+                    customerName: userData.fullName || user.displayName,
+                  }).catch(e => console.warn("Renewal reminder dispatch failed:", e));
+                }
+              }
+            }
+          }
+
           // Check if voucher expired (for SME users only)
           if (isSme) {
             await checkAndHandleExpiredVoucher()
@@ -955,6 +995,19 @@ const checkAndHandleExpiredVoucher = async () => {
         await updateCurrentPlan(plan.name, billingCycle, { userType, scoreState })
         setCurrentSubscription(newRecord)
         setIsExistingUser(true)
+
+        // Multi-channel notification dispatch
+        notifySubscriptionStarted({
+          planName: plan.name,
+          billingCycle,
+          amount: 0,
+          currency: "ZAR",
+          transactionId: newRecord.id,
+          isTrialPeriod: false,
+          userType,
+          customerName: fullName || userFullName,
+        }).catch(err => console.error("Notification dispatch error:", err))
+
         alert(`${plan.name} plan activated successfully!`)
         setUpgradeDowngradeAction(null)
         setShowPlanChangeConfirm(false)
@@ -1024,6 +1077,34 @@ const checkAndHandleExpiredVoucher = async () => {
 
         setCurrentSubscription(newRecord)
         setIsExistingUser(true)
+
+        // Multi-channel notification dispatch
+        notifySubscriptionStarted({
+          planName: plan.name,
+          billingCycle,
+          amount: planPrice,
+          currency: "ZAR",
+          transactionId: newRecord.transactionRef,
+          isTrialPeriod: isTrialEligible,
+          trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
+          userType,
+          customerName: fullName || userFullName,
+        }).catch(err => console.error("Notification dispatch error:", err))
+
+        // Check if this action is an upgrade (SP8.51)
+        const isUpgrade = isExistingUser && planOrder[planKey] > planOrder[getCurrentPlanKey()];
+        if (isUpgrade) {
+          notifyPlanUpgrade({
+            previousPlan: currentSubscription?.plan || "Previous Plan",
+            newPlan: plan.name,
+            billingCycle,
+            newAmount: planPrice,
+            effectiveDate: new Date().toISOString(),
+            currency: "ZAR",
+            userType,
+            customerName: fullName || userFullName,
+          }).catch(err => console.error("Plan upgrade notification dispatch error:", err));
+        }
         
         const successMessage = isTrialEligible
           ? `🎉 Welcome to your ${plan.name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${planPrice}\n\nEnjoy all premium features at no cost for the first 3 months!`
@@ -1038,6 +1119,19 @@ const checkAndHandleExpiredVoucher = async () => {
       }
     } catch (error) {
       console.error("Payment processing error:", error)
+      // Multi-channel payment failed dispatch with interactive retry
+      notifyPaymentFailed({
+        planName: plan.name,
+        billingCycle,
+        amount: planPrice,
+        currency: "ZAR",
+        failureReason: error.message || "Card transaction could not be authorized",
+        userType,
+        customerName: fullName || userFullName,
+        retryUrl: window.location.href,
+        updateCardUrl: userType === "investor" ? "/investor-billing" : "/billing-info",
+      }, () => processSubscription(planKey)).catch(err => console.error("Payment failed notification error:", err))
+
       alert(`Failed to process payment: ${error.message}. Please try again.`)
     } finally {
       setPaymentProcessing(false)
@@ -1089,6 +1183,16 @@ const checkAndHandleExpiredVoucher = async () => {
       setHistory([cancellationRecord, ...history])
       setCurrentSubscription(cancellationRecord)
       setSelectedPlan(freePlanKey)
+
+      // Multi-channel cancellation dispatch
+      notifySubscriptionCancelled({
+        planName: currentSubscription.plan,
+        effectiveDate: currentSubscription.trialEndDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        freePlanName: plans[freePlanKey].name,
+        userType,
+        customerName: fullName || user?.displayName,
+      }).catch(err => console.error("Cancellation notification error:", err))
+
       alert(`Subscription cancelled successfully!\n\nYou've been downgraded to the ${plans[freePlanKey].name} plan.\nYour premium features will remain active until the end of your current billing period.`)
       setTimeout(() => loadUserSubscription(user.uid), 1000)
     } catch (error) {
@@ -1107,9 +1211,38 @@ const checkAndHandleExpiredVoucher = async () => {
       if (mockPaymentResult.success) {
         const addOnRecord = { id: uuidv4(), email, type: "addon", addonName: selectedAddOn.name, addonId: selectedAddOn.id, amount: selectedAddOn.amount, fullName, companyName, createdAt: new Date().toISOString(), status: "Success", transactionRef: mockPaymentResult.transactionId, userId: user.uid, userType }
         await saveSubscriptionToFirebase(addOnRecord)
-        setHistory([addOnRecord, ...history]); alert(`Payment successful! ${selectedAddOn.name} has been added to your account.`); setShowAddOnModal(false); setSelectedAddOn(null)
+        setHistory([addOnRecord, ...history])
+
+        // Multi-channel notification dispatch
+        notifySubscriptionStarted({
+          planName: selectedAddOn.name,
+          billingCycle: "one-time",
+          amount: selectedAddOn.amount,
+          currency: "ZAR",
+          transactionId: mockPaymentResult.transactionId,
+          isTrialPeriod: false,
+          userType,
+          customerName: fullName,
+        }).catch(err => console.error("Add-on notification error:", err))
+
+        alert(`Payment successful! ${selectedAddOn.name} has been added to your account.`)
+        setShowAddOnModal(false)
+        setSelectedAddOn(null)
       } else { throw new Error(mockPaymentResult.error || "Add-on payment failed") }
-    } catch (error) { console.error("Add-on payment error:", error); alert(`Failed to process add-on payment: ${error.message}. Please try again.`) }
+    } catch (error) {
+      console.error("Add-on payment error:", error)
+      notifyPaymentFailed({
+        planName: selectedAddOn?.name || "Add-on Feature",
+        billingCycle: "one-time",
+        amount: selectedAddOn?.amount || 0,
+        currency: "ZAR",
+        failureReason: error.message || "Payment declined",
+        userType,
+        customerName: fullName,
+      }, () => handleAddOnPayment()).catch(err => console.error("Add-on failure notification error:", err))
+
+      alert(`Failed to process add-on payment: ${error.message}. Please try again.`)
+    }
     finally { setPaymentProcessing(false) }
   }
 
@@ -1458,7 +1591,7 @@ const checkAndHandleExpiredVoucher = async () => {
           <div style={{ background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, borderRadius: "16px", padding: "2rem", marginTop: "3rem", border: `1px solid ${colors.lightTan}` }}>
             <h3 style={{ color: colors.darkBrown, marginBottom: "1.5rem", fontSize: "1.5rem", fontWeight: 700, textAlign: "center" }}>Subscription Management</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "1.5rem" }}>
-              <button style={{ padding: "1rem 1.5rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s ease", textAlign: "center" }} onClick={() => { alert("Update payment method feature coming soon!") }}>💳 Update Payment Method</button>
+              <button style={{ padding: "1rem 1.5rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s ease", textAlign: "center" }} onClick={() => navigate(userType === "investor" ? "/investor-billing" : "/billing-info")}>💳 Update Payment Method</button>
               <button style={{ padding: "1rem 1.5rem", background: `linear-gradient(135deg, ${colors.featureCross} 0%, #B71C1C 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s ease", textAlign: "center" }} onClick={handleCancelSubscription}>❌ Cancel Subscription</button>
             </div>
           </div>
@@ -1471,6 +1604,53 @@ const checkAndHandleExpiredVoucher = async () => {
               <div style={{ width: "80px", height: "80px", border: `6px solid ${colors.lightTan}`, borderTop: `6px solid ${colors.accentGold}`, borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 2rem auto" }}></div>
               <h3 style={{ color: colors.darkBrown, fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>{selectedAddOn ? "Processing Add-on..." : "Processing Subscription..."}</h3>
               <p style={{ color: colors.mediumBrown, fontSize: "1rem", lineHeight: "1.5" }}>🔒 Please wait while we process your request...<br /><strong>Do not close this window.</strong></p>
+            </div>
+          </div>
+        )}
+
+        {/* Failed Payment Modal */}
+        {failedPayment.hasFailed && (
+          <div style={baseStyles.planChangeModal}>
+            <div style={{ ...baseStyles.modalContent, borderTop: `5px solid ${colors.errorRed || '#ef4444'}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "1rem" }}>
+                <AlertCircle size={28} color={colors.errorRed || '#ef4444'} />
+                <h3 style={{ ...baseStyles.modalTitle, margin: 0, color: colors.errorRed || '#ef4444' }}>Payment Failed</h3>
+              </div>
+              <p style={baseStyles.modalText}>
+                We were unable to process your payment for the <strong style={{ color: colors.darkBrown }}>{failedPayment.planName}</strong> plan.
+              </p>
+              <div style={{ margin: "1.5rem 0", padding: "1.2rem", background: `${colors.errorRed || '#ef4444'}12`, border: `1px solid ${colors.errorRed || '#ef4444'}40`, borderRadius: "10px", fontSize: "0.9rem" }}>
+                <div style={{ marginBottom: "6px", color: colors.darkBrown }}><strong>Amount Due:</strong> {failedPayment.currency} {Number(failedPayment.amount).toFixed(2)}</div>
+                <div style={{ color: colors.errorRed || '#ef4444' }}><strong>Reason:</strong> {failedPayment.errorReason}</div>
+              </div>
+              <p style={{ fontSize: "0.85rem", color: colors.mediumBrown, marginBottom: "1.5rem", lineHeight: "1.5" }}>
+                You have a 3-day grace period to resolve this before feature access is downgraded. Please retry your payment or update your card details.
+              </p>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button style={baseStyles.buttonSecondary} onClick={clearFailedPayment}>Dismiss</button>
+                <button
+                  style={{ ...baseStyles.button, background: colors.mediumBrown }}
+                  onClick={() => {
+                    clearFailedPayment()
+                    navigate(userType === "investor" ? "/investor-billing" : "/billing-info")
+                  }}
+                >
+                  💳 Update Card
+                </button>
+                <button
+                  style={baseStyles.button}
+                  onClick={() => {
+                    clearFailedPayment()
+                    if (failedPayment.retryCallback) {
+                      failedPayment.retryCallback()
+                    } else {
+                      processSubscription(selectedPlan)
+                    }
+                  }}
+                >
+                  🔄 Retry Payment
+                </button>
+              </div>
             </div>
           </div>
         )}

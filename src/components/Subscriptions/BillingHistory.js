@@ -22,6 +22,7 @@ import {
   mockSuccessFeeData,
   mockGrowthToolsData,
 } from "../../config/billingHistoryConfig";
+import { useBillingNotifications } from "../../hooks/useBillingNotifications";
 
 const ReusableBillingHistory = ({
   userType = "investor",
@@ -32,6 +33,14 @@ const ReusableBillingHistory = ({
   setFullName: setParentFullName = () => {},
   setCompanyName: setParentCompanyName = () => {},
 }) => {
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
+  const {
+    notifyInvoiceIssued,
+    notifySuccessFeeTriggered,
+    notifySuccessFeeReceipt,
+  } = useBillingNotifications(currentUser, userType);
+
   const [activeTab, setActiveTab] = useState("billing-history");
   const [firebaseData, setFirebaseData] = useState({});
   const [email, setEmail] = useState(initialEmail);
@@ -41,6 +50,130 @@ const ReusableBillingHistory = ({
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [growthTools, setGrowthTools] = useState([]);
   const [loadingGrowthTools, setLoadingGrowthTools] = useState(true);
+  const [emailingInvoiceId, setEmailingInvoiceId] = useState(null);
+  const [emailSentInvoiceId, setEmailSentInvoiceId] = useState(null);
+
+  const handleEmailInvoice = async (transaction) => {
+    const recipientEmail = email || currentUser?.email;
+    if (!recipientEmail) {
+      alert("Please ensure a valid email address is associated with your account.");
+      return;
+    }
+    setEmailingInvoiceId(transaction.id);
+    try {
+      const amount = Number(transaction.amount) || 0;
+      const subtotal = amount > 0 ? amount / 1.15 : 0;
+      const vat = amount > 0 ? amount - subtotal : 0;
+      const result = await notifyInvoiceIssued({
+        invoiceNumber: transaction.invoiceNumber || transaction.id?.slice(0, 10),
+        items: [
+          {
+            description: `${transaction.plan || "Platform"} Subscription (${transaction.cycle || "monthly"})`,
+            qty: 1,
+            rate: subtotal,
+            amount: subtotal,
+          }
+        ],
+        subtotal,
+        vat,
+        total: amount,
+        currency: "ZAR",
+        transactionId: transaction.transactionRef || transaction.id,
+        customerName: transaction.fullName || fullName || currentUser?.displayName,
+        companyName: transaction.companyName || companyName,
+        userType,
+      });
+
+      if (result && result.success !== false) {
+        setEmailSentInvoiceId(transaction.id);
+        setTimeout(() => setEmailSentInvoiceId(null), 4000);
+      } else {
+        alert("Failed to email invoice: " + (result?.error || "Please try again later."));
+      }
+    } catch (err) {
+      console.error("Error emailing invoice:", err);
+      alert("Could not send invoice email. Please try again.");
+    } finally {
+      setEmailingInvoiceId(null);
+    }
+  };
+
+  const handleEmailSuccessFeeInvoice = async (transaction) => {
+    const recipientEmail = email || currentUser?.email;
+    if (!recipientEmail) {
+      alert("Please ensure a valid email address is associated with your account.");
+      return;
+    }
+    const txId = transaction.id || transaction.transactionId;
+    setEmailingInvoiceId(txId);
+    try {
+      const dealAmount = Number(String(transaction.dealValue || 0).replace(/[^0-9.]/g, "")) || 0;
+      const feeAmount = Number(String(transaction.successFeeAmount || 0).replace(/[^0-9.]/g, "")) || 0;
+      const feePct = dealAmount > 0 ? Number(((feeAmount / dealAmount) * 100).toFixed(1)) : 3;
+
+      const result = await notifySuccessFeeTriggered({
+        dealName: transaction.counterparty ? `Deal with ${transaction.counterparty}` : "Marketplace Funded Deal",
+        dealAmount,
+        feePercentage: feePct,
+        feeAmount,
+        invoiceNumber: `SF-${txId}`,
+        dueDate: "30 Days from date of invoice (Net 30)",
+        currency: "ZAR",
+        userType,
+        customerName: fullName || currentUser?.displayName,
+        companyName: companyName || transaction.counterparty || "",
+      });
+
+      if (result && result.success !== false) {
+        setEmailSentInvoiceId(txId);
+        setTimeout(() => setEmailSentInvoiceId(null), 4000);
+      } else {
+        alert("Failed to email success fee invoice: " + (result?.error || "Please try again later."));
+      }
+    } catch (err) {
+      console.error("Error emailing success fee invoice:", err);
+      alert("Could not send success fee invoice email. Please try again.");
+    } finally {
+      setEmailingInvoiceId(null);
+    }
+  };
+
+  const handleEmailSuccessFeeReceipt = async (transaction) => {
+    const recipientEmail = email || currentUser?.email;
+    if (!recipientEmail) {
+      alert("Please ensure a valid email address is associated with your account.");
+      return;
+    }
+    const txId = transaction.id || transaction.transactionId;
+    setEmailingInvoiceId(txId);
+    try {
+      const amountPaid = Number(String(transaction.successFeeAmount || 0).replace(/[^0-9.]/g, "")) || 0;
+      const result = await notifySuccessFeeReceipt({
+        receiptNumber: `REC-${txId}`,
+        invoiceNumber: `SF-${txId}`,
+        dealReference: txId,
+        amountPaid,
+        paymentMethod: "EFT / Bank Wire",
+        paymentDate: transaction.date || new Date().toLocaleDateString(),
+        currency: "ZAR",
+        userType,
+        customerName: fullName || currentUser?.displayName,
+        companyName: companyName || transaction.counterparty || "",
+      });
+
+      if (result && result.success !== false) {
+        setEmailSentInvoiceId(txId);
+        setTimeout(() => setEmailSentInvoiceId(null), 4000);
+      } else {
+        alert("Failed to email receipt: " + (result?.error || "Please try again later."));
+      }
+    } catch (err) {
+      console.error("Error emailing success fee receipt:", err);
+      alert("Could not send receipt email. Please try again.");
+    } finally {
+      setEmailingInvoiceId(null);
+    }
+  };
   
   const successFeeData =
     mockSuccessFeeData[userType] || mockSuccessFeeData.investor;
@@ -729,17 +862,52 @@ const ReusableBillingHistory = ({
                               >
                                 👁️ View
                               </button>
+                              <button
+                                style={styles.emailBtn || styles.viewBtn}
+                                onMouseEnter={(e) =>
+                                  styles.emailBtnHover &&
+                                  Object.assign(
+                                    e.target.style,
+                                    styles.emailBtnHover
+                                  )
+                                }
+                                onMouseLeave={(e) =>
+                                  styles.emailBtn &&
+                                  Object.assign(
+                                    e.target.style,
+                                    styles.emailBtn
+                                  )
+                                }
+                                onClick={() => handleEmailSuccessFeeReceipt(transaction)}
+                                disabled={emailingInvoiceId === (transaction.id || transaction.transactionId)}
+                              >
+                                🧾 <span>{emailingInvoiceId === (transaction.id || transaction.transactionId) ? "Sending..." : emailSentInvoiceId === (transaction.id || transaction.transactionId) ? "Sent!" : "Receipt"}</span>
+                              </button>
                             </div>
                           ) : (
-                            <span
-                              style={{
-                                color: colors.mediumBrown,
-                                fontWeight: 600,
-                                fontSize: "0.95em",
-                              }}
-                            >
-                              Awaiting Payment
-                            </span>
+                            <div style={styles.actionButtons}>
+                              <button
+                                style={styles.emailBtn || styles.viewBtn}
+                                onMouseEnter={(e) =>
+                                  styles.emailBtnHover &&
+                                  Object.assign(
+                                    e.target.style,
+                                    styles.emailBtnHover
+                                  )
+                                }
+                                onMouseLeave={(e) =>
+                                  styles.emailBtn &&
+                                  Object.assign(
+                                    e.target.style,
+                                    styles.emailBtn
+                                  )
+                                }
+                                onClick={() => handleEmailSuccessFeeInvoice(transaction)}
+                                disabled={emailingInvoiceId === (transaction.id || transaction.transactionId)}
+                              >
+                                ✉️ <span>{emailingInvoiceId === (transaction.id || transaction.transactionId) ? "Sending..." : emailSentInvoiceId === (transaction.id || transaction.transactionId) ? "Sent!" : "Invoice (Email)"}</span>
+                              </button>
+                            </div>
                           )}
                         </td>
                         <td style={styles.transactionThTd}>
@@ -1168,6 +1336,27 @@ const ReusableBillingHistory = ({
                                         }}
                                       >
                                         👁️ <span>View</span>
+                                      </button>
+                                      <button
+                                        style={styles.emailBtn || styles.viewBtn}
+                                        onMouseEnter={(e) =>
+                                          styles.emailBtnHover &&
+                                          Object.assign(
+                                            e.target.style,
+                                            styles.emailBtnHover
+                                          )
+                                        }
+                                        onMouseLeave={(e) =>
+                                          styles.emailBtn &&
+                                          Object.assign(
+                                            e.target.style,
+                                            styles.emailBtn
+                                          )
+                                        }
+                                        onClick={() => handleEmailInvoice(entry)}
+                                        disabled={emailingInvoiceId === entry.id}
+                                      >
+                                        ✉️ <span>{emailingInvoiceId === entry.id ? "Sending..." : emailSentInvoiceId === entry.id ? "Sent!" : "Email"}</span>
                                       </button>
                                     </>
                                   ) : entry.status === "Cancelled" ? (
