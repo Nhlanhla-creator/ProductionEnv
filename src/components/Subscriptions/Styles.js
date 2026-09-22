@@ -574,6 +574,8 @@ const getBillingHistoryStyles = (userType = "investor") => {
     actionButtons: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
     downloadBtn: { display: "flex", alignItems: "center", gap: "0.3rem", backgroundColor: colors.accentGold, color: colors.lightText, border: "none", padding: "0.5rem 0.85rem", fontSize: "0.75rem", borderRadius: "0.5rem", cursor: "pointer", transition: "all 0.3s ease", fontWeight: 500 },
     viewBtn: { display: "flex", alignItems: "center", gap: "0.3rem", backgroundColor: colors.mediumBrown, color: colors.lightText, border: "none", padding: "0.5rem 0.85rem", fontSize: "0.75rem", borderRadius: "0.5rem", cursor: "pointer", transition: "all 0.3s ease", fontWeight: 500 },
+    emailBtn: { display: "flex", alignItems: "center", gap: "0.3rem", backgroundColor: colors.darkBrown, color: colors.lightText, border: "none", padding: "0.5rem 0.85rem", fontSize: "0.75rem", borderRadius: "0.5rem", cursor: "pointer", transition: "all 0.3s ease", fontWeight: 500 },
+    emailBtnHover: { backgroundColor: colors.darkText },
     cancelledText: { fontSize: "0.75rem", fontWeight: 500, color: colors.mediumBrown, fontStyle: "italic" },
     freeText: { fontSize: "0.75rem", fontWeight: 500, color: colors.mediumBrown, fontStyle: "italic" },
     emptyState: { padding: "3rem 2rem", textAlign: "center", backgroundColor: colors.cream, borderRadius: "0.75rem", border: `1px solid ${colors.lightTan}`, color: colors.mediumBrown, fontStyle: "italic", fontSize: "0.95rem" },

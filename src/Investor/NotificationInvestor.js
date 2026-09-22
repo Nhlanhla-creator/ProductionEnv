@@ -83,7 +83,11 @@ const InvestorNotifications = () => {
     };
 
     window.addEventListener('newInvestorNotification', handleNewNotification, true);
-    return () => window.removeEventListener('newInvestorNotification', handleNewNotification, true);
+    window.addEventListener('newCommunityNotification', handleNewNotification, true);
+    return () => {
+      window.removeEventListener('newInvestorNotification', handleNewNotification, true);
+      window.removeEventListener('newCommunityNotification', handleNewNotification, true);
+    };
   }, []);
 
   const addNotification = (message, type = 'info', applicationId = null, companyName = null, timestamp = null) => {

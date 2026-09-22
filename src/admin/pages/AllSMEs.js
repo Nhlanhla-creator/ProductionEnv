@@ -36,6 +36,7 @@ import { collection, getDocs, doc, getDoc, deleteDoc, updateDoc } from "firebase
 import { db, auth } from "../../firebaseConfig"
 import * as XLSX from 'xlsx';
 import databaseService from "../../services/databaseService"
+import onboardingVettingService from "../../services/onboardingVettingService"
 
 function AllSMEs() {
   const navigate = useNavigate()
@@ -331,6 +332,16 @@ function AllSMEs() {
           suspendedByEmail: currentUser.email
         });
       }
+
+      // Dispatch Profile Rejected notification (SP8.18)
+      const targetEmail = selectedSMEForAction?.email || userData?.email;
+      const targetCompany = selectedSMEForAction?.companyName || userData?.companyName || "Your Business";
+      onboardingVettingService.notifyProfileRejected({
+        user: { email: targetEmail, uid: userId },
+        companyName: targetCompany,
+        generalReason: disableReason || "Account suspended by administration",
+        issues: [disableReason || "Account suspended by administration"],
+      }).catch(err => console.error("Error dispatching profile rejected notification:", err));
       
       const message = !hasOtherRoles 
         ? `SME role was the last active role. The user's account has been fully suspended.`
@@ -448,6 +459,12 @@ function AllSMEs() {
           reactivatedByEmail: currentUser.email
         });
       }
+
+      // Dispatch Profile Approved / Marketplace Activated notification (SP8.17)
+      onboardingVettingService.notifyProfileApproved({
+        user: { email: sme.email, uid: userId },
+        companyName: sme.companyName || "Your Business",
+      }).catch(err => console.error("Error dispatching profile approved notification:", err));
       
       alert(`SME role has been reactivated successfully.`);
       await fetchSMEs();

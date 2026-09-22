@@ -21,6 +21,7 @@ import {
  getSyncConfig
 } from "../../utils/documentSyncService";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { useVerificationNudges } from "../../hooks/useVerificationNudges";
 
 const DOCUMENTS = [
  "5 Year Budget",
@@ -198,6 +199,65 @@ const MyDocuments = () => {
   // State for guidelines expand/collapse
   const [showFullGuidelines, setShowFullGuidelines] = useState(false);
 const [highlightedDoc, setHighlightedDoc] = useState(null);
+  const { notifyDocumentExpiryWarning } = useVerificationNudges(auth.currentUser);
+
+  // Expiry calculation for compliance documents (SP8.41)
+  const getExpiringDocuments = () => {
+    if (!profileData) return [];
+    const expiring = [];
+
+    DOCUMENTS.forEach((docLabel) => {
+      const docId = getDocumentId(docLabel);
+      const verification = profileData.verification?.[docId];
+      const explicitExpiry = verification?.expiryDate || verification?.validUntil || profileData.documents?.[`${docId}_expiry`];
+      const isStatusExpired = verification?.status === "expired";
+
+      if (isStatusExpired) {
+        expiring.push({
+          docLabel,
+          docId,
+          expiryType: "expired",
+          expiryDate: explicitExpiry || "Expired",
+          daysLeft: 0,
+        });
+      } else if (explicitExpiry) {
+        const expiryTime = new Date(explicitExpiry).getTime();
+        if (!isNaN(expiryTime)) {
+          const daysLeft = Math.ceil((expiryTime - Date.now()) / (1000 * 60 * 60 * 24));
+          if (daysLeft <= 0) {
+            expiring.push({ docLabel, docId, expiryType: "expired", expiryDate: explicitExpiry, daysLeft });
+          } else if (daysLeft <= 7) {
+            expiring.push({ docLabel, docId, expiryType: "7_days", expiryDate: explicitExpiry, daysLeft });
+          } else if (daysLeft <= 30) {
+            expiring.push({ docLabel, docId, expiryType: "30_days", expiryDate: explicitExpiry, daysLeft });
+          }
+        }
+      }
+    });
+
+    return expiring;
+  };
+
+  useEffect(() => {
+    if (!profileData || isInvestorView) return;
+    const expiringDocs = getExpiringDocuments();
+    if (expiringDocs.length === 0) return;
+
+    expiringDocs.forEach((item) => {
+      const sessionKey = `doc_expiry_notified_${item.docId}_${item.expiryType}`;
+      if (!sessionStorage.getItem(sessionKey)) {
+        sessionStorage.setItem(sessionKey, "true");
+        notifyDocumentExpiryWarning({
+          companyName: profileData.registeredName || profileData.formData?.entityOverview?.registeredName || "there",
+          documentName: item.docLabel,
+          expiryType: item.expiryType,
+          expiryDate: item.expiryDate,
+          updateUrl: window.location.href,
+        }).catch((err) => console.error("Document expiry warning notification error:", err));
+      }
+    });
+  }, [profileData, isInvestorView]);
+
  // Use the synchronization hook
  useDocumentSync(setSubmittedDocuments, setProfileData, null);
 
@@ -2090,6 +2150,51 @@ const badgeStyles = (status) => {
              }
            `}</style>
          </div>
+
+         {/* Document Expiry Warnings Banner (SP8.41) */}
+         {!isInvestorView && getExpiringDocuments().length > 0 && (
+           <div style={{
+             marginBottom: "24px",
+             padding: "18px 24px",
+             backgroundColor: "#fff7ed",
+             border: "1.5px solid #ea580c",
+             borderRadius: "12px",
+             boxShadow: "0 2px 6px rgba(234, 88, 12, 0.08)"
+           }}>
+             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+               <span style={{ fontSize: "1.25rem" }}>⚠️</span>
+               <strong style={{ color: "#9a3412", fontSize: "1rem" }}>
+                 Document Expiry Action Required
+               </strong>
+             </div>
+             <p style={{ margin: "0 0 12px 0", fontSize: "0.875rem", color: "#7c2d12" }}>
+               The following compliance documents are expired or expiring soon. Upload updated certificates to maintain your BigMarketplace verification and platform trust rating:
+             </p>
+             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+               {getExpiringDocuments().map((item, idx) => (
+                 <div key={idx} style={{
+                   display: "flex",
+                   alignItems: "center",
+                   justifyContent: "space-between",
+                   padding: "10px 14px",
+                   backgroundColor: item.expiryType === "expired" ? "#fee2e2" : "#fef3c7",
+                   border: `1px solid ${item.expiryType === "expired" ? "#f87171" : "#fcd34d"}`,
+                   borderRadius: "8px",
+                   fontSize: "0.875rem"
+                 }}>
+                   <span style={{ fontWeight: "600", color: item.expiryType === "expired" ? "#991b1b" : "#92400e" }}>
+                     {item.docLabel}
+                   </span>
+                   <span style={{ fontSize: "0.8rem", color: item.expiryType === "expired" ? "#b91c1c" : "#b45309", fontWeight: "600" }}>
+                     {item.expiryType === "expired"
+                       ? "🚨 Expired – Immediate upload required"
+                       : `⏳ Expires in ${item.daysLeft} day${item.daysLeft === 1 ? "" : "s"} (${item.expiryDate})`}
+                   </span>
+                 </div>
+               ))}
+             </div>
+           </div>
+         )}
 
          <div className="document-controls" style={{
            display: "flex",
