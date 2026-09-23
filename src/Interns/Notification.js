@@ -1,310 +1,1171 @@
-"use client"
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, X, Trash2, Check, AlertTriangle, Info, CheckCircle2, AlertCircle } from 'lucide-react';
+"use client";
+
+import React, {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  Bell,
+  X,
+  Trash2,
+  Check,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  AlertCircle,
+  CalendarDays,
+} from "lucide-react";
+
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore";
+
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
+
+// Notifications.jsx appears to be inside src/
+// Change this path only if your file is somewhere else.
+import { auth, db } from "../firebaseConfig";
 
 const Notifications = () => {
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] =
+    useState([]);
+
+  const [unreadCount, setUnreadCount] =
+    useState(0);
+
+  const [showNotifications, setShowNotifications] =
+    useState(false);
+
+  const [currentUser, setCurrentUser] =
+    useState(null);
+
   const notificationsRef = useRef(null);
 
-  // Notification type styling
+  /*
+   * Holds the actual Firestore calendar events.
+   *
+   * key:
+   * smeCalendarEvents:firestoreDocId
+   *
+   * value:
+   * {
+   *   id,
+   *   collectionName,
+   *   ...firestoreData
+   * }
+   */
+  const calendarEventsRef = useRef(new Map());
+
+  // --------------------------------------------------
+  // STORAGE HELPERS
+  // --------------------------------------------------
+
+  const getReadStorageKey = (uid) =>
+    `calendarNotificationReads_${uid}`;
+
+  const getDismissedStorageKey = (uid) =>
+    `calendarNotificationDismissed_${uid}`;
+
+  const getStoredSet = (key) => {
+    try {
+      return new Set(
+        JSON.parse(
+          localStorage.getItem(key) || "[]"
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Failed reading notification storage:",
+        error
+      );
+
+      return new Set();
+    }
+  };
+
+  const saveStoredSet = (key, set) => {
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify([...set])
+      );
+    } catch (error) {
+      console.error(
+        "Failed saving notification storage:",
+        error
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // DATE HELPERS
+  // --------------------------------------------------
+
+  const convertToDate = (value) => {
+    if (!value) return null;
+
+    try {
+      // Firestore Timestamp
+      if (typeof value?.toDate === "function") {
+        return value.toDate();
+      }
+
+      // Firestore timestamp-shaped object
+      if (
+        typeof value === "object" &&
+        value.seconds
+      ) {
+        return new Date(
+          value.seconds * 1000
+        );
+      }
+
+      const date = new Date(value);
+
+      if (Number.isNaN(date.getTime())) {
+        return null;
+      }
+
+      return date;
+    } catch {
+      return null;
+    }
+  };
+
+  const getEventDate = (event) => {
+    // Confirmed / scheduled meeting date
+    if (event.scheduledDate) {
+      const scheduled =
+        convertToDate(event.scheduledDate);
+
+      if (scheduled) return scheduled;
+    }
+
+    // Normal calendar date
+    if (event.date) {
+      const date =
+        convertToDate(event.date);
+
+      if (date) return date;
+    }
+
+    // Meeting availability dates
+    if (
+      Array.isArray(event.availableDates) &&
+      event.availableDates.length > 0
+    ) {
+      const date =
+        convertToDate(
+          event.availableDates[0]?.date
+        );
+
+      if (date) return date;
+    }
+
+    return null;
+  };
+
+  const getCreatedDate = (event) => {
+    return (
+      convertToDate(event.updatedAt) ||
+      convertToDate(event.createdAt) ||
+      getEventDate(event) ||
+      new Date()
+    );
+  };
+
+  const formatEventDate = (date) => {
+    if (!date) return "";
+
+    return date.toLocaleDateString(
+      "en-ZA",
+      {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }
+    );
+  };
+
+  // --------------------------------------------------
+  // NOTIFICATION TYPE
+  // --------------------------------------------------
+
   const getNotificationStyle = (type) => {
     switch (type) {
-      case 'success':
-        return { 
-          borderLeftColor: '#4caf50',
-          icon: <CheckCircle2 size={16} className="text-green-500" />,
-          title: 'Match Update'
+      case "success":
+        return {
+          borderLeftColor: "#4caf50",
+          icon: (
+            <CheckCircle2
+              size={16}
+              className="text-green-500"
+            />
+          ),
+          title: "Success",
         };
-      case 'status_change':
-        return { 
-          borderLeftColor: '#2196f3',
-          icon: <Info size={16} className="text-blue-500" />,
-          title: 'Status Change'
+
+      case "error":
+        return {
+          borderLeftColor: "#f44336",
+          icon: (
+            <AlertCircle
+              size={16}
+              className="text-red-500"
+            />
+          ),
+          title: "Error",
         };
-      case 'new_match':
-        return { 
-          borderLeftColor: '#9c27b0',
-          icon: <AlertCircle size={16} className="text-purple-500" />,
-          title: 'New Match'
+
+      case "warning":
+        return {
+          borderLeftColor: "#ffc107",
+          icon: (
+            <AlertTriangle
+              size={16}
+              className="text-yellow-500"
+            />
+          ),
+          title: "Warning",
         };
+
       default:
-        return { 
-          borderLeftColor: '#ff9800',
-          icon: <AlertTriangle size={16} className="text-orange-500" />,
-          title: 'Update'
+        return {
+          borderLeftColor: "#2196f3",
+          icon: (
+            <Info
+              size={16}
+              className="text-blue-500"
+            />
+          ),
+          title: "Information",
         };
     }
   };
 
-  // Load notifications from localStorage
-  useEffect(() => {
-    const savedNotifications = JSON.parse(localStorage.getItem('intern-notifications') || '[]');
-    setNotifications(savedNotifications);
-    setUnreadCount(savedNotifications.filter(n => !n.read).length);
-  }, []);
+  // --------------------------------------------------
+  // TURN CALENDAR EVENT INTO NOTIFICATION
+  // --------------------------------------------------
 
-  // Listen for status changes in the PROGRAM SPONSOR MATCHES table
-  useEffect(() => {
-    const handleStatusChange = (event) => {
-      if (event.detail && event.detail.type === 'status_change') {
-        addNotification(
-          `Your application status with ${event.detail.company} changed to ${event.detail.newStatus}`,
-          'status_change',
-          {
-            company: event.detail.company,
-            internshipRole: event.detail.internshipRole,
-            oldStatus: event.detail.oldStatus,
-            newStatus: event.detail.newStatus
-          }
-        );
-      }
-    };
+  const createCalendarNotification = (
+    event,
+    uid,
+    readIds,
+    dismissedIds
+  ) => {
+    const status = String(
+      event.status ||
+      event.meetingStatus ||
+      "pending"
+    ).toLowerCase();
 
-    const handleNewMatch = (event) => {
-      if (event.detail && event.detail.type === 'new_match') {
-        addNotification(
-          `New match found with ${event.detail.company} for ${event.detail.role}`,
-          'new_match',
-          {
-            company: event.detail.company,
-            internshipRole: event.detail.role,
-            matchPercentage: event.detail.matchPercentage
-          }
-        );
-      }
-    };
+    /*
+     * Status is deliberately part of the notification ID.
+     *
+     * Example:
+     *
+     * event1:pending
+     * event1:scheduled
+     *
+     * This means if the user already read the
+     * "pending invitation", changing the meeting to
+     * "scheduled" can produce a NEW unread update.
+     */
+    const notificationId =
+      `${event.collectionName}:` +
+      `${event.id}:` +
+      `${status}`;
 
-    window.addEventListener('intern_status_change', handleStatusChange);
-    window.addEventListener('new_intern_match', handleNewMatch);
+    if (dismissedIds.has(notificationId)) {
+      return null;
+    }
 
-    return () => {
-      window.removeEventListener('intern_status_change', handleStatusChange);
-      window.removeEventListener('new_intern_match', handleNewMatch);
-    };
-  }, []);
+    /*
+     * Don't notify somebody about the event they
+     * themselves just created.
+     *
+     * Recipient copies have the original creator
+     * in createdBy but the recipient's uid in smeId.
+     */
+    const createdByCurrentUser =
+      event.createdBy === uid;
 
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
-    };
+    const isRecipientInvitation =
+      event.isInvitation === true;
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+    if (
+      createdByCurrentUser &&
+      !isRecipientInvitation
+    ) {
+      return null;
+    }
 
-  const addNotification = (message, type = 'info', metadata = {}) => {
-    const newNotification = {
-      id: Date.now(),
+    const eventTitle =
+      event.title ||
+      event.name ||
+      event.purpose ||
+      "Meeting";
+
+    const senderName =
+      event.createdByName ||
+      event.requesterName ||
+      event.customerName ||
+      event.smeName ||
+      event.host ||
+      "A user";
+
+    const meetingDate =
+      getEventDate(event);
+
+    const dateText =
+      meetingDate
+        ? ` on ${formatEventDate(
+            meetingDate
+          )}`
+        : "";
+
+    const location =
+      event.location &&
+      event.location !== "Virtual"
+        ? ` at ${event.location}`
+        : "";
+
+    let type = "info";
+    let title =
+      "New Calendar Event";
+    let message =
+      `${senderName} added "${eventTitle}" ` +
+      `to your calendar${dateText}${location}.`;
+
+    switch (status) {
+      case "pending":
+        type = "info";
+        title =
+          isRecipientInvitation
+            ? "New Meeting Invitation"
+            : "New Calendar Event";
+
+        message =
+          `${senderName} invited you to ` +
+          `"${eventTitle}"${dateText}${location}.`;
+        break;
+
+      case "scheduled":
+        type = "success";
+        title = "Meeting Scheduled";
+
+        message =
+          `"${eventTitle}" has been scheduled` +
+          `${dateText}${location}.`;
+        break;
+
+      case "confirmed":
+        type = "success";
+        title = "Meeting Confirmed";
+
+        message =
+          `"${eventTitle}" has been confirmed` +
+          `${dateText}${location}.`;
+        break;
+
+      case "rescheduled":
+        type = "warning";
+        title = "Meeting Rescheduled";
+
+        message =
+          `"${eventTitle}" has been rescheduled` +
+          `${dateText}${location}.`;
+        break;
+
+      case "cancelled":
+      case "canceled":
+        type = "warning";
+        title = "Meeting Cancelled";
+
+        message =
+          `"${eventTitle}" was cancelled.`;
+        break;
+
+      case "completed":
+        type = "success";
+        title = "Meeting Completed";
+
+        message =
+          `"${eventTitle}" was marked as completed.`;
+        break;
+
+      default:
+        type = "info";
+        title = "Calendar Update";
+        break;
+    }
+
+    const createdDate =
+      getCreatedDate(event);
+
+    return {
+      id: notificationId,
+
+      // Keep original Firestore information
+      eventId: event.id,
+      eventCollection:
+        event.collectionName,
+
+      category: "calendar",
+
+      title,
       message,
       type,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      date: new Date().toLocaleDateString(),
-      read: false,
-      metadata
+
+      status,
+
+      timestamp: createdDate,
+
+      date:
+        createdDate.toISOString(),
+
+      read:
+        readIds.has(
+          notificationId
+        ),
+
+      eventDate:
+        meetingDate,
+
+      location:
+        event.location ||
+        "Virtual",
     };
+  };
 
-    setNotifications(prev => {
-      const updated = [newNotification, ...prev].slice(0, 50);
-      localStorage.setItem('intern-notifications', JSON.stringify(updated));
-      return updated;
-    });
+  // --------------------------------------------------
+  // BUILD THE NOTIFICATION LIST
+  // --------------------------------------------------
 
-    setUnreadCount(prev => prev + 1);
-    
-    // Trigger native browser notification if permitted
-    if (Notification.permission === 'granted') {
-      new Notification('Intern Match Update', {
-        body: message,
-        icon: '/logo192.png'
-      });
+  const rebuildNotifications = (uid) => {
+    if (!uid) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
     }
-  };
 
-  const markAllAsRead = () => {
-    const updatedNotifications = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updatedNotifications);
-    setUnreadCount(0);
-    localStorage.setItem('intern-notifications', JSON.stringify(updatedNotifications));
-  };
+    const readIds =
+      getStoredSet(
+        getReadStorageKey(uid)
+      );
 
-  const clearAllNotifications = () => {
-    setNotifications([]);
-    setUnreadCount(0);
-    localStorage.removeItem('intern-notifications');
-  };
+    const dismissedIds =
+      getStoredSet(
+        getDismissedStorageKey(uid)
+      );
 
-  const deleteNotification = (id) => {
-    const wasUnread = notifications.find(n => n.id === id)?.read === false;
-    const updatedNotifications = notifications.filter(n => n.id !== id);
-    setNotifications(updatedNotifications);
-    if (wasUnread) {
-      setUnreadCount(prev => prev - 1);
-    }
-    localStorage.setItem('intern-notifications', JSON.stringify(updatedNotifications));
-  };
+    const builtNotifications = [
+      ...calendarEventsRef.current.values(),
+    ]
+      .map((event) =>
+        createCalendarNotification(
+          event,
+          uid,
+          readIds,
+          dismissedIds
+        )
+      )
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          b.timestamp.getTime() -
+          a.timestamp.getTime()
+      )
+      .slice(0, 50);
 
-  const markAsRead = (id) => {
-    const updatedNotifications = notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
+    setNotifications(
+      builtNotifications
     );
-    setNotifications(updatedNotifications);
-    setUnreadCount(prev => prev - 1);
-    localStorage.setItem('intern-notifications', JSON.stringify(updatedNotifications));
+
+    setUnreadCount(
+      builtNotifications.filter(
+        (notification) =>
+          !notification.read
+      ).length
+    );
   };
 
-  const formatTimestamp = (dateString) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInHours = (now - date) / (1000 * 60 * 60);
-    
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-  };
+  // --------------------------------------------------
+  // AUTH LISTENER
+  // --------------------------------------------------
 
-  const handleNotificationClick = (id, isRead, metadata) => {
-    if (!isRead) {
-      markAsRead(id);
-    }
-    
-    // You could add navigation logic here based on the metadata
-    // For example, navigate to the specific internship application
-    console.log('Notification metadata:', metadata);
-  };
-
-  const requestNotificationPermission = () => {
-    if (Notification.permission !== 'granted') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          console.log('Notification permission granted');
-        }
-      });
-    }
-  };
-
-  // Request notification permission when component mounts
   useEffect(() => {
-    requestNotificationPermission();
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        (user) => {
+          setCurrentUser(user);
+
+          if (!user) {
+            calendarEventsRef.current.clear();
+            setNotifications([]);
+            setUnreadCount(0);
+          }
+        }
+      );
+
+    return unsubscribe;
   }, []);
 
+  // --------------------------------------------------
+  // REAL-TIME FIRESTORE CALENDAR LISTENERS
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      return;
+    }
+
+    const uid = currentUser.uid;
+
+    calendarEventsRef.current.clear();
+
+    /*
+     * These are the exact collections currently used
+     * by your Meetings page.
+     */
+    const calendarSources = [
+      {
+        collectionName:
+          "smeCalendarEvents",
+
+        userField:
+          "smeId",
+      },
+      {
+        collectionName:
+          "supplierCalendarEvents",
+
+        userField:
+          "supplierId",
+      },
+    ];
+
+    const unsubscribers =
+      calendarSources.map(
+        ({
+          collectionName,
+          userField,
+        }) => {
+          const calendarQuery =
+            query(
+              collection(
+                db,
+                collectionName
+              ),
+              where(
+                userField,
+                "==",
+                uid
+              )
+            );
+
+          return onSnapshot(
+            calendarQuery,
+
+            (snapshot) => {
+              /*
+               * Remove the old snapshot for this
+               * particular collection first.
+               */
+              const prefix =
+                `${collectionName}:`;
+
+              for (
+                const key of
+                calendarEventsRef.current.keys()
+              ) {
+                if (
+                  key.startsWith(
+                    prefix
+                  )
+                ) {
+                  calendarEventsRef.current.delete(
+                    key
+                  );
+                }
+              }
+
+              /*
+               * Put current Firestore data back.
+               */
+              snapshot.forEach(
+                (docSnap) => {
+                  const event =
+                    docSnap.data();
+
+                  const mapKey =
+                    `${collectionName}:` +
+                    docSnap.id;
+
+                  calendarEventsRef.current.set(
+                    mapKey,
+                    {
+                      id:
+                        docSnap.id,
+
+                      collectionName,
+
+                      ...event,
+                    }
+                  );
+                }
+              );
+
+              rebuildNotifications(
+                uid
+              );
+            },
+
+            (error) => {
+              console.error(
+                `Error listening to ${collectionName}:`,
+                error
+              );
+            }
+          );
+        }
+      );
+
+    return () => {
+      unsubscribers.forEach(
+        (unsubscribe) =>
+          unsubscribe()
+      );
+
+      calendarEventsRef.current.clear();
+    };
+  }, [currentUser?.uid]);
+
+  // --------------------------------------------------
+  // CLICK OUTSIDE
+  // --------------------------------------------------
+
+  useEffect(() => {
+    const handleClickOutside = (
+      event
+    ) => {
+      if (
+        notificationsRef.current &&
+        !notificationsRef.current.contains(
+          event.target
+        )
+      ) {
+        setShowNotifications(
+          false
+        );
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+    };
+  }, []);
+
+  // --------------------------------------------------
+  // MARK ONE AS READ
+  // --------------------------------------------------
+
+  const markAsRead = (id) => {
+    if (!currentUser?.uid) return;
+
+    const storageKey =
+      getReadStorageKey(
+        currentUser.uid
+      );
+
+    const readIds =
+      getStoredSet(storageKey);
+
+    readIds.add(id);
+
+    saveStoredSet(
+      storageKey,
+      readIds
+    );
+
+    setNotifications(
+      (previous) =>
+        previous.map(
+          (notification) =>
+            notification.id === id
+              ? {
+                  ...notification,
+                  read: true,
+                }
+              : notification
+        )
+    );
+
+    setUnreadCount(
+      (previous) =>
+        Math.max(
+          0,
+          previous - 1
+        )
+    );
+  };
+
+  // --------------------------------------------------
+  // MARK ALL READ
+  // --------------------------------------------------
+
+  const markAllAsRead = () => {
+    if (!currentUser?.uid) return;
+
+    const storageKey =
+      getReadStorageKey(
+        currentUser.uid
+      );
+
+    const readIds =
+      getStoredSet(storageKey);
+
+    notifications.forEach(
+      (notification) => {
+        readIds.add(
+          notification.id
+        );
+      }
+    );
+
+    saveStoredSet(
+      storageKey,
+      readIds
+    );
+
+    setNotifications(
+      (previous) =>
+        previous.map(
+          (notification) => ({
+            ...notification,
+            read: true,
+          })
+        )
+    );
+
+    setUnreadCount(0);
+  };
+
+  // --------------------------------------------------
+  // DELETE ONE
+  // --------------------------------------------------
+
+  const deleteNotification = (
+    id
+  ) => {
+    if (!currentUser?.uid) return;
+
+    const dismissedKey =
+      getDismissedStorageKey(
+        currentUser.uid
+      );
+
+    const dismissedIds =
+      getStoredSet(
+        dismissedKey
+      );
+
+    dismissedIds.add(id);
+
+    saveStoredSet(
+      dismissedKey,
+      dismissedIds
+    );
+
+    setNotifications(
+      (previous) => {
+        const target =
+          previous.find(
+            (item) =>
+              item.id === id
+          );
+
+        if (
+          target &&
+          !target.read
+        ) {
+          setUnreadCount(
+            (count) =>
+              Math.max(
+                0,
+                count - 1
+              )
+          );
+        }
+
+        return previous.filter(
+          (item) =>
+            item.id !== id
+        );
+      }
+    );
+  };
+
+  // --------------------------------------------------
+  // CLEAR ALL
+  // --------------------------------------------------
+
+  const clearAllNotifications =
+    () => {
+      if (!currentUser?.uid) return;
+
+      const dismissedKey =
+        getDismissedStorageKey(
+          currentUser.uid
+        );
+
+      const dismissedIds =
+        getStoredSet(
+          dismissedKey
+        );
+
+      notifications.forEach(
+        (notification) => {
+          dismissedIds.add(
+            notification.id
+          );
+        }
+      );
+
+      saveStoredSet(
+        dismissedKey,
+        dismissedIds
+      );
+
+      setNotifications([]);
+      setUnreadCount(0);
+    };
+
+  // --------------------------------------------------
+  // DISPLAY TIME
+  // --------------------------------------------------
+
+  const formatTimestamp = (
+    timestamp
+  ) => {
+    const date =
+      timestamp instanceof Date
+        ? timestamp
+        : new Date(timestamp);
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return "";
+    }
+
+    const now = new Date();
+
+    const difference =
+      now.getTime() -
+      date.getTime();
+
+    const minutes =
+      difference /
+      (1000 * 60);
+
+    const hours =
+      difference /
+      (1000 * 60 * 60);
+
+    if (
+      minutes >= 0 &&
+      minutes < 1
+    ) {
+      return "Just now";
+    }
+
+    if (
+      minutes >= 1 &&
+      minutes < 60
+    ) {
+      return `${Math.floor(
+        minutes
+      )}m ago`;
+    }
+
+    if (
+      hours >= 0 &&
+      hours < 24
+    ) {
+      return date.toLocaleTimeString(
+        [],
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      );
+    }
+
+    return date.toLocaleDateString(
+      "en-ZA",
+      {
+        day: "numeric",
+        month: "short",
+      }
+    );
+  };
+
+  // --------------------------------------------------
+  // NOTIFICATION CLICK
+  // --------------------------------------------------
+
+  const handleNotificationClick = (
+    notification
+  ) => {
+    if (!notification.read) {
+      markAsRead(
+        notification.id
+      );
+    }
+
+    /*
+     * Optional:
+     *
+     * If you want clicking a calendar notification
+     * to open your Calendar page, uncomment:
+     *
+     * window.location.href = "/calendar";
+     */
+  };
+
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
+
   return (
-    <div className="notifications-container" ref={notificationsRef}>
+    <div
+      className="notifications-container"
+      ref={notificationsRef}
+    >
       <button
-        className={`icon-button ${showNotifications ? 'active' : ''}`}
+        className={`icon-button ${
+          showNotifications
+            ? "active"
+            : ""
+        }`}
         onClick={() => {
-          setShowNotifications(!showNotifications);
-          if (!showNotifications && unreadCount > 0) {
+          const opening =
+            !showNotifications;
+
+          setShowNotifications(
+            opening
+          );
+
+          /*
+           * This preserves the behaviour
+           * from your existing component:
+           * opening the dropdown marks
+           * everything as read.
+           *
+           * Remove this block if you want
+           * notifications to remain unread
+           * until each one is clicked.
+           */
+          if (
+            opening &&
+            unreadCount > 0
+          ) {
             markAllAsRead();
           }
         }}
         aria-label="Notifications"
       >
         <Bell size={20} />
+
         {unreadCount > 0 && (
-          <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+          <span className="notification-badge">
+            {unreadCount > 9
+              ? "9+"
+              : unreadCount}
+          </span>
         )}
       </button>
 
       {showNotifications && (
         <div className="dropdown-menu notifications-dropdown">
           <div className="dropdown-header">
-            <h3>Internship Updates</h3>
+            <h3>
+              Notifications
+            </h3>
+
             <div className="notification-actions">
-              <button 
-                className="mark-read-button" 
-                onClick={markAllAsRead}
+              <button
+                className="mark-read-button"
+                onClick={
+                  markAllAsRead
+                }
               >
-                <Check size={16} /> Mark all as read
+                <Check size={16} />
+                Mark all as read
               </button>
-              <button className="clear-all-button" onClick={clearAllNotifications}>
-                <Trash2 size={16} /> Clear all
+
+              <button
+                className="clear-all-button"
+                onClick={
+                  clearAllNotifications
+                }
+              >
+                <Trash2
+                  size={16}
+                />
+                Clear all
               </button>
             </div>
           </div>
-          <div className="dropdown-divider"></div>
+
+          <div className="dropdown-divider" />
+
           <div className="notifications-list">
-            {notifications.length === 0 ? (
+            {notifications.length ===
+            0 ? (
               <div className="notification-item empty">
-                <p>No notifications yet</p>
-                <p className="notification-subtext">You'll be notified about your internship matches</p>
+                <p>
+                  No notifications
+                  yet
+                </p>
               </div>
             ) : (
-              notifications.map(notification => {
-                const style = getNotificationStyle(notification.type);
-                return (
-                  <div 
-                    key={notification.id} 
-                    className={`notification-item ${notification.read ? 'read' : 'unread'}`}
-                    style={{ 
-                      borderLeftColor: style.borderLeftColor,
-                      backgroundColor: notification.read ? '#FFFFFF' : '#909090'
-                    }}
-                    onClick={() => handleNotificationClick(
-                      notification.id, 
-                      notification.read,
-                      notification.metadata
-                    )}
-                  >
-                    <div className="notification-icon-container">
-                      {style.icon}
-                    </div>
-                    <div className="notification-content">
-                      <div className="notification-header">
-                        <span className="notification-title">{style.title}</span>
-                        {notification.metadata?.company && (
-                          <span className="notification-company">
-                            {notification.metadata.company}
-                          </span>
+              notifications.map(
+                (notification) => {
+                  const style =
+                    getNotificationStyle(
+                      notification.type
+                    );
+
+                  return (
+                    <div
+                      key={
+                        notification.id
+                      }
+                      className={`notification-item ${
+                        notification.read
+                          ? "read"
+                          : "unread"
+                      }`}
+                      style={{
+                        borderLeftColor:
+                          style.borderLeftColor,
+
+                        backgroundColor:
+                          notification.read
+                            ? "#FFFFFF"
+                            : "#F5F8FF",
+                      }}
+                      onClick={() =>
+                        handleNotificationClick(
+                          notification
+                        )
+                      }
+                    >
+                      <div className="notification-icon-container">
+                        {notification.category ===
+                        "calendar" ? (
+                          <CalendarDays
+                            size={18}
+                          />
+                        ) : (
+                          style.icon
                         )}
                       </div>
-                      <p className="notification-text">
-                        {notification.message}
-                      </p>
-                      {notification.metadata?.internshipRole && (
-                        <p className="notification-role">
-                          Role: {notification.metadata.internshipRole}
+
+                      <div className="notification-content">
+                        <div className="notification-header">
+                          <span className="notification-title">
+                            {
+                              notification.title
+                            }
+                          </span>
+                        </div>
+
+                        <p className="notification-text">
+                          {
+                            notification.message
+                          }
                         </p>
-                      )}
-                      {notification.metadata?.matchPercentage && (
-                        <p className="notification-match">
-                          Match: {notification.metadata.matchPercentage}%
-                        </p>
-                      )}
-                      <div className="notification-meta">
-                        <span className="notification-time">
-                          {formatTimestamp(notification.date)}
-                        </span>
-                        {!notification.read && <span className="unread-dot"></span>}
+
+                        <div className="notification-meta">
+                          <span className="notification-time">
+                            {formatTimestamp(
+                              notification.timestamp
+                            )}
+                          </span>
+
+                          {notification.status && (
+                            <span className="notification-status">
+                              {
+                                notification.status
+                              }
+                            </span>
+                          )}
+
+                          {!notification.read && (
+                            <span className="unread-dot" />
+                          )}
+                        </div>
                       </div>
+
+                      <button
+                        className="delete-notification"
+                        onClick={(
+                          event
+                        ) => {
+                          event.stopPropagation();
+
+                          deleteNotification(
+                            notification.id
+                          );
+                        }}
+                        aria-label="Delete notification"
+                      >
+                        <X
+                          size={16}
+                        />
+                      </button>
                     </div>
-                    <button 
-                      className="delete-notification" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteNotification(notification.id);
-                      }}
-                      aria-label="Delete notification"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                );
-              })
+                  );
+                }
+              )
             )}
           </div>
         </div>
       )}
 
-      <style>{`
+   <style>{`
+      .notification-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #f1ece9;
+  color: #5d4037;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
         .notifications-container {
           position: relative;
           display: inline-block;
@@ -391,7 +1252,6 @@ const Notifications = () => {
           margin: 0;
           font-size: 16px;
           font-weight: 600;
-          color: #5D4037;
         }
         
         .notification-actions {
@@ -461,13 +1321,6 @@ const Notifications = () => {
           text-align: center;
           cursor: default;
           background: white !important;
-          flex-direction: column;
-        }
-        
-        .notification-subtext {
-          font-size: 12px;
-          color: #aaa;
-          margin-top: 4px;
         }
         
         .notification-icon-container {
@@ -488,22 +1341,12 @@ const Notifications = () => {
           display: flex;
           align-items: center;
           margin-bottom: 8px;
-          gap: 8px;
-          flex-wrap: wrap;
         }
         
         .notification-title {
           font-weight: 600;
           font-size: 14px;
           color: #333;
-        }
-        
-        .notification-company {
-          font-size: 12px;
-          background: #f0f0f0;
-          padding: 2px 6px;
-          border-radius: 4px;
-          color: #555;
         }
         
         .notification-text {
@@ -513,17 +1356,6 @@ const Notifications = () => {
           white-space: normal;
           word-wrap: break-word;
           color: #555;
-        }
-        
-        .notification-role,
-        .notification-match {
-          font-size: 12px;
-          color: #666;
-          margin: 4px 0;
-          padding: 2px 4px;
-          background: #f5f5f5;
-          border-radius: 3px;
-          display: inline-block;
         }
         
         .notification-meta {
@@ -561,33 +1393,6 @@ const Notifications = () => {
       `}</style>
     </div>
   );
-};
-
-// Helper function to dispatch status change events
-export const notifyStatusChange = (company, role, oldStatus, newStatus) => {
-  const event = new CustomEvent('intern_status_change', {
-    detail: {
-      type: 'status_change',
-      company,
-      internshipRole: role,
-      oldStatus,
-      newStatus
-    }
-  });
-  window.dispatchEvent(event);
-};
-
-// Helper function to dispatch new match events
-export const notifyNewMatch = (company, role, matchPercentage) => {
-  const event = new CustomEvent('new_intern_match', {
-    detail: {
-      type: 'new_match',
-      company,
-      role,
-      matchPercentage
-    }
-  });
-  window.dispatchEvent(event);
 };
 
 export default Notifications;

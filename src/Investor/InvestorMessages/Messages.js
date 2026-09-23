@@ -1,15 +1,61 @@
 import { useEffect, useState } from "react"
+import { getAuth } from "firebase/auth"
+import { collection, query, where, getDocs } from "firebase/firestore"
+import { db } from "../../firebaseConfig"
 import MessagesComponent from "../../components/Messages/MessagesComponent"
 import Upsell from "../../components/Upsell/Upsell"
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
 const InvestorMessages = () => {
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
+  const [recipientsList, setRecipientsList] = useState([])
+  const [recipientsLoading, setRecipientsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchRecipients = async () => {
+      const auth = getAuth()
+      const user = auth.currentUser
+      if (!user) {
+        setRecipientsLoading(false)
+        return
+      }
+
+      try {
+        const recipientsMap = new Map()
+
+        // SMEs this investor has applications against (I am the funder)
+        const appsQuery = query(
+          collection(db, "investorApplications"),
+          where("funderId", "==", user.uid)
+          || collection(db, "smeinvestorApplications"),
+          where("funderId", "==", user.uid)
+        )
+        const appsSnapshot = await getDocs(appsQuery)
+        appsSnapshot.forEach(doc => {
+          const data = doc.data()
+          const id = data.smeId
+          const name = data.smeName
+          if (id && name && !recipientsMap.has(id)) {
+            recipientsMap.set(id, { id, name })
+          }
+        })
+
+        setRecipientsList(Array.from(recipientsMap.values()))
+      } catch (error) {
+        console.error("Error fetching recipients:", error)
+      } finally {
+        setRecipientsLoading(false)
+      }
+    }
+
+    fetchRecipients()
+  }, [])
 
   const config = {
+    showSidebarOffset: false,
     supportAttachments: true,
     showSearchIcon: true,
-    hasRecipientDropdown: false,
+    hasRecipientDropdown: true,
   }
 
   const getContainerStyles = () => ({
@@ -24,7 +70,7 @@ const InvestorMessages = () => {
     backgroundColor: "#f8f9fa",
   })
 
-  if (subscriptionLoading) {
+  if (subscriptionLoading || recipientsLoading) {
     return (
       <div style={getContainerStyles()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
@@ -52,7 +98,7 @@ const InvestorMessages = () => {
     )
   }
 
-  return <MessagesComponent config={config} />
+  return <MessagesComponent config={config} recipientsList={recipientsList} />
 }
 
 export default InvestorMessages
