@@ -72,12 +72,10 @@ const CatalystMessages = () => {
     return () => unsubscribe();
   }, []);
 
-  const config = {
-    showSidebarOffset: false,
-    supportAttachments: false,
-    showSearchIcon: true,
-    hasRecipientDropdown: true,
-  };
+const config = { showSidebarOffset: false,
+  supportAttachments: true,   // was false
+  showSearchIcon: true,
+  hasRecipientDropdown: true}
 
   if (loading) {
     return (

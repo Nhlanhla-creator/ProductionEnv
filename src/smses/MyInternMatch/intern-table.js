@@ -644,6 +644,97 @@ const calculateMatchScore = (internData, sponsorData) => {
   return { score: Math.min(score, 100), breakdown }
 }
 
+/* ─── Date + list dedupe helpers (mirrors SupportSMETable) ──────────── */
+
+/* Dedupe by calendar day (year+month+day) so a date picked twice — or loaded
+   from an existing availability slot with a slightly different timestamp —
+   doesn't produce two rows. */
+const dayKeyOf = (value) => {
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+const dedupeAvailabilities = (list) => {
+  const seen = new Set()
+  const out = []
+  for (const item of list) {
+    const key = dayKeyOf(item?.date)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+  }
+  return out
+}
+
+/* Location / institution / degree strings can differ only by case or stray
+   whitespace — that's what produced duplicate chips in the filter popovers.
+   Keep the first spelling seen, compare on a normalised key. */
+const dedupeLabels = (values) => {
+  const seen = new Map()
+  for (const raw of values) {
+    if (raw === null || raw === undefined) continue
+    const value = String(raw).trim()
+    if (!value || value === "-" || value.toLowerCase() === "not specified") continue
+    const key = value.toLowerCase()
+    if (!seen.has(key)) seen.set(key, value)
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
+}
+
+/* Converts availability rows into the exact shape the calendar expects — the
+   same shape SupportSMETable writes into smeCalendarEvents. */
+const buildMeetingAvailableDates = (availabilityList, fallbackMeetingTime, defaultTimeZone) => {
+  const slots = []
+
+  if (Array.isArray(availabilityList) && availabilityList.length > 0) {
+    // Already-deduped on the way in.
+    dedupeAvailabilities(availabilityList).forEach((availability) => {
+      if (!availability?.date) return
+      const date = availability.date instanceof Date ? new Date(availability.date) : new Date(availability.date)
+      if (Number.isNaN(date.getTime())) return
+
+      const timeSlots = Array.isArray(availability.timeSlots) ? availability.timeSlots : []
+      const firstTime = timeSlots[0]
+      if (firstTime?.start) {
+        const [hour, minute] = firstTime.start.split(":").map(Number)
+        if (Number.isFinite(hour) && Number.isFinite(minute)) {
+          date.setHours(hour, minute, 0, 0)
+        }
+      }
+
+      slots.push({
+        date: date.toISOString(),
+        timeSlots,
+        timeZone: availability.timeZone || defaultTimeZone,
+        status: "available",
+      })
+    })
+    return slots
+  }
+
+  if (fallbackMeetingTime) {
+    const startDate = new Date(fallbackMeetingTime)
+    if (!Number.isNaN(startDate.getTime())) {
+      const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
+      const pad = (n) => String(n).padStart(2, "0")
+      slots.push({
+        date: startDate.toISOString(),
+        timeSlots: [
+          {
+            start: `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`,
+            end: `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`,
+          },
+        ],
+        timeZone: defaultTimeZone,
+        status: "available",
+      })
+    }
+  }
+
+  return slots
+}
+
 export const calculateMatchScoreForSponsor = (smeData, internProfileData) => {
   const internProfile = internProfileData?.formData || {}
   const sponsorIR = smeData?.internshipRequest || {}
@@ -1346,6 +1437,73 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
     },
     [savedMatches, toast],
   )
+
+  /* ─── Message + meeting helpers (mirrors SupportSMETable) ──────────── */
+
+const sendMessageToIntern = useCallback(
+  async ({
+    sponsorUser,
+    intern,
+    applicationId,
+    subject,
+    content,
+    attachments = [],
+    attachmentNames = [],
+  }) => {
+    // Allow a document-only message too.
+    if (!content?.trim() && attachments.length === 0) return
+
+    let sponsorName =
+      sponsorUser.displayName ||
+      sponsorUser.email?.split("@")[0] ||
+      "Sponsor"
+
+    try {
+      const profileSnap = await getDoc(doc(db, "universalProfiles", sponsorUser.uid))
+      if (profileSnap.exists()) {
+        const data = profileSnap.data()
+        sponsorName =
+          data.entityOverview?.tradingName ||
+          data.entityOverview?.registeredName ||
+          sponsorName
+      }
+    } catch (error) {
+      console.error("Could not load Sponsor name:", error)
+    }
+
+    const messagePayload = {
+      from: sponsorUser.uid,
+      fromName: sponsorName,
+      to: intern.internId || intern.id,
+      toName: intern.internName,
+      subject,
+      content: content || "",
+      attachments,
+      attachmentNames,
+      date: new Date().toISOString(),
+      applicationId,
+    }
+
+    await Promise.all([
+      // Intern inbox copy
+      addDoc(collection(db, "messages"), {
+        ...messagePayload,
+        type: "inbox",
+        read: false,
+        sender: sponsorName,
+      }),
+      // Sponsor sent copy
+      addDoc(collection(db, "messages"), {
+        ...messagePayload,
+        type: "sent",
+        read: true,
+        sender: "You",
+      }),
+    ])
+  },
+  [],
+)
+
 
   /* ─── Company membership ──────────────────────────────────────────────── */
   useEffect(() => {
@@ -2067,20 +2225,20 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
     setActivePopup(null)
   }
 
-  const loadApplicationAvailability = (intern) => {
-    if (intern?.availableDates && Array.isArray(intern.availableDates)) {
-      setAvailabilities(
-        intern.availableDates.map((avail) => ({
-          ...avail,
-          date: new Date(avail.date),
-          timeSlots: Array.isArray(avail.timeSlots) ? avail.timeSlots : [{ start: "09:00", end: "17:00" }],
-          timeZone: avail.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-        })),
-      )
-    } else {
-      setAvailabilities([])
-    }
-  }
+  // const loadApplicationAvailability = (intern) => {
+  //   if (intern?.availableDates && Array.isArray(intern.availableDates)) {
+  //     setAvailabilities(
+  //       intern.availableDates.map((avail) => ({
+  //         ...avail,
+  //         date: new Date(avail.date),
+  //         timeSlots: Array.isArray(avail.timeSlots) ? avail.timeSlots : [{ start: "09:00", end: "17:00" }],
+  //         timeZone: avail.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  //       })),
+  //     )
+  //   } else {
+  //     setAvailabilities([])
+  //   }
+  // }
 
   const openPopup = (type, intern, rect) => {
     let popupWidth
@@ -2173,25 +2331,60 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
     setMeetingPurpose("")
   }
 
-  const handleTimeChange = (type, value) => setTimeSlot((prev) => ({ ...prev, [type]: value }))
+const handleTimeChange = (type, value) => setTimeSlot((prev) => ({ ...prev, [type]: value }))
 
-  const saveSelectedDates = () => {
-    const newAvailabilities = tempDates
-      .filter((date) => !availabilities.some((a) => a.date?.getTime?.() === date.getTime()))
-      .map((date) => ({
-        date,
-        timeSlots: [{ start: timeSlot.start, end: timeSlot.end }],
-        timeZone,
-        status: "available",
-      }))
-    setAvailabilities((prev) => [...prev, ...newAvailabilities])
-    setShowCalendarPopup(false)
-    setTempDates([])
+/* Push into tempDates only if that calendar day isn't already staged. */
+const addTempDate = (value) => {
+  if (!value) return
+  const picked = new Date(value)
+  if (Number.isNaN(picked.getTime())) return
+  const key = dayKeyOf(picked)
+  setTempDates((prev) => (prev.some((d) => dayKeyOf(d) === key) ? prev : [...prev, picked]))
+}
+
+/* Merge staged dates into availabilities, deduped on calendar day against
+   both the existing list and each other. */
+const saveSelectedDates = () => {
+  const existingKeys = new Set(availabilities.map((a) => dayKeyOf(a.date)))
+  const additions = []
+  for (const date of tempDates) {
+    const key = dayKeyOf(date)
+    if (!key || existingKeys.has(key)) continue
+    existingKeys.add(key)
+    additions.push({
+      date,
+      timeSlots: [{ start: timeSlot.start, end: timeSlot.end }],
+      timeZone,
+      status: "available",
+    })
   }
+  setAvailabilities((prev) => dedupeAvailabilities([...prev, ...additions]))
+  setShowCalendarPopup(false)
+  setTempDates([])
+}
 
-  const removeAvailability = (dateToRemove) =>
-    setAvailabilities((prev) => prev.filter((avail) => avail.date.getTime() !== dateToRemove.getTime()))
+const removeAvailability = (dateToRemove) => {
+  const key = dayKeyOf(dateToRemove)
+  setAvailabilities((prev) => prev.filter((avail) => dayKeyOf(avail.date) !== key))
+}
 
+/* Loading from the intern — collapse any dupes that arrived from earlier
+   versions of the app. */
+const loadApplicationAvailability = (intern) => {
+  if (intern?.availableDates && Array.isArray(intern.availableDates)) {
+    const mapped = intern.availableDates.map((avail) => ({
+      ...avail,
+      date: new Date(avail.date),
+      timeSlots: Array.isArray(avail.timeSlots) && avail.timeSlots.length
+        ? avail.timeSlots
+        : [{ start: "09:00", end: "17:00" }],
+      timeZone: avail.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }))
+    setAvailabilities(dedupeAvailabilities(mapped))
+  } else {
+    setAvailabilities([])
+  }
+}
   const getStageFields = (stage) => {
     const fields = {
       showMessage: true,
@@ -2360,21 +2553,72 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
       const applicationData = docSnapshot.data()
       const internUid = applicationData.applicantId
 
-      await updateDoc(docRef, updateData)
+           await updateDoc(docRef, updateData)
 
-      if (stageFields.showInterview && interviewDate && interviewTime && interviewLocation) {
-        await addDoc(collection(db, "internCalendarEvents"), {
-          sponsorId,
+      // ─────────────────────────────────────────────
+      // MEETING REQUEST — same shape as SupportSMETable's smeCalendarEvents
+      // ─────────────────────────────────────────────
+      const proposedMeetingSlots = buildMeetingAvailableDates(
+        updateData.availableDates || [],
+        meetingTime,
+        timeZone,
+      )
+
+      const meetingFeatureEnabled =
+        stageFields.showMeeting || stageFields.showAvailability
+
+      const meetingRequested =
+        meetingFeatureEnabled &&
+        (proposedMeetingSlots.length > 0 || (interviewDate && interviewTime))
+
+      let meetingEventId = null
+
+      if (meetingRequested) {
+        const sponsorName = user.displayName || "Sponsor"
+        const meetingLocationValue = (meetingLocation || interviewLocation || "").trim() || "Virtual"
+        const meetingPurposeValue =
+          (meetingPurpose || "").trim() || "Internship Meeting"
+
+        // Deterministic id — safe to retry.
+        meetingEventId = `sponsor_${applicationDocId}`
+
+        const calendarEvent = {
+          // Intern receiving the request
           internId: internUid,
-          title: "Internship Interview",
-          date: interviewDate,
-          time: interviewTime,
-          status: "available",
-          location: interviewLocation,
-          type: "internship_meeting",
-          createdAt: new Date().toISOString(),
-          ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-        })
+          internName: selectedInternForStage.internName,
+
+          // Sponsor requesting the meeting
+          sponsorId,
+          requesterId: user.uid,
+          requesterName: sponsorName,
+          requesterType: "Sponsor",
+          createdBy: user.uid,
+          createdByName: sponsorName,
+
+          // Application relationship
+          internshipApplicationId: applicationDocId,
+          applicationId: applicationDocId,
+
+          // Meeting details
+          title: meetingPurposeValue,
+          purpose: meetingPurposeValue,
+          description:
+            stageNotes?.trim() || `Meeting request from ${sponsorName}`,
+          location: meetingLocationValue,
+          availableDates: proposedMeetingSlots,
+          timeZone: proposedMeetingSlots[0]?.timeZone || timeZone,
+
+          // Workflow
+          status: "pending",
+          meetingStatus: "pending",
+          requestType: "meeting_request",
+          source: "sponsor",
+          isInvitation: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }
+
+        await setDoc(doc(db, "internCalendarEvents", meetingEventId), calendarEvent, { merge: true })
       }
 
       setInterns((prevInterns) =>
@@ -2385,9 +2629,6 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
                 status: selectedStage,
                 pipelineStage: selectedStage,
                 ...(stageNotes && { lastMessage: stageNotes }),
-                ...(stageFields.showInterview && {
-                  interviewDetails: { date: interviewDate, time: interviewTime, location: interviewLocation },
-                }),
                 ...(updateData.availableDates && { availableDates: updateData.availableDates }),
               }
             : intern,
@@ -2399,6 +2640,43 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
       closePopup()
       resetStageForm()
 
+      // ─────────────────────────────────────────────
+      // MESSAGE THE INTERN — mirrors sendMessageToSME
+      // ─────────────────────────────────────────────
+      if (stageNotes?.trim()) {
+        try {
+          let messageBody = stageNotes
+
+          if (meetingRequested) {
+            messageBody = `${stageNotes}
+
+A meeting has been requested.
+
+Purpose: ${(meetingPurpose || "").trim() || "Internship Meeting"}
+Location: ${(meetingLocation || interviewLocation || "").trim() || "Virtual"}
+
+Please open your Calendar to select and confirm one of the proposed time slots.`
+          }
+
+          await sendMessageToIntern({
+            sponsorUser: user,
+            intern: selectedInternForStage,
+            applicationId: applicationDocId,
+            subject: meetingRequested
+              ? `Meeting Request — Internship Programme`
+              : `Internship Application — ${selectedStage}`,
+            content: messageBody,
+            attachments: attachmentUrl ? [attachmentUrl] : [],
+            attachmentNames: termSheetFile ? [termSheetFile.name] : [],
+          })
+        } catch (messageError) {
+          console.error("Stage saved but message failed:", messageError)
+        }
+      }
+
+      // ─────────────────────────────────────────────
+      // EMAIL NOTIFICATION (kept — intern table already uses emailjs)
+      // ─────────────────────────────────────────────
       let internEmail = null
       try {
         const internProfileSnap = await getDoc(doc(db, "internProfiles", internUid))
@@ -2415,68 +2693,6 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
       }
 
       if (!internEmail) internEmail = selectedInternForStage.profileEmail
-
-      const subject = `Update: ${selectedStage} Stage for Your Application`
-      let content = `Dear ${selectedInternForStage.internName},\n\nYour application has progressed to the "${selectedStage}" stage.\n\n`
-
-      if (stageNotes) {
-        content += `Message from ${user?.displayName || "Internship Program Team"}:\n${stageNotes}\n\n`
-      }
-
-      if (stageFields.showMeeting) {
-        content += `Meeting Details:\n`
-        if (meetingTime) content += `- Time: ${new Date(meetingTime).toLocaleString()}\n`
-        if (meetingLocation) content += `- Location: ${meetingLocation}\n`
-        if (meetingPurpose) content += `- Purpose: ${meetingPurpose}\n\n`
-      }
-
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        content += `Available Meeting Times:\n`
-        content += availabilities
-          .map((avail, idx) => {
-            const dateStr = avail.date.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })
-            const timeStr = avail.timeSlots?.[0]
-              ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-              : "Time not specified"
-            return `${idx + 1}. ${dateStr} (${timeStr})`
-          })
-          .join("\n")
-        content += `\nPlease reply with your preferred time.`
-      }
-
-      content += `\n\nBest regards,\nInternship Program Team\nBIG Marketplace Africa`
-
-      const messagePayload = {
-        to: internUid,
-        from: sponsorId,
-        subject,
-        content,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        applicationId: internId,
-        ...(attachmentUrl && { attachments: [attachmentUrl] }),
-        ...(stageFields.showAvailability &&
-          availabilities.length > 0 && { availableDates: updateData.availableDates }),
-      }
-
-      const sentMessagePayload = {
-        ...messagePayload,
-        read: true,
-        type: "sent",
-        to: sponsorId,
-        from: internUid,
-      }
-
-      await Promise.all([
-        addDoc(collection(db, "messages"), messagePayload),
-        addDoc(collection(db, "messages"), sentMessagePayload),
-      ])
 
       if (internEmail) {
         try {
@@ -2507,24 +2723,21 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
 
           if (stageNotes) emailMessage += `Message from ${sponsorName}:\n${stageNotes}\n\n`
 
-          if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
+          if (meetingRequested) {
             emailMessage += `Meeting Details:\n`
-            if (meetingTime) emailMessage += `- Date: ${new Date(meetingTime).toLocaleString()}\n`
-            emailMessage += `- Location: ${meetingLocation}\n`
-            emailMessage += `- Purpose: ${meetingPurpose}\n\n`
-          }
+            if (meetingLocation) emailMessage += `- Location: ${meetingLocation}\n`
+            if (meetingPurpose) emailMessage += `- Purpose: ${meetingPurpose}\n\n`
 
-          if (stageFields.showAvailability && availabilities.length > 0) {
             emailMessage += `Available Meeting Times:\n`
-            availabilities.forEach((avail, idx) => {
-              const dateStr = avail.date.toLocaleDateString("en-US", {
+            proposedMeetingSlots.forEach((slot, idx) => {
+              const dateStr = new Date(slot.date).toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
                 day: "numeric",
               })
-              const timeStr = avail.timeSlots?.[0]
-                ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
+              const timeStr = slot.timeSlots?.[0]
+                ? `${slot.timeSlots[0].start} - ${slot.timeSlots[0].end} ${slot.timeZone}`
                 : "Time not specified"
               emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`
             })
@@ -2550,15 +2763,9 @@ export function InternTablePage({ filters, stageFilter, applicationFilter, profi
             templateParams,
             emailjsConfig.publicKey,
           )
-
-          toast("success", `Stage updated to ${selectedStage} and email notification sent successfully`)
         } catch (emailError) {
           console.error("Email to intern failed:", emailError)
-          toast("success", `Stage updated to ${selectedStage} successfully (email notification failed)`)
         }
-      } else {
-        console.warn("No intern email found, skipping email notification")
-        toast("success", `Stage updated to ${selectedStage} successfully (no email available)`)
       }
     } catch (error) {
       console.error("Detailed error:", { message: error.message, code: error.code, stack: error.stack })
@@ -2907,54 +3114,51 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
   }
 
   /* ─── Derived filter options ──────────────────────────────────────────── */
-  const uniqueFields = useMemo(
-    () => [...new Set(interns.map((i) => formatLabel(i.field)).filter((v) => v && v !== "Not Specified"))].sort(),
-    [interns],
-  )
-  const uniqueLocationFlex = useMemo(
-    () => [...new Set(interns.map((i) => i.locationFlexibility).filter((v) => v && v !== "Not specified"))].sort(),
-    [interns],
-  )
-  const uniqueFundingPrograms = useMemo(
-    () => [...new Set(interns.map((i) => i.fundingProgramType).filter((v) => v && v !== "Not specified"))].sort(),
-    [interns],
-  )
-  const uniqueSkills = useMemo(
-    () => [...new Set(interns.flatMap((i) => (Array.isArray(i.technicalSkills) ? i.technicalSkills : [])).filter(Boolean))].sort(),
-    [interns],
-  )
-  const uniqueLanguages = useMemo(
-    () => [...new Set(interns.flatMap((i) => (Array.isArray(i.languagesSpoken) ? i.languagesSpoken : [])).filter(Boolean))].sort(),
-    [interns],
-  )
-  const statusFilterOptions = APPLICATION_STAGES.map((s) => s.name)
-  const uniqueApplicationIds = useMemo(
-    () => [...new Set(interns.map((i) => i.applicationRefId).filter((v) => v && v !== "-"))].sort(),
-    [interns],
-  )
-  const uniqueNames = useMemo(
-    () => [...new Set(interns.map((i) => i.internName).filter((v) => v && v !== "Unnamed Intern"))].sort(),
-    [interns],
-  )
-  const uniqueQualifications = useMemo(
-    () =>
-      [...new Set(interns.map((i) => i.degree).filter((v) => v && v !== "Not specified" && v !== "Not Provided"))].sort(),
-    [interns],
-  )
-  const uniqueInstitutions = useMemo(
-    () =>
-      [...new Set(interns.map((i) => i.institution).filter((v) => v && v !== "Not specified" && v !== "Not Provided"))].sort(),
-    [interns],
-  )
-  const uniqueLocations = useMemo(
-    () => [...new Set(interns.map((i) => i.location).filter((v) => v && v !== "Not specified"))].sort(),
-    [interns],
-  )
-  const uniqueApplicationRequests = useMemo(
-    () => [...new Set(interns.map((i) => i.applicationRequest).filter((v) => v && v !== "-"))].sort(),
-    [interns],
-  )
-
+const uniqueFields = useMemo(
+  () => dedupeLabels(interns.map((i) => formatLabel(i.field))),
+  [interns],
+)
+const uniqueLocationFlex = useMemo(
+  () => dedupeLabels(interns.map((i) => i.locationFlexibility)),
+  [interns],
+)
+const uniqueFundingPrograms = useMemo(
+  () => dedupeLabels(interns.map((i) => i.fundingProgramType)),
+  [interns],
+)
+const uniqueSkills = useMemo(
+  () => dedupeLabels(interns.flatMap((i) => (Array.isArray(i.technicalSkills) ? i.technicalSkills : []))),
+  [interns],
+)
+const uniqueLanguages = useMemo(
+  () => dedupeLabels(interns.flatMap((i) => (Array.isArray(i.languagesSpoken) ? i.languagesSpoken : []))),
+  [interns],
+)
+const statusFilterOptions = APPLICATION_STAGES.map((s) => s.name)
+const uniqueApplicationIds = useMemo(
+  () => dedupeLabels(interns.map((i) => i.applicationRefId)),
+  [interns],
+)
+const uniqueNames = useMemo(
+  () => dedupeLabels(interns.map((i) => (i.internName === "Unnamed Intern" ? "" : i.internName))),
+  [interns],
+)
+const uniqueQualifications = useMemo(
+  () => dedupeLabels(interns.map((i) => i.degree)),
+  [interns],
+)
+const uniqueInstitutions = useMemo(
+  () => dedupeLabels(interns.map((i) => i.institution)),
+  [interns],
+)
+const uniqueLocations = useMemo(
+  () => dedupeLabels(interns.map((i) => i.location)),
+  [interns],
+)
+const uniqueApplicationRequests = useMemo(
+  () => dedupeLabels(interns.map((i) => i.applicationRequest)),
+  [interns],
+)
   const statusOf = useCallback(
     (intern) => updatedStages[intern.id] || intern.pipelineStage || intern.status,
     [updatedStages],
@@ -4298,19 +4502,17 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={localFilters.availableFrom}
-                    onChange={(e) => setLocalFilters((p) => ({ ...p, availableFrom: e.target.value }))}
-                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
-                  />
+                 <input
+  type="date"
+  onChange={(e) => addTempDate(e.target.value)}
+  className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+/>
                   <span className="text-[#7d5a50] text-xs">to</span>
                   <input
-                    type="date"
-                    value={localFilters.availableTo}
-                    onChange={(e) => setLocalFilters((p) => ({ ...p, availableTo: e.target.value }))}
-                    className="flex-1 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
-                  />
+  type="date"
+  onChange={(e) => addTempDate(e.target.value)}
+  className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs"
+/>
                 </div>
               </>
             )}

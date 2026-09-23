@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import {
-  collection, query, where, onSnapshot, updateDoc, doc, getDoc, getDocs, addDoc,
-  serverTimestamp,
+  collection, query, where, onSnapshot, updateDoc, doc, getDoc, getDocs, addDoc, setDoc,
+  writeBatch, serverTimestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onAuthStateChanged } from "firebase/auth";
@@ -750,6 +750,48 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   // ─── Programme-aware pipeline stages ──────────────────────────────────────
   const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
 
+    const buildMeetingAvailableDates = (availabilityList, fallbackMeetingTime) => {
+    const slots = [];
+
+    if (Array.isArray(availabilityList) && availabilityList.length > 0) {
+      availabilityList.forEach((availability) => {
+        if (!availability?.date) return;
+        const date = availability.date instanceof Date ? new Date(availability.date) : new Date(availability.date);
+        if (isNaN(date.getTime())) return;
+
+        const timeSlots = Array.isArray(availability.timeSlots) ? availability.timeSlots : [];
+        const firstTime = timeSlots[0];
+        if (firstTime?.start) {
+          const [hour, minute] = firstTime.start.split(":").map(Number);
+          if (Number.isFinite(hour) && Number.isFinite(minute)) date.setHours(hour, minute, 0, 0);
+        }
+
+        slots.push({
+          date: date.toISOString(),
+          timeSlots,
+          timeZone: availability.timeZone || timeZone,
+          status: "available",
+        });
+      });
+      return slots;
+    }
+
+    if (fallbackMeetingTime) {
+      const startDate = new Date(fallbackMeetingTime);
+      if (!isNaN(startDate.getTime())) {
+        const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
+        const pad = (n) => String(n).padStart(2, "0");
+        slots.push({
+          date: startDate.toISOString(),
+          timeSlots: [{ start: `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`, end: `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}` }],
+          timeZone,
+          status: "available",
+        });
+      }
+    }
+    return slots;
+  };
+
   useEffect(() => {
     const refresh = () => setPipelineSettings(loadPipelineSettings());
     window.addEventListener("storage", refresh);
@@ -1253,6 +1295,32 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     window.location.href = "/dashboard";
   };
 
+    const sendMessageToSME = async ({ investorUser, sme, subject, content }) => {
+    if (!content?.trim()) return;
+
+    const investorName =
+      investorProfile?.entityOverview?.tradingName ||
+      investorProfile?.entityOverview?.registeredName ||
+      investorUser.email?.split("@")[0] ||
+      "Investment Team";
+
+    const messagePayload = {
+      from: investorUser.uid,
+      fromName: investorName,
+      to: sme.userId || sme.smeId || sme.id,
+      toName: sme.name,
+      subject,
+      content,
+      date: new Date().toISOString(),
+      applicationId: sme.docId,
+    };
+
+    await Promise.all([
+      addDoc(collection(db, "messages"), { ...messagePayload, type: "inbox", read: false, sender: investorName }),
+      addDoc(collection(db, "messages"), { ...messagePayload, type: "sent", read: true, sender: "You" }),
+    ]);
+  };
+
   // ─── Column drag-to-reorder ───────────────────────────────────────────────
   const handleColumnDragStart = (e, key) => {
     setDraggedColumn(key);
@@ -1635,17 +1703,46 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
         await updateDoc(smeSnapshot.docs[0].ref, updateData);
       }
 
-      if (stageFields.showAvailability && availabilityData.length > 0) {
-        await addDoc(collection(db, "smeCalendarEvents"), {
-          smeId: sme.smeId,
-          funderId: currentUser.uid,
-          title: stageUpdateData.meetingPurpose || "Meeting",
-          date: availabilityData[0].date,
-          location: stageUpdateData.meetingLocation || "",
-          type: "meeting",
-          createdAt: new Date().toISOString(),
-          availableDates: availabilityData,
-        });
+           if (stageFields.showAvailability && availabilityData.length > 0) {
+        const proposedMeetingSlots = buildMeetingAvailableDates(availabilities, stageUpdateData.meetingTime);
+        const requesterName =
+          investorProfile?.entityOverview?.tradingName ||
+          investorProfile?.entityOverview?.registeredName ||
+          currentUser.email?.split("@")[0] ||
+          "Investor";
+        const meetingEventId = `investor_${sme.id}`;
+
+        await setDoc(
+          doc(db, "smeCalendarEvents", meetingEventId),
+          {
+            smeId: sme.smeId,
+            smeName: sme.name,
+            funderId: currentUser.uid,
+            requesterId: currentUser.uid,
+            requesterName,
+            requesterType: "Investor",
+            createdBy: currentUser.uid,
+            createdByName: requesterName,
+            applicationId: sme.id,
+            title: stageUpdateData.meetingPurpose || "Meeting",
+            purpose: stageUpdateData.meetingPurpose || "Meeting",
+            description: stageUpdateData.message?.trim() || `Meeting request from ${requesterName}`,
+            location: stageUpdateData.meetingLocation || "Virtual",
+            availableDates: proposedMeetingSlots,
+            timeZone: proposedMeetingSlots[0]?.timeZone || timeZone,
+            status: "pending",
+            meetingStatus: "pending",
+            requestType: "meeting_request",
+            source: "investor",
+            isInvitation: true,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        updateData.meetingRequestId = meetingEventId;
+        updateData.meetingStatus = "pending";
       }
 
       // In-app message to the business (inbox + sent copies).
@@ -3020,7 +3117,31 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
               {sme.guaranteeCount > 0 && (
                 <button onClick={() => { handleOpenGuarantees(sme); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Shield size={12} /> View Guarantees</button>
               )}
-              <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
+                           <button
+                onClick={async () => {
+                  const sme = selectedSMEForPopup;
+                  closePopup();
+                  const content = window.prompt(`Message to ${sme.name}:`);
+                  if (!content || !content.trim()) return;
+                  try {
+                    const currentUser = auth.currentUser;
+                    if (!currentUser) throw new Error("User not authenticated");
+                    await sendMessageToSME({
+                      investorUser: currentUser,
+                      sme,
+                      subject: `Message from Investment Team: ${sme.name}`,
+                      content,
+                    });
+                    setNotification({ type: "success", message: `Message sent to ${sme.name}` });
+                  } catch (error) {
+                    console.error("Send message error:", error);
+                    setNotification({ type: "error", message: `Couldn't send message: ${error.message}` });
+                  }
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+              >
+                <MessageSquare size={12} /> Send Message
+              </button>
               {/* Both entry points call the same toggleSaved, so the row
                   bookmark and this item can't drift apart. */}
               <button

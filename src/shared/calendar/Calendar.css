@@ -1,0 +1,104 @@
+/* =========================================================
+   CALENDAR PAGE
+========================================================= */
+
+.calendar-system,
+.calendar-system *,
+.calendar-system *::before,
+.calendar-system *::after {
+  box-sizing: border-box;
+}
+
+.calendar-system {
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+
+  background: #f8f7f5;
+
+  margin: 0;
+  padding: 0;
+
+  overflow-x: hidden;
+
+  color: #3e2723;
+}
+
+.calendar-page-shell {
+  width: 100%;
+  max-width: 1600px;
+
+  margin: 0 auto;
+
+  padding: clamp(14px, 2vw, 30px);
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 20px;
+
+  min-width: 0;
+}
+
+/* =========================================================
+   STATISTICS
+========================================================= */
+
+.calendar-stats-section {
+  width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   MEETINGS
+========================================================= */
+
+.calendar-meetings-section {
+  width: 100%;
+  min-width: 0;
+
+  overflow: hidden;
+}
+
+/* Helps any child table/component stay contained */
+.calendar-meetings-section > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 1024px) {
+  .calendar-page-shell {
+    padding: 18px;
+    gap: 18px;
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 768px) {
+  .calendar-system {
+    min-height: 100dvh;
+  }
+
+  .calendar-page-shell {
+    padding: 12px;
+    gap: 14px;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 480px) {
+  .calendar-page-shell {
+    padding: 10px;
+  }
+}
