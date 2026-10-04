@@ -13,6 +13,7 @@ import {
   UserRound,
   UsersRound,
   FileText,
+  Link2,
 } from "lucide-react";
 
 import {
@@ -426,7 +427,9 @@ const CreateEventForm = ({
     to: "",
     toName: "",
     duration: "30",
-    location: "Virtual",
+    meetingType: "virtual",
+    meetingLink: "",
+    location: "",
     description: "",
   });
 
@@ -689,9 +692,42 @@ if (
   return;
 }
 
-    if (!formData.location.trim()) {
+    const isVirtual =
+      formData.meetingType === "virtual";
+
+    let meetingLink = "";
+
+    if (isVirtual) {
+      const rawLink =
+        formData.meetingLink.trim();
+
+      if (!rawLink) {
+        setError(
+          "Please add the link people should use to join the meeting."
+        );
+        return;
+      }
+
+      // Allow "zoom.us/j/123" without a protocol
+      meetingLink = /^https?:\/\//i.test(rawLink)
+        ? rawLink
+        : `https://${rawLink}`;
+
+      try {
+        const parsed = new URL(meetingLink);
+
+        if (!parsed.hostname.includes(".")) {
+          throw new Error("invalid");
+        }
+      } catch {
+        setError(
+          "Please enter a valid meeting link, e.g. https://meet.google.com/abc-defg-hij"
+        );
+        return;
+      }
+    } else if (!formData.location.trim()) {
       setError(
-        "Please provide a meeting location."
+        "Please provide the meeting location or address."
       );
       return;
     }
@@ -759,6 +795,15 @@ const availableDates =
 
     await onSubmit({
   ...formData,
+
+  meetingType:
+    formData.meetingType,
+
+  meetingLink,
+
+  location: isVirtual
+    ? "Virtual"
+    : formData.location.trim(),
 
   // Legacy compatibility:
   // existing code may still read
@@ -1062,19 +1107,66 @@ const availableDates =
           </FormGroup>
 
           <FormGroup>
-            <Label htmlFor="location">
+            <Label htmlFor="meetingType">
               <MapPin size={15} />
-              Location
+              Meeting format
             </Label>
 
-            <Input
-              id="location"
-              name="location"
-              value={formData.location}
+            <Select
+              id="meetingType"
+              name="meetingType"
+              value={formData.meetingType}
               onChange={handleChange}
-              placeholder="Virtual, office, Zoom..."
-            />
+            >
+              <option value="virtual">
+                Online / virtual
+              </option>
+
+              <option value="in-person">
+                In person
+              </option>
+            </Select>
           </FormGroup>
+
+          {formData.meetingType ===
+          "virtual" ? (
+            <FullWidth>
+              <FormGroup>
+                <Label htmlFor="meetingLink">
+                  <Link2 size={15} />
+                  Meeting link
+                </Label>
+
+                <Input
+                  id="meetingLink"
+                  name="meetingLink"
+                  type="url"
+                  value={
+                    formData.meetingLink
+                  }
+                  onChange={handleChange}
+                  placeholder="https://meet.google.com/abc-defg-hij (Zoom, Teams, etc.)"
+                />
+              </FormGroup>
+            </FullWidth>
+          ) : (
+            <FullWidth>
+              <FormGroup>
+                <Label htmlFor="location">
+                  <MapPin size={15} />
+                  Location / address
+                </Label>
+
+                <Input
+                  id="location"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  placeholder="e.g. Sandton City, Office 4B, 1 Main Rd"
+                />
+              </FormGroup>
+            </FullWidth>
+          )}
 
           <FullWidth>
             <FormGroup>

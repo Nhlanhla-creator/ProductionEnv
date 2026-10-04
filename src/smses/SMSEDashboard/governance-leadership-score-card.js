@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { ChevronDown, RefreshCw, AlertCircle, Users, CheckCircle } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
-import { doc, onSnapshot, updateDoc, setDoc, getDoc, collection, getDocs } from "firebase/firestore"
+import { doc, onSnapshot, updateDoc, setDoc, getDoc, collection, getDocs, deleteField } from "firebase/firestore"
 import { getFunctions, httpsCallable } from "firebase/functions"
+import { logAnalysisFailure } from "./analysis-failure-log"
 import { buildGovernancePrompt } from "./governance-improvements"
 import { buildOpportunities, fmtPts } from "./governance-potential"
 import ScoreExplorer from "./ScoreExplorer"
@@ -52,8 +53,8 @@ import { prepareLeadershipData, buildBoardPromptAddendum } from "./governance-pr
 //   Governance. Elements are the leaves underneath them, so each one gets its
 //   own three buttons:
 //
-//     Leadership (40%)   Leadership Credentials · Structure · Behaviour
-//     Governance (60%)   Ownership & Structure · Board Structure ·
+//     Leadership (65% Startup → 35% Mature)   Credentials · Structure · Behaviour
+//     Governance (35% Startup → 65% Mature)   Ownership & Structure · Board Structure ·
 //                        and every remaining governance-maturity category
 //
 //   Board Structure is deliberately its own element rather than a panel
@@ -534,8 +535,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   // ── AI (prompt building is unchanged; see prepareLeadershipData and
   //    buildBoardPromptAddendum, which move across with the rest) ──
   const runAiEvaluation = async () => {
-    if (!apiKey?.trim()) { setEvaluationError("API key not configured."); return }
-    if (!profileData) { setEvaluationError("No profile data."); return }
+    if (!apiKey?.trim()) { setEvaluationError("API key not configured."); return false }
+    if (!profileData) { setEvaluationError("No profile data."); return false }
 
     setIsEvaluating(true)
     setEvaluationError("")
@@ -595,13 +596,18 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
           await setDoc(doc(db, "aiGovernanceEvaluation", userId), { result: governanceText, timestamp, profileSnapshot: profileData }, { merge: true })
         }
       }
+      return true
     } catch (error) {
       console.error("Governance & Leadership AI evaluation error:", error)
       setEvaluationError(`Failed to get AI evaluation: ${error.message}`)
+      await logAnalysisFailure(db, auth?.currentUser?.uid, "governanceLeadership", error)
+      return false
     } finally {
       setIsEvaluating(false)
     }
   }
+
+  const triggerTried = useRef(false)
 
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) return
@@ -614,9 +620,13 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       if (docSnap.exists()) {
         const data = docSnap.data()
         const needsRun = data.triggerLeadershipEvaluation === true || data.triggerGovernanceEvaluation === true
-        if (needsRun && !isEvaluating) {
-          await runAiEvaluation()
-          await updateDoc(profileRef, { triggerLeadershipEvaluation: false, triggerGovernanceEvaluation: false })
+        // One attempt per mount: the failure log below writes to this same doc,
+        // which re-fires this listener. A failed run leaves the trigger set, so
+        // the next page open tries again.
+        if (needsRun && !isEvaluating && !triggerTried.current) {
+          triggerTried.current = true
+          const ok = await runAiEvaluation()
+          if (ok) await updateDoc(profileRef, { triggerLeadershipEvaluation: false, triggerGovernanceEvaluation: false, "analysisFailures.governanceLeadership": deleteField() })
         }
       }
       try {

@@ -1126,6 +1126,21 @@ meetingsData.push({
     data.location ||
     "Virtual",
 
+  meetingLink:
+    data.meetingLink ||
+    "",
+
+  meetingType:
+    data.meetingType ||
+    (
+      data.meetingLink ||
+      /virtual|online|zoom|teams|meet|webex/i.test(
+        data.location || "virtual"
+      )
+        ? "virtual"
+        : "in-person"
+    ),
+
   duration:
     data.duration ||
     "30",
@@ -1752,6 +1767,14 @@ const firstTimeSlot =
     newEvent.location ||
     "Virtual",
 
+  meetingType:
+    newEvent.meetingType ||
+    "virtual",
+
+  meetingLink:
+    newEvent.meetingLink ||
+    "",
+
   description:
     newEvent.description ||
     "",
@@ -1915,6 +1938,9 @@ if (newEvent.to) {
           meetingDate: dateString,
           meetingTime: timeString,
           location: newEvent.location || "Virtual",
+          meetingType: newEvent.meetingType || "virtual",
+          meetingLink: newEvent.meetingLink || "",
+          duration: newEvent.duration || "30",
           description: newEvent.description || "",
           linkTo: "https://www.bigmarketplace.africa/calendar"
         });
@@ -2355,7 +2381,24 @@ if (newEvent.to) {
           </TableCell>
 
           <TableCell>
-            {meeting.location}
+            {meeting.meetingType ===
+              "virtual" &&
+            meeting.meetingLink ? (
+              <a
+                href={meeting.meetingLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color:
+                    colors.mediumBrown,
+                  fontWeight: 600,
+                }}
+              >
+                Online — join link
+              </a>
+            ) : (
+              meeting.location
+            )}
           </TableCell>
 
           <TableCell>

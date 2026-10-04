@@ -12,6 +12,8 @@ import {
 import {
   computeLeadershipQuality,
   computeOwnershipStructure,
+  governanceStageKey,
+  sectionWeightsFor,
   buildOpportunities,
   fmtPts,
 } from "./governance-potential"
@@ -38,11 +40,9 @@ import {
 //      (sourced from ALL calculateGovernanceScore() categories including board)
 // ─────────────────────────────────────────────────────────────────────────
 
-export const SECTION_WEIGHTS = {
-  ownership: 25,
-  leadership: 40,
-  maturity: 35,
-}
+// Pillar weights are stage-dependent (BIG Score Methodology v3 §6) and come
+// from sectionWeightsFor(stage) in governance-potential.js — there is no flat
+// 25 / 40 / 35 any more.
 
 // ─────────────────────────────────────────────────────────────────────────
 // TWO DOMAINS, NOT THREE PILLARS
@@ -53,11 +53,12 @@ export const SECTION_WEIGHTS = {
 //
 //   LEADERSHIP  — who is running this business, and are they any good at it?
 //                 Founder credentials, the depth of the operating team, and
-//                 how they behave. One pillar, 40%.
+//                 how they behave. One pillar; its share is stage-dependent
+//                 (65% Startup down to 35% Mature).
 //
 //   GOVERNANCE  — what structures hold them to account?
 //                 Who owns and directs the company, and how mature the
-//                 governance around that is. Two pillars, 60%.
+//                 governance around that is. Two pillars sharing the rest.
 //
 // Ownership & Structure sits under GOVERNANCE deliberately. Directors,
 // shareholders and the exec / non-exec split describe the accountability
@@ -1204,10 +1205,12 @@ export const computeAll = (profileData, cvProfiles) => {
   const ownership = computeOwnershipStructure(profileData)
   const leadership = computeLeadershipQuality(profileData, cvProfiles, roleCoverage)
 
+  const stage = governanceStageKey(profileData)
+  const weights = sectionWeightsFor(stage)
   const overallRaw =
-    ownership.score * (SECTION_WEIGHTS.ownership / 100) +
-    leadership.totalScore * (SECTION_WEIGHTS.leadership / 100) +
-    maturityScore * (SECTION_WEIGHTS.maturity / 100)
+    ownership.score * (weights.ownership / 100) +
+    leadership.totalScore * (weights.leadership / 100) +
+    maturityScore * (weights.maturity / 100)
 
   const activeConflicts = (om.activeInterests || []).filter(
     (i) => i?.assignedTo && i.businessStatus && i.businessStatus !== "Closed"
@@ -1216,6 +1219,8 @@ export const computeAll = (profileData, cvProfiles) => {
   return {
     overall: Math.round(overallRaw),
     overallRaw,
+    stage,
+    weights,
     ownership,
     leadership,
     maturityScore,
@@ -1251,7 +1256,7 @@ export const buildPillars = (a) => [
     domain: "governance",
     label: "Ownership & Structure",
     color: "#8D6E63",
-    weight: SECTION_WEIGHTS.ownership,
+    weight: a.weights.ownership,
     percent: a.ownership.score,
     items: a.ownership.items,
     source: "Ownership & Management",
@@ -1261,7 +1266,7 @@ export const buildPillars = (a) => [
     domain: "leadership",
     label: "Leadership Quality",
     color: "#6D4C41",
-    weight: SECTION_WEIGHTS.leadership,
+    weight: a.weights.leadership,
     percent: a.leadership.totalScore,
     subCategories: a.leadership.categories,
     items: a.leadership.items,
@@ -1272,7 +1277,7 @@ export const buildPillars = (a) => [
     domain: "governance",
     label: "Governance Maturity",
     color: "#A67C52",
-    weight: SECTION_WEIGHTS.maturity,
+    weight: a.weights.maturity,
     percent: a.maturityScore,
     subCategories: a.maturityCategories,
     source: "Governance, Board Structure",

@@ -43,7 +43,7 @@ export const weightingsByStage = {
   startup:    { foundational: 35, digital: 25, track: 15, thirdParty: 25 },
   growth:     { foundational: 28, digital: 22, track: 25, thirdParty: 25 },
   scaling:    { foundational: 22, digital: 20, track: 30, thirdParty: 28 },
-  turnaround: { foundational: 30, digital: 18, track: 28, thirdParty: 24 },
+  turnaround: { foundational: 20, digital: 15, track: 30, thirdParty: 35 },
   mature:     { foundational: 18, digital: 17, track: 30, thirdParty: 35 },
 }
 
@@ -318,14 +318,19 @@ const DIGITAL_PROFILES = [
   },
 ]
 
+// Methodology v3 §5: the general profile scores website 45 and LinkedIn company
+// page 55 as core. Facebook, Instagram and other relevant channels are BONUS
+// recovery only — a missing bonus channel costs nothing and is never listed as
+// withheld points. (The sector profiles above still carry the old v2.1 core
+// lists, including Facebook as core; v3 requires their core substitute and
+// bonus configuration to be published before they score — see notes.)
 const DEFAULT_DIGITAL_PROFILE = {
   key: "general", label: "General business",
   channels: [
-    { key: "website", label: "Website", points: 40, where: "add professional website URL" },
-    { key: "linkedin", label: "LinkedIn profile", points: 30, where: "add LinkedIn profile" },
-    { key: "facebook", label: "Facebook page", points: 30, where: "add Facebook page" },
+    { key: "website", label: "Website", points: 45, where: "add professional website URL" },
+    { key: "linkedin", label: "LinkedIn company page", points: 55, where: "add LinkedIn profile" },
   ],
-  bonus: ["instagram", "whatsapp"], irrelevant: ["x", "youtube"],
+  bonus: ["facebook", "instagram", "whatsapp"], irrelevant: ["x", "youtube"],
 }
 
 const pickDigitalProfile = (industry) =>

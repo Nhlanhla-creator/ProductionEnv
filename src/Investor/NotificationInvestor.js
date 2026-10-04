@@ -8,7 +8,7 @@ import { auth, db } from "../firebaseConfig";
 
 // Override calendarSources if the investor Meetings page uses different names.
 const DEFAULT_CALENDAR_SOURCES = [
-  { collectionName: "investorCalendarEvents", userField: "investorId" },
+  { collectionName: "smeCalendarEvents", userField: "smeId" },
 ];
 const MAX_NOTIFICATIONS = 50;
 const storageKey = (uid, kind) => `investorNotifications_${uid}_${kind}`;
@@ -41,7 +41,8 @@ const eventDate = (event) => {
   return null;
 };
 const makeCalendarNotification = (event, uid) => {
-  if (event.createdBy === uid && event.isInvitation !== true) return null;
+  if (event.createdBy === uid && event.isInvitation !== true &&
++      (!event.to || String(event.status || "pending").toLowerCase() === "pending")) return null;
   const status = String(event.status || event.meetingStatus || "pending").trim().toLowerCase();
   const date = eventDate(event);
   const title = event.title || event.name || event.purpose || "Meeting";

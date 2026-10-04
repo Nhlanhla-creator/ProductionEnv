@@ -3,176 +3,60 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ChevronDown, AlertCircle, DollarSign, RefreshCw } from "lucide-react";
 import { db, auth } from "../../firebaseConfig";
-import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, setDoc, getDoc, deleteField } from "firebase/firestore";
+import { logAnalysisFailure } from "./analysis-failure-log";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { useFirebaseFunctions } from "./hooks";
 import { useSolvencyScore } from "../hooks/useSolvencyScore";
 import { normalizeSolvencyScore } from "../MyGrowthTools/financial/data_utils/solvencyScoreUtils";
-import { buildCapitalAppealAssessment, fmtPts } from "./fundability-potential";
+import {
+  buildCapitalAppealAssessment, fmtPts, detectInstruments, applicationSnapshot, METHODOLOGY_VERSION,
+  STAGE_LABELS, FS_FACTOR_WEIGHTS,
+} from "./fundability-potential";
 import { buildDocumentFindings } from "./document-findings";
 import ScoreExplorer from "./ScoreExplorer";
 
 // ─────────────────────────────────────────────────────────────────────────
-// CAPITAL APPEAL
+// CAPITAL APPEAL — BIG Score Scoring Methodology v3.0
 //
-// WHAT CHANGED IN THIS PASS — NAVIGATION, NOT ARITHMETIC
+// Scoring is deterministic: buildCapitalAppealAssessment produces every
+// number in code and the AI never writes one.
 //
-//   The scoring is untouched. buildCapitalAppealAssessment still produces
-//   every number in code and the AI still never writes one.
+//   ORIGINAL Capital Appeal = Financial Strength alone (§8). This is the figure
+//   on the card and the one passed to onScoreUpdate, so the BIG Score is built
+//   from the universal profile and never moves because of a funding request.
 //
-//   What changed is that the modal no longer shows everything at once.
-//   Four accordions could all be open together — about, potential points,
-//   score breakdown, and a single scrolling slab of AI narrative — so the
-//   first thing a business saw was roughly two thousand words. The order
-//   was also arbitrary.
+//   APPLICATION CONTEXT (§8–§9). A complete funding request adds Fundability,
+//   scored for the request's INSTRUMENT (not an amount or the retired A–D
+//   tiers). It is combined with Financial Strength using the stage split and
+//   shown beside the original, never over it. Several instruments on one
+//   request are scored separately and not averaged. An unknown instrument is
+//   "Not assessed", not zero.
 //
-//   It is now a navigation stack, in a fixed order:
+// MULTIPLE FUNDING APPLICATIONS
 //
-//     1. About this score   → 1.1 definition · 1.2 assessment areas
-//                             1.3 interpretation · 1.4 weighting
-//     2. Your score         → block → element → 2.1 breakdown
-//                                               2.2 analysis
-//                                               2.3 improvements
-//     3. Potential points   → item detail
+//   One business can hold several funding requests, and Fundability belongs to
+//   the REQUEST (§2), so every complete (or submitted) application in
+//   fundingApplicationsV2 is assessed on its own: its own instrument, its own
+//   useOfFunds / growthPotential / socialImpact / security instruments, overlaid
+//   on the profile. They all share one Capital Appeal headline (Financial
+//   Strength does not depend on the request).
 //
-//   Every element carries those three as buttons with a pop-out preview,
-//   so a quick look does not cost a navigation. Everything below Home has
-//   a back arrow and a breadcrumb.
-//
-//   The AI prompt now emits ONE SECTION PER ELEMENT (twelve, not seven)
-//   with a fixed heading, so parseAnalysisByElement can route each section
-//   to the element it describes. That is what makes tab 2.2 possible: the
-//   narrative is no longer a document, it is twelve short findings filed
-//   against the twelve things they describe.
+//   - The explorer shows one application at a time; a switcher lists them all.
+//   - Each result is stored on its application
+//     (fundingApplicationsV2/{id}.fundabilityAssessment) so the applications
+//     list can show it, and only rewritten when its signature changes.
+//   - The AI narrative is written and stored per application
+//     (…/{id}.fundabilityNarrative). The trigger honours
+//     fundabilityEvaluationApplicationId on the profile, so saving application B
+//     explains B, not whichever application happens to score highest.
 //
 // Category 5 of 5 in the taxonomy:
 //   1. Compliance  2. Legitimacy  3. Leadership & Governance
 //   4. Operational Strength  5. Capital Appeal (this file)
 // ─────────────────────────────────────────────────────────────────────────
 
-const GRANT_KEYWORDS = ["grant", "grants"];
-const DEBT_KEYWORDS = ["debt", "loan"];
-const PO_KEYWORDS = ["purchase_order", "purchaseorder", "po", "supply_chain", "supplychain"];
-const EQUITY_KEYWORDS = [
-  "equity", "convertible", "hybrid", "revenue-based", "revenue_based",
-  "secondary", "special",
-];
-const ESD_FUNDER_KEYWORDS = [
-  "grant / non-profit", "grant/non-profit", "development_finance",
-  "development finance", "incubator",
-];
-
-function detectFundingTier(profileData) {
-  const instruments = (profileData?.useOfFunds?.fundingInstruments || [])
-    .map((s) => s.toLowerCase().replace(/[\s-]/g, "_"));
-  const funderTypes = (profileData?.useOfFunds?.funderTypes || []).map((s) => s.toLowerCase());
-  const supportFocus = profileData?.useOfFunds?.additionalSupportFocus || "";
-  const amountStr = profileData?.useOfFunds?.amountRequested || "";
-  const amountNum = parseInt(amountStr.replace(/[^\d]/g, ""), 10) || 0;
-
-  const hasPO = instruments.some((i) => PO_KEYWORDS.some((k) => i.includes(k)));
-  const hasDebt = instruments.some((i) => DEBT_KEYWORDS.some((k) => i.includes(k)));
-  const hasGrant = instruments.some((i) => GRANT_KEYWORDS.some((k) => i.includes(k)));
-  const hasEquity = instruments.some((i) => EQUITY_KEYWORDS.some((k) => i.includes(k)));
-  const hasESDFunder = funderTypes.some((f) => ESD_FUNDER_KEYWORDS.some((k) => f.includes(k)));
-  const hasSupportFocus = !!supportFocus;
-  const isLargeAmount = amountNum > 10_000_000;
-
-  if (!instruments.length && !hasSupportFocus) return null;
-
-  if (hasEquity || isLargeAmount) return "D";
-  if (hasPO || hasDebt) return "B";
-  if (hasESDFunder || hasSupportFocus) return "C";
-  if (hasGrant || instruments.length > 0) return "A";
-  return null;
-}
-
-const TIER_LABELS = {
-  A: "Grant",
-  B: "Purchase Order / Debt",
-  C: "ESD / Support Programme / Accelerator",
-  D: "Full Fundability (Serious Funding)",
-};
-
-const TIER_BADGE_COLORS = {
-  A: { bg: "#e8f5e9", border: "#4CAF50", text: "#1B5E20" },
-  B: { bg: "#e3f2fd", border: "#1976d2", text: "#0d47a1" },
-  C: { bg: "#fff8e1", border: "#f9a825", text: "#e65100" },
-  D: { bg: "#fce4ec", border: "#c62828", text: "#b71c1c" },
-};
-
-function getFundabilitySubWeights(tier) {
-  if (!tier) return null;
-  switch (tier) {
-    case "A":
-      return {
-        businessPlan: 21, pitchDeck: 17, impactMandate: 34, creditworthiness: 13,
-        guarantees: 0, financialResilience: 0, growthPotential: 15,
-        _excluded: {
-          guarantees: "Non-repayable funding — collateral security is not required.",
-          financialResilience: "Financial resilience metrics are not assessed at grant level.",
-        },
-        _reduced: {
-          creditworthiness: "Reduced weight — credit discipline is noted but is not a primary grant criterion.",
-        },
-      };
-    case "B":
-      return {
-        businessPlan: 18, pitchDeck: 9, impactMandate: 9, creditworthiness: 27,
-        guarantees: 27, financialResilience: 0, growthPotential: 10,
-        _excluded: {
-          financialResilience: "Underwriting-grade resilience metrics are reserved for tickets above R10m.",
-        },
-        _reduced: {
-          pitchDeck: "Reduced — pitch readiness is secondary to credit strength and collateral for PO/debt finance.",
-          impactMandate: "Reduced — social impact is a secondary consideration for purchase-order or debt finance.",
-        },
-      };
-    case "C":
-      return {
-        businessPlan: 21, pitchDeck: 17, impactMandate: 34, creditworthiness: 13,
-        guarantees: 0, financialResilience: 0, growthPotential: 15,
-        _excluded: {
-          guarantees: "ESD / support programmes do not require collateral from applicants.",
-          financialResilience: "Financial resilience is not assessed for accelerator or ESD programmes.",
-        },
-        _reduced: {
-          creditworthiness: "Reduced — some ESD programmes note credit history but it is not a primary requirement.",
-        },
-      };
-    case "D":
-      return {
-        businessPlan: 18, pitchDeck: 9, impactMandate: 9, creditworthiness: 23,
-        guarantees: 13, financialResilience: 18, growthPotential: 10,
-        _excluded: {},
-        _reduced: {
-          pitchDeck: "Reduced — investor communications matter but fundamentals dominate at serious ticket sizes.",
-          impactMandate: "Reduced — ESG / impact is a qualifier, not the primary investment criterion.",
-        },
-      };
-    default:
-      return null;
-  }
-}
-
-const mapStageToCategory = (stage) => {
-  const s = (stage || "").toLowerCase();
-  if (["pre-seed", "preseed"].includes(s)) return "pre-seed";
-  if (["seed"].includes(s)) return "seed";
-  if (["series a", "seriesa"].includes(s)) return "seriesa";
-  if (["series b", "seriesb"].includes(s)) return "seriesb";
-  if (["early-growth", "growth", "scale-up"].includes(s)) return "growth";
-  return "maturity";
-};
-
-const weightingsByStage = {
-  "pre-seed": { financialStrength: 42, impactMandate: 58 },
-  seed: { financialStrength: 54, impactMandate: 46 },
-  seriesa: { financialStrength: 64, impactMandate: 36 },
-  seriesb: { financialStrength: 73, impactMandate: 27 },
-  growth: { financialStrength: 81, impactMandate: 19 },
-  maturity: { financialStrength: 88, impactMandate: 12 },
-};
+const INSTRUMENT_BADGE = { bg: "#fdf8f6", border: "#8d6e63", text: "#5d4037" };
 
 const FUNDING_SECTION_LABELS = {
   applicationOverview: "Application Overview",
@@ -187,6 +71,79 @@ const FUNDING_SECTION_LABELS = {
 const REQUIRED_FUNDING_SECTIONS = Object.keys(FUNDING_SECTION_LABELS);
 const FUNDING_ROUTE = "/applications/funding";
 
+// ─────────────────────────────────────────────────────────────────────────
+// Funding applications (fundingApplicationsV2)
+// ─────────────────────────────────────────────────────────────────────────
+
+// An application counts once it is submitted or every required section is done.
+const isAppComplete = (a) =>
+  a?.status === "submitted" ||
+  REQUIRED_FUNDING_SECTIONS.every((k) => a?.completedSections?.[k] === true);
+
+// The application's own answers replace the profile's, so each application is
+// scored on what it actually says.
+const withApplication = (pd, app) => ({
+  ...pd,
+  applicationOverview: app.applicationOverview ?? pd?.applicationOverview,
+  useOfFunds: app.useOfFunds ?? pd?.useOfFunds,
+  growthPotential: app.growthPotential ?? pd?.growthPotential,
+  socialImpact: app.socialImpact ?? pd?.socialImpact,
+});
+
+// Security instruments: an application that stores its own list is scored on it;
+// otherwise the profile's list stands. Relevance and availability are decided in
+// the engine (summariseSecurity), per instrument — not here.
+const securityFor = (app, profileSecurity = []) =>
+  Array.isArray(app?.guarantees?.securityInstruments) ? app.guarantees.securityInstruments : profileSecurity;
+
+const shortId = (id) => (id ? String(id).slice(-8).toUpperCase() : "");
+
+const millis = (v) => (v?.toMillis ? v.toMillis() : v?.toDate ? v.toDate().getTime() : v ? new Date(v).getTime() || 0 : 0);
+
+// Every qualifying application, assessed separately. With none, one profile-only
+// assessment is returned so the headline still exists.
+const assessAll = (pd, apps, analyses, fallbackApplied) => {
+  const { profileSecurity = [], ...engineAnalyses } = analyses;
+  const qualifying = (apps || [])
+    .filter(isAppComplete)
+    .sort((x, y) => millis(y.lastUpdated) - millis(x.lastUpdated));
+
+  return (qualifying.length ? qualifying : [null]).map((app) => {
+    const merged = app ? withApplication(pd, app) : pd;
+    const detected = detectInstruments(merged);
+    const assessment = buildCapitalAppealAssessment({
+      profileData: merged,
+      hasAppliedForFunding: app ? true : fallbackApplied,
+      instrumentGroups: detected.groups,
+      unmappedInstruments: detected.unmapped,
+      securityInstruments: securityFor(app, profileSecurity),
+      ...engineAnalyses,
+    });
+    return {
+      id: app?.id ?? null,
+      app,
+      shortId: shortId(app?.id),
+      assessment,
+      detected,
+      instrument: assessment.application.instrument,
+    };
+  });
+};
+
+// The default selection: the strongest application view. Unscored ones rank last;
+// ties keep the most recently updated (assessAll sorts newest first).
+const bestOf = (results) =>
+  results.reduce((b, c) => ((c.assessment.application.score ?? -1) > (b.assessment.application.score ?? -1) ? c : b));
+
+const fmtTs = (v) => {
+  try {
+    const d = v?.toDate ? v.toDate() : new Date(v);
+    return Number.isFinite(d.getTime()) ? d.toLocaleString() : null;
+  } catch {
+    return null;
+  }
+};
+
 // What each element is for, in one line. Used by About → 1.2 Assessment
 // areas, which is a map of the assessment rather than a second copy of it.
 const ELEMENT_PURPOSE = {
@@ -195,12 +152,12 @@ const ELEMENT_PURPOSE = {
   balanceSheet: "What the business owns against what it owes, and whether it can meet the next twelve months.",
   debt: "Existing obligations and how well they are being serviced. New debt sits behind old debt.",
   credit: "The external credit record — the one number a lender can check without asking you.",
-  businessPlan: "Whether there is a costed, coherent plan for the money.",
+  businessPlan: "Whether there is a costed, coherent investment case for the money.",
   pitchDeck: "Whether the case can be communicated to an investment committee.",
-  impactMandate: "Whether the business fits the mandate the money comes with — jobs, ownership, sector, geography.",
+  impactMandate: "Outcomes evidence — ownership, jobs and environmental impact — assessed generically. Fit to one funder's mandate is matched separately.",
   creditworthiness: "Repayment capacity as evidenced by the credit report on file.",
-  guarantees: "Security available if the plan does not work: instruments, whether signed, whether current, and what they are worth.",
-  financialResilience: "Whether the business survives a bad year — the underwriting view at serious ticket sizes.",
+  guarantees: "Security that can be enforced if the plan does not work: instruments that are current, whether signed, and what they are worth.",
+  financialResilience: "Whether the business survives a bad year, read from the statements and the solvency position.",
   growthPotential: "Whether the capital compounds or is simply consumed.",
 };
 
@@ -214,10 +171,6 @@ const INTERPRETATION = [
 
 // ═════════════════════════════════════════════════════════════════════════
 // AI narrative → per-element findings
-//
-// The prompt emits "### 4. Balance Sheet" and inside it a fixed set of
-// bold labels. This splits that into a map keyed on a normalised label, so
-// each element's Analysis tab shows only its own finding.
 // ═════════════════════════════════════════════════════════════════════════
 
 const normLabel = (s) =>
@@ -286,24 +239,24 @@ export function parseAnalysisByElement(text) {
 
 export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, apiKey, onNavigate }) {
   const [showModal, setShowModal] = useState(false);
-  const [assessment, setAssessment] = useState(null);
-  const [fundabilityScore, setFundabilityScore] = useState(0);
-
-  const [aiEvaluationResult, setAiEvaluationResult] = useState("");
+  // Narratives are per application. `localNarratives` holds ones written this session,
+  // `userNarrative` is the latest saved one on aiFundabilityEvaluations/{uid}.
+  const [localNarratives, setLocalNarratives] = useState({});
+  const [userNarrative, setUserNarrative] = useState(null);
+  const [selectedAppId, setSelectedAppId] = useState(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationError, setEvaluationError] = useState("");
-  const [evaluationTimestamp, setEvaluationTimestamp] = useState(null);
 
   const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null);
   const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null);
   const [creditReportAnalysis, setCreditReportAnalysis] = useState(null);
-  const [guaranteesAnalysis, setGuaranteesAnalysis] = useState(null);
+  const [profileSecurity, setProfileSecurity] = useState([]);
   const [solvencyAnalysis, setSolvencyAnalysis] = useState(null);
   const [financialStatementsAnalysis, setFinancialStatementsAnalysis] = useState(null);
   const [isFundingDataLoaded, setIsFundingDataLoaded] = useState(false);
 
+  const [applications, setApplications] = useState([]);
   const [hasAppliedForFunding, setHasAppliedForFunding] = useState(false);
-  const [fundingTier, setFundingTier] = useState(null);
   const [fundingCheckComplete, setFundingCheckComplete] = useState(false);
   const [missingFundingSections, setMissingFundingSections] = useState([]);
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
@@ -314,13 +267,29 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
   const isSavingEvaluation = useRef(false);
   const profileDataRef = useRef(profileData);
   const runAiEvaluationRef = useRef(null);
+  const triggerTried = useRef(false);
+
+  // Live copies for code that runs outside a render (the trigger listener and
+  // the AI run), so they never score against stale state.
+  const applicationsRef = useRef([]);
+  const hasAppliedRef = useRef(false);
+  const resultsRef = useRef([]); // every application's assessment, for code outside a render
+  const selectedIdRef = useRef(null);
+  const savedSigRef = useRef({}); // appId -> last snapshot signature written this session
+  const saveNarrativeRef = useRef(null);
+  const readyRef = useRef(null);
+  if (!readyRef.current) {
+    let resolve;
+    const promise = new Promise((r) => { resolve = r; });
+    readyRef.current = { promise, resolve };
+  }
 
   const { loadLatestSolvencyScore } = useSolvencyScore(auth?.currentUser);
   const { callFunction } = useFirebaseFunctions();
 
-  useEffect(() => { setFundingTier(detectFundingTier(profileData)); }, [profileData]);
   useEffect(() => { isEvaluatingRef.current = isEvaluating; });
   useEffect(() => { profileDataRef.current = profileData; });
+  useEffect(() => { selectedIdRef.current = selectedAppId; });
 
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : "";
@@ -333,7 +302,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     else window.location.assign(route);
   };
 
-  // ── Load the document-backed analyses (unchanged) ──
+  // ── Load the document-backed analyses ──
   const fetchFundingApplicationData = useCallback(async () => {
     if (dataLoadPromiseRef.current) return dataLoadPromiseRef.current;
 
@@ -341,7 +310,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
       const userId = auth.currentUser.uid;
       const fresh = {
         businessPlanAnalysis: null, pitchDeckAnalysis: null, creditReportAnalysis: null,
-        guaranteesAnalysis: null, solvencyAnalysis: null, financialStatementsAnalysis: null,
+        profileSecurity: [], solvencyAnalysis: null, financialStatementsAnalysis: null,
       };
 
       try {
@@ -400,9 +369,6 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
           const isCreditReport = ar.isCreditReport ?? d?.evaluation?.isCreditReport ?? d?.isCreditReport ?? false;
           fresh.creditReportAnalysis = {
             score, content, label, isCreditReport,
-            // The reasoning was being thrown away. negativeItems is what a
-            // lender actually reads — a recorded judgment, days beyond terms,
-            // buyer concentration — and it is already a clean array on the doc.
             negativeItems: ar.negativeItems ?? d?.evaluation?.negativeItems ?? d?.negativeItems ?? [],
             positiveItems: ar.positiveItems ?? d?.evaluation?.positiveItems ?? d?.positiveItems ?? [],
             overallAssessment: ar.overallAssessment ?? d?.evaluation?.overallAssessment ?? d?.overallAssessment ?? "",
@@ -415,19 +381,8 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
       try {
         const profSnap = await getDoc(doc(db, "universalProfiles", userId));
         if (profSnap.exists()) {
-          const securityInstruments = profSnap.data()?.guarantees?.securityInstruments || [];
-          const active = securityInstruments.filter(
-            (i) => i.instrument || i.instrumentOther || (i.files && i.files.length > 0)
-          );
-          fresh.guaranteesAnalysis = {
-            activeCount: active.length,
-            totalCount: securityInstruments.length,
-            items: active.map((i) => i.instrument || i.instrumentOther || "Unnamed instrument"),
-            signedCount: active.filter((i) => i.isSigned === "yes").length,
-            currentCount: active.filter((i) => i.isCurrent === "yes").length,
-            withValue: active.filter((i) => i.value && parseFloat(String(i.value).replace(/[^\d.]/g, "")) > 0).length,
-          };
-          setGuaranteesAnalysis(fresh.guaranteesAnalysis);
+          fresh.profileSecurity = profSnap.data()?.guarantees?.securityInstruments || [];
+          setProfileSecurity(fresh.profileSecurity);
         }
       } catch (e) { console.error("Guarantees load error:", e); }
 
@@ -468,82 +423,152 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     finally { dataLoadPromiseRef.current = null; }
   }, [auth?.currentUser?.uid]);
 
-  const checkFundingApplicationStatus = useCallback(async () => {
-    if (!auth?.currentUser?.uid || fundingCheckComplete) return;
-    try {
-      const snap = await getDoc(doc(db, "universalProfiles", auth.currentUser.uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        const completed = data.completedSections || {};
-        const missing = REQUIRED_FUNDING_SECTIONS.filter((k) => completed[k] !== true);
-        const submitted = data.applicationSubmitted === true;
-        const applied = missing.length === 0 || submitted;
+  // ── Live funding applications ──
+  // Fires on mount and again whenever an application is created, edited,
+  // completed, submitted or deleted. This is what makes applications a
+  // trigger for Fundability.
+  useEffect(() => {
+    const uid = auth?.currentUser?.uid;
+    if (!uid) return;
+    let first = true;
 
-        setMissingFundingSections(missing);
-        setApplicationSubmitted(submitted);
-        setHasAppliedForFunding(applied);
-        await fetchFundingApplicationData();
-      } else {
+    const unsubscribe = onSnapshot(
+      query(collection(db, "fundingApplicationsV2"), where("userId", "==", uid)),
+      async (appSnap) => {
+        const apps = appSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        applicationsRef.current = apps;
+        setApplications(apps);
+
+        try {
+          const profSnap = await getDoc(doc(db, "universalProfiles", uid));
+          const data = profSnap.exists() ? profSnap.data() : {};
+          const missingFor = (c = {}) => REQUIRED_FUNDING_SECTIONS.filter((k) => c[k] !== true);
+
+          // The closest-to-done application drives the "still to complete" message.
+          const missing = apps.length
+            ? apps.map((a) => missingFor(a.completedSections)).sort((a, b) => a.length - b.length)[0]
+            : missingFor(data.completedSections);
+          const submitted = data.applicationSubmitted === true || apps.some((a) => a.status === "submitted");
+          const applied = apps.some(isAppComplete) || (!apps.length && missing.length === 0) || submitted;
+
+          hasAppliedRef.current = applied;
+          setMissingFundingSections(missing);
+          setApplicationSubmitted(submitted);
+          setHasAppliedForFunding(applied);
+
+          if (first) await fetchFundingApplicationData();
+        } catch (e) {
+          console.error("Funding status check error:", e);
+          setIsFundingDataLoaded(true);
+        } finally {
+          first = false;
+          setFundingCheckComplete(true);
+          fundingCheckCompleteRef.current = true;
+          readyRef.current.resolve();
+        }
+      },
+      (e) => {
+        console.error("Funding applications listener error:", e);
         setIsFundingDataLoaded(true);
+        setFundingCheckComplete(true);
+        fundingCheckCompleteRef.current = true;
+        readyRef.current.resolve();
       }
-    } catch (e) {
-      console.error("Funding status check error:", e);
-      setIsFundingDataLoaded(true);
-    } finally {
-      setFundingCheckComplete(true);
-      fundingCheckCompleteRef.current = true;
-    }
-  }, [auth?.currentUser?.uid, fundingCheckComplete, fetchFundingApplicationData]);
+    );
 
-  useEffect(() => {
-    if (auth?.currentUser?.uid) checkFundingApplicationStatus();
-  }, [auth?.currentUser?.uid, checkFundingApplicationStatus]);
+    return () => unsubscribe();
+  }, [auth?.currentUser?.uid, fetchFundingApplicationData]);
 
-  // ── Score — a pure function of the profile and the stored analyses ──
-  useEffect(() => {
-    if (!profileData || !fundingCheckComplete) return;
+  // ── Score — a pure function of the profile, the applications and the stored analyses ──
+  // One assessment per complete application; they share one Capital Appeal headline.
+  const results = useMemo(() => {
+    if (!profileData || !fundingCheckComplete) return [];
     try {
-      const a = buildCapitalAppealAssessment({
+      return assessAll(
         profileData,
-        fundingTier,
-        hasAppliedForFunding,
-        subWeights: getFundabilitySubWeights(fundingTier),
-        stageWeights: weightingsByStage[mapStageToCategory(profileData?.entityOverview?.operationStage)],
-        businessPlanAnalysis,
-        pitchDeckAnalysis,
-        creditReportAnalysis,
-        guaranteesAnalysis,
-        solvencyAnalysis,
-        financialStatementsAnalysis,
-      });
-      setAssessment(a);
-      setFundabilityScore(a.totalScore);
-      if (onScoreUpdate) onScoreUpdate(a.totalScore);
+        applications,
+        { businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis, profileSecurity, solvencyAnalysis, financialStatementsAnalysis },
+        hasAppliedForFunding
+      );
     } catch (e) {
       console.error("Capital appeal scoring error:", e);
+      return [];
     }
   }, [
-    profileData, fundingTier, hasAppliedForFunding, fundingCheckComplete,
+    profileData, applications, hasAppliedForFunding, fundingCheckComplete,
     businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis,
-    guaranteesAnalysis, solvencyAnalysis, financialStatementsAnalysis, isFundingDataLoaded,
+    profileSecurity, solvencyAnalysis, financialStatementsAnalysis, isFundingDataLoaded,
   ]);
+
+  useEffect(() => { resultsRef.current = results; }, [results]);
+
+  const selected = useMemo(
+    () => (results.length ? results.find((r) => r.id && r.id === selectedAppId) || bestOf(results) : null),
+    [results, selectedAppId]
+  );
+  const a = selected?.assessment || null;
+  const fundabilityScore = a?.totalScore ?? 0;
+
+  useEffect(() => {
+    if (a && onScoreUpdate) onScoreUpdate(a.totalScore);
+  }, [a?.totalScore]);
+
+  // The narrative shown is the one written for THIS application. A narrative written
+  // for another application would describe the wrong instrument, so none is shown.
+  const narrative = useMemo(() => {
+    const key = selected?.id || "profile";
+    if (localNarratives[key]) return localNarratives[key];
+    const fromApp = selected?.app?.fundabilityNarrative;
+    if (fromApp?.result) return { result: fromApp.result, timestamp: fromApp.evaluatedAt };
+    if (userNarrative?.result && (userNarrative.applicationId ?? "profile") === key) return userNarrative;
+    return null;
+  }, [selected, localNarratives, userNarrative]);
+  const aiEvaluationResult = narrative?.result || "";
+  const evaluationTimestamp = fmtTs(narrative?.timestamp);
+
+  // Persist each application's own result so the applications list can show it.
+  // Written only when the signature changes, and only once the document analyses
+  // have loaded — otherwise a half-loaded run would store a falsely low score.
+  useEffect(() => {
+    if (!results.length || !fundingCheckComplete || !isFundingDataLoaded) return;
+    results.forEach((r) => {
+      if (!r.app) return;
+      const snap = applicationSnapshot(r.assessment);
+      if (r.app.fundabilityAssessment?.signature === snap.signature) return;
+      if (savedSigRef.current[r.id] === snap.signature) return;
+      savedSigRef.current[r.id] = snap.signature;
+      const record = { ...snap, evaluatedAt: new Date().toISOString() };
+      (async () => {
+        try {
+          await setDoc(doc(db, "fundingApplicationsV2", r.id), { fundabilityAssessment: record }, { merge: true });
+        } catch (e) {
+          delete savedSigRef.current[r.id];
+          console.error(`Could not store the fundability result for ${r.id}:`, e);
+          return;
+        }
+        // Immutable history (§2): one record per signature, never rewritten.
+        try {
+          await setDoc(doc(db, "fundingApplicationsV2", r.id, "fundabilityResults", snap.signature), record);
+        } catch (e) {
+          console.warn("Fundability history not stored:", e?.code || e);
+        }
+      })();
+    });
+  }, [results, fundingCheckComplete, isFundingDataLoaded]);
 
   // ═══════════════════════════════════════════════════════════════════════
   // PROMPT — one section per element
   //
-  // Financial Strength used to arrive as a single section containing five
-  // sub-categories, which meant the model wrote one paragraph covering
-  // revenue, records, balance sheet, debt and credit together. There was
-  // no way to show a business the finding for its balance sheet on its
-  // own. Each sub-category is now its own section with its own heading,
-  // matching the element list exactly.
+  // `instrumentLabel` is a parameter on both builders on purpose: the AI run
+  // computes its own best application, and state would still hold the previous
+  // render's value.
   // ═══════════════════════════════════════════════════════════════════════
-  const buildSections = (a) => {
+  const buildSections = (a, instrumentLabel) => {
     const sections = a.financialStrength.subCategories.map((sc) => ({
       title: sc.label,
       findingsKey: `financialStrength:${sc.key}`,
       block: "Financial Strength",
-      weightLabel: `${sc.weight}% of Financial Strength, which is ${a.blockWeights.financialStrength}% of the final score`,
+      weightLabel: `${sc.weight}% of Financial Strength at the ${a.stage.label} stage, and Financial Strength is the whole of the original Capital Appeal score`,
       percent: Math.round(sc.percent),
       items: sc.items,
       sourceNote: "Read from the fields on your Financial Overview, plus the credit report on file.",
@@ -555,8 +580,8 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
         findingsKey: `fundability:${c.key}`,
         block: "Fundability",
         weightLabel: c.excluded
-          ? `EXCLUDED at Tier ${fundingTier}`
-          : `${c.weight}% of Fundability · ${c.effectiveWeight.toFixed(1)} of the final score`,
+          ? `OUT OF SCOPE for ${instrumentLabel}`
+          : `${c.weight}% of Fundability · ${c.effectiveWeight.toFixed(1)} points of the application-context score`,
         percent: c.excluded ? null : Math.round(c.percent),
         items: c.items,
         excluded: c.excluded,
@@ -568,11 +593,11 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     return sections;
   };
 
-  const buildPrompt = (a, docFindings = {}) => {
+  const buildPrompt = (a, docFindings = {}, instrumentLabel = null, appRef = null) => {
     const line = (i) =>
       `  - ${i.label}: ${
-        i.state === "missing" ? "NOT CAPTURED" : i.withheld === 0 ? "COUNTED IN FULL" : `${i.earned}/${i.points} item points — ${i.withheld} withheld`
-      }${i.evidence ? ` — on file: ${i.evidence}` : ""}${i.reason ? ` — ${i.reason}` : ""}${
+        i.state === "missing" ? "NOT CAPTURED" : i.withheld === 0 ? "COUNTED IN FULL" : `${Math.round(i.earned * 10) / 10}/${i.points} item points — ${Math.round(i.withheld * 10) / 10} withheld`
+      }${i.provisional ? " — PROVISIONAL RULE" : ""}${i.evidence ? ` — on file: ${i.evidence}` : ""}${i.reason ? ` — ${i.reason}` : ""}${
         i.withheld > 0
           ? i.claimable
             ? ` — recoverable ${fmtPts(i.pointValue)} via ${i.section}`
@@ -580,17 +605,13 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
           : ""
       }`;
 
-    const sections = buildSections(a);
+    const sections = buildSections(a, instrumentLabel);
 
     const sectionData = sections
       .map((sec, idx) => {
         if (sec.excluded) {
-          return `\n### ${idx + 1}. ${sec.title}\nSTATUS: EXCLUDED at Tier ${fundingTier} — ${sec.exclusionNote || "not assessed for this funding type"}\nThis carries no weight and is NOT a gap. Say so plainly and move on.`;
+          return `\n### ${idx + 1}. ${sec.title}\nSTATUS: OUT OF SCOPE for ${instrumentLabel} — ${sec.exclusionNote || "not assessed for this instrument"}\nThis carries no weight and is NOT a gap. Say so plainly and move on.`;
         }
-        // Where a document evaluator has already scored this element, its own
-        // findings go in too. Otherwise the narrative can only talk about
-        // fields, and says "pitch deck: 18%, capture more" when the stored
-        // analysis already explains exactly what is wrong with the deck.
         const f = docFindings[sec.findingsKey];
         const findingBlock = f
           ? `\nALREADY ASSESSED — findings from the ${f.docLabel || f.source} on file${f.headline ? ` (${f.headline})` : ""}:${
@@ -635,15 +656,26 @@ EVERY NUMBER BELOW IS FINAL. You do not calculate, adjust or re-derive anything.
 
 ONLY the data below exists. Do not invent or infer any figure that is not here. Where an item says NOT CAPTURED, treat it as unproven, never as a positive.
 
+An item marked PROVISIONAL RULE is scored on a threshold the methodology has not yet approved. Say the figure uses a provisional rule where you mention it; never present it as final.
+
 An item marked NOT RECOVERABLE must never appear under "Points available". Explain it under "Points withheld" as a fixed deduction that follows the underlying financial reality rather than the form.
 
-A section marked EXCLUDED costs the business nothing at this tier and must never be described as a gap or a weakness.
+A section marked OUT OF SCOPE costs the business nothing for this instrument and must never be described as a gap or a weakness.
 
 WRITE ONE SECTION PER HEADING BELOW, WITH THE HEADING TEXT COPIED EXACTLY. Do not merge sections, do not skip sections, do not reorder them and do not add sections. Each heading is read on its own screen, so each section must stand alone and must be SHORT — a reader sees one at a time, not the set.
 
-FINAL SCORE: ${a.totalScore}%
-Recoverable in total: ${a.availablePoints}%${a.lockedPoints > 0 ? `\nFixed deductions that cannot be recovered by editing the profile: ${a.lockedPoints}%` : ""}
-${a.fundingActive ? `Funding tier: ${fundingTier} — ${TIER_LABELS[fundingTier]}. Financial Strength ${a.blockWeights.financialStrength}%, Fundability ${a.blockWeights.fundability}%.` : `No funding application on file, so the score is Financial Strength only, weighted ${a.blockWeights.financialStrength}% for this business stage.`}
+CAPITAL APPEAL (original — Financial Strength alone, the figure the BIG Score uses): ${a.totalScore}%
+Recoverable in total on the original score: ${a.availablePoints}%${a.lockedPoints > 0 ? `\nFixed deductions that cannot be recovered by editing the profile: ${a.lockedPoints}%` : ""}
+Business stage: ${a.stage.label} (${a.stage.basis}).${appRef ? `\nThis analysis is for funding application ${appRef}. The business may hold other applications; do not refer to them.` : ""}
+${
+  a.fundingActive
+    ? `Funding request instrument: ${instrumentLabel}. Application-context Capital Appeal (Financial Strength ${a.split.financialStrength}% + Fundability ${a.split.fundability}%): ${a.application.score}%, which is ${a.application.delta >= 0 ? "+" : ""}${a.application.delta.toFixed(1)} points against the original. Fundability scored ${Math.round(a.blocks.find((b) => b.key === "fundability")?.percent || 0)}%. Recoverable figures under Fundability sections are points of the application-context score, NOT of the original score; never add them to it.`
+    : a.fundabilityStatus === "blended"
+    ? `This request combines several financing components (${a.instrumentResults.map((r) => r.label).join(", ")}). Each is scored separately and no combined Fundability or application figure is published. Say so; never average them.`
+    : a.fundabilityStatus === "no_application"
+    ? "No funding application is complete, so only the original score exists. The application-context score is Not assessed — that is not a zero."
+    : "A funding application is complete but its instrument is not identified, so the application-context score is Not assessed — that is not a zero. Do not state a figure for it."
+}
 
 ═══ SCORED DATA ═══
 ${sectionData}
@@ -661,6 +693,7 @@ RULES
 - Where points were withheld on something that WAS captured, lead with that — it is more useful than listing blanks.
 - Every recommendation must be an item above, must be marked recoverable, and must carry its exact value.
 - Never invent an improvement that is not on the list — it cannot earn anything.
+- Never state or imply that a score guarantees readiness, creditworthiness or approval.
 - Plain business English. Short sentences. No preamble, no closing summary inside a section.
 
 OUTPUT FORMAT — follow exactly, including the bold labels and the section numbering:
@@ -669,47 +702,58 @@ ${outputFormat}
 
 ### Overall Assessment
 **Strongest section:** [name it and say in one line why it stands out to a funder]
-**Weakest section:** [name it, excluding anything marked EXCLUDED, and say what it costs]
+**Weakest section:** [name it, excluding anything marked OUT OF SCOPE, and say what it costs]
 **Highest-value next step:** [the single top recoverable item, its section and exact value]
-**Final analysis:** [short paragraph: where this business stands, and what the score becomes once the top three recoverable items are resolved]`;
+**Final analysis:** [short paragraph: where this business stands, and what the original score becomes once the top three recoverable Financial Strength items are resolved. If an application-context score exists, give it one sentence and keep it separate.]`;
   };
 
-  // `fresh` wins when the loader beat state to it; otherwise state. Shared by
-  // scoring and by the findings parser so the two never disagree.
+  // `fresh` wins when the loader beat state to it; otherwise state.
   const pickAnalyses = (fresh) => {
     const pick = (key, stateValue) => (fresh && key in fresh ? fresh[key] : stateValue);
     return {
       businessPlanAnalysis: pick("businessPlanAnalysis", businessPlanAnalysis),
       pitchDeckAnalysis: pick("pitchDeckAnalysis", pitchDeckAnalysis),
       creditReportAnalysis: pick("creditReportAnalysis", creditReportAnalysis),
-      guaranteesAnalysis: pick("guaranteesAnalysis", guaranteesAnalysis),
+      profileSecurity: pick("profileSecurity", profileSecurity),
       solvencyAnalysis: pick("solvencyAnalysis", solvencyAnalysis),
       financialStatementsAnalysis: pick("financialStatementsAnalysis", financialStatementsAnalysis),
     };
   };
 
-  const computeAssessment = (fresh) => {
+  // Reads applications and the applied flag from refs, so an AI run that starts
+  // straight after mount scores the same way the card does. `targetId` picks the
+  // application; otherwise the one on screen; otherwise the strongest.
+  const computeAssessment = (fresh, targetId = null) => {
     const pd = profileDataRef.current || profileData;
     if (!pd) return null;
-    return buildCapitalAppealAssessment({
-      profileData: pd,
-      fundingTier,
-      hasAppliedForFunding,
-      subWeights: getFundabilitySubWeights(fundingTier),
-      stageWeights: weightingsByStage[mapStageToCategory(pd?.entityOverview?.operationStage)],
-      ...pickAnalyses(fresh),
-    });
+    const all = assessAll(pd, applicationsRef.current, pickAnalyses(fresh), hasAppliedRef.current);
+    resultsRef.current = all;
+    const target =
+      all.find((r) => r.id && r.id === targetId) ||
+      all.find((r) => r.id && r.id === selectedIdRef.current) ||
+      bestOf(all);
+    return { all, target };
   };
 
-  const runAiEvaluation = async () => {
+  const labelFor = (target) =>
+    target?.app
+      ? `#${target.shortId}${target.assessment.application.instrumentLabel ? ` (${target.assessment.application.instrumentLabel})` : ""}`
+      : null;
+
+  const runAiEvaluation = async (targetId = null) => {
     if (!apiKey?.trim()) { setEvaluationError("AI analysis is not configured yet."); return null; }
     if (!profileDataRef.current && !profileData) { setEvaluationError("No profile data available to analyse."); return null; }
 
     setIsEvaluating(true);
     setEvaluationError("");
     try {
+      // Applications must be loaded before scoring, or Fundability reads as inactive.
+      if (!fundingCheckCompleteRef.current) {
+        await Promise.race([readyRef.current.promise, new Promise((r) => setTimeout(r, 10000))]);
+      }
+
       let fresh = null;
-      if (!fundingCheckCompleteRef.current || !isFundingDataLoaded) {
+      if (!isFundingDataLoaded) {
         try {
           fresh = await fetchFundingApplicationData();
         } catch (e) {
@@ -717,18 +761,18 @@ ${outputFormat}
         }
       }
 
-      const a = computeAssessment(fresh);
-      if (!a) { setEvaluationError("No profile data available to analyse."); return null; }
-
-      setAssessment(a);
-      setFundabilityScore(a.totalScore);
+      const ctx = computeAssessment(fresh, targetId);
+      if (!ctx) { setEvaluationError("No profile data available to analyse."); return null; }
+      const { target } = ctx;
+      const ta = target.assessment;
 
       const result = await callFunction("generateFundabilityAnalysis", {
-        prompt: buildPrompt(a, buildDocumentFindings(pickAnalyses(fresh))),
+        prompt: buildPrompt(ta, buildDocumentFindings(pickAnalyses(fresh)), ta.application.instrumentLabel, labelFor(target)),
       });
-      return result?.content || "";
+      return { content: result?.content || "", target };
     } catch (error) {
       console.error("Capital appeal AI evaluation error:", error);
+       await logAnalysisFailure(db, auth?.currentUser?.uid, "fundability", error);
       setEvaluationError(`Analysis failed: ${error.message}`);
       return null;
     } finally {
@@ -738,27 +782,65 @@ ${outputFormat}
 
   useEffect(() => { runAiEvaluationRef.current = runAiEvaluation; });
 
+  // What gets saved alongside a narrative: the scores, instrument, stage and application it was written for.
+  const metaFor = (target) => ({
+    score: target?.assessment?.totalScore ?? null,
+    applicationScore: target?.assessment?.application?.score ?? null,
+    instrumentGroup: target?.instrument ?? null,
+    stage: target?.assessment?.stage?.key ?? null,
+    methodologyVersion: METHODOLOGY_VERSION,
+    applicationId: target?.id ?? null,
+  });
+
+  // The narrative is stored on the application it explains, and also on the
+  // user-level document the dashboard report reads (latest run wins there).
+  const saveNarrative = async (content, target, { auto = false } = {}) => {
+    const userId = auth?.currentUser?.uid;
+    if (!userId || !content) return;
+    const iso = new Date().toISOString();
+    const meta = metaFor(target);
+
+    await setDoc(
+      doc(db, "aiFundabilityEvaluations", userId),
+      {
+        result: content, ...meta, timestamp: new Date(),
+        includedFundingData: auto ? true : isFundingDataLoaded,
+        profileSnapshot: profileDataRef.current || profileData,
+      },
+      { merge: true }
+    );
+    if (target?.app) {
+      await setDoc(
+        doc(db, "fundingApplicationsV2", target.id),
+        {
+          fundabilityNarrative: {
+            result: content, evaluatedAt: iso,
+            snapshotSignature: applicationSnapshot(target.assessment).signature,
+            ...meta,
+          },
+        },
+        { merge: true }
+      );
+    }
+    setLocalNarratives((prev) => ({ ...prev, [target?.id || "profile"]: { result: content, timestamp: iso } }));
+    setUserNarrative({ result: content, applicationId: target?.id ?? null, timestamp: iso });
+  };
+  useEffect(() => { saveNarrativeRef.current = saveNarrative; });
+
   const refreshAiEvaluation = async () => {
     const userId = auth?.currentUser?.uid;
     if (!userId) return;
     try {
-      const result = await runAiEvaluation();
-      if (result) {
-        const timestamp = new Date();
-        await setDoc(
-          doc(db, "aiFundabilityEvaluations", userId),
-          { result, score: fundabilityScore, timestamp, fundingTier, includedFundingData: isFundingDataLoaded, profileSnapshot: profileData },
-          { merge: true }
-        );
-        setAiEvaluationResult(result);
-        setEvaluationTimestamp(timestamp.toLocaleString());
-      }
+      const out = await runAiEvaluation(selectedIdRef.current || selected?.id || null);
+      if (out?.content) await saveNarrative(out.content, out.target);
     } catch (error) {
       setEvaluationError(`Failed to refresh: ${error.message}`);
     }
   };
 
-  // ── Auto-trigger + load saved narrative (unchanged) ──
+  // ── Auto-trigger (triggerFundabilityEvaluation on the profile) + load saved narrative ──
+  // The funding application sets fundabilityEvaluationApplicationId when it asks for
+  // an evaluation, so the narrative is written for the application that was saved.
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) return;
     const userId = auth.currentUser.uid;
@@ -768,24 +850,24 @@ ${outputFormat}
     const unsubscribe = onSnapshot(docRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.triggerFundabilityEvaluation === true && !isEvaluatingRef.current && !isSavingEvaluation.current) {
+           // One attempt per mount: the failure log writes to this same doc and
+       // would re-fire this listener. A failed run leaves the trigger set, so
+        // the next page open tries again.
+        if (data.triggerFundabilityEvaluation === true && !isEvaluatingRef.current && !isSavingEvaluation.current && !triggerTried.current) {
+          triggerTried.current = true;
           isSavingEvaluation.current = true;
+          let ok = false;
           try {
-            const result = await runAiEvaluationRef.current();
-            if (result) {
-              const timestamp = new Date();
-              await setDoc(
-                aiEvalRef,
-                { result, timestamp, profileSnapshot: profileDataRef.current, fundingTier, includedFundingData: true },
-                { merge: true }
-              );
-              setAiEvaluationResult(result);
-              setEvaluationTimestamp(timestamp.toLocaleString());
-            }
+            const out = await runAiEvaluationRef.current(data.fundabilityEvaluationApplicationId || null);
+            if (out?.content) {
+              await saveNarrativeRef.current(out.content, out.target, { auto: true });
+              ok = true;
+            } // else: runAiEvaluation already logged why
           } catch (error) {
-            setEvaluationError(`Auto evaluation failed: ${error.message}`);
+           setEvaluationError(`Auto evaluation failed: ${error.message}`);
+            await logAnalysisFailure(db, userId, "fundability", error, { stage: "save" });
           } finally {
-            await updateDoc(docRef, { triggerFundabilityEvaluation: false });
+            if (ok) await updateDoc(docRef, { triggerFundabilityEvaluation: false, "analysisFailures.fundability": deleteField() });
             isSavingEvaluation.current = false;
           }
           return;
@@ -796,10 +878,12 @@ ${outputFormat}
       try {
         const aiSnap = await getDoc(aiEvalRef);
         if (aiSnap.exists() && aiSnap.data().result) {
-          setAiEvaluationResult(aiSnap.data().result);
-          if (aiSnap.data().timestamp) {
-            setEvaluationTimestamp(new Date(aiSnap.data().timestamp.toDate()).toLocaleString());
-          }
+          const d = aiSnap.data();
+          setUserNarrative({
+            result: d.result,
+            applicationId: d.applicationId ?? null,
+            timestamp: d.timestamp?.toDate ? d.timestamp.toDate().toISOString() : d.timestamp || null,
+          });
         }
       } catch (e) { console.error("Load saved eval error:", e); }
     });
@@ -818,20 +902,34 @@ ${outputFormat}
     return { level: "Needs development", color: "#B71C1C" };
   };
   const scoreLevel = getScoreLevel(fundabilityScore);
-  const a = assessment;
 
   const fundingEvidence = [
     businessPlanAnalysis?.isValid && "a business plan analysis",
     pitchDeckAnalysis?.isValid && "a pitch deck analysis",
     creditReportAnalysis?.isValid && "a credit report",
-    guaranteesAnalysis?.activeCount > 0 && "security instruments",
+    profileSecurity.length > 0 && "security instruments",
     (profileData?.useOfFunds?.fundingInstruments || []).length > 0 && "funding instruments",
     profileData?.useOfFunds?.amountRequested && "an amount requested",
   ].filter(Boolean);
 
   const fundabilityStatus = (() => {
-    if (a?.fundingActive) return null;
+    if (!a || a.fundingActive) return null;
     if (!fundingCheckComplete) return null;
+    const share = a.split.fundability;
+
+    if (a.fundabilityStatus === "blended") {
+      return {
+        key: "blended",
+        headline: "Several financing components — scored separately",
+        detail: `This request combines ${a.instrumentResults.map((r) => r.label).join(" and ")}. Each is scored on its own and no combined Fundability figure is published until an aggregation rule is approved. ${a.instrumentResults
+          .map((r) => `${r.label}: Fundability ${Math.round(r.percent)}%`)
+          .join(" · ")}. Your Capital Appeal score is unaffected.`,
+        chips: [],
+        cta: "Review use of funds",
+        route: `${FUNDING_ROUTE}?section=useOfFunds`,
+        note: null,
+      };
+    }
 
     if (!hasAppliedForFunding) {
       return {
@@ -839,8 +937,7 @@ ${outputFormat}
         headline: missingFundingSections.length
           ? `${missingFundingSections.length} funding application section${missingFundingSections.length === 1 ? "" : "s"} still to complete`
           : "No funding application on file",
-        detail:
-          "Fundability is 60% of the Capital Appeal score and only activates once the funding application is complete. Until then you are scored on Financial Strength alone, which is why the weighting reads differently from the published one.",
+        detail: `Your Capital Appeal score is Financial Strength alone and does not wait on this. A complete funding application adds an application view: Fundability for your instrument, weighted ${share}% against Financial Strength at the ${a.stage.label} stage. Until then that view is Not assessed — it is not a zero.`,
         chips: missingFundingSections.map((k) => FUNDING_SECTION_LABELS[k] || k),
         cta: "Go to the funding application",
         route: FUNDING_ROUTE,
@@ -850,13 +947,15 @@ ${outputFormat}
       };
     }
 
+    const unmapped = a.unmappedInstruments || [];
     return {
-      key: "tier",
-      headline: "Funding type not identified",
-      detail:
-        "The application is complete, but no funding instrument has been selected — and the instrument is what decides how Fundability is weighted. A grant is scored on impact and business plan; purchase-order finance is scored on collateral and credit. Without one, the block cannot be weighted at all.",
+      key: "instrument",
+      headline: unmapped.length ? `${unmapped.join(", ")} is not in the Fundability matrix` : "Funding instrument not identified",
+      detail: unmapped.length
+        ? `Fundability applies by instrument, and ${unmapped.join(", ")} does not map to one of the scored instrument types, so this application's Fundability is Not assessed — it is not a zero. Your Capital Appeal score and your other applications are unaffected. Choosing a specific instrument in Use of Funds (for example Term Loan, Purchase Order Finance, Invoice Discounting, Asset Finance, an equity or grant instrument) lets it be scored.`
+        : "The application is complete, but no funding instrument was selected — and the instrument decides which Fundability rows apply. A grant is read on investment case and impact; purchase-order finance on credit and security; equity on case, growth, pitch and resilience. Until one is selected the application view is Not assessed (not zero). Your Capital Appeal score is unaffected.",
       chips: [],
-      cta: "Select your funding instruments",
+      cta: "Choose a funding instrument",
       route: `${FUNDING_ROUTE}?section=useOfFunds`,
       note: null,
     };
@@ -865,9 +964,6 @@ ${outputFormat}
   // ── Assemble what the explorer needs ────────────────────────────────
   const parsed = useMemo(() => parseAnalysisByElement(aiEvaluationResult), [aiEvaluationResult]);
 
-  // Weak areas and priority improvements recovered from the document
-  // evaluations that already ran — business plan, pitch deck, credit report,
-  // financial statements. Qualitative, no point values, keyed by element.
   const documentFindings = useMemo(
     () =>
       buildDocumentFindings({
@@ -881,6 +977,10 @@ ${outputFormat}
 
   const explorer = useMemo(() => {
     if (!a) return null;
+
+    const app = a.application;
+    const stageLabel = a.stage.label;
+    const signed = (n) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}`;
 
     const findingFor = (label) => parsed.map[normLabel(label)] || null;
     const toElement = (src, blockKey, extra = {}) => ({
@@ -905,8 +1005,8 @@ ${outputFormat}
         key: "financialStrength",
         label: "Financial Strength",
         percent: a.financialStrength.percent,
-        blockWeight: a.blockWeights.financialStrength,
-        note: "Scored in code against the fields on your Financial Overview and the credit report on file.",
+        blockWeight: 100,
+        note: `This is your Capital Appeal score. Factor weights are those for the ${stageLabel} stage (${a.stage.basis}). Scored in code against the fields on your Financial Overview and the credit report on file.`,
         elements: a.financialStrength.subCategories.map((sc) =>
           toElement(sc, "financialStrength", {
             sourceNote: "Read from the fields on your Financial Overview, plus the credit report on file.",
@@ -919,10 +1019,14 @@ ${outputFormat}
       const fundabilityBlock = a.blocks.find((b) => b.key === "fundability");
       blocks.push({
         key: "fundability",
-        label: "Fundability",
+        label: selected?.app ? `Fundability — application #${selected.shortId}` : "Fundability — with your funding request",
         percent: fundabilityBlock?.percent ?? 0,
-        blockWeight: a.blockWeights.fundability,
-        note: `Weighted for Tier ${fundingTier} — ${TIER_LABELS[fundingTier]}. Sub-components at 0% are excluded for this funding type and cost you nothing.`,
+        blockWeight: a.split.fundability,
+        note: `Scored for ${app.instrumentLabel}. Rows that do not apply to this instrument are out of scope and cost you nothing. This block does not change the Capital Appeal score above; it builds the application view, which stands at ${app.score}% (${signed(app.delta)} points against your Capital Appeal).${
+          results.filter((r) => r.app).length > 1
+            ? ` This is application #${selected.shortId} of ${results.filter((r) => r.app).length}. Each application is assessed on its own instrument and its own security — switch between them above.`
+            : ""
+        }`,
         elements: a.fundabilityComponents.map((c) => toElement(c, "fundability")),
       });
     } else if (fundabilityStatus) {
@@ -930,9 +1034,9 @@ ${outputFormat}
         key: "fundability",
         label: "Fundability — not scored",
         percent: 0,
-        blockWeight: 60,
+        blockWeight: a.split.fundability,
         inactive: true,
-        note: `${fundabilityStatus.headline}. Its seven sub-components — business plan, pitch deck, impact and mandate, creditworthiness, guarantees, financial resilience and growth potential — are all inactive, so your score is Financial Strength only.`,
+        note: `${fundabilityStatus.headline}. The application view is Not assessed (not zero). Your Capital Appeal score is Financial Strength alone and is unaffected.`,
         elements: [],
       });
     }
@@ -940,30 +1044,46 @@ ${outputFormat}
     const assessmentAreas = blocks.flatMap((b) =>
       b.elements.map((e) => ({
         label: e.label,
-        weightLabel: e.excluded ? `excluded · ${b.label}` : `${e.weight}% of ${b.label}`,
+        weightLabel: e.excluded ? `out of scope · ${app.instrumentLabel}` : `${e.weight}% of ${b.label}`,
         detail: ELEMENT_PURPOSE[e.key.split(":")[1]] || "",
       }))
     );
 
+    const fsRows = Object.entries(FS_FACTOR_WEIGHTS).map(([key, w]) => ({
+      label: STAGE_LABELS[key],
+      weight: `${w.revenue} · ${w.records} · ${w.balanceSheet} · ${w.debt} · ${w.credit}`,
+      now: key === a.stage.key ? "you" : "—",
+      excluded: key !== a.stage.key,
+    }));
+
     const weightingTables = [
       {
-        title: "Block weighting",
+        title: "Your Capital Appeal score",
         firstColumn: "Block",
         rows: [
-          { label: "Financial Strength", weight: `${a.blockWeights.financialStrength}%`, now: `${Math.round(a.financialStrength.percent)}%` },
+          { label: "Financial Strength", weight: "100%", now: `${Math.round(a.financialStrength.percent)}%` },
+          { label: "Fundability", weight: "—", now: "—", excluded: true },
+        ],
+        note: "Capital Appeal is Financial Strength alone. Fundability belongs to a funding request and never changes this score.",
+      },
+      {
+        title: `With a funding request — ${stageLabel} stage split`,
+        firstColumn: "Block",
+        rows: [
+          { label: "Financial Strength", weight: `${a.split.financialStrength}%`, now: `${Math.round(a.financialStrength.percent)}%` },
           {
             label: "Fundability",
-            weight: `${a.blockWeights.fundability}%`,
+            weight: `${a.split.fundability}%`,
             now: a.fundingActive ? `${Math.round(a.blocks.find((b) => b.key === "fundability")?.percent || 0)}%` : "—",
             excluded: !a.fundingActive,
           },
         ],
         note: a.fundingActive
-          ? "Block weights follow your business stage and funding tier."
-          : "Fundability is inactive, so Financial Strength carries the whole score at the weight shown for your stage.",
+          ? `Application view: ${app.score}%. Shown beside your Capital Appeal, never over it.`
+          : "Application view: Not assessed.",
       },
       {
-        title: "Within Financial Strength",
+        title: `Within Financial Strength — ${stageLabel} stage`,
         rows: a.financialStrength.subCategories.map((sc) => ({
           label: sc.label,
           weight: `${sc.weight}%`,
@@ -971,24 +1091,53 @@ ${outputFormat}
         })),
         note: "Applied in code against the fields on your Financial Overview — this is the arithmetic, not a guide.",
       },
+      {
+        title: "How the Financial Strength weighting moves by stage",
+        firstColumn: "Stage",
+        rows: fsRows,
+        note: "Weights read in order: Revenue & Profitability · Records & Governance · Balance Sheet · Debt & Liability · Credit History.",
+      },
     ];
 
     if (a.fundingActive) {
       weightingTables.push({
-        title: `Within Fundability — Tier ${fundingTier}: ${TIER_LABELS[fundingTier]}`,
+        title: `Within Fundability — ${app.instrumentLabel}`,
         firstColumn: "Sub-component",
         rows: a.fundabilityComponents.map((c) => ({
-          label: c.label,
-          weight: `${c.weight}%`,
+          label: c.excluded ? c.label : `${c.label} (stage base ${c.baseWeight})`,
+          weight: c.excluded ? "—" : `${c.weight}%`,
           now: c.excluded ? "—" : `${Math.round(c.percent)}%`,
           excluded: c.excluded,
         })),
-        note: "A sub-component at 0% is excluded for your tier. It is not a gap and costs you nothing.",
+        note: "The stage's base weights are shared out across only the rows that apply to this instrument, so the active rows total 100%. A row that does not apply is out of scope and costs you nothing.",
       });
     }
 
     const attention = [];
     if (fundabilityStatus) attention.push(fundabilityStatus);
+    const incompleteApps = (applications || []).filter((x) => !isAppComplete(x)).length;
+    if (incompleteApps > 0 && results.some((r) => r.app)) {
+      attention.push({
+        key: "incomplete",
+        headline: `${incompleteApps} funding application${incompleteApps === 1 ? "" : "s"} not scored yet`,
+        detail: "Fundability is assessed for each application once every required section is complete, or the application is submitted. Applications still in draft are not scored and do not affect the ones that are.",
+        chips: [],
+        note: null,
+        cta: "Open funding applications",
+        route: FUNDING_ROUTE,
+      });
+    }
+    if (a.stage.derived && a.stage.recorded && a.stage.recorded !== a.stage.key) {
+      attention.push({
+        key: "stage",
+        headline: `Scored as ${stageLabel}, not ${STAGE_LABELS[a.stage.recorded]}`,
+        detail: `The methodology sets Startup (under 3 completed years) and Growth (3 to under 6) by years in operation, and you have ${a.stage.basis}. Your profile records "${profileData?.entityOverview?.operationStage}". Scaling and Mature need a recorded stage assessment instead.`,
+        chips: [],
+        note: null,
+        cta: "Review business stage",
+        route: "/profile?section=entityOverview",
+      });
+    }
     if (a.statements?.hasDiscrepancy) {
       attention.push({
         key: "discrepancy",
@@ -1002,16 +1151,42 @@ ${outputFormat}
       });
     }
 
+    const footnotes = [];
+    if (a.fundingActive) {
+      footnotes.push({
+        title: `With your ${app.instrumentLabel} request`,
+        body: `The application view stands at ${app.score}% (${signed(app.delta)} points against your Capital Appeal). Fundability items are valued in points of that view, not of your Capital Appeal, so they are listed here and not added to the total above. ${fmtPts(app.availablePoints)} is recoverable across Financial Strength and Fundability.`,
+        items: app.outstanding
+          .filter((i) => i.block === "Fundability")
+          .slice(0, 5)
+          .map((i) => ({
+            what: `${i.label} — ${fmtPts(i.pointValue)} of the application view`,
+            why: i.fix || i.reason || i.importance || "",
+          })),
+      });
+    }
+    if (a.provisional) {
+      footnotes.push({
+        title: "Provisional rules",
+        body: `Some thresholds used here are not yet approved in the scoring rule registry: ${a.provisionalRules.join("; ")}. Items that depend on them are scored and labelled provisional, and may change when the rules are approved.`,
+        items: [],
+      });
+    }
+
     return {
       blocks,
       attention,
       about: {
         definition:
-          "Capital Appeal measures whether this business can absorb, deploy and return capital. It is built from two blocks: Financial Strength — what your own numbers say — and Fundability, which activates once a funding application is complete and is weighted according to the kind of money you are asking for.",
+          "Capital Appeal measures the financial strength of the business — what your own numbers and records say. Where a funding request is complete, Fundability is scored for that request's instrument and shown beside it as an application view. It never changes the Capital Appeal score itself.",
         definitionNotes: [
           {
             title: "The score is calculated in code",
             body: "Every figure here comes from a scoring function reading literal fields on your profile and the documents on file. The AI reads the finished numbers and explains them. That is what lets a figure like +3.4% be a promise rather than an estimate.",
+          },
+          {
+            title: "Two views, kept apart",
+            body: "Your Capital Appeal is Financial Strength alone, so it is the same whichever funder you approach. A funding request adds an application view, which blends Financial Strength with Fundability for that instrument at your stage's split. A score describes the evidence on file; it does not predict approval.",
           },
           {
             title: "Points that cannot be claimed back",
@@ -1021,43 +1196,90 @@ ${outputFormat}
         assessmentAreas,
         interpretation: INTERPRETATION,
         weighting: {
-          formula: "value = (item points withheld ÷ container points) × block weight × component weight",
+          formula: "value = (item points withheld ÷ container points) × factor weight for your stage",
           formulaNote:
-            "Each figure shown against an improvement is the exact amount the score moves when that item is resolved — the same function promises it and awards it.",
+            "Each figure shown against a Financial Strength improvement is the exact amount your Capital Appeal moves when that item is resolved — the same function promises it and awards it. Fundability items are valued in the same way, then scaled by their weight and the stage split, in points of the application view.",
           tables: weightingTables,
         },
       },
       potential: {
         available: a.availablePoints,
         locked: a.lockedPoints,
-        current: a.totalRaw,
+        current: Math.round(a.totalRaw * 10) / 10,
         projected: Math.round(a.totalRaw + a.availablePoints),
         items: a.outstanding,
         lockedItems: a.locked,
+        footnotes,
       },
       summary: parsed.overall,
     };
-  }, [a, parsed, documentFindings, fundingTier, fundabilityStatus]);
+  }, [a, selected, results, parsed, documentFindings, fundabilityStatus, applications, profileData]);
 
-  const tierBadge =
-    a?.fundingActive && fundingTier ? (
+  const applicationPanel =
+    results.filter((r) => r.app).length > 1 ? (
+      <div style={{ marginTop: "10px", border: "1px solid #e8ddd6", borderRadius: "10px", background: "#faf8f6", overflow: "hidden", textAlign: "left" }}>
+        <div style={{ padding: "8px 12px", fontSize: "10.5px", fontWeight: 800, letterSpacing: "0.6px", textTransform: "uppercase", color: "#8d6e63", borderBottom: "1px solid #e8ddd6" }}>
+          Your funding applications ({results.filter((r) => r.app).length}) — each assessed separately
+        </div>
+        {results.filter((r) => r.app).map((r) => {
+          const ra = r.assessment;
+          const fund = ra.blocks.find((b) => b.key === "fundability");
+          const on = r.id === selected?.id;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setSelectedAppId(r.id)}
+              aria-pressed={on}
+              style={{
+                width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px",
+                padding: "9px 12px", border: "none", borderBottom: "1px solid #f0e9e4", cursor: "pointer",
+                background: on ? "#efe6e1" : "white", textAlign: "left", fontFamily: "inherit",
+              }}
+            >
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#5d4037" }}>
+                  #{r.shortId}{ra.application.instrumentLabel ? ` · ${ra.application.instrumentLabel}` : ""}
+                </span>
+                <span style={{ display: "block", fontSize: "11px", color: "#8d6e63", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {ra.fundingActive
+                    ? `Fundability ${Math.round(fund?.percent || 0)}% · with this request ${ra.application.score}%`
+                    : ra.fundabilityStatus === "unmapped"
+                    ? `Not assessed — ${(ra.unmappedInstruments || []).join(", ") || "instrument not recognised"}`
+                    : "Not assessed — no instrument selected"}
+                </span>
+              </span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: on ? "#5d4037" : "#a1887f", whiteSpace: "nowrap" }}>
+                {on ? "Showing" : "View"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
+
+  const instrumentBadge =
+    a?.fundingActive && a.application.instrumentLabel ? (
       <div
         style={{
           display: "inline-flex",
           alignItems: "center",
           gap: "8px",
-          backgroundColor: TIER_BADGE_COLORS[fundingTier].bg,
-          border: `1px solid ${TIER_BADGE_COLORS[fundingTier].border}`,
+          backgroundColor: INSTRUMENT_BADGE.bg,
+          border: `1px solid ${INSTRUMENT_BADGE.border}`,
           borderRadius: "20px",
           padding: "6px 14px",
           fontSize: "12px",
           fontWeight: 600,
-          color: TIER_BADGE_COLORS[fundingTier].text,
+          color: INSTRUMENT_BADGE.text,
           marginTop: "8px",
         }}
       >
         <span>🏷</span>
-        <span>Tier {fundingTier}: {TIER_LABELS[fundingTier]}</span>
+        <span>
+          With your {a.application.instrumentLabel} request: {a.application.score}%
+          {` (${a.application.delta >= 0 ? "+" : ""}${a.application.delta.toFixed(1)})`}
+        </span>
       </div>
     ) : null;
 
@@ -1088,7 +1310,7 @@ ${outputFormat}
 
           {fundabilityStatus && (
             <div style={{ marginTop: "8px", display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 12px", background: "#fff8e1", border: "1px solid #e8d0a8", borderRadius: "20px", color: "#8a5a00", fontWeight: 700, fontSize: "10.5px", lineHeight: 1.4 }}>
-              <AlertCircle size={12} /> Fundability (60%) not scored
+              <AlertCircle size={12} /> {a?.fundabilityStatus === "blended" ? "Several instruments — scored separately" : "Application view not scored"}
             </div>
           )}
 
@@ -1124,17 +1346,18 @@ ${outputFormat}
                 contextLine={
                   <>
                     Business stage:{" "}
-                    <strong style={{ color: "#5d4037", textTransform: "capitalize" }}>
-                      {profileData?.entityOverview?.operationStage || "Ideation"}
-                    </strong>
+                    <strong style={{ color: "#5d4037" }}>{a.stage.label}</strong>
+                    <div style={{ fontSize: "11.5px", color: "#8d6e63", marginTop: "4px" }}>
+                      {a.stage.basis}
+                    </div>
                     <div style={{ fontSize: "11.5px", color: "#8d6e63", marginTop: "4px" }}>
                       {a.fundingActive
-                        ? `Financial Strength ${a.blockWeights.financialStrength}% · Fundability ${a.blockWeights.fundability}%`
-                        : `Financial Strength only, weighted ${a.blockWeights.financialStrength}% for this stage`}
+                        ? `Capital Appeal is Financial Strength alone · with your request: Financial Strength ${a.split.financialStrength}% + Fundability ${a.split.fundability}%`
+                        : "Capital Appeal is Financial Strength alone"}
                     </div>
                   </>
                 }
-                badge={tierBadge}
+                badge={<>{instrumentBadge}{applicationPanel}</>}
                 about={explorer.about}
                 blocks={explorer.blocks}
                 potential={explorer.potential}
