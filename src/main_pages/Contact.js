@@ -80,63 +80,68 @@ const ContactFormPage = () => {
     if (error) setError(null);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSending(true);
-    setError(null);
-    
-    try {
-      if (!formData.name.trim()) throw new Error('Name is required');
-      if (!formData.email.trim()) throw new Error('Email is required');
-      if (!formData.message.trim()) throw new Error('Message is required');
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        throw new Error('Please enter a valid email address');
-      }
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-      const app = getApp();
-      const functions = getFunctions(app);
-      const submitContactForm = httpsCallable(functions, 'submitContactForm');
-      
-      const result = await submitContactForm({
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        subject: formData.subject.trim(),
-        message: formData.message.trim()
-      });
+  if (isSending) return;
 
-      const { data } = result;
-      
-      if (data.success) {
-        setIsSubmitted(true);
-        setSuccessMessage(data.message || 'Message sent successfully! Check your email for confirmation.');
-        setFormData({
-          name: '',
-          email: '',
-          subject: '',
-          message: ''
-        });
-      } else {
-        throw new Error(data.message || 'Failed to send message');
-      }
-    } catch (err) {
-      console.error('Form submission error:', err);
-      
-      if (err.code === 'functions/internal') {
-        setError('Server error: ' + (err.message || 'Please try again.'));
-      } else if (err.code === 'functions/unavailable') {
-        setError('Network error. Please check your connection.');
-      } else if (err.code === 'functions/not-found') {
-        setError('Contact service is currently unavailable. Please email us directly at hello@bigmarketplace.africa');
-      } else if (err.code === 'functions/permission-denied') {
-        setError('Permission denied. Please refresh the page.');
-      } else {
-        setError(err.message || 'Failed to send message. Please try again.');
-      }
-    } finally {
-      setIsSending(false);
-    }
+  setError(null);
+
+  const payload = {
+    name: formData.name.trim(),
+    email: formData.email.trim(),
+    subject: formData.subject.trim(),
+    message: formData.message.trim()
   };
 
+  if (!payload.name || !payload.email || !payload.message) {
+    setError("Please enter your name, email and message.");
+    return;
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+    setError("Please enter a valid email address.");
+    return;
+  }
+
+  setIsSending(true);
+
+  try {
+    const functions = getFunctions(getApp());
+    const submitContactForm = httpsCallable(
+      functions,
+      "submitContactForm"
+    );
+
+    const { data } = await submitContactForm(payload);
+
+    if (!data?.success) {
+      throw new Error("Unable to submit your message.");
+    }
+
+    setIsSubmitted(true);
+    setSuccessMessage(
+      data.message || "Your message has been received."
+    );
+
+    setFormData({
+      name: "",
+      email: "",
+      subject: "",
+      message: ""
+    });
+  } catch (error) {
+    console.error("Contact form submission failed:", error);
+
+    setError(
+      error.code === "functions/unavailable"
+        ? "Unable to connect. Please check your connection and try again."
+        : error.message || "Unable to submit your message. Please try again."
+    );
+  } finally {
+    setIsSending(false);
+  }
+};
   const toggleQuestion = (index) => {
     setOpenQuestion(openQuestion === index ? null : index);
   };
