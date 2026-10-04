@@ -452,7 +452,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
     Object.fromEntries(structure.filter(c => !c.hidden).map((c) => [c.id, true]))
   );
   const [includeSummary, setIncludeSummary] = useState(true);
-  const [includeCharts, setIncludeCharts] = useState(true);
+  const [includeBreakdown, setIncludeBreakdown] = useState(true);
   const [includeAnalysis, setIncludeAnalysis] = useState(true);
   const [includeActions, setIncludeActions] = useState(true);
   const [periodForReport, setPeriodForReport] = useState(period);
@@ -493,6 +493,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       generated: new Date().toISOString(),
       period: PERIOD_LABEL[periodForReport],
       financialYear: fyLabel(fy.startYear, fy.startMonth),
+      fy: fy,
       userName: userName || "User",
       categories: [],
       summary: null,
@@ -544,6 +545,45 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
           const v = periodValues(k, periodForReport, fy);
           const status = getStatus(k, periodForReport, fy);
           const variance = getVariance(k, periodForReport, fy);
+          
+          // Build period-by-period breakdown
+          const breakdown = [];
+          if (k.entries) {
+            // Determine which period keys to show based on frequency and selected period
+            let periodKeys = [];
+            if (k.frequency === "Daily") {
+              // Show daily entries for the selected month
+              const now = new Date();
+              const days = daysInMonth(now.getFullYear(), now.getMonth());
+              periodKeys = days.map(d => d.key);
+            } else if (k.frequency === "Weekly") {
+              // Show weekly entries
+              const weeks = fyWeeks(fy.startYear, fy.startMonth);
+              periodKeys = weeks.map(w => w.key);
+            } else {
+              // Monthly - show all months
+              const months = fyMonths(fy.startYear, fy.startMonth);
+              periodKeys = months.map(m => m.key);
+            }
+            
+            periodKeys.forEach(pk => {
+              const entry = k.entries[pk];
+              if (entry) {
+                const entryActual = parseNum(entry.actual);
+                const entryBudget = parseNum(entry.budget);
+                const entryVariance = Number.isFinite(entryActual) && Number.isFinite(entryBudget) 
+                  ? entryActual - entryBudget : null;
+                breakdown.push({
+                  key: pk,
+                  label: pk.replace(/^[A-Z]:/, ""),
+                  actual: entryActual,
+                  budget: entryBudget,
+                  variance: entryVariance,
+                });
+              }
+            });
+          }
+
           subData.kpis.push({
             id: k.id,
             name: k.name,
@@ -558,6 +598,8 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
             status: status.label,
             statusKey: status.key,
             notes: k.notes || "",
+            breakdown: breakdown,
+            kpiRef: k,
           });
         });
 
@@ -587,7 +629,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
     }
 
     // Generate the Word document
-    const htmlContent = generateWordHTML(reportData, includeCharts, includeAnalysis);
+    const htmlContent = generateWordHTML(reportData, includeBreakdown, includeAnalysis);
     
     // Create the download
     const blob = new Blob([htmlContent], { 
@@ -606,7 +648,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
     onClose();
   };
 
-  const generateWordHTML = (data, includeCharts, includeAnalysis) => {
+  const generateWordHTML = (data, includeBreakdown, includeAnalysis) => {
     const statusColor = (key) => {
       if (key === "green") return "#166534";
       if (key === "amber") return "#92400e";
@@ -676,6 +718,33 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       return html;
     };
 
+    const breakdownRows = (kpis) => {
+      if (!kpis.length) return "";
+      let html = "";
+      kpis.forEach(k => {
+        if (!k.breakdown || !k.breakdown.length) return;
+        html += `<h4 style="color:#4a352f; font-size:10pt; margin:10px 0 4px;">${k.name} — period breakdown</h4>`;
+        html += `<table style="width:100%; border-collapse:collapse; font-size:9pt; margin:4px 0 10px;">
+          <thead><tr style="background:#f2eeec; color:#4a352f;">
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Period</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Budget</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Actual</th>
+            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Variance</th>
+          </tr></thead><tbody>`;
+        k.breakdown.forEach((row, ri) => {
+          const bg = ri % 2 === 0 ? "#ffffff" : "#faf8f7";
+          html += `<tr style="background:${bg};">
+            <td style="padding:4px 8px; border:1px solid #ddd;">${row.label}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(row.budget, k.units)}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:600;">${fmtVal(row.actual, k.units)}</td>
+            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${row.variance !== null && row.variance >= 0 ? '#166534' : '#991b1b'};">${row.variance !== null ? fmtVal(row.variance, k.units) : "—"}</td>
+          </tr>`;
+        });
+        html += `</tbody></table>`;
+      });
+      return html;
+    };
+
     // Build categories HTML
     let categoriesHtml = "";
     data.categories.forEach(cat => {
@@ -686,6 +755,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
           categoriesHtml += `
             <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">${sub.name}</h3>
             ${kpiRows(sub.kpis)}
+            ${includeBreakdown ? breakdownRows(sub.kpis) : ""}
           `;
         }
       });
@@ -872,8 +942,8 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
             Summary header
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
-            <input type="checkbox" checked={includeCharts} onChange={() => setIncludeCharts(!includeCharts)} />
-            Charts (static view)
+            <input type="checkbox" checked={includeBreakdown} onChange={() => setIncludeBreakdown(!includeBreakdown)} />
+            Period-by-period breakdown
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
             <input type="checkbox" checked={includeAnalysis} onChange={() => setIncludeAnalysis(!includeAnalysis)} />
@@ -889,13 +959,13 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
         <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
         The report will be generated as a Word document (.doc) that can be opened in Microsoft Word, Google Docs, or LibreOffice.
-        {includeCharts && " Charts are rendered as static tables and summaries."}
+        {includeBreakdown && " Period-by-period breakdown shows the detailed split (daily/weekly/monthly) for each KPI."}
       </div>
     </Modal>
   );
 };
 
-/* ─── KPI info popup (unchanged from original) ────────────────────────── */
+/* ─── KPI info popup ───────────────────────────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
   const [meaning, setMeaning] = useState(kpi.meaning || "");
@@ -943,7 +1013,7 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Analysis text (unchanged) ────────────────────────────────────────── */
+/* ─── Analysis text ────────────────────────────────────────────────────── */
 const localAnalysis = (kpi, period, v, fy) => {
   const status = statusFromPair(kpi, v.budget, v.actual);
   const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
@@ -1079,9 +1149,7 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => (
   </Modal>
 );
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Trend chart (unchanged from original)
-   ════════════════════════════════════════════════════════════════════════ */
+/* ─── Trend chart ──────────────────────────────────────────────────────── */
 const CHART_TYPES = [
   { value: "bar", label: "Column Chart" }, { value: "line", label: "Line Chart" },
   { value: "area", label: "Area Chart" }, { value: "scatter", label: "Scatter Chart" },
@@ -1326,7 +1394,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   );
 };
 
-/* ─── Add Action (unchanged) ───────────────────────────────────────────── */
+/* ─── Add Action ───────────────────────────────────────────────────────── */
 const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId, onClose, onSaved }) => {
   const [meetings, setMeetings] = useState([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
@@ -1490,7 +1558,7 @@ const AddActionModal = ({ kpi, period, fy, categoryName, subCategoryName, userId
   );
 };
 
-/* ─── KPI notes ────────────────────────────────────────────────────────────── */
+/* ─── KPI notes ────────────────────────────────────────────────────────── */
 const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
   const [state, setState] = useState("idle");
@@ -1516,7 +1584,7 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Manage Categories (unchanged) ────────────────────────────────────── */
+/* ─── Manage Categories ────────────────────────────────────────────────── */
 const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   const [confirmId, setConfirmId] = useState(null);
   
@@ -1582,7 +1650,7 @@ const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   );
 };
 
-/* ─── Add Data (unchanged) ────────────────────────────────────────────── */
+/* ─── Add Data (revised for bulk capture) ─────────────────────────────── */
 const deriveFrequency = (category) => {
   const kpis = category?.subCategories.flatMap((s) => s.kpis) || [];
   if (!kpis.length) return { frequency: "Monthly", mixed: false };
@@ -1604,7 +1672,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   const [frequency, setFrequency] = useState(prefs?.frequency || derived.frequency);
   const [freqOverridden, setFreqOverridden] = useState(!!prefs?.frequency);
   const [monthForDays, setMonthForDays] = useState(new Date().getMonth());
-  const [periodKey, setPeriodKey] = useState(null);
+  const [selectedMonthForWeekly, setSelectedMonthForWeekly] = useState(new Date().getMonth());
   const [draft, setDraft] = useState({});
   const [saveState, setSaveState] = useState("idle");
   const timer = useRef(null);
@@ -1619,25 +1687,30 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
   ];
 
-  const periods = useMemo(() => {
-    if (frequency === "Monthly") return fyMonths(startYear, fy.startMonth).map((m) => ({ key: m.key, label: m.long }));
-    if (frequency === "Weekly") return fyWeeks(startYear, fy.startMonth).map((w) => ({ key: w.key, label: `${w.label}  ·  ${w.short}` }));
-    const list = fyMonths(startYear, fy.startMonth);
-    const m = list.find((x) => x.month === monthForDays) || list[0];
-    return daysInMonth(m.year, m.month).map((d) => ({ key: d.key, label: d.label }));
-  }, [frequency, startYear, fy.startMonth, monthForDays]);
-
-  useEffect(() => {
-    if (!periods.length) { setPeriodKey(null); return; }
-    if (periods.some((p) => p.key === periodKey)) return;
-    const todayKey = frequency === "Weekly" ? currentWeekKey() : frequency === "Monthly" ? currentMonthKey() : `D:${isoDate(new Date())}`;
-    setPeriodKey(periods.find((p) => p.key === todayKey)?.key || periods[0].key);
-  }, [periods, frequency]);
-
-  const periodIndex = periods.findIndex((p) => p.key === periodKey);
   const kpis = useMemo(() => category?.subCategories.flatMap((s) => s.kpis.map((k) => ({ ...k, sub: s.name }))) || [], [category]);
 
-  const value = (kpiId, field) => {
+  // Build period columns based on frequency
+  const periodColumns = useMemo(() => {
+    if (frequency === "Monthly") {
+      return fyMonths(startYear, fy.startMonth).map((m) => ({ key: m.key, label: m.long, short: m.label }));
+    }
+    if (frequency === "Weekly") {
+      // Show 6 months of weeks at a time
+      const allWeeks = fyWeeks(startYear, fy.startMonth);
+      const months = fyMonths(startYear, fy.startMonth);
+      const startMonth = months[selectedMonthForWeekly];
+      if (!startMonth) return allWeeks.slice(0, 26).map((w) => ({ key: w.key, label: w.label, short: w.short }));
+      const endDate = new Date(startMonth.year, startMonth.month + 6, 0);
+      const filtered = allWeeks.filter((w) => w.start >= new Date(startMonth.year, startMonth.month, 1) && w.start <= endDate);
+      return filtered.map((w) => ({ key: w.key, label: w.label, short: w.short }));
+    }
+    // Daily - show full month
+    const months = fyMonths(startYear, fy.startMonth);
+    const m = months.find((x) => x.month === monthForDays) || months[0];
+    return daysInMonth(m.year, m.month).map((d) => ({ key: d.key, label: d.label, short: d.short }));
+  }, [frequency, startYear, fy.startMonth, monthForDays, selectedMonthForWeekly]);
+
+  const value = (kpiId, periodKey, field) => {
     const d = draft[kpiId]?.[periodKey];
     if (d && d[field] !== undefined) return d[field];
     return kpis.find((k) => k.id === kpiId)?.entries?.[periodKey]?.[field] ?? "";
@@ -1662,7 +1735,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     })),
   });
 
-  const setValue = (kpiId, field, raw) => {
+  const setValue = (kpiId, periodKey, field, raw) => {
     const next = { ...draft, [kpiId]: { ...(draft[kpiId] || {}), [periodKey]: { ...(draft[kpiId]?.[periodKey] || {}), [field]: raw } } };
     setDraft(next);
     setSaveState("saving");
@@ -1676,9 +1749,13 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const cell = { ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" };
-  const th = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
-    letterSpacing: "0.5px", background: T.header, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2, verticalAlign: "top" };
+  const cell = { padding: "5px 6px", textAlign: "center", fontSize: "12.5px", border: `1px solid ${T.lineSoft}`,
+    minWidth: "80px", maxWidth: "100px" };
+  const inputCell = { ...inputS, padding: "5px 6px", textAlign: "center", fontSize: "12.5px", minHeight: "30px",
+    border: "none", borderRadius: 0, background: "transparent" };
+  const th = { padding: "8px 10px", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
+    letterSpacing: "0.5px", background: T.header, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2,
+    verticalAlign: "top", borderRight: "1px solid rgba(255,255,255,0.15)" };
 
   if (!category) {
     return (
@@ -1690,8 +1767,8 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   }
 
   return (
-    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]}`} icon={<Database size={17} />}
-      onClose={onClose} width={760}
+    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Bulk capture mode`} icon={<Database size={17} />}
+      onClose={onClose} width={Math.min(1400, 1000 + periodColumns.length * 40)}
       footer={<> 
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
@@ -1700,7 +1777,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
         <button onClick={onClose} style={btnPrimary}>Done</button>
       </>}>
 
-      <div style={{ display: "grid", gridTemplateColumns: frequency === "Daily" ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: frequency === "Daily" ? "1fr 1fr 1fr 1fr 1fr" : frequency === "Weekly" ? "1fr 1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
         <div>
           <label style={labelS}>Financial year</label>
           <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
@@ -1728,52 +1805,98 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
             </select>
           </div>
         )}
+        {frequency === "Weekly" && (
+          <div>
+            <label style={labelS}>Starting month (showing 6 months)</label>
+            <select value={selectedMonthForWeekly} onChange={(e) => setSelectedMonthForWeekly(Number(e.target.value))} style={selectS}>
+              {fyMonths(startYear, fy.startMonth).map((m) => <option key={m.key} value={m.month}>{m.long}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+          <label style={labelS}>Periods shown</label>
+          <div style={{ padding: "9px 11px", background: T.panel, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", fontSize: "13.5px", color: T.body }}>
+            {periodColumns.length} {frequency === "Daily" ? "days" : frequency === "Weekly" ? "weeks" : "months"}
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
-        <div style={{ flex: 1 }}>
-          <label style={labelS}>Period · {periods.length} in FY {fyLabel(startYear, fy.startMonth)}</label>
-          <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
-            {periods.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-          </select>
-        </div>
-        <button onClick={() => setPeriodKey(periods[Math.max(0, periodIndex - 1)]?.key)} disabled={periodIndex <= 0}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: periodIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-        <button onClick={() => setPeriodKey(periods[Math.min(periods.length - 1, periodIndex + 1)]?.key)} disabled={periodIndex >= periods.length - 1}
-          style={{ ...btnGhost, padding: "9px 11px", opacity: periodIndex >= periods.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+      <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px" }}>
+        {frequency === "Monthly" ? "Enter actual and budget for each month of the financial year." :
+         frequency === "Weekly" ? `Showing 6 months of weekly capture. Change the starting month above to scroll through the year.` :
+         "Enter daily actual and budget for the selected month."}
       </div>
 
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ maxHeight: "44vh", overflowY: "auto" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+        <div style={{ maxHeight: "55vh", overflow: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "max-content", minWidth: "100%", tableLayout: "auto" }}>
             <thead>
               <tr>
-                <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
-                <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
-                <th style={{ ...th, textAlign: "center", width: "24%" }}>Budget</th>
+                <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3, background: T.header,
+                  minWidth: "160px", maxWidth: "200px", borderRight: `2px solid ${T.lineStrong}` }}>
+                  KPI
+                </th>
+                {periodColumns.map((p) => (
+                  <th key={p.key} style={{ ...th, textAlign: "center", minWidth: "90px" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 400, color: "rgba(255,255,255,0.7)", marginBottom: "2px" }}>
+                      {p.label}
+                    </div>
+                    <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
+                      <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.6)" }}>A</span>
+                      <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.6)" }}>B</span>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+              {/* Sub-header for Actual / Budget */}
+              <tr>
+                <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3, background: T.header,
+                  minWidth: "160px", maxWidth: "200px", borderRight: `2px solid ${T.lineStrong}`, padding: "4px 10px", fontSize: "10px" }}>
+                  &nbsp;
+                </th>
+                {periodColumns.map((p) => (
+                  <th key={p.key} style={{ ...th, padding: "3px 0", background: "#4a352f" }}>
+                    <div style={{ display: "flex" }}>
+                      <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.8)", borderRight: "1px solid rgba(255,255,255,0.15)", padding: "2px" }}>Actual</span>
+                      <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.8)", padding: "2px" }}>Budget</span>
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {kpis.map((k, i) => (
                 <tr key={k.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                  <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
-                    borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <div style={{ fontWeight: 600 }}>{k.name}</div>
-                    <div style={{ fontSize: "11.5px", color: T.muted }}>{k.sub} · {k.units} · {k.frequency}</div>
+                  <td style={{ padding: "6px 10px", fontSize: "12.5px", color: T.ink,
+                    borderBottom: `1px solid ${T.lineSoft}`, borderRight: `2px solid ${T.lineStrong}`,
+                    position: "sticky", left: 0, zIndex: 1, background: i % 2 ? T.panel : T.bg,
+                    minWidth: "160px", maxWidth: "200px" }}>
+                    <div style={{ fontWeight: 600, fontSize: "12.5px" }}>{k.name}</div>
+                    <div style={{ fontSize: "10.5px", color: T.muted }}>{k.sub} · {k.units}</div>
                   </td>
-                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                    <input type="number" step="any" value={value(k.id, "actual")} placeholder="—"
-                      onChange={(e) => setValue(k.id, "actual", e.target.value)} style={cell} />
-                  </td>
-                  <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                    <input type="number" step="any" value={value(k.id, "budget")} placeholder="—"
-                      onChange={(e) => setValue(k.id, "budget", e.target.value)} style={cell} />
-                  </td>
+                  {periodColumns.map((p) => (
+                    <td key={p.key} style={{ padding: 0, borderBottom: `1px solid ${T.lineSoft}` }}>
+                      <div style={{ display: "flex" }}>
+                        <input type="number" step="any" value={value(k.id, p.key, "actual")} placeholder="—"
+                          onChange={(e) => setValue(k.id, p.key, "actual", e.target.value)}
+                          style={{ ...inputCell, flex: 1, borderRight: `1px solid ${T.lineSoft}` }} />
+                        <input type="number" step="any" value={value(k.id, p.key, "budget")} placeholder="—"
+                          onChange={(e) => setValue(k.id, p.key, "budget", e.target.value)}
+                          style={{ ...inputCell, flex: 1 }} />
+                      </div>
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+        <Info size={12} />
+        Each period has two columns: <strong>A</strong> = Actual, <strong>B</strong> = Budget. Values save automatically as you type.
+        {frequency === "Weekly" && " Use the starting month dropdown to view different 6-month windows."}
       </div>
     </Modal>
   );
@@ -1997,7 +2120,7 @@ const OperationalPerformance = () => {
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
   const [manageCats, setManageCats] = useState(false);
-  const [showReport, setShowReport] = useState(false);  // NEW: Report generator state
+  const [showReport, setShowReport] = useState(false);
 
   const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
 
