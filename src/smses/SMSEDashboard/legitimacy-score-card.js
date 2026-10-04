@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { ChevronDown, RefreshCw, AlertCircle } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
-import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
+import { doc, onSnapshot, updateDoc, setDoc, getDoc, deleteField } from "firebase/firestore"
 import { getFunctions, httpsCallable } from "firebase/functions"
+import { logAnalysisFailure } from "./analysis-failure-log"
 import ScoreExplorer from "./ScoreExplorer"
 import {
   buildLegitimacyAssessment,
@@ -211,6 +212,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       setVerdicts(next)
     } catch (e) {
       console.error("Verification error:", e)
+      logAnalysisFailure(db, userId, "legitimacyVerification", e)
       setEvaluationError(`The entry check could not finish: ${e.message}. Entries stay counted in full until it succeeds.`)
     } finally {
       setIsVerifying(false)
@@ -246,8 +248,8 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
   }
 
   const runAiEvaluation = async () => {
-    if (!apiKey?.trim()) { setEvaluationError("AI analysis is not configured yet."); return }
-    if (!profileData) { setEvaluationError("No profile data available to analyse."); return }
+    if (!apiKey?.trim()) { setEvaluationError("AI analysis is not configured yet."); return false }
+    if (!profileData) { setEvaluationError("No profile data available to analyse."); return false }
     setIsEvaluating(true)
     setEvaluationError("")
     try {
@@ -266,13 +268,18 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           { merge: true }
         )
       }
+      return true
     } catch (e) {
       console.error("Legitimacy AI evaluation error:", e)
       setEvaluationError(`Analysis failed: ${e.message}`)
+      await logAnalysisFailure(db, auth?.currentUser?.uid, "legitimacy", e)
+      return false
     } finally {
       setIsEvaluating(false)
     }
   }
+
+  const triggerTried = useRef(false)
 
   useEffect(() => {
     if (!auth?.currentUser?.uid) return
@@ -280,10 +287,14 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     const profileRef = doc(db, "universalProfiles", userId)
     const aiEvalRef = doc(db, "aiLegitimacyEvaluation", userId)
     const unsub = onSnapshot(profileRef, async (snap) => {
-      if (snap.exists() && snap.data().triggerLegitimacyEvaluation === true && !isEvaluating && apiKey) {
+      // One attempt per mount (the failure log writes to this doc and would
+      // re-fire this listener). A failed run leaves the trigger set, so the
+      // next page open tries again.
+      if (snap.exists() && snap.data().triggerLegitimacyEvaluation === true && !isEvaluating && apiKey && !triggerTried.current) {
+        triggerTried.current = true
         await runVerification()
-        await runAiEvaluation()
-        await updateDoc(profileRef, { triggerLegitimacyEvaluation: false })
+        const ok = await runAiEvaluation()
+        if (ok) await updateDoc(profileRef, { triggerLegitimacyEvaluation: false, "analysisFailures.legitimacy": deleteField() })
         return
       }
       try {

@@ -122,7 +122,7 @@ function Header({
       console.error("Error fetching sender from users collection:", err)
     }
 
-    return "Unnamed Funder"
+    return "BIG System"
   }
 
   // Profile & roles managed by hooks (useHeaderProfile, useRoles)

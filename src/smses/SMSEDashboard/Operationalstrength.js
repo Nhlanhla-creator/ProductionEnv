@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ChevronDown, RefreshCw, AlertCircle, Settings } from "lucide-react";
 import ScoreExplorer from "./ScoreExplorer";
 import { db, auth } from "../../firebaseConfig";
-import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, setDoc, getDoc, deleteField } from "firebase/firestore";
+import { logAnalysisFailure } from "./analysis-failure-log";
 import { useFirebaseFunctions } from "./hooks";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -55,11 +56,30 @@ const CATEGORY_LABELS = {
   premises: "Premises & Facilities",
 };
 
-const CATEGORY_WEIGHTS = {
-  supplierContinuity: 25,
-  delivery: 30,
-  safety: 20,
-  premises: 25,
+// Methodology v3 §7 — category weights by stage (each column sums to 100).
+const CATEGORY_WEIGHTS_BY_STAGE = {
+  startup:    { delivery: 30, supplierContinuity: 25, premises: 25, safety: 20 },
+  growth:     { delivery: 30, supplierContinuity: 25, premises: 23, safety: 22 },
+  scaling:    { delivery: 30, supplierContinuity: 30, premises: 20, safety: 20 },
+  turnaround: { delivery: 35, supplierContinuity: 30, premises: 15, safety: 20 },
+  mature:     { delivery: 30, supplierContinuity: 25, premises: 20, safety: 25 },
+};
+
+const STAGE_LABELS = {
+  startup: "Startup",
+  growth: "Growth",
+  scaling: "Scaling",
+  turnaround: "Turnaround",
+  mature: "Mature",
+};
+
+const stageKeyOf = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "growth") return "growth";
+  if (["scaling", "scale-up", "scaleup", "scale"].includes(s)) return "scaling";
+  if (s === "turnaround") return "turnaround";
+  if (["mature", "established"].includes(s)) return "mature";
+  return "startup";
 };
 
 const CATEGORY_COLORS = {
@@ -131,6 +151,8 @@ const mk = ({
 
 const buildOperationalAssessment = (data) => {
   const ops = data?.operationsOverview || {};
+  const stage = stageKeyOf(data?.entityOverview?.operationStage);
+  const CATEGORY_WEIGHTS = CATEGORY_WEIGHTS_BY_STAGE[stage];
   const sectors = data?.entityOverview?.economicSectors || [];
 
   // ── 1. Supplier & Continuity Risk ──
@@ -421,6 +443,8 @@ const buildOperationalAssessment = (data) => {
 
   return {
     ops,
+    stage,
+    stageLabel: STAGE_LABELS[stage],
     categories,
     allItems,
     outstanding,
@@ -648,6 +672,7 @@ export function OperationalStrengthScoreCard({
     } catch (error) {
       console.error("Operational AI evaluation error:", error);
       setEvaluationError(`Analysis failed: ${error.message}`);
+      await logAnalysisFailure(db, auth?.currentUser?.uid, "operational", error);
       return null;
     } finally {
       setIsEvaluating(false);
@@ -674,6 +699,8 @@ export function OperationalStrengthScoreCard({
     }
   };
 
+  const triggerTried = useRef(false);
+
   // ── Auto-trigger + load saved narrative ──
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) return;
@@ -686,15 +713,23 @@ export function OperationalStrengthScoreCard({
         const data = snap.data();
         // Shares the Leadership & Governance trigger for now — one flag fires
         // the evaluations together. Give this its own flag when that exists.
-        if (data.triggerOperationalEvaluation === true && !isEvaluating) {
+        // One attempt per mount (the failure log writes to this doc and would
+        // re-fire this listener). A failed run leaves the trigger set, so the
+        // next page open tries again.
+        if (data.triggerOperationalEvaluation === true && !isEvaluating && !triggerTried.current) {
+          triggerTried.current = true;
           const result = await runAiEvaluation();
           if (result) {
-            const timestamp = new Date();
-            await setDoc(aiEvalRef, { result, timestamp, profileSnapshot: profileData }, { merge: true });
-            setAiEvaluationResult(result);
-            setEvaluationTimestamp(timestamp.toLocaleString());
+            try {
+              const timestamp = new Date();
+              await setDoc(aiEvalRef, { result, timestamp, profileSnapshot: profileData }, { merge: true });
+              setAiEvaluationResult(result);
+              setEvaluationTimestamp(timestamp.toLocaleString());
+              await updateDoc(profileRef, { triggerOperationalEvaluation: false, "analysisFailures.operational": deleteField() });
+            } catch (error) {
+              await logAnalysisFailure(db, userId, "operational", error, { stage: "save" });
+            }
           }
-          await updateDoc(profileRef, { triggerOperationalEvaluation: false });
           return;
         }
       }
