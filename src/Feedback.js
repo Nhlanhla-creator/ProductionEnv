@@ -41,14 +41,13 @@ const Feedback = () => {
       const userUid = user?.uid || 'Not logged in';
 
       const result = await sendFeedback({
-        userEmail: email,
-        userName: displayName,
-        userUid: userUid,
-        message: feedbackMessage,
-        rating: feedbackRating,
-        url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
-        platform: 'BIG Marketplace'
-      });
+  message: feedbackMessage.trim(),
+  rating: feedbackRating,
+  url: typeof window !== "undefined"
+    ? window.location.href
+    : "Unknown",
+  platform: "BIG Marketplace"
+});
 
       console.log('Feedback sent:', result.data);
 
@@ -294,8 +293,7 @@ const Feedback = () => {
           <div style={styles.content}>
             {feedbackSent ? (
               <div style={styles.success}>
-                <p>Thank you for your feedback!</p>
-                <p>We appreciate your input and will review it shortly.</p>
+             <p>Feedback submitted successfully.</p>
               </div>
             ) : (
               <>
