@@ -24,6 +24,7 @@ const STAGE_MAP = {
   "series c": "venture_series_c",
   seriesc: "venture_series_c",
   growth: "late_growth_pe",
+    "growth/pe": "late_growth_pe",
   pe: "late_growth_pe",
   mbo: "late_mbo",
   mbi: "late_mbi",
@@ -150,7 +151,11 @@ export const SECTOR_SYNONYMS = {
 
 export const normalizeSector = (value) => {
   if (!value) return ""
-  const key = value.toLowerCase().replace(/[\s-]/g, "_").trim()
+  const key = value
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, "")
+    .replace(/[\s-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
   return SECTOR_SYNONYMS[key] || key
 }
 
@@ -216,9 +221,9 @@ export const normalizeInvestorFund = (fund = {}) => {
     excludedSectors: expandSectorsWithSynonyms(
       Array.isArray(fund.sectorExclusions) ? fund.sectorExclusions : [fund.sectorExclusions],
     ),
-    instruments: Array.isArray(fund.instruments)
-      ? fund.instruments.map((i) => i?.toLowerCase().trim()).filter(Boolean)
-      : [fund.instruments?.toLowerCase().trim()].filter(Boolean),
+        instruments: (Array.isArray(fund.instruments) ? fund.instruments : [fund.instruments])
+      .map(normalizeText)
+      .filter(Boolean),
     ticketMin: ticket(fund.minimumTicket),
     ticketMax: ticket(fund.maximumTicket),
     supportOffered: normalizeArray(fund.supportOffered),
@@ -320,12 +325,34 @@ export function calculateHybridScore(sme, investorFund) {
    is returned with adjusted:false and the column renders the plain BIG Score.
    ──────────────────────────────────────────────────────────────────────── */
 
-export const getFunderScoreWeightings = (funderFormData = {}) =>
-  funderFormData.scoreWeightings ||
-  funderFormData.applicationBrief?.scoreWeightings ||
-  funderFormData.applicationBrief?.evaluationWeightings ||
-  funderFormData.generalInvestmentPreference?.scoreWeightings ||
-  null
+const weightNum = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v))
+
+/* Funder forms use capitalAppeal / governance / leadership; bigEvaluations uses
+   fundability / governanceLeadership / operational. Translate here. */
+const normalizeWeightings = (w) => {
+  if (!w || typeof w !== "object") return null
+  const sum = (...keys) => {
+    const vals = keys.map((k) => weightNum(w[k])).filter(Number.isFinite)
+    return vals.length ? vals.reduce((a, b) => a + b, 0) : undefined
+  }
+  const out = {
+    compliance: sum("compliance"),
+    legitimacy: sum("legitimacy"),
+    fundability: sum("fundability", "capitalAppeal"),
+    governanceLeadership: sum("governanceLeadership") ?? sum("governance", "leadership"),
+    operational: sum("operational", "operationalStrength"),
+  }
+  return Object.values(out).some((v) => v > 0) ? out : null
+}
+
+export const getFunderScoreWeightings = (form = {}) =>
+  normalizeWeightings(
+    form.scoreWeightings ||
+      form.applicationBrief?.scoreWeightings ||
+      form.applicationBrief?.evaluationWeightings ||
+      form.generalInvestmentPreference?.scoreWeightings ||
+      form.investmentRequirements?.weights,
+  )
 
 export function calculateAdjustedBigScore(bigEvaluation, funderWeightings) {
   const scores = bigEvaluation?.scores || {}
@@ -497,4 +524,137 @@ export const formatWaitingTime = (value) => {
     .replace(/([0-9]+)\s*-+\s*([0-9]+)\s*(days?|weeks?|months?)/i, "$1–$2 $3")
     .replace(/([0-9]+)(days?|weeks?|months?)/i, "$1 $2")
     .trim()
+}
+
+/* ─── Funder requirements + shared fund shaping (both tables use these) ─── */
+export const DEFAULT_MIN_BIG_SCORE = 75
+
+const asList = (v) => (Array.isArray(v) ? v : v ? [v] : [])
+
+export const buildFundRequirements = (prefs = {}) => ({
+  minimumBigScore: normalizeAmount(prefs.minimumBigScore) || DEFAULT_MIN_BIG_SCORE,
+  minimumCompliance: normalizeAmount(prefs.minimumComplianceScore),
+  minimumFinancialStrength: normalizeAmount(prefs.minimumFinancialStrength),
+  minimumOperational: normalizeAmount(prefs.minimumOperationalStrength),
+  minimumRevenue: normalizeAmount(prefs.minimumRevenue),
+  minimumYearsTrading: normalizeAmount(prefs.minimumYearsTrading),
+})
+
+export function evaluateFundRequirements(req = {}, { bigScore, adjusted, evaluation, profile } = {}) {
+  const unmet = []
+  const num = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v))
+  const scores = evaluation?.scores || {}
+
+  // The funder's own weighting decides the score it is judged on.
+  const effective = Number.isFinite(adjusted?.score) ? adjusted.score : num(bigScore)
+  const minBig = req.minimumBigScore || DEFAULT_MIN_BIG_SCORE
+  if (!Number.isFinite(effective) || effective < minBig) {
+    unmet.push({
+      key: "bigScore",
+      label: "BIG Score",
+      required: `${minBig}%`,
+      actual: Number.isFinite(effective) ? `${effective}%` : "not scored yet",
+    })
+  }
+
+  // Pillar minimums are skipped when that pillar has no score to compare.
+  const pillar = (key, label, min, raw) => {
+    const value = num(raw)
+    if (min > 0 && Number.isFinite(value) && value < min) {
+      unmet.push({ key, label, required: `${min}%`, actual: `${Math.round(value)}%` })
+    }
+  }
+  pillar("compliance", "Compliance score", req.minimumCompliance, scores.compliance)
+  pillar("financial", "Financial strength (Capital Appeal)", req.minimumFinancialStrength, scores.fundability)
+  pillar("operational", "Operational strength", req.minimumOperational, scores.operational)
+
+  const revenue = normalizeAmount(profile?.financialOverview?.annualRevenue)
+  if (req.minimumRevenue > 0 && revenue < req.minimumRevenue) {
+    unmet.push({
+      key: "revenue",
+      label: "Annual revenue",
+      required: `R${req.minimumRevenue.toLocaleString("en-ZA")}`,
+      actual: revenue ? `R${revenue.toLocaleString("en-ZA")}` : "not declared",
+    })
+  }
+  const years = num(profile?.entityOverview?.yearsInOperation)
+  if (req.minimumYearsTrading > 0 && Number.isFinite(years) && years < req.minimumYearsTrading) {
+    unmet.push({ key: "years", label: "Years trading", required: `${req.minimumYearsTrading}`, actual: `${years}` })
+  }
+  return unmet
+}
+
+export const resolveTicketRange = (form = {}, fund = {}, index = 0) => {
+  const p = form.fundDetails?.funds?.[index] || fund
+  const minTicket =
+    p?.minimumTicket ?? p?.minTicket ?? fund.minimumTicket ?? fund.minTicket ??
+    form.fundDetails?.minimumTicket ?? p?.ticketSize?.min ?? 0
+  const maxTicket =
+    p?.maximumTicket ?? p?.maxTicket ?? fund.maximumTicket ?? fund.maxTicket ??
+    form.fundDetails?.maximumTicket ?? p?.ticketSize?.max ?? fund.size ?? 0
+  return { minTicket, maxTicket }
+}
+
+export const buildScoringFund = (form = {}, fund = {}, index = 0) => {
+  const prefs = form.generalInvestmentPreference || {}
+  const { minTicket, maxTicket } = resolveTicketRange(form, fund, index)
+  return {
+    ...fund,
+    stages: asList(prefs.investmentStage),
+    sectorFocus: asList(prefs.sectorFocus),
+    sectorExclusions: asList(prefs.sectorExclusions),
+    geographicFocus: asList(prefs.geographicFocus),
+    selectedProvinces: asList(prefs.selectedProvinces),
+    selectedCountries: asList(prefs.selectedCountries),
+    instruments: asList(prefs.investmentFocus),
+    minimumTicket: minTicket,
+    maximumTicket: maxTicket,
+    supportOffered: asList(fund.supportOffered),
+    dueDiligenceTimeline: fund.dueDiligenceTimeline || prefs.typicalDealClosingTime,
+  }
+}
+
+/* ─── Documents: pull from what the SME already uploaded ─── */
+const isUrl = (v) => typeof v === "string" && v.startsWith("http")
+
+// Accepts a string, an array of strings, or an array/object of { url }.
+export const pickDocumentUrl = (value) => {
+  if (isUrl(value)) return value
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const u = pickDocumentUrl(v)
+      if (u) return u
+    }
+    return null
+  }
+  if (value && typeof value === "object") return pickDocumentUrl(value.url)
+  return null
+}
+
+const compact = (s) => (s || "").toString().toLowerCase().replace(/[\s_&-]/g, "")
+
+// Investor coreDocuments ids -> keys the SME profile actually uses.
+export const DOCUMENT_ALIASES = {
+  pitch_deck: ["pitchDeck"],
+  business_plan: ["businessPlan"],
+  financials: ["financialStatements", "auditedFinancials"],
+  financial_statements: ["financialStatements"],
+  audited_financials: ["auditedFinancials"],
+  team_bios: ["cv_multiple", "CV_multiple"],
+}
+
+export const resolveProfileDocument = (profile = {}, label, mappedValue) => {
+  const direct = pickDocumentUrl(mappedValue)
+  if (direct) return direct
+  const wanted = [label, ...(DOCUMENT_ALIASES[label] || [])].map(compact)
+  const boxes = [profile.documents, profile.documentUpload, profile.fundingDocuments, profile]
+  for (const box of boxes) {
+    if (!box || typeof box !== "object") continue
+    for (const [key, value] of Object.entries(box)) {
+      if (!wanted.includes(compact(key))) continue
+      const url = pickDocumentUrl(value)
+      if (url) return url
+    }
+  }
+  return null
 }

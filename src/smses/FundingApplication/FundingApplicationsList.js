@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import {
@@ -26,6 +26,7 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  AlertTriangle,
   Hash,
   DollarSign,
   Table2,
@@ -34,13 +35,19 @@ import {
   MoreVertical,
   Send,
   ChevronDown,
+  Sparkles,
 } from "lucide-react"
-
+import { getFunctions, httpsCallable } from "firebase/functions"
 /**
  * FundingApplicationsList
  *
- * The inline "show matches" panel is gone — funder matches are read on the
- * Funding Matches table instead, so there's one place to look rather than two.
+ * Funder matches are read on the Funding Matches table; this list opens it.
+ *
+ * AI capital navigation (moved here from the Dashboard summary card): each
+ * application gets its own analysis. Results are cached on the application
+ * doc (fundingApplicationsV2/{id}.capitalNavigation) and only re-run on demand
+ * — nothing calls the AI on page load, so the 4/min and 20/day limits on
+ * analyzeCapitalNavigation aren't burned just by opening this page.
  *
  * Props:
  * - onViewSummary: (applicationId, applicationData) => void
@@ -52,20 +59,13 @@ import {
  * - embedded: boolean
  */
 
-/* ⚠️ CONFIRM THIS PATH — set it to whatever route renders <FundingTable />.
-   The advisor list uses /find-advisors and the intern list
-   /intern-matches-page; this is the funding equivalent. */
+/* ⚠️ CONFIRM THIS PATH — set it to whatever route renders <FundingTable />. */
 const MATCHES_ROUTE = "/funding-matches"
 
-/* Both events are string literals rather than imports from the funding table,
-   so the two files can't form an import cycle. They must match the constants
-   exported there: FUNDING_APPLICATION_FILTER_EVENT and
-   FUNDING_MATCH_RANGE_EVENT. */
+/* Must match the constants exported by the funding table. */
 const FUNDING_APPLICATION_FILTER_EVENT = "funding-application-filter"
 const FUNDING_MATCH_RANGE_EVENT = "funding-match-range-filter"
 
-/* The bands offered on each row's Matches cell. `test` counts them here;
-   `range` is what the Funding Matches table filters on. */
 const MATCH_BANDS = [
   { key: "all", label: "All matches", short: "All", range: [0, 100], test: () => true },
   { key: "above75", label: "Above 75%", short: ">75%", range: [75, 100], test: (s) => s >= 75 },
@@ -74,23 +74,91 @@ const MATCH_BANDS = [
 ]
 const bandOf = (key) => MATCH_BANDS.find((b) => b.key === key) || MATCH_BANDS[0]
 
-/* Column explanations, same idea as the Funding Matches table: an i beside
-   each header, portaled to <body> so nothing clips it. */
 const COLUMN_TOOLTIPS = {
   appId: "The short id for this funding request. Hover it in the row to see the full document id.",
-  application: "The funding stage you applied for, with the amount requested underneath.",
+  application:
+    "The funding stage you applied for, the amount requested, and the AI capital navigation analysis for this application.",
   type: "The funding instruments you asked for — debt, equity, grant and so on.",
   matches:
     "Funds matched to this application. Pick a score band to see how many fall in it, then press the eye to open those matches in the Funding Matches table.",
   lastUpdated: "When you last saved a change to this application.",
   status: "Draft while sections are still incomplete, Ready once every section is done, Submitted after you send it.",
-  actions: "Open the quick actions menu to view matches, view the application, submit it, or delete it.",
+  actions: "Open the quick actions menu to view matches, view the analysis, view the application, submit it, or delete it.",
 }
 
 const Portal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
 }
+
+/* ─── Capital navigation helpers ─────────────────────────────────────────── */
+
+const parseAmount = (v) => parseInt((v ?? "").toString().replace(/[^\d]/g, ""), 10) || 0
+
+/* UseOfFunds.jsx writes fundingCategory, fundingInstrument and preferredFunderType
+   (plus the *Other free-text fields). The old fundingInstruments array is only
+   used as a fallback for applications saved before that form changed. */
+const getRequestedRoute = (useOfFunds = {}) => {
+  const pick = (main, other) => (main && main.startsWith("Other") ? other || main : main) || null
+  const legacy = Array.isArray(useOfFunds.fundingInstruments)
+    ? useOfFunds.fundingInstruments.filter(Boolean).join(", ")
+    : ""
+  return {
+    category: pick(useOfFunds.fundingCategory, useOfFunds.fundingCategoryOther),
+    instrument: pick(useOfFunds.fundingInstrument, useOfFunds.fundingInstrumentOther) || legacy || null,
+    funderType: pick(useOfFunds.preferredFunderType, useOfFunds.preferredFunderTypeOther),
+  }
+}
+
+const buildCapitalNavSignature = (appData, scores = {}, guaranteesEvaluation, profile = {}) => {
+  const route = getRequestedRoute(appData.useOfFunds)
+  return JSON.stringify({
+    compliance: scores.compliance ?? null,
+    legitimacy: scores.legitimacy ?? null,
+    governanceLeadership: scores.governanceLeadership ?? null,
+    operational: scores.operational ?? null,
+    fundability: scores.fundability ?? null,
+    overall: scores.bigScore ?? null,
+    guarantees: guaranteesEvaluation?.score ?? null,
+    stage: profile?.entityOverview?.operationStage ?? null,
+    category: route.category,
+    instrument: route.instrument,
+    amountRequested: appData.useOfFunds?.amountRequested ?? null,
+    items: (appData.useOfFunds?.fundingItems || []).length,
+  })
+}
+
+/* blocking: the analysis can't run without these.
+   optional: it runs, but is provisional until they're provided. */
+const getMissingInfo = (appData, ctx) => {
+  const blocking = []
+  const optional = []
+  const useOfFunds = appData?.useOfFunds || {}
+  const route = getRequestedRoute(useOfFunds)
+
+  if (parseAmount(useOfFunds.amountRequested) <= 0) blocking.push("Amount requested (Use of Funds section)")
+  if (!route.category && !route.instrument) blocking.push("Funding category (Use of Funds section)")
+  else if (route.category && route.category !== "Any" && !route.instrument)
+    optional.push("Funding instrument (Use of Funds section)")
+
+  if (ctx) {
+    if (ctx.scores?.bigScore == null)
+      blocking.push("Your BIG Score hasn't been calculated yet — open the Dashboard once so it can be generated")
+
+    const profile = ctx.profile || {}
+    if (!profile.entityOverview?.operationStage) optional.push("Business stage (Business Profile → Entity Overview)")
+    if (!(profile.entityOverview?.economicSectors || []).length)
+      optional.push("Industry / economic sector (Business Profile → Entity Overview)")
+    if (!ctx.guaranteesEvaluation) optional.push("Guarantees haven't been analysed yet (Guarantees section)")
+    if (!profile.financialOverview?.existingDebt) optional.push("Existing debt position (Financial Overview)")
+  }
+
+  if (!(useOfFunds.fundingItems || []).length) optional.push("Purpose of funds breakdown (Use of Funds section)")
+
+  return { blocking, optional }
+}
+
+const suitabilityColor = (score) => (score >= 70 ? "#10b981" : score >= 50 ? "#f59e0b" : "#ef4444")
 
 /* ─── Column header info tooltip ─────────────────────────────────────────── */
 const HeaderInfoTooltip = ({ text }) => {
@@ -149,15 +217,15 @@ const FundingApplicationsList = ({
   const [submittingId, setSubmittingId] = useState(null)
   const [navNotice, setNavNotice] = useState(null)
 
-  /* applicationId -> [finalScore, ...]. Scores are kept rather than a single
-     count so the row's band picker can answer all four questions without
-     going back to Firestore. */
+  /* Capital navigation */
+  const [capitalNavByApp, setCapitalNavByApp] = useState({}) // appId -> result | { success:false, error }
+  const [capitalNavLoadingByApp, setCapitalNavLoadingByApp] = useState({}) // appId -> bool
+  const [navCtx, setNavCtx] = useState(null) // { scores, profile, guaranteesEvaluation }
+  const navCtxRef = useRef(null)
+  const [analysisModalId, setAnalysisModalId] = useState(null)
+
   const [matchScores, setMatchScores] = useState({})
-
-  /* applicationId -> band key. Defaults to "all". */
   const [rowBand, setRowBand] = useState({})
-
-  /* { app, rect } for the quick actions popover. */
   const [quickActions, setQuickActions] = useState(null)
 
   const navigate = useNavigate()
@@ -175,12 +243,6 @@ const FundingApplicationsList = ({
 
   const fetchMatchCounts = async (userId) => {
     try {
-      /* No status filter and no score floor. It used to require
-         status == "matched" and finalScore >= 70, but the match table shows
-         every record whatever its stage — so the moment a fund moved to
-         "applied" the badge count dropped while the table still listed the
-         row, and anything under 70 was invisible here even though it was
-         sitting in the table. */
       const q = query(collection(db, "smseFundingMatches"), where("smeId", "==", userId))
       const snapshot = await getDocs(q)
       const scores = {}
@@ -198,24 +260,46 @@ const FundingApplicationsList = ({
     }
   }
 
+  /* Shared inputs for every application's analysis: BIG scores, the universal
+     profile and the guarantees evaluation. Read once and reused. */
+  const fetchSharedCapitalNavContext = async (userId) => {
+    const [bigEvalSnap, profileSnap, aiEvalSnap] = await Promise.all([
+      getDoc(doc(db, "bigEvaluations", userId)),
+      getDoc(doc(db, "universalProfiles", userId)),
+      getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId))),
+    ])
+    return {
+      scores: bigEvalSnap.exists() ? bigEvalSnap.data().scores || {} : {},
+      profile: profileSnap.exists() ? profileSnap.data() : {},
+      guaranteesEvaluation: aiEvalSnap.docs.map((d) => d.data()?.guaranteesEvaluation).find(Boolean) || null,
+    }
+  }
+
+  const ensureNavCtx = async (userId, force = false) => {
+    if (navCtxRef.current && !force) return navCtxRef.current
+    const uid = userId || auth.currentUser?.uid
+    if (!uid) return null
+    const ctx = await fetchSharedCapitalNavContext(uid)
+    navCtxRef.current = ctx
+    setNavCtx(ctx)
+    return ctx
+  }
+
   const fetchApplications = async (userId) => {
     try {
       setLoading(true)
       setError(null)
       let apps = []
 
-      // Check if any apps exist in fundingApplicationsV2
       const qNew = query(collection(db, "fundingApplicationsV2"), where("userId", "==", userId))
       const snapshot = await getDocs(qNew)
 
       if (snapshot.empty) {
-        // If no apps exist in fundingApplicationsV2, check universalProfiles for legacy app
         const upDocRef = doc(db, "universalProfiles", userId)
         const upSnap = await getDoc(upDocRef)
         if (upSnap.exists()) {
           const upData = upSnap.data()
           if (upData.applicationOverview || upData.useOfFunds || upData.completedSections) {
-            // Seed the legacy application
             const newAppPayload = {
               userId: userId,
               userEmail: auth.currentUser?.email || "",
@@ -228,20 +312,17 @@ const FundingApplicationsList = ({
             const possibleFields = [
               "applicationOverview", "useOfFunds", "enterpriseReadiness",
               "financialOverview", "guarantees", "growthPotential",
-              "socialImpact", "documentUpload", "declarationCommitment"
+              "socialImpact", "documentUpload", "declarationCommitment",
             ]
-            possibleFields.forEach(field => {
+            possibleFields.forEach((field) => {
               if (upData[field]) {
                 newAppPayload[field] = upData[field]
               }
             })
 
             await addDoc(collection(db, "fundingApplicationsV2"), newAppPayload)
-
-            // Mark universalProfile as seeded so we don't try again
             await setDoc(upDocRef, { legacyFundingSeeded: true }, { merge: true })
 
-            // Re-fetch now that it's seeded
             const snapshotRefreshed = await getDocs(qNew)
             snapshotRefreshed.forEach((d) => apps.push(formatAppData(d.id, d.data())))
           }
@@ -252,7 +333,23 @@ const FundingApplicationsList = ({
       }
 
       setApplications(apps)
+
+      // Show saved analyses straight away — no AI call here.
+      const cached = {}
+      apps.forEach((a) => {
+        const r = a.raw?.capitalNavigation?.result
+        if (r && r.success !== false) cached[a.id] = r
+      })
+      setCapitalNavByApp(cached)
+
       await fetchMatchCounts(userId)
+
+      // Context is read so "more info needed" and "out of date" can be shown per row.
+      try {
+        await ensureNavCtx(userId, true)
+      } catch (ctxErr) {
+        console.error("Failed to load capital navigation context:", ctxErr)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -278,21 +375,140 @@ const FundingApplicationsList = ({
     const applicationOverview = data.applicationOverview || {}
     const fundingStage = applicationOverview.fundingStage || ""
     const applicationType = applicationOverview.applicationType || ""
-    const fundingInstruments = useOfFunds.fundingInstruments || []
+    const route = getRequestedRoute(useOfFunds)
 
     return {
       id: docId,
       appId: docId?.slice(-8) || docId,
       name: `Funding${fundingStage ? ` - ${fundingStage}` : ""}`,
       purpose: amountRequested ? `${amountRequested}` : "",
-      fundingType: fundingInstruments.length > 0
-        ? fundingInstruments.join(", ")
-        : applicationType || "",
+      fundingType: route.instrument || route.category || applicationType || "",
       lastUpdatedFormatted,
       lastUpdatedTimestamp,
       isComplete,
       status: data.status || (isComplete ? "complete" : "draft"),
+      raw: data, // full doc — needed to build the capital-nav payload
     }
+  }
+
+  /* ─── Capital navigation: per application ───────────────────────────── */
+  const generateCapitalNavForApp = async (app, { force = false } = {}) => {
+    const appId = app.id
+    const appData = app.raw || {}
+    setCapitalNavLoadingByApp((p) => ({ ...p, [appId]: true }))
+    try {
+      const ctx = await ensureNavCtx(null, force)
+      if (!ctx) throw new Error("Please log in again.")
+
+      // Nothing to send yet — the modal lists what's needed.
+      if (getMissingInfo(appData, ctx).blocking.length > 0) return
+
+      const { scores, profile, guaranteesEvaluation } = ctx
+      const useOfFunds = appData.useOfFunds || {}
+      const financials = profile.financialOverview || {}
+      const growth = appData.growthPotential || {}
+      const route = getRequestedRoute(useOfFunds)
+
+      const signature = buildCapitalNavSignature(appData, scores, guaranteesEvaluation, profile)
+
+      const saved = appData.capitalNavigation
+      if (!force && saved?.signature === signature && saved?.result?.success !== false) {
+        setCapitalNavByApp((p) => ({ ...p, [appId]: saved.result }))
+        return
+      }
+
+      const fundingPurpose =
+        (useOfFunds.fundingItems || [])
+          .map((i) => `${i.category}${i.subArea ? ` (${i.subArea})` : ""}: ${i.amount}`)
+          .join("; ") || null
+
+      const growthProfileSummary =
+        [
+          growth.marketShare === "yes" && `Market share growth: ${growth.marketShareDetails || "yes"}`,
+          growth.qualityImprovement === "yes" && `Quality/price improvement: ${growth.qualityImprovementDetails || "yes"}`,
+          growth.greenTech === "yes" && `Green/resource efficiency: ${growth.greenTechDetails || "yes"}`,
+          growth.employment === "yes" &&
+            `Jobs: +${growth.employmentIncreaseDirect || 0} direct, +${growth.employmentIncreaseIndirect || 0} indirect`,
+        ]
+          .filter(Boolean)
+          .join("; ") || null
+
+      const om = profile.ownershipManagement || {}
+      const headcount = ["permanentEmployees", "contractEmployees", "internshipEmployees", "temporaryEmployees"]
+        .reduce((s, k) => s + (parseInt(om[k], 10) || 0), 0)
+      const num = (v) => Number(String(v ?? "").replace(/[^\d.-]/g, "")) || 0
+      const cur = num(financials.incomeTurnoverCurrent)
+      const prev = num(financials.incomeTurnoverPrevious)
+      const turnoverTrend =
+        cur && prev ? `Turnover ${cur >= prev ? "up" : "down"} ${Math.abs(Math.round(((cur - prev) / prev) * 100))}% year on year` : null
+
+      const functions = getFunctions()
+      const call = httpsCallable(functions, "analyzeCapitalNavigation")
+      const resp = await call({
+        entityName: profile.entityOverview?.entityName || "",
+        businessStage: profile.entityOverview?.operationStage || "",
+        industry: (profile.entityOverview?.economicSectors || []).join(", "),
+        employees: headcount || null,
+        growthRate: turnoverTrend || growthProfileSummary,
+        existingDebt: financials.existingDebt || null,
+        bigScore: {
+          compliance: scores.compliance,
+          legitimacy: scores.legitimacy,
+          leadershipGovernance: scores.governanceLeadership,
+          operationalStrength: scores.operational,
+          overall: scores.bigScore,
+        },
+        guarantees: guaranteesEvaluation
+          ? { score: guaranteesEvaluation.score, label: guaranteesEvaluation.label, summary: guaranteesEvaluation.analysis }
+          : null,
+        requestedCategory: route.category,
+        requestedInstrument: route.instrument,
+        fundingAmount: useOfFunds.amountRequested || null,
+        fundingPurpose,
+      })
+
+      const result = resp?.data
+      if (!result || result.success === false) {
+        // Not cached, so the next attempt actually retries.
+        setCapitalNavByApp((p) => ({
+          ...p,
+          [appId]: { success: false, error: result?.error || "The analysis service returned no result." },
+        }))
+        return
+      }
+
+      setCapitalNavByApp((p) => ({ ...p, [appId]: result }))
+      setApplications((prev) =>
+        prev.map((a) =>
+          a.id === appId ? { ...a, raw: { ...a.raw, capitalNavigation: { result, signature } } } : a,
+        ),
+      )
+      await setDoc(
+        doc(db, "fundingApplicationsV2", appId),
+        { capitalNavigation: { result, signature, evaluatedAt: serverTimestamp() } },
+        { merge: true },
+      )
+    } catch (err) {
+      console.error(`generateCapitalNavForApp(${appId}) error:`, err)
+      setCapitalNavByApp((p) => ({ ...p, [appId]: { success: false, error: err?.message || "Analysis failed." } }))
+    } finally {
+      setCapitalNavLoadingByApp((p) => ({ ...p, [appId]: false }))
+    }
+  }
+
+  /* Opens the analysis modal; runs the analysis first if there's no saved result. */
+  const openAnalysis = (app) => {
+    setAnalysisModalId(app.id)
+    const existing = capitalNavByApp[app.id]
+    if (existing && existing.success !== false) return
+    if (capitalNavLoadingByApp[app.id]) return
+    generateCapitalNavForApp(app)
+  }
+
+  const isNavStale = (app) => {
+    const saved = app.raw?.capitalNavigation
+    if (!saved?.signature || !navCtx) return false
+    return saved.signature !== buildCapitalNavSignature(app.raw || {}, navCtx.scores, navCtx.guaranteesEvaluation, navCtx.profile)
   }
 
   /* ─── Match bands ───────────────────────────────────────────────────── */
@@ -321,8 +537,6 @@ const FundingApplicationsList = ({
     }
   }
 
-  /* Submit hands off to the shell when it wants to run its own validation or
-     flow; otherwise the status is written here so the badge updates. */
   const handleSubmit = async (app) => {
     if (typeof onSubmitApplication === "function") {
       onSubmitApplication(app.id, app)
@@ -349,14 +563,6 @@ const FundingApplicationsList = ({
     }
   }
 
-  /* Open the Funding Matches table scoped to this application, narrowed to the
-     score band picked on the row.
-
-     Both channels are used on purpose. The query params are what survive the
-     route change and are read on mount; the events cover the case where the
-     table is already mounted and only needs re-scoping. A shell-provided
-     handler wins when there is one, so a tabbed layout can switch panes
-     without a route change. */
   const openMatchTable = (appId, bandKey = "all") => {
     const band = bandOf(bandKey)
 
@@ -389,6 +595,238 @@ const FundingApplicationsList = ({
     return { label: "Draft", color: "#6b7280", bg: "#f3f4f6", Icon: Clock }
   }
 
+  /* One line under each application: what the AI analysis says, or what to do next. */
+  const renderNavLine = (app) => {
+    const result = capitalNavByApp[app.id]
+    const hasResult = result && result.success !== false && result.suitabilityScore != null
+
+    if (capitalNavLoadingByApp[app.id]) {
+      return <span className="ell" style={{ fontSize: 10.5, color: "#a67c52" }}>Analysing fit…</span>
+    }
+    if (hasResult) {
+      return (
+        <button
+          className="fl-nav-link"
+          onClick={() => setAnalysisModalId(app.id)}
+          title={result.plainEnglishSummary || "Open the full analysis"}
+        >
+          <Sparkles size={10} /> AI: {result.suitabilityScore}/100 suitability · {result.approvalProbability || "—"} approval
+          {isNavStale(app) ? " · out of date" : ""}
+        </button>
+      )
+    }
+    if (result?.success === false) {
+      return (
+        <button className="fl-nav-link warn" onClick={() => setAnalysisModalId(app.id)}>
+          <AlertTriangle size={10} /> Analysis failed — view
+        </button>
+      )
+    }
+    if (navCtx && getMissingInfo(app.raw, navCtx).blocking.length > 0) {
+      return (
+        <button className="fl-nav-link warn" onClick={() => setAnalysisModalId(app.id)}>
+          <AlertTriangle size={10} /> More info needed for analysis
+        </button>
+      )
+    }
+    return (
+      <button className="fl-nav-link" onClick={() => openAnalysis(app)}>
+        <Sparkles size={10} /> Analyse this application
+      </button>
+    )
+  }
+
+  /* ─── Analysis modal ────────────────────────────────────────────────── */
+  const renderAnalysisModal = () => {
+    const app = applications.find((a) => a.id === analysisModalId)
+    if (!app) return null
+
+    const result = capitalNavByApp[app.id]
+    const isLoading = !!capitalNavLoadingByApp[app.id]
+    const hasResult = result && result.success !== false
+    const missing = getMissingInfo(app.raw, navCtx)
+    const stale = hasResult && isNavStale(app)
+
+    const sectionTitle = { color: "#5D4037", fontSize: 14, fontWeight: 700, margin: "18px 0 8px" }
+    const listStyle = { margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.65, color: "#333" }
+
+    const MissingBox = ({ title, items, tone }) =>
+      items.length > 0 ? (
+        <div
+          style={{
+            marginTop: 14,
+            padding: "12px 14px",
+            borderRadius: 10,
+            background: tone === "block" ? "#fef2f2" : "#fffbeb",
+            border: `1px solid ${tone === "block" ? "#fecaca" : "#fde68a"}`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: tone === "block" ? "#b91c1c" : "#92400e", marginBottom: 6 }}>
+            <AlertTriangle size={13} /> {title}
+          </div>
+          <ul style={listStyle}>
+            {items.map((m, i) => (
+              <li key={i}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null
+
+    return (
+      <Portal>
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20, backdropFilter: "blur(4px)" }}
+          onClick={() => setAnalysisModalId(null)}
+        >
+          <div
+            style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 680, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 28px 56px rgba(0,0,0,0.25)", fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ background: "linear-gradient(135deg,#5D4037,#3E2723)", color: "#fff", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 17, fontWeight: 700 }}>
+                  <Sparkles size={18} /> AI Capital Navigation
+                </div>
+                <div style={{ fontSize: 12.5, opacity: 0.85, marginTop: 4 }}>
+                  {app.name}
+                  {app.purpose ? ` · ${app.purpose}` : ""} · #{app.appId}
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalysisModalId(null)}
+                aria-label="Close analysis"
+                style={{ background: "rgba(255,255,255,0.18)", border: "none", borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", cursor: "pointer", flexShrink: 0 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: "18px 22px 22px", overflowY: "auto", flex: 1 }}>
+              {isLoading ? (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: 44, color: "#6c757d", fontSize: 14 }}>
+                  <div style={{ width: 20, height: 20, border: "2px solid #5D4037", borderTopColor: "transparent", borderRadius: "50%", animation: "fl-spin 0.8s linear infinite", marginRight: 12 }} />
+                  Analysing this application…
+                </div>
+              ) : (
+                <>
+                  <MissingBox
+                    title="More information is needed before this can be analysed"
+                    items={missing.blocking}
+                    tone="block"
+                  />
+
+                  {result?.success === false && missing.blocking.length === 0 && (
+                    <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
+                      {result.error || "The analysis could not be completed."}
+                    </div>
+                  )}
+
+                  {hasResult && (
+                    <>
+                      {stale && (
+                        <div style={{ marginTop: 4, marginBottom: 6, padding: "9px 12px", borderRadius: 10, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", fontSize: 12.5 }}>
+                          Your scores, guarantees or this application have changed since this analysis ran. Re-run it to refresh.
+                        </div>
+                      )}
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10, marginTop: 8 }}>
+                        {[
+                          { label: "Suitability", value: result.suitabilityScore != null ? `${result.suitabilityScore}/100` : "—", color: suitabilityColor(result.suitabilityScore ?? 0) },
+                          { label: "Approval probability", value: result.approvalProbability || "—" },
+                          { label: "Confidence", value: result.confidenceLevel || "—" },
+                          { label: "Readiness", value: result.readinessStatus || "—" },
+                        ].map((s) => (
+                          <div key={s.label} style={{ background: "#f8f9fa", border: "1px solid #e9ecef", borderRadius: 10, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#7d5a50", textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+                            <div style={{ fontSize: 17, fontWeight: 700, color: s.color || "#4a352f", marginTop: 3 }}>{s.value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {result.plainEnglishSummary && (
+                        <p style={{ fontSize: 13.5, lineHeight: 1.7, color: "#333", margin: "16px 0 0" }}>{result.plainEnglishSummary}</p>
+                      )}
+
+                      {(result.mostSuitableCategory || result.mostSuitableInstrument || result.mostSuitableFunderType) && (
+                        <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: "rgba(166,124,82,0.1)", border: "1px solid rgba(166,124,82,0.2)", fontSize: 13, lineHeight: 1.7, color: "#4a352f" }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#7d5a50", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Best-fit route right now</div>
+                          {result.mostSuitableCategory && <div><strong>Category:</strong> {result.mostSuitableCategory}</div>}
+                          {result.mostSuitableInstrument && <div><strong>Instrument:</strong> {result.mostSuitableInstrument}</div>}
+                          {result.mostSuitableFunderType && <div><strong>Funder type:</strong> {result.mostSuitableFunderType}</div>}
+                        </div>
+                      )}
+
+                      {result.likelyApprovingFunderTypes?.length > 0 && (
+                        <>
+                          <h4 style={sectionTitle}>Funder types likely to approve today</h4>
+                          <ul style={listStyle}>{result.likelyApprovingFunderTypes.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                        </>
+                      )}
+                      {result.keyStrengths?.length > 0 && (
+                        <>
+                          <h4 style={sectionTitle}>Key strengths</h4>
+                          <ul style={listStyle}>{result.keyStrengths.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                        </>
+                      )}
+                      {result.keyWeaknesses?.length > 0 && (
+                        <>
+                          <h4 style={sectionTitle}>Key weaknesses</h4>
+                          <ul style={listStyle}>{result.keyWeaknesses.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                        </>
+                      )}
+                      {result.recommendedAlternatives?.length > 0 && (
+                        <>
+                          <h4 style={sectionTitle}>Recommended alternatives</h4>
+                          <ol style={listStyle}>{result.recommendedAlternatives.map((x, i) => <li key={i}>{x}</li>)}</ol>
+                        </>
+                      )}
+                      {result.improvementActions?.length > 0 && (
+                        <>
+                          <h4 style={sectionTitle}>Improvement actions</h4>
+                          <ul style={listStyle}>{result.improvementActions.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                        </>
+                      )}
+
+                      <MissingBox
+                        title="This analysis is provisional — it would sharpen with:"
+                        items={missing.optional}
+                        tone="warn"
+                      />
+                    </>
+                  )}
+
+                  {!hasResult && missing.blocking.length === 0 && result?.success !== false && (
+                    <MissingBox title="Not analysed yet. For a sharper result, also add:" items={missing.optional} tone="warn" />
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "12px 22px", borderTop: "1px solid #eee", background: "#fff" }}>
+              <button
+                onClick={() => setAnalysisModalId(null)}
+                style={{ padding: "9px 18px", background: "#f3f4f6", color: "#4a352f", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                Close
+              </button>
+              <button
+                onClick={() => generateCapitalNavForApp(app, { force: true })}
+                disabled={isLoading || missing.blocking.length > 0}
+                title={missing.blocking.length > 0 ? "Provide the missing information first" : "Run the analysis again with the latest data"}
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#faf7f2", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: isLoading || missing.blocking.length > 0 ? "not-allowed" : "pointer", opacity: isLoading || missing.blocking.length > 0 ? 0.5 : 1 }}
+              >
+                <RefreshCw size={14} /> {hasResult ? "Re-run analysis" : "Run analysis"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Portal>
+    )
+  }
+
   if (loading) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
       <div style={{ width: 44, height: 44, border: "3px solid rgba(166,124,82,0.15)", borderTopColor: "#a67c52", borderRadius: "50%", animation: "fl-spin 0.8s linear infinite" }} />
@@ -412,6 +850,7 @@ const FundingApplicationsList = ({
   return (
     <>
       <style>{`
+        @keyframes fl-spin{to{transform:rotate(360deg)}}
         @keyframes fl-fadein { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
         .fl-wrap {
           width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
@@ -429,8 +868,6 @@ const FundingApplicationsList = ({
         .fl-tbl col.c5 { width:11%; }
         .fl-tbl col.c6 { width:11%; }
 
-        /* Same header treatment as the Funding Matches table: white label on
-           the dark bar, so the two tables read as one product. */
         .fl-tbl thead th {
           padding:13px 15px; text-align:left;
           font-size:11px; font-weight:700; color:#faf7f2;
@@ -448,7 +885,17 @@ const FundingApplicationsList = ({
         .ell { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
         .fl-appid { display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:linear-gradient(135deg,#5d4037,#4a332a);color:#FAF7F2;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.5px;white-space:nowrap;font-family:'SF Mono','Monaco','Consolas',monospace; }
 
-        /* Matches cell: band picker + the eye that opens those matches */
+        /* AI analysis link under each application */
+        .fl-nav-link {
+          display:inline-flex; align-items:center; gap:4px; max-width:100%;
+          margin-top:3px; padding:0; background:none; border:none;
+          font-size:10.5px; font-weight:600; font-family:inherit; color:#7d5a50;
+          cursor:pointer; text-align:left;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .fl-nav-link:hover { color:#4a352f; text-decoration:underline; }
+        .fl-nav-link.warn { color:#b45309; }
+
         .fl-match { display:flex; align-items:center; gap:7px; min-width:0; }
         .fl-sel-wrap { position:relative; flex:1 1 auto; min-width:0; }
         .fl-sel {
@@ -594,6 +1041,7 @@ const FundingApplicationsList = ({
                         </span>
                       </td>
 
+                      {/* Application + this application's AI analysis */}
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                           <div style={{ width: 32, height: 32, flexShrink: 0, background: "rgba(166,124,82,0.1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -602,6 +1050,7 @@ const FundingApplicationsList = ({
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <span className="ell" style={{ fontWeight: 600, color: "#4a352f", fontSize: 13, marginBottom: 2 }} title={app.name}>{app.name}</span>
                             <span className="ell" style={{ fontSize: 11, color: "#6b7280" }} title={app.purpose}>{app.purpose}</span>
+                            {renderNavLine(app)}
                           </div>
                         </div>
                       </td>
@@ -612,8 +1061,6 @@ const FundingApplicationsList = ({
                         </span>
                       </td>
 
-                      {/* Matches — pick a score band, then press the eye to open
-                          exactly those rows in the Funding Matches table. */}
                       <td>
                         {hasAnyMatch ? (
                           <div className="fl-match">
@@ -660,14 +1107,12 @@ const FundingApplicationsList = ({
                         </div>
                       </td>
 
-                      {/* Status — unchanged */}
                       <td>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", background: bg, color, borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
                           <Icon size={10} /> {label}
                         </span>
                       </td>
 
-                      {/* Actions — one quick actions menu, nothing else. */}
                       <td style={{ textAlign: "center" }}>
                         <button
                           className="fl-kebab"
@@ -695,7 +1140,7 @@ const FundingApplicationsList = ({
           const app = quickActions.app
           const rect = quickActions.rect
           const menuWidth = 232
-          const menuHeight = 208
+          const menuHeight = 252
           let left = rect.right - menuWidth
           left = Math.min(Math.max(left, 12), window.innerWidth - menuWidth - 12)
           const openUpward = rect.bottom + menuHeight > window.innerHeight - 12
@@ -760,6 +1205,17 @@ const FundingApplicationsList = ({
                   role="menuitem"
                   onClick={() => {
                     closeQuickActions()
+                    openAnalysis(app)
+                  }}
+                >
+                  <Sparkles size={14} /> View AI analysis
+                </button>
+
+                <button
+                  className="fl-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    closeQuickActions()
                     onViewSummary(app.id, app)
                   }}
                 >
@@ -802,6 +1258,9 @@ const FundingApplicationsList = ({
             </Portal>
           )
         })()}
+
+      {/* AI ANALYSIS MODAL */}
+      {analysisModalId && renderAnalysisModal()}
 
       {/* DELETE MODAL */}
       {showDeleteConfirm && (

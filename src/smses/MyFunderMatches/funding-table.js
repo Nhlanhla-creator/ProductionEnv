@@ -41,7 +41,6 @@ import {
   getDocs,
   setDoc,
   addDoc,
-  updateDoc,
   serverTimestamp,
   arrayUnion,
   query,
@@ -50,11 +49,10 @@ import {
   writeBatch,
 } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { getFunctions, httpsCallable } from "firebase/functions"
-import get from "lodash.get"
-import { db, storage, auth } from "../../firebaseConfig"
-import { DOCUMENT_PATHS } from "../../utils/documentUtils"
+import { db, auth } from "../../firebaseConfig"
+import { getDocumentId, getAllDocumentLabels } from "../../utils/documentMapping"
+import { getDocumentUrlFromAnyLocation } from "../../utils/documentSyncService"
 import FunderDetailsModal from "./FunderDetailsModal"
 import {
   calculateHybridScore,
@@ -121,7 +119,87 @@ export const REMOVED_FUNDERS = "removedFunders"
 export const fundKeyOf = (funderId, fundName) => `${funderId}__${fundName}`
 export const applicationIdOf = (smeId, funderId, fundName) => `${smeId}__${funderId}__${fundName}`
 
-export const BIG_SCORE_MINIMUM = 85
+/* Default only. Each funder's own generalInvestmentPreference.minimumBigScore wins. */
+export const BIG_SCORE_MINIMUM = 75
+
+/* ─── Funder minimums (generalInvestmentPreference) ─────────────────────── */
+const buildRequirements = (prefs = {}) => ({
+  minBigScore: normalizeAmount(prefs.minimumBigScore) || BIG_SCORE_MINIMUM,
+  minCompliance: normalizeAmount(prefs.minimumComplianceScore),
+  minFinancial: normalizeAmount(prefs.minimumFinancialStrength),
+  minOperational: normalizeAmount(prefs.minimumOperationalStrength),
+  minRevenue: normalizeAmount(prefs.minimumRevenue),
+  minYears: normalizeAmount(prefs.minimumYearsTrading),
+})
+
+/* Returns what the SME misses. BIG Score is judged on the funder-weighted
+   score; pillar minimums are skipped when that pillar has no score. */
+const evaluateRequirements = (fund, { bigScore, evaluation, profile }) => {
+  const req = fund.requirements || buildRequirements({})
+  const unmet = []
+  const num = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v))
+  const scores = evaluation?.scores || {}
+
+  const effective = Number.isFinite(fund.adjustedBigScore?.score) ? fund.adjustedBigScore.score : num(bigScore)
+  if (!Number.isFinite(effective) || effective < req.minBigScore) {
+    unmet.push({
+      key: "bigScore",
+      label: "BIG Score",
+      required: `${req.minBigScore}%`,
+      actual: Number.isFinite(effective) ? `${effective}%` : "not scored yet",
+    })
+  }
+  const pillar = (key, label, min, raw) => {
+    const v = num(raw)
+    if (min > 0 && Number.isFinite(v) && v < min) unmet.push({ key, label, required: `${min}%`, actual: `${Math.round(v)}%` })
+  }
+  pillar("compliance", "Compliance score", req.minCompliance, scores.compliance)
+  pillar("financial", "Financial strength (Capital Appeal)", req.minFinancial, scores.fundability)
+  pillar("operational", "Operational strength", req.minOperational, scores.operational)
+
+  const revenue = normalizeAmount(profile?.financialOverview?.annualRevenue)
+  if (req.minRevenue > 0 && revenue < req.minRevenue) {
+    unmet.push({
+      key: "revenue",
+      label: "Annual revenue",
+      required: `R${req.minRevenue.toLocaleString("en-ZA")}`,
+      actual: revenue ? `R${revenue.toLocaleString("en-ZA")}` : "not declared",
+    })
+  }
+  const years = num(profile?.entityOverview?.yearsInOperation)
+  if (req.minYears > 0 && Number.isFinite(years) && years < req.minYears) {
+    unmet.push({ key: "years", label: "Years trading", required: `${req.minYears}`, actual: `${years}` })
+  }
+  return unmet
+}
+
+/* ─── Funder document ids -> My Documents labels ──────────────────────────
+   Documents live at profile.documents.<getDocumentId(label)> (single) or
+   profile.documents.<id>_multiple (array of { url, status }) — the same
+   places the My Documents page reads and writes. */
+const FUNDER_DOC_LABELS = {
+  pitch_deck: "Pitch Deck",
+  business_plan: "Business Plan",
+  financials: "Financial Statements",
+  financial_statements: "Financial Statements",
+  audited_financials: "Audited Financials",
+  team_bios: "CV",
+  five_year_budget: "5 Year Budget",
+  budget_5year: "5 Year Budget",
+  bank_details: "Bank Details Confirmation Letter",
+  company_profile: "Company Profile / Brochure",
+  business_profile: "Company Profile / Brochure",
+  company_registration: "Company Registration Certificate",
+  tax_clearance: "Tax Clearance Certificate",
+  bbbee_certificate: "B-BBEE Certificate",
+  proof_of_address: "Proof of Address",
+  share_register: "Share Register",
+  ids_directors: "IDs of Directors & Shareholders",
+  loan_agreements: "Loan Agreements",
+  client_references: "Client References & Support Letters",
+}
+const compactKey = (s) => (s || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "")
+const BAD_DOC_STATUS = ["wrong_type", "name_mismatch", "incomplete", "rejected", "expired"]
 
 /* ════════════════════════════════════════════════════════════════════════════
    Events the pipeline uses to talk to this table.
@@ -689,6 +767,7 @@ const mapFund = (investor, funderId, fund, index) => {
     website: contact.website || null,
 
     scoreWeightings: getFunderScoreWeightings(form),
+    requirements: buildRequirements(prefs),
 
     matchPercentage: 0,
     matchBreakdown: null,
@@ -775,9 +854,21 @@ export function FundingTable({
   const [detailsFund, setDetailsFund] = useState(null)
   const [applyingFund, setApplyingFund] = useState(null)
   const [profileData, setProfileData] = useState({})
-  const [submittedDocuments, setSubmittedDocuments] = useState([])
   const [selectedDocs, setSelectedDocs] = useState([])
   const [showBigScoreGate, setShowBigScoreGate] = useState(false)
+  const [gateFund, setGateFund] = useState(null)
+  const [gateUnmet, setGateUnmet] = useState([])
+  const docUrlFor = useCallback(
+    (id) => {
+      const label = FUNDER_DOC_LABELS[id] || getAllDocumentLabels().find((l) => compactKey(l) === compactKey(id))
+      if (!label) return null
+      const multi = (profileData?.documents?.[`${getDocumentId(label)}_multiple`] || []).find(
+        (d) => d?.url && !BAD_DOC_STATUS.includes(d.status),
+      )
+      return multi?.url || getDocumentUrlFromAnyLocation(label, profileData) || null
+    },
+    [profileData],
+  )
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState("")
   const [confirmHide, setConfirmHide] = useState(null)
@@ -1489,7 +1580,10 @@ export function FundingTable({
       toast("info", "Checking your BIG Score...")
       return
     }
-    if (bigScore < BIG_SCORE_MINIMUM) {
+    const unmet = evaluateRequirements(fund, { bigScore, evaluation: bigEvaluation, profile: profileData })
+    if (unmet.length > 0) {
+      setGateFund(fund)
+      setGateUnmet(unmet)
       setShowBigScoreGate(true)
       return
     }
@@ -1500,21 +1594,7 @@ export function FundingTable({
 
     setBusyId(fund.id)
     try {
-      const coreDocs = fund.requiredDocuments
-      const uploads = profileData.documentUpload || {}
-      const normalize = (str) => str?.toLowerCase().replace(/[\s_-]/g, "").trim()
-
-      const submitted = coreDocs.filter((label) =>
-        Object.entries(uploads).some(
-          ([key, urls]) =>
-            normalize(key) === normalize(label) &&
-            Array.isArray(urls) &&
-            urls.some((url) => typeof url === "string" && url.startsWith("http")),
-        ),
-      )
-
-      setSubmittedDocuments(submitted)
-      setSelectedDocs(submitted)
+      setSelectedDocs(fund.requiredDocuments.filter((id) => docUrlFor(id)))
       setApplyingFund(fund)
       await writeRecord(fund, { status: "Application Started" })
     } catch (err) {
@@ -1522,30 +1602,6 @@ export function FundingTable({
       toast("error", "Could not load the application requirements.", 4000)
     } finally {
       setBusyId(null)
-    }
-  }
-
-  const handleUpload = async (docLabel, file) => {
-    const user = auth.currentUser
-    if (!user || !file) return
-    try {
-      toast("info", `Uploading ${formatDocumentLabel(docLabel)}...`)
-      const storageRef = ref(storage, `documents/${user.uid}/${docLabel}.pdf`)
-      await uploadBytes(storageRef, file)
-      const downloadURL = await getDownloadURL(storageRef)
-
-      const path = DOCUMENT_PATHS[docLabel]
-      await updateDoc(doc(db, "universalProfiles", effectiveUserId), {
-        [path]: [downloadURL],
-        [`${path}UpdatedAt`]: serverTimestamp(),
-      })
-
-      setProfileData((prev) => ({ ...prev }))
-      setSubmittedDocuments((prev) => [...new Set([...prev, docLabel])])
-      toast("success", `${formatDocumentLabel(docLabel)} uploaded.`)
-    } catch (err) {
-      console.error("Upload failed:", err)
-      toast("error", "Upload failed. Try again.", 4000)
     }
   }
 
@@ -1564,7 +1620,7 @@ export function FundingTable({
 
       const documentURLs = {}
       selectedDocs.forEach((label) => {
-        const url = get(profileData, DOCUMENT_PATHS[label])?.[0]
+        const url = docUrlFor(label)
         if (url) documentURLs[label] = url
       })
 
@@ -1592,6 +1648,7 @@ export function FundingTable({
         focusArea: business.businessDescription || "Not specified",
         documents: selectedDocs,
         documentURLs,
+        missingDocuments: fund.requiredDocuments.filter((id) => !documentURLs[id]),
         fundTicketSize: fund.fundingRange,
         applicationDate,
         pipelineStage: "Application Sent",
@@ -2237,8 +2294,8 @@ export function FundingTable({
             <span
               className="inline-block px-2.5 py-1 rounded-full text-xs font-bold"
               style={{
-                backgroundColor: adjusted.score >= BIG_SCORE_MINIMUM ? "#E8F5E8" : "#FFF3E0",
-                color: adjusted.score >= BIG_SCORE_MINIMUM ? "#388E3C" : "#F57C00",
+                backgroundColor: adjusted.score >= r.requirements.minBigScore ? "#E8F5E8" : "#FFF3E0",
+                color: adjusted.score >= r.requirements.minBigScore ? "#388E3C" : "#F57C00",
               }}
             >
               {adjusted.score}
@@ -2357,6 +2414,8 @@ export function FundingTable({
   }
 
   const eligible = bigScore !== null && bigScore >= BIG_SCORE_MINIMUM
+  const gateMin = gateFund?.requirements?.minBigScore ?? BIG_SCORE_MINIMUM
+  const gateScore = Number.isFinite(gateFund?.adjustedBigScore?.score) ? gateFund.adjustedBigScore.score : bigScore
 
   /* Every chip-list filter is driven by this one array. */
   const FILTER_OPTION_SETS = [
@@ -2420,13 +2479,17 @@ export function FundingTable({
           <strong>BIG Score: {bigScore === null ? "—" : `${bigScore}%`}</strong>
           <span className="ml-2">
             {eligible
-              ? "You can apply to any fund below."
-              : `Applications open at ${BIG_SCORE_MINIMUM}%. You can still browse and shortlist.`}
+              ? "Each fund sets its own minimum. If you fall short, Apply will say why."
+              : `Most funds open at ${BIG_SCORE_MINIMUM}%. You can still browse and shortlist.`}
           </span>
         </div>
         {!eligible && (
           <button
-            onClick={() => setShowBigScoreGate(true)}
+            onClick={() => {
+              setGateFund(null)
+              setGateUnmet([])
+              setShowBigScoreGate(true)
+            }}
             className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#7d5a50] text-white"
           >
             How to raise it
@@ -3694,20 +3757,31 @@ export function FundingTable({
 
               <div className="p-6">
                 <h4 className="text-sm font-semibold text-[#4a352f] m-0">Required documents</h4>
-                <p className="text-xs text-[#a89482] mt-1 mb-4">
-                  Tick each document to include it. Anything missing can be uploaded here.
+                <p className="text-xs text-[#a89482] mt-1 mb-2">
+                  Documents already in My Documents are pulled in and ticked. Ticked documents become visible to{" "}
+                  {applyingFund.funderName}.
                 </p>
+                {(() => {
+                  const missing = applyingFund.requiredDocuments.filter((id) => !docUrlFor(id))
+                  return missing.length > 0 ? (
+                    <p className="text-xs text-[#8a5a1e] bg-[#FFF3E0] border border-[#F57C00]/30 rounded-lg px-3 py-2 mb-4 m-0">
+                      More information needed: {missing.map(formatDocumentLabel).join(", ")}{" "}
+                      {missing.length === 1 ? "isn't" : "aren't"} in My Documents yet. Add{" "}
+                      {missing.length === 1 ? "it" : "them"} there; anything left out is flagged to the funder as
+                      outstanding.
+                    </p>
+                  ) : (
+                    <div className="mb-4" />
+                  )
+                })()}
 
                 {applyingFund.requiredDocuments.length === 0 ? (
                   <p className="text-xs text-[#7d5a50]">This fund hasn't listed any required documents.</p>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {applyingFund.requiredDocuments.map((label) => {
-                      const submitted = submittedDocuments.includes(label)
-                      const path = DOCUMENT_PATHS[label]
-                      const url = path ? get(profileData, path)?.[0] : null
-                      const updatedAt = path ? get(profileData, `${path}UpdatedAt`) : null
-                      const when = updatedAt?.seconds ? new Date(updatedAt.seconds * 1000).toLocaleDateString("en-ZA") : null
+                      const url = docUrlFor(label)
+                      const submitted = !!url
 
                       return (
                         <div
@@ -3727,10 +3801,9 @@ export function FundingTable({
                               className="rounded border-[#c8b6a6]"
                             />
                             <span className="text-sm text-[#4a352f] truncate">{formatDocumentLabel(label)}</span>
-                            {when && <span className="text-[10px] text-[#a89482] flex-shrink-0">Uploaded {when}</span>}
                           </label>
 
-                          {submitted && url ? (
+                          {submitted ? (
                             <a
                               href={url}
                               target="_blank"
@@ -3740,21 +3813,12 @@ export function FundingTable({
                               <Eye size={13} /> View
                             </a>
                           ) : (
-                            <>
-                              <input
-                                type="file"
-                                id={`upload-${label}`}
-                                accept=".pdf,.doc,.docx"
-                                onChange={(e) => handleUpload(label, e.target.files[0])}
-                                className="hidden"
-                              />
-                              <label
-                                htmlFor={`upload-${label}`}
-                                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8b6a6] text-[#4a352f] cursor-pointer flex-shrink-0"
-                              >
-                                Upload
-                              </label>
-                            </>
+                            <a
+                              href="/my-documents"
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8b6a6] text-[#4a352f] no-underline flex-shrink-0"
+                            >
+                              Add in My Documents
+                            </a>
                           )}
                         </div>
                       )
@@ -3792,18 +3856,27 @@ export function FundingTable({
               <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center bg-[#FFF3E0]">
                 <AlertTriangle size={26} className="text-[#F57C00]" />
               </div>
-              <h3 className="text-lg font-bold text-[#4a352f] m-0">Applications open at {BIG_SCORE_MINIMUM}%</h3>
-              <p className="text-sm text-[#7d5a50] mt-2 mb-5">
-                Your BIG Score is {bigScore}%. Funders use it as a first filter, so strengthening it first gives your
-                application a far better hearing. An advisor or a support programme is the fastest route.
-              </p>
+              <h3 className="text-lg font-bold text-[#4a352f] m-0">
+                {gateFund ? `${gateFund.fundName} needs a little more` : `Applications open at ${gateMin}%`}
+              </h3>
+              {gateUnmet.length > 0 ? (
+                <ul className="text-left text-sm text-[#7d5a50] mt-3 mb-5 pl-5 list-disc space-y-1">
+                  {gateUnmet.map((u) => (
+                    <li key={u.key}>
+                      <strong>{u.label}</strong>: needs {u.required}, you have {u.actual}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-[#7d5a50] mt-2 mb-5">
+                  Your BIG Score is {bigScore}%. Funders use it as a first filter, so strengthening it first gives your
+                  application a far better hearing. An advisor or a support programme is the fastest route.
+                </p>
+              )}
 
               <div className="h-2.5 rounded-full bg-[#e6d7c3] relative mb-6">
-                <div className="h-full rounded-full bg-[#a67c52]" style={{ width: `${Math.min(100, bigScore || 0)}%` }} />
-                <div
-                  className="absolute -top-1 w-0.5 bg-[#4a352f]"
-                  style={{ left: `${BIG_SCORE_MINIMUM}%`, height: "18px" }}
-                />
+                <div className="h-full rounded-full bg-[#a67c52]" style={{ width: `${Math.min(100, gateScore || 0)}%` }} />
+                <div className="absolute -top-1 w-0.5 bg-[#4a352f]" style={{ left: `${gateMin}%`, height: "18px" }} />
               </div>
 
               <div className="flex gap-2">
