@@ -196,6 +196,15 @@ import CMFBillingInfo from "./cmf/CMFBillingAndPayments/billing-info"
 import CMFSubscriptions from "./cmf/CMFBillingAndPayments/subscriptions"
 import CMFBillingHistory from "./cmf/CMFBillingAndPayments/billing-history"
 
+// Procurement Components
+import ProcurementLayout from "./procurement/Layout/ProcurementLayout"
+import MatchedSuppliersPage from "./procurement/MatchedSuppliers/MatchedSuppliersPage"
+import BuyerUniversalProfile from "./procurement/UniversalProfile/BuyerUniversalProfile"
+import InteractionsPage from "./procurement/Interactions/InteractionsPage"
+import ESDCohortWorkspace from "./procurement/ESDCohorts/ESDCohortWorkspace"
+import AuditReportsPage from "./procurement/Reports/AuditReportsPage"
+import ProcurementSettingsPage from "./procurement/Settings/ProcurementSettingsPage"
+
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
 import AboutPage from "./main_pages/About"
@@ -723,6 +732,7 @@ function App() {
   const renderProgramSponsorRoute = (Component, props = {}) => (<ProgramSponsorLayout><Component {...props} /></ProgramSponsorLayout>)
   const renderAssociatorRoute = (Component, props = {}) => (<AssociatorLayout><Component {...props} /></AssociatorLayout>)
   const renderCMFRoute = (Component, props = {}) => (<CMFLayout><CMFMatchesProvider><Component {...props} /></CMFMatchesProvider></CMFLayout>)
+  const renderProcurementRoute = (Component, props = {}) => (<ProcurementLayout><Component {...props} /></ProcurementLayout>)
 
   // ─── Profile section renderers ────────────────────────────────────────────────
   const renderSMEProfileSection = (Component, section) => (
@@ -1069,6 +1079,26 @@ function App() {
         <Route path="/program-sponsor/billing/info" element={withProtection(ProgramSponsorBillingInfo, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor/billing/subscriptions" element={withProtection(ProgramSponsorSubscription, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor/billing/history" element={withProtection(ProgramSponsorBillingHistory, {}, renderProgramSponsorRoute)} />
+
+        {/* Protected Procurement Dashboard Routes */}
+        <Route path="/procurement" element={<Navigate to="/procurement/profile" replace />} />
+        <Route path="/procurement/matches" element={withProtection(MatchedSuppliersPage, {}, renderProcurementRoute)} />
+        <Route path="/procurement/preview" element={renderProcurementRoute(MatchedSuppliersPage)} />
+        <Route path="/procurement/profile" element={withProtection(BuyerUniversalProfile, {}, renderProcurementRoute)} />
+        <Route path="/procurement/profile/preview" element={renderProcurementRoute(BuyerUniversalProfile)} />
+        <Route path="/procurement/interactions" element={withProtection(InteractionsPage, {}, renderProcurementRoute)} />
+        <Route path="/procurement/interactions/preview" element={renderProcurementRoute(InteractionsPage)} />
+        <Route path="/procurement/cohorts" element={withProtection(ESDCohortWorkspace, {}, renderProcurementRoute)} />
+        <Route path="/procurement/cohorts/preview" element={renderProcurementRoute(ESDCohortWorkspace)} />
+        <Route path="/procurement/reports" element={withProtection(AuditReportsPage, {}, renderProcurementRoute)} />
+        <Route path="/procurement/reports/preview" element={renderProcurementRoute(AuditReportsPage)} />
+        <Route path="/procurement/settings" element={withProtection(ProcurementSettingsPage, {}, renderProcurementRoute)} />
+        <Route path="/procurement/settings/preview" element={renderProcurementRoute(ProcurementSettingsPage)} />
+        <Route path="/procurement-profile" element={<Navigate to="/procurement/profile" replace />} />
+        <Route path="/procurement-cohorts" element={<Navigate to="/procurement/cohorts" replace />} />
+        <Route path="/procurement-reports" element={<Navigate to="/procurement/reports" replace />} />
+        <Route path="/procurement-settings" element={<Navigate to="/procurement/settings" replace />} />
+        <Route path="/procurement-dashboard" element={<Navigate to="/procurement/matches" replace />} />
 
         {/* Protected Support Program Dashboard Routes */}
         <Route path="/support-profile" element={withProtection(CatalystUniversalProfile, {}, renderSupportProgramRoute)} />

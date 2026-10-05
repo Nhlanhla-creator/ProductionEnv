@@ -116,6 +116,12 @@ const ROLE_CARDS = [
     icon: <Award size={20} />,
     hoverInfo: "Sponsor internship programs and build talent pipelines.",
   },
+  {
+    id: "Procurement",
+    title: "Procurement & Buyer",
+    icon: <Building2 size={20} />,
+    hoverInfo: "Corporate buyers and procurement teams discovering verified suppliers and managing ESD cohorts.",
+  },
 ];
 
 // Objective catalogue — outcome-first per role, from the brief §4.2. `service`
@@ -144,6 +150,12 @@ const ROLE_OBJECTIVES = {
     { id: "sponsor-internships", title: "Sponsor or manage internships and graduate placements", service: "Internship Management + Internship Marketplace" },
     { id: "find-partners", title: "Find innovation, implementation or strategic partners", service: "Procurement Matchmaking" },
     { id: "monitor-portfolio", title: "Monitor supplier, cohort or portfolio performance", service: "Portfolio Intelligence" },
+  ],
+  Procurement: [
+    { id: "find-suppliers", title: "Find and verify capable suppliers", service: "Procurement Matchmaking + Supplier Intelligence + BIG Score" },
+    { id: "supplier-pipeline", title: "Build a pre-vetted supplier pipeline for a category or opportunity", service: "Procurement Matchmaking + Supplier Readiness" },
+    { id: "help-compliance", title: "Help suppliers close compliance and accreditation gaps", service: "Compliance & Accreditation Support + Compliance Vault" },
+    { id: "run-esd", title: "Run or monitor an ESD/Transformation programme", service: "ESD Platform + Programme Intelligence + Growth Suite" },
   ],
   Investor: [
     { id: "find-investable", title: "Find investment-ready or finance-ready businesses", service: "Funding Matchmaking + BIG Score" },
@@ -704,6 +716,8 @@ const isProfileComplete = (snap) => {
       "Business Association": <Globe size={16} />,
       "BusinessAssociation": <Globe size={16} />,
       "Association and Member Organisations": <Globe size={16} />,
+      "Procurement": <Building2 size={16} />,
+      "Buyer": <Building2 size={16} />,
       // Backward compatibility with older stored role ids
       "Small and Medium Social Enterprises": <Briefcase size={16} />,
       SMSEs: <Briefcase size={16} />,
@@ -736,6 +750,9 @@ const isProfileComplete = (snap) => {
       "InternSponsor": "/intern-sponsor-profile",
       "Business Association": "/associator-profile",
       "BusinessAssociation": "/associator-profile",
+      "Procurement": "/procurement/profile",
+      "Buyer": "/procurement/profile",
+      "ProcurementBuyer": "/procurement/profile",
       // Backward compatibility with older stored role ids
       Investor: "/investor-profile",
       INVESTOR: "/investor-profile",

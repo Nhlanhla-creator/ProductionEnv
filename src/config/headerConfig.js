@@ -17,8 +17,10 @@ export const roleRoutes = {
   ASSOCIATOR: "/associator-profile",
   associator: "/associator-profile",
   "Capital and Market Facilitator": "/cmf-profile",
-  CapitalMarketFacilitator: "/cmf-profile",
   CMF: "/cmf-profile",
+  Procurement: "/procurement/profile",
+  "Procurement Manager": "/procurement/profile",
+  Buyer: "/procurement/profile",
 }
 
 // Available role options for each profile type
@@ -31,6 +33,7 @@ export const profileRoleOptions = {
   programSponsor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator", "Capital and Market Facilitator"],
   associator: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator", "Capital and Market Facilitator"],
   capitalMarketFacilitator: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator", "Capital and Market Facilitator"],
+  procurement: ["Procurement", "SMSEs", "Advisors", "Catalysts", "Investor", "ProgramSponsor"],
 }
 
 // Profile-specific configurations
@@ -90,5 +93,12 @@ export const headerProfiles = {
     logoField: "formData.entityOverview.companyLogo",
     portalName: "CMF Dashboard",
     fallbackName: "Facilitator",
+  },
+  procurement: {
+    collection: "universalProfiles",
+    nameField: "entityOverview.registeredName",
+    logoField: "entityOverview.companyLogo",
+    portalName: "Procurement Portal",
+    fallbackName: "Procurement Lead",
   },
 }
