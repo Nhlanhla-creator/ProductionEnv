@@ -881,4 +881,43 @@ export const capitalMarketFacilitatorMenuItems = [
     route: "/cmf-settings",
   },
 ];
+
+export const procurementMenuItems = [
+  {
+    id: "profile",
+    label: "Universal Profile",
+    icon: <User size={18} />,
+    route: "/procurement/profile",
+  },
+  {
+    id: "matches",
+    label: "Matched Suppliers",
+    icon: <HeartHandshake size={18} />,
+    route: "/procurement/matches",
+  },
+  {
+    id: "cohorts",
+    label: "ESD Cohorts",
+    icon: <Users size={18} />,
+    route: "/procurement/cohorts",
+  },
+  {
+    id: "interactions",
+    label: "Interactions & RFIs",
+    icon: <MessageSquare size={18} />,
+    route: "/procurement/interactions",
+  },
+  {
+    id: "reports",
+    label: "Reports & Audit",
+    icon: <BarChart size={18} />,
+    route: "/procurement/reports",
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/procurement/settings",
+  },
+];
 // ─────────────────────────────────────────────────────────────────────────────
