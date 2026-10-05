@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { BarChart3, MapPin, Calendar, Filter, X, Info, Eye } from "lucide-react"
-import { collection, getDocs, query, where, serverTimestamp, doc, writeBatch, updateDoc, getDoc, addDoc } from "firebase/firestore"
+import { collection, getDocs, query, where, serverTimestamp, doc, setDoc, getDoc, addDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { storage } from "../../firebaseConfig"
@@ -10,6 +10,84 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { API_KEYS } from "../../API";
 import emailjs from '@emailjs/browser';
+
+/* ════════════════════════════════════════════════════════════════════════
+   This is the ADVISOR-side table: an advisor reviewing the businesses (SMEs)
+   that applied to work with them (rows come from AdvisorApplications where
+   advisorId === the signed-in advisor). It is a different component from
+   the SME-side "find an advisor" AdvisorTable, but the two must agree on
+   what a stage is called and where a match record lives — otherwise a
+   stage set here shows up unrecognized over there.
+
+   Two things changed from the old version of this file:
+
+   1. AdvisoryMatches is no longer written to. It was a third collection
+      that nothing downstream reads; keeping it in sync with the two real
+      records (AdvisorApplications + SmeAdvisorApplications) was just an
+      extra way for the data to drift.
+
+   2. The stage vocabulary and doc-id scheme below now match what the
+      SME-side AdvisorTable exports (ADVISOR_STATUSES, normalizeAdvisorStatus,
+      smeAdvisorId, advisorSmeId, SME_ADVISOR_COLLECTION,
+      ADVISOR_SME_COLLECTION). If that file is importable from here, prefer
+      `import { ... } from "./path/to/find-advisors/AdvisorTable"` over this
+      duplicated copy — until then, keep the two lists identical by hand.
+   ════════════════════════════════════════════════════════════════════════ */
+const ADVISOR_SME_COLLECTION = "AdvisorApplications"     // advisor's view of the match
+const SME_ADVISOR_COLLECTION = "SmeAdvisorApplications"  // SME's view of the match
+const advisorSmeId = (advisorId, smeId) => `${advisorId}_${smeId}`
+const smeAdvisorId = (smeId, advisorId) => `${smeId}_${advisorId}`
+
+const ADVISOR_STATUSES = [
+  "New Match", "Viewed", "Shortlisted", "Contacted", "Under Review",
+  "Interviewing", "Accepted", "Engaged/Placed", "Declined", "Closed",
+]
+const LEGACY_STATUS_ALIASES = {
+  Match: "New Match", Matched: "New Match", Confirmed: "Accepted",
+  "Deal Successful": "Engaged/Placed", "Deal Declined": "Declined", Pending: "Contacted",
+}
+const normalizeAdvisorStatus = (s) => LEGACY_STATUS_ALIASES[s] || s || "New Match"
+
+// Stages this table lets the advisor move an application *to*. An
+// application arrives here already at "Contacted" (that's what the SME-side
+// table sets when the business applies), so the earlier states aren't
+// offered — the advisor only moves it forward from there, or out.
+const ADVISOR_ACTIONABLE_STAGES = [
+  { id: "under_review", name: "Under Review" },
+  { id: "interviewing", name: "Interviewing" },
+  { id: "accepted", name: "Accepted" },
+  { id: "engaged_placed", name: "Engaged/Placed" },
+  { id: "declined", name: "Declined" },
+  { id: "closed", name: "Closed" },
+]
+
+// Which fields a given stage shows in the "Update Stage" modal.
+const getStageFields = (stageName) => {
+  const baseFields = { showMessage: true, showMeeting: true, showTermSheet: false, showAvailability: false }
+  switch (stageName) {
+    case "Under Review":
+      return { ...baseFields, showAvailability: true }
+    case "Interviewing":
+      return { ...baseFields, showAvailability: true }
+    case "Accepted":
+      return { ...baseFields, showAvailability: true, showTermSheet: true }
+    case "Engaged/Placed":
+      return { ...baseFields, showMeeting: false, showTermSheet: true }
+    case "Declined":
+      return { ...baseFields, showMeeting: false }
+    case "Closed":
+      return { ...baseFields, showMeeting: false }
+    default:
+      return baseFields
+  }
+}
+
+// How long the "Update Stage" button waits for the server to acknowledge the
+// write before handing control back to the user. Firestore persists the
+// write locally the instant it's issued and replays it when the connection
+// recovers, so past this point there's nothing useful left to block on.
+const STAGE_WRITE_GRACE_MS = 6000
+const NOTIFICATION_TIMEOUT_MS = 6000
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -93,30 +171,106 @@ const getScoreColor = (score) => {
 }
 
 const STATUS_TYPES = {
-  "New Match": {
-    color: "#E3F2FD",
-    textColor: "#1976D2",
-  },
-  Shortlisted: {
-    color: "#FFF3E0",
-    textColor: "#F57C00",
-  },
-  Contacted: {
-    color: "#F3E5F5",
-    textColor: "#7B1FA2",
-  },
-  Confirmed: {
-    color: "#E8F5E8",
-    textColor: "#388E3C",
-  },
-  Declined: {
-    color: "#FFEBEE",
-    textColor: "#D32F2F",
-  },
+  "New Match": { color: "#F5F0E1", textColor: "#7D5A50" },
+  Viewed: { color: "#EFEBE9", textColor: "#5D4037" },
+  Shortlisted: { color: "#FFF3E0", textColor: "#F57C00" },
+  Contacted: { color: "#E8EAF6", textColor: "#3949AB" },
+  "Under Review": { color: "#E3F2FD", textColor: "#1565C0" },
+  Interviewing: { color: "#F3E5F5", textColor: "#7B1FA2" },
+  Accepted: { color: "#E8F5E8", textColor: "#388E3C" },
+  "Engaged/Placed": { color: "#E0F2F1", textColor: "#00695C" },
+  Declined: { color: "#FFEBEE", textColor: "#D32F2F" },
+  Closed: { color: "#EEEEEE", textColor: "#616161" },
 }
 
 const getStatusStyle = (status) => {
-  return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
+  return STATUS_TYPES[normalizeAdvisorStatus(status)] || { color: "#F5F5F5", textColor: "#666666" }
+}
+
+// Converts proposed availability into the shape the SME's calendar expects,
+// including the start time folded into the Date itself (the SME calendar
+// reads slot.date.getHours()). Mirrors SupportSMETable's version exactly —
+// keep the two in sync.
+const buildMeetingAvailableDates = (availabilityList, fallbackMeetingTime, timeZone) => {
+  const slots = []
+
+  if (Array.isArray(availabilityList) && availabilityList.length > 0) {
+    availabilityList.forEach((availability) => {
+      if (!availability?.date) return
+      const date = availability.date instanceof Date ? new Date(availability.date) : new Date(availability.date)
+      if (isNaN(date.getTime())) return
+
+      const timeSlots = Array.isArray(availability.timeSlots) ? availability.timeSlots : []
+      const firstTime = timeSlots[0]
+      if (firstTime?.start) {
+        const [hour, minute] = firstTime.start.split(":").map(Number)
+        if (Number.isFinite(hour) && Number.isFinite(minute)) date.setHours(hour, minute, 0, 0)
+      }
+
+      slots.push({
+        date: date.toISOString(),
+        timeSlots,
+        timeZone: availability.timeZone || timeZone,
+        status: "available",
+      })
+    })
+    return slots
+  }
+
+  if (fallbackMeetingTime) {
+    const startDate = new Date(fallbackMeetingTime)
+    if (!isNaN(startDate.getTime())) {
+      const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
+      const pad = (number) => String(number).padStart(2, "0")
+      slots.push({
+        date: startDate.toISOString(),
+        timeSlots: [{ start: `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`, end: `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}` }],
+        timeZone,
+        status: "available",
+      })
+    }
+  }
+
+  return slots
+}
+
+// Resolves the advisor's display name from advisorProfiles, then writes the
+// inbox + sent message pair. Mirrors SupportSMETable's sendMessageToSME.
+const sendMessageToSME = async ({ advisorUser, sme, applicationId, subject, content, attachments = [], attachmentNames = [] }) => {
+  if (!content?.trim() && attachments.length === 0) return null
+
+  let advisorName = advisorUser.displayName || advisorUser.email?.split("@")[0] || "Advisor"
+
+  try {
+    const profileSnap = await getDoc(doc(db, "advisorProfiles", advisorUser.uid))
+    if (profileSnap.exists()) {
+      const contact = profileSnap.data().formData?.contactDetails || {}
+      const fullName = `${contact.name || ""} ${contact.surname || ""}`.trim()
+      advisorName = fullName || advisorName
+    }
+  } catch (error) {
+    console.error("Could not load Advisor name:", error)
+  }
+
+  const messagePayload = {
+    from: advisorUser.uid,
+    fromName: advisorName,
+    to: sme.userId || sme.id,
+    toName: sme.name,
+    subject,
+    content: content || "",
+    attachments,
+    attachmentNames,
+    date: new Date().toISOString(),
+    applicationId,
+  }
+
+  await Promise.all([
+    addDoc(collection(db, "messages"), { ...messagePayload, type: "inbox", read: false, sender: advisorName }),
+    addDoc(collection(db, "messages"), { ...messagePayload, type: "sent", read: true, sender: "You" }),
+  ])
+
+  return advisorName
 }
 
 export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
@@ -134,7 +288,8 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
   const [nextStage, setNextStage] = useState("")
   const [showStageModal, setShowStageModal] = useState(false)
   const [selectedAdvisorForStage, setSelectedAdvisorForStage] = useState(null)
-  const [updatedStages, setUpdatedStages] = useState({})
+  // Rows whose write is still in flight with the server, keyed by smeId.
+  const [syncingRows, setSyncingRows] = useState({})
   const [availabilities, setAvailabilities] = useState([])
   const [showCalendarModal, setShowCalendarModal] = useState(false)
   const [tempDates, setTempDates] = useState([])
@@ -161,6 +316,23 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
     sortBy: "",
   })
   const [termSheetFile, setTermSheetFile] = useState(null)
+
+  // Guards setState calls that resolve after unmount (a slow write can
+  // outlive the screen it was started from).
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
+
+  // Notifications clear themselves rather than sitting on screen forever.
+  useEffect(() => {
+    if (!notification) return
+    const timer = setTimeout(() => {
+      if (isMountedRef.current) setNotification(null)
+    }, NOTIFICATION_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [notification])
 
   const modalHeaderStyle = {
     display: "flex",
@@ -259,18 +431,21 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
           status: avail.status,
         }))
 
-        const docId = `${auth.currentUser.uid}_${selectedAdvisor.id}`
-        await updateDoc(doc(db, "AdvisorApplications", docId), {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
+        const advisorId = auth.currentUser.uid
+        const smeId = selectedAdvisor.id
 
-        const smeDocRef = doc(db, "SmeAdvisorApplications", docId)
-        await updateDoc(smeDocRef, {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-
+        // setDoc + merge, not updateDoc — updateDoc rejects outright on a
+        // document that doesn't exist yet.
+        await Promise.all([
+          setDoc(doc(db, ADVISOR_SME_COLLECTION, advisorSmeId(advisorId, smeId)), {
+            availableDates: availabilityData,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }),
+          setDoc(doc(db, SME_ADVISOR_COLLECTION, smeAdvisorId(smeId, advisorId)), {
+            availableDates: availabilityData,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }),
+        ])
       } catch (error) {
         console.error("Error updating availabilities:", error)
         setNotification({
@@ -297,18 +472,19 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
           timeZone: avail.timeZone,
         }))
 
-        const docId = `${auth.currentUser.uid}_${selectedAdvisor.id}`
-        await updateDoc(doc(db, "AdvisorApplications", docId), {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
+        const advisorId = auth.currentUser.uid
+        const smeId = selectedAdvisor.id
 
-        const smeDocRef = doc(db, "SmeAdvisorApplications", docId)
-        await updateDoc(smeDocRef, {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-
+        await Promise.all([
+          setDoc(doc(db, ADVISOR_SME_COLLECTION, advisorSmeId(advisorId, smeId)), {
+            availableDates: availabilityData,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }),
+          setDoc(doc(db, SME_ADVISOR_COLLECTION, smeAdvisorId(smeId, advisorId)), {
+            availableDates: availabilityData,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }),
+        ])
       } catch (error) {
         console.error("Error updating availabilities:", error)
         setNotification({
@@ -323,51 +499,6 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
     return advisor.availableDates && advisor.availableDates.length > 0
   }
 
-  const applicationStages = [
-    { id: "evaluation", name: "Evaluation", color: "#3b82f6" },
-    { id: "due_diligence", name: "Due Diligence", color: "#8b5cf6" },
-    { id: "decision", name: "Decision", color: "#f59e0b" },
-    { id: "term_issue", name: "Term Issue", color: "#06b6d4" },
-    { id: "deal_successful", name: "Deal Successful", color: "#10b981" },
-    { id: "deal_declined", name: "Deal Declined", color: "#ef4444" },
-  ]
-
-  const getStageFields = (stageName) => {
-    const baseFields = {
-      showMessage: true,
-      showMeeting: true,
-      showTermSheet: false,
-      showAvailability: false,
-    }
-
-    switch (stageName) {
-      case "Evaluation":
-        return { ...baseFields, showTermSheet: false, showAvailability: true }
-      case "Due Diligence":
-        return { ...baseFields, showTermSheet: false, showAvailability: true }
-      case "Decision":
-        return { ...baseFields, showTermSheet: false, showAvailability: true }
-      case "Term Issue":
-        return { ...baseFields, showTermSheet: true, showAvailability: true }
-      case "Deal Successful":
-        return { 
-          ...baseFields, 
-          showTermSheet: true, 
-          showAvailability: false,
-          showMeeting: false // ✅ Hide meeting for successful deal
-        }
-      case "Deal Declined":
-        return { 
-          ...baseFields, 
-          showTermSheet: false, 
-          showAvailability: false,
-          showMeeting: false // ✅ Hide meeting for declined deal
-        }
-      default:
-        return baseFields
-    }
-  }
-
   useEffect(() => {
     const fetchAdvisorApplications = async () => {
       const user = auth.currentUser
@@ -375,7 +506,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
 
       try {
         const advisorId = user.uid
-        const q = query(collection(db, "AdvisorApplications"), where("advisorId", "==", advisorId))
+        const q = query(collection(db, ADVISOR_SME_COLLECTION), where("advisorId", "==", advisorId))
         const snapshot = await getDocs(q)
         const advisorMatches = snapshot.docs.map((doc) => {
           const data = doc.data()
@@ -386,14 +517,17 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
             fundability: { score: data.fundability || 0, color: getScoreColor(data.fundability || 0) },
             leadership: { score: data.leadership || 0, color: getScoreColor(data.leadership || 0) },
           })
-          
+
           const availabilityData = data.availableDates ? data.availableDates.map((avail) => ({
             ...avail,
             date: new Date(avail.date),
           })) : []
 
+          const normalizedStatus = normalizeAdvisorStatus(data.status || "New Match")
+
           return {
             id: data.smeId,
+            userId: data.smeUserId || data.smeId,
             name: data.smeName,
             location: data.smeLocation,
             sector: data.smeSector,
@@ -405,16 +539,15 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
             applicationDate: data.createdAt?.toDate().toLocaleDateString() || "N/A",
             matchPercentage: data.matchPercentage || 70,
             matchBreakdown: data.breakdown || {},
-            status: data.status || "New Match",
-            pipelineStage: data.status || "New Match",
-            action: "Application Received",
+            status: normalizedStatus,
+            pipelineStage: normalizedStatus,
             availableDates: availabilityData,
           }
         })
-        
+
         setAdvisors(advisorMatches)
         setLoading(false)
-        
+
         if (onMatchesCountChange) {
           onMatchesCountChange(advisorMatches.length)
         }
@@ -422,7 +555,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
         console.error("Failed to fetch advisor applications:", error)
         setAdvisors([])
         setLoading(false)
-        
+
         if (onMatchesCountChange) {
           onMatchesCountChange(0)
         }
@@ -452,7 +585,6 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
   }
 
   const applyFilters = () => {
-    console.log("Applying filters:", localFilters)
     setShowFilters(false)
   }
 
@@ -466,7 +598,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
     setMeetingPurpose("")
     setTermSheetFile(null)
     setFormErrors({})
-    
+
     loadApplicationAvailability(advisor)
   }
 
@@ -496,412 +628,300 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
     setAvailabilities([])
   }
 
-  const findDocumentIds = async (advisorId, smeId) => {
-    const collections = ["AdvisorApplications", "AdvisoryMatches", "SmeAdvisorApplications"];
-    const results = {};
-    
-    for (const collectionName of collections) {
-      try {
-        console.log(`\n=== Checking ${collectionName} ===`);
-        
-        const allDocs = await getDocs(collection(db, collectionName));
-        console.log(`Total documents in ${collectionName}: ${allDocs.size}`);
-        
-        const matchingDocs = [];
-        allDocs.forEach(doc => {
-          const data = doc.data();
-          console.log(`Document ID: ${doc.id}`, {
-            advisorId: data.advisorId,
-            smeId: data.smeId,
-            status: data.status
-          });
-          
-          if (data.advisorId === advisorId && data.smeId === smeId) {
-            matchingDocs.push({
-              id: doc.id,
-              data: data
-            });
-          }
-        });
-        
-        results[collectionName] = matchingDocs;
-        console.log(`Found ${matchingDocs.length} matching documents in ${collectionName}`);
-        
-      } catch (error) {
-        console.error(`Error checking ${collectionName}:`, error);
-        results[collectionName] = [];
-      }
-    }
-    
-    return results;
-  };
+  // Optimistic stage move: paints the new status straight into local state,
+  // so the row responds the instant the advisor confirms rather than after
+  // the server replies.
+  const applyLocalStatus = useCallback((smeId, status) => {
+    setAdvisors((prev) => prev.map((a) => (a.id === smeId ? { ...a, status, pipelineStage: status } : a)))
+  }, [])
+
+  // Puts the row back if the server ultimately rejects the write.
+  const revertLocalStatus = useCallback((smeId, previousStatus) => {
+    setAdvisors((prev) => prev.map((a) => (a.id === smeId ? { ...a, status: previousStatus, pipelineStage: previousStatus } : a)))
+  }, [])
+
+  const markSyncing = useCallback((smeId, value) => {
+    setSyncingRows((prev) => {
+      if (value) return { ...prev, [smeId]: true }
+      const { [smeId]: _dropped, ...rest } = prev
+      return rest
+    })
+  }, [])
 
   const handleStageUpdate = async () => {
-    const stageFields = getStageFields(nextStage);
-    const errors = {};
+    const sme = selectedAdvisorForStage
+    if (!sme) return
+
+    const stageFields = getStageFields(nextStage)
+    const errors = {}
 
     if (!nextStage) {
-      errors.nextStage = "Please select a stage";
+      errors.nextStage = "Please select a stage"
     }
     if (stageFields.showMessage && !message.trim()) {
-      errors.message = "Please provide a message";
+      errors.message = "Please provide a message"
     }
 
-    // ✅ ONLY validate meeting fields if stage is NOT successful or declined
-    if (stageFields.showMeeting) {
-      if (!meetingLocation.trim()) {
-        errors.meetingLocation = "Please provide a meeting location";
-      }
-      if (!meetingPurpose.trim()) {
-        errors.meetingPurpose = "Please provide a meeting purpose";
-      }
-    }
+    // A meeting request is enabled when this stage exposes either the
+    // meeting section or the availability section, and only fires if the
+    // advisor actually proposed a date/time.
+    const meetingFeatureEnabled = stageFields.showMeeting || stageFields.showAvailability
+    const hasMeetingSlot = Boolean(meetingTime) || availabilities.length > 0
+    const meetingRequested = meetingFeatureEnabled && hasMeetingSlot
+    const proposedMeetingSlots = buildMeetingAvailableDates(availabilities, meetingTime, timeZone)
 
-    if (stageFields.showAvailability && !availabilities.length) {
-      errors.availabilities = "Please select at least one available date";
+    if (meetingRequested) {
+      if (stageFields.showMeeting) {
+        if (!meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location"
+        if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
+      }
+      if (proposedMeetingSlots.length === 0) {
+        errors.availabilities = "Please propose at least one meeting date and time"
+      }
     }
 
     if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
+      setFormErrors(errors)
+      return
     }
 
-    setIsSubmitting(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-      
-      const advisorId = user.uid;
-      const smeId = selectedAdvisorForStage.id;
+    const user = auth.currentUser
+    if (!user) {
+      setNotification({ type: "error", message: "You've been signed out. Please sign in again." })
+      return
+    }
 
-      console.log("Updating status for application:", {
+    const advisorId = user.uid
+    const smeId = sme.id
+    const previousStatus = sme.status
+    const chosenStage = nextStage
+    const messageText = message
+    const meetingLoc = meetingLocation?.trim() || "Virtual"
+    const meetingPurp = meetingPurpose?.trim() || "Advisory Meeting"
+    const termSheetFileToUpload = termSheetFile
+
+    const documentId = advisorSmeId(advisorId, smeId)
+    const smeDocumentId = smeAdvisorId(smeId, advisorId)
+
+    setIsSubmitting(true)
+
+    const performWrite = async () => {
+      const basePayload = {
         advisorId,
         smeId,
-        nextStage
-      });
-
-      let attachmentUrl = null;
-
-      if (termSheetFile) {
-        const storageRef = ref(storage, `advisor_termsheets/${selectedAdvisorForStage.id}/${termSheetFile.name}`);
-        const snapshot = await uploadBytes(storageRef, termSheetFile);
-        attachmentUrl = await getDownloadURL(snapshot.ref);
-      }
-
-      const updateData = {
-        status: nextStage,
-        pipelineStage: nextStage,
+        smeName: sme.name,
+        status: chosenStage,
+        pipelineStage: chosenStage,
         updatedAt: serverTimestamp(),
-        ...(message && { lastMessage: message }),
-      };
+        lastActivity: new Date().toISOString(),
+        ...(messageText && { lastMessage: messageText }),
+      }
 
-      // ✅ ONLY add meeting details if stage allows meetings
-      if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-        updateData.meetingDetails = {
+      let attachmentUrl = null
+      if (stageFields.showTermSheet && termSheetFileToUpload) {
+        const storageRef = ref(storage, `advisor_termsheets/${smeId}/${Date.now()}_${termSheetFileToUpload.name}`)
+        const snap = await uploadBytes(storageRef, termSheetFileToUpload)
+        attachmentUrl = await getDownloadURL(snap.ref)
+        basePayload.termSheetUrl = attachmentUrl
+        basePayload.termSheetName = termSheetFileToUpload.name
+      }
+
+      // Resolve the advisor's display name once, reused for the calendar
+      // event, the in-app message and the email notification.
+      let advisorName = user.displayName || user.email?.split("@")[0] || "Advisor"
+      try {
+        const profileSnap = await getDoc(doc(db, "advisorProfiles", advisorId))
+        if (profileSnap.exists()) {
+          const contact = profileSnap.data().formData?.contactDetails || {}
+          advisorName = `${contact.name || ""} ${contact.surname || ""}`.trim() || advisorName
+        }
+      } catch (err) {
+        console.warn("Could not load advisor display name:", err)
+      }
+
+      if (meetingRequested) {
+        // Deterministic ID so a retried write can't create duplicate
+        // meeting requests.
+        const meetingEventId = `advisor_${documentId}`
+
+        const calendarEvent = {
+          smeId: sme.userId || smeId,
+          smeName: sme.name,
+          advisorId,
+          requesterId: advisorId,
+          requesterName: advisorName,
+          requesterType: "Advisor",
+          createdBy: advisorId,
+          createdByName: advisorName,
+          advisorApplicationId: documentId,
+          applicationId: documentId,
+          title: meetingPurp,
+          purpose: meetingPurp,
+          description: messageText?.trim() || `Meeting request from ${advisorName}`,
+          location: meetingLoc,
+          availableDates: proposedMeetingSlots,
+          timeZone: proposedMeetingSlots[0]?.timeZone || timeZone,
+          status: "pending",
+          meetingStatus: "pending",
+          requestType: "meeting_request",
+          source: "advisor",
+          isInvitation: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }
+
+        await setDoc(doc(db, "smeCalendarEvents", meetingEventId), calendarEvent, { merge: true })
+
+        basePayload.meetingRequestId = meetingEventId
+        basePayload.meetingStatus = "pending"
+        basePayload.meetingDetails = {
           time: meetingTime,
-          location: meetingLocation,
-          purpose: meetingPurpose
+          location: meetingLoc,
+          purpose: meetingPurp,
+          availableDates: proposedMeetingSlots,
         }
       }
 
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        const availabilityData = availabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-          status: avail.status,
-        }));
-        updateData.availableDates = availabilityData;
-      }
-
-      console.log("Update data:", updateData);
-
-      const documentId = `${advisorId}_${smeId}`;
-      const documentsmeId = `${smeId}_${advisorId}`;
-
-      const docRef = doc(db, "AdvisorApplications", documentId);
-      
-      const docSnapshot = await getDoc(docRef);
-      if (!docSnapshot.exists()) {
-        throw new Error(`Document with ID ${documentId} does not exist in AdvisorApplications`);
-      }
-
-      await updateDoc(docRef, updateData);
-
-      try {
-        const matchesDocRef = doc(db, "AdvisoryMatches", documentsmeId);
-        await updateDoc(matchesDocRef, { 
-          status: nextStage,
-          ...(updateData.availableDates && { availableDates: updateData.availableDates })
-        });
-        
-        const smeDocRef = doc(db, "SmeAdvisorApplications", documentsmeId);
-        await updateDoc(smeDocRef, { 
-          status: nextStage,
-          ...(updateData.availableDates && { availableDates: updateData.availableDates })
-        });
-      } catch (matchError) {
-        console.warn("Could not update related collections:", matchError.message);
-      }
-
-      // ✅ ONLY create calendar event if stage allows meetings
-      if (stageFields.showMeeting && meetingTime && meetingLocation && meetingPurpose) {
-        try {
-          await addDoc(collection(db, "smeCalendarEvents"), {
-            smeId: smeId,
-            advisorId: advisorId,
-            title: meetingPurpose,
-            date: meetingTime,
-            location: meetingLocation,
-            type: "advisory_meeting",
-            createdAt: new Date().toISOString(),
-            ...(updateData.availableDates && { availableDates: updateData.availableDates })
-          });
-        } catch (calendarError) {
-          console.error("Error creating calendar event:", calendarError);
-        }
-      }
-
-      setAdvisors(prevAdvisors => 
-        prevAdvisors.map(advisor => 
-          advisor.id === smeId 
-            ? { 
-                ...advisor, 
-                status: nextStage,
-                pipelineStage: nextStage,
-                ...(message && { lastMessage: message }),
-                ...(stageFields.showMeeting && {
-                  meetingDetails: {
-                    time: meetingTime,
-                    location: meetingLocation,
-                    purpose: meetingPurpose
-                  }
-                }),
-                ...(updateData.availableDates && { availableDates: updateData.availableDates })
-              }
-            : advisor
-        )
-      );
-
-      setUpdatedStages((prev) => ({ ...prev, [smeId]: nextStage }));
-      setNotification({
-        type: "success",
-        message: `Application status updated to ${nextStage} successfully`
-      });
-      
-      setShowStageModal(false);
-      resetStageModal();
-      
-      let subject = `Update: ${nextStage} Stage for Your Application`;
-      let content = "";
-
-      if (nextStage === "Deal Declined") {
-        content = `Dear ${selectedAdvisorForStage.name},\n\nWe regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n${message}`;
-      } else {
-        content = `Dear ${selectedAdvisorForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`;
-      }
-
-      // ✅ ONLY add meeting details to email if stage allows meetings
-      if (stageFields.showMeeting) {
-        content += `\n\nMeeting Details:\n- Date: ${new Date(meetingTime).toLocaleString()}\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`;
-      }
-
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        content += `\n\nAvailable Meeting Times:\n`;
-        content += availabilities
-          .map((avail, idx) => {
-            const dateStr = avail.date.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            });
-            const timeStr = avail.timeSlots?.[0]
-              ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-              : "Time not specified";
-            return `${idx + 1}. ${dateStr} (${timeStr})`;
-          })
-          .join("\n");
-        
-        content += `\n\nPlease reply with your preferred meeting time from the above options.`;
-      }
-
-      content += `\n\nBest regards,\nAdvisory Support Team`;
-
-      const messagePayload = {
-        to: smeId,
-        from: advisorId,
-        subject,
-        content,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        applicationId: `${advisorId}_${smeId}`,
-        attachments: attachmentUrl ? [attachmentUrl] : [],
-        ...(updateData.availableDates && { availableDates: updateData.availableDates })
-      };
-
-      const sentMessagePayload = {
-        ...messagePayload,
-        read: true,
-        type: "sent",
-      };
-
+      // setDoc + merge, not updateDoc — updateDoc rejects outright when the
+      // document doesn't exist yet, which used to surface as a silent
+      // failure whenever the application record hadn't been created with
+      // exactly this ID.
       await Promise.all([
-        addDoc(collection(db, "messages"), messagePayload),
-        addDoc(collection(db, "messages"), sentMessagePayload),
-      ]);
+        setDoc(doc(db, ADVISOR_SME_COLLECTION, documentId), basePayload, { merge: true }),
+        setDoc(doc(db, SME_ADVISOR_COLLECTION, smeDocumentId), basePayload, { merge: true }),
+      ])
 
+      if (messageText?.trim()) {
+        try {
+          const subject = meetingRequested
+            ? `Meeting Request - ${sme.name}`
+            : `Application Update: ${chosenStage}`
+          const content = meetingRequested
+            ? `${messageText}\n\nA meeting has been requested.\n\nPurpose: ${meetingPurp}\nLocation: ${meetingLoc}\n\nPlease open your Calendar to select and confirm one of the proposed time slots.`
+            : messageText
+          await sendMessageToSME({ advisorUser: user, sme, applicationId: documentId, subject, content })
+        } catch (messageError) {
+          console.error("Stage saved but in-app message failed:", messageError)
+        }
+      }
+
+      // Best-effort email notification — never blocks or fails the stage
+      // update itself.
       try {
-        console.log("🔄 Using Feedback service configuration...");
-
         const emailjsConfig = {
           serviceId: API_KEYS.SERVICE_ID_MESSAGES,
           templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-          publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-        };
-
-        console.log("📧 Using Feedback config:", emailjsConfig);
-
+          publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
+        }
         if (!window.emailjs) {
-          emailjs.init(emailjsConfig.publicKey);
-          window.emailjs = emailjs;
+          emailjs.init(emailjsConfig.publicKey)
+          window.emailjs = emailjs
         }
 
-        const user = auth.currentUser;
-        const advisorName = user?.displayName || "Advisory Team";
-        const smeName = selectedAdvisorForStage.name;
-
-        let smeEmail = null;
-        console.log("📋 Fetching SMSE email for:", smeId);
-
+        let smeEmail = null
         try {
-          const universalProfileRef = doc(db, "universalProfiles", smeId);
-          const universalProfileSnap = await getDoc(universalProfileRef);
-          
+          const universalProfileSnap = await getDoc(doc(db, "universalProfiles", smeId))
           if (universalProfileSnap.exists()) {
-            const profileData = universalProfileSnap.data();
-            console.log("📄 universalProfiles data:", profileData);
-            
-            smeEmail = profileData.email || 
-                       profileData.contactDetails?.email ||
-                       profileData.contactEmail ||
-                       profileData.businessEmail ||
-                       profileData.personalEmail;
-            
-            if (smeEmail) {
-              console.log("✅ Found SMSE email:", smeEmail);
-            } else {
-              console.log("❌ No email found in universalProfiles");
-            }
-          } else {
-            console.log("❌ No document in universalProfiles for:", smeId);
+            const profileData = universalProfileSnap.data()
+            smeEmail = profileData.email ||
+              profileData.contactDetails?.email ||
+              profileData.contactEmail ||
+              profileData.businessEmail ||
+              profileData.personalEmail
           }
         } catch (fetchError) {
-          console.error("❌ Error fetching SMSE email:", fetchError);
+          console.error("Error fetching SME email:", fetchError)
         }
+        if (!smeEmail) smeEmail = "support@bigmarketplace.africa"
 
-        if (!smeEmail) {
-          console.warn("⚠️ No SMSE email found, using fallback");
-          smeEmail = "support@bigmarketplace.africa";
-        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (emailRegex.test(smeEmail)) {
+          let emailMessage = chosenStage === "Declined"
+            ? `Dear ${sme.name},\n\nWe regret to inform you that your application has been moved to the "${chosenStage}" stage.\n\n`
+            : `Dear ${sme.name},\n\nYour application has progressed to the "${chosenStage}" stage.\n\n`
 
-        console.log("📧 Final recipient email:", smeEmail);
+          if (messageText) emailMessage += `Message from ${advisorName}:\n${messageText}\n\n`
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(smeEmail)) {
-          throw new Error(`Invalid email format: "${smeEmail}"`);
-        }
-
-        let emailMessage = "";
-
-        if (nextStage === "Deal Declined") {
-          emailMessage = `Dear ${smeName},\n\n`;
-          emailMessage += `We regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n`;
-        } else {
-          emailMessage = `Dear ${smeName},\n\n`;
-          emailMessage += `We are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n`;
-        }
-        
-        if (message) {
-          emailMessage += `Message from ${advisorName}:\n${message}\n\n`;
-        }
-
-        // ✅ ONLY add meeting details to email if stage allows meetings
-        if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-          emailMessage += `Meeting Details:\n`;
-          if (meetingTime) {
-            emailMessage += `- Date: ${new Date(meetingTime).toLocaleString()}\n`;
+          if (meetingRequested) {
+            emailMessage += `Meeting Details:\n- Location: ${meetingLoc}\n- Purpose: ${meetingPurp}\n\n`
+            emailMessage += `Available Meeting Times:\n`
+            proposedMeetingSlots.forEach((slot, idx) => {
+              const slotDate = new Date(slot.date)
+              const dateStr = slotDate.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+              const timeStr = slot.timeSlots?.[0] ? `${slot.timeSlots[0].start} - ${slot.timeSlots[0].end} ${slot.timeZone}` : "Time not specified"
+              emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`
+            })
+            emailMessage += `\nPlease reply with your preferred meeting time from the above options.\n\n`
           }
-          emailMessage += `- Location: ${meetingLocation}\n`;
-          emailMessage += `- Purpose: ${meetingPurpose}\n\n`;
+
+          emailMessage += `Best regards,\n${advisorName}\nBIG Marketplace Africa`
+
+          const templateParams = {
+            to_email: smeEmail,
+            subject: `Application Stage Update: ${chosenStage}`,
+            from_name: advisorName,
+            date: new Date().toLocaleDateString(),
+            message: emailMessage,
+            portal_url: `https://www.bigmarketplace.africa/applications/${documentId}`,
+            has_attachments: attachmentUrl ? "true" : "false",
+            attachments_count: attachmentUrl ? "1" : "0",
+          }
+
+          await window.emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, templateParams, emailjsConfig.publicKey)
         }
-
-        if (stageFields.showAvailability && availabilities.length > 0) {
-          emailMessage += `Available Meeting Times:\n`;
-          availabilities.forEach((avail, idx) => {
-            const dateStr = avail.date.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            });
-            const timeStr = avail.timeSlots?.[0]
-              ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-              : "Time not specified";
-            emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`;
-          });
-          emailMessage += `\nPlease reply with your preferred meeting time from the above options.\n\n`;
-        }
-
-        emailMessage += `Best regards,\n${advisorName}\nAdvisory Support Team\nBIG Marketplace Africa`;
-
-        const templateParams = {
-          to_email: smeEmail,
-          subject: `Application Stage Update: ${nextStage}`,
-          from_name: advisorName,
-          date: new Date().toLocaleDateString(),
-          message: emailMessage,
-          portal_url: `https://www.bigmarketplace.africa/applications/${advisorId}_${smeId}`,
-          has_attachments: termSheetFile ? "true" : "false",
-          attachments_count: termSheetFile ? "1" : "0"
-        };
-
-        console.log("📨 Sending with Feedback service...", templateParams);
-
-        const response = await window.emailjs.send(
-          emailjsConfig.serviceId,
-          emailjsConfig.templateId,
-          templateParams,
-          emailjsConfig.publicKey
-        );
-        
-        console.log("✅ Email sent successfully with Feedback service!", response);
-        
-        setNotification({
-          type: "success",
-          message: `Stage updated to ${nextStage} and notification sent successfully`
-        });
-
       } catch (emailError) {
-        console.error("❌ Email failed:", emailError);
-        
-        setNotification({
-          type: "success", 
-          message: `Stage updated to ${nextStage} successfully`
-        });
+        console.error("Email notification failed:", emailError)
       }
-    } catch (error) {
-      console.error("Detailed error:", error);
-      
-      setNotification({
-        type: "error",
-        message: `Failed to update status: ${error.message}`
-      });
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+
+    const tracked = performWrite().then(() => ({ status: "ok" })).catch((error) => ({ status: "error", error }))
+
+    // Optimistic: the row moves now, not after the round trip.
+    applyLocalStatus(smeId, chosenStage)
+    markSyncing(smeId, true)
+
+    const outcome = await Promise.race([
+      tracked,
+      new Promise((resolve) => setTimeout(() => resolve({ status: "pending" }), STAGE_WRITE_GRACE_MS)),
+    ])
+
+    if (!isMountedRef.current) return
+
+    setIsSubmitting(false)
+    setShowStageModal(false)
+    resetStageModal()
+
+    if (outcome.status === "ok") {
+      markSyncing(smeId, false)
+      setNotification({ type: "success", message: `${sme.name} moved to ${chosenStage} successfully` })
+      return
+    }
+
+    if (outcome.status === "error") {
+      markSyncing(smeId, false)
+      revertLocalStatus(smeId, previousStatus)
+      console.error("Detailed error:", outcome.error)
+      setNotification({ type: "error", message: `Failed to update status: ${outcome.error?.message || "unknown error"}` })
+      return
+    }
+
+    // Still pending — Firestore has the write queued locally and will replay
+    // it as soon as the connection allows, so let the advisor carry on and
+    // only come back to them if it eventually fails.
+    setNotification({ type: "info", message: `${sme.name} moved to ${chosenStage} — still syncing to the server.` })
+
+    tracked.then((result) => {
+      if (!isMountedRef.current) return
+      markSyncing(smeId, false)
+      if (result.status === "error") {
+        revertLocalStatus(smeId, previousStatus)
+        console.error("Stage update error (deferred):", result.error)
+        setNotification({ type: "error", message: `${sme.name} couldn't be saved and has been put back to ${previousStatus}.` })
+      } else {
+        setNotification({ type: "success", message: `${sme.name} moved to ${chosenStage} successfully` })
+      }
+    })
+  }
 
   const handleViewDetails = (advisor) => {
     setSelectedAdvisor(advisor)
@@ -1050,13 +1070,18 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
 
       {notification && (
         <div
-          className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+          className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-medium ${
             notification.type === "success"
               ? "border-green-200 bg-green-50 text-green-800"
-              : "border-red-200 bg-red-50 text-red-800"
+              : notification.type === "info"
+                ? "border-[#e8c99a] bg-[#fff8ed] text-[#8a5a12]"
+                : "border-red-200 bg-red-50 text-red-800"
           }`}
         >
-          {notification.message}
+          <span>{notification.message}</span>
+          <button onClick={() => setNotification(null)} className="ml-2 text-current opacity-50 hover:opacity-100">
+            <X size={16} />
+          </button>
         </div>
       )}
 
@@ -1149,8 +1174,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
               </tr>
             ) : (
               advisors.map((advisor) => {
-                const currentStatus = updatedStages[advisor.id] || advisor.pipelineStage || advisor.status
+                const currentStatus = normalizeAdvisorStatus(advisor.pipelineStage || advisor.status)
                 const statusStyle = getStatusStyle(currentStatus)
+                const isSyncing = !!syncingRows[advisor.id]
                 return (
                   <tr key={advisor.id} className="transition-colors hover:bg-[#fdf8f4]" style={{ borderBottom: "1px solid #e6d7c3" }}>
                     <td style={tableCellStyle}>
@@ -1204,16 +1230,16 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                     <td style={tableCellStyle}>
                       <div style={matchContainerStyle}>
                         <div style={progressBarStyle}>
-                          <div style={{ 
-                            ...progressFillStyle, 
-                            width: `${advisor.matchPercentage}%` 
+                          <div style={{
+                            ...progressFillStyle,
+                            width: `${advisor.matchPercentage}%`
                           }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <span style={matchScoreStyle}>{advisor.matchPercentage}%</span>
-                          <Eye 
-                            size={14} 
-                            style={{ cursor: 'pointer', color: '#a67c52' }} 
+                          <Eye
+                            size={14}
+                            style={{ cursor: 'pointer', color: '#a67c52' }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAdvisor(advisor);
@@ -1235,18 +1261,18 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                           />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ 
-                            ...matchScoreStyle, 
-                            color: getScoreColor(advisor.bigScore) 
+                          <span style={{
+                            ...matchScoreStyle,
+                            color: getScoreColor(advisor.bigScore)
                           }}>
                             {advisor.bigScore}%
                           </span>
-                          <Eye 
-                            size={14} 
-                            style={{ 
-                              cursor: 'pointer', 
-                              color: getScoreColor(advisor.bigScore) 
-                            }} 
+                          <Eye
+                            size={14}
+                            style={{
+                              cursor: 'pointer',
+                              color: getScoreColor(advisor.bigScore)
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAdvisor(advisor);
@@ -1266,6 +1292,11 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                       >
                         {currentStatus}
                       </span>
+                      {isSyncing && (
+                        <div style={{ fontSize: "0.65rem", color: "#a89482", fontStyle: "italic", marginTop: "2px" }}>
+                          syncing…
+                        </div>
+                      )}
                     </td>
                     <td style={{ ...tableCellStyle, borderRight: "none" }}>
                       <button
@@ -1283,7 +1314,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        Application Received
+                        Update Stage
                       </button>
                     </td>
                   </tr>
@@ -1293,10 +1324,6 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
           </tbody>
         </table>
       </div>
-
-      {advisors.length === 0 && (
-        null
-      )}
 
       {selectedAdvisor && modalType === "matchBreakdown" && (
         <div style={modalOverlayStyle} onClick={resetModal}>
@@ -1309,13 +1336,13 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                 ✖
               </button>
             </div>
-            
+
             <div style={modalBodyStyle}>
               <div style={{ marginBottom: '1rem' }}>
                 <p style={{ color: '#5D2A0A', marginBottom: '0.5rem' }}>
                   Match score: {selectedAdvisor.matchPercentage}%
                 </p>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {selectedAdvisor.matchBreakdown && Object.entries(selectedAdvisor.matchBreakdown).map(([key, criteria]) => (
                     <div key={key} style={breakdownItemStyle(criteria.matched, key)}>
@@ -1331,10 +1358,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                   ))}
                 </div>
               </div>
-              
-              <div style={{ 
-                background: '#F5EBE0', 
-                padding: '1rem', 
+
+              <div style={{
+                background: '#F5EBE0',
+                padding: '1rem',
                 borderRadius: '8px',
                 marginTop: '1rem'
               }}>
@@ -1343,9 +1370,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                 </p>
               </div>
             </div>
-            
+
             <div style={modalActionsStyle}>
-              <button 
+              <button
                 onClick={resetModal}
                 style={cancelButtonStyle}
               >
@@ -1367,13 +1394,13 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                 ✖
               </button>
             </div>
-            
+
             <div style={modalBodyStyle}>
               <div style={{ marginBottom: '1rem' }}>
                 <p style={{ color: '#5D2A0A', marginBottom: '0.5rem' }}>
                   BIG Score: {selectedAdvisor.bigScore}%
                 </p>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {Object.entries(bigScoreData).map(([key, data]) => (
                     <div key={key} style={{
@@ -1406,8 +1433,8 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                             borderRadius: '3px'
                           }} />
                         </div>
-                        <span style={{ 
-                          fontWeight: '600', 
+                        <span style={{
+                          fontWeight: '600',
                           color: data.color,
                           minWidth: '35px',
                           textAlign: 'right'
@@ -1419,10 +1446,10 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                   ))}
                 </div>
               </div>
-              
-              <div style={{ 
-                background: '#F5EBE0', 
-                padding: '1rem', 
+
+              <div style={{
+                background: '#F5EBE0',
+                padding: '1rem',
                 borderRadius: '8px',
                 marginTop: '1rem'
               }}>
@@ -1431,9 +1458,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                 </p>
               </div>
             </div>
-            
+
             <div style={modalActionsStyle}>
-              <button 
+              <button
                 onClick={resetModal}
                 style={cancelButtonStyle}
               >
@@ -1697,7 +1724,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                     <strong>Application Date:</strong> {selectedAdvisor.applicationDate}
                   </div>
                   <div>
-                    <strong>Status:</strong> {selectedAdvisor.status}
+                    <strong>Status:</strong> {normalizeAdvisorStatus(selectedAdvisor.status)}
                   </div>
                 </div>
               </div>
@@ -2352,27 +2379,27 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                 Selected Availability
               </h4>
               {tempDates.length > 0 ? (
-                <div style={{ 
-                  border: "1px solid #eee", 
-                  borderRadius: "8px", 
+                <div style={{
+                  border: "1px solid #eee",
+                  borderRadius: "8px",
                   padding: "12px",
                   maxHeight: "200px",
                   overflowY: "auto"
                 }}>
                   {tempDates.map((date, index) => (
-                    <div key={index} style={{ 
-                      display: "flex", 
-                      justifyContent: "space-between", 
+                    <div key={index} style={{
+                      display: "flex",
+                      justifyContent: "space-between",
                       alignItems: "center",
                       padding: "8px 0",
                       borderBottom: "1px solid #f0f0f0"
                     }}>
                       <span>
-                        {date.toLocaleDateString("en-US", { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
+                        {date.toLocaleDateString("en-US", {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
                         })}
                         {timeSlot.start && timeSlot.end && (
                           <span style={{ color: "#666", marginLeft: "8px" }}>
@@ -2441,6 +2468,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                 Update Application Stage
               </h3>
               <p style={{ fontSize: "16px", color: "#666", margin: 0 }}>{selectedAdvisorForStage.name}</p>
+              <p style={{ fontSize: "12px", color: "#a89482", margin: "4px 0 0 0" }}>
+                Currently: {normalizeAdvisorStatus(selectedAdvisorForStage.pipelineStage || selectedAdvisorForStage.status)}
+              </p>
             </div>
 
             <div style={{ marginBottom: "24px" }}>
@@ -2473,7 +2503,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                 }}
               >
                 <option value="">Choose a stage...</option>
-                {applicationStages.map((stage) => (
+                {ADVISOR_ACTIONABLE_STAGES.map((stage) => (
                   <option key={stage.id} value={stage.name}>
                     {stage.name}
                   </option>
@@ -2526,15 +2556,15 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                   </div>
                 )}
                 {currentStageFields.showAvailability && (
-                  <div style={{ 
-                    backgroundColor: "#f8f5f3", 
-                    padding: "20px", 
-                    borderRadius: "12px", 
-                    marginBottom: "24px" 
+                  <div style={{
+                    backgroundColor: "#f8f5f3",
+                    padding: "20px",
+                    borderRadius: "12px",
+                    marginBottom: "24px"
                   }}>
-                    <div style={{ 
-                      display: "flex", 
-                      justifyContent: "space-between", 
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
                       alignItems: "center",
                       marginBottom: "16px"
                     }}>
@@ -2562,26 +2592,26 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                     </div>
 
                     {availabilities.length > 0 ? (
-                      <div style={{ 
-                        border: "1px solid #eee", 
-                        borderRadius: "8px", 
+                      <div style={{
+                        border: "1px solid #eee",
+                        borderRadius: "8px",
                         maxHeight: "200px",
                         overflowY: "auto"
                       }}>
                         {availabilities.map((availability, index) => (
-                          <div key={index} style={{ 
-                            display: "flex", 
-                            justifyContent: "space-between", 
+                          <div key={index} style={{
+                            display: "flex",
+                            justifyContent: "space-between",
                             alignItems: "center",
                             padding: "8px 12px",
                             borderBottom: "1px solid #f0f0f0"
                           }}>
                             <div>
                               <div style={{ fontWeight: "500" }}>
-                                {availability.date.toLocaleDateString("en-US", { 
-                                  weekday: 'short', 
-                                  month: 'short', 
-                                  day: 'numeric' 
+                                {availability.date.toLocaleDateString("en-US", {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric'
                                 })}
                               </div>
                               {availability.timeSlots?.[0] && (
@@ -2625,6 +2655,32 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                     </h4>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#4a352f",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          Meeting Time:
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={meetingTime}
+                          onChange={(e) => setMeetingTime(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            border: "2px solid #c8b6a6",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            backgroundColor: "white",
+                          }}
+                        />
+                      </div>
                       <div>
                         <label
                           style={{
@@ -2735,6 +2791,9 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                         Selected: {termSheetFile.name}
                       </p>
                     )}
+                    <p style={{ fontSize: "11px", color: "#a89482", marginTop: "6px" }}>
+                      Uploads in the background — you don't need to wait on this screen.
+                    </p>
                   </div>
                 )}
               </>

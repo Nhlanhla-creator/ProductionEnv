@@ -1,5 +1,4 @@
 import React, {
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -13,20 +12,9 @@ import {
   UserRound,
   UsersRound,
   FileText,
-  Link2,
 } from "lucide-react";
 
-import {
-  getAuth,
-  onAuthStateChanged,
-} from "firebase/auth";
-
-import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
-
-import { db } from "../../firebaseConfig";
+import { useUserProfile } from "./useUserProfile";
 
 /* =========================================================
    STYLES
@@ -409,15 +397,11 @@ const CreateEventForm = ({
   onSubmit,
   onCancel,
   previousRecipients = [],
+  config,
 }) => {
-  const [sender, setSender] = useState({
-    id: "",
-    name: "",
-    email: "",
-  });
-
-  const [loadingSender, setLoadingSender] =
-    useState(true);
+  const { user, userName, email, loading: loadingSender } = useUserProfile(config);
+  const sender = { id: user?.uid || "", name: userName, email };
+  const [submitting, setSubmitting] = useState(false);
 
   const [error, setError] = useState("");
 
@@ -427,9 +411,7 @@ const CreateEventForm = ({
     to: "",
     toName: "",
     duration: "30",
-    meetingType: "virtual",
-    meetingLink: "",
-    location: "",
+    location: "Virtual",
     description: "",
   });
 
@@ -453,85 +435,6 @@ const CreateEventForm = ({
     return localDate
       .toISOString()
       .split("T")[0];
-  }, []);
-
-  useEffect(() => {
-    const auth = getAuth();
-
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (user) => {
-        if (!user) {
-          setSender({
-            id: "",
-            name: "Not signed in",
-            email: "",
-          });
-
-          setLoadingSender(false);
-
-          return;
-        }
-
-        let senderName =
-          user.displayName ||
-          user.email?.split("@")[0] ||
-          "User";
-
-        let senderEmail = user.email || "";
-
-        try {
-          const profileSnap = await getDoc(
-            doc(
-              db,
-              "MyuniversalProfiles",
-              user.uid
-            )
-          );
-
-          if (profileSnap.exists()) {
-            const profile =
-              profileSnap.data();
-
-            senderName =
-              profile?.formData?.entityOverview
-                ?.registeredName ||
-              profile?.formData?.contactDetails
-                ?.primaryContactName ||
-              profile?.formData?.contactDetails
-                ?.contactName ||
-              profile?.formData?.personalDetails
-                ?.fullName ||
-              profile?.formData?.fundManageOverview
-                ?.registeredName ||
-              user.displayName ||
-              senderName;
-
-            senderEmail =
-              profile?.formData?.contactDetails
-                ?.email ||
-              profile?.email ||
-              user.email ||
-              "";
-          }
-        } catch (err) {
-          console.error(
-            "Error retrieving sender:",
-            err
-          );
-        }
-
-        setSender({
-          id: user.uid,
-          name: senderName,
-          email: senderEmail,
-        });
-
-        setLoadingSender(false);
-      }
-    );
-
-    return () => unsubscribe();
   }, []);
 
   const handleChange = (event) => {
@@ -692,42 +595,14 @@ if (
   return;
 }
 
-    const isVirtual =
-      formData.meetingType === "virtual";
+    if (proposedSlots.some((slot) => new Date(`${slot.date}T${slot.time}:00`).getTime() < Date.now())) {
+      setError("Please select future meeting dates and times.");
+      return;
+    }
 
-    let meetingLink = "";
-
-    if (isVirtual) {
-      const rawLink =
-        formData.meetingLink.trim();
-
-      if (!rawLink) {
-        setError(
-          "Please add the link people should use to join the meeting."
-        );
-        return;
-      }
-
-      // Allow "zoom.us/j/123" without a protocol
-      meetingLink = /^https?:\/\//i.test(rawLink)
-        ? rawLink
-        : `https://${rawLink}`;
-
-      try {
-        const parsed = new URL(meetingLink);
-
-        if (!parsed.hostname.includes(".")) {
-          throw new Error("invalid");
-        }
-      } catch {
-        setError(
-          "Please enter a valid meeting link, e.g. https://meet.google.com/abc-defg-hij"
-        );
-        return;
-      }
-    } else if (!formData.location.trim()) {
+    if (!formData.location.trim()) {
       setError(
-        "Please provide the meeting location or address."
+        "Please provide a meeting location."
       );
       return;
     }
@@ -793,17 +668,10 @@ const availableDates =
   );
 
 
-    await onSubmit({
+    try {
+      setSubmitting(true);
+      await onSubmit({
   ...formData,
-
-  meetingType:
-    formData.meetingType,
-
-  meetingLink,
-
-  location: isVirtual
-    ? "Virtual"
-    : formData.location.trim(),
 
   // Legacy compatibility:
   // existing code may still read
@@ -825,6 +693,11 @@ const availableDates =
   senderEmail:
     sender.email,
 });
+    } catch (error) {
+      setError(error?.message || "Could not create event. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -1107,66 +980,19 @@ const availableDates =
           </FormGroup>
 
           <FormGroup>
-            <Label htmlFor="meetingType">
+            <Label htmlFor="location">
               <MapPin size={15} />
-              Meeting format
+              Location
             </Label>
 
-            <Select
-              id="meetingType"
-              name="meetingType"
-              value={formData.meetingType}
+            <Input
+              id="location"
+              name="location"
+              value={formData.location}
               onChange={handleChange}
-            >
-              <option value="virtual">
-                Online / virtual
-              </option>
-
-              <option value="in-person">
-                In person
-              </option>
-            </Select>
+              placeholder="Virtual, office, Zoom..."
+            />
           </FormGroup>
-
-          {formData.meetingType ===
-          "virtual" ? (
-            <FullWidth>
-              <FormGroup>
-                <Label htmlFor="meetingLink">
-                  <Link2 size={15} />
-                  Meeting link
-                </Label>
-
-                <Input
-                  id="meetingLink"
-                  name="meetingLink"
-                  type="url"
-                  value={
-                    formData.meetingLink
-                  }
-                  onChange={handleChange}
-                  placeholder="https://meet.google.com/abc-defg-hij (Zoom, Teams, etc.)"
-                />
-              </FormGroup>
-            </FullWidth>
-          ) : (
-            <FullWidth>
-              <FormGroup>
-                <Label htmlFor="location">
-                  <MapPin size={15} />
-                  Location / address
-                </Label>
-
-                <Input
-                  id="location"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  placeholder="e.g. Sandton City, Office 4B, 1 Main Rd"
-                />
-              </FormGroup>
-            </FullWidth>
-          )}
 
           <FullWidth>
             <FormGroup>
@@ -1204,9 +1030,9 @@ const availableDates =
 
           <SubmitButton
             type="submit"
-            disabled={loadingSender}
+            disabled={loadingSender || submitting || !user}
           >
-            Create Event
+            {submitting ? "Creating event..." : "Create Event"}
           </SubmitButton>
         </FormActions>
       </FormBody>

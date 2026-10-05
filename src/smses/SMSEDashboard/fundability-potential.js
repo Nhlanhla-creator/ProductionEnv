@@ -1,30 +1,31 @@
 // ─────────────────────────────────────────────────────────────────────────
 // CAPITAL APPEAL — DETERMINISTIC SCORING AND POTENTIAL POINTS
 //
-// WHAT CHANGED, AND WHY IT HAD TO
+// ALIGNED TO BIG SCORE SCORING METHODOLOGY v3.0 (29 September 2026)
 //
-//   Financial Strength is 40% of this score and Impact & Mandate is another
-//   9–34% of the fundability block. Both came out of parseAiEvaluationScores
-//   — a number the model wrote in prose, re-parsed on every run. The card's
-//   own About panel said as much of Financial Strength: "this weighting is
-//   not applied programmatically to sub-scores — it guides the AI's single
-//   overall rating."
+//   §8   Original Capital Appeal = Financial Strength alone. This is the
+//        number the BIG Score consumes (`totalScore`). Fundability never
+//        changes it.
+//   §8   Financial Strength factor weights are stage-specific (FS_FACTOR_WEIGHTS).
+//   §8   A funding request adds an APPLICATION-CONTEXT Capital Appeal:
+//          FS × stage share + Fundability × stage share
+//        (CAPITAL_APPEAL_SPLIT). It is reported next to the original,
+//        never over it.
+//   §9   Fundability applicability is decided by INSTRUMENT, not by amount,
+//        funder type or the retired A–D tiers (FUNDABILITY_MATRIX). Active
+//        rows are renormalised (effective = base ÷ Σ active base).
+//        Conditional (C) rows stay out of scope unless a published rule is
+//        supplied through `conditionalRules`.
+//   §9   Several instruments on one request are scored separately and are
+//        NOT averaged into one Fundability number.
+//   §3.1 Stage is resolved by resolveBigStage (age for Startup/Growth,
+//        recorded stage for Scaling/Mature, turnaround flag).
+//   §13  Item thresholds the methodology says are still to be approved
+//        (financial ratios, bureau bands, plan/deck rubrics, security
+//        enforceability) are marked `provisional` on the item and surfaced
+//        on the assessment. They are scored, and labelled.
 //
-//   That is incompatible with telling a business "+3.4% if you capture your
-//   balance sheet". The model could return a different number next run, so
-//   the promise would be a guess with a decimal point on it.
-//
-//   So the weighting table the card already documented is now the actual
-//   arithmetic. Revenue & Profitability 30, Financial Records 25, Balance
-//   Sheet 20, Debt & Liability 15, Credit History 10 — applied in code,
-//   against literal fields on financialOverview. Impact & Mandate the same,
-//   against socialImpact. The AI never touches a number; it explains the
-//   finished ones.
-//
-//   Everything else was already deterministic and read from Firestore
-//   (business plan, pitch deck, credit report, guarantees, solvency, growth
-//   potential). Those are unchanged — they are simply now the whole picture
-//   rather than most of it.
+// The AI never writes a number. It explains the finished ones.
 //
 // NOT EVERYTHING WITHHELD IS CLAIMABLE
 //
@@ -106,15 +107,16 @@ const pos = (v) => {
 // ── One scored answer ──
 const mk = ({
   key, label, points, section, field, importance, guidance,
-  credit, evidence, reason, fix, claimable = true, applicable = true,
+  credit, evidence, reason, fix, claimable = true, applicable = true, provisional = false,
 }) => {
   const c = Math.max(0, Math.min(1, credit || 0))
-  const earned = Math.round(points * c)
+  // Full precision (§3). Rounding here turned eight 12.5-point growth items into 13 each — 104%.
+  const earned = points * c
   return {
     key, label, points, section, field, importance, guidance,
     credit: c, earned, withheld: points - earned,
     evidence: evidence || "", reason: reason || null, fix: fix || null,
-    claimable, applicable,
+    claimable, applicable, provisional,
     route: routeFor(section, field),
     state: c >= 1 ? "counted" : c > 0 ? "partial" : "missing",
   }
@@ -123,16 +125,300 @@ const mk = ({
 const scale = (v, map) => (answered(v) ? map[cleanStr(v).toLowerCase()] ?? 0 : 0)
 
 // ═════════════════════════════════════════════════════════════════════════
-// 1. FINANCIAL STRENGTH — the card's own documented weighting, now applied
+// METHODOLOGY v3.0 CONFIGURATION
+//
+// Every table below is copied from the methodology document. Each one must
+// sum to 100 per stage; checkWeightTables() enforces that (§13 release check).
 // ═════════════════════════════════════════════════════════════════════════
 
-export const FINANCIAL_STRENGTH_WEIGHTS = {
-  revenue: 30,
-  records: 25,
-  balanceSheet: 20,
-  debt: 15,
-  credit: 10,
+export const METHODOLOGY_VERSION = "3.0"
+
+export const BIG_STAGES = ["startup", "growth", "scaling", "turnaround", "mature"]
+export const STAGE_LABELS = {
+  startup: "Startup", growth: "Growth", scaling: "Scaling", turnaround: "Turnaround", mature: "Mature",
 }
+
+// §3.1 — Startup is under 3 completed years, Growth is 3 to under 6.
+// Scaling and Mature need a RECORDED stage assessment, never an age cutoff.
+// Set to false to trust the recorded stage for Startup/Growth as well.
+const STAGE_FROM_AGE = true
+
+const STAGE_ALIASES = {
+  startup: ["startup", "ideation", "preseed", "seed", "earlystage", "early"],
+  growth: ["growth", "earlygrowth"],
+  scaling: ["scaling", "scaleup", "scale"],
+  turnaround: ["turnaround"],
+  mature: ["mature", "maturity", "established"],
+}
+
+export const resolveBigStage = (profile) => {
+  const eo = profile?.entityOverview || {}
+  const norm = cleanStr(eo.operationStage).toLowerCase().replace(/[^a-z]/g, "")
+  const recorded = BIG_STAGES.find((k) => STAGE_ALIASES[k].includes(norm)) || null
+  const years = num(eo.yearsInOperation)
+  const out = (key, basis, extra = {}) => ({ key, label: STAGE_LABELS[key], basis, recorded, ...extra })
+
+  if (isYes(eo.turnaroundFlag) || recorded === "turnaround") return out("turnaround", "Turnaround flag recorded")
+  if (recorded === "scaling" || recorded === "mature") return out(recorded, `Recorded stage assessment: ${STAGE_LABELS[recorded]}`)
+  if (STAGE_FROM_AGE && years !== null) {
+    const key = years < 3 ? "startup" : "growth"
+    return out(key, `${years} completed year${years === 1 ? "" : "s"} in operation`, { derived: true })
+  }
+  if (recorded) return out(recorded, `Recorded stage: ${STAGE_LABELS[recorded]}`)
+  return out("startup", "No stage or years in operation recorded — Startup assumed", { assumed: true })
+}
+
+// §8 — Financial Strength factor weights by stage
+export const FS_FACTOR_WEIGHTS = {
+  startup:    { revenue: 25, records: 35, balanceSheet: 20, debt: 10, credit: 10 },
+  growth:     { revenue: 30, records: 25, balanceSheet: 20, debt: 15, credit: 10 },
+  scaling:    { revenue: 30, records: 15, balanceSheet: 25, debt: 20, credit: 10 },
+  turnaround: { revenue: 20, records: 15, balanceSheet: 25, debt: 30, credit: 10 },
+  mature:     { revenue: 30, records: 10, balanceSheet: 25, debt: 20, credit: 15 },
+}
+
+// §8 — Application / investor-adjusted context only. Never alters the original.
+export const CAPITAL_APPEAL_SPLIT = {
+  startup:    { financialStrength: 40, fundability: 60 },
+  growth:     { financialStrength: 50, fundability: 50 },
+  scaling:    { financialStrength: 55, fundability: 45 },
+  turnaround: { financialStrength: 55, fundability: 45 },
+  mature:     { financialStrength: 65, fundability: 35 },
+}
+
+// §9 — default Fundability sub-component weights by stage (v2.1 retained)
+export const FUNDABILITY_BASE_WEIGHTS = {
+  businessPlan:        { startup: 26, growth: 22, scaling: 18, turnaround: 24, mature: 14 },
+  growthPotential:     { startup: 18, growth: 12, scaling: 8,  turnaround: 4,  mature: 7 },
+  pitchDeck:           { startup: 16, growth: 12, scaling: 9,  turnaround: 7,  mature: 5 },
+  impactMandate:       { startup: 12, growth: 11, scaling: 9,  turnaround: 9,  mature: 8 },
+  financialResilience: { startup: 12, growth: 16, scaling: 19, turnaround: 18, mature: 21 },
+  creditworthiness:    { startup: 10, growth: 17, scaling: 23, turnaround: 20, mature: 28 },
+  guarantees:          { startup: 6,  growth: 10, scaling: 14, turnaround: 18, mature: 17 },
+}
+
+// Keys are kept from the previous build so stored findings and narratives still
+// resolve. `label` follows the methodology's names.
+export const FUNDABILITY_COMPONENTS = [
+  { key: "businessPlan", label: "Investment Case (Business Plan)" },
+  { key: "growthPotential", label: "Growth Potential" },
+  { key: "pitchDeck", label: "Pitch Deck" },
+  { key: "impactMandate", label: "Impact & Outcomes Evidence" },
+  { key: "financialResilience", label: "Financial Resilience" },
+  { key: "creditworthiness", label: "Creditworthiness" },
+  { key: "guarantees", label: "Financeable Security" },
+]
+
+export const INSTRUMENT_GROUPS = {
+  grant: "Grant",
+  po: "Purchase order / contract",
+  receivable: "Invoice / receivable",
+  asset: "Asset / lease",
+  debt: "Term / revolving / bridge",
+  equity: "Equity",
+  hybrid: "Convertible / revenue-based / mezzanine",
+}
+
+// §9 — Y active by default · C only under a published rule · — out of scope
+const Y = "Y", C = "C", X = "—"
+export const FUNDABILITY_MATRIX = {
+  //                      grant po receivable asset debt equity hybrid
+  businessPlan:        { grant: Y, po: Y, receivable: C, asset: Y, debt: Y, equity: Y, hybrid: Y },
+  growthPotential:     { grant: C, po: C, receivable: X, asset: C, debt: C, equity: Y, hybrid: C },
+  pitchDeck:           { grant: C, po: X, receivable: X, asset: X, debt: C, equity: Y, hybrid: C },
+  impactMandate:       { grant: Y, po: C, receivable: C, asset: C, debt: C, equity: C, hybrid: C },
+  financialResilience: { grant: C, po: Y, receivable: Y, asset: Y, debt: Y, equity: Y, hybrid: Y },
+  creditworthiness:    { grant: X, po: Y, receivable: Y, asset: Y, debt: Y, equity: X, hybrid: C },
+  guarantees:          { grant: X, po: Y, receivable: Y, asset: Y, debt: C, equity: X, hybrid: C },
+}
+
+// No published conditional rules exist yet. A rule is an entry keyed
+// `${instrumentGroup}:${componentKey}` → { reason, ruleVersion }, e.g.
+//   "grant:pitchDeck": { reason: "Programme X scores the pitch", ruleVersion: "2026-10" }
+export const CONDITIONAL_RULES = {}
+
+// Items whose thresholds §13 says must be approved before they produce
+// production scores. Scored, and labelled provisional.
+export const PROVISIONAL_RULES = [
+  "Financial ratio thresholds (margin, current ratio, gearing, overdraft utilisation)",
+  "Credit bureau band mapping (needs an approved table, consent, report date and dispute workflow)",
+  "Quality rubrics for business plans and pitch decks",
+  "Security enforceability and financeable value (ownership, prior cession or lien, remaining value)",
+  "Which security categories are relevant to which instrument (SECURITY_RELEVANCE)",
+  "Solvency strength mapping",
+]
+
+export function checkWeightTables() {
+  const errs = []
+  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0)
+  BIG_STAGES.forEach((st) => {
+    if (sum(FS_FACTOR_WEIGHTS[st]) !== 100) errs.push(`FS_FACTOR_WEIGHTS.${st} sums to ${sum(FS_FACTOR_WEIGHTS[st])}`)
+    const sp = CAPITAL_APPEAL_SPLIT[st]
+    if (sp.financialStrength + sp.fundability !== 100) errs.push(`CAPITAL_APPEAL_SPLIT.${st} does not sum to 100`)
+    const f = Object.values(FUNDABILITY_BASE_WEIGHTS).reduce((a, w) => a + w[st], 0)
+    if (f !== 100) errs.push(`FUNDABILITY_BASE_WEIGHTS.${st} sums to ${f}`)
+  })
+  return errs
+}
+
+// ── Instrument detection ──
+//
+// UseOfFunds.jsx writes a three-level choice: fundingCategory → fundingInstrument
+// → preferredFunderType. Only the first two say what KIND of money it is; the
+// funder type, the amount and the support focus decide nothing (§1, §9).
+//
+// The map is exact-match on the form's own option text. An instrument that is not
+// in the §9 matrix is reported as NOT ASSESSED rather than forced into a column
+// (§8: "If a route is unknown … show Not assessed, not an invented zero").
+//
+// To bring one of the unmapped instruments into scope, add one line below.
+const GROUPED = (group, list) => Object.fromEntries(list.map((n) => [n.toLowerCase(), group]))
+
+export const INSTRUMENT_MAP = {
+  ...GROUPED("equity", ["Any Equity Instrument", "Ordinary Equity", "Preference Shares", "Growth Equity", "Strategic Equity"]),
+  ...GROUPED("debt", ["Term Loan", "Working Capital Facility", "Revolving Credit Facility", "Bridging Finance"]),
+  ...GROUPED("asset", ["Asset Finance"]),
+  ...GROUPED("receivable", ["Invoice Discounting / Factoring"]),
+  ...GROUPED("po", ["Purchase Order Finance", "Contract Finance"]),
+  ...GROUPED("grant", [
+    "Any Grant", "Government Grant", "Innovation Grant", "Research Grant", "Export Grant",
+    "Green / Energy Grant", "Impact Grant", "Challenge Fund", "Incentive / Rebate", "Matching Grant",
+  ]),
+  ...GROUPED("hybrid", [
+    "Any Hybrid Instrument", "Convertible Note", "SAFE", "Revenue Based Financing", "Mezzanine Finance", "Royalty Financing",
+  ]),
+}
+
+// Deliberately NOT mapped — each needs a decision on which §9 column it belongs to:
+//   Debt: "Any Debt Instrument", Trade Finance, Import Finance, Export Finance
+//   Hybrid: Blended Finance (a blend is scored as separate components, §9)
+//   Secondary Market Strategies: all four   ·   Special Strategies: all five
+export const UNMAPPED_INSTRUMENTS_NOTE =
+  "Not in the Fundability matrix: Any Debt Instrument, Trade/Import/Export Finance, Blended Finance, Secondary Market and Special Strategies."
+
+// When only the category is chosen, it decides the column ONLY if every instrument
+// in it sits in the same column. Debt does not (term, PO, receivable and asset differ).
+const CATEGORY_ONLY_MAP = { equity: "equity", grants: "grant", "hybrid / structured finance": "hybrid" }
+
+// Legacy arrays and free-text "Other" answers: keyword fallback.
+const KEYWORD_RULES = [
+  ["hybrid", ["convertible", "mezzanine", "revenue_based", "revenue_share", "royalty", "safe"]],
+  ["equity", ["equity", "preference_share"]],
+  ["grant", ["grant", "incentive", "rebate"]],
+  ["receivable", ["invoice", "receivable", "factoring", "discounting"]],
+  ["po", ["purchase_order", "purchaseorder", "po", "contract_finance"]],
+  ["asset", ["asset_finance", "lease", "equipment_finance", "hire_purchase"]],
+  ["debt", ["term_loan", "revolving", "bridge", "bridging", "working_capital", "loan"]],
+]
+const kwMatch = (item, k) => (k === "po" ? /(^|_)po(_|$)/.test(item) : item.includes(k))
+const groupByKeyword = (text) => {
+  const n = String(text).toLowerCase().replace(/[\s/-]+/g, "_")
+  const hit = KEYWORD_RULES.find(([, kws]) => kws.some((k) => kwMatch(n, k)))
+  return hit ? hit[0] : null
+}
+
+export function detectInstruments(profileData) {
+  const u = profileData?.useOfFunds || {}
+  const isOther = (v) => v && String(v).startsWith("Other")
+  const category = cleanStr(isOther(u.fundingCategory) ? u.fundingCategoryOther || u.fundingCategory : u.fundingCategory)
+  const instrument = cleanStr(isOther(u.fundingInstrument) ? u.fundingInstrumentOther || u.fundingInstrument : u.fundingInstrument)
+  const legacy = (u.fundingInstruments || []).map(cleanStr).filter((x) => x && x.toLowerCase() !== "any")
+
+  const groups = new Set()
+  const unmapped = []
+  const note = (label) => { if (label && !unmapped.includes(label)) unmapped.push(label) }
+  const typedInstrument = instrument && !/^any$/i.test(instrument)
+
+  if (typedInstrument) {
+    const exact = INSTRUMENT_MAP[instrument.toLowerCase()]
+    const g = exact || (isOther(u.fundingInstrument) ? groupByKeyword(instrument) : null)
+    if (g) groups.add(g)
+    else note(instrument)
+  } else if (category && !/^any$/i.test(category)) {
+    const g = CATEGORY_ONLY_MAP[category.toLowerCase()] || (isOther(u.fundingCategory) ? groupByKeyword(category) : null)
+    if (g) groups.add(g)
+    else note(`${category} — a specific instrument has not been chosen`)
+  }
+
+  // Legacy arrays only count when the current fields said nothing at all.
+  if (!groups.size && !unmapped.length) {
+    legacy.forEach((l) => {
+      const g = INSTRUMENT_MAP[l.toLowerCase()] || groupByKeyword(l)
+      if (g) groups.add(g)
+      else note(l)
+    })
+  }
+
+  return {
+    groups: [...groups],
+    unmapped,
+    raw: [category, instrument, ...legacy].filter(Boolean),
+  }
+}
+
+// ── Security: only relevant, AVAILABLE rights count (§9) ──
+//
+// Categories come from Guarantees.jsx. Relevance by instrument group is a
+// provisional rule (PROVISIONAL_RULES): PO finance does not need unrelated
+// property (§13), and asset finance reads the financed assets.
+export const SECURITY_RELEVANCE = {
+  po:         { categories: ["revenueBacked", "paymentSecurity", "institutionalSupport", "other"], extra: ["Accounts Receivable", "Cession of Receivables"] },
+  receivable: { categories: ["revenueBacked", "paymentSecurity", "other"], extra: ["Accounts Receivable", "Cession of Receivables"] },
+  asset:      { categories: ["assetSecurity", "paymentSecurity", "revenueBacked", "other"], extra: [] },
+  debt:       { categories: ["revenueBacked", "paymentSecurity", "assetSecurity", "institutionalSupport", "other"], extra: [] },
+  hybrid:     { categories: ["revenueBacked", "paymentSecurity", "assetSecurity", "institutionalSupport", "other"], extra: [] },
+}
+// existingFinancing records what is ALREADY pledged to someone else (cession, lien,
+// bank security). It is shown but is not available security (§9 prior cession/lien).
+const NEEDS_ASSIGNMENT = (i) =>
+  i.category === "revenueBacked" || ["Accounts Receivable", "Cession of Receivables"].includes(i.instrument)
+
+const isExpired = (endDate, today) => {
+  if (!endDate) return false
+  const d = new Date(endDate)
+  return Number.isFinite(d.getTime()) && d < today
+}
+
+export function summariseSecurity(instruments = [], group = null, today = new Date()) {
+  const recorded = (instruments || []).filter((i) => i && (i.instrument || i.instrumentOther || (i.files && i.files.length > 0)))
+  const rule = SECURITY_RELEVANCE[group] || null
+  const dropped = { notRelevant: 0, encumbered: 0, expired: 0, notCurrent: 0, notAssignable: 0 }
+  const available = []
+
+  recorded.forEach((i) => {
+    if (i.category === "existingFinancing") return void (dropped.encumbered += 1)
+    const relevant = !rule || rule.categories.includes(i.category) || rule.extra.includes(i.instrument)
+    if (!relevant) return void (dropped.notRelevant += 1)
+    if (i.isCurrent === "no") return void (dropped.notCurrent += 1)
+    if (isExpired(i.endDate, today)) return void (dropped.expired += 1)
+    if (NEEDS_ASSIGNMENT(i) && i.isAssignable === "no") return void (dropped.notAssignable += 1)
+    available.push(i)
+  })
+
+  const droppedTotal = Object.values(dropped).reduce((a, b) => a + b, 0)
+  const parts = [
+    dropped.notRelevant && `${dropped.notRelevant} not relevant to ${INSTRUMENT_GROUPS[group] || "this instrument"}`,
+    dropped.encumbered && `${dropped.encumbered} already pledged under existing financing`,
+    dropped.expired && `${dropped.expired} past its end date`,
+    dropped.notCurrent && `${dropped.notCurrent} marked not current`,
+    dropped.notAssignable && `${dropped.notAssignable} where assignment is not allowed`,
+  ].filter(Boolean)
+
+  return {
+    recordedCount: recorded.length,
+    activeCount: available.length,
+    items: available.map((i) => i.instrument || i.instrumentOther || "Unnamed instrument"),
+    signedCount: available.filter((i) => i.isSigned === "yes").length,
+    withValue: available.filter((i) => i.value && parseFloat(String(i.value).replace(/[^\d.]/g, "")) > 0).length,
+    dropped,
+    droppedTotal,
+    droppedNote: droppedTotal ? `${droppedTotal} of ${recorded.length} recorded do not count: ${parts.join("; ")}.` : "",
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 1. FINANCIAL STRENGTH — stage-weighted, §8
+// ═════════════════════════════════════════════════════════════════════════
 
 // ─────────────────────────────────────────────────────────────────────────
 // FINANCIAL STATEMENTS ANALYSIS — aiFinancialEvaluations/{userId}
@@ -212,7 +498,7 @@ const statementItem = ({ key, label, points, metrics, stmt, importance }) => {
   })
 }
 
-const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis) => {
+const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis, W) => {
   const f = data?.financialOverview || {}
   const S = "Financial Overview"
   const stmt = readStatements(statementsAnalysis)
@@ -253,6 +539,7 @@ const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis) 
     }),
     mk({
       key: "margins", label: "Gross margin readable from the income statement", points: 25,
+      provisional: true,
       section: S, field: "incomeGrossProfitCurrent",
       importance: "Margin is what tells a funder whether growth in turnover will actually reach the bottom line.",
       guidance: "Capture turnover, cost of goods sold and gross profit for the current year — margin is worked out from those.",
@@ -362,6 +649,7 @@ const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis) 
     }),
     mk({
       key: "currentRatio", label: "Current ratio at or above 1.0", points: 35,
+      provisional: true,
       section: S, field: "balanceCurrentAssetsCurrent",
       importance: "Whether you can meet the next twelve months of obligations from the next twelve months of assets.",
       credit: currentRatio === null ? 0 : currentRatio >= 1.5 ? 1 : currentRatio >= 1 ? 0.8 : currentRatio >= 0.7 ? 0.4 : 0.15,
@@ -396,6 +684,7 @@ const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis) 
     }),
     mk({
       key: "overdraft", label: "Overdraft facility and utilisation", points: 25,
+      provisional: true,
       section: S, field: "hasOverdraft",
       importance: "A permanently maxed overdraft is read as working capital already exhausted.",
       credit: !answered(f.hasOverdraft)
@@ -431,6 +720,7 @@ const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis) 
     }),
     mk({
       key: "gearing", label: "Debt to equity within a lendable range", points: 25,
+      provisional: true,
       section: S, field: "existingDebt",
       importance: "Above roughly 2:1 most lenders will want equity in before more debt.",
       credit: debtToEquity === null ? 0 : debtToEquity <= 1 ? 1 : debtToEquity <= 2 ? 0.7 : debtToEquity <= 3 ? 0.35 : 0.1,
@@ -469,6 +759,7 @@ const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis) 
     }),
     mk({
       key: "creditBand", label: "Credit score band", points: 50,
+      provisional: true,
       section: "My Documents", field: "creditReport",
       applicable: crValid,
       claimable: false, // your credit record is not a form field
@@ -482,18 +773,19 @@ const buildFinancialStrength = (data, creditReportAnalysis, statementsAnalysis) 
   ]
 
   const subCategories = [
-    { key: "revenue", label: "Revenue & Profitability", weight: FINANCIAL_STRENGTH_WEIGHTS.revenue, items: revenueItems },
-    { key: "records", label: "Financial Records & Governance", weight: FINANCIAL_STRENGTH_WEIGHTS.records, items: recordsItems },
-    { key: "balanceSheet", label: "Balance Sheet Strength", weight: FINANCIAL_STRENGTH_WEIGHTS.balanceSheet, items: balanceItems },
-    { key: "debt", label: "Debt & Liability Position", weight: FINANCIAL_STRENGTH_WEIGHTS.debt, items: debtItems },
-    { key: "credit", label: "Credit History", weight: FINANCIAL_STRENGTH_WEIGHTS.credit, items: creditItems },
+    { key: "revenue", label: "Revenue & Profitability", weight: W.revenue, items: revenueItems },
+    { key: "records", label: "Financial Records & Governance", weight: W.records, items: recordsItems },
+    { key: "balanceSheet", label: "Balance Sheet Strength", weight: W.balanceSheet, items: balanceItems },
+    { key: "debt", label: "Debt & Liability Position", weight: W.debt, items: debtItems },
+    { key: "credit", label: "Credit History", weight: W.credit, items: creditItems },
   ]
 
   return { ...rollUpSubCategories(subCategories), statements: stmt }
 }
 
 // ═════════════════════════════════════════════════════════════════════════
-// 2. IMPACT & MANDATE — deterministic, from socialImpact
+// 2. IMPACT & OUTCOMES EVIDENCE — deterministic, from socialImpact.
+//    Assessed generically (§9). Fit to a named funder's mandate is Match Score, not this.
 // ═════════════════════════════════════════════════════════════════════════
 
 const pctCredit = (v, target) => {
@@ -510,7 +802,7 @@ const buildImpactMandate = (data) => {
     mk({
       key: "blackOwnership", label: "Black ownership", points: 20,
       section: S, field: "blackOwnership",
-      importance: "The single most weighted mandate criterion for South African development funders and ESD programmes.",
+      importance: "The most heavily weighted ownership outcome for South African development funders and ESD programmes.",
       credit: pctCredit(s.blackOwnership, 51),
       evidence: answered(s.blackOwnership) ? `${cleanStr(s.blackOwnership)}%` : "",
     }),
@@ -632,6 +924,7 @@ const buildDocumentComponent = ({ analysis, label, docField, uploadAction, quali
     }),
     mk({
       key: `${docField}_quality`, label: qualityLabel, points: 50,
+      provisional: true,
       section: "My Documents", field: docField,
       applicable: present,
       importance: "Read from the analysis already run on the document you uploaded.",
@@ -644,38 +937,41 @@ const buildDocumentComponent = ({ analysis, label, docField, uploadAction, quali
   return rollUpItems(items)
 }
 
-const buildGuarantees = (guaranteesAnalysis) => {
-  const g = guaranteesAnalysis
+const buildGuarantees = (g) => {
   const active = g?.activeCount || 0
   const TARGET = 3
 
   const items = [
     mk({
-      key: "guaranteeCount", label: `Security instruments recorded (${active} of ${TARGET} expected)`, points: 40,
+      key: "guaranteeCount", label: `Available security instruments (${active} of ${TARGET} expected)`, points: 40,
+      provisional: true,
       section: "Guarantees", field: "securityInstruments",
-      importance: "Debt and purchase-order finance is priced off what secures it, not off the business plan.",
-      guidance: "Purchase orders, personal suretyship, cession of debtors, notarial bonds and fixed property all count.",
+      importance: "Where security applies, it is priced off what can actually be enforced. Only relevant, current, unencumbered instruments count.",
+      guidance: "Contracts and purchase orders with assignable proceeds, issued guarantees, receivables and the assets being financed all count. Property that has nothing to do with this request does not.",
       credit: Math.min(active / TARGET, 1),
       evidence: active ? (g.items || []).join(", ") : "",
-      fix: active < TARGET ? `Add ${TARGET - active} more security instrument${TARGET - active === 1 ? "" : "s"} under Guarantees on your funding application.` : null,
+      reason: g?.droppedNote || null,
+      fix: active < TARGET ? `Add ${TARGET - active} more relevant security instrument${TARGET - active === 1 ? "" : "s"} under Guarantees on this funding application.` : null,
     }),
     mk({
       key: "guaranteeSigned", label: "Instruments signed", points: 30,
+      provisional: true,
       section: "Guarantees", field: "securityInstruments",
       applicable: active > 0,
       importance: "An unsigned instrument is a draft, and a funder treats it as one.",
       credit: active ? Math.min((g.signedCount || 0) / active, 1) : 0,
       evidence: active ? `${g.signedCount || 0} of ${active} signed` : "",
-      fix: active && (g.signedCount || 0) < active ? "Get the outstanding instruments signed and mark them so under Guarantees on your funding application." : null,
+      fix: active && (g.signedCount || 0) < active ? "Get the outstanding instruments signed and mark them so under Guarantees on this funding application." : null,
     }),
     mk({
       key: "guaranteeValue", label: "Instruments carry a stated value", points: 30,
+      provisional: true,
       section: "Guarantees", field: "securityInstruments",
       applicable: active > 0,
       importance: "Security without a number against it cannot be counted towards cover.",
       credit: active ? Math.min((g.withValue || 0) / active, 1) : 0,
       evidence: active ? `${g.withValue || 0} of ${active} valued` : "",
-      fix: active && (g.withValue || 0) < active ? "Record the rand value of each instrument under Guarantees on your funding application." : null,
+      fix: active && (g.withValue || 0) < active ? "Record the rand value of each instrument under Guarantees on this funding application." : null,
     }),
   ]
   return rollUpItems(items)
@@ -707,6 +1003,7 @@ const buildFinancialResilience = (solvencyAnalysis, statementsAnalysis) => {
     }),
     mk({
       key: "solvencyStrength", label: "Solvency position", points: 40,
+      provisional: true,
       section: "Financial Overview", field: "balanceEquityCurrent",
       applicable: valid,
       claimable: false, // the ratios are trading reality, not a form entry
@@ -740,177 +1037,251 @@ function rollUpSubCategories(subs) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
-// THE ASSESSMENT
-//
-//   Each item's pointValue is its share of the FINAL score:
-//     effectiveWeight = blockWeight × (componentWeight ÷ 100) × (subWeight ÷ 100)
-//     pointValue      = (item.withheld ÷ containerPossible) × effectiveWeight
+// FUNDABILITY FOR ONE INSTRUMENT (§9)
 // ═════════════════════════════════════════════════════════════════════════
 
-export const buildCapitalAppealAssessment = ({
-  profileData,
-  fundingTier,
-  hasAppliedForFunding,
-  subWeights,
-  stageWeights,
-  businessPlanAnalysis,
-  pitchDeckAnalysis,
-  creditReportAnalysis,
-  guaranteesAnalysis,
-  solvencyAnalysis,
-  financialStatementsAnalysis,
-}) => {
-  const fundingActive = !!(hasAppliedForFunding && fundingTier && subWeights)
+// Largest-remainder rounding so displayed one-decimal weights reconcile to 100.0.
+const reconcileTo100 = (vals, dp = 1) => {
+  if (!vals.length) return []
+  const f = 10 ** dp
+  const floors = vals.map((v) => Math.floor(v * f + 1e-9))
+  let rem = Math.round(100 * f) - floors.reduce((a, b) => a + b, 0)
+  vals
+    .map((v, i) => [v * f - floors[i], i])
+    .sort((x, y) => y[0] - x[0])
+    .forEach(([, i]) => { if (rem > 0) { floors[i] += 1; rem -= 1 } })
+  return floors.map((x) => x / f)
+}
 
-  const blockWeights = {
-    financialStrength: fundingActive ? 40 : stageWeights?.financialStrength || 0,
-    fundability: fundingActive ? 60 : 0,
+const outOfScopeNote = (row, group) => {
+  const inst = INSTRUMENT_GROUPS[group]
+  if (row.applicability === C) {
+    return `${row.label} is conditional for ${inst}: it activates only under a published subtype, programme or approved investor rule, and none applies to this request. It is out of scope and costs nothing.`
   }
+  const noncredit = group === "equity" || group === "grant"
+  if (row.key === "guarantees" && noncredit) return `${inst} does not inherit a collateral penalty — financeable security is outside its scope.`
+  if (row.key === "creditworthiness" && noncredit) return `Creditworthiness is not a criterion for ${inst}.`
+  return `${row.label} is outside scope for ${inst}. It is excluded from the denominator and costs nothing.`
+}
 
-  // ── Financial Strength block ──
-  const fs = buildFinancialStrength(profileData, creditReportAnalysis, financialStatementsAnalysis)
-  const fsWeight = blockWeights.financialStrength
+const buildFundability = ({ group, stage, split, profileData, conditionalRules, analyses, securityInstruments, today }) => {
+  const rows = FUNDABILITY_COMPONENTS.map((c) => {
+    const applicability = FUNDABILITY_MATRIX[c.key][group]
+    const rule = conditionalRules?.[`${group}:${c.key}`] || null
+    const active = applicability === Y || (applicability === C && !!rule)
+    return { ...c, applicability, active, rule, base: FUNDABILITY_BASE_WEIGHTS[c.key][stage] }
+  })
+  const baseTotal = rows.filter((r) => r.active).reduce((s, r) => s + r.base, 0) || 1
+  rows.forEach((r) => { r.exact = r.active ? (r.base / baseTotal) * 100 : 0 })
+  const shown = reconcileTo100(rows.filter((r) => r.active).map((r) => r.exact))
+  let n = 0
+  rows.forEach((r) => { r.display = r.active ? shown[n++] : 0 })
 
-  const financialStrength = {
-    key: "financialStrength",
-    label: "Financial Strength",
-    color: "#8D6E63",
-    blockWeight: fsWeight,
-    percent: fs.percent,
-    subCategories: fs.subCategories.map((sc) => {
-      const scWeightTotal = Object.values(FINANCIAL_STRENGTH_WEIGHTS).reduce((a, b) => a + b, 0)
-      const effective = fsWeight * (sc.weight / scWeightTotal)
-      return {
-        ...sc,
-        effectiveWeight: effective,
-        items: sc.items.map((i) => ({
-          ...i,
-          pointValue: (i.withheld / sc.possible) * effective,
-          container: sc.label,
-          block: "Financial Strength",
-        })),
-      }
-    }),
-  }
-  financialStrength.items = financialStrength.subCategories.flatMap((sc) => sc.items)
+  const { businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis, solvencyAnalysis, financialStatementsAnalysis } = analyses
 
-  // ── Fundability block ──
-  const fundabilityComponents = []
-
-  if (fundingActive) {
-    const fw = blockWeights.fundability
-
-    const add = (key, label, weight, built, notes = {}) => {
-      const effective = fw * (weight / 100)
-      const excluded = !weight
-      fundabilityComponents.push({
-        key,
-        label,
-        weight,
-        effectiveWeight: effective,
-        excluded,
-        percent: excluded ? 0 : built.percent,
-        exclusionNote: notes.exclusionNote || null,
-        reductionNote: notes.reductionNote || null,
-        items: excluded
-          ? []
-          : built.items.map((i) => ({
-              ...i,
-              pointValue: (i.withheld / built.possible) * effective,
-              container: label,
-              block: "Fundability",
-            })),
-        possible: built.possible,
-      })
-    }
-
-    add("businessPlan", "Business Plan / Investment Case", subWeights.businessPlan,
+  const builders = {
+    businessPlan: () =>
       buildDocumentComponent({
-        analysis: businessPlanAnalysis,
-        label: "Business plan",
-        docField: "businessPlan",
+        analysis: businessPlanAnalysis, label: "Business plan", docField: "businessPlan",
         uploadAction: "Upload your business plan under My Documents.",
         qualityLabel: "Business plan quality",
         importance: "The document a funder reads first and declines from fastest.",
         guidance: "A funder-ready plan is 15–25 pages with the financial model attached, not a 60-page narrative.",
-        scoreOutOf5: (a) => Math.round((a.score / 100) * 5 * 10) / 10,
+        scoreOutOf5: (x) => Math.round((x.score / 100) * 5 * 10) / 10,
       }),
-      { reductionNote: subWeights._reduced?.businessPlan })
-
-    add("pitchDeck", "Pitch Readiness / Pitch Deck", subWeights.pitchDeck,
+    pitchDeck: () =>
       buildDocumentComponent({
-        analysis: pitchDeckAnalysis,
-        label: "Pitch deck",
-        docField: "pitchDeck",
+        analysis: pitchDeckAnalysis, label: "Pitch deck", docField: "pitchDeck",
         uploadAction: "Upload your pitch deck under My Documents.",
         qualityLabel: "Pitch deck quality",
         importance: "How the opportunity is communicated, separate from whether it is a good one.",
-        scoreOutOf5: (a) => Math.round((a.score / 100) * 5 * 10) / 10,
+        scoreOutOf5: (x) => Math.round((x.score / 100) * 5 * 10) / 10,
       }),
-      { reductionNote: subWeights._reduced?.pitchDeck })
-
-    add("impactMandate", "Impact & Mandate Alignment", subWeights.impactMandate,
-      buildImpactMandate(profileData),
-      { reductionNote: subWeights._reduced?.impactMandate })
-
-    add("creditworthiness", "Creditworthiness", subWeights.creditworthiness,
+    impactMandate: () => buildImpactMandate(profileData),
+    creditworthiness: () =>
       buildDocumentComponent({
-        analysis: creditReportAnalysis,
-        label: "Credit report",
-        docField: "creditReport",
+        analysis: creditReportAnalysis, label: "Credit report", docField: "creditReport",
         uploadAction: "Upload a bureau credit report under My Documents.",
         qualityLabel: "Credit score band",
-        importance: "The risk filter almost every debt funder applies before anything else.",
+        importance: "Repayment capacity as evidenced by the credit report on file.",
         guidance: "You are entitled to one free report a year from each bureau.",
-        scoreOutOf5: (a) => (!a.score ? 0 : a.score >= 750 ? 5 : a.score >= 650 ? 4 : a.score >= 550 ? 3 : a.score >= 450 ? 2 : 1),
+        scoreOutOf5: (x) => (!x.score ? 0 : x.score >= 750 ? 5 : x.score >= 650 ? 4 : x.score >= 550 ? 3 : x.score >= 450 ? 2 : 1),
       }),
-      { reductionNote: subWeights._reduced?.creditworthiness })
-
-    add("guarantees", "Guarantees / Collateral", subWeights.guarantees,
-      buildGuarantees(guaranteesAnalysis),
-      { exclusionNote: subWeights._excluded?.guarantees })
-
-    add("financialResilience", "Financial Resilience & Efficiency", subWeights.financialResilience,
-      buildFinancialResilience(solvencyAnalysis, financialStatementsAnalysis),
-      { exclusionNote: subWeights._excluded?.financialResilience })
-
-    add("growthPotential", "Growth Potential", subWeights.growthPotential,
-      buildGrowthPotential(profileData),
-      { exclusionNote: subWeights._excluded?.growthPotential })
+    guarantees: () => buildGuarantees(summariseSecurity(securityInstruments, group, today)),
+    financialResilience: () => buildFinancialResilience(solvencyAnalysis, financialStatementsAnalysis),
+    growthPotential: () => buildGrowthPotential(profileData),
   }
 
-  const blocks = [
-    financialStrength,
-    ...(fundingActive
-      ? [{
-          key: "fundability",
-          label: "Fundability",
-          color: "#6D4C41",
-          blockWeight: blockWeights.fundability,
-          components: fundabilityComponents,
-          percent: (() => {
-            const live = fundabilityComponents.filter((c) => !c.excluded)
-            const wt = live.reduce((s, c) => s + c.weight, 0) || 1
-            return live.reduce((s, c) => s + c.percent * (c.weight / wt), 0)
-          })(),
-          items: fundabilityComponents.flatMap((c) => c.items),
-        }]
-      : []),
-  ]
+  const components = rows.map((r) => {
+    if (!r.active) {
+      return {
+        key: r.key, label: r.label, applicability: r.applicability, baseWeight: r.base,
+        weight: 0, exactWeight: 0, effectiveWeight: 0, excluded: true,
+        exclusionNote: outOfScopeNote(r, group), reductionNote: null,
+        percent: 0, possible: 0, items: [],
+      }
+    }
+    const built = builders[r.key]()
+    const effective = split.fundability * (r.exact / 100)
+    return {
+      key: r.key, label: r.label, applicability: r.applicability, baseWeight: r.base,
+      weight: r.display, exactWeight: r.exact, effectiveWeight: effective, excluded: false,
+      exclusionNote: null,
+      reductionNote: r.rule ? `Conditional row activated by rule: ${r.rule.reason}` : null,
+      percent: built.percent, possible: built.possible,
+      items: built.items.map((i) => ({
+        ...i,
+        pointValue: (i.withheld / built.possible) * effective,
+        container: r.label, block: "Fundability", scope: "application",
+      })),
+    }
+  })
 
-  const totalRaw = blocks.reduce((s, bl) => s + bl.percent * (bl.blockWeight / 100), 0)
-  const allItems = blocks.flatMap((bl) => bl.items)
-  const withheld = allItems.filter((i) => i.withheld > 0 && i.pointValue > 0.05)
-  const outstanding = withheld.filter((i) => i.claimable).sort((x, y) => y.pointValue - x.pointValue)
-  const locked = withheld.filter((i) => !i.claimable)
+  const percent = components.filter((c) => !c.excluded).reduce((s, c) => s + c.percent * (c.exactWeight / 100), 0)
+  return { group, label: INSTRUMENT_GROUPS[group], components, percent }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// THE ASSESSMENT
+//
+//   ORIGINAL Capital Appeal (what the BIG Score consumes)
+//     = Financial Strength percent, with the stage's factor weights (sum 100)
+//     item.pointValue = (withheld ÷ subCategoryPossible) × factorWeight
+//
+//   APPLICATION-CONTEXT Capital Appeal (single instrument only)
+//     = FS% × fsShare + Fundability% × fundShare
+//     Fundability item.pointValue = (withheld ÷ componentPossible)
+//                                   × effectiveWeight × fundShare ÷ 100
+//     (points of the application score, scope: "application")
+// ═════════════════════════════════════════════════════════════════════════
+
+export const buildCapitalAppealAssessment = ({
+  profileData,
+  hasAppliedForFunding,
+  instrumentGroups,
+  unmappedInstruments = [],
+  conditionalRules = CONDITIONAL_RULES,
+  businessPlanAnalysis,
+  pitchDeckAnalysis,
+  creditReportAnalysis,
+  securityInstruments = [],
+  solvencyAnalysis,
+  financialStatementsAnalysis,
+  today = new Date(),
+}) => {
+  const stage = resolveBigStage(profileData)
+  const split = CAPITAL_APPEAL_SPLIT[stage.key]
+  const factorWeights = FS_FACTOR_WEIGHTS[stage.key]
+  const groups = instrumentGroups ?? detectInstruments(profileData).groups
+  const analyses = { businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis, solvencyAnalysis, financialStatementsAnalysis }
+
+  // ── Financial Strength = original Capital Appeal ──
+  const fs = buildFinancialStrength(profileData, creditReportAnalysis, financialStatementsAnalysis, factorWeights)
+  const financialStrength = {
+    key: "financialStrength",
+    label: "Financial Strength",
+    color: "#8D6E63",
+    blockWeight: 100,
+    percent: fs.percent,
+    subCategories: fs.subCategories.map((sc) => ({
+      ...sc,
+      effectiveWeight: sc.weight,
+      items: sc.items.map((i) => {
+        const pointValue = (i.withheld / sc.possible) * sc.weight
+        return {
+          ...i,
+          pointValue,
+          applicationPointValue: pointValue * (split.financialStrength / 100),
+          container: sc.label, block: "Financial Strength", scope: "profile",
+        }
+      }),
+    })),
+  }
+  financialStrength.items = financialStrength.subCategories.flatMap((sc) => sc.items)
+
+  // ── Fundability status ──
+  const status = !hasAppliedForFunding
+    ? "no_application"
+    : groups.length === 0
+    ? unmappedInstruments.length ? "unmapped" : "no_instrument"
+    : groups.length > 1
+    ? "blended"
+    : "scored"
+  const fundingActive = status === "scored"
+
+  const instrumentResults = groups.map((g) =>
+    buildFundability({ group: g, stage: stage.key, split, profileData, conditionalRules, analyses, securityInstruments, today })
+  )
+  const single = fundingActive ? instrumentResults[0] : null
+  const fundabilityComponents = single ? single.components : []
+
+  const blocks = [financialStrength]
+  if (single) {
+    blocks.push({
+      key: "fundability",
+      label: "Fundability",
+      color: "#6D4C41",
+      blockWeight: split.fundability,
+      percent: single.percent,
+      components: fundabilityComponents,
+      items: fundabilityComponents.flatMap((c) => c.items),
+    })
+  }
+
+  // ── Original ──
+  const totalRaw = fs.percent
+  const fsItems = financialStrength.items
+  const fundItems = blocks.flatMap((b) => (b.key === "fundability" ? b.items : []))
+  const allItems = [...fsItems, ...fundItems]
+
+  const recoverable = (list, valueOf) =>
+    list
+      .filter((i) => i.withheld > 0 && valueOf(i) > 0.05)
+      .reduce((acc, i) => { (i.claimable ? acc.claim : acc.lock).push(i); return acc }, { claim: [], lock: [] })
+
+  const orig = recoverable(fsItems, (i) => i.pointValue)
+  const outstanding = orig.claim.sort((x, y) => y.pointValue - x.pointValue)
+  const locked = orig.lock
+
+  // ── Application context ──
+  let application = {
+    status, instrument: single?.group || null, instrumentLabel: single?.label || null,
+    score: null, raw: null, delta: null,
+    financialStrengthShare: split.financialStrength, fundabilityShare: split.fundability,
+    outstanding: [], locked: [], availablePoints: 0, lockedPoints: 0,
+    instrumentResults: instrumentResults.map((r) => ({ group: r.group, label: r.label, percent: r.percent })),
+  }
+  if (single) {
+    const raw = fs.percent * (split.financialStrength / 100) + single.percent * (split.fundability / 100)
+    const appFs = fsItems.map((i) => ({ ...i, pointValue: i.applicationPointValue }))
+    const app = recoverable([...appFs, ...fundItems], (i) => i.pointValue)
+    const appOut = app.claim.sort((x, y) => y.pointValue - x.pointValue)
+    application = {
+      ...application,
+      raw, score: Math.round(raw), delta: raw - totalRaw,
+      outstanding: appOut, locked: app.lock,
+      availablePoints: Math.round(appOut.reduce((s, i) => s + i.pointValue, 0) * 10) / 10,
+      lockedPoints: Math.round(app.lock.reduce((s, i) => s + i.pointValue, 0) * 10) / 10,
+    }
+  }
+
+  const provisionalItems = allItems.filter((i) => i.provisional && i.applicable)
 
   return {
+    methodologyVersion: METHODOLOGY_VERSION,
+    stage,
+    split,
+    factorWeights,
+    // Application split, kept under the old name. The original is always FS 100%.
+    blockWeights: { financialStrength: split.financialStrength, fundability: split.fundability },
     fundingActive,
+    fundabilityStatus: status,
+    unmappedInstruments,
     blocks,
-    blockWeights,
     statements: fs.statements,
     financialStrength,
     fundabilityComponents,
+    instrumentResults,
     allItems,
     outstanding,
     locked,
@@ -918,7 +1289,52 @@ export const buildCapitalAppealAssessment = ({
     totalScore: Math.round(totalRaw),
     availablePoints: Math.round(outstanding.reduce((s, i) => s + i.pointValue, 0) * 10) / 10,
     lockedPoints: Math.round(locked.reduce((s, i) => s + i.pointValue, 0) * 10) / 10,
+    application,
+    provisional: provisionalItems.length > 0,
+    provisionalItems,
+    provisionalRules: PROVISIONAL_RULES,
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PER-APPLICATION RESULT (§2)
+//
+// One person can hold several funding requests, and Fundability belongs to the
+// request, not to the person. Each qualifying application is assessed on its
+// own and this is the plain, storable record of that assessment — written to
+// fundingApplicationsV2/{id}.fundabilityAssessment so the applications list can
+// show it without re-running the engine. Same inputs → same signature, so it is
+// only rewritten when something material changed.
+// ═════════════════════════════════════════════════════════════════════════
+const cheapHash = (str) => {
+  let h = 5381
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+
+export const applicationSnapshot = (a) => {
+  const r1 = (n) => (n == null || !Number.isFinite(n) ? null : Math.round(n * 10) / 10)
+  const fund = a.blocks.find((b) => b.key === "fundability")
+  const base = {
+    methodologyVersion: a.methodologyVersion,
+    stage: { key: a.stage.key, label: a.stage.label, basis: a.stage.basis },
+    status: a.fundabilityStatus,
+    instrument: a.application.instrument,
+    instrumentLabel: a.application.instrumentLabel,
+    unmappedInstruments: a.unmappedInstruments || [],
+    capitalAppeal: r1(a.totalRaw),
+    fundability: r1(fund?.percent),
+    applicationScore: r1(a.application.raw),
+    delta: r1(a.application.delta),
+    split: { financialStrength: a.split.financialStrength, fundability: a.split.fundability },
+    components: a.fundabilityComponents.map((c) => ({
+      key: c.key, label: c.label, excluded: !!c.excluded, weight: c.weight,
+      percent: c.excluded ? null : r1(c.percent), effectiveWeight: r1(c.effectiveWeight),
+    })),
+    availablePoints: a.application.availablePoints,
+    provisional: !!a.provisional,
+  }
+  return { ...base, signature: cheapHash(JSON.stringify(base)) }
 }
 
 export const fmtPts = (n) => `${n >= 0 ? "+" : ""}${(Math.round(n * 10) / 10).toFixed(1)}%`

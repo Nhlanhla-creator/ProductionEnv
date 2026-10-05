@@ -1,323 +1,447 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, X, Trash2, Check, AlertTriangle, Info, CheckCircle2, AlertCircle } from 'lucide-react';
+"use client";
+import React, { useEffect, useRef, useState } from "react";
+import { Bell, X, Trash2, Check, AlertTriangle, Info, CheckCircle2, AlertCircle, CalendarDays } from "lucide-react";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+// Keep the same firebaseConfig path used by the reference component.
+import { auth, db } from "../firebaseConfig";
 
-const InvestorNotifications = () => {
+// Override calendarSources if the investor Meetings page uses different names.
+const DEFAULT_CALENDAR_SOURCES = [
+  { collectionName: "smeCalendarEvents", userField: "smeId" },
+];
+const MAX_NOTIFICATIONS = 50;
+const storageKey = (uid, kind) => `investorNotifications_${uid}_${kind}`;
+const readStorage = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch { return []; }
+};
+const writeStorage = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (error) { console.warn("Could not save notification preferences:", error); }
+};
+const toDate = (value) => {
+  if (value == null || value === "") return null;
+  try {
+    const date = typeof value?.toDate === "function" ? value.toDate()
+      : typeof value === "object" && typeof value.seconds === "number"
+        ? new Date(value.seconds * 1000 + (value.nanoseconds || 0) / 1000000)
+        : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  } catch { return null; }
+};
+const eventDate = (event) => {
+  for (const value of [event.scheduledDate, event.start, event.date,
+    event.meetingDetails?.date, event.availableDates?.[0]?.date]) {
+    const date = toDate(value);
+    if (date) return date;
+  }
+  return null;
+};
+const makeCalendarNotification = (event, uid) => {
+  if (event.createdBy === uid && event.isInvitation !== true &&
++      (!event.to || String(event.status || "pending").toLowerCase() === "pending")) return null;
+  const status = String(event.status || event.meetingStatus || "pending").trim().toLowerCase();
+  const date = eventDate(event);
+  const title = event.title || event.name || event.purpose || "Meeting";
+  const sender = event.createdByName || event.requesterName || event.customerName || event.smeName || event.host || "A user";
+  const dateText = date ? ` on ${date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
+  const locationText = event.location ? ` at ${event.location}` : "";
+  let notificationTitle = "Calendar Update";
+  let message = `${sender} added "${title}" to your calendar${dateText}${locationText}.`;
+  let type = "info";
+  switch (status) {
+    case "pending":
+      notificationTitle = event.isInvitation ? "New Meeting Invitation" : "New Calendar Event";
+      message = event.isInvitation
+        ? `${sender} invited you to "${title}"${dateText}${locationText}.` : message;
+      break;
+    case "scheduled": case "confirmed":
+      type = "success";
+      notificationTitle = status === "scheduled" ? "Meeting Scheduled" : "Meeting Confirmed";
+      message = `"${title}" has been ${status}${dateText}${locationText}.`;
+      break;
+    case "rescheduled":
+      type = "warning"; notificationTitle = "Meeting Rescheduled";
+      message = `"${title}" has been rescheduled${dateText}${locationText}.`;
+      break;
+    case "cancelled": case "canceled":
+      type = "warning"; notificationTitle = "Meeting Cancelled";
+      message = `"${title}" was cancelled.`;
+      break;
+    case "completed":
+      type = "success"; notificationTitle = "Meeting Completed";
+      message = `"${title}" was marked as completed.`;
+      break;
+  }
+  // Changes to status or scheduled time become new unread updates.
+  const id = `calendar:${event.collectionName}:${event.id}:${status}:${date?.toISOString() || ""}`;
+  return {
+    id, category: "calendar", title: notificationTitle, message, type, status,
+    eventId: event.id, eventCollection: event.collectionName,
+    timestamp: (toDate(event.updatedAt) || toDate(event.createdAt) || date || new Date(0)).toISOString(),
+    companyName: event.companyName || event.smeName || null,
+  };
+};
+const getNotificationStyle = (type) => {
+  switch (type) {
+    case "new_application": return { borderLeftColor: "#4caf50", icon: <CheckCircle2 size={16} />, title: "New Application" };
+    case "status_change": return { borderLeftColor: "#2196f3", icon: <Info size={16} />, title: "Status Update" };
+    case "success": return { borderLeftColor: "#4caf50", icon: <CheckCircle2 size={16} />, title: "Success" };
+    case "warning": return { borderLeftColor: "#ffc107", icon: <AlertTriangle size={16} />, title: "Warning" };
+    case "error": return { borderLeftColor: "#f44336", icon: <AlertCircle size={16} />, title: "Error" };
+    default: return { borderLeftColor: "#2196f3", icon: <Info size={16} />, title: "Information" };
+  }
+};
+const formatTimestamp = (value) => {
+  const date = toDate(value);
+  if (!date || date.getTime() === 0) return "";
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (minutes >= 0 && minutes < 1) return "Just now";
+  if (minutes >= 1 && minutes < 60) return `${minutes}m ago`;
+  if (minutes >= 60 && minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
+  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+};
+const formatMessage = (notification) => {
+  const message = notification.message || "";
+  return notification.companyName && notification.companyName !== "Unknown Company"
+    ? message.replace(/unnamed|Unknown Company/gi, () => notification.companyName) : message;
+};
+
+const InvestorNotifications = ({
+  calendarSources = DEFAULT_CALENDAR_SOURCES,
+  onNotificationClick,
+  markReadOnOpen = true,
+}) => {
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [listenerError, setListenerError] = useState("");
   const notificationsRef = useRef(null);
-
-  // Notification type styling
-  const getNotificationStyle = (type) => {
-    switch (type) {
-      case 'new_application':
-        return { 
-          borderLeftColor: '#4caf50',
-          icon: <CheckCircle2 size={16} className="text-green-500" />,
-          title: 'New Application'
-        };
-      case 'status_change':
-        return { 
-          borderLeftColor: '#2196f3',
-          icon: <Info size={16} className="text-blue-500" />,
-          title: 'Status Update'
-        };
-      case 'warning':
-        return { 
-          borderLeftColor: '#ffc107',
-          icon: <AlertTriangle size={16} className="text-yellow-500" />,
-          title: 'Warning'
-        };
-      case 'error':
-        return { 
-          borderLeftColor: '#f44336',
-          icon: <AlertCircle size={16} className="text-red-500" />,
-          title: 'Error'
-        };
-      default:
-        return { 
-          borderLeftColor: '#2196f3',
-          icon: <Info size={16} className="text-blue-500" />,
-          title: 'Information'
-        };
-    }
-  };
-
-  // Load notifications from localStorage
-  useEffect(() => {
-    const savedNotifications = JSON.parse(localStorage.getItem('investorNotifications') || '[]');
-    setNotifications(savedNotifications);
-    setUnreadCount(savedNotifications.filter(n => !n.read).length);
-  }, []);
-
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Event listener for new notifications
-  useEffect(() => {
-    const handleNewNotification = (event) => {
-      try {
-        if (event.detail && event.detail.message) {
-          addNotification(
-            event.detail.message, 
-            event.detail.type, 
-            event.detail.applicationId,
-            event.detail.companyName,
-            event.detail.timestamp
-          );
-        }
-      } catch (error) {
-        console.error('Error handling notification:', error);
-      }
-    };
-
-    window.addEventListener('newInvestorNotification', handleNewNotification, true);
-    window.addEventListener('newCommunityNotification', handleNewNotification, true);
-    return () => {
-      window.removeEventListener('newInvestorNotification', handleNewNotification, true);
-      window.removeEventListener('newCommunityNotification', handleNewNotification, true);
-    };
-  }, []);
-
-  const addNotification = (message, type = 'info', applicationId = null, companyName = null, timestamp = null) => {
-    const notificationTimestamp = timestamp ? new Date(timestamp) : new Date();
-    
-    const newNotification = {
-      id: Date.now(),
-      message,
-      type,
-      timestamp: notificationTimestamp.toISOString(), // Store as ISO string for consistency
-      read: false,
-      applicationId,
-      companyName: companyName || 'Unknown Company'
-    };
-
-    setNotifications(prev => {
-      const updated = [newNotification, ...prev].slice(0, 50);
-      localStorage.setItem('investorNotifications', JSON.stringify(updated));
-      return updated;
+  const storeRef = useRef({ uid: null, local: [], events: new Map(), reads: new Set(), dismissed: new Set() });
+  const unreadCount = notifications.filter(n => !n.read).length;
+  // A stable primitive prevents inline calendarSources arrays from repeatedly subscribing.
+  const sourcesKey = JSON.stringify(calendarSources);
+  const rebuild = () => {
+    const store = storeRef.current;
+    if (!store.uid) { setNotifications([]); return; }
+    const calendar = [...store.events.values()].map(event => makeCalendarNotification(event, store.uid)).filter(Boolean);
+    const unique = new Map();
+    [...store.local, ...calendar].forEach(item => {
+      if (!item || typeof item.message !== "string" || !item.id) return;
+      const id = String(item.id);
+      if (!store.dismissed.has(id)) unique.set(id, { ...item, id, read: item.read === true || store.reads.has(id) });
     });
-
-    setUnreadCount(prev => prev + 1);
+    setNotifications([...unique.values()]
+      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0))
+      .slice(0, MAX_NOTIFICATIONS));
   };
-
+  const persistPreferences = () => {
+    const store = storeRef.current;
+    if (!store.uid) return;
+    writeStorage(storageKey(store.uid, "reads"), [...store.reads]);
+    writeStorage(storageKey(store.uid, "dismissed"), [...store.dismissed]);
+    writeStorage(storageKey(store.uid, "items"), store.local);
+  };
+  useEffect(() => {
+    let active = true;
+    let generation = 0;
+    let unsubscribers = [];
+    const stopListeners = () => { unsubscribers.forEach(fn => fn()); unsubscribers = []; };
+    const unsubscribeAuth = onAuthStateChanged(auth, user => {
+      stopListeners();
+      const currentGeneration = ++generation;
+      setShowNotifications(false);
+      setListenerError("");
+      storeRef.current = { uid: user?.uid || null, local: [], events: new Map(), reads: new Set(), dismissed: new Set() };
+      setNotifications([]);
+      if (!user) return;
+      const store = storeRef.current;
+      store.local = readStorage(storageKey(user.uid, "items"));
+      store.reads = new Set(readStorage(storageKey(user.uid, "reads")).map(String));
+      store.dismissed = new Set(readStorage(storageKey(user.uid, "dismissed")).map(String));
+      // The old global investorNotifications cache is intentionally not imported:
+      // it has no owner UID and may belong to another signed-in account.
+      rebuild();
+      const errors = new Set();
+      JSON.parse(sourcesKey).forEach(({ collectionName, userField }) => {
+        if (!collectionName || !userField) return;
+        const source = `${collectionName}:${userField}`;
+        const calendarQuery = query(collection(db, collectionName), where(userField, "==", user.uid));
+        unsubscribers.push(onSnapshot(calendarQuery, snapshot => {
+          if (!active || generation !== currentGeneration) return;
+          errors.delete(source);
+          setListenerError(errors.size ? "Some meeting notifications could not load. Check calendar access." : "");
+          // Replace only this query's records, keeping other configured sources.
+          for (const [key, event] of store.events) if (event.source === source) store.events.delete(key);
+          snapshot.forEach(docSnap => store.events.set(`${source}:${docSnap.id}`, {
+            ...docSnap.data(), id: docSnap.id, collectionName, source,
+          }));
+          rebuild();
+        }, error => {
+          if (!active || generation !== currentGeneration) return;
+          console.error(`Investor calendar notifications (${source}):`, error);
+          errors.add(source);
+          setListenerError("Some meeting notifications could not load. Check calendar access.");
+        }));
+      });
+    });
+    return () => { active = false; generation++; unsubscribeAuth(); stopListeners(); };
+  }, [sourcesKey]);
+  useEffect(() => {
+    const outside = event => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) setShowNotifications(false);
+    };
+    const escape = event => { if (event.key === "Escape") setShowNotifications(false); };
+    document.addEventListener("mousedown", outside);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("mousedown", outside); document.removeEventListener("keydown", escape); };
+  }, []);
+  useEffect(() => {
+    const receive = event => {
+      const detail = event.detail;
+      const store = storeRef.current;
+      if (!store.uid || auth.currentUser?.uid !== store.uid || typeof detail?.message !== "string" || !detail.message.trim()) return;
+      if (detail.recipientId && detail.recipientId !== store.uid) return;
+      const timestamp = (toDate(detail.timestamp) || new Date()).toISOString();
+      const id = detail.id ? `local:${detail.id}`
+        : `local:${JSON.stringify([detail.type || "info", detail.applicationId || null, detail.message, timestamp])}`;
+      if (store.local.some(n => n.id === id)) return;
+      store.local = [{ ...detail, id, timestamp, read: false, category: "application" }, ...store.local].slice(0, MAX_NOTIFICATIONS);
+      persistPreferences(); rebuild();
+    };
+    window.addEventListener("newInvestorNotification", receive);
+    window.addEventListener("newCommunityNotification", receive);
+    const storageChanged = event => {
+      const store = storeRef.current;
+      if (!store.uid || (event.key !== null && !event.key.startsWith(`investorNotifications_${store.uid}_`))) return;
+      store.local = readStorage(storageKey(store.uid, "items"));
+      store.reads = new Set(readStorage(storageKey(store.uid, "reads")).map(String));
+      store.dismissed = new Set(readStorage(storageKey(store.uid, "dismissed")).map(String));
+      rebuild();
+    };
+    window.addEventListener("storage", storageChanged);
+    return () => {
+      window.removeEventListener("newInvestorNotification", receive);
+      window.removeEventListener("newCommunityNotification", receive);
+      window.removeEventListener("storage", storageChanged);
+    };
+  }, []);
+  const markAsRead = id => {
+    storeRef.current.reads.add(String(id)); persistPreferences(); rebuild();
+  };
   const markAllAsRead = () => {
-    const updatedNotifications = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updatedNotifications);
-    setUnreadCount(0);
-    localStorage.setItem('investorNotifications', JSON.stringify(updatedNotifications));
+    notifications.forEach(n => storeRef.current.reads.add(String(n.id)));
+    persistPreferences(); rebuild();
   };
-
+  const deleteNotification = id => {
+    storeRef.current.dismissed.add(String(id)); persistPreferences(); rebuild();
+  };
   const clearAllNotifications = () => {
-    setNotifications([]);
-    setUnreadCount(0);
-    localStorage.removeItem('investorNotifications');
+    notifications.forEach(n => storeRef.current.dismissed.add(String(n.id)));
+    persistPreferences(); rebuild();
   };
-
-  const deleteNotification = (id) => {
-    const wasUnread = notifications.find(n => n.id === id)?.read === false;
-    const updatedNotifications = notifications.filter(n => n.id !== id);
-    setNotifications(updatedNotifications);
-    if (wasUnread) {
-      setUnreadCount(prev => prev - 1);
-    }
-    localStorage.setItem('investorNotifications', JSON.stringify(updatedNotifications));
-  };
-
-  const markAsRead = (id) => {
-    const updatedNotifications = notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    );
-    setNotifications(updatedNotifications);
-    setUnreadCount(prev => prev - 1);
-    localStorage.setItem('investorNotifications', JSON.stringify(updatedNotifications));
-  };
-
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return 'Just now';
-    
-    const now = new Date();
-    const date = new Date(timestamp);
-    
-    // Check if the date is invalid
-    if (isNaN(date.getTime())) return 'Invalid date';
-    
-    const diffInMs = now - date;
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-    
-    // Less than 1 minute ago
-    if (diffInMinutes < 1) {
-      return 'Just now';
-    }
-    
-    // Less than 1 hour ago
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes}m ago`;
-    }
-    
-    // Less than 24 hours ago
-    if (diffInHours < 24) {
-      return `${diffInHours}h ago`;
-    }
-    
-    // Less than 7 days ago
-    if (diffInDays < 7) {
-      return `${diffInDays}d ago`;
-    }
-    
-    // More than 7 days ago, show the actual date and time
-    const isToday = date.toDateString() === now.toDateString();
-    const isYesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toDateString() === date.toDateString();
-    
-    if (isToday) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (isYesterday) {
-      return `Yesterday ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      // Show full date and time for older notifications
-      return date.toLocaleDateString([], { 
-        month: 'short', 
-        day: 'numeric',
-        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-      }) + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const handleNotificationClick = notification => {
+    if (!notification.read) markAsRead(notification.id);
+    // The parent supplies its existing investor application / calendar route.
+    if (typeof onNotificationClick === "function") {
+      onNotificationClick(notification); setShowNotifications(false);
     }
   };
-
-  const handleNotificationClick = (id, isRead, applicationId) => {
-    if (!isRead) {
-      markAsRead(id);
-    }
-    if (applicationId) {
-      // Navigate to investor matches - you can implement your navigation logic here
-      console.log('Navigate to investor matches for application:', applicationId);
-    }
-  };
-
-  // Format notification message to include company name properly
-  const formatNotificationMessage = (notification) => {
-    let message = notification.message || '';
-    
-    // Replace "unnamed" with the actual company name if available
-    if (notification.companyName && notification.companyName !== 'Unknown Company') {
-      message = message.replace(/unnamed/gi, notification.companyName);
-      message = message.replace(/Unknown Company/gi, notification.companyName);
-    }
-    
-    return message;
-  };
-
   return (
-    <div className="notifications-container" ref={notificationsRef}>
+    <div
+      className="notifications-container investor-notifications"
+      ref={notificationsRef}
+    >
       <button
-        className={`icon-button ${showNotifications ? 'active' : ''}`}
+                type="button"
+        className={`icon-button ${
+          showNotifications
+            ? "active"
+            : ""
+        }`}
+        aria-expanded={showNotifications}
+        aria-controls="investor-notifications-panel"
         onClick={() => {
-          setShowNotifications(!showNotifications);
-          if (!showNotifications && unreadCount > 0) {
-            markAllAsRead();
-          }
+          if (!showNotifications && markReadOnOpen) markAllAsRead();
+          setShowNotifications(previous => !previous);
         }}
         aria-label="Notifications"
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+          <span className="notification-badge">
+            {unreadCount > 9
+              ? "9+"
+              : unreadCount}
+          </span>
         )}
       </button>
-
       {showNotifications && (
-        <div className="dropdown-menu notifications-dropdown">
+        <div id="investor-notifications-panel" className="dropdown-menu notifications-dropdown">
           <div className="dropdown-header">
-            <h3>Notifications</h3>
+            <h3>
+              Notifications
+            </h3>
             <div className="notification-actions">
-              <button 
-                className="mark-read-button" 
-                onClick={markAllAsRead}
+              <button
+                type="button"
+                className="mark-read-button"
+                onClick={
+                  markAllAsRead
+                }
               >
-                <Check size={16} /> Mark all as read
+                <Check size={16} />
+                Mark all as read
               </button>
-              <button className="clear-all-button" onClick={clearAllNotifications}>
-                <Trash2 size={16} /> Clear all
+              <button
+                type="button"
+                className="clear-all-button"
+                onClick={
+                  clearAllNotifications
+                }
+              >
+                <Trash2
+                  size={16}
+                />
+                Clear all
               </button>
             </div>
           </div>
-          <div className="dropdown-divider"></div>
+          <div className="dropdown-divider" />
+          {listenerError && <p role="status" className="notification-load-error">{listenerError}</p>}
           <div className="notifications-list">
-            {notifications.length === 0 ? (
+            {notifications.length ===
+            0 ? (
               <div className="notification-item empty">
-                <p>No notifications yet</p>
+                <p>
+                  No notifications
+                  yet
+                </p>
               </div>
             ) : (
-              notifications.map(notification => {
-                const style = getNotificationStyle(notification.type);
-                return (
-                  <div 
-                    key={notification.id} 
-                    className={`notification-item ${notification.read ? 'read' : 'unread'}`}
-                    style={{ 
-                      borderLeftColor: style.borderLeftColor,
-                      backgroundColor: notification.read ? '#FFFFFF' : '#f8f9fa'
-                    }}
-                    onClick={() => handleNotificationClick(notification.id, notification.read, notification.applicationId)}
-                  >
-                    <div className="notification-icon-container">
-                      {style.icon}
-                    </div>
-                    <div className="notification-content">
-                      <div className="notification-header">
-                        <span className="notification-title">{style.title}</span>
-                        {notification.companyName && notification.companyName !== 'Unknown Company' && (
-                          <span className="company-name">• {notification.companyName}</span>
+              notifications.map(
+                (notification) => {
+                  const style =
+                    getNotificationStyle(
+                      notification.type
+                    );
+                  return (
+                    <div
+                      key={
+                        notification.id
+                      }
+                      className={`notification-item ${
+                        notification.read
+                          ? "read"
+                          : "unread"
+                      }`}
+                      style={{
+                        borderLeftColor:
+                          style.borderLeftColor,
+                        backgroundColor:
+                          notification.read
+                            ? "#FFFFFF"
+                            : "#F5F8FF",
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={event => {
+                        if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) {
+                          event.preventDefault(); handleNotificationClick(notification);
+                        }
+                      }}
+                      onClick={() =>
+                        handleNotificationClick(
+                          notification
+                        )
+                      }
+                    >
+                      <div className="notification-icon-container">
+                        {notification.category ===
+                        "calendar" ? (
+                          <CalendarDays
+                            size={18}
+                          />
+                        ) : (
+                          style.icon
                         )}
                       </div>
-                      <p className="notification-text">
-                        {formatNotificationMessage(notification)}
-                      </p>
-                      <div className="notification-meta">
-                        <span className="notification-time">
-                          {formatTimestamp(notification.timestamp)}
-                        </span>
-                        {!notification.read && <span className="unread-dot"></span>}
+                      <div className="notification-content">
+                        <div className="notification-header">
+                          <span className="notification-title">
+                            {
+                              notification.title || style.title
+                            }
+                          </span>
+                        </div>
+                        <p className="notification-text">
+                          {
+                            formatMessage(notification)
+                          }
+                        </p>
+                        <div className="notification-meta">
+                          <span className="notification-time">
+                            {formatTimestamp(
+                              notification.timestamp
+                            )}
+                          </span>
+                          {notification.status && (
+                            <span className="notification-status">
+                              {
+                                notification.status
+                              }
+                            </span>
+                          )}
+                          {!notification.read && (
+                            <span className="unread-dot" />
+                          )}
+                        </div>
                       </div>
+                      <button
+                type="button"
+                        className="delete-notification"
+                        onClick={(
+                          event
+                        ) => {
+                          event.stopPropagation();
+                          deleteNotification(
+                            notification.id
+                          );
+                        }}
+                        aria-label="Delete notification"
+                      >
+                        <X
+                          size={16}
+                        />
+                      </button>
                     </div>
-                    <button 
-                      className="delete-notification" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteNotification(notification.id);
-                      }}
-                      aria-label="Delete notification"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                );
-              })
+                  );
+                }
+              )
             )}
           </div>
         </div>
       )}
-
-      <style>{`
-        .notifications-container {
+   <style>{`
+      .investor-notifications .notification-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #f1ece9;
+  color: #5d4037;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+        .investor-notifications.notifications-container {
           position: relative;
           display: inline-block;
           margin-right: 15px;
         }
-        
-        .icon-button {
+        .investor-notifications .icon-button {
           background: none;
           border: none;
           cursor: pointer;
@@ -327,17 +451,14 @@ const InvestorNotifications = () => {
           transition: all 0.3s;
           color: #333;
         }
-        
-        .icon-button:hover {
+        .investor-notifications .icon-button:hover {
           background-color: rgba(0, 0, 0, 0.05);
           transform: scale(1.1);
         }
-        
-        .icon-button.active {
+        .investor-notifications .icon-button.active {
           background-color: rgba(0, 0, 0, 0.1);
         }
-        
-        .notification-badge {
+        .investor-notifications .notification-badge {
           position: absolute;
           top: -5px;
           right: -5px;
@@ -353,14 +474,12 @@ const InvestorNotifications = () => {
           font-weight: bold;
           animation: pulse 1.5s infinite;
         }
-        
         @keyframes pulse {
           0% { transform: scale(1); }
           50% { transform: scale(1.2); }
           100% { transform: scale(1); }
         }
-        
-        .dropdown-menu {
+        .investor-notifications .dropdown-menu {
           position: absolute;
           right: 0;
           top: 100%;
@@ -375,13 +494,11 @@ const InvestorNotifications = () => {
           animation: fadeIn 0.2s ease-out;
           transform-origin: top right;
         }
-        
         @keyframes fadeIn {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }
         }
-        
-        .dropdown-header {
+        .investor-notifications .dropdown-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -392,19 +509,16 @@ const InvestorNotifications = () => {
           background: white;
           z-index: 1;
         }
-        
-        .dropdown-header h3 {
+        .investor-notifications .dropdown-header h3 {
           margin: 0;
           font-size: 16px;
           font-weight: 600;
         }
-        
-        .notification-actions {
+        .investor-notifications .notification-actions {
           display: flex;
           gap: 8px;
         }
-        
-        .mark-read-button, .clear-all-button {
+        .investor-notifications .mark-read-button, .investor-notifications .clear-all-button {
           background: none;
           border: none;
           cursor: pointer;
@@ -417,25 +531,21 @@ const InvestorNotifications = () => {
           border-radius: 4px;
           transition: all 0.2s;
         }
-        
-        .mark-read-button:hover, 
-        .clear-all-button:hover {
+        .investor-notifications .mark-read-button:hover, 
+        .investor-notifications .clear-all-button:hover {
           background-color: #f5f5f5;
         }
-        
-        .dropdown-divider {
+        .investor-notifications .dropdown-divider {
           height: 1px;
           background-color: #eee;
           margin: 0;
         }
-        
-        .notifications-list {
+        .investor-notifications .notifications-list {
           max-height: 400px;
           overflow-y: auto;
           overscroll-behavior: contain;
         }
-        
-        .notification-item {
+        .investor-notifications .notification-item {
           display: flex;
           align-items: flex-start;
           padding: 16px;
@@ -446,20 +556,16 @@ const InvestorNotifications = () => {
           border-left: 3px solid transparent;
           gap: 12px;
         }
-        
-        .notification-item.unread {
-          background-color: #f8f9fa;
+        .investor-notifications .notification-item.unread {
+          background-color: #909090;
         }
-        
-        .notification-item.read {
+        .investor-notifications .notification-item.read {
           background-color: #FFFFFF;
         }
-        
-        .notification-item:hover {
+        .investor-notifications .notification-item:hover {
           background-color: rgba(0, 0, 0, 0.02) !important;
         }
-        
-        .notification-item.empty {
+        .investor-notifications .notification-item.empty {
           justify-content: center;
           color: #888;
           padding: 20px;
@@ -467,41 +573,29 @@ const InvestorNotifications = () => {
           cursor: default;
           background: white !important;
         }
-        
-        .notification-icon-container {
+        .investor-notifications .notification-icon-container {
           flex-shrink: 0;
           display: flex;
           align-items: center;
           justify-content: center;
           margin-top: 2px;
         }
-        
-        .notification-content {
+        .investor-notifications .notification-content {
           flex: 1;
           min-width: 0;
           overflow: hidden;
         }
-        
-        .notification-header {
+        .investor-notifications .notification-header {
           display: flex;
           align-items: center;
           margin-bottom: 8px;
-          gap: 8px;
         }
-        
-        .notification-title {
+        .investor-notifications .notification-title {
           font-weight: 600;
           font-size: 14px;
           color: #333;
         }
-        
-        .company-name {
-          font-size: 13px;
-          color: #666;
-          font-weight: 500;
-        }
-        
-        .notification-text {
+        .investor-notifications .notification-text {
           margin: 0 0 8px 0;
           font-size: 14px;
           line-height: 1.4;
@@ -509,8 +603,7 @@ const InvestorNotifications = () => {
           word-wrap: break-word;
           color: #555;
         }
-        
-        .notification-meta {
+        .investor-notifications .notification-meta {
           display: flex;
           gap: 8px;
           font-size: 12px;
@@ -518,12 +611,7 @@ const InvestorNotifications = () => {
           align-items: center;
           margin-top: 8px;
         }
-        
-        .notification-time {
-          font-weight: 500;
-        }
-        
-        .unread-dot {
+        .investor-notifications .unread-dot {
           display: inline-block;
           width: 6px;
           height: 6px;
@@ -531,8 +619,7 @@ const InvestorNotifications = () => {
           border-radius: 50%;
           margin-left: 4px;
         }
-        
-        .delete-notification {
+        .investor-notifications .delete-notification {
           background: none;
           border: none;
           cursor: pointer;
@@ -542,27 +629,27 @@ const InvestorNotifications = () => {
           transition: color 0.2s;
           flex-shrink: 0;
         }
-        
-        .delete-notification:hover {
+        .investor-notifications .delete-notification:hover {
           color: #ff4444;
         }
-      `}</style>
+      
+        .investor-notifications .dropdown-menu { width: min(420px, calc(100vw - 24px)); }
+        .investor-notifications .dropdown-header { flex-wrap: wrap; gap: 10px; }
+        .investor-notifications .notification-header { flex-wrap: wrap; }
+        .investor-notifications .notification-item:focus-visible { outline: 2px solid #a67c52; outline-offset: -2px; }
+        .investor-notifications .notification-load-error { margin: 0; padding: 12px 16px; color: #8a4a19; background: #fff8e6; font-size: 13px; }
+`}</style>
     </div>
   );
 };
 
-// Updated function to properly handle company names and timestamps
-export const addInvestorNotification = (message, type = 'info', applicationId = null, companyName = null, timestamp = null) => {
-  const event = new CustomEvent('newInvestorNotification', {
-    detail: { 
-      message, 
-      type, 
-      applicationId,
-      companyName: companyName || 'Unknown Company',
-      timestamp: timestamp || new Date().toISOString()
-    }
-  });
-  window.dispatchEvent(event);
+// Existing positional arguments remain compatible with current application code.
+export const addInvestorNotification = (message, type = "info", applicationId = null, companyName = null, timestamp = null) => {
+  if (typeof window === "undefined" || typeof message !== "string") return;
+  window.dispatchEvent(new CustomEvent("newInvestorNotification", {
+    detail: { message, type, applicationId, companyName,
+      timestamp: (toDate(timestamp) || new Date()).toISOString(),
+      recipientId: auth.currentUser?.uid || null },
+  }));
 };
-
 export default InvestorNotifications;

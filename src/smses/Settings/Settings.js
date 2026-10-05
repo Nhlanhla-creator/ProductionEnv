@@ -5,11 +5,11 @@ import { auth, db } from '../../firebaseConfig';
 import { 
   doc, getDoc, updateDoc, deleteDoc, 
   collection, addDoc, query, where, 
-  getDocs, arrayUnion, arrayRemove 
+  getDocs, arrayUnion, arrayRemove, writeBatch 
 } from "firebase/firestore"
 import TwoFactorSetup from '../../TwoFactorSetup';
 
-import { updatePassword, deleteUser } from "firebase/auth"
+import { updatePassword, deleteUser, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
 import { differenceInDays } from "date-fns"; 
 export default function Settings() {
   const colors = {
@@ -23,6 +23,8 @@ export default function Settings() {
     paleBrown: "#f0e6d9",
   }
 
+  const TEAM_MEMBERS_ENABLED = false
+  const [accountLoaded, setAccountLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("account")
   const [formData, setFormData] = useState({
     email: "",
@@ -84,6 +86,7 @@ const validateEmail = (email) => {
 };
 
 const loadInvitations = async (companyId) => {
+  if (!TEAM_MEMBERS_ENABLED) return;
   try {
     const invitationsQuery = query(
       collection(db, "invitations"),
@@ -176,7 +179,7 @@ const handle2FASetupSuccess = () => {
 
 // Call this in your useEffect when companyId changes
 useEffect(() => {
-  if (companyId) {
+  if (TEAM_MEMBERS_ENABLED && companyId) {
     loadInvitations(companyId);
     loadCompanyMembers(companyId);
   }
@@ -191,47 +194,55 @@ useEffect(() => {
   })
 
   useEffect(() => {
-    const loadUser = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-
+    let cancelled = false
+    let loadVersion = 0
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      const version = ++loadVersion
+      setAccountLoaded(false)
+      setFormData(prev => ({ ...prev, firstName: "", lastName: "", email: "" }))
+      if (!user) return
       try {
-        const docRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-
-          // ✅ Set form data
-          setFormData(prev => ({
+        const [userSnap, profileSnap] = await Promise.all([
+          getDoc(doc(db, "users", user.uid)),
+          getDoc(doc(db, "universalProfiles", user.uid)),
+        ])
+        if (cancelled || version !== loadVersion) return
+        const userData = userSnap.exists() ? userSnap.data() : {}
+        const contact = profileSnap.exists() ? profileSnap.data().contactDetails || {} : {}
+        // The profile's existing full-name field is the single source of truth.
+        // Legacy settings names are a fallback only when contactName is absent.
+        const fullName = typeof contact.contactName === "string"
+          ? contact.contactName.trim()
+          : [userData.firstName, userData.lastName].filter(Boolean).join(" ").trim()
+        const [firstName = "", ...surnameParts] = fullName.split(/\s+/)
+        setFormData(prev => ({
           ...prev,
-          email: data.email || "",
-          phone: data.phone || "",
-          notifications: data.notifications ?? true,  
-          sms: data.smsNotifications ?? false,
-            marketingEmails: data.marketingEmails ?? false,
-            darkMode: data.darkMode ?? false,
-            language: data.language || "en",
-            timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-            twoFactorAuth: data.twoFactorAuth ?? false,
-          }));
-
-          // ✅ Set roles (handle both array and string formats)
-          if (Array.isArray(data.roleArray)) {
-            setUserRoles(data.roleArray);
-          } else if (typeof data.role === "string") {
-            setUserRoles(data.role.split(",").map(r => r.trim()));
-          } else {
-            setUserRoles([]); // fallback
-          }
+          firstName,
+          lastName: surnameParts.join(" "),
+          email: userData.email || user.email || "",
+          phone: userData.phone || "",
+          notifications: userData.notifications ?? true,
+          sms: false,
+          marketingEmails: userData.marketingEmails ?? false,
+          language: userData.language || "en",
+          timezone: userData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+          twoFactorAuth: userData.twoFactorAuth ?? false,
+        }))
+        setUserRoles(Array.isArray(userData.roleArray) ? userData.roleArray
+          : typeof userData.role === "string" ? userData.role.split(",").map(r => r.trim()) : [])
+        if (TEAM_MEMBERS_ENABLED && userData.companyId) {
+          setCompanyId(userData.companyId)
+          setIsCompanyOwner(userData.userRole === "owner")
         }
+        setAccountLoaded(true)
       } catch (error) {
-        console.error("Error loading user:", error);
+        if (cancelled || version !== loadVersion) return
+        console.error("Error loading settings:", error)
+        setMessage("Could not load your contact details. Reload before saving.")
       }
-    };
-
-    loadUser();
-  }, []);
+    })
+    return () => { cancelled = true; unsubscribe() }
+  }, [])
 
   const checkDeletedStatus = async (user) => {
     if (!user) return;
@@ -358,57 +369,9 @@ useEffect(() => {
     }
   };
 
-  useEffect(() => {
-  const loadUser = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      const docRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        
-        // ✅ Set form data
-        setFormData(prev => ({
-          ...prev,
-          email: data.email || "",
-          phone: data.phone || "",
-          notifications: data.notifications ?? true,
-          marketingEmails: data.marketingEmails ?? false,
-          darkMode: data.darkMode ?? false,
-          language: data.language || "en",
-          timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-          twoFactorAuth: data.twoFactorAuth ?? false,
-        }));
-
-        // ✅ Set roles
-        if (Array.isArray(data.roleArray)) {
-          setUserRoles(data.roleArray);
-        } else if (typeof data.role === "string") {
-          setUserRoles(data.role.split(",").map(r => r.trim()));
-        } else {
-          setUserRoles([]);
-        }
-
-        // ✅ Load company data if user has company
-        if (data.companyId) {
-          setCompanyId(data.companyId);
-          setIsCompanyOwner(data.userRole === 'owner');
-          await loadCompanyMembers(data.companyId);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading user:", error);
-    }
-  };
-
-  loadUser();
-}, []);
-
 // Function to load company members
 const loadCompanyMembers = async (companyId) => {
+  if (!TEAM_MEMBERS_ENABLED) return;
   try {
     // Get company document
     const companyRef = doc(db, "companies", companyId);
@@ -444,6 +407,7 @@ const loadCompanyMembers = async (companyId) => {
   }
 };
 const handleInviteMember = async () => {
+  if (!TEAM_MEMBERS_ENABLED) return;
   if (!inviteEmail || !validateEmail(inviteEmail)) {
     setInviteError("Please enter a valid email address.");
     return;
@@ -529,6 +493,7 @@ const handleInviteMember = async () => {
 
 // Remove a team member
 const handleRemoveMember = async (memberId) => {
+  if (!TEAM_MEMBERS_ENABLED) return;
   if (!window.confirm("Are you sure you want to remove this team member?")) {
     return;
   }
@@ -558,6 +523,7 @@ const handleRemoveMember = async (memberId) => {
 
 // Update member role
 const handleUpdateRole = async (memberId, newRole) => {
+  if (!TEAM_MEMBERS_ENABLED) return;
   try {
     await updateDoc(doc(db, "users", memberId), {
       userRole: newRole
@@ -766,23 +732,28 @@ const handleUpdateRole = async (memberId, newRole) => {
   }
 
   const handleSaveChanges = async () => {
+    if (loading || !accountLoaded) return
+    const user = auth.currentUser
+    if (!user) { setMessage("Please sign in before saving."); return }
+    const contactName = [formData.firstName.trim(), formData.lastName.trim()]
+      .filter(Boolean).join(" ")
+    if (!contactName) { setMessage("Please enter your contact name."); return }
     setLoading(true)
     setMessage("")
     try {
-      const user = auth.currentUser
-      if (user) {
-        await updateDoc(doc(db, "users", user.uid), {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-        })
-        setMessage("Settings saved successfully!")
-      }
+      const batch = writeBatch(db)
+      // A field-specific merge preserves phone, addresses and all other contact fields.
+      batch.set(doc(db, "universalProfiles", user.uid), {
+        contactDetails: { contactName },
+        triggerLegitimacyEvaluation: true,
+      }, { mergeFields: ["contactDetails.contactName", "triggerLegitimacyEvaluation"] })
+      batch.update(doc(db, "users", user.uid), { email: formData.email })
+      await batch.commit()
+      setMessage("Settings saved successfully!")
     } catch (error) {
       console.error("Save error:", error)
       setMessage(`Error saving settings: ${error.message}`)
-    }
-    setLoading(false)
+    } finally { setLoading(false) }
   }
 
   const openDeletePopup = async () => {
@@ -825,6 +796,7 @@ const handleUpdateRole = async (memberId, newRole) => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
+    if (["sms", "darkMode", "language", "timezone"].includes(name)) return
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -833,19 +805,22 @@ const handleUpdateRole = async (memberId, newRole) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (loading) return
+    const user = auth.currentUser
+    if (!user?.email) { setMessage("Please sign in before changing your password."); return }
+    if (!formData.currentPassword) { setMessage("Enter your current password."); return }
+    if (formData.newPassword.length < 6) { setMessage("Password must be at least 6 characters."); return }
+    if (formData.newPassword !== formData.confirmPassword) { setMessage("Passwords do not match."); return }
     setLoading(true)
     setMessage("")
     try {
-      const user = auth.currentUser
-      if (user) {
-        await updateDoc(doc(db, "users", user.uid), { ...formData })
-        setMessage("Settings saved successfully!")
-      }
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, formData.currentPassword))
+      await updatePassword(user, formData.newPassword)
+      setFormData(prev => ({ ...prev, currentPassword: "", newPassword: "", confirmPassword: "" }))
+      setMessage("Password updated successfully!")
     } catch (error) {
-      console.error("Save error:", error)
-      setMessage(`Error saving settings: ${error.message}`)
-    }
-    setLoading(false)
+      setMessage(`Error updating password: ${error.message}`)
+    } finally { setLoading(false) }
   }
 
   return (
@@ -884,14 +859,16 @@ const handleUpdateRole = async (memberId, newRole) => {
           {[
             { key: "account", label: "Account" },
             { key: "security", label: "Security" },
-            { key: "appearance", label: "Appearance" },
+            { key: "appearance", label: "Appearance", disabled: true },
             { key: "notifications", label: "Notifications" },
             // Update your tabs array to include "team"
-{ key: "team", label: "Team Members" },
+{ key: "team", label: "Team Members", disabled: true },
           ].map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              disabled={!!tab.disabled}
+              title={tab.disabled ? "Coming soon" : undefined}
+              onClick={() => { if (!tab.disabled) setActiveTab(tab.key) }}
               style={{
                 padding: "1.25rem 1.5rem",
                 border: "none",
@@ -899,13 +876,14 @@ const handleUpdateRole = async (memberId, newRole) => {
                 color: activeTab === tab.key ? colors.textBrown : "#6b7280",
                 fontWeight: activeTab === tab.key ? "600" : "500",
                 fontSize: "0.95rem",
-                cursor: "pointer",
+                cursor: tab.disabled ? "not-allowed" : "pointer",
+                opacity: tab.disabled ? 0.45 : 1,
                 transition: "all 0.2s ease",
                 borderBottom: activeTab === tab.key ? `2px solid ${colors.primaryBrown}` : "2px solid transparent",
                 whiteSpace: "nowrap",
               }}
             >
-              {tab.label}
+              {tab.label}{tab.disabled ? " (Coming soon)" : ""}
             </button>
           ))}
         </div>
@@ -949,6 +927,7 @@ const handleUpdateRole = async (memberId, newRole) => {
                     </label>
                     <input
                       type="text"
+                      disabled={!accountLoaded || loading}
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleInputChange}
@@ -989,6 +968,7 @@ const handleUpdateRole = async (memberId, newRole) => {
                     </label>
                     <input
                       type="text"
+                      disabled={!accountLoaded || loading}
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleInputChange}
@@ -1076,9 +1056,10 @@ const handleUpdateRole = async (memberId, newRole) => {
                     onMouseLeave={(e) => {
                       e.target.style.backgroundColor = colors.primaryBrown
                     }}
+                    disabled={loading || !accountLoaded}
                     onClick={handleSaveChanges}
                   >
-                    Save Changes
+                    {loading ? "Saving..." : "Save Changes"}
                   </button>
                   <button
                     type="button"
@@ -1107,7 +1088,7 @@ const handleUpdateRole = async (memberId, newRole) => {
             </div>
           )}
 
-          {activeTab === "appearance" && (
+          {false && activeTab === "appearance" && (
             <div>
               <div style={{ marginBottom: "2rem" }}>
                 <h2
@@ -1276,8 +1257,9 @@ const handleUpdateRole = async (memberId, newRole) => {
                     type="checkbox"
                     id="sms"
                     name="sms"
-                    checked={formData.sms}
-                    onChange={handleInputChange}
+                    checked={false}
+                    disabled
+                    title="SMS notifications are coming soon"
                     style={{
                       width: "18px",
                       height: "18px",
@@ -1294,14 +1276,14 @@ const handleUpdateRole = async (memberId, newRole) => {
                       fontSize: "1rem",
                     }}
                   >
-                    Enable SMS Notifications
+                    Enable SMS Notifications (Coming soon)
                   </label>
                 </div>
               </div>
             </div>
           )}
 
-{activeTab === "team" && (
+{TEAM_MEMBERS_ENABLED && activeTab === "team" && (
   <div>
     <div style={{ marginBottom: "2rem" }}>
       <h2 style={{
@@ -2176,7 +2158,7 @@ const handleUpdateRole = async (memberId, newRole) => {
         </div>
       )}
     
-{showAddMemberModal && (
+{TEAM_MEMBERS_ENABLED && showAddMemberModal && (
   <div style={{
     position: "fixed",
     top: 0,
@@ -2358,7 +2340,7 @@ const handleUpdateRole = async (memberId, newRole) => {
   </div>
 )}
 
-// Add toast notification JSX at the bottom of your settings page (before closing divs)
+
 {toast.show && (
   <div style={{
     position: "fixed",
@@ -2378,7 +2360,7 @@ const handleUpdateRole = async (memberId, newRole) => {
   </div>
 )}
 
-// Add CSS animation
+
 <style>{`
   @keyframes slideIn {
     from {

@@ -2,7 +2,62 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { getDashboardRoute, getPortalLabel } from '../utils/roleRoutes';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
+
+const ROLE_ROUTES = {
+  Business: '/profile',
+  'Non-Profit': '/profile',
+  NonProfit: '/profile',
+  'Investor/Funder': '/investor-profile',
+  Investor: '/investor-profile',
+  INVESTOR: '/investor-profile',
+  Corporate: '/corporate-profile',
+  Catalyst: '/support-profile',
+  Accelerators: '/support-profile',
+  CapitalMarketFacilitators: '/cmf-profile',
+  Advisor: '/advisor-profile',
+  Advisors: '/advisor-profile',
+  ADVISOR: '/advisor-profile',
+  Intern: '/intern-profile',
+  Interns: '/intern-profile',
+  INTERN: '/intern-profile',
+  'Intern Sponsor': '/intern-sponsor-profile',
+  InternSponsor: '/intern-sponsor-profile',
+  ProgramSponsor: '/intern-sponsor-profile',
+  PROGRAM_SPONSOR: '/intern-sponsor-profile',
+  'Business Association': '/associator-profile',
+  BusinessAssociation: '/associator-profile',
+  Association: '/associator-profile',
+  'Small and Medium Social Enterprises': '/profile',
+  SMSEs: '/profile',
+  SMSE: '/profile',
+  SMEs: '/profile',
+  SME: '/profile',
+  'SME/BUSINESS': '/profile',
+  Admin: '/admin/dashboard',
+  admin: '/admin/dashboard',
+  ADMIN: '/admin/dashboard',
+};
+
+const normalizeRoles = (input) => {
+  if (!input) return [];
+  let list = [];
+  if (Array.isArray(input)) {
+    list = input.map((r) => (typeof r === 'string' ? r : r?.name));
+  } else if (typeof input === 'string') {
+    list = input.split(',');
+  } else if (typeof input === 'object') {
+    list = Object.keys(input);
+  }
+  return list.map((r) => String(r || '').trim()).filter(Boolean);
+};
+
+const findRoute = (roles) => {
+  const match = normalizeRoles(roles).find((r) => ROLE_ROUTES[r]);
+  return match ? ROLE_ROUTES[match] : null;
+};
 const Header = ({ onLoginClick }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,7 +79,7 @@ const Header = ({ onLoginClick }) => {
   const { user, userRoles, loading: authLoading } = useAuth();
 
   const isLoggedIn = Boolean(user);
-  const dashboardRoute = getDashboardRoute(userRoles);
+  const dashboardRoute = getDashboardRoute(userRoles) || findRoute(userRoles);
   const portalLabel = getPortalLabel(userRoles);
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -84,24 +139,44 @@ const Header = ({ onLoginClick }) => {
 
   // Logged in -> go back to the correct portal.
   // Logged out -> normal login behaviour.
-  const handleLoginClick = () => {
-    setIsMobileMenuOpen(false);
-    setOpenDropdown(null);
+const handleLoginClick = async () => {
+  setIsMobileMenuOpen(false);
+  setOpenDropdown(null);
 
-    if (isLoggedIn && dashboardRoute) {
-      navigate(dashboardRoute);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+  if (isLoggedIn) {
+    let route = dashboardRoute;
+
+    // Roles not resolved from context — read them from Firestore
+    if (!route && user?.uid) {
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+          const d = snap.data();
+          const candidates = [
+            d.currentRole,
+            ...normalizeRoles(d.roleArray),
+            ...normalizeRoles(d.role),
+            ...normalizeRoles(d.roles),
+          ];
+          route = findRoute(candidates);
+        }
+      } catch (e) {
+        console.error('Header: could not resolve dashboard route', e);
+      }
     }
 
-    if (onLoginClick) {
-      onLoginClick();
-    } else {
-      navigate('/loginRegister');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+    navigate(route || '/loginRegister');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
 
+  if (onLoginClick) {
+    onLoginClick();
+  } else {
+    navigate('/loginRegister');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+};
   const handleNavigation = (path) => {
     // Close all dropdowns
     setOpenDropdown(null);
@@ -434,7 +509,7 @@ const Header = ({ onLoginClick }) => {
       marginTop: '0.6rem',
       textAlign: 'center',
       fontSize: '0.9rem',
-      backgroundColor: isLoggedIn && dashboardRoute ? '#1E7A47' : '#A78B71',
+      backgroundColor: isLoggedIn ? '#1E7A47' : '#A78B71',
       color: 'white',
       border: 'none',
       borderRadius: '6px',
@@ -442,8 +517,7 @@ const Header = ({ onLoginClick }) => {
       cursor: 'pointer',
       transition: 'all 0.3s',
       letterSpacing: '0.3px',
-      // Hide the button for admin users (no dashboard route)
-      display: (isLoggedIn && !dashboardRoute) ? 'none' : 'block',
+  
     },
     closeButton: {
       position: 'absolute',
@@ -764,66 +838,51 @@ const Header = ({ onLoginClick }) => {
 
         {/* Desktop right-hand button: session-aware */}
         <div style={styles.desktopLoginContainer}>
-          {isLoggedIn && dashboardRoute ? (
-            <button
-              className="login-btn"
-              onClick={handleLoginClick}
-              disabled={authLoading}
-              style={{
-                ...styles.dashboardButton,
-                ...(authLoading ? { opacity: 0.55, cursor: 'default' } : {}),
-              }}
-              onMouseEnter={(e) => {
-                if (authLoading) return;
-                e.currentTarget.style.backgroundColor = '#155A34';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
-              }}
-              onMouseLeave={(e) => {
-                if (authLoading) return;
-                e.currentTarget.style.backgroundColor = '#1E7A47';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              {authLoading ? (
-                '...'
-              ) : (
-                <>
-                  <span style={styles.sessionDot} />
-                  {portalLabel || 'My Dashboard'}
-                </>
-              )}
-            </button>
-          ) : isLoggedIn && !dashboardRoute ? (
-            // Admin user - show nothing or a different button
-            null
-          ) : (
-            <button
-              className="login-btn"
-              onClick={handleLoginClick}
-              disabled={authLoading}
-              style={{
-                ...styles.loginButton,
-                ...(authLoading ? { opacity: 0.55, cursor: 'default' } : {}),
-              }}
-              onMouseEnter={(e) => {
-                if (authLoading) return;
-                e.currentTarget.style.backgroundColor = '#8a6d52';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
-              }}
-              onMouseLeave={(e) => {
-                if (authLoading) return;
-                e.currentTarget.style.backgroundColor = '#A78B71';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              {authLoading ? '...' : 'Login/Register'}
-            </button>
-          )}
-        </div>
+  {isLoggedIn ? (
+    <button
+      className="login-btn"
+      onClick={handleLoginClick}
+      style={styles.dashboardButton}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = '#155A34';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = '#1E7A47';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      <span style={styles.sessionDot} />
+      {portalLabel || 'My Dashboard'}
+    </button>
+  ) : (
+    <button
+      className="login-btn"
+      onClick={handleLoginClick}
+      disabled={authLoading}
+      style={{
+        ...styles.loginButton,
+        ...(authLoading ? { opacity: 0.55, cursor: 'default' } : {}),
+      }}
+      onMouseEnter={(e) => {
+        if (authLoading) return;
+        e.currentTarget.style.backgroundColor = '#8a6d52';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+      }}
+      onMouseLeave={(e) => {
+        if (authLoading) return;
+        e.currentTarget.style.backgroundColor = '#A78B71';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      Login/Register
+    </button>
+  )}
+</div>
 
         {/* Mobile Menu Button */}
         <button
@@ -867,17 +926,17 @@ const Header = ({ onLoginClick }) => {
         </button>
 
         {/* Logged-in shortcut, pinned at the top of the mobile drawer */}
-        {isLoggedIn && dashboardRoute && !authLoading && (
-          <>
-            <button
-              style={{ ...styles.mobileNavButton, backgroundColor: '#1E7A47' }}
-              onClick={handleLoginClick}
-            >
-              ← {portalLabel || 'My Dashboard'}
-            </button>
-            <div style={styles.divider} />
-          </>
-        )}
+ {isLoggedIn && (
+  <>
+    <button
+      style={{ ...styles.mobileNavButton, backgroundColor: '#1E7A47' }}
+      onClick={handleLoginClick}
+    >
+      ← {portalLabel || 'My Dashboard'}
+    </button>
+    <div style={styles.divider} />
+  </>
+)}
 
         {/* Home - First in mobile */}
         <button
@@ -1055,36 +1114,25 @@ const Header = ({ onLoginClick }) => {
         <div style={styles.divider} />
 
         {/* Mobile Login/Dashboard Button - Hidden for admin users */}
-        {isLoggedIn && dashboardRoute ? (
-          <button
-            style={styles.mobileLoginButton}
-            onClick={handleLoginClick}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#155A34';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#1E7A47';
-            }}
-          >
-            {portalLabel || 'My Dashboard'}
-          </button>
-        ) : isLoggedIn && !dashboardRoute ? (
-          // Admin user - show nothing
-          null
-        ) : (
-          <button
-            style={styles.mobileLoginButton}
-            onClick={handleLoginClick}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#8a6d52';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#A78B71';
-            }}
-          >
-            Login/Register
-          </button>
-        )}
+        {isLoggedIn ? (
+  <button
+    style={styles.mobileLoginButton}
+    onClick={handleLoginClick}
+    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#155A34'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1E7A47'; }}
+  >
+    {portalLabel || 'My Dashboard'}
+  </button>
+) : (
+  <button
+    style={styles.mobileLoginButton}
+    onClick={handleLoginClick}
+    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#8a6d52'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#A78B71'; }}
+  >
+    Login/Register
+  </button>
+)}
       </div>
 
       {/* CSS Styles */}

@@ -34,7 +34,10 @@ import {
 } from "lucide-react";
 import "./MessagesComponent.css";
 
-const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
+const MessagesComponent = ({ config = {showSidebarOffset: false,
+  supportAttachments: true,   // was false
+  showSearchIcon: true,
+  hasRecipientDropdown: true}, recipientsList = [] }) => {
   const {
     supportAttachments,
     showSearchIcon,
@@ -1576,9 +1579,9 @@ const filteredMessages = useMemo(() => {
                   </button>
                 </div>
                 <div className="compose-form">
-                  <div className="form-group">
-                    <label>To:</label>
-                    {hasRecipientDropdown ? (
+                <div className="form-group">
+  <label>To:</label>
+  {hasRecipientDropdown && !selectedMessage ? (
                       <div className="recipient-select-wrapper" style={{ position: 'relative' }}>
                         <select
                           value={newMessage.to}
@@ -1626,13 +1629,13 @@ const filteredMessages = useMemo(() => {
                         </div>
                       </div>
                     ) : (
-                      <input
-                        type="text"
-                        value={newMessage.toName}
-                        disabled
-                        placeholder="Recipient Name"
-                      />
-                    )}
+  <input
+    type="text"
+    value={newMessage.toName}
+    disabled
+    placeholder="Recipient Name"
+  />
+)}
                   </div>
 
                   <div className="form-group">

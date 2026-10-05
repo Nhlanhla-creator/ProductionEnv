@@ -86,7 +86,56 @@ const getPath = (obj, path) =>
 // parsed CV store.
 // ═════════════════════════════════════════════════════════════════════════
 
-const LEADERSHIP_WEIGHTS = { credentials: 40, structure: 30, behaviour: 30 }
+// ─────────────────────────────────────────────────────────────────────────
+// STAGE TABLES — BIG Score Methodology v3 §6
+// Every column sums to 100. Stage comes from entityOverview.operationStage.
+// ─────────────────────────────────────────────────────────────────────────
+export const governanceStageKey = (profileData) => {
+  const s = cleanStr(profileData?.entityOverview?.operationStage).toLowerCase()
+  if (s === "growth") return "growth"
+  if (["scaling", "scale-up", "scaleup", "scale"].includes(s)) return "scaling"
+  if (s === "turnaround") return "turnaround"
+  if (["mature", "established"].includes(s)) return "mature"
+  return "startup"
+}
+
+// Leadership vs Governance share of the whole card, and how Governance splits
+// into Ownership & Structure vs Governance Maturity.
+const LEADERSHIP_SHARE = { startup: 65, growth: 55, scaling: 45, turnaround: 55, mature: 35 }
+const OWNERSHIP_SPLIT_OF_GOVERNANCE = { startup: 55, growth: 48, scaling: 42, turnaround: 45, mature: 40 }
+
+// Pillar weights as a % of the whole card (sum to 100). Full precision — round
+// only for display.
+export const sectionWeightsFor = (stage) => {
+  const leadership = LEADERSHIP_SHARE[stage] ?? LEADERSHIP_SHARE.startup
+  const governance = 100 - leadership
+  const ownSplit = OWNERSHIP_SPLIT_OF_GOVERNANCE[stage] ?? OWNERSHIP_SPLIT_OF_GOVERNANCE.startup
+  return {
+    leadership,
+    ownership: (governance * ownSplit) / 100,
+    maturity: (governance * (100 - ownSplit)) / 100,
+  }
+}
+
+// Inside Leadership: Credentials / Team structure / Leadership behaviour.
+const LEADERSHIP_WEIGHTS_BY_STAGE = {
+  startup:    { credentials: 50, structure: 20, behaviour: 30 },
+  growth:     { credentials: 44, structure: 28, behaviour: 28 },
+  scaling:    { credentials: 38, structure: 36, behaviour: 26 },
+  turnaround: { credentials: 40, structure: 34, behaviour: 26 },
+  mature:     { credentials: 32, structure: 42, behaviour: 26 },
+}
+
+// Inside Ownership & Structure (v2.1 positive base retained by v3 §6). The
+// flat structural baseline of 5 is the same at every stage.
+const OWNERSHIP_POINTS_BY_STAGE = {
+  startup:    { shareholders: 30, directors: 34, executives: 22, advisors: 9 },
+  growth:     { shareholders: 30, directors: 32, executives: 22, advisors: 11 },
+  scaling:    { shareholders: 28, directors: 32, executives: 22, advisors: 13 },
+  turnaround: { shareholders: 30, directors: 33, executives: 22, advisors: 10 },
+  mature:     { shareholders: 29, directors: 32, executives: 23, advisors: 11 },
+}
+const OWNERSHIP_BASELINE = 5
 
 const QUAL_PATTERNS = {
   designation: [/\bCA\s*\(?SA\)?/i, /chartered account/i, /\bCFA\b/i, /\bCIMA\b/i, /\bACCA\b/i, /\bSAIPA\b/i, /\bPr\.?\s?Eng\b/i, /\bPMP\b/i, /admitted\s+(attorney|advocate)/i],
@@ -147,6 +196,7 @@ export const computeLeadershipQuality = (profileData, cvProfiles, roleCoverage) 
   const directors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
   const executives = (om.executives || []).filter((e) => e?.name && e.name.trim() !== "")
   const cvs = cvProfiles || []
+  const LEADERSHIP_WEIGHTS = LEADERSHIP_WEIGHTS_BY_STAGE[governanceStageKey(profileData)]
 
   // ── Credentials — what the CVs actually show ──
   const perDirector = directors.map((d) => {
@@ -345,31 +395,36 @@ export const computeOwnershipStructure = (profileData) => {
   const advisorBonus = isYesish(profileData?.enterpriseReadiness?.hasAdvisors) ? 100 : 0
   const conflictPenalty = Math.min(activeConflicts.length * 15, 40)
 
+  const pts = OWNERSHIP_POINTS_BY_STAGE[governanceStageKey(profileData)]
   const raw = Math.round(
-    shareholderScore * 0.25 + directorScore * 0.35 + executiveScore * 0.2 + advisorBonus * 0.15 + 5
+    (shareholderScore * pts.shareholders +
+      directorScore * pts.directors +
+      executiveScore * pts.executives +
+      advisorBonus * pts.advisors) / 100 +
+      OWNERSHIP_BASELINE
   ) - conflictPenalty
 
   const items = [
     mkItem({
-      key: "shareholders", label: "Shareholders recorded", points: 25, credit: shareholderScore / 100,
+      key: "shareholders", label: "Shareholders recorded", points: pts.shareholders, credit: shareholderScore / 100,
       section: "Ownership & Management", field: "shareholders",
       evidence: `${shareholders.length} shareholder${shareholders.length === 1 ? "" : "s"}`,
       reason: shareholders.length > 8 ? "More than eight shareholders for an SME can signal fragmented decision-making." : null,
       importance: "Ownership transparency is the first thing due diligence checks.",
     }),
     mkItem({
-      key: "directorsRecorded", label: "Directors recorded", points: 35, credit: directorScore / 100,
+      key: "directorsRecorded", label: "Directors recorded", points: pts.directors, credit: directorScore / 100,
       section: "Ownership & Management", field: "directors",
       evidence: `${directors.length} director${directors.length === 1 ? "" : "s"}`,
       importance: "The directors are the board — nothing in Board Structure can be assessed without them.",
     }),
     mkItem({
-      key: "executivesRecorded", label: "Executive team recorded", points: 20, credit: executiveScore / 100,
+      key: "executivesRecorded", label: "Executive team recorded", points: pts.executives, credit: executiveScore / 100,
       section: "Ownership & Management", field: "executives",
       evidence: `${executives.length} executive${executives.length === 1 ? "" : "s"}`,
     }),
     mkItem({
-      key: "advisorStructure", label: "Advisory structure declared", points: 15, credit: advisorBonus / 100,
+      key: "advisorStructure", label: "Advisory structure declared", points: pts.advisors, credit: advisorBonus / 100,
       section: "Enterprise Readiness", field: "hasAdvisors",
       importance: "Below a PIS of 100 an advisory structure is what stands in for a board.",
     }),
