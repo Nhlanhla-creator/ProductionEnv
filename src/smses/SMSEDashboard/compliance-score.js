@@ -257,11 +257,36 @@ const PROFILE_SECTIONS = [
   "declarationConsent",
 ];
 
+// Five stages, per BIG Score Methodology v3 §3.1 / §4. Startup is under 3
+// completed years, Growth 3 to under 6; Scaling, Turnaround and Mature come
+// from the recorded stage in entityOverview.operationStage.
 const STAGE_LABELS = {
-  earlyStage: "Early stage",
-  growthStage: "Growth / scale-up",
-  matureStage: "Mature",
+  startup: "Startup",
+  growth: "Growth",
+  scaling: "Scaling",
+  turnaround: "Turnaround",
+  mature: "Mature",
 };
+
+// Methodology v3 §4 gives each requirement as points out of 100 per stage
+// (Startup, Growth, Scaling, Turnaround, Mature). Stored as fractions so the
+// rest of the scorer is unchanged.
+const W = (startup, growth, scaling, turnaround, mature) => ({
+  startup: startup / 100,
+  growth: growth / 100,
+  scaling: scaling / 100,
+  turnaround: turnaround / 100,
+  mature: mature / 100,
+});
+
+// Universal gate caps (v3 §4). A missing or invalid item caps the OVERALL BIG
+// Score, not this card's own percentage; the card exposes the cap so the BIG
+// Score aggregator can apply min(preCap, lowest active cap).
+const GATES = [
+  { key: "companyReg", cap: 40, label: "registration evidence" },
+  { key: "taxClearance", cap: 50, label: "SARS tax status" },
+  { key: "directorIds", cap: 60, label: "director and shareholder ID evidence" },
+];
 
 // Presentation-only grouping — buildComplianceAssessment stays flat.
 // Regroup here if you'd rather split these differently; it changes nothing
@@ -276,10 +301,11 @@ const COMPLIANCE_GROUPS = [
 
 const mapStageToWeightKey = (stageRaw) => {
   const s = cleanStr(stageRaw).toLowerCase();
-  if (["growth", "scale-up", "scaleup", "scaling"].includes(s))
-    return "growthStage";
-  if (["mature", "established"].includes(s)) return "matureStage";
-  return "earlyStage";
+  if (s === "growth") return "growth";
+  if (["scaling", "scale-up", "scaleup", "scale"].includes(s)) return "scaling";
+  if (s === "turnaround") return "turnaround";
+  if (["mature", "established"].includes(s)) return "mature";
+  return "startup";
 };
 
 const buildRubric = () => [
@@ -291,7 +317,7 @@ const buildRubric = () => [
     description: "CIPC registration document",
     importance: "Non-negotiable – proves legal existence",
     compulsory: true,
-    weights: { earlyStage: 0.2, growthStage: 0.15, matureStage: 0.1 },
+    weights: W(20, 16, 13, 13, 11),
     where: "My Documents → upload your CIPC registration certificate",
     guidance:
       "The CoR 14.3 or CIPC disclosure certificate. Download a fresh copy from the CIPC portal if you cannot find the original.",
@@ -304,7 +330,7 @@ const buildRubric = () => [
     description: "Valid tax clearance certificate",
     importance: "Critical – shows financial/legal integrity",
     compulsory: true,
-    weights: { earlyStage: 0.2, growthStage: 0.15, matureStage: 0.1 },
+    weights: W(20, 19, 16, 19, 17),
     where: "My Documents → upload your SARS tax clearance certificate",
     guidance:
       "SARS issues a tax compliance status PIN online at no cost — usually within a day.",
@@ -315,7 +341,7 @@ const buildRubric = () => [
     displayName: "VAT registration",
     description: "VAT number captured",
     importance: "Compulsory for turnover above R1m",
-    weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.05 },
+    weights: W(0, 6, 9, 9, 9),
     where: "Legal & Compliance → add your VAT number",
     guidance:
       "Your declared turnover is above the R1m threshold, so SARS registration is compulsory rather than optional.",
@@ -339,7 +365,7 @@ const buildRubric = () => [
     description: "Valid B-BBEE certificate or affidavit",
     importance: "Essential for corporate procurement",
     compulsory: true,
-    weights: { earlyStage: 0.1, growthStage: 0.15, matureStage: 0.15 },
+    weights: W(10, 13, 13, 13, 13),
     where: "My Documents → upload your B-BBEE certificate or affidavit",
     guidance:
       "Turnover under R10m qualifies as an Exempted Micro Enterprise — a sworn affidavit counts in full and costs nothing at a police station or Commissioner of Oaths.",
@@ -351,7 +377,7 @@ const buildRubric = () => [
     displayName: "COIDA registration",
     description: "Letter of good standing plus UIF number",
     importance: "Shows compliance with labour laws",
-    weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.1 },
+    weights: W(0, 5, 9, 9, 9),
     where: "My Documents → upload your COIDA letter of good standing",
     guidance:
       "This item needs two things: the letter of good standing from the Compensation Fund, and your UIF number under Legal & Compliance.",
@@ -394,7 +420,7 @@ const buildRubric = () => [
     displayName: "Business bank account",
     description: "Bank confirmation letter in the company name",
     importance: "Confirms financial separation from owners",
-    weights: { earlyStage: 0.1, growthStage: 0.15, matureStage: 0.2 },
+    weights: W(10, 8, 6, 7, 6),
     where: "My Documents → upload your bank confirmation letter",
     guidance:
       "Any branch or your banking app can issue a stamped confirmation letter, usually the same day.",
@@ -407,7 +433,7 @@ const buildRubric = () => [
     description: "Official share register document",
     importance: "Ensures ownership transparency",
     compulsory: true,
-    weights: { earlyStage: 0.1, growthStage: 0.1, matureStage: 0.1 },
+    weights: W(10, 9, 9, 9, 9),
     where: "My Documents → upload your share register",
     guidance:
       "The securities register listing every shareholder and their holding, signed by a director.",
@@ -420,7 +446,7 @@ const buildRubric = () => [
     description: "Certified copies of ID documents",
     importance: "Verifies accountable individuals",
     compulsory: true,
-    weights: { earlyStage: 0.1, growthStage: 0.1, matureStage: 0.05 },
+    weights: W(10, 9, 6, 6, 6),
     where: "My Documents → upload certified IDs for every director",
     guidance:
       "Certification must be within three months. Any police station certifies free of charge.",
@@ -433,7 +459,7 @@ const buildRubric = () => [
     description: "Business address verification",
     importance: "Confirms physical business location",
     compulsory: true,
-    weights: { earlyStage: 0.1, growthStage: 0.05, matureStage: 0.05 },
+    weights: W(10, 7, 5, 5, 6),
     where: "My Documents → upload proof of address",
     guidance:
       "A municipal bill or signed lease in the company name, dated within three months.",
@@ -445,7 +471,7 @@ const buildRubric = () => [
     displayName: "Industry licences",
     description: "Sector-specific permits and accreditations",
     importance: "Required for regulated industries",
-    weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.1 },
+    weights: W(0, 0, 8, 4, 8),
     where: "My Documents → upload your industry accreditations",
     guidance:
       "CIDB, PSIRA, liquor, health or transport permits — whatever your sector requires to trade lawfully.",
@@ -456,7 +482,7 @@ const buildRubric = () => [
     displayName: "Complete business profile",
     description: "All profile sections completed",
     importance: "Tells funders who they are dealing with",
-    weights: { earlyStage: 0.1, growthStage: 0.1, matureStage: 0.1 },
+    weights: W(10, 8, 6, 6, 6),
     where: "Profile → complete the remaining sections",
     guidance:
       "This one is scored proportionally — every section you finish adds part of the weight.",
@@ -521,6 +547,14 @@ const buildComplianceAssessment = (data) => {
     };
   });
 
+  // Universal gate caps — lowest active cap wins. "Missing or invalid" means
+  // the item earned no credit at all (absent, expired, rejected, wrong type).
+  const gates = GATES.filter((g) => {
+    const it = graded.find((x) => x.key === g.key);
+    return it && it.credit <= 0;
+  });
+  const gateCap = gates.length ? Math.min(...gates.map((g) => g.cap)) : null;
+
   const scored = graded.filter((i) => i.weight > 0);
   const maxWeight = scored.reduce((s, i) => s + i.weight, 0);
   const totalEarned = scored.reduce((s, i) => s + i.earned, 0);
@@ -539,6 +573,8 @@ const buildComplianceAssessment = (data) => {
 
   return {
     weightKey,
+    gates,
+    gateCap,
     stageLabel: STAGE_LABELS[weightKey],
     rawStage: cleanStr(data?.entityOverview?.operationStage) || "Ideation",
     documents,

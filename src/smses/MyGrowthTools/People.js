@@ -25,9 +25,6 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 
 const functions = getFunctions();
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Tokens — shared with Operational and Financial Performance.
-   ════════════════════════════════════════════════════════════════════════ */
 const T = {
   ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", faint: "#8a7a74",
   line: "#ded8d4", lineSoft: "#e9e3df", lineStrong: "#b0a29b",
@@ -60,7 +57,6 @@ const PERIODS = [
 const PERIOD_LABEL = { month: "This month", quarter: "This quarter", year: "This year" };
 const PERIOD_PREFIX = { month: "Monthly", quarter: "Quarterly", year: "Annual" };
 
-/* ─── Financial year, from Entity Overview's financialYearEnd ────────────── */
 const fyStartMonthFromEnd = (end) => {
   if (!end) return 0;
   const m = Number(String(end).split("-")[1]);
@@ -89,7 +85,6 @@ const fyQuarters = (sy, sm) => {
 };
 const currentMonthKey = () => { const d = new Date(); return `M:${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 
-/* ─── Formatting ────────────────────────────────────────────────────────── */
 const LOCALE = "en-US";
 const trimNum = (n) => {
   if (!Number.isFinite(n)) return "";
@@ -97,7 +92,6 @@ const trimNum = (n) => {
   return Number(n.toFixed(dp)).toLocaleString(LOCALE, { maximumFractionDigits: dp });
 };
 
-/* `bare` drops the unit marker — the table has its own Units column. */
 const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
   if (raw === null || raw === undefined || raw === "") return "—";
   if (kpi?.options) {
@@ -131,14 +125,6 @@ const rollUp = (values, mode) => {
 const mean = (arr) => { const n = arr.filter((v) => Number.isFinite(v)); return n.length ? n.reduce((a,b)=>a+b,0) / n.length : null; };
 const div = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? a / b : null);
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Source documents — the same peopleData docs the old sections wrote to, so
-   existing data appears immediately.
-
-   People figures are stored as twelve calendar-month slots with no year on
-   the document, so the same twelve slots serve every financial year. The FY
-   selector reorders them; it doesn't separate them.
-   ════════════════════════════════════════════════════════════════════════ */
 const DOC = {
   prod: "_productivity",
   cap: "_capabilityTraining",
@@ -165,9 +151,7 @@ const scalarAt = (docs, src, path) => {
   return Number.isFinite(n) ? n : null;
 };
 
-/* Everything a KPI might need for one month, in one object. */
 const buildContext = (docs, mi) => ({
-  // Productivity
   revenuePerEmployee: numAt(docs, "prod", ["productivityData","revenuePerEmployee","actual"], mi),
   revenuePerEmployeeB: numAt(docs, "prod", ["productivityData","revenuePerEmployee","budget"], mi),
   laborCostPercentage: numAt(docs, "prod", ["productivityData","laborCostPercentage","actual"], mi),
@@ -176,32 +160,22 @@ const buildContext = (docs, mi) => ({
   salesVolumePerEmployeeB: numAt(docs, "prod", ["productivityData","salesVolumePerEmployee","budget"], mi),
   overtimeHours: numAt(docs, "prod", ["productivityData","overtimeHours","actual"], mi),
   overtimeHoursB: numAt(docs, "prod", ["productivityData","overtimeHours","budget"], mi),
-  // Capability
   trainingSpendAmount: numAt(docs, "cap", ["capabilityData","trainingSpendAmount","actual"], mi),
   trainingSpendAmountB: numAt(docs, "cap", ["capabilityData","trainingSpendAmount","budget"], mi),
   trainingSpendPercentage: numAt(docs, "cap", ["capabilityData","trainingSpendPercentage","actual"], mi),
   trainingSpendPercentageB: numAt(docs, "cap", ["capabilityData","trainingSpendPercentage","budget"], mi),
   trainingFocus: numAt(docs, "cap", ["capabilityData","trainingFocus","actual"], mi),
   trainingFocusB: numAt(docs, "cap", ["capabilityData","trainingFocus","budget"], mi),
-  // Composition — scalars, so the same figure stands for every month
   headCount: scalarAt(docs, "comp", ["employeeData","headCount"]),
   targetHeadCount: scalarAt(docs, "comp", ["employeeData","targetHeadCount"]),
-  // Execution capacity
   criticalFunctionsSinglePoint: numAt(docs, "exec", ["executionData","criticalFunctionsSinglePoint"], mi),
   criticalRolesWith2IC: numAt(docs, "exec", ["executionData","criticalRolesWith2IC"], mi),
-  // Stability
   overallTurnover: numAt(docs, "stab", ["stabilityData","overallTurnover"], mi),
   criticalRoleTurnover: numAt(docs, "stab", ["stabilityData","criticalRoleTurnover"], mi),
   workforceMovements: numAt(docs, "stab", ["stabilityData","workforceMovements"], mi),
   contractorDependence: numAt(docs, "stab", ["stabilityData","contractorDependence"], mi),
 });
 
-/* ════════════════════════════════════════════════════════════════════════════
-   The KPI registry — tabs, categories, KPIs.
-
-   `benchmark` is the fallback the status uses when nobody has captured a
-   target, so a KPI without a budget still says something rather than nothing.
-   ════════════════════════════════════════════════════════════════════════ */
 const K = (o) => ({
   id: o.id, name: o.name, units: o.units, direction: o.direction || "higher",
   aggregate: o.aggregate || "avg", meaning: o.meaning, measured: o.measured,
@@ -335,7 +309,6 @@ const TAB_DEFS = [
   },
 ];
 
-/* ─── Status ────────────────────────────────────────────────────────────── */
 const S = {
   green: { key: "green", label: "On target", color: T.green, bg: T.greenBg },
   amber: { key: "amber", label: "Needs attention", color: T.amber, bg: T.amberBg },
@@ -370,7 +343,6 @@ const StatusIcon = ({ status, size = 22 }) => {
   return <Info {...p} />;
 };
 
-/* ─── Period resolution ─────────────────────────────────────────────────── */
 const monthEntry = (kpi, year, mi) => kpi.entries?.[`M:${year}-${String(mi + 1).padStart(2, "0")}`] || { actual: null, budget: null };
 
 const periodValues = (kpi, period, fy) => {
@@ -395,7 +367,6 @@ const getVariance = (kpi, period, fy) => {
   return Number.isFinite(b) && Number.isFinite(a) ? a - b : null;
 };
 
-/* ─── Columns ───────────────────────────────────────────────────────────── */
 const COLUMN_DEFS = {
   category:  { label: "Category", width: 178, tip: "The category this KPI sits under.", filter: true, sort: true, hideable: true },
   kpi:       { label: "KPI", width: 288, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
@@ -410,7 +381,6 @@ const ACTIONS_KEY = "__actions__";
 const columnLines = (key, period) =>
   ["budget","actual","variance"].includes(key) ? [PERIOD_PREFIX[period], COLUMN_DEFS[key].label] : [COLUMN_DEFS[key].label];
 
-/* ─── Shared UI ─────────────────────────────────────────────────────────── */
 const InfoTip = ({ text, light = false }) => {
   const [rect, setRect] = useState(null);
   if (!text) return null;
@@ -437,7 +407,21 @@ const btnGhost = { ...btnBase, background: T.bg, color: T.body, border: `1px sol
 const btnQuiet = { ...btnBase, background: "transparent", color: T.accent, border: "1px solid transparent" };
 const inputS = { width: "100%", padding: "9px 11px", border: `1px solid ${T.lineStrong}`, borderRadius: "8px",
   fontSize: "13.5px", fontFamily: "inherit", boxSizing: "border-box", color: T.ink, background: T.bg, outline: "none" };
-const selectS = { ...inputS, cursor: "pointer" };
+
+/* Select gets a hand-drawn brown chevron so it always reads as a dropdown. */
+const selectS = {
+  ...inputS,
+  cursor: "pointer",
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b5b55' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
+  backgroundSize: "14px",
+  paddingRight: "34px",
+};
+
 const labelS = { display: "block", fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "5px" };
 const cardS = { background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" };
 const panelTh = { padding: "9px 12px", fontSize: "11.5px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
@@ -475,7 +459,6 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better" },
 ];
 
-/* ─── KPI info popup ────────────────────────────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
   const [meaning, setMeaning] = useState(kpi.meaning || "");
@@ -523,7 +506,6 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Analysis ──────────────────────────────────────────────────────────── */
 const localAnalysis = (kpi, period, v, fy) => {
   const status = statusFromPair(kpi, v.budget, v.actual);
   const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
@@ -558,7 +540,6 @@ const summaryAnalysis = (kpi, fy) => {
   const withData = rows.filter((r) => r.status.key !== "none");
   const reds = withData.filter((r) => r.status.key === "red");
   const greens = withData.filter((r) => r.status.key === "green");
-  const mth = rows.find((r) => r.key === "month"), yr = rows.find((r) => r.key === "year");
   return {
     observations: [
       ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no target)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
@@ -654,7 +635,6 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => (
   </Modal>
 );
 
-/* ─── Trend chart ───────────────────────────────────────────────────────── */
 const CHART_VERSION = 2;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
@@ -695,7 +675,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
 
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
 
-  useEffect(() => { setNoteText(kpi.periodNotes?.[noteKey] || ""); setNoteState("idle"); }, [noteKey, kpi.id]); // eslint-disable-line
+  useEffect(() => { setNoteText(kpi.periodNotes?.[noteKey] || ""); setNoteState("idle"); }, [noteKey, kpi.id]);
 
   const onNoteChange = (text) => {
     setNoteText(text); setNoteState("saving");
@@ -726,8 +706,6 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.78, ...extra };
   };
 
-  /* The variance band has no axes and no legend — it floats above the plot so
-     it reads as a top layer rather than a competing chart. */
   const varianceData = { labels, datasets: [
     { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors), __signed: true, __labelColor: T.body }] };
   const varianceOptions = {
@@ -873,7 +851,6 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   );
 };
 
-/* ─── Add Action ────────────────────────────────────────────────────────── */
 const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClose, onSaved }) => {
   const [meetings, setMeetings] = useState([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
@@ -1036,7 +1013,6 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
   );
 };
 
-/* ─── KPI notes — autosaving ────────────────────────────────────────────── */
 const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
   const [state, setState] = useState("idle");
@@ -1061,7 +1037,6 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Enhanced table hook ───────────────────────────────────────────────── */
 function useEnhancedTable(initialCols, dataRows) {
   const [colOrder, setColOrder] = useState(initialCols.map(c => c.key));
   const [widths, setWidths] = useState(() => Object.fromEntries(initialCols.map(c => [c.key, c.width || 140])));
@@ -1133,7 +1108,6 @@ function useEnhancedTable(initialCols, dataRows) {
   };
 }
 
-/* ─── Shared FilterDropdown component ──────────────────────────────────── */
 const FilterDropdown = ({ options, value, onChange, onClose }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -1174,14 +1148,16 @@ const FilterDropdown = ({ options, value, onChange, onClose }) => {
   );
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Panels — the parts of People Performance that aren't KPI rows.
-   ════════════════════════════════════════════════════════════════════════ */
 const BROWN = ["#3E2723", "#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"];
 
-const TrackingPanel = ({ docs, readOnly }) => {
+/* ────────────────────────────────────────────────────────────────────────────
+   TrackingPanel — employee development tracking with inline edit/delete
+   ──────────────────────────────────────────────────────────────────────── */
+const TrackingPanel = ({ docs, readOnly, onUpdate }) => {
   const employees = docs.track?.employees || [];
-  
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
+
   const cols = [
     { key: "employee", label: "Employee", tip: "Name of the employee.", width: 180 },
     { key: "skillsGap", label: "Skills Gap", tip: "Skills gap assessment status.", width: 140 },
@@ -1191,6 +1167,8 @@ const TrackingPanel = ({ docs, readOnly }) => {
   ];
 
   const rows = employees.map(e => ({
+    __id: e.id,
+    __raw: e,
     employee: e.employee || "—",
     skillsGap: e.skillsGap?.status === "Done" ? "✅ Done" : "❌ Not done",
     idp: e.idp?.status === "Done" ? "✅ Done" : "❌ Not done",
@@ -1209,6 +1187,34 @@ const TrackingPanel = ({ docs, readOnly }) => {
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
   
   const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  const startEdit = (row) => {
+    setEditingId(row.__id);
+    setEditDraft({
+      employee: row.__raw.employee || "",
+      skillsGap: { ...(row.__raw.skillsGap || { date: "", status: "Not Done" }) },
+      idp: { ...(row.__raw.idp || { date: "", status: "Not Done" }) },
+      midTermReview: { ...(row.__raw.midTermReview || { date: "", status: "Not Done" }) },
+      annualReview: { ...(row.__raw.annualReview || { date: "", status: "Not Done" }) },
+    });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
+  const saveEdit = () => {
+    if (!onUpdate) { cancelEdit(); return; }
+    const next = employees.map(e => e.id === editingId
+      ? { ...e, employee: editDraft.employee, skillsGap: editDraft.skillsGap, idp: editDraft.idp,
+          midTermReview: editDraft.midTermReview, annualReview: editDraft.annualReview }
+      : e);
+    onUpdate("track", { employees: next });
+    cancelEdit();
+  };
+  const deleteRow = (row) => {
+    if (!window.confirm("Remove this employee record?")) return;
+    if (!onUpdate) return;
+    const next = employees.filter(e => e.id !== row.__id);
+    onUpdate("track", { employees: next });
+  };
+  const updateEditStage = (stage, patch) => setEditDraft(d => ({ ...d, [stage]: { ...(d[stage] || {}), ...patch } }));
 
   return (
     <div style={cardS}>
@@ -1281,18 +1287,56 @@ const TrackingPanel = ({ docs, readOnly }) => {
                     </th>
                   );
                 })}
+                {!readOnly && (
+                  <th style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", width: 110, borderLeft: "1px solid rgba(255,255,255,0.14)" }}>
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {sortedData.map((row, i) => (
-                <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
-                  {colOrder.map((key) => (
-                    <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {row[key] || "-"}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {sortedData.map((row, i) => {
+                const editing = editingId === row.__id;
+                return (
+                  <tr key={row.__id || i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                    {colOrder.map((key) => (
+                      <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {editing && key === "employee" ? (
+                          <input value={editDraft.employee} onChange={(e) => setEditDraft(d => ({ ...d, employee: e.target.value }))}
+                            style={{ ...inputS, padding: "4px 6px", fontSize: "12.5px" }} />
+                        ) : editing && key !== "employee" ? (
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            <input type="date" value={editDraft[key]?.date || ""}
+                              onChange={(e) => updateEditStage(key, { date: e.target.value })}
+                              style={{ ...inputS, padding: "3px 5px", fontSize: "11.5px", flex: 1 }} />
+                            <select value={editDraft[key]?.status || "Not Done"}
+                              onChange={(e) => updateEditStage(key, { status: e.target.value })}
+                              style={{ ...selectS, padding: "3px 20px 3px 5px", fontSize: "11.5px", flex: 1 }}>
+                              <option value="Done">Done</option>
+                              <option value="Not Done">Not done</option>
+                            </select>
+                          </div>
+                        ) : row[key]}
+                      </td>
+                    ))}
+                    {!readOnly && (
+                      <td style={{ padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                        {editing ? (
+                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                            <button onClick={saveEdit} style={{ ...btnPrimary, padding: "3px 7px" }} title="Save"><Check size={13} /></button>
+                            <button onClick={cancelEdit} style={{ ...btnGhost, padding: "3px 7px" }} title="Cancel"><X size={13} /></button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                            <button onClick={() => startEdit(row)} style={{ ...btnGhost, padding: "3px 7px" }} title="Edit"><Pencil size={13} /></button>
+                            <button onClick={() => deleteRow(row)} style={{ ...btnGhost, padding: "3px 7px", color: T.red }} title="Delete"><Trash2 size={13} /></button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1301,10 +1345,14 @@ const TrackingPanel = ({ docs, readOnly }) => {
   );
 };
 
-// Simplified CapacityLoadPanel - NO filters or drag-drop
-const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
+/* ────────────────────────────────────────────────────────────────────────────
+   CapacityLoadPanel — founder load per month with inline per-month editing
+   ──────────────────────────────────────────────────────────────────────── */
+const CapacityLoadPanel = ({ docs, fy, readOnly, onUpdate }) => {
   const exec = docs.exec?.executionData || {};
   const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+  const [editingMonth, setEditingMonth] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   const loadStatus = (v) => {
     if (v === "1" || v === 1) return { text: "Low", color: T.green, bg: T.greenBg };
@@ -1312,6 +1360,31 @@ const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
     if (v === "3" || v === 3) return { text: "High", color: T.red, bg: T.redBg };
     if (v === "4" || v === 4) return { text: "Critical", color: T.red, bg: T.redBg };
     return { text: "—", color: T.faint, bg: T.raised };
+  };
+
+  const startEdit = (monthIdx) => {
+    setEditingMonth(monthIdx);
+    setEditValue(exec.founderLoad?.[monthIdx] ?? "");
+  };
+  const saveEdit = () => {
+    if (!onUpdate) { setEditingMonth(null); return; }
+    const arr = Array.isArray(exec.founderLoad) ? [...exec.founderLoad] : Array(12).fill("");
+    while (arr.length < 12) arr.push("");
+    arr[editingMonth] = editValue === "" ? "" : Number(editValue);
+    onUpdate("exec", { executionData: { ...exec, founderLoad: arr } });
+    setEditingMonth(null);
+  };
+  const cancelEdit = () => {
+    setEditingMonth(null);
+    setEditValue("");
+  };
+  const deleteMonth = (monthIdx) => {
+    if (!window.confirm(`Clear ${MONTHS[monthIdx]}?`)) return;
+    if (!onUpdate) return;
+    const arr = Array.isArray(exec.founderLoad) ? [...exec.founderLoad] : Array(12).fill("");
+    while (arr.length < 12) arr.push("");
+    arr[monthIdx] = "";
+    onUpdate("exec", { executionData: { ...exec, founderLoad: arr } });
   };
 
   return (
@@ -1338,11 +1411,24 @@ const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
             <tr style={{ background: T.bg }}>
               {months.map((m) => {
                 const s = loadStatus(exec.founderLoad?.[m.month]);
+                const editing = editingMonth === m.month;
                 return (
                   <td key={m.key} style={{ padding: "10px 12px", textAlign: "center", borderRight: `1px solid ${T.lineSoft}` }}>
-                    <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>
-                      {s.text}
-                    </div>
+                    {editing ? (
+                      <select value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                        style={{ ...selectS, padding: "4px 20px 4px 5px", fontSize: "11.5px" }}>
+                        <option value="">—</option>
+                        <option value="1">1 · Low</option>
+                        <option value="2">2 · Medium</option>
+                        <option value="3">3 · High</option>
+                        <option value="4">4 · Critical</option>
+                      </select>
+                    ) : (
+                      <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }}
+                        onClick={() => !readOnly && startEdit(m.month)}>
+                        {s.text}
+                      </div>
+                    )}
                   </td>
                 );
               })}
@@ -1350,6 +1436,14 @@ const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
           </tbody>
         </table>
       </div>
+
+      {!readOnly && editingMonth !== null && (
+        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "10px" }}>
+          <button onClick={cancelEdit} style={{ ...btnGhost, padding: "6px 12px", fontSize: "12.5px" }}>Cancel</button>
+          <button onClick={saveEdit} style={{ ...btnPrimary, padding: "6px 14px", fontSize: "12.5px" }}><Check size={13} /> Save</button>
+        </div>
+      )}
+
       <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
         Low means the founder is on strategy and operations run without them. Critical means the business stops when they do. Aim for Low to Medium.
       </p>
@@ -1357,10 +1451,14 @@ const CapacityLoadPanel = ({ docs, fy, readOnly }) => {
   );
 };
 
-// Simplified CapacitySpanPanel - NO filters or drag-drop
-const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
+/* ────────────────────────────────────────────────────────────────────────────
+   CapacitySpanPanel — span of control per month with inline editing
+   ──────────────────────────────────────────────────────────────────────── */
+const CapacitySpanPanel = ({ docs, fy, readOnly, onUpdate }) => {
   const exec = docs.exec?.executionData || {};
   const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+  const [editingMonth, setEditingMonth] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   const spanStatus = (v) => {
     const n = parseFloat(v);
@@ -1368,6 +1466,23 @@ const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
     if (n >= 5 && n <= 8) return { text: n.toFixed(1), color: T.green, bg: T.greenBg };
     if (n < 3 || n > 12) return { text: n.toFixed(1), color: T.red, bg: T.redBg };
     return { text: n.toFixed(1), color: T.amber, bg: T.amberBg };
+  };
+
+  const startEdit = (monthIdx) => {
+    setEditingMonth(monthIdx);
+    setEditValue(exec.spanOfControl?.[monthIdx] ?? "");
+  };
+  const saveEdit = () => {
+    if (!onUpdate) { setEditingMonth(null); return; }
+    const arr = Array.isArray(exec.spanOfControl) ? [...exec.spanOfControl] : Array(12).fill("");
+    while (arr.length < 12) arr.push("");
+    arr[editingMonth] = editValue === "" ? "" : Number(editValue);
+    onUpdate("exec", { executionData: { ...exec, spanOfControl: arr } });
+    setEditingMonth(null);
+  };
+  const cancelEdit = () => {
+    setEditingMonth(null);
+    setEditValue("");
   };
 
   return (
@@ -1394,11 +1509,18 @@ const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
             <tr style={{ background: T.bg }}>
               {months.map((m) => {
                 const s = spanStatus(exec.spanOfControl?.[m.month]);
+                const editing = editingMonth === m.month;
                 return (
                   <td key={m.key} style={{ padding: "10px 12px", textAlign: "center", borderRight: `1px solid ${T.lineSoft}` }}>
-                    <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700 }}>
-                      {s.text}
-                    </div>
+                    {editing ? (
+                      <input type="number" step="0.1" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                        style={{ ...inputS, padding: "4px 6px", fontSize: "12px", textAlign: "center" }} />
+                    ) : (
+                      <div style={{ padding: "6px 4px", borderRadius: "6px", background: s.bg, color: s.color, fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }}
+                        onClick={() => !readOnly && startEdit(m.month)}>
+                        {s.text}
+                      </div>
+                    )}
                   </td>
                 );
               })}
@@ -1406,6 +1528,14 @@ const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
           </tbody>
         </table>
       </div>
+
+      {!readOnly && editingMonth !== null && (
+        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "10px" }}>
+          <button onClick={cancelEdit} style={{ ...btnGhost, padding: "6px 12px", fontSize: "12.5px" }}>Cancel</button>
+          <button onClick={saveEdit} style={{ ...btnPrimary, padding: "6px 14px", fontSize: "12.5px" }}><Check size={13} /> Save</button>
+        </div>
+      )}
+
       <p style={{ fontSize: "12px", color: T.muted, margin: "10px 0 0" }}>
         Five to eight direct reports is the working range. Below three is top-heavy; above twelve and supervision stops being real.
       </p>
@@ -1413,8 +1543,13 @@ const CapacitySpanPanel = ({ docs, fy, readOnly }) => {
   );
 };
 
-const RecordsTermPanel = ({ docs, readOnly }) => {
+/* ────────────────────────────────────────────────────────────────────────────
+   RecordsTermPanel — termination records with inline edit/delete
+   ──────────────────────────────────────────────────────────────────────── */
+const RecordsTermPanel = ({ docs, readOnly, onUpdate }) => {
   const terms = docs.term?.entries || [];
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
 
   const byReason = terms.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
   const reasons = Object.keys(byReason);
@@ -1427,6 +1562,8 @@ const RecordsTermPanel = ({ docs, readOnly }) => {
   ];
 
   const rows = terms.map(e => ({
+    __id: e.id,
+    __raw: e,
     name: e.name || "—",
     dateStarted: e.dateStarted || "—",
     dateEnded: e.dateEnded || "—",
@@ -1436,6 +1573,29 @@ const RecordsTermPanel = ({ docs, readOnly }) => {
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
   
   const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  const startEdit = (row) => {
+    setEditingId(row.__id);
+    setEditDraft({
+      name: row.__raw.name || "",
+      dateStarted: row.__raw.dateStarted || "",
+      dateEnded: row.__raw.dateEnded || "",
+      reason: row.__raw.reason || "",
+    });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
+  const saveEdit = () => {
+    if (!onUpdate) { cancelEdit(); return; }
+    const next = terms.map(e => e.id === editingId ? { ...e, ...editDraft } : e);
+    onUpdate("term", { entries: next });
+    cancelEdit();
+  };
+  const deleteRow = (row) => {
+    if (!window.confirm("Remove this termination record?")) return;
+    if (!onUpdate) return;
+    const next = terms.filter(e => e.id !== row.__id);
+    onUpdate("term", { entries: next });
+  };
 
   return (
     <div style={cardS}>
@@ -1491,20 +1651,59 @@ const RecordsTermPanel = ({ docs, readOnly }) => {
                         </th>
                       );
                     })}
+                    {!readOnly && (
+                      <th style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", width: 110, borderLeft: "1px solid rgba(255,255,255,0.14)" }}>
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedData.map((row, i) => (
-                    <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
-                      {colOrder.map((key) => (
-                        <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {key === "reason" ? (
-                            <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{row[key]}</span>
-                          ) : row[key]}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {sortedData.map((row, i) => {
+                    const editing = editingId === row.__id;
+                    return (
+                      <tr key={row.__id || i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                        {colOrder.map((key) => (
+                          <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {editing ? (
+                              key === "reason" ? (
+                                <select value={editDraft.reason} onChange={(e) => setEditDraft(d => ({ ...d, reason: e.target.value }))}
+                                  style={{ ...selectS, padding: "3px 20px 3px 5px", fontSize: "12px" }}>
+                                  <option value="">—</option>
+                                  {["Performance","Resignation","Redundancy","Misconduct","Retirement","Other"].map(r => (
+                                    <option key={r} value={r}>{r}</option>
+                                  ))}
+                                </select>
+                              ) : key === "dateStarted" || key === "dateEnded" ? (
+                                <input type="date" value={editDraft[key] || ""} onChange={(e) => setEditDraft(d => ({ ...d, [key]: e.target.value }))}
+                                  style={{ ...inputS, padding: "3px 5px", fontSize: "12px" }} />
+                              ) : (
+                                <input value={editDraft[key] || ""} onChange={(e) => setEditDraft(d => ({ ...d, [key]: e.target.value }))}
+                                  style={{ ...inputS, padding: "3px 5px", fontSize: "12.5px" }} />
+                              )
+                            ) : key === "reason" ? (
+                              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.redBg, color: T.red }}>{row[key]}</span>
+                            ) : row[key]}
+                          </td>
+                        ))}
+                        {!readOnly && (
+                          <td style={{ padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            {editing ? (
+                              <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                                <button onClick={saveEdit} style={{ ...btnPrimary, padding: "3px 7px" }} title="Save"><Check size={13} /></button>
+                                <button onClick={cancelEdit} style={{ ...btnGhost, padding: "3px 7px" }} title="Cancel"><X size={13} /></button>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                                <button onClick={() => startEdit(row)} style={{ ...btnGhost, padding: "3px 7px" }} title="Edit"><Pencil size={13} /></button>
+                                <button onClick={() => deleteRow(row)} style={{ ...btnGhost, padding: "3px 7px", color: T.red }} title="Delete"><Trash2 size={13} /></button>
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1538,8 +1737,13 @@ const RecordsTermPanel = ({ docs, readOnly }) => {
   );
 };
 
-const RecordsHirePanel = ({ docs, readOnly }) => {
+/* ────────────────────────────────────────────────────────────────────────────
+   RecordsHirePanel — new hire records with inline edit/delete
+   ──────────────────────────────────────────────────────────────────────── */
+const RecordsHirePanel = ({ docs, readOnly, onUpdate }) => {
   const hires = docs.hire?.entries || [];
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
 
   const byType = {
     Permanent: hires.filter((e) => e.contractType === "Permanent").length,
@@ -1556,6 +1760,8 @@ const RecordsHirePanel = ({ docs, readOnly }) => {
   ];
 
   const rows = hires.map(e => ({
+    __id: e.id,
+    __raw: e,
     name: e.name || "—",
     dateStarted: e.dateStarted || "—",
     contractType: e.contractType || "—",
@@ -1565,6 +1771,29 @@ const RecordsHirePanel = ({ docs, readOnly }) => {
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
   
   const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  const startEdit = (row) => {
+    setEditingId(row.__id);
+    setEditDraft({
+      name: row.__raw.name || "",
+      dateStarted: row.__raw.dateStarted || "",
+      contractType: row.__raw.contractType || "Permanent",
+      endDate: row.__raw.endDate || "",
+    });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
+  const saveEdit = () => {
+    if (!onUpdate) { cancelEdit(); return; }
+    const next = hires.map(e => e.id === editingId ? { ...e, ...editDraft } : e);
+    onUpdate("hire", { entries: next });
+    cancelEdit();
+  };
+  const deleteRow = (row) => {
+    if (!window.confirm("Remove this hire record?")) return;
+    if (!onUpdate) return;
+    const next = hires.filter(e => e.id !== row.__id);
+    onUpdate("hire", { entries: next });
+  };
 
   return (
     <div style={cardS}>
@@ -1622,20 +1851,58 @@ const RecordsHirePanel = ({ docs, readOnly }) => {
                         </th>
                       );
                     })}
+                    {!readOnly && (
+                      <th style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", width: 110, borderLeft: "1px solid rgba(255,255,255,0.14)" }}>
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedData.map((row, i) => (
-                    <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
-                      {colOrder.map((key) => (
-                        <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {key === "contractType" ? (
-                            <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{row[key]}</span>
-                          ) : row[key]}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {sortedData.map((row, i) => {
+                    const editing = editingId === row.__id;
+                    return (
+                      <tr key={row.__id || i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                        {colOrder.map((key) => (
+                          <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {editing ? (
+                              key === "contractType" ? (
+                                <select value={editDraft.contractType} onChange={(e) => setEditDraft(d => ({ ...d, contractType: e.target.value }))}
+                                  style={{ ...selectS, padding: "3px 20px 3px 5px", fontSize: "12px" }}>
+                                  {["Permanent","Contract","Internship"].map(t => (
+                                    <option key={t} value={t}>{t}</option>
+                                  ))}
+                                </select>
+                              ) : key === "dateStarted" || key === "endDate" ? (
+                                <input type="date" value={editDraft[key] || ""} onChange={(e) => setEditDraft(d => ({ ...d, [key]: e.target.value }))}
+                                  style={{ ...inputS, padding: "3px 5px", fontSize: "12px" }} />
+                              ) : (
+                                <input value={editDraft[key] || ""} onChange={(e) => setEditDraft(d => ({ ...d, [key]: e.target.value }))}
+                                  style={{ ...inputS, padding: "3px 5px", fontSize: "12.5px" }} />
+                              )
+                            ) : key === "contractType" ? (
+                              <span style={{ fontSize: "11.5px", fontWeight: 600, padding: "3px 9px", borderRadius: "999px", background: T.raised, color: T.body }}>{row[key]}</span>
+                            ) : row[key]}
+                          </td>
+                        ))}
+                        {!readOnly && (
+                          <td style={{ padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            {editing ? (
+                              <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                                <button onClick={saveEdit} style={{ ...btnPrimary, padding: "3px 7px" }} title="Save"><Check size={13} /></button>
+                                <button onClick={cancelEdit} style={{ ...btnGhost, padding: "3px 7px" }} title="Cancel"><X size={13} /></button>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                                <button onClick={() => startEdit(row)} style={{ ...btnGhost, padding: "3px 7px" }} title="Edit"><Pencil size={13} /></button>
+                                <button onClick={() => deleteRow(row)} style={{ ...btnGhost, padding: "3px 7px", color: T.red }} title="Delete"><Trash2 size={13} /></button>
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1669,7 +1936,6 @@ const RecordsHirePanel = ({ docs, readOnly }) => {
   );
 };
 
-/* ─── Records editor — the register-style data the KPI wizard can't hold ──── */
 const REASONS = ["Performance","Resignation","Redundancy","Misconduct","Retirement","Other"];
 const CONTRACT_TYPES = ["Permanent","Contract","Internship"];
 
@@ -1698,14 +1964,6 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
     if (mode === "recordsHire") await onSave("hire", { entries: hires });
     setSaving(false); onClose();
   };
-
-  const numField = (label, key) => (
-    <div key={key}>
-      <label style={labelS}>{label}</label>
-      <input type="number" min="0" value={exec[key] ?? ""} placeholder="0"
-        onChange={(e) => setExec({ ...exec, [key]: e.target.value === "" ? "" : Number(e.target.value) })} style={inputS} />
-    </div>
-  );
 
   const capacityEditor = (label, key, min, max) => (
     <div>
@@ -1865,115 +2123,107 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Add Data — writes back into the same peopleData docs the old sections used.
-   FIXED: Shows ALL tabs, not just the first one.
+   Add Data — bulk capture grid with flexible window
    ════════════════════════════════════════════════════════════════════════ */
 const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, onPullFinancials, currentTabId }) => {
-  // FIX: Include tabs that have either editable KPIs OR panels that need data entry
   const editableTabs = tabs.filter((t) => {
-    // Check if any category has editable KPIs (with field property)
-    const hasEditableKpis = t.categories.some((c) => 
-      (c.kpis || []).some((k) => k.field)
-    );
-    // Check if any category has a panel that needs data entry
-    const hasPanel = t.categories.some((c) => 
-      c.panel === "tracking" || 
-      c.panel === "capacityLoad" || 
-      c.panel === "capacitySpan" || 
-      c.panel === "recordsTerm" || 
-      c.panel === "recordsHire"
-    );
+    const hasEditableKpis = t.categories.some((c) => (c.kpis || []).some((k) => k.field));
+    const hasPanel = t.categories.some((c) =>
+      c.panel === "tracking" || c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
+      c.panel === "recordsTerm" || c.panel === "recordsHire");
     return hasEditableKpis || hasPanel;
   });
-  
-  const [tabId, setTabId] = useState(prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId
-    : editableTabs.some((t) => t.id === currentTabId) ? currentTabId : editableTabs[0]?.id);
+
+  const [tabId, setTabId] = useState(
+    prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId
+      : editableTabs.some((t) => t.id === currentTabId) ? currentTabId
+      : editableTabs[0]?.id
+  );
   const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
-  const [periodKey, setPeriodKey] = useState(null);
+  const [showCount, setShowCount] = useState(prefs?.showCount || 12);
+  const [startMonthOffset, setStartMonthOffset] = useState(prefs?.startMonthOffset || 0);
   const [draft, setDraft] = useState({});
   const [saveState, setSaveState] = useState("idle");
   const [pulling, setPulling] = useState(false);
   const timer = useRef(null);
+  const docsRef = useRef(docs);
+
+  useEffect(() => { docsRef.current = docs; }, [docs]);
 
   const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
-  const months = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
+  const allMonths = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
 
-  useEffect(() => {
-    if (!months.length) return;
-    if (months.some((m) => m.key === periodKey)) return;
-    setPeriodKey(months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [months]);
+  const months = useMemo(() => {
+    const start = Math.max(0, Math.min(startMonthOffset, allMonths.length - 1));
+    const end = Math.min(allMonths.length, start + showCount);
+    return allMonths.slice(start, end);
+  }, [allMonths, startMonthOffset, showCount]);
 
-  const monthMeta = months.find((m) => m.key === periodKey) || months[0];
-  const monthIndex = months.findIndex((m) => m.key === periodKey);
-
-  // Get rows from the selected tab - include all editable KPIs
   const rows = useMemo(() => {
     if (!tab) return [];
     const out = [];
     tab.categories.forEach((cat) => {
-      // Check if this category has a panel
-      const hasPanel = cat.panel === "tracking" || cat.panel === "capacityLoad" || 
-                       cat.panel === "capacitySpan" || cat.panel === "recordsTerm" || 
+      const hasPanel = cat.panel === "tracking" || cat.panel === "capacityLoad" ||
+                       cat.panel === "capacitySpan" || cat.panel === "recordsTerm" ||
                        cat.panel === "recordsHire";
       if (hasPanel) {
-        // For panel tabs, we want to show a special message or the panel data
-        // We'll add a special entry to indicate this tab has panel data
-        out.push({ 
-          kpi: { 
-            id: `panel_${cat.panel}`, 
-            name: `📋 ${cat.name}`, 
-            units: "", 
-            field: null,
-            panel: cat.panel,
-            isPanel: true 
-          }, 
-          category: cat.name 
-        });
+        out.push({ kpi: { id: `panel_${cat.panel}`, name: cat.name, units: "", field: null,
+          panel: cat.panel, isPanel: true }, category: cat.name, isPanel: true });
       } else {
-        // For regular tabs, include editable KPIs
         (cat.kpis || []).forEach((k) => {
-          if (k.field) {
-            out.push({ kpi: k, category: cat.name });
-          }
+          if (k.field) out.push({ kpi: k, category: cat.name, isPanel: false });
         });
       }
     });
     return out;
   }, [tab]);
 
-  const draftKey = (kpiId, which) => `${monthMeta?.month}|${kpiId}|${which}`;
+  const hasPanelData = tab?.categories.some((c) =>
+    c.panel === "tracking" || c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
+    c.panel === "recordsTerm" || c.panel === "recordsHire");
 
-  const value = (kpi, which) => {
-    const dk = draftKey(kpi.id, which);
+  const panelToOpen = tab?.categories.find((c) =>
+    c.panel === "tracking" || c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
+    c.panel === "recordsTerm" || c.panel === "recordsHire")?.panel;
+
+  const draftKey = (kpiId, monthIdx, which) => `${monthIdx}|${kpiId}|${which}`;
+
+  const value = (kpi, monthIdx, which) => {
+    const dk = draftKey(kpi.id, monthIdx, which);
     if (draft[dk] !== undefined) return draft[dk];
     if (!kpi.field) return "";
     const path = which === "actual" ? kpi.field.a : kpi.field.b;
     if (!path) return "";
     const raw = kpi.field.scalar
       ? atPath(docs[kpi.field.src], path)
-      : atPath(docs[kpi.field.src], path)?.[monthMeta.month];
+      : atPath(docs[kpi.field.src], path)?.[monthIdx];
     return raw === undefined || raw === null ? "" : String(raw);
   };
 
-  /* Typing saves itself — stepping to the next month can't silently drop it. */
-  const setValue = (kpi, which, raw) => {
-    const dk = draftKey(kpi.id, which);
+  const setValue = (kpi, monthIdx, which, raw) => {
+    const dk = draftKey(kpi.id, monthIdx, which);
     setDraft((p) => ({ ...p, [dk]: raw }));
     setSaveState("saving");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
-      await onSaveField({ kpi, which, raw, monthIndex: monthMeta.month });
-      onSavePrefs({ tabId, startYear });
+      await onSaveField({ kpi, which, raw, monthIndex: monthIdx });
+      onSavePrefs({ tabId, startYear, showCount, startMonthOffset });
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 1800);
     }, 800);
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const cell = { ...inputS, padding: "7px 9px", textAlign: "center", fontSize: "13.5px", minHeight: "34px" };
-  const th = { ...panelTh, position: "sticky", top: 0, zIndex: 2, verticalAlign: "top" };
+  const cell = {
+    ...inputS, padding: "5px 6px", textAlign: "center", fontSize: "12.5px",
+    minHeight: "30px", border: "none", borderRadius: 0, background: "transparent",
+  };
+  const th = {
+    padding: "8px 10px", fontSize: "11px", fontWeight: 700, color: "#fff",
+    textTransform: "uppercase", letterSpacing: "0.5px", background: T.header,
+    whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2,
+    verticalAlign: "top", borderRight: "1px solid rgba(255,255,255,0.15)",
+  };
   const yearOptions = [
     { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
     { value: fy.startYear,     badge: "FY",  label: fyLabel(fy.startYear, fy.startMonth) },
@@ -1989,17 +2239,16 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     );
   }
 
-  // Check if the selected tab has panel data (like records)
-  const hasPanelData = tab.categories.some((c) => 
-    c.panel === "tracking" || c.panel === "capacityLoad" || 
-    c.panel === "capacitySpan" || c.panel === "recordsTerm" || 
-    c.panel === "recordsHire"
-  );
+  const kpiRows = rows.filter((r) => !r.isPanel);
 
   return (
-    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · captured monthly`} icon={<Database size={17} />}
-      onClose={onClose} width={800}
-      footer={<> 
+    <Modal
+      title="Add Data"
+      subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Bulk capture mode`}
+      icon={<Database size={17} />}
+      onClose={onClose}
+      width={Math.min(1500, 1000 + months.length * 60)}
+      footer={<>
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
           {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}
@@ -2007,7 +2256,7 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
         <button onClick={onClose} style={btnPrimary}>Done</button>
       </>}>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "10px", marginBottom: "12px", alignItems: "end" }}>
         <div>
           <label style={labelS}>Financial year</label>
           <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
@@ -2020,29 +2269,56 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
             {editableTabs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
+        <div>
+          <label style={labelS}>Starting from</label>
+          <select value={startMonthOffset} onChange={(e) => setStartMonthOffset(Number(e.target.value))} style={selectS}>
+            {allMonths.map((m, i) => <option key={m.key} value={i}>{m.long}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Show</label>
+          <select value={showCount} onChange={(e) => setShowCount(Number(e.target.value))} style={selectS}>
+            <option value={3}>3 months</option>
+            <option value={6}>6 months</option>
+            <option value={12}>12 months (full year)</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelS}>Periods shown</label>
+          <div style={{ padding: "9px 11px", background: T.panel, border: `1px solid ${T.lineStrong}`,
+            borderRadius: "8px", fontSize: "13.5px", color: T.body }}>
+            {months.length} months
+          </div>
+        </div>
       </div>
 
-      {hasPanelData && (
+      {tabId === "summary" && (
         <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex",
           alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <Info size={16} color={T.accentSoft} />
           <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
-            This section contains records data (Employee Development, Terminations, Hires, etc.). Click the button below to edit these records.
+            Revenue per employee, labour cost % and training spend can be pulled from Financial Performance.
           </span>
-          <button 
+          <button onClick={async () => { setPulling(true); await onPullFinancials(); setPulling(false); }}
+            disabled={pulling} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: pulling ? 0.6 : 1 }}>
+            <RefreshCw size={12} /> {pulling ? "Pulling…" : "Pull from Financials"}
+          </button>
+        </div>
+      )}
+
+      {hasPanelData && kpiRows.length === 0 && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex",
+          alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <Info size={16} color={T.accentSoft} />
+          <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
+            This section contains records data (Employee Development, Terminations, Hires, Founder Load, Span of Control).
+            Click the button below to edit these records.
+          </span>
+          <button
             onClick={() => {
-              // Find the first panel category
-              const panelCat = tab.categories.find((c) => 
-                c.panel === "tracking" || c.panel === "capacityLoad" || 
-                c.panel === "capacitySpan" || c.panel === "recordsTerm" || 
-                c.panel === "recordsHire"
-              );
-              if (panelCat?.panel) {
-                onClose();
-                // Let the parent know which panel to open
-                if (window.__setRecordsMode) {
-                  window.__setRecordsMode(panelCat.panel);
-                }
+              onClose();
+              if (panelToOpen && typeof window !== "undefined" && window.__setRecordsMode) {
+                window.__setRecordsMode(panelToOpen);
               }
             }}
             style={{ ...btnPrimary, padding: "7px 14px", fontSize: "12.5px" }}>
@@ -2051,81 +2327,136 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
         </div>
       )}
 
-      {!hasPanelData && (
+      {hasPanelData && kpiRows.length > 0 && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex",
+          alignItems: "center", gap: "12px", flexWrap: "wrap", fontSize: "12.5px", color: T.body }}>
+          <Info size={16} color={T.accentSoft} />
+          <span style={{ flex: 1, minWidth: "220px" }}>
+            This section also has records data — click Edit Records to manage it.
+          </span>
+          <button
+            onClick={() => {
+              onClose();
+              if (panelToOpen && typeof window !== "undefined" && window.__setRecordsMode) {
+                window.__setRecordsMode(panelToOpen);
+              }
+            }}
+            style={{ ...btnGhost, padding: "7px 14px", fontSize: "12.5px" }}>
+            <Users size={13} /> Edit Records
+          </button>
+        </div>
+      )}
+
+      {kpiRows.length > 0 && (
         <>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelS}>Month · 12 in FY {fyLabel(startYear, fy.startMonth)}</label>
-              <select value={periodKey || ""} onChange={(e) => setPeriodKey(e.target.value)} style={selectS}>
-                {months.map((m) => <option key={m.key} value={m.key}>{m.long}</option>)}
-              </select>
-            </div>
-            <button onClick={() => setPeriodKey(months[Math.max(0, monthIndex - 1)]?.key)} disabled={monthIndex <= 0}
-              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
-            <button onClick={() => setPeriodKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
-              style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+          <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px" }}>
+            Enter Actual and Target for each month. Values save automatically as you type.
+            Use <strong>Starting from</strong> and <strong>Show</strong> to narrow the window.
           </div>
 
-          {(tabId === "summary") && (
-            <div style={{ ...cardS, background: T.panel, marginBottom: "12px", display: "flex",
-              alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              <Info size={16} color={T.accentSoft} />
-              <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
-                Revenue per employee, labour cost % and training spend can be computed from Financial Performance rather than typed.
-              </span>
-              <button onClick={async () => { setPulling(true); await onPullFinancials(); setPulling(false); }}
-                disabled={pulling} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: pulling ? 0.6 : 1 }}>
-                <RefreshCw size={12} /> {pulling ? "Pulling…" : "Pull from Financials"}
-              </button>
-            </div>
-          )}
-
           <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-            <div style={{ maxHeight: "42vh", overflowY: "auto" }}>
-              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <div style={{ maxHeight: "58vh", overflow: "auto" }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "max-content",
+                minWidth: "100%", tableLayout: "auto" }}>
                 <thead>
                   <tr>
-                    <th style={{ ...th, textAlign: "left", borderRight: "1px solid rgba(255,255,255,0.15)" }}>KPI</th>
-                    <th style={{ ...th, textAlign: "center", width: "24%", borderRight: "1px solid rgba(255,255,255,0.15)" }}>Actual</th>
-                    <th style={{ ...th, textAlign: "center", width: "24%" }}>Target</th>
+                    <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3,
+                      background: T.header, minWidth: "200px", maxWidth: "240px",
+                      borderRight: `2px solid ${T.lineStrong}` }}>
+                      KPI
+                    </th>
+                    {months.map((m) => (
+                      <th key={m.key} style={{ ...th, textAlign: "center", minWidth: "110px" }}>
+                        <div style={{ fontSize: "11px", fontWeight: 600, color: "#fff" }}>{m.label}</div>
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3,
+                      background: T.header, minWidth: "200px", maxWidth: "240px",
+                      borderRight: `2px solid ${T.lineStrong}`, padding: "4px 10px", fontSize: "10px" }}>
+                      &nbsp;
+                    </th>
+                    {months.map((m) => (
+                      <th key={m.key} style={{ ...th, padding: "3px 0", background: "#4a352f" }}>
+                        <div style={{ display: "flex" }}>
+                          <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.85)",
+                            borderRight: "1px solid rgba(255,255,255,0.15)", padding: "2px" }}>Actual</span>
+                          <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.85)", padding: "2px" }}>Target</span>
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ kpi, category }, i) => {
-                    // Skip panel rows - they should have been handled above
-                    if (kpi.isPanel) return null;
-                    const pathActual = kpi.field?.a;
-                    const pathBudget = kpi.field?.b;
+                  {kpiRows.map(({ kpi, category }, i) => {
+                    const isScalar = !!kpi.field?.scalar;
+                    const hasTarget = !!kpi.field?.b;
                     return (
                       <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "7px 12px", fontSize: "13.5px", color: T.ink,
-                          borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                          <div style={{ fontWeight: 600 }}>{kpi.name}</div>
-                          <div style={{ fontSize: "11.5px", color: T.muted }}>
-                            {category} · {kpi.units}{kpi.field?.scalar ? " · applies to every month" : ""}
+                        <td style={{ padding: "6px 10px", fontSize: "12.5px", color: T.ink,
+                          borderBottom: `1px solid ${T.lineSoft}`, borderRight: `2px solid ${T.lineStrong}`,
+                          position: "sticky", left: 0, zIndex: 1, background: i % 2 ? T.panel : T.bg,
+                          minWidth: "200px", maxWidth: "240px" }}>
+                          <div style={{ fontWeight: 600, fontSize: "12.5px" }}>{kpi.name}</div>
+                          <div style={{ fontSize: "10.5px", color: T.muted }}>
+                            {category} · {kpi.units}
+                            {isScalar ? " · applies to every month" : ""}
                           </div>
                         </td>
-                        {["actual", "budget"].map((which) => {
-                          const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
-                          return (
-                            <td key={which} style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`,
-                              borderRight: which === "actual" ? `1px solid ${T.lineSoft}` : "none" }}>
-                              {!path ? (
-                                <div style={{ textAlign: "center", fontSize: "12.5px", color: T.faint, padding: "8px 0" }}>
-                                  {which === "budget" && kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)} benchmark` : "—"}
-                                </div>
-                              ) : kpi.options ? (
-                                <select value={value(kpi, which)} onChange={(e) => setValue(kpi, which, e.target.value)} style={{ ...cell, textAlign: "left" }}>
-                                  <option value="">—</option>
-                                  {kpi.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                </select>
-                              ) : (
-                                <input type="number" step="any" value={value(kpi, which)} placeholder="—"
-                                  onChange={(e) => setValue(kpi, which, e.target.value)} style={cell} />
-                              )}
-                            </td>
-                          );
-                        })}
+                        {months.map((m) => (
+                          <td key={m.key} style={{ padding: 0, borderBottom: `1px solid ${T.lineSoft}` }}>
+                            <div style={{ display: "flex" }}>
+                              <div style={{ flex: 1, borderRight: `1px solid ${T.lineSoft}` }}>
+                                {kpi.options ? (
+                                  <select
+                                    value={value(kpi, m.month, "actual")}
+                                    onChange={(e) => setValue(kpi, m.month, "actual", e.target.value)}
+                                    style={{ ...cell, textAlign: "left" }}>
+                                    <option value="">—</option>
+                                    {kpi.options.map((o) => (
+                                      <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    type="number" step="any"
+                                    value={isScalar ? value(kpi, 0, "actual") : value(kpi, m.month, "actual")}
+                                    placeholder="—"
+                                    disabled={isScalar && m.month !== 0}
+                                    onChange={(e) => setValue(kpi, isScalar ? 0 : m.month, "actual", e.target.value)}
+                                    style={{ ...cell, opacity: isScalar && m.month !== 0 ? 0.4 : 1 }} />
+                                )}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                {!hasTarget ? (
+                                  <div style={{ textAlign: "center", fontSize: "11px",
+                                    color: T.faint, padding: "8px 4px" }}>
+                                    {kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)}` : "—"}
+                                  </div>
+                                ) : kpi.options ? (
+                                  <select
+                                    value={value(kpi, m.month, "budget")}
+                                    onChange={(e) => setValue(kpi, m.month, "budget", e.target.value)}
+                                    style={{ ...cell, textAlign: "left" }}>
+                                    <option value="">—</option>
+                                    {kpi.options.map((o) => (
+                                      <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    type="number" step="any"
+                                    value={isScalar ? value(kpi, 0, "budget") : value(kpi, m.month, "budget")}
+                                    placeholder="—"
+                                    disabled={isScalar && m.month !== 0}
+                                    onChange={(e) => setValue(kpi, isScalar ? 0 : m.month, "budget", e.target.value)}
+                                    style={{ ...cell, opacity: isScalar && m.month !== 0 ? 0.4 : 1 }} />
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        ))}
                       </tr>
                     );
                   })}
@@ -2133,13 +2464,27 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
               </table>
             </div>
           </div>
+
+          <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "8px",
+            display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+            <Info size={12} />
+            Each month has two columns: <strong>Actual</strong> and <strong>Target</strong>. Values save automatically as you type.
+            {kpiRows.some(({ kpi }) => kpi.field?.scalar) && (
+              <> Scalar KPIs (like Head Count) write once and stand for every month.</>
+            )}
+          </div>
         </>
+      )}
+
+      {kpiRows.length === 0 && !hasPanelData && (
+        <div style={{ textAlign: "center", padding: "30px", color: T.muted, fontSize: "13.5px" }}>
+          Nothing on this tab takes direct input.
+        </div>
       )}
     </Modal>
   );
 };
 
-/* ─── Add KPI ───────────────────────────────────────────────────────────── */
 const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
   const [tabId, setTabId] = useState(tabs.some((t) => t.id === currentTabId) ? currentTabId : tabs[0]?.id);
   const [catChoice, setCatChoice] = useState("");
@@ -2257,16 +2602,12 @@ const AddChooser = ({ onPick, onClose }) => (
   </Modal>
 );
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Report Generator — Custom Word document export
-   ════════════════════════════════════════════════════════════════════════ */
-
 const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userName }) => {
-  const [selectedTabs, setSelectedTabs] = useState(() => 
+  const [selectedTabs, setSelectedTabs] = useState(() =>
     Object.fromEntries(tabs.map((t) => [t.id, true]))
   );
   const [includeSummary, setIncludeSummary] = useState(true);
-  const [includeCharts, setIncludeCharts] = useState(true);
+  const [includeBreakdown, setIncludeBreakdown] = useState(true);
   const [includeAnalysis, setIncludeAnalysis] = useState(true);
   const [includeRecords, setIncludeRecords] = useState(true);
   const [includeActions, setIncludeActions] = useState(true);
@@ -2274,7 +2615,6 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
   const [generating, setGenerating] = useState(false);
   const [reportTitle, setReportTitle] = useState(`People Performance Report - ${new Date().toLocaleDateString()}`);
 
-  // Get actions from governanceCalendar
   const [actions, setActions] = useState([]);
   const [loadingActions, setLoadingActions] = useState(true);
 
@@ -2285,7 +2625,7 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
         const snap = await getDoc(doc(db, "governanceCalendar", userId));
         if (snap.exists()) {
           const meetings = snap.data().meetings || [];
-          const allActions = meetings.flatMap(m => 
+          const allActions = meetings.flatMap(m =>
             (m.actions || []).map(a => ({ ...a, meetingTitle: m.title }))
           );
           setActions(allActions);
@@ -2299,10 +2639,22 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
     loadActions();
   }, [userId]);
 
+  const buildBreakdown = useCallback((kpi) => {
+    const months = fyMonths(fy.startYear, fy.startMonth);
+    const rows = months.map((m) => {
+      const entry = kpi.entries?.[m.key] || {};
+      const a = parseNum(entry.actual);
+      const b = parseNum(entry.budget);
+      const v = Number.isFinite(a) && Number.isFinite(b) ? a - b : null;
+      return { label: m.long, actual: a, budget: b, variance: v };
+    });
+    const anyData = rows.some((r) => r.actual !== null || r.budget !== null);
+    return anyData ? rows : [];
+  }, [fy]);
+
   const generateReport = async () => {
     setGenerating(true);
 
-    // Build the report data structure
     const reportData = {
       title: reportTitle,
       generated: new Date().toISOString(),
@@ -2314,12 +2666,10 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       actions: [],
     };
 
-    // Process each selected tab
     const selectedTabList = tabs.filter(t => selectedTabs[t.id]);
 
     if (includeSummary) {
-      // Build summary statistics
-      const allKpis = selectedTabList.flatMap(t => 
+      const allKpis = selectedTabList.flatMap(t =>
         t.categories.flatMap(c => c.kpis || [])
       );
       const statusCounts = { green: 0, amber: 0, red: 0, none: 0 };
@@ -2334,12 +2684,8 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       };
     }
 
-    // Build section data
     selectedTabList.forEach(tab => {
-      const section = {
-        name: tab.name,
-        categories: [],
-      };
+      const section = { name: tab.name, categories: [] };
 
       tab.categories.forEach(cat => {
         const catData = {
@@ -2370,16 +2716,10 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
           };
         } else if (cat.panel === "capacityLoad") {
           const exec = docs.exec?.executionData || {};
-          catData.panelData = {
-            type: "capacityLoad",
-            data: exec.founderLoad || {},
-          };
+          catData.panelData = { type: "capacityLoad", data: exec.founderLoad || {} };
         } else if (cat.panel === "capacitySpan") {
           const exec = docs.exec?.executionData || {};
-          catData.panelData = {
-            type: "capacitySpan",
-            data: exec.spanOfControl || {},
-          };
+          catData.panelData = { type: "capacitySpan", data: exec.spanOfControl || {} };
         } else if (cat.panel === "recordsTerm") {
           const terms = docs.term?.entries || [];
           const byReason = terms.reduce((acc, e) => { acc[e.reason] = (acc[e.reason] || 0) + 1; return acc; }, {});
@@ -2401,7 +2741,6 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
             byType,
           };
         } else {
-          // Regular KPI category
           (cat.kpis || []).forEach(k => {
             const v = periodValues(k, periodForReport, fy);
             const status = getStatus(k, periodForReport, fy);
@@ -2420,6 +2759,7 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
               statusKey: status.key,
               benchmark: k.benchmark,
               notes: k.notes || "",
+              breakdown: buildBreakdown(k),
             });
           });
         }
@@ -2430,10 +2770,9 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       reportData.sections.push(section);
     });
 
-    // Get actions
     if (includeActions) {
-      const peopleActions = actions.filter(a => 
-        a.sourceModule === "People Performance" || 
+      const peopleActions = actions.filter(a =>
+        a.sourceModule === "People Performance" ||
         a.category === "People" ||
         a.sourceCategory?.includes("People")
       );
@@ -2449,13 +2788,9 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       }));
     }
 
-    // Generate the Word document (HTML format that Word can open)
-    const htmlContent = generateWordHTML(reportData, includeCharts, includeAnalysis);
-    
-    // Create the download
-    const blob = new Blob([htmlContent], { 
-      type: "application/msword;charset=utf-8" 
-    });
+    const htmlContent = generateWordHTML(reportData, includeBreakdown, includeAnalysis);
+
+    const blob = new Blob([htmlContent], { type: "application/msword;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -2469,32 +2804,27 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
     onClose();
   };
 
-  const generateWordHTML = (data, includeCharts, includeAnalysis) => {
-    const statusColor = (key) => {
-      if (key === "green") return "#166534";
-      if (key === "amber") return "#92400e";
-      if (key === "red") return "#991b1b";
-      return "#6b5b55";
-    };
-
-    const statusBg = (key) => {
-      if (key === "green") return "#f0fdf4";
-      if (key === "amber") return "#fffbeb";
-      if (key === "red") return "#fef2f2";
-      return "#f2eeec";
-    };
+  const generateWordHTML = (data, includeBreakdown, includeAnalysis) => {
+    const statusColor = (key) => key === "green" ? "#166534" : key === "amber" ? "#92400e" : key === "red" ? "#991b1b" : "#6b5b55";
+    const statusBg    = (key) => key === "green" ? "#f0fdf4" : key === "amber" ? "#fffbeb" : key === "red" ? "#fef2f2" : "#f2eeec";
 
     const fmtVal = (v, units) => {
       if (v === null || v === undefined || v === "") return "—";
       if (units === "%") return `${trimNum(Number(v))}%`;
       if (units === "R") {
         const n = Number(v);
-        if (n >= 1_000_000) return `R ${(n / 1_000_000).toFixed(1)}m`;
-        if (n >= 1_000) return `R ${(n / 1_000).toFixed(1)}k`;
+        if (Math.abs(n) >= 1_000_000) return `R ${(n / 1_000_000).toFixed(1)}m`;
+        if (Math.abs(n) >= 1_000) return `R ${(n / 1_000).toFixed(1)}k`;
         return `R ${n.toFixed(0)}`;
       }
       if (units && !["#","%","R"].includes(units)) return `${trimNum(Number(v))} ${units}`;
       return trimNum(Number(v));
+    };
+
+    const isFav = (k, v) => {
+      if (v === null) return null;
+      if (k?.direction === "match") return Math.abs(v) < 0.001;
+      return k?.direction === "higher" ? v >= 0 : v <= 0;
     };
 
     const kpiRows = (kpis) => {
@@ -2514,19 +2844,53 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
           <tbody>`;
       kpis.forEach((k, i) => {
         const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
+        const fav = isFav(k, k.variance);
         html += `
           <tr style="background:${bg};">
             <td style="padding:6px 10px; border:1px solid #ddd; font-weight:500;">${k.name}</td>
             <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${k.units}</td>
             <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">${fmtVal(k.budget, k.units)}</td>
             <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; font-weight:600;">${fmtVal(k.actual, k.units)}</td>
-            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${k.variance !== null && k.variance >= 0 ? '#166534' : '#991b1b'};">${k.variance !== null ? fmtVal(k.variance, k.units) : "—"}</td>
+            <td style="padding:6px 10px; border:1px solid #ddd; text-align:center; color:${fav === null ? '#6b5b55' : fav ? '#166534' : '#991b1b'};">${k.variance !== null ? fmtVal(k.variance, k.units) : "—"}</td>
             <td style="padding:6px 10px; border:1px solid #ddd; text-align:center;">
               <span style="background:${statusBg(k.statusKey)}; color:${statusColor(k.statusKey)}; padding:2px 12px; border-radius:12px; font-weight:600; font-size:9pt;">${k.status}</span>
             </td>
           </tr>`;
       });
       html += `</tbody></table>`;
+      return html;
+    };
+
+    const breakdownTables = (kpis) => {
+      if (!kpis.length) return "";
+      let html = "";
+      kpis.forEach(k => {
+        if (!k.breakdown || !k.breakdown.length) return;
+        html += `<h4 style="color:#4a352f; font-size:10pt; margin:14px 0 4px;">${k.name} — month-by-month detail (${k.breakdown.length} captured)</h4>`;
+        html += `
+          <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:0 0 10px;">
+            <thead>
+              <tr style="background:#f2eeec; color:#4a352f;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Month</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Target</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Actual</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Variance</th>
+              </tr>
+            </thead>
+            <tbody>`;
+        k.breakdown.forEach((row, ri) => {
+          const bg = ri % 2 === 0 ? "#ffffff" : "#faf8f7";
+          const fav = isFav(k, row.variance);
+          html += `
+            <tr style="background:${bg};">
+              <td style="padding:4px 8px; border:1px solid #ddd;">${row.label}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(row.budget, k.units)}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:600;">${fmtVal(row.actual, k.units)}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${fav === null ? '#6b5b55' : fav ? '#166534' : '#991b1b'};">${row.variance !== null ? fmtVal(row.variance, k.units) : "—"}</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+      });
       return html;
     };
 
@@ -2584,7 +2948,7 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
         MONTHS.forEach((m, i) => {
           const val = panelData.data[i];
           const text = val !== undefined && val !== null && val !== "" ? Number(val).toFixed(1) : "—";
-          const color = (val && Number(val) >= 5 && Number(val) <= 8) ? "#166534" : 
+          const color = (val && Number(val) >= 5 && Number(val) <= 8) ? "#166534" :
                         (val && (Number(val) < 3 || Number(val) > 12)) ? "#991b1b" : "#92400e";
           cells += `<td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${color}; font-weight:600;">${text}</td>`;
         });
@@ -2594,8 +2958,7 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
               ${MONTHS.map(m => `<th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${m}</th>`).join("")}
             </tr></thead>
             <tbody><tr>${cells}</tr></tbody>
-          </table>
-          <p style="font-size:8pt; color:#6b5b55;">5-8 direct reports is the working range</p>`;
+          </table>`;
       }
       if (panelData.type === "recordsTerm") {
         let rows = "";
@@ -2649,60 +3012,52 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       return "";
     };
 
-    // Build the full HTML document
     let sectionsHtml = "";
     data.sections.forEach(section => {
       sectionsHtml += `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">${section.name}</h2>`;
-      
+
       section.categories.forEach(cat => {
         if (cat.isPanel && cat.panelData) {
           sectionsHtml += `
             <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">${cat.name}</h3>
-            ${panelHtml(cat.panelData)}
-          `;
+            ${panelHtml(cat.panelData)}`;
         } else if (cat.kpis.length) {
           sectionsHtml += `
             <h3 style="color:#4a352f; font-size:12pt; margin:12px 0 6px;">${cat.name}</h3>
             ${kpiRows(cat.kpis)}
-          `;
+            ${includeBreakdown ? breakdownTables(cat.kpis) : ""}`;
         }
       });
     });
 
-    // Analysis section
     let analysisHtml = "";
     if (includeAnalysis) {
       analysisHtml = `
         <h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Analysis & Observations</h2>
         <div style="font-size:10pt; line-height:1.6;">`;
-      
+
       data.sections.forEach(section => {
         section.categories.forEach(cat => {
           if (!cat.isPanel) {
             cat.kpis.forEach(k => {
-              const status = k.statusKey;
-              if (status === "red" || status === "amber") {
+              if (k.statusKey === "red" || k.statusKey === "amber") {
                 analysisHtml += `
-                  <div style="background:${statusBg(status)}; padding:8px 12px; margin:6px 0; border-radius:4px; border-left:3px solid ${statusColor(status)};">
+                  <div style="background:${statusBg(k.statusKey)}; padding:8px 12px; margin:6px 0; border-radius:4px; border-left:3px solid ${statusColor(k.statusKey)};">
                     <strong>${k.name}</strong> — ${k.status}
                     ${k.variance !== null ? ` (${k.variance >= 0 ? "+" : ""}${fmtVal(k.variance, k.units)})` : ""}
                     ${k.notes ? `<br><span style="color:#6b5b55; font-size:9pt;">Note: ${k.notes}</span>` : ""}
-                  </div>
-                `;
+                  </div>`;
               }
             });
           }
         });
       });
 
-      // Summary stats
-      const allKpis = data.sections.flatMap(s => 
-        s.categories.flatMap(c => c.kpis || [])
-      );
+      const allKpis = data.sections.flatMap(s => s.categories.flatMap(c => c.kpis || []));
       const reds = allKpis.filter(k => k.statusKey === "red");
       const ambers = allKpis.filter(k => k.statusKey === "amber");
       const greens = allKpis.filter(k => k.statusKey === "green");
-      
+
       analysisHtml += `
         <div style="background:#faf8f7; padding:12px 16px; margin:12px 0; border-radius:6px;">
           <p><strong>Summary:</strong> ${greens.length} on target · ${ambers.length} needs attention · ${reds.length} critical</p>
@@ -2712,7 +3067,6 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       analysisHtml += `</div>`;
     }
 
-    // Actions section
     let actionsHtml = "";
     if (includeActions && data.actions.length) {
       let actionRows = "";
@@ -2814,7 +3168,7 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
         <div>
-          <label style={labelS}>Period</label>
+          <label style={labelS}>Period (summary rollup)</label>
           <select value={periodForReport} onChange={(e) => setPeriodForReport(e.target.value)} style={selectS}>
             {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
@@ -2848,8 +3202,8 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
             Summary header
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
-            <input type="checkbox" checked={includeCharts} onChange={() => setIncludeCharts(!includeCharts)} />
-            Charts (static view)
+            <input type="checkbox" checked={includeBreakdown} onChange={() => setIncludeBreakdown(!includeBreakdown)} />
+            Month-by-month detail
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
             <input type="checkbox" checked={includeAnalysis} onChange={() => setIncludeAnalysis(!includeAnalysis)} />
@@ -2869,15 +3223,12 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
         <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
         The report will be generated as a Word document (.doc) that can be opened in Microsoft Word, Google Docs, or LibreOffice.
-        {includeCharts && " Charts are rendered as static tables and summaries."}
+        {includeBreakdown && " The detail section shows every captured month — not the rolled-up figure."}
       </div>
     </Modal>
   );
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Main
-   ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "peoplePerf.addData.prefs";
 const META_DOC = "peopleKpiMeta";
 
@@ -2915,7 +3266,7 @@ const PeoplePerformance = () => {
   const [addFlow, setAddFlow] = useState(null);
   const [manageTabs, setManageTabs] = useState(false);
   const [recordsMode, setRecordsMode] = useState(null);
-  const [showReport, setShowReport] = useState(false);  // NEW: Report generator state
+  const [showReport, setShowReport] = useState(false);
 
   const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
 
@@ -2932,7 +3283,6 @@ const PeoplePerformance = () => {
     try { const raw = window.localStorage.getItem(PREFS_KEY); if (raw) setDataPrefs(JSON.parse(raw)); } catch { /* ignore */ }
   }, []);
 
-  // Set up the global callback for the AddDataWizard to open records
   useEffect(() => {
     window.__setRecordsMode = (mode) => {
       setRecordsMode(mode);
@@ -2966,7 +3316,6 @@ const PeoplePerformance = () => {
         if (snap.exists()) out[k] = snap.data();
       } catch (err) { console.error(`Could not load ${k}:`, err); }
     }));
-    // Financial docs are read-only here — they only feed the Pull button.
     await Promise.all([["pnl", DOC.pnl], ["bs", DOC.bs]].map(async ([k, id]) => {
       try {
         const snap = await getDoc(doc(db, "financialData", `${uid_}${id}`));
@@ -3013,8 +3362,6 @@ const PeoplePerformance = () => {
     notify("success", "KPI removed from the dashboard.");
   };
 
-  /* Writes into a nested path inside one peopleData doc, creating the shape
-     as it goes so a first entry doesn't get dropped. */
   const writeDoc = async (src, mutate) => {
     if (!user?.uid || isInvestorView) return;
     const next = JSON.parse(JSON.stringify(docs[src] || {}));
@@ -3057,8 +3404,6 @@ const PeoplePerformance = () => {
     await writeDoc(kpi.field.src, (d) => setAtPath(d, path, raw, { scalar: !!kpi.field.scalar, monthIndex }));
   };
 
-  /* Revenue per employee, labour cost % and training spend can all be derived
-     from what Financial Performance already holds. */
   const pullFromFinancials = async () => {
     const pnl = docs.pnl, bs = docs.bs;
     const arr = (a) => (Array.isArray(a) ? a.map((v) => parseFloat(v) || 0) : Array(12).fill(0));
@@ -3072,15 +3417,17 @@ const PeoplePerformance = () => {
     const trainPct = training.map((v, i) => (salaries[i] ? (v / salaries[i] * 100).toFixed(2) : ""));
 
     await writeDoc("prod", (d) => {
-      setAtPath(d, ["productivityData","revenuePerEmployee","actual"], "", {});
+      if (!d.productivityData) d.productivityData = {};
+      if (!d.productivityData.revenuePerEmployee) d.productivityData.revenuePerEmployee = {};
       d.productivityData.revenuePerEmployee.actual = revPer;
-      setAtPath(d, ["productivityData","laborCostPercentage","actual"], "", {});
+      if (!d.productivityData.laborCostPercentage) d.productivityData.laborCostPercentage = {};
       d.productivityData.laborCostPercentage.actual = labPct;
     });
     await writeDoc("cap", (d) => {
-      setAtPath(d, ["capabilityData","trainingSpendAmount","actual"], "", {});
+      if (!d.capabilityData) d.capabilityData = {};
+      if (!d.capabilityData.trainingSpendAmount) d.capabilityData.trainingSpendAmount = {};
       d.capabilityData.trainingSpendAmount.actual = trainAmt;
-      setAtPath(d, ["capabilityData","trainingSpendPercentage","actual"], "", {});
+      if (!d.capabilityData.trainingSpendPercentage) d.capabilityData.trainingSpendPercentage = {};
       d.capabilityData.trainingSpendPercentage.actual = trainPct;
     });
     notify("success", "Pulled revenue, labour cost and training figures from Financial Performance.");
@@ -3088,7 +3435,11 @@ const PeoplePerformance = () => {
 
   const saveRecords = async (src, payload) => writeDoc(src, (d) => Object.assign(d, payload));
 
-  /* ─── Assemble tabs and hydrate every KPI with a financial year ─────────── */
+  // Helper for panel inline edits/deletes (used by TrackingPanel, RecordsTermPanel, RecordsHirePanel, Capacity panels)
+  const handlePanelRowUpdate = async (src, payload) => {
+    await writeDoc(src, (d) => Object.assign(d, payload));
+  };
+
   const tabs = useMemo(() => {
     const withCustom = TAB_DEFS.map((tab) => {
       const cats = tab.categories.map((c) => ({ ...c, kpis: [...(c.kpis || [])] }));
@@ -3118,8 +3469,6 @@ const PeoplePerformance = () => {
               const b = kpi.budget ? kpi.budget(ctx) : null;
               entries[m.key] = {
                 actual: kpi.actual ? kpi.actual(ctx) : null,
-                // Fall back to the published benchmark so a KPI without a
-                // captured target still says something.
                 budget: b !== null && b !== undefined ? b : kpi.benchmark,
               };
             }
@@ -3146,8 +3495,6 @@ const PeoplePerformance = () => {
   const updateKpiMeta = (kpiId, patch) =>
     persistMeta({ ...meta, kpis: { ...meta.kpis, [kpiId]: { ...(meta.kpis[kpiId] || {}), ...patch } } });
 
-  /* A KPI's target is "Set" when someone captured one, "Benchmark" when the
-     published figure is standing in for it. */
   const targetSource = (kpi, period) => {
     const months = fyMonths(fy.startYear, fy.startMonth);
     const anyCaptured = months.some((m) => {
@@ -3199,7 +3546,6 @@ const PeoplePerformance = () => {
     }[sortConfig.key];
 
     return [...list].sort((a, b) => {
-      // Category leads so the merged Category cell stays contiguous.
       if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName);
       if (!get) return 0;
       const av = get(a), bv = get(b);
@@ -3589,34 +3935,33 @@ const PeoplePerformance = () => {
         </div>
       )}
 
-      {/* Panels - only shown for non-summary tabs */}
       {!isKpiTableTab && panels.includes("tracking") && (
         <div style={{ marginBottom: "20px" }}>
-          <TrackingPanel docs={docs} readOnly={isInvestorView} />
+          <TrackingPanel docs={docs} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("capacityLoad") && (
         <div style={{ marginBottom: "20px" }}>
-          <CapacityLoadPanel docs={docs} fy={fy} readOnly={isInvestorView} />
+          <CapacityLoadPanel docs={docs} fy={fy} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("capacitySpan") && (
         <div style={{ marginBottom: "20px" }}>
-          <CapacitySpanPanel docs={docs} fy={fy} readOnly={isInvestorView} />
+          <CapacitySpanPanel docs={docs} fy={fy} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("recordsTerm") && (
         <div style={{ marginBottom: "20px" }}>
-          <RecordsTermPanel docs={docs} readOnly={isInvestorView} />
+          <RecordsTermPanel docs={docs} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
         </div>
       )}
 
       {!isKpiTableTab && panels.includes("recordsHire") && (
         <div style={{ marginBottom: "20px" }}>
-          <RecordsHirePanel docs={docs} readOnly={isInvestorView} />
+          <RecordsHirePanel docs={docs} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
         </div>
       )}
 

@@ -1,140 +1,83 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore"
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage"
-import { getAuth, onAuthStateChanged } from "firebase/auth"
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore"
+import {
+  getDownloadURL,
+  getStorage,
+  ref,
+  uploadBytes,
+} from "firebase/storage"
+import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
-import { db, auth } from "../../../firebaseConfig"
 
-const IS_PROD = process.env.NODE_ENV === "production"
-const LOCAL_MATCHING_URL = "http://localhost:8000/api/funders/analyze"
-const USE_CLOUD_FUNCTION = true // Set to false to switch back to local backend for matching in dev environment
+import { db, auth } from "../../../firebaseConfig"
 
 const storage = getStorage()
 
-// ── Normalization & Filtering Helpers ─────────────────────────────────────────
-function normalizeToArray(value) {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") {
-    const cleaned = value.trim();
-    if (!cleaned) return [];
-    return cleaned.split(/\s*,\s*/).map(i => i.trim()).filter(Boolean);
-  }
-  return [];
+const USE_CLOUD_FUNCTION = true
+const IS_PROD = process.env.NODE_ENV === "production"
+const LOCAL_MATCHING_URL = "http://localhost:8000/api/funders/analyze"
+
+const SECTION_LABELS = {
+  applicationOverview: "Application Overview",
+  useOfFunds: "Use of Funds",
+  enterpriseReadiness: "Enterprise Readiness",
+  guarantees: "Guarantees",
+  growthPotential: "Growth Potential",
+  socialImpact: "Social Impact",
+  documentUpload: "Document Upload",
+  declarationCommitment: "Declaration & Commitment",
 }
 
-function normalizeAmount(value) {
-  if (!value) return 0;
-  if (typeof value === "number") return value;
-  const cleaned = value.toString().replace(/[R$,\s]/g, "").replace(/[^\d.]/g, "");
-  return parseFloat(cleaned) || 0;
-}
+const SECTION_IDS = Object.keys(SECTION_LABELS)
 
-function funderIsComplete(funder) {
-  return funder.sectorFocus?.length > 0 && funder.investmentStage?.length > 0 && funder.investmentFocus;
-}
+// Financial Overview belongs to Universal Profile.
+// Preserve any previously saved funding data, but do not require an
+// invisible financialOverview section for funding submission.
+const DOCUMENTS_LIST = [
+  { id: "budgetDocuments", label: "5 Year Budget", required: true },
+  {
+    id: "bankConfirmation",
+    label: "Bank Details Confirmation Letter",
+    required: true,
+  },
+  {
+    id: "financialStatements",
+    label: "Financial Statements",
+    required: true,
+  },
+  { id: "programReports", label: "Previous Program Reports" },
+  { id: "loanAgreements", label: "Loan Agreements" },
+  { id: "supportLetters", label: "Support Letters / Endorsements" },
+  { id: "impactStatement", label: "Impact Statement" },
+]
 
-const hasSectorOverlap = (smeSectors, funderSectors) => {
-  if (!smeSectors || smeSectors.length === 0) return true;
-  if (!funderSectors || funderSectors.length === 0) return false;
-  
-  const smeSet = new Set(smeSectors.map(s => s.toLowerCase().trim()));
-  return funderSectors.some(fs => {
-    const cleanFs = fs.toLowerCase().trim();
-    return cleanFs === "all sectors" || cleanFs === "general" || smeSet.has(cleanFs);
-  });
-};
-
-const hasStageOverlap = (smeStage, funderStages) => {
-  if (!smeStage) return true;
-  if (!funderStages || funderStages.length === 0) return false;
-  
-  const cleanSme = smeStage.toLowerCase().trim();
-  return funderStages.some(fs => fs.toLowerCase().trim() === cleanSme);
-};
-
-const ticketSizeFits = (amountRequested, minTicket, maxTicket) => {
-  if (!amountRequested || amountRequested <= 0) return true;
-  if (minTicket <= 0 && maxTicket <= 0) return true;
-  
-  if (minTicket > 0 && amountRequested < minTicket * 0.5) return false;
-  if (maxTicket > 0 && amountRequested > maxTicket * 2.0) return false;
-  return true;
-};
-
-const passHighLevelFilter = (funder, sme) => {
-  if (!funderIsComplete(funder)) return false;
-  
-  const smeSectors = normalizeToArray(sme.economicSectors);
-  if (!hasSectorOverlap(smeSectors, funder.sectorFocus)) return false;
-  
-  if (!hasStageOverlap(sme.fundingStage, funder.investmentStage)) return false;
-  
-  if (!ticketSizeFits(sme.amountRequested, funder.minTicket, funder.maxTicket)) return false;
-  
-  return true;
-};
-
-const normalizeFunder = (docId, data) => {
-  const fd = data.formData || {};
-  const generalPrefs = fd.generalInvestmentPreference || {};
-  const fundManage = fd.fundManageOverview || {};
-  const entity = fd.entityOverview || {};
-  const contact = fd.contactDetails || {};
-  const funds = fd.fundDetails?.funds || [];
-
-  const sectorFocus = normalizeToArray(generalPrefs.sectorFocus);
-  const investmentStage = normalizeToArray(generalPrefs.investmentStage);
-  const geographicFocus = normalizeToArray(generalPrefs.geographicFocus);
-  const selectedProvinces = normalizeToArray(generalPrefs.selectedProvinces);
-  const investmentFocus = generalPrefs.investmentFocus || "";
-
-  let minTicket = 0;
-  let maxTicket = 0;
-  funds.forEach(f => {
-    const fMin = normalizeAmount(f.minimumTicket || f.minTicket);
-    const fMax = normalizeAmount(f.maximumTicket || f.maxTicket);
-    if (fMin > 0 && (minTicket === 0 || fMin < minTicket)) minTicket = fMin;
-    if (fMax > 0 && fMax > maxTicket) maxTicket = fMax;
-  });
-
-  const supportOffered = normalizeToArray(fundManage.additionalSupport);
-
-  return {
-    id: docId,
-    name: fundManage.registeredName || fundManage.tradingName || contact.registeredName || "Unnamed Funder",
-    email: contact.businessEmail || contact.email || "",
-    province: entity.province || "",
-    city: entity.city || "",
-    sectorFocus,
-    investmentStage,
-    geographicFocus,
-    selectedProvinces,
-    investmentFocus,
-    minTicket,
-    maxTicket,
-    supportOffered,
-    riskAppetite: generalPrefs.riskAppetite || "",
-    legalEntityFit: generalPrefs.legalEntityFit || "",
-    briefDescription: fundManage.briefDescription || "",
-    yearsInOperation: fundManage.yearsInOperation || "",
-    numberOfInvestments: fundManage.numberOfInvestments || "",
-    valueDeployed: fundManage.valueDeployed || "",
-  };
-};
-
-
-const EMPTY_FORM = {
+const createEmptyForm = () => ({
   applicationOverview: {
     submissionChannel: "Online Portal",
     applicationDate: new Date().toISOString().split("T")[0],
   },
   useOfFunds: {
-    fundingItems: [{ category: "", subArea: "", description: "", amount: "" }],
+    fundingItems: [
+      {
+        category: "",
+        subArea: "",
+        description: "",
+        amount: "",
+      },
+    ],
   },
-  enterpriseReadiness: { barriers: [] },
-  financialOverview: {},
+  enterpriseReadiness: {
+    barriers: [],
+  },
   guarantees: {},
   growthPotential: {},
   socialImpact: {},
@@ -144,124 +87,615 @@ const EMPTY_FORM = {
     commitReporting: false,
     consentShare: false,
   },
+})
+
+const createEmptyCompleted = () =>
+  Object.fromEntries(SECTION_IDS.map((id) => [id, false]))
+
+const createEmptyUniversalDocs = () => ({
+  businessPlan: null,
+  pitchDeck: null,
+  financialStatements: [],
+  loading: true,
+})
+
+const present = (value) =>
+  value !== undefined &&
+  value !== null &&
+  String(value).trim() !== ""
+
+const asText = (value) => String(value ?? "").trim()
+
+const isYesNo = (value) => value === "yes" || value === "no"
+
+const isFile = (value) =>
+  typeof File !== "undefined" && value instanceof File
+
+const hasDocument = (value) => {
+  if (Array.isArray(value)) {
+    return value.some(hasDocument)
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length > 0
+  }
+
+  return Boolean(
+    value &&
+      (isFile(value) ||
+        (typeof value.url === "string" && value.url.trim()))
+  )
 }
 
-const EMPTY_COMPLETED = {
-  applicationOverview: false,
-  useOfFunds: false,
-  enterpriseReadiness: false,
-  financialOverview: false,
-  guarantees: false,
-  growthPotential: false,
-  socialImpact: false,
-  documentUpload: false,
-  declarationCommitment: false,
-}
+const documentUrls = (value) => {
+  const entries = Array.isArray(value)
+    ? value
+    : value
+      ? [value]
+      : []
 
-const documentsList = [
-  { id: "budgetDocuments", label: "5 Year Budget", required: true },
-  { id: "bankConfirmation", label: "Bank Details Confirmation Letter", required: true },
-  { id: "financialStatements", label: "Financial Statements", required: true },
-  { id: "programReports", label: "Previous Program Reports", required: false },
-  { id: "loanAgreements", label: "Loan Agreements", required: false },
-  { id: "supportLetters", label: "Support Letters / Endorsements", required: false },
-  { id: "impactStatement", label: "Optional Impact Statement", required: false },
-]
-
-const sectionValidations = {
-  applicationOverview: (data) => {
-    const required = ["applicationType", "fundingStage", "urgency", "preferredStartDate"]
-    return required.every((f) => data?.[f] !== undefined && data?.[f] !== null && data?.[f] !== "")
-  },
-  useOfFunds: (data) => {
-    if (!data || !Array.isArray(data.fundingItems) || data.fundingItems.length === 0) return false
-    const allItemsValid = data.fundingItems.every(
-      (item) => item.category?.trim() && item.subArea?.trim() && item.description?.trim() && item.amount?.trim()
+  return entries
+    .map((entry) =>
+      typeof entry === "string" ? entry : entry?.url
     )
-    if (!allItemsValid) return false
-    if (!Array.isArray(data.fundingInstruments) || data.fundingInstruments.length === 0) return false
-    if (!Array.isArray(data.funderTypes) || data.funderTypes.length === 0) return false
-    const parse = (val) => Number.parseInt((val || "").replace(/[^\d]/g, "")) || 0
-    const requested = parse(data.amountRequested)
-    const total = (data.fundingItems || []).reduce((sum, item) => sum + parse(item.amount), 0)
-    if (requested !== total || requested <= 0) return false
-    if (!data.personalEquity || isNaN(parse(data.personalEquity))) return false
-    return true
-  },
-  enterpriseReadiness: (data) => {
-    if (!data) return false
-    const requiredRadios = [
-      "hasBusinessPlan", "hasFinancials", "hasPitchDeck", "hasMvp",
-      "hasTraction", "hasGuarantees", "hasMentor", "hasAdvisors",
-      "previousSupport", "hasPayingCustomers",
-    ]
-    for (const field of requiredRadios) {
-      if (!data[field]) return false
+    .filter((url) => typeof url === "string" && url.trim())
+}
+
+const documentUrl = (value) => documentUrls(value)[0] || null
+
+const parseCurrency = (value) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : NaN
+  }
+
+  const cleaned = asText(value)
+    .replace(/^R\s*/i, "")
+    .replace(/[\s,]/g, "")
+
+  if (!/^\d+(?:\.\d{1,2})?$/.test(cleaned)) {
+    return NaN
+  }
+
+  return Number(cleaned)
+}
+
+const normalizeAmount = (value) => {
+  const amount = parseCurrency(value)
+  return Number.isFinite(amount) ? amount : 0
+}
+
+const normalizeToArray = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/\s*,\s*/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+const readableField = (field) =>
+  field.replace(/([A-Z])/g, " $1").toLowerCase()
+
+// One validator shared by saving, submission, and the page.
+function getIssuesForSection(
+  sectionId,
+  sectionData = {},
+  universalDocs = {}
+) {
+  const data = sectionData || {}
+  const issues = []
+
+  const requireField = (field, label) => {
+    if (!present(data[field])) {
+      issues.push(`Please provide ${label}.`)
     }
-    if (data.hasBusinessPlan === "yes" && (!Array.isArray(data.businessPlanFile) || data.businessPlanFile.length === 0)) return false
-    if (data.hasFinancials === "yes" && (!Array.isArray(data.financialsFile) || data.financialsFile.length === 0)) return false
-    if (data.hasPitchDeck === "yes" && (!Array.isArray(data.pitchDeckFile) || data.pitchDeckFile.length === 0)) return false
-    if (data.hasMvp === "yes" && !data.mvpDetails?.trim()) return false
-    if (data.hasTraction === "yes" && !data.tractionDetails?.trim()) return false
-    if (data.hasGuarantees === "yes" && (!Array.isArray(data.guaranteeFile) || data.guaranteeFile.length === 0)) return false
-    if (data.hasMentor === "yes" && !data.mentorDetails?.trim()) return false
-    if (data.hasAdvisors === "yes") {
-      if (!data.advisorsDetails?.trim()) return false
-      if (!data.advisorsMeetRegularly) return false
-      if (data.advisorsMeetRegularly === "yes" && !data.advisorsMeetingFrequency?.trim()) return false
+  }
+
+  const requireAnswer = (field, question) => {
+    if (!isYesNo(data[field])) {
+      issues.push(`Please answer: ${question}`)
     }
-    if ((data.barriers || []).includes("other") && !data.otherBarrierDetails?.trim()) return false
-    if (data.previousSupport === "yes" && (!data.previousSupportDetails?.trim() || !data.previousSupportSource?.trim())) return false
-    if (data.hasPayingCustomers === "yes" && !data.payingCustomersDetails?.trim()) return false
-    return true
-  },
-  financialOverview: (data) => {
-    const required = ["generatesRevenue", "profitabilityStatus", "hasAccountingSoftware"]
-    const basic = required.every((f) => data?.[f] !== undefined && data?.[f] !== null && data?.[f] !== "")
-    if (!basic) return false
-    if (data.generatesRevenue === "yes" && (!data.annualRevenue || data.annualRevenue === "")) return false
-    return true
-  },
-  guarantees: () => true,
-  growthPotential: (data) => {
-    const required = ["marketShare", "qualityImprovement", "greenTech", "localisation", "regionalSpread", "personalRisk", "empowerment", "employment"]
-    const radioValid = required.every((f) => data?.[f] === "yes" || data?.[f] === "no")
-    if (!radioValid) return false
-    if (data.marketShare === "yes" && !data.marketShareDetails?.trim()) return false
-    if (data.qualityImprovement === "yes" && !data.qualityImprovementDetails?.trim()) return false
-    if (data.greenTech === "yes" && !data.greenTechDetails?.trim()) return false
-    if (data.localisation === "yes" && !data.localisationDetails?.trim()) return false
-    if (data.regionalSpread === "yes" && !data.regionalSpreadDetails?.trim()) return false
-    if (data.personalRisk === "yes" && !data.personalRiskDetails?.trim()) return false
-    if (data.empowerment === "yes" && !data.empowermentDetails?.trim()) return false
-    if (data.employment === "yes") {
-      if (data.employmentIncreaseDirect === undefined || data.employmentIncreaseDirect === null || data.employmentIncreaseDirect === "") return false
-      if (data.employmentIncreaseIndirect === undefined || data.employmentIncreaseIndirect === null || data.employmentIncreaseIndirect === "") return false
+  }
+
+  const requireDetails = (answerField, detailsField, label) => {
+    if (data[answerField] === "yes") {
+      requireField(detailsField, label)
     }
-    return true
-  },
-  socialImpact: (data) => {
-    const required = ["jobsToCreate", "csiCsrSpend", "blackOwnership", "womenOwnership", "youthOwnership", "disabledOwnership"]
-    const basic = required.every((f) => data?.[f] !== undefined && data?.[f] !== null && data?.[f] !== "")
-    if (!basic) return false
-    const pctFields = ["blackOwnership", "womenOwnership", "youthOwnership", "disabledOwnership"]
-    const pctValid = pctFields.every((f) => {
-      const v = Number.parseFloat(data[f])
-      return !isNaN(v) && v >= 0 && v <= 100
+  }
+
+  switch (sectionId) {
+    case "applicationOverview": {
+      const requiredFields = {
+        applicationType: "application type",
+        fundingStage: "funding stage",
+        urgency: "urgency",
+        preferredStartDate: "preferred start date",
+      }
+
+      Object.entries(requiredFields).forEach(([field, label]) => {
+        requireField(field, label)
+      })
+
+      if (
+        [
+          "acceleration",
+          "incubation",
+          "enterprise_development",
+        ].includes(data.applicationType)
+      ) {
+        requireField("supportFormat", "support format")
+      }
+
+      break
+    }
+
+    case "useOfFunds": {
+      const requested = parseCurrency(data.amountRequested)
+      const personalEquity = parseCurrency(data.personalEquity)
+
+      if (!Number.isFinite(requested) || requested <= 0) {
+        issues.push(
+          "Total Amount Requested must be greater than R 0."
+        )
+      }
+
+      if (!Number.isFinite(personalEquity)) {
+        issues.push(
+          "Enter your personal equity contribution. R 0 is allowed."
+        )
+      }
+
+      requireField("equityType", "equity offered")
+      requireField("fundingCategory", "funding category")
+
+      if (data.fundingCategory === "Other") {
+        requireField(
+          "fundingCategoryOther",
+          "your other funding category"
+        )
+      }
+
+      // These dropdowns are optional in your supplied UseOfFunds UI.
+      // Validate their Other descriptions only when selected.
+      if (
+        data.fundingCategory !== "Any" &&
+        data.fundingCategory !== "Other" &&
+        asText(data.fundingInstrument).startsWith("Other")
+      ) {
+        requireField(
+          "fundingInstrumentOther",
+          "your other funding instrument"
+        )
+      }
+
+      if (
+        data.fundingCategory !== "Other" &&
+        asText(data.preferredFunderType).startsWith("Other")
+      ) {
+        requireField(
+          "preferredFunderTypeOther",
+          "your other preferred funder type"
+        )
+      }
+
+      const items = Array.isArray(data.fundingItems)
+        ? data.fundingItems
+        : []
+
+      if (items.length === 0) {
+        issues.push("Add at least one Purpose of Funds item.")
+      }
+
+      items.forEach((item, index) => {
+        const row = item || {}
+        const prefix = `Purpose of Funds item ${index + 1}`
+
+        if (!present(row.category)) {
+          issues.push(`${prefix}: select a category.`)
+        }
+
+        if (!present(row.subArea)) {
+          issues.push(`${prefix}: select a sub-area.`)
+        }
+
+        if (!present(row.description)) {
+          issues.push(`${prefix}: enter a description.`)
+        }
+
+        const amount = parseCurrency(row.amount)
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+          issues.push(
+            `${prefix}: amount must be greater than R 0.`
+          )
+        }
+      })
+
+      const amounts = items.map((item) =>
+        parseCurrency(item?.amount)
+      )
+
+      if (
+        Number.isFinite(requested) &&
+        amounts.length > 0 &&
+        amounts.every(Number.isFinite)
+      ) {
+        const requestedCents = Math.round(requested * 100)
+        const totalCents = amounts.reduce(
+          (sum, amount) => sum + Math.round(amount * 100),
+          0
+        )
+
+        if (requestedCents !== totalCents) {
+          issues.push(
+            `Total Amount Requested (R ${requested.toLocaleString(
+              "en-ZA"
+            )}) must equal Purpose of Funds (R ${(
+              totalCents / 100
+            ).toLocaleString("en-ZA")}).`
+          )
+        }
+      }
+
+      break
+    }
+
+    case "enterpriseReadiness": {
+      const requiredAnswers = {
+        hasBusinessPlan: "Do you have a business plan?",
+        hasPitchDeck: "Do you have a pitch deck?",
+        hasMvp: "Do you have an MVP/prototype?",
+        hasTraction: "Do you have traction?",
+        hasGuarantees: "Do you have any guarantees?",
+        hasMentor: "Do you have a mentor?",
+        hasAdvisors: "Do you have advisors/board?",
+        previousSupport: "Have you received support previously?",
+        hasPayingCustomers: "Do you currently have paying customers?",
+      }
+
+      Object.entries(requiredAnswers).forEach(
+        ([field, question]) => requireAnswer(field, question)
+      )
+
+      const requiredFiles = [
+        {
+          answer: "hasBusinessPlan",
+          field: "businessPlanFile",
+          fallback: universalDocs.businessPlan,
+          label: "Business Plan",
+        },
+        {
+          answer: "hasPitchDeck",
+          field: "pitchDeckFile",
+          fallback: universalDocs.pitchDeck,
+          label: "Pitch Deck",
+        },
+        {
+          answer: "hasGuarantees",
+          field: "guaranteeFile",
+          fallback: null,
+          label: "Guarantee / Contract",
+        },
+      ]
+
+      requiredFiles.forEach(
+        ({ answer, field, fallback, label }) => {
+          if (
+            data[answer] === "yes" &&
+            !hasDocument(data[field]) &&
+            !hasDocument(fallback)
+          ) {
+            issues.push(`Upload your ${label}.`)
+          }
+        }
+      )
+
+      const conditionalDetails = [
+        ["hasMvp", "mvpDetails", "MVP/prototype details"],
+        ["hasTraction", "tractionDetails", "traction details"],
+        ["hasMentor", "mentorDetails", "mentor details"],
+        ["hasAdvisors", "advisorsDetails", "advisor/board details"],
+        [
+          "previousSupport",
+          "previousSupportDetails",
+          "previous support details",
+        ],
+        [
+          "previousSupport",
+          "previousSupportSource",
+          "previous support source",
+        ],
+        [
+          "hasPayingCustomers",
+          "payingCustomersDetails",
+          "paying customer details",
+        ],
+      ]
+
+      conditionalDetails.forEach(([answer, field, label]) => {
+        requireDetails(answer, field, label)
+      })
+
+      if (data.hasAdvisors === "yes") {
+        requireAnswer(
+          "advisorsMeetRegularly",
+          "Do your advisors meet regularly?"
+        )
+
+        requireDetails(
+          "advisorsMeetRegularly",
+          "advisorsMeetingFrequency",
+          "advisor meeting frequency"
+        )
+      }
+
+      if (
+        Array.isArray(data.barriers) &&
+        data.barriers.includes("other")
+      ) {
+        requireField(
+          "otherBarrierDetails",
+          "details of your other growth barrier"
+        )
+      }
+
+      // hasFinancials is not present in the supplied Readiness UI.
+      // Financial documents remain validated under Document Upload.
+      break
+    }
+
+    case "guarantees": {
+      // Preserve your existing policy: guarantees are optional.
+      break
+    }
+
+    case "growthPotential": {
+      const questions = [
+        "marketShare",
+        "qualityImprovement",
+        "greenTech",
+        "localisation",
+        "regionalSpread",
+        "personalRisk",
+        "empowerment",
+        "employment",
+      ]
+
+      questions.forEach((field) => {
+        requireAnswer(field, readableField(field))
+
+        if (field !== "employment") {
+          requireDetails(
+            field,
+            `${field}Details`,
+            `${readableField(field)} details`
+          )
+        }
+      })
+
+      if (data.employment === "yes") {
+        requireField(
+          "employmentIncreaseDirect",
+          "direct employment increase"
+        )
+
+        requireField(
+          "employmentIncreaseIndirect",
+          "indirect employment increase"
+        )
+      }
+
+      break
+    }
+
+    case "socialImpact": {
+      const requiredFields = {
+        jobsToCreate: "jobs to create",
+        csiCsrSpend: "CSI/CSR spend",
+        blackOwnership: "black ownership percentage",
+        womenOwnership: "women ownership percentage",
+        youthOwnership: "youth ownership percentage",
+        disabledOwnership: "disabled ownership percentage",
+      }
+
+      Object.entries(requiredFields).forEach(([field, label]) => {
+        requireField(field, label)
+      })
+
+      const percentageFields = [
+        "blackOwnership",
+        "womenOwnership",
+        "youthOwnership",
+        "disabledOwnership",
+      ]
+
+      percentageFields.forEach((field) => {
+        if (!present(data[field])) return
+
+        const value = Number(data[field])
+
+        if (
+          !Number.isFinite(value) ||
+          value < 0 ||
+          value > 100
+        ) {
+          issues.push(
+            `${requiredFields[field]} must be between 0 and 100.`
+          )
+        }
+      })
+
+      break
+    }
+
+    case "documentUpload": {
+      DOCUMENTS_LIST.filter((document) => document.required)
+        .forEach((document) => {
+          if (!hasDocument(data[document.id])) {
+            issues.push(`Upload ${document.label}.`)
+          }
+        })
+
+      break
+    }
+
+    case "declarationCommitment": {
+      if (data.confirmIntent !== true) {
+        issues.push("Please confirm your funding intent.")
+      }
+
+      if (data.commitReporting !== true) {
+        issues.push("Please agree to the reporting commitment.")
+      }
+
+      if (data.consentShare !== true) {
+        issues.push("Please consent to sharing your application.")
+      }
+
+      break
+    }
+
+    default:
+      issues.push(`Unknown funding section: ${sectionId}`)
+  }
+
+  return issues
+}
+
+const completionForForm = (form, universalDocs) =>
+  Object.fromEntries(
+    SECTION_IDS.map((id) => [
+      id,
+      getIssuesForSection(id, form[id], universalDocs).length === 0,
+    ])
+  )
+
+// Preserve your existing funder filtering.
+const normalizeFunder = (docId, data) => {
+  const form = data.formData || {}
+  const preferences = form.generalInvestmentPreference || {}
+  const overview = form.fundManageOverview || {}
+  const entity = form.entityOverview || {}
+  const contact = form.contactDetails || {}
+  const funds = form.fundDetails?.funds || []
+
+  let minTicket = 0
+  let maxTicket = 0
+
+  funds.forEach((fund) => {
+    const minimum = normalizeAmount(
+      fund.minimumTicket || fund.minTicket
+    )
+
+    const maximum = normalizeAmount(
+      fund.maximumTicket || fund.maxTicket
+    )
+
+    if (
+      minimum > 0 &&
+      (minTicket === 0 || minimum < minTicket)
+    ) {
+      minTicket = minimum
+    }
+
+    if (maximum > maxTicket) {
+      maxTicket = maximum
+    }
+  })
+
+  return {
+    id: docId,
+    name:
+      overview.registeredName ||
+      overview.tradingName ||
+      contact.registeredName ||
+      "Unnamed Funder",
+    email: contact.businessEmail || contact.email || "",
+    province: entity.province || "",
+    city: entity.city || "",
+    sectorFocus: normalizeToArray(preferences.sectorFocus),
+    investmentStage: normalizeToArray(preferences.investmentStage),
+    geographicFocus: normalizeToArray(preferences.geographicFocus),
+    selectedProvinces: normalizeToArray(
+      preferences.selectedProvinces
+    ),
+    investmentFocus: preferences.investmentFocus || "",
+    minTicket,
+    maxTicket,
+    supportOffered: normalizeToArray(overview.additionalSupport),
+    riskAppetite: preferences.riskAppetite || "",
+    legalEntityFit: preferences.legalEntityFit || "",
+    briefDescription: overview.briefDescription || "",
+    yearsInOperation: overview.yearsInOperation || "",
+    numberOfInvestments: overview.numberOfInvestments || "",
+    valueDeployed: overview.valueDeployed || "",
+  }
+}
+
+const passHighLevelFilter = (funder, sme) => {
+  if (
+    !funder.sectorFocus.length ||
+    !funder.investmentStage.length ||
+    !funder.investmentFocus
+  ) {
+    return false
+  }
+
+  const sectors = normalizeToArray(sme.economicSectors)
+    .map((sector) => sector.toLowerCase())
+
+  if (
+    sectors.length &&
+    !funder.sectorFocus.some((sector) => {
+      const value = sector.toLowerCase().trim()
+
+      return (
+        value === "all sectors" ||
+        value === "general" ||
+        sectors.includes(value)
+      )
     })
-    return pctValid
-  },
-  documentUpload: (data) => {
-    const required = documentsList.filter((d) => d.required)
-    return required.every((doc) => {
-      const files = data?.[doc.id] || []
-      return files.length > 0
-    })
-  },
-  declarationCommitment: (data) => {
-    if (!data) return false
-    return data.confirmIntent === true && data.commitReporting === true && data.consentShare === true
-  },
+  ) {
+    return false
+  }
+
+  if (
+    sme.fundingStage &&
+    !funder.investmentStage.some(
+      (stage) =>
+        stage.toLowerCase().trim() ===
+        sme.fundingStage.toLowerCase().trim()
+    )
+  ) {
+    return false
+  }
+
+  if (sme.amountRequested > 0) {
+    if (
+      funder.minTicket > 0 &&
+      sme.amountRequested < funder.minTicket * 0.5
+    ) {
+      return false
+    }
+
+    if (
+      funder.maxTicket > 0 &&
+      sme.amountRequested > funder.maxTicket * 2
+    ) {
+      return false
+    }
+  }
+
+  return true
 }
 
 export const useFundingApplications = ({
@@ -270,391 +704,915 @@ export const useFundingApplications = ({
   onNavigateToMatches,
 } = {}) => {
   const [user, setUser] = useState(null)
-  const [formData, setFormData] = useState(EMPTY_FORM)
-  const [completedSections, setCompletedSections] = useState(EMPTY_COMPLETED)
+  const [formData, setFormData] = useState(createEmptyForm)
+  const [completedSections, setCompletedSections] = useState(
+    createEmptyCompleted
+  )
   const [currentDocId, setCurrentDocId] = useState(applicationId)
+  const [existingUniversalDocs, setExistingUniversalDocs] = useState(
+    createEmptyUniversalDocs
+  )
+
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [saveStatus, setSaveStatus] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [analysisProgress, setAnalysisProgress] = useState(null)
   const [analysisComplete, setAnalysisComplete] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
 
-  const lastSaved = useRef(JSON.parse(JSON.stringify(EMPTY_FORM)))
+  // Refs ensure saves use current form values, including updates from
+  // guarantee analysis immediately before saving.
+  const formRef = useRef(formData)
+  const documentIdRef = useRef(applicationId)
+  const universalDocsRef = useRef(existingUniversalDocs)
+  const lastSavedRef = useRef(createEmptyForm())
+  const operationInFlightRef = useRef(false)
 
-  // ── Auth ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u ?? null))
-    return unsub
+    return onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser || null)
+    })
   }, [])
 
-  // ── Load / reset on mount ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return
-    if (isNew) {
-      resetToEmpty()
-    } else {
-      loadApplication()
-    }
-  }, [user, applicationId, isNew])
+  const applyForm = useCallback((form, documentId, submitted) => {
+    formRef.current = form
+    documentIdRef.current = documentId
+    lastSavedRef.current = form
 
-  // ── Helpers ───────────────────────────────────────────────────────────────────
-  const resetToEmpty = () => {
-    setFormData(JSON.parse(JSON.stringify(EMPTY_FORM)))
-    setCompletedSections({ ...EMPTY_COMPLETED })
-    setCurrentDocId(null)
-    setHasUnsavedChanges(false)
-    setIsSubmitted(false)
-    lastSaved.current = JSON.parse(JSON.stringify(EMPTY_FORM))
-  }
-
-  const applyLoadedData = (data, docId) => {
-    const form = {}
-    Object.keys(EMPTY_FORM).forEach((key) => {
-      form[key] = data[key] ? { ...EMPTY_FORM[key], ...data[key] } : { ...EMPTY_FORM[key] }
-    })
     setFormData(form)
-    lastSaved.current = JSON.parse(JSON.stringify(form))
-
-    const completed = data.completedSections || {}
-    setCompletedSections({ ...EMPTY_COMPLETED, ...completed })
-    setCurrentDocId(docId)
+    setCurrentDocId(documentId)
+    setCompletedSections(
+      completionForForm(form, universalDocsRef.current)
+    )
     setHasUnsavedChanges(false)
+    setIsSubmitted(Boolean(submitted))
+    setAnalysisProgress(null)
+    setAnalysisComplete(false)
+    setSaveStatus("")
+  }, [])
 
-    if (data.status === "submitted") setIsSubmitted(true)
-  }
+  const fetchUniversalProfile = useCallback(async (uid) => {
+    const snapshot = await getDoc(
+      doc(db, "universalProfiles", uid)
+    )
 
-  const loadApplication = async () => {
-    if (!user || !applicationId) return
-    try {
+    const profile = snapshot.exists() ? snapshot.data() : {}
+    const documents = profile.documents || {}
+
+    const universalDocs = {
+      businessPlan: documentUrl(documents.businessPlan),
+      pitchDeck: documentUrl(documents.pitchDeck),
+      financialStatements: documentUrls(
+        documents.financialStatements_multiple ||
+          documents.financialStatements
+      ),
+      loading: false,
+    }
+
+    return { profile, universalDocs }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      if (!user) {
+        const emptyDocs = {
+          ...createEmptyUniversalDocs(),
+          loading: false,
+        }
+
+        universalDocsRef.current = emptyDocs
+        setExistingUniversalDocs(emptyDocs)
+        applyForm(createEmptyForm(), null, false)
+        setIsLoading(false)
+        return
+      }
+
       setIsLoading(true)
-      const snap = await getDoc(doc(db, "fundingApplicationsV2", applicationId))
-      if (snap.exists()) {
-        applyLoadedData(snap.data(), applicationId)
-      } else {
-        resetToEmpty()
+
+      let universalDocs = {
+        ...createEmptyUniversalDocs(),
+        loading: false,
       }
-    } catch (err) {
-      console.error("Error loading application:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  const ensureDocId = async () => {
-    if (currentDocId) return currentDocId
-    const docRef = await addDoc(collection(db, "fundingApplicationsV2"), {
-      userId: user.uid,
-      userEmail: user.email,
-      status: "in_progress",
-      createdAt: serverTimestamp(),
-      lastUpdated: serverTimestamp(),
-    })
-    setCurrentDocId(docRef.id)
-    return docRef.id
-  }
-
-  // ── Upload files and replace with URLs ──────────────────────────────────────
-  const uploadFilesAndReplaceWithURLs = async (data, pathPrefix) => {
-    const uploadRecursive = async (item, prefix) => {
-      if (item instanceof File) {
-        const fileRef = ref(storage, `fundingApplications/${currentDocId || "new"}/${prefix}`)
-        await uploadBytes(fileRef, item)
-        return await getDownloadURL(fileRef)
-      } else if (Array.isArray(item)) {
-        return await Promise.all(item.map((entry, idx) => uploadRecursive(entry, `${prefix}/${idx}`)))
-      } else if (typeof item === "object" && item !== null) {
-        const updated = {}
-        for (const key in item) {
-          updated[key] = await uploadRecursive(item[key], `${prefix}/${key}`)
-        }
-        return updated
-      } else {
-        return item
-      }
-    }
-    return await uploadRecursive(data, pathPrefix)
-  }
-
-  // ── Save section ──────────────────────────────────────────────────────────────
-  const saveSectionToFirebase = useCallback(
-    async (sectionName, markCompleted = false) => {
-      if (!user) return false
       try {
-        setSaveStatus("saving")
-        const docId = await ensureDocId()
-        const docRef = doc(db, "fundingApplicationsV2", docId)
-
-        const base = {
-          lastUpdated: serverTimestamp(),
-          userId: user.uid,
-          userEmail: user.email,
-          status: "in_progress",
-        }
-
-        const sectionData = formData[sectionName] || {}
-        const uploaded = await uploadFilesAndReplaceWithURLs(sectionData, `${sectionName}`)
-
-        let payload = { ...base, [sectionName]: uploaded }
-
-        if (markCompleted) {
-          const updated = { ...completedSections, [sectionName]: true }
-          payload.completedSections = updated
-          setCompletedSections(updated)
-        }
-
-        await updateDoc(docRef, payload)
-        setSaveStatus("saved")
-        setTimeout(() => setSaveStatus(""), 2000)
-        setHasUnsavedChanges(false)
-        return true
-      } catch (err) {
-        console.error("Save error:", err)
-        setSaveStatus("error")
-        setTimeout(() => setSaveStatus(""), 3000)
-        return false
+        const result = await fetchUniversalProfile(user.uid)
+        universalDocs = result.universalDocs
+      } catch (error) {
+        console.error("Unable to load Universal Profile:", error)
       }
+
+      if (cancelled) return
+
+      universalDocsRef.current = universalDocs
+      setExistingUniversalDocs(universalDocs)
+
+      try {
+        if (isNew || !applicationId) {
+          applyForm(createEmptyForm(), null, false)
+          return
+        }
+
+        const snapshot = await getDoc(
+          doc(db, "fundingApplicationsV2", applicationId)
+        )
+
+        if (cancelled) return
+
+        if (!snapshot.exists()) {
+          applyForm(createEmptyForm(), null, false)
+          return
+        }
+
+        const saved = snapshot.data()
+
+        if (saved.userId && saved.userId !== user.uid) {
+          throw new Error("This application belongs to another user.")
+        }
+
+        const defaults = createEmptyForm()
+        const loadedForm = {}
+
+        Object.keys(defaults).forEach((section) => {
+          loadedForm[section] = {
+            ...defaults[section],
+            ...(saved[section] || {}),
+          }
+        })
+
+        // Preserve historical data without making it a required section.
+        if (saved.financialOverview) {
+          loadedForm.financialOverview = saved.financialOverview
+        }
+
+        applyForm(
+          loadedForm,
+          applicationId,
+          saved.status === "submitted"
+        )
+      } catch (error) {
+        console.error("Unable to load funding application:", error)
+
+        if (!cancelled) {
+          setSaveStatus("error")
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    user,
+    applicationId,
+    isNew,
+    applyForm,
+    fetchUniversalProfile,
+  ])
+
+  const ensureDocumentId = useCallback(() => {
+    if (!documentIdRef.current) {
+      // Allocate the ID immediately without creating an empty document.
+      const applicationRef = doc(
+        collection(db, "fundingApplicationsV2")
+      )
+
+      documentIdRef.current = applicationRef.id
+      setCurrentDocId(applicationRef.id)
+    }
+
+    return documentIdRef.current
+  }, [])
+
+  const uploadFilesAndReplaceWithURLs = useCallback(
+    async (value, uid, documentId, path) => {
+      const uploadRecursive = async (item, itemPath) => {
+        if (isFile(item)) {
+          // Unique names prevent replacement uploads from overwriting
+          // files referenced by an earlier saved application version.
+          const uniqueId = doc(
+            collection(db, "fundingApplicationsV2")
+          ).id
+
+          const safeName = item.name.replace(
+            /[^a-zA-Z0-9._-]/g,
+            "_"
+          )
+
+          const fileRef = ref(
+            storage,
+            `fundingApplications/${uid}/${documentId}/${itemPath}/${uniqueId}-${safeName}`
+          )
+
+          await uploadBytes(fileRef, item)
+          return getDownloadURL(fileRef)
+        }
+
+        if (Array.isArray(item)) {
+          return Promise.all(
+            item.map((entry, index) =>
+              uploadRecursive(entry, `${itemPath}/${index}`)
+            )
+          )
+        }
+
+        if (item && typeof item === "object") {
+          const uploaded = {}
+
+          for (const [key, entry] of Object.entries(item)) {
+            if (entry !== undefined) {
+              uploaded[key] = await uploadRecursive(
+                entry,
+                `${itemPath}/${key}`
+              )
+            }
+          }
+
+          return uploaded
+        }
+
+        return item === undefined ? null : item
+      }
+
+      return uploadRecursive(value, path)
     },
-    [user, formData, completedSections, currentDocId]
+    []
   )
 
-  // ── Full submit ───────────────────────────────────────────────────────────────
-  const submitApplication = useCallback(async () => {
-    if (!user) return
-    setIsLoading(true)
-    // Show progress overlay immediately during file uploads / preparation
-    setAnalysisProgress({ stage: "gettingReady", fundersCount: 0 })
-    try {
-      const docId = await ensureDocId()
+  const requestFundabilityAnalysis = useCallback(
+    async (uid, documentId, sectionId) => {
+      const requestId = doc(
+        collection(db, "fundingApplicationsV2")
+      ).id
 
-      // Fetch user's entityOverview from universalProfiles
-      let entityOverview = {}
-      try {
-        const upSnap = await getDoc(doc(db, "universalProfiles", user.uid))
-        if (upSnap.exists()) {
-          entityOverview = upSnap.data().entityOverview || {}
-        }
-      } catch (err) {
-        console.error("Error fetching universal profile on submission:", err)
-      }
-
-      // Upload all sections
-      const uploadedData = {}
-      for (const key of Object.keys(EMPTY_FORM)) {
-        uploadedData[key] = await uploadFilesAndReplaceWithURLs(formData[key] || {}, key)
-      }
-
-      const docRef = doc(db, "fundingApplicationsV2", docId)
+      // Same trigger field used by UniversalProfile.
+      // Request only AFTER application data has been saved.
       await setDoc(
-        docRef,
+        doc(db, "universalProfiles", uid),
         {
-          ...uploadedData,
+          triggerFundabilityEvaluation: true,
+          fundabilityEvaluationRequestId: requestId,
+          fundabilityEvaluationRequestedAt: serverTimestamp(),
+          fundabilityEvaluationApplicationId: documentId,
+          fundabilityEvaluationSource: "fundingApplication",
+          fundabilityEvaluationSection: sectionId,
+        },
+        { merge: true }
+      )
+    },
+    []
+  )
+
+  const updateFormData = useCallback((section, changes) => {
+    const next = {
+      ...formRef.current,
+      [section]: {
+        ...(formRef.current[section] || {}),
+        ...changes,
+      },
+    }
+
+    formRef.current = next
+    setFormData(next)
+
+    // Any edit clears the saved completion indicator for that section.
+    setCompletedSections((previous) => ({
+      ...previous,
+      [section]: false,
+    }))
+
+    setHasUnsavedChanges(true)
+  }, [])
+
+  const getSectionIssues = useCallback((sectionId) => {
+    return getIssuesForSection(
+      sectionId,
+      formRef.current[sectionId],
+      universalDocsRef.current
+    )
+  }, [])
+
+  const getValidationMessages = useCallback(() => {
+    return SECTION_IDS.flatMap((sectionId) =>
+      getIssuesForSection(
+        sectionId,
+        formRef.current[sectionId],
+        universalDocsRef.current
+      ).map(
+        (message) => `${SECTION_LABELS[sectionId]}: ${message}`
+      )
+    )
+  }, [])
+
+  const validate = useCallback(
+    (sectionId) => getSectionIssues(sectionId).length === 0,
+    [getSectionIssues]
+  )
+
+  const validateAll = useCallback(
+    () => getValidationMessages().length === 0,
+    [getValidationMessages]
+  )
+
+  const getInvalidSections = useCallback(() => {
+    return SECTION_IDS.filter(
+      (sectionId) => getSectionIssues(sectionId).length > 0
+    ).map((sectionId) => SECTION_LABELS[sectionId])
+  }, [getSectionIssues])
+
+  const saveSectionToFirebase = useCallback(
+    async (sectionId) => {
+      const currentUser = auth.currentUser
+
+      if (!currentUser) {
+        throw new Error("Please sign in before saving.")
+      }
+
+      if (!SECTION_IDS.includes(sectionId)) {
+        throw new Error(`Unknown funding section: ${sectionId}`)
+      }
+
+      if (operationInFlightRef.current) {
+        throw new Error("Please wait for the current save to finish.")
+      }
+
+      operationInFlightRef.current = true
+      setSaveStatus("saving")
+
+      try {
+        const documentId = ensureDocumentId()
+        const applicationRef = doc(
+          db,
+          "fundingApplicationsV2",
+          documentId
+        )
+
+        const snapshot = formRef.current
+        const originalSection = snapshot[sectionId] || {}
+        const issues = getIssuesForSection(
+          sectionId,
+          originalSection,
+          universalDocsRef.current
+        )
+        const complete = issues.length === 0
+
+        const uploadedSection =
+          await uploadFilesAndReplaceWithURLs(
+            originalSection,
+            currentUser.uid,
+            documentId,
+            sectionId
+          )
+
+        const existing = await getDoc(applicationRef)
+
+        if (
+          existing.exists() &&
+          existing.data().userId &&
+          existing.data().userId !== currentUser.uid
+        ) {
+          throw new Error("This application belongs to another user.")
+        }
+
+        const savedCompletion = {
+          ...createEmptyCompleted(),
+          ...(existing.exists()
+            ? existing.data().completedSections || {}
+            : {}),
+          [sectionId]: complete,
+        }
+
+        await setDoc(
+          applicationRef,
+          {
+            [sectionId]: uploadedSection,
+            completedSections: savedCompletion,
+            userId: currentUser.uid,
+            userEmail: currentUser.email || "",
+            status: "in_progress",
+            lastUpdated: serverTimestamp(),
+            ...(!existing.exists()
+              ? { createdAt: serverTimestamp() }
+              : {}),
+          },
+          { merge: true }
+        )
+
+        // Record only the section actually saved.
+        const nextSaved = {
+          ...lastSavedRef.current,
+          [sectionId]: uploadedSection,
+        }
+
+        lastSavedRef.current = nextSaved
+
+        // Preserve any edits made while upload/save was running.
+        const sectionUnchanged =
+          formRef.current[sectionId] === originalSection
+
+        if (sectionUnchanged) {
+          const nextForm = {
+            ...formRef.current,
+            [sectionId]: uploadedSection,
+          }
+
+          formRef.current = nextForm
+          setFormData(nextForm)
+        }
+
+        setCompletedSections((previous) => ({
+          ...previous,
+          [sectionId]: sectionUnchanged ? complete : false,
+        }))
+
+        const stillUnsaved = Object.keys(
+          formRef.current
+        ).some(
+          (key) =>
+            formRef.current[key] !== lastSavedRef.current[key]
+        )
+
+        setHasUnsavedChanges(stillUnsaved)
+        setIsSubmitted(false)
+
+        let analysisRequested = false
+        let warning = ""
+
+        try {
+          await requestFundabilityAnalysis(
+            currentUser.uid,
+            documentId,
+            sectionId
+          )
+
+          analysisRequested = true
+        } catch (error) {
+          console.error(
+            "Fundability analysis request failed:",
+            error
+          )
+
+          warning =
+            "Your section was saved, but fundability analysis could not be requested. Save again to retry."
+        }
+
+        setSaveStatus(warning ? "saved_with_warning" : "saved")
+
+        return {
+          saved: true,
+          documentId,
+          complete,
+          issues,
+          analysisRequested,
+          warning,
+        }
+      } catch (error) {
+        console.error("Funding section save failed:", error)
+        setSaveStatus("error")
+        throw error
+      } finally {
+        operationInFlightRef.current = false
+      }
+    },
+    [
+      ensureDocumentId,
+      uploadFilesAndReplaceWithURLs,
+      requestFundabilityAnalysis,
+    ]
+  )
+
+  const triggerAIMatching = useCallback(
+    async (documentId, submittedForm, entityOverview, uid) => {
+      let progressTimer
+      let abortTimer
+
+      try {
+        setAnalysisComplete(false)
+
+        const category = submittedForm.useOfFunds?.fundingCategory
+        const selectedInstrument =
+          submittedForm.useOfFunds?.fundingInstrument
+
+        const instrument =
+          asText(selectedInstrument).startsWith("Other")
+            ? submittedForm.useOfFunds?.fundingInstrumentOther
+            : selectedInstrument
+
+        const fundingInstruments =
+          category === "Any" || category === "Other"
+            ? []
+            : instrument
+              ? [instrument]
+              : normalizeToArray(
+                  submittedForm.useOfFunds?.fundingInstruments
+                )
+
+        const sme = {
+          smeId: uid,
+          applicationId: documentId,
+          economicSectors: entityOverview.economicSectors || [],
+          province: entityOverview.province || "",
+          location: entityOverview.location || "",
+          businessDescription:
+            entityOverview.businessDescription ||
+            entityOverview.briefDescription ||
+            "",
+          fundingStage:
+            submittedForm.applicationOverview?.fundingStage || "",
+          amountRequested: normalizeAmount(
+            submittedForm.useOfFunds?.amountRequested
+          ),
+          fundingCategory: category || "",
+          fundingInstruments,
+          preferredFunderType:
+            submittedForm.useOfFunds?.preferredFunderType || "",
+          supportNeeded:
+            submittedForm.applicationOverview?.supportFormat
+              ? [submittedForm.applicationOverview.supportFormat]
+              : [],
+        }
+
+        const funderSnapshot = await getDocs(
+          collection(db, "MyuniversalProfiles")
+        )
+
+        const allFunders = funderSnapshot.docs.map((snapshot) =>
+          normalizeFunder(snapshot.id, snapshot.data())
+        )
+
+        const filteredFunders = allFunders.filter((funder) =>
+          passHighLevelFilter(funder, sme)
+        )
+
+        const totalCount = allFunders.length
+
+        setAnalysisProgress({
+          stage: "searching",
+          fundersCount: totalCount,
+        })
+
+        // This changes the displayed stage, without swallowing failures.
+        progressTimer = setTimeout(() => {
+          setAnalysisProgress({
+            stage: "wrappingUp",
+            fundersCount: totalCount,
+          })
+        }, 15000)
+
+        if (USE_CLOUD_FUNCTION || IS_PROD) {
+          const analyzeMatches = httpsCallable(
+            getFunctions(),
+            "analyzeFundingMatches"
+          )
+
+          // Preserve the existing callable contract.
+          // Its backend must read the current fields from the saved app.
+          await analyzeMatches({ applicationId: documentId })
+        } else {
+          const controller = new AbortController()
+
+          abortTimer = setTimeout(
+            () => controller.abort(),
+            45000
+          )
+
+          const response = await fetch(LOCAL_MATCHING_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              applicationId: documentId,
+              funders: filteredFunders,
+              totalCount,
+            }),
+            signal: controller.signal,
+          })
+
+          if (!response.ok) {
+            const errorBody = await response
+              .json()
+              .catch(() => ({}))
+
+            throw new Error(
+              errorBody.error ||
+                "Failed to analyze funding matches."
+            )
+          }
+
+          await response.json()
+        }
+
+        setAnalysisComplete(true)
+        setAnalysisProgress(null)
+      } catch (error) {
+        setAnalysisComplete(false)
+        setAnalysisProgress(null)
+        throw error
+      } finally {
+        clearTimeout(progressTimer)
+        clearTimeout(abortTimer)
+      }
+    },
+    []
+  )
+
+  const submitApplication = useCallback(async () => {
+    const currentUser = auth.currentUser
+
+    if (!currentUser) {
+      throw new Error("Please sign in before submitting.")
+    }
+
+    if (operationInFlightRef.current) {
+      throw new Error("Please wait for the current save to finish.")
+    }
+
+    operationInFlightRef.current = true
+    setIsLoading(true)
+    setAnalysisComplete(false)
+    setAnalysisProgress({
+      stage: "gettingReady",
+      fundersCount: 0,
+    })
+
+    let applicationSaved = false
+
+    try {
+      // Refresh profile documents for final validation.
+      const { profile, universalDocs } =
+        await fetchUniversalProfile(currentUser.uid)
+
+      universalDocsRef.current = universalDocs
+      setExistingUniversalDocs(universalDocs)
+
+      const snapshot = formRef.current
+
+      const messages = SECTION_IDS.flatMap((sectionId) =>
+        getIssuesForSection(
+          sectionId,
+          snapshot[sectionId],
+          universalDocs
+        ).map(
+          (message) => `${SECTION_LABELS[sectionId]}: ${message}`
+        )
+      )
+
+      if (messages.length) {
+        const error = new Error(
+          "Please complete the required application fields."
+        )
+
+        error.validationMessages = messages
+        throw error
+      }
+
+      const documentId = ensureDocumentId()
+      const applicationRef = doc(
+        db,
+        "fundingApplicationsV2",
+        documentId
+      )
+
+      const existing = await getDoc(applicationRef)
+
+      if (
+        existing.exists() &&
+        existing.data().userId &&
+        existing.data().userId !== currentUser.uid
+      ) {
+        throw new Error("This application belongs to another user.")
+      }
+
+      const uploaded = {}
+
+      for (const [sectionId, sectionData] of Object.entries(
+        snapshot
+      )) {
+        uploaded[sectionId] =
+          await uploadFilesAndReplaceWithURLs(
+            sectionData || {},
+            currentUser.uid,
+            documentId,
+            sectionId
+          )
+      }
+
+      // Include existing profile documents in saved Readiness data
+      // where no application-specific replacement was supplied.
+      const readiness = uploaded.enterpriseReadiness || {}
+
+      if (
+        readiness.hasBusinessPlan === "yes" &&
+        !hasDocument(readiness.businessPlanFile) &&
+        hasDocument(universalDocs.businessPlan)
+      ) {
+        readiness.businessPlanFile = [
+          universalDocs.businessPlan,
+        ]
+      }
+
+      if (
+        readiness.hasPitchDeck === "yes" &&
+        !hasDocument(readiness.pitchDeckFile) &&
+        hasDocument(universalDocs.pitchDeck)
+      ) {
+        readiness.pitchDeckFile = [
+          universalDocs.pitchDeck,
+        ]
+      }
+
+      uploaded.enterpriseReadiness = readiness
+
+      const completed = completionForForm(
+        uploaded,
+        universalDocs
+      )
+
+      const entityOverview = profile.entityOverview || {}
+
+      await setDoc(
+        applicationRef,
+        {
+          ...uploaded,
           entityOverview,
-          userId: user.uid,
-          userEmail: user.email,
+          userId: currentUser.uid,
+          userEmail: currentUser.email || "",
           status: "submitted",
           submittedAt: serverTimestamp(),
           lastUpdated: serverTimestamp(),
-          completedSections,
+          ...(!existing.exists()
+            ? { createdAt: serverTimestamp() }
+            : {}),
+          completedSections: completed,
           applicationType: "funding",
           version: "2.0",
         },
         { merge: true }
       )
 
-      setHasUnsavedChanges(false)
-      lastSaved.current = JSON.parse(JSON.stringify(formData))
+      applicationSaved = true
+      lastSavedRef.current = uploaded
 
-      // Small delay for Firestore consistency before AI matching
-      await new Promise((r) => setTimeout(r, 1000))
-      await triggerAIMatching(docId)
-    } catch (err) {
-      console.error("Submit error:", err)
-      setAnalysisProgress(null)
-      throw err
-    } finally {
-      setIsLoading(false)
-    }
-  }, [user, formData, completedSections, currentDocId])
+      // Preserve edits made during the submission operation.
+      const nextForm = { ...formRef.current }
+      const nextCompleted = { ...completed }
 
-  const triggerAIMatching = (docId) => {
-    return new Promise(async (resolve) => {
+      for (const sectionId of Object.keys(uploaded)) {
+        if (
+          formRef.current[sectionId] === snapshot[sectionId]
+        ) {
+          nextForm[sectionId] = uploaded[sectionId]
+        } else {
+          nextCompleted[sectionId] = false
+        }
+      }
+
+      formRef.current = nextForm
+      setFormData(nextForm)
+      setCompletedSections(nextCompleted)
+      setHasUnsavedChanges(
+        Object.keys(nextForm).some(
+          (key) => nextForm[key] !== uploaded[key]
+        )
+      )
+      setIsSubmitted(true)
+
+      let analysisWarning = ""
+
       try {
-        // 1. Fetch SME Universal Profile to get entityOverview (sectors, description, etc)
-        let entityOverview = {}
-        try {
-          const upSnap = await getDoc(doc(db, "universalProfiles", user.uid))
-          if (upSnap.exists()) {
-            entityOverview = upSnap.data().entityOverview || {}
-          }
-        } catch (err) {
-          console.error("Error fetching universal profile for AI matching:", err)
-        }
-
-        // Construct SME profile data
-        const sme = {
-          smeId: user.uid,
-          applicationId: docId,
-          economicSectors: entityOverview.economicSectors || [],
-          province: entityOverview.province || "",
-          location: entityOverview.location || "",
-          businessDescription: entityOverview.businessDescription || entityOverview.briefDescription || "",
-          fundingStage: formData.applicationOverview?.fundingStage || "",
-          amountRequested: normalizeAmount(formData.useOfFunds?.amountRequested),
-          fundingInstruments: formData.useOfFunds?.fundingInstruments || [],
-          supportNeeded: formData.applicationOverview?.supportFormat ? [formData.applicationOverview.supportFormat] : [],
-        }
-
-        // 2. Fetch all funder profiles
-        let allFunders = []
-        try {
-          const snapshot = await getDocs(collection(db, "MyuniversalProfiles"))
-          snapshot.forEach((d) => {
-            const normalized = normalizeFunder(d.id, d.data())
-            allFunders.push(normalized)
-          })
-        } catch (err) {
-          console.error("Error fetching funder profiles:", err)
-        }
-
-        const totalCount = allFunders.length
-
-        // 3. High-level filtering
-        const filteredFunders = allFunders.filter((funder) => passHighLevelFilter(funder, sme))
-
-        // Update progress overlay with actual funder count
-        setAnalysisProgress({ stage: "gettingReady", fundersCount: totalCount })
-        await new Promise((r) => setTimeout(r, 5000))
-
-        // STEP 3: Show "Searching For Matches" and start the fetch
-        setAnalysisProgress({ stage: "searching", fundersCount: totalCount })
-
-        const controller = new AbortController()
-
-        const fetchPromise = (USE_CLOUD_FUNCTION || IS_PROD)
-          ? (async () => {
-              const fn = httpsCallable(getFunctions(), "analyzeFundingMatches")
-              const { data } = await fn({ applicationId: docId })
-              return data
-            })()
-          : (async () => {
-              const response = await fetch(LOCAL_MATCHING_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  applicationId: docId,
-                  funders: filteredFunders,
-                  totalCount: totalCount,
-                }),
-                signal: controller.signal,
-              })
-              if (!response.ok) {
-                const error = await response.json()
-                throw new Error(error.error || "Failed to analyze funding matches")
-              }
-              const data = await response.json()
-              return data
-            })()
-
-        // STEP 4: Race — if fetch takes >15s, switch to "Almost There"
-        const fifteenSecondTimer = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 15000)
+        await requestFundabilityAnalysis(
+          currentUser.uid,
+          documentId,
+          "submission"
+        )
+      } catch (error) {
+        console.error(
+          "Fundability request after submission failed:",
+          error
         )
 
-        try {
-          await Promise.race([fetchPromise, fifteenSecondTimer])
-        } catch (raceErr) {
-          if (raceErr.message === "timeout") {
-            setAnalysisProgress({ stage: "wrappingUp" })
-            const abortTimer = setTimeout(() => controller.abort(), 30000)
-            controller._timeoutId = abortTimer
-            await fetchPromise.catch(() => {})
-            clearTimeout(abortTimer)
-          }
-        }
+        analysisWarning =
+          "Your application was submitted, but fundability analysis could not be requested."
+      }
 
-        setAnalysisComplete(true)
+      await triggerAIMatching(
+        documentId,
+        uploaded,
+        entityOverview,
+        currentUser.uid
+      )
 
-        // After 1.5s, trigger redirection and resolve promise
-        setTimeout(() => {
-          setAnalysisProgress(null)
-          setAnalysisComplete(false)
-          onNavigateToMatches?.()
-          resolve()
-        }, 1500)
-      } catch (err) {
-        console.error("AI matching failed:", err)
-        setAnalysisProgress(null)
+      // Navigation failures do not change submission/matching status.
+      try {
         onNavigateToMatches?.()
-        resolve()
+      } catch (error) {
+        console.error("Unable to navigate to matches:", error)
       }
-    })
-  }
 
-  // ── Form helpers ──────────────────────────────────────────────────────────────
-  const updateFormData = useCallback((section, data) => {
-    setFormData((prev) => {
-      const next = {
-        ...prev,
-        [section]: { ...(prev[section] || {}), ...data },
+      return {
+        submitted: true,
+        documentId,
+        warning: analysisWarning,
       }
-      const changed = JSON.stringify(next) !== JSON.stringify(lastSaved.current)
-      setHasUnsavedChanges(changed)
-      return next
-    })
-  }, [])
+    } catch (error) {
+      setAnalysisProgress(null)
 
-  const validate = useCallback(
-    (sectionId) => sectionValidations[sectionId]?.(formData[sectionId]) ?? true,
-    [formData]
-  )
+      if (applicationSaved) {
+        const matchingError = new Error(
+          "Your application was submitted, but funding matching failed. Please retry matching."
+        )
 
-  const validateAll = useCallback(
-    () => Object.keys(sectionValidations).every((id) => sectionValidations[id](formData[id])),
-    [formData]
-  )
+        matchingError.applicationSubmitted = true
+        matchingError.cause = error
+        throw matchingError
+      }
 
-  const getInvalidSections = useCallback(() => {
-    const sectionLabels = {
-      applicationOverview: "Application Overview",
-      useOfFunds: "Use of Funds",
-      enterpriseReadiness: "Enterprise Readiness",
-      financialOverview: "Financial Overview",
-      guarantees: "Guarantees",
-      growthPotential: "Growth Potential",
-      socialImpact: "Social Impact",
-      documentUpload: "Document Upload",
-      declarationCommitment: "Declaration & Commitment",
+      throw error
+    } finally {
+      operationInFlightRef.current = false
+      setIsLoading(false)
     }
-    return Object.entries(sectionValidations)
-      .filter(([id]) => !sectionValidations[id](formData[id]))
-      .map(([id]) => sectionLabels[id] || id)
-  }, [formData])
+  }, [
+    fetchUniversalProfile,
+    ensureDocumentId,
+    uploadFilesAndReplaceWithURLs,
+    requestFundabilityAnalysis,
+    triggerAIMatching,
+    onNavigateToMatches,
+  ])
 
   const discardChanges = useCallback(async () => {
-    await loadApplication()
-  }, [applicationId, user])
+    const currentUser = auth.currentUser
+    const documentId = documentIdRef.current
+
+    if (!currentUser || !documentId) {
+      applyForm(createEmptyForm(), null, false)
+      return
+    }
+
+    const snapshot = await getDoc(
+      doc(db, "fundingApplicationsV2", documentId)
+    )
+
+    if (!snapshot.exists()) {
+      applyForm(createEmptyForm(), null, false)
+      return
+    }
+
+    const saved = snapshot.data()
+    const defaults = createEmptyForm()
+    const restored = {}
+
+    Object.keys(defaults).forEach((sectionId) => {
+      restored[sectionId] = {
+        ...defaults[sectionId],
+        ...(saved[sectionId] || {}),
+      }
+    })
+
+    if (saved.financialOverview) {
+      restored.financialOverview = saved.financialOverview
+    }
+
+    applyForm(
+      restored,
+      documentId,
+      saved.status === "submitted"
+    )
+  }, [applyForm])
 
   return {
-    // state
     user,
     formData,
     completedSections,
     currentDocId,
+    existingUniversalDocs,
     hasUnsavedChanges,
     saveStatus,
     isLoading,
     analysisProgress,
     analysisComplete,
     isSubmitted,
-    // actions
+
     updateFormData,
     saveSectionToFirebase,
     submitApplication,
     discardChanges,
+
     validate,
     validateAll,
+    getSectionIssues,
+    getValidationMessages,
     getInvalidSections,
+
     setIsSubmitted,
     setCompletedSections,
   }

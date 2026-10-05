@@ -497,19 +497,15 @@ const calculateGovernanceScore = (profileData) => {
   const stage = ["startup","growth","scaling","turnaround","mature"].includes(rawStage)
     ? rawStage : "startup";
  
-  // ── Rubric-aligned weights per stage ─────────────────────────────────────
-  // Maps rubric columns to your 5 scorer categories:
-  //   4.1 Advisory + 4.2 Board Comp → board
-  //   4.3 Committees                → risk
-  //   4.4 Ownership & Accountability→ strategic
-  //   4.5 Transparency              → transparency
-  //   (no rubric column)            → policies (flat 20%)
+  // ── Governance Maturity weights per stage ────────────────────────────────
+  // BIG Score Methodology v3 §6: Board Structure, Strategic Planning,
+  // Policies, Transparency and Risk Management. Each stage sums to 100.
   const WEIGHTS = {
-    startup:    { strategic: 25, risk: 10, transparency: 15, policies: 20, board: 30 },
-    turnaround: { strategic: 25, risk: 10, transparency: 15, policies: 20, board: 30 },
-    growth:     { strategic: 25, risk: 15, transparency: 15, policies: 20, board: 25 },
-    scaling:    { strategic: 20, risk: 25, transparency: 15, policies: 20, board: 20 },
-    mature:     { strategic: 20, risk: 25, transparency: 15, policies: 20, board: 20 },
+    startup:    { strategic: 30, risk: 15, transparency: 20, policies: 25, board: 10 },
+    growth:     { strategic: 27, risk: 13, transparency: 18, policies: 22, board: 20 },
+    scaling:    { strategic: 24, risk: 12, transparency: 16, policies: 20, board: 28 },
+    turnaround: { strategic: 25, risk: 15, transparency: 15, policies: 15, board: 30 },
+    mature:     { strategic: 20, risk: 15, transparency: 15, policies: 15, board: 35 },
   };
   const w = WEIGHTS[stage];
  

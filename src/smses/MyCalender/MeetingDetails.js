@@ -222,6 +222,42 @@ const ResponseMessage = styled.div`
   text-align: center;
 `;
 
+const DescriptionText = styled.div`
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+`;
+
+const MeetingLinkAnchor = styled.a`
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #5D4037;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  word-break: break-all;
+
+  &:hover {
+    background: #8D6E63;
+  }
+`;
+
+const formatDuration = (value) => {
+  const minutes = Number(value);
+
+  if (!minutes || Number.isNaN(minutes)) return "";
+  if (minutes < 60) return `${minutes} minutes`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+
+  return rest
+    ? `${hours} hr ${rest} min`
+    : `${hours} ${hours === 1 ? "hour" : "hours"}`;
+};
+
 const getSlotKey = (slot) => {
   if (!slot) return null;
   const dateKey = slot.date instanceof Date ? slot.date.getTime() : slot.date;
@@ -435,7 +471,13 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
         `Your meeting with ${meeting.smeName || "an SME"} has been confirmed.\n\n` +
         `📅 Date: ${formatDate(selectedSlot.date)}\n` +
         `⏰ Time: ${formatTimeSlot(selectedSlot.timeSlots[0])} (${selectedSlot.timeZone})\n` +
-        `📍 Location: ${meeting.location}\n\n`;
+        (meeting.meetingType === "virtual" && meeting.meetingLink
+          ? `🔗 Meeting link: ${meeting.meetingLink}\n`
+          : `📍 Location: ${meeting.location}\n`) +
+        (meeting.description
+          ? `\n📝 Details: ${meeting.description}\n`
+          : "") +
+        "\n";
 
       const confirmationMessage = {
         from: user.uid,
@@ -491,6 +533,12 @@ const MeetingDetails = ({ meeting, onAction, onClose }) => {
 
                 location:
                   meeting.location,
+
+                meetingType:
+                  meeting.meetingType,
+
+                meetingLink:
+                  meeting.meetingLink || "",
 
                 timeZone:
                   selectedSlot.timeZone,
@@ -698,9 +746,60 @@ if (
           </InfoRow>
 
           <InfoRow>
-            <InfoLabel>Location</InfoLabel>
-            <InfoValue>{meeting.location}</InfoValue>
+            <InfoLabel>Format</InfoLabel>
+            <InfoValue>
+              {meeting.meetingType === "virtual"
+                ? "Online / virtual"
+                : "In person"}
+            </InfoValue>
           </InfoRow>
+
+          {meeting.meetingType === "virtual" ? (
+            meeting.meetingLink ? (
+              <InfoRow>
+                <InfoLabel>Meeting Link</InfoLabel>
+                <InfoValue>
+                  <MeetingLinkAnchor
+                    href={meeting.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Join meeting
+                  </MeetingLinkAnchor>
+                </InfoValue>
+              </InfoRow>
+            ) : (
+              <InfoRow>
+                <InfoLabel>Meeting Link</InfoLabel>
+                <InfoValue>Not provided yet</InfoValue>
+              </InfoRow>
+            )
+          ) : (
+            <InfoRow>
+              <InfoLabel>Location</InfoLabel>
+              <InfoValue>{meeting.location}</InfoValue>
+            </InfoRow>
+          )}
+
+          {formatDuration(meeting.duration) && (
+            <InfoRow>
+              <InfoLabel>Duration</InfoLabel>
+              <InfoValue>
+                {formatDuration(meeting.duration)}
+              </InfoValue>
+            </InfoRow>
+          )}
+
+          {meeting.description && (
+            <InfoRow>
+              <InfoLabel>Description</InfoLabel>
+              <InfoValue>
+                <DescriptionText>
+                  {meeting.description}
+                </DescriptionText>
+              </InfoValue>
+            </InfoRow>
+          )}
 
           <InfoRow>
             <InfoLabel>Available Slots</InfoLabel>
