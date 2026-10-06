@@ -44,7 +44,7 @@ export default function SectionDecisions({ data = {}, onChange }) {
           Decision Process, Roles & Approval Thresholds
         </h4>
         <p style={{ margin: 0, fontSize: "0.825rem", color: "#8D6E63" }}>
-          Configures accountability and decision gates conforming to the brief's 6-role permission matrix.
+          Configure governance roles, approval thresholds, and sign-off delegations across procurement workflows.
         </p>
       </div>
 

@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { Database, Link2, ShieldAlert, CheckCircle, ExternalLink } from "lucide-react"
+import { Database, Link2 } from "lucide-react"
 
 const ERP_OPTIONS = [
   "SAP S/4HANA",
@@ -44,35 +44,11 @@ export default function SectionEnvironment({ data = {}, onChange }) {
     <div>
       <div style={{ marginBottom: "20px" }}>
         <h4 style={{ margin: "0 0 6px 0", fontSize: "1rem", fontWeight: 700, color: "#4A352F" }}>
-          Current Environment & Portal Coexistence Plan
+          Current Environment & ERP Coexistence
         </h4>
         <p style={{ margin: 0, fontSize: "0.825rem", color: "#8D6E63" }}>
-          Configures coexistence with your existing ERP or sourcing suite without replacing your vendor master.
+          Configure enterprise ERP coexistence and vendor portal hand-off without replacing your internal vendor master.
         </p>
-      </div>
-
-      {/* Non-Negotiable Coexistence Policy Alert */}
-      <div
-        style={{
-          background: "#FFF8E1",
-          border: "1px solid #FFE082",
-          borderRadius: "8px",
-          padding: "14px 18px",
-          marginBottom: "20px",
-          display: "flex",
-          gap: "12px",
-          alignItems: "flex-start",
-        }}
-      >
-        <ShieldAlert size={20} color="#F57F17" style={{ flexShrink: 0, marginTop: "2px" }} />
-        <div>
-          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#795548" }}>
-            Architectural Coexistence Principle (Brief Section 4)
-          </div>
-          <p style={{ margin: "4px 0 0 0", fontSize: "0.775rem", color: "#5D4037", lineHeight: "1.45" }}>
-            Prism acts as a pre-vetting and discovery engine. <strong>BIG never stores buyer portal passwords, logs into portals for suppliers, scrapes portals, or marks a supplier approved without explicit buyer confirmation.</strong> Formal external registration remains on your approved portal.
-          </p>
-        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
@@ -117,20 +93,8 @@ export default function SectionEnvironment({ data = {}, onChange }) {
           />
         </div>
         <div style={{ fontSize: "0.725rem", color: "#8D6E63", marginTop: "4px" }}>
-          This verified link is provided to matched suppliers when you initiate a "Request Portal Registration" hand-off.
+          This link is provided to matched suppliers when initiating a "Request Portal Registration" hand-off.
         </div>
-      </div>
-
-      {/* Hand-off Instructions */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={labelStyle}>Supplier Onboarding Instructions & Guidelines</label>
-        <textarea
-          rows={3}
-          placeholder="e.g. Suppliers must submit CIPC registration certificate, banking letter less than 3 months old, and complete the safety declaration form on our portal."
-          value={data.onboardingInstructions || ""}
-          onChange={(e) => handleChange("onboardingInstructions", e.target.value)}
-          style={{ ...inputStyle, resize: "vertical" }}
-        />
       </div>
 
       {/* Explicit Acknowledgment Checkbox */}

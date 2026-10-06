@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState } from "react"
-import { Layers, Plus, X, Search, DollarSign } from "lucide-react"
+import { Layers, Plus, X } from "lucide-react"
+import MultiSelect from "../../../components/MultiSelect"
 
 const CORE_TAXONOMY_CATEGORIES = [
   "Information Technology",
@@ -22,10 +23,32 @@ const CORE_TAXONOMY_CATEGORIES = [
   "Human Resources & Training",
 ]
 
+const GEOGRAPHY_TYPES = [
+  "Host Community / Local Site Radius",
+  "South Africa (Provincial / National)",
+  "Cross-border / SADC Region",
+  "International / Foreign",
+  "No Geographic Preference",
+]
+
+const PROVINCES_LIST = [
+  "Gauteng",
+  "Western Cape",
+  "KwaZulu-Natal",
+  "Eastern Cape",
+  "Free State",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Northern Cape",
+]
+
 export default function SectionDemand({ data = {}, onChange }) {
   const [customInput, setCustomInput] = useState("")
 
   const categories = Array.isArray(data.categories) ? data.categories : []
+  const selectedProvinces = Array.isArray(data.selectedProvinces) ? data.selectedProvinces : []
+  const geoType = data.geographyType || "South Africa (Provincial / National)"
 
   const toggleCategory = (cat) => {
     const next = categories.includes(cat)
@@ -65,6 +88,9 @@ export default function SectionDemand({ data = {}, onChange }) {
     marginBottom: "5px",
   }
 
+  const taxonomyOptions = CORE_TAXONOMY_CATEGORIES.map((c) => ({ value: c, label: c }))
+  const provinceOptions = PROVINCES_LIST.map((p) => ({ value: p, label: p }))
+
   return (
     <div>
       <div style={{ marginBottom: "20px" }}>
@@ -72,30 +98,44 @@ export default function SectionDemand({ data = {}, onChange }) {
           Demand Context & Sourcing Taxonomy
         </h4>
         <p style={{ margin: 0, fontSize: "0.825rem", color: "#8D6E63" }}>
-          Configures the product and service categories that trigger supplier matches and algorithm weighting.
+          Configure product and service categories, geographic preferences, spend thresholds, and supplier onboarding guidelines.
         </p>
       </div>
 
-      {/* Selected Categories Display */}
+      {/* Sourcing Categories Multi-Select Dropdown */}
       <div style={{ marginBottom: "16px" }}>
         <label style={labelStyle}>
-          Active Sourcing Categories ({categories.length} selected) *
+          Select from Enterprise Taxonomy Library ({categories.length} selected) *
         </label>
-        {categories.length === 0 ? (
-          <div style={{ fontSize: "0.8rem", color: "#C62828", fontStyle: "italic", marginBottom: "8px" }}>
-            No categories selected. Please select at least one category to achieve "Match Ready" status.
+        <MultiSelect
+          options={taxonomyOptions}
+          selected={categories}
+          onChange={(newSelected) => handleChange("categories", newSelected)}
+          placeholder="Search and select categories from taxonomy library..."
+        />
+        {categories.length === 0 && (
+          <div style={{ fontSize: "0.775rem", color: "#C62828", marginTop: "6px" }}>
+            * Please select at least one sourcing category to unlock Match Ready status.
           </div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
+        )}
+      </div>
+
+      {/* Selected Categories Tags */}
+      {categories.length > 0 && (
+        <div style={{ marginBottom: "18px" }}>
+          <div style={{ fontSize: "0.725rem", color: "#8D6E63", marginBottom: "6px" }}>
+            Active Sourcing Categories:
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {categories.map((cat) => (
               <span
                 key={cat}
                 style={{
                   background: "#4A352F",
                   color: "#FAF7F2",
-                  padding: "5px 12px",
-                  borderRadius: "16px",
-                  fontSize: "0.775rem",
+                  padding: "4px 10px",
+                  borderRadius: "14px",
+                  fontSize: "0.75rem",
                   fontWeight: 600,
                   display: "inline-flex",
                   alignItems: "center",
@@ -120,46 +160,14 @@ export default function SectionDemand({ data = {}, onChange }) {
               </span>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Core Taxonomy Grid */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={labelStyle}>Select from Enterprise Taxonomy Library</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {CORE_TAXONOMY_CATEGORIES.map((cat) => {
-            const isSelected = categories.includes(cat)
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => toggleCategory(cat)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: "6px",
-                  border: isSelected ? "1px solid #4A352F" : "1px solid #D7CCC8",
-                  background: isSelected ? "#FDF8F0" : "#FFFFFF",
-                  color: isSelected ? "#4A352F" : "#6D4C41",
-                  fontSize: "0.775rem",
-                  fontWeight: isSelected ? 600 : 400,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                {isSelected ? "✓" : "+"} {cat}
-              </button>
-            )
-          })}
         </div>
-      </div>
+      )}
 
       {/* Custom Category Input */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
         <input
           type="text"
-          placeholder="Add custom niche category or commodity..."
+          placeholder="Add custom niche commodity or service..."
           value={customInput}
           onChange={(e) => setCustomInput(e.target.value)}
           onKeyDown={(e) => {
@@ -187,26 +195,95 @@ export default function SectionDemand({ data = {}, onChange }) {
             gap: "4px",
           }}
         >
-          <Plus size={14} /> Add
+          <Plus size={14} /> Add Custom
         </button>
       </div>
 
-      {/* Volume & Budget Context */}
+      {/* Geographic Sourcing Preferences */}
       <div
         style={{
-          background: "#FAF7F2",
-          border: "1px solid #E8D5C4",
+          background: "#FFFFFF",
+          border: "1px solid #E6D7C3",
           borderRadius: "8px",
-          padding: "16px",
+          padding: "18px",
+          marginBottom: "20px",
         }}
       >
-        <h5 style={{ margin: "0 0 12px 0", fontSize: "0.85rem", fontWeight: 700, color: "#4A352F" }}>
+        <h5 style={{ margin: "0 0 4px 0", fontSize: "0.9rem", fontWeight: 700, color: "#4A352F" }}>
+          Geographic Sourcing Preferences
+        </h5>
+        <p style={{ margin: "0 0 14px 0", fontSize: "0.775rem", color: "#8D6E63" }}>
+          Define geographic boundaries and host community localisation tiers. Tender-specific preferences override general corporate settings.
+        </p>
+
+        <div style={{ marginBottom: "14px" }}>
+          <label style={labelStyle}>Geographic Sourcing Scope</label>
+          <select
+            value={geoType}
+            onChange={(e) => handleChange("geographyType", e.target.value)}
+            style={inputStyle}
+          >
+            {GEOGRAPHY_TYPES.map((gt) => (
+              <option key={gt} value={gt}>{gt}</option>
+            ))}
+          </select>
+        </div>
+
+        {geoType !== "No Geographic Preference" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+            <div>
+              <label style={labelStyle}>Host Community / Site Radius</label>
+              <input
+                type="text"
+                placeholder="e.g. Within 50km of operational sites / Host Municipality"
+                value={data.localRadius || ""}
+                onChange={(e) => handleChange("localRadius", e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Designated Municipalities / Districts</label>
+              <input
+                type="text"
+                placeholder="e.g. Rustenburg, eMalahleni, City of Johannesburg"
+                value={data.designatedMunicipalities || ""}
+                onChange={(e) => handleChange("designatedMunicipalities", e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Operating Provinces Multi-Select Dropdown */}
+        <div style={{ marginBottom: "4px" }}>
+          <label style={labelStyle}>Target Operating Provinces</label>
+          <MultiSelect
+            options={provinceOptions}
+            selected={selectedProvinces}
+            onChange={(newSelected) => handleChange("selectedProvinces", newSelected)}
+            placeholder="Select operating provinces..."
+          />
+        </div>
+      </div>
+
+      {/* Spend Volumes & Operational Scope */}
+      <div
+        style={{
+          background: "#FFFFFF",
+          border: "1px solid #E6D7C3",
+          borderRadius: "8px",
+          padding: "18px",
+          marginBottom: "20px",
+        }}
+      >
+        <h5 style={{ margin: "0 0 12px 0", fontSize: "0.9rem", fontWeight: 700, color: "#4A352F" }}>
           Spend Volumes & Operational Scope
         </h5>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
           <div>
-            <label style={labelStyle}>Estimated Annual Procurement Spend (ZAR)</label>
+            <label style={labelStyle}>Estimated Annual Sourcing Spend (ZAR)</label>
             <input
               type="text"
               placeholder="e.g. R 50,000,000 - R 250,000,000"
@@ -228,18 +305,7 @@ export default function SectionDemand({ data = {}, onChange }) {
           </div>
 
           <div>
-            <label style={labelStyle}>Host Community / Localisation Sourcing Radius</label>
-            <input
-              type="text"
-              placeholder="e.g. 50km radius of mine site / Host Municipality"
-              value={data.localRadius || ""}
-              onChange={(e) => handleChange("localRadius", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>Delivery Flexibility Expected</label>
+            <label style={labelStyle}>Delivery Mode Preference</label>
             <select
               value={data.deliveryModePreference || "Hybrid"}
               onChange={(e) => handleChange("deliveryModePreference", e.target.value)}
@@ -250,7 +316,50 @@ export default function SectionDemand({ data = {}, onChange }) {
               <option value="Remote">Remote / Digital Delivery</option>
             </select>
           </div>
+
+          <div>
+            <label style={labelStyle}>Payment Terms Baseline</label>
+            <select
+              value={data.paymentTerms || "30 Days from Invoice"}
+              onChange={(e) => handleChange("paymentTerms", e.target.value)}
+              style={inputStyle}
+            >
+              <option value="15 Days (SMME Fast-track)">15 Days (SMME Fast-track)</option>
+              <option value="30 Days from Invoice">30 Days from Invoice</option>
+              <option value="60 Days from Statement">60 Days from Statement</option>
+            </select>
+          </div>
         </div>
+      </div>
+
+      {/* Supplier Onboarding Instructions */}
+      <div
+        style={{
+          background: "#FAF7F2",
+          border: "1px solid #E8D5C4",
+          borderRadius: "8px",
+          padding: "18px",
+        }}
+      >
+        <h5 style={{ margin: "0 0 4px 0", fontSize: "0.9rem", fontWeight: 700, color: "#4A352F" }}>
+          Supplier Onboarding Instructions & Guidelines
+        </h5>
+        <p style={{ margin: "0 0 12px 0", fontSize: "0.775rem", color: "#8D6E63" }}>
+          Free-text instructions provided to shortlisted or applicant suppliers detailing requirements for vendor pack submission, mandatory tender documents, and registration steps.
+        </p>
+
+        <textarea
+          rows={5}
+          placeholder="e.g. All prospective suppliers must hold active COIDA Letters of Good Standing and valid Tax Compliance status. For engineering works, submit CIDB grade verification. Shortlisted vendors will receive a formal invite to complete registration on our vendor portal with their verified BIG Green Passport."
+          value={data.onboardingInstructions || ""}
+          onChange={(e) => handleChange("onboardingInstructions", e.target.value)}
+          style={{
+            ...inputStyle,
+            fontFamily: "inherit",
+            resize: "vertical",
+            lineHeight: "1.5",
+          }}
+        />
       </div>
     </div>
   )

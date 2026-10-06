@@ -204,6 +204,7 @@ import InteractionsPage from "./procurement/Interactions/InteractionsPage"
 import ESDCohortWorkspace from "./procurement/ESDCohorts/ESDCohortWorkspace"
 import AuditReportsPage from "./procurement/Reports/AuditReportsPage"
 import ProcurementSettingsPage from "./procurement/Settings/ProcurementSettingsPage"
+import ProcurementRequestsPage from "./procurement/ProcurementWorkflow/ProcurementRequestsPage"
 
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
@@ -1084,6 +1085,8 @@ function App() {
         <Route path="/procurement" element={<Navigate to="/procurement/profile" replace />} />
         <Route path="/procurement/matches" element={withProtection(MatchedSuppliersPage, {}, renderProcurementRoute)} />
         <Route path="/procurement/preview" element={renderProcurementRoute(MatchedSuppliersPage)} />
+        <Route path="/procurement/requests" element={withProtection(ProcurementRequestsPage, {}, renderProcurementRoute)} />
+        <Route path="/procurement/requests/preview" element={renderProcurementRoute(ProcurementRequestsPage)} />
         <Route path="/procurement/profile" element={withProtection(BuyerUniversalProfile, {}, renderProcurementRoute)} />
         <Route path="/procurement/profile/preview" element={renderProcurementRoute(BuyerUniversalProfile)} />
         <Route path="/procurement/interactions" element={withProtection(InteractionsPage, {}, renderProcurementRoute)} />

@@ -1,23 +1,23 @@
 /**
  * buyerProfileState.js
  *
- * Implements the 6-state lifecycle engine and dynamic completion plan
- * specified in the BIG Prism Procurement Dashboard Core Developer Brief.
+ * Implements the 6-state lifecycle engine and completion status
+ * for the Procurement Universal Profile.
  *
- * States:
- *   1. Profile Started: Organisation exists but objectives or context are incomplete.
- *   2. Configuration Required: Categories, requirements, users or portal workflow still block use.
- *   3. Match Ready: Demand, category, location and supplier criteria are sufficient.
- *   4. Assessment Ready: Requirements and permissions support Score and Passport review.
- *   5. Onboarding Ready: Decision roles, portal hand-off and buyer-specific requirements are configured.
- *   6. Live: The buyer can match, interact with and progress suppliers through the configured journey.
+ * Section Order:
+ *   1. Objectives (Entity Details & Strategic Objectives)
+ *   2. Demand Context (Categories, Spend Ranges, Geography, Onboarding Instructions)
+ *   3. Compliance Gates (Statutory Gates, Accreditations, Operational Overlays)
+ *   4. Decision Roles (Governance Roles & Approval Thresholds)
+ *   5. Environment & ERP (ERP Coexistence & Vendor Master Portal)
+ *   6. Policy & Consent (Data Minimisation & Benchmark Consent)
  */
 
 export const PROFILE_STATES = {
   PROFILE_STARTED: {
     key: "profile_started",
     label: "Profile Started",
-    description: "Organisation basic entity details recorded; objectives and operational context incomplete.",
+    description: "Corporate entity details and objectives recorded; demand context incomplete.",
     variant: "neutral",
     badgeColor: "#8D6E63",
     badgeBg: "#EFEBE9",
@@ -26,7 +26,7 @@ export const PROFILE_STATES = {
   CONFIGURATION_REQUIRED: {
     key: "configuration_required",
     label: "Configuration Required",
-    description: "Categories, requirements, users or portal workflow still block matching and progression.",
+    description: "Categories, compliance gates, decision roles or portal workflow still pending.",
     variant: "warning",
     badgeColor: "#E65100",
     badgeBg: "#FFF3E0",
@@ -35,7 +35,7 @@ export const PROFILE_STATES = {
   MATCH_READY: {
     key: "match_ready",
     label: "Match Ready",
-    description: "Demand, category, location and supplier criteria are sufficient to generate accurate matches.",
+    description: "Demand taxonomy and supplier criteria are configured to qualify Preferred Suppliers.",
     variant: "info",
     badgeColor: "#0D47A1",
     badgeBg: "#E3F2FD",
@@ -44,7 +44,7 @@ export const PROFILE_STATES = {
   ASSESSMENT_READY: {
     key: "assessment_ready",
     label: "Assessment Ready",
-    description: "Requirement gates and reviewer permissions support BIG Score and Passport deep-dive inspection.",
+    description: "Compliance gates and review roles support BIG Score and Passport deep-dive inspection.",
     variant: "accent",
     badgeColor: "#4A148C",
     badgeBg: "#F3E5F5",
@@ -62,7 +62,7 @@ export const PROFILE_STATES = {
   LIVE: {
     key: "live",
     label: "Live",
-    description: "Full end-to-end journey active: match, interact, assess, and progress suppliers.",
+    description: "Full end-to-end journey active: discover preferred suppliers, issue RFPs, and progress bids.",
     variant: "success",
     badgeColor: "#2E7D32",
     badgeBg: "#C8E6C9",
@@ -71,8 +71,37 @@ export const PROFILE_STATES = {
 }
 
 /**
- * Evaluates profile data and returns the active state, progress percentage,
- * and actionable completion plan items.
+ * Checks if a specific section has completed required information.
+ */
+export function isSectionCompleted(sectionId, profile = {}) {
+  const org = profile.organisation || {}
+  const obj = profile.objectives || {}
+  const demand = profile.demandContext || {}
+  const req = profile.requirements || {}
+  const decisions = profile.decisionProcess || {}
+  const env = profile.currentEnvironment || {}
+  const consent = profile.dataConsent || {}
+
+  switch (sectionId) {
+    case "objectives":
+      return !!(org.legalName || org.tradingName) && Array.isArray(obj.selectedObjectives) && obj.selectedObjectives.length > 0
+    case "demand":
+      return Array.isArray(demand.categories) && demand.categories.length > 0
+    case "compliance":
+      return !!req.minBBBEELevel && req.mandatoryCIPC !== undefined
+    case "decisions":
+      return !!decisions.approverRole || !!decisions.technicalReviewer
+    case "environment":
+      return !!env.primaryERP && !!env.portalUrl
+    case "consent":
+      return consent.agreedToBenchmark !== undefined && !!consent.policySignedBy
+    default:
+      return false
+  }
+}
+
+/**
+ * Evaluates profile data and returns active state and progress percentage.
  */
 export function evaluateBuyerProfileState(profile = {}) {
   const org = profile.organisation || {}
@@ -83,138 +112,58 @@ export function evaluateBuyerProfileState(profile = {}) {
   const decisions = profile.decisionProcess || {}
   const consent = profile.dataConsent || {}
 
-  const tasks = []
-
-  // Check 1: Organisation
+  // Section 1: Objectives & Entity Details
   const hasOrg = !!(org.legalName || org.tradingName) && !!org.industry && !!org.primaryContact?.email
-  if (!hasOrg) {
-    tasks.push({
-      id: "org_info",
-      section: "organisation",
-      title: "Complete Organization & Primary Contact",
-      description: "Record legal entity name, industry, and primary procurement lead contact.",
-      blocking: true,
-      owner: org.primaryContact?.name || "Procurement Admin",
-      dueDate: "Immediate",
-    })
-  }
-
-  // Check 2: Objectives
   const hasObjectives = Array.isArray(obj.selectedObjectives) && obj.selectedObjectives.length > 0
-  if (!hasObjectives) {
-    tasks.push({
-      id: "objectives_select",
-      section: "objectives",
-      title: "Select Strategic Procurement Objectives",
-      description: "Define what your organisation wants from Prism (pre-vetting, pipeline, ESD, localization).",
-      blocking: true,
-      owner: "Procurement Lead",
-      dueDate: "Within 2 days",
-    })
-  }
+  const objectivesComplete = hasOrg || hasObjectives
 
-  // Check 3: Demand Context (Unlocks Match Ready)
-  const hasDemand = Array.isArray(demand.categories) && demand.categories.length > 0
-  if (!hasDemand) {
-    tasks.push({
-      id: "demand_categories",
-      section: "demand",
-      title: "Configure Demand Categories & Taxonomy",
-      description: "Select at least one product or service category to unlock supplier matching.",
-      blocking: true,
-      owner: "Category Manager",
-      dueDate: "Within 3 days",
-    })
-  }
+  // Section 2: Demand Context
+  const demandComplete = Array.isArray(demand.categories) && demand.categories.length > 0
 
-  // Check 4: Requirements & Baseline Gates (Unlocks Assessment Ready)
-  const hasRequirements = !!req.minBBBEELevel && req.mandatoryCIPC !== undefined
-  if (!hasRequirements) {
-    tasks.push({
-      id: "requirement_gates",
-      section: "requirements",
-      title: "Set Statutory Requirement Gates",
-      description: "Define baseline B-BBEE, Tax Pin, CIPC and COIDA compliance thresholds.",
-      blocking: false,
-      owner: "Compliance / SHEQ",
-      dueDate: "Within 5 days",
-    })
-  }
+  // Section 3: Compliance Gates
+  const complianceComplete = !!req.minBBBEELevel && req.mandatoryCIPC !== undefined
 
-  // Check 5: Environment & Portal Coexistence (Unlocks Onboarding Ready)
-  const hasEnvironment = !!env.primaryERP && !!env.portalUrl
-  if (!hasEnvironment) {
-    tasks.push({
-      id: "env_portal",
-      section: "environment",
-      title: "Configure Buyer Portal URL & ERP Coexistence",
-      description: "Specify your external supplier onboarding portal URL and ERP system (SAP, Ariba, Coupa).",
-      blocking: false,
-      owner: "Procurement Ops",
-      dueDate: "Within 1 week",
-    })
-  }
+  // Section 4: Decision Roles
+  const decisionsComplete = !!decisions.approverRole || !!decisions.technicalReviewer
 
-  // Check 6: Decision Roles & Approval Stages (Unlocks Live)
-  const hasRoles = !!decisions.approverRole || !!decisions.technicalReviewer
-  if (!hasRoles) {
-    tasks.push({
-      id: "decision_roles",
-      section: "decisions",
-      title: "Assign Decision Roles & Approval Authority",
-      description: "Designate Technical Reviewer, Category Manager, and Stage Approver roles.",
-      blocking: false,
-      owner: "Procurement Director",
-      dueDate: "Within 1 week",
-    })
-  }
+  // Section 5: Environment & ERP (#5 per user request)
+  const environmentComplete = !!env.primaryERP && !!env.portalUrl
 
-  // Check 7: Consent Policy
-  const hasConsent = consent.agreedToBenchmark !== undefined && !!consent.policySignedBy
-  if (!hasConsent) {
-    tasks.push({
-      id: "data_consent",
-      section: "consent",
-      title: "Sign Data Minimization & Consent Policy",
-      description: "Acknowledge evidence visibility limitations and benchmark access terms.",
-      blocking: false,
-      owner: "Legal / Compliance",
-      dueDate: "Prior to go-live",
-    })
-  }
+  // Section 6: Policy & Consent (#6 LAST per user request)
+  const consentComplete = consent.agreedToBenchmark !== undefined && !!consent.policySignedBy
 
   // Determine State
   let currentState = PROFILE_STATES.PROFILE_STARTED
 
-  if (hasOrg && hasObjectives && hasDemand) {
+  if (objectivesComplete && demandComplete) {
     currentState = PROFILE_STATES.MATCH_READY
-  } else if (hasOrg || hasObjectives) {
+  } else if (objectivesComplete) {
     currentState = PROFILE_STATES.CONFIGURATION_REQUIRED
   }
 
-  if (currentState.step >= 3 && hasRequirements) {
+  if (currentState.step >= 3 && complianceComplete) {
     currentState = PROFILE_STATES.ASSESSMENT_READY
   }
 
-  if (currentState.step >= 4 && hasEnvironment) {
+  if (currentState.step >= 4 && decisionsComplete && environmentComplete) {
     currentState = PROFILE_STATES.ONBOARDING_READY
   }
 
-  if (currentState.step >= 5 && hasRoles && hasConsent) {
+  if (currentState.step >= 5 && consentComplete) {
     currentState = PROFILE_STATES.LIVE
   }
 
-  const totalChecks = 7
-  const passedChecks = [
-    hasOrg,
-    hasObjectives,
-    hasDemand,
-    hasRequirements,
-    hasEnvironment,
-    hasRoles,
-    hasConsent,
-  ].filter(Boolean).length
+  const completedMap = {
+    objectives: objectivesComplete,
+    demand: demandComplete,
+    compliance: complianceComplete,
+    decisions: decisionsComplete,
+    environment: environmentComplete,
+    consent: consentComplete,
+  }
 
+  const totalChecks = 6
+  const passedChecks = Object.values(completedMap).filter(Boolean).length
   const completionPercentage = Math.round((passedChecks / totalChecks) * 100)
 
   return {
@@ -222,7 +171,7 @@ export function evaluateBuyerProfileState(profile = {}) {
     completionPercentage,
     passedChecks,
     totalChecks,
-    tasks,
+    completedMap,
     isMatchReady: currentState.step >= 3,
     isLive: currentState.step === 6,
   }
