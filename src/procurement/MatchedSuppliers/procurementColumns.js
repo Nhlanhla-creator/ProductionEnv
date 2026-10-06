@@ -28,15 +28,6 @@ export const PROCUREMENT_COLUMN_DEFS = {
     sortable: true,
     tooltip: "Operating site and geographic delivery capabilities.",
   },
-  matchReason: {
-    label: "Match Reason",
-    width: 160,
-    filterType: "matchReason",
-    visible: true,
-    priority: 1,
-    sortable: false,
-    tooltip: "Click to inspect explainable AI reasoning and criteria breakdown.",
-  },
   bbbeeLevel: {
     label: "B-BBEE Level",
     width: 120,
@@ -47,7 +38,7 @@ export const PROCUREMENT_COLUMN_DEFS = {
     tooltip: "Verified South African Broad-Based Black Economic Empowerment compliance level.",
   },
   bigScore: {
-    label: "BIG Score",
+    label: "BIG SCORE",
     align: "center",
     width: 120,
     filterType: "bigScore",
@@ -76,14 +67,14 @@ export const PROCUREMENT_COLUMN_DEFS = {
     tooltip: "Prism Universal Passport status: Active, In Review, or Gap Identified.",
   },
   requirementFit: {
-    label: "Requirement Fit",
+    label: "MATCH %",
     align: "center",
     width: 140,
     filterType: "match",
     visible: true,
     priority: 1,
     sortable: true,
-    tooltip: "Algorithmic alignment with buyer demand context, criteria weights, and AI semantic match.",
+    tooltip: "Algorithmic alignment with buyer demand context. Click cell or info icon to view breakdown.",
   },
   criticalGaps: {
     label: "Critical Gaps",

@@ -38,6 +38,204 @@ import {
 
 const VIEWS_STORAGE_KEY = "procurement-matches-views-v1"
 
+/**
+ * Visual circular gauge for BIG Score matching the design in the brief:
+ * Soft beige circular track, proportional active colored arc, inner score value,
+ * and status pill below (Weak / Moderate / Strong).
+ */
+function BigScoreGauge({ score }) {
+  const numericScore = typeof score === "number" ? Math.round(score) : Number(score)
+  const isPending = score === null || score === undefined || isNaN(numericScore)
+
+  let color = "#27AE60"
+  let bgColor = "#E8F5E9"
+  let label = "Strong"
+
+  if (isPending) {
+    color = "#8D6E63"
+    bgColor = "#F5F0E1"
+    label = "Pending"
+  } else if (numericScore < 50) {
+    color = "#E53935"
+    bgColor = "#FFEBEE"
+    label = "Weak"
+  } else if (numericScore < 75) {
+    color = "#E67E22"
+    bgColor = "#FFF3E0"
+    label = "Moderate"
+  } else {
+    color = "#27AE60"
+    bgColor = "#E8F5E9"
+    label = "Strong"
+  }
+
+  const radius = 15
+  const circumference = 2 * Math.PI * radius // ~94.25
+  const validScore = isPending ? 0 : Math.min(Math.max(numericScore, 0), 100)
+  const strokeDashoffset = circumference - (circumference * validScore) / 100
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          position: "relative",
+          width: 40,
+          height: 40,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <svg width="40" height="40" viewBox="0 0 40 40">
+          {/* Background Ring Track */}
+          <circle
+            cx="20"
+            cy="20"
+            r={radius}
+            fill="none"
+            stroke="#E8DFD8"
+            strokeWidth="3.5"
+          />
+          {/* Progress Arc */}
+          {!isPending && validScore > 0 && (
+            <circle
+              cx="20"
+              cy="20"
+              r={radius}
+              fill="none"
+              stroke={color}
+              strokeWidth="3.5"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              transform="rotate(-90 20 20)"
+            />
+          )}
+        </svg>
+        <span
+          style={{
+            position: "absolute",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            color: color,
+            lineHeight: 1,
+          }}
+        >
+          {isPending ? "—" : validScore}
+        </span>
+      </div>
+      <div
+        style={{
+          marginTop: "4px",
+          display: "inline-block",
+          padding: "2px 10px",
+          borderRadius: "12px",
+          fontSize: "0.7rem",
+          fontWeight: 600,
+          background: bgColor,
+          color: color,
+          lineHeight: 1.2,
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Requirement Fit cell with percentage, (?) trigger, and horizontal progress bar.
+ * Clicking opens the Match Reason breakdown modal/drawer.
+ */
+function RequirementFitCell({ fit, onClick }) {
+  const fitValue = typeof fit === "number" ? Math.round(fit) : Math.round(Number(fit) || 0)
+  const fitColor = fitValue >= 75 ? "#27AE60" : fitValue >= 50 ? "#F39C12" : "#E74C3C"
+
+  return (
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          onClick && onClick()
+        }
+      }}
+      title={`Match Fit: ${fitValue}%. Click to view criteria breakdown & AI explanation.`}
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        padding: "4px 8px",
+        borderRadius: "6px",
+        transition: "background 0.15s ease",
+        userSelect: "none",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "#F2EAE1"
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent"
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "4px",
+          marginBottom: "4px",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "0.875rem",
+            fontWeight: 700,
+            color: fitColor,
+          }}
+        >
+          {fitValue}%
+        </span>
+        <HelpCircle
+          size={13}
+          color="#8D6E63"
+          style={{ opacity: 0.85 }}
+        />
+      </div>
+
+      {/* Horizontal Progress Bar */}
+      <div
+        style={{
+          width: "88px",
+          height: "4px",
+          borderRadius: "3px",
+          background: "#E8DFD8",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.min(Math.max(fitValue, 0), 100)}%`,
+            height: "100%",
+            background: fitColor,
+            borderRadius: "3px",
+            transition: "width 0.3s ease",
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function MatchedSuppliersTable({
   suppliers = [],
   loading = false,
@@ -48,6 +246,8 @@ export default function MatchedSuppliersTable({
   onOpenRFI,
   onShortlist,
   demandContext,
+  onExtendSearch,
+  isPreferredTab = false,
 }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
@@ -590,22 +790,40 @@ export default function MatchedSuppliersTable({
                       <div style={{ fontSize: "0.825rem", color: "#8D6E63", maxWidth: "400px" }}>
                         Try lowering the minimum requirement fit score or broadening the category and B-BBEE filters.
                       </div>
-                      <button
-                        onClick={resetFilters}
-                        style={{
-                          marginTop: "8px",
-                          padding: "8px 16px",
-                          background: "#4A352F",
-                          border: "none",
-                          borderRadius: "6px",
-                          color: "#FAF7F2",
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Reset All Filters
-                      </button>
+                      <div style={{ display: "flex", gap: "10px", marginTop: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+                        <button
+                          onClick={resetFilters}
+                          style={{
+                            padding: "8px 16px",
+                            background: "#4A352F",
+                            border: "none",
+                            borderRadius: "6px",
+                            color: "#FAF7F2",
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Reset All Filters
+                        </button>
+                        {isPreferredTab && onExtendSearch && (
+                          <button
+                            onClick={onExtendSearch}
+                            style={{
+                              padding: "8px 16px",
+                              background: "#FAF7F2",
+                              border: "1px solid #4A352F",
+                              borderRadius: "6px",
+                              color: "#4A352F",
+                              fontSize: "0.8rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Extend Search to Full Directory →
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -613,7 +831,6 @@ export default function MatchedSuppliersTable({
                 /* Data Rows */
                 sortedSuppliers.map((supplier, idx) => {
                   const isSelected = selectedIds.includes(supplier.id)
-                  const fitColor = supplier.requirementFit >= 75 ? "#2E7D32" : supplier.requirementFit >= 50 ? "#F57C00" : "#D32F2F"
 
                   return (
                     <tr
@@ -694,32 +911,6 @@ export default function MatchedSuppliersTable({
                         </td>
                       )}
 
-                      {/* Match Reason */}
-                      {columnVisibility.matchReason !== false && (
-                        <td style={{ padding: cellPadding }}>
-                          <button
-                            onClick={() => onOpenMatchReason && onOpenMatchReason(supplier)}
-                            style={{
-                              background: "#FAF7F2",
-                              border: "1px solid #C8B6A6",
-                              borderRadius: "14px",
-                              padding: "3px 10px",
-                              fontSize: "0.725rem",
-                              color: "#4A352F",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              cursor: "pointer",
-                              fontWeight: 500,
-                            }}
-                            title="Click to inspect explainable scoring reasoning"
-                          >
-                            <Sparkles size={12} color="#D4AF37" />
-                            {supplier.aiReasoning ? "AI Reason" : "Fit Breakdown"}
-                          </button>
-                        </td>
-                      )}
-
                       {/* B-BBEE Level */}
                       {columnVisibility.bbbeeLevel !== false && (
                         <td style={{ padding: cellPadding, fontSize: "0.8rem", fontWeight: 500, color: "#4A352F" }}>
@@ -730,24 +921,7 @@ export default function MatchedSuppliersTable({
                       {/* BIG Score */}
                       {columnVisibility.bigScore !== false && (
                         <td style={{ padding: cellPadding, textAlign: "center" }}>
-                          {supplier.bigScore !== null ? (
-                            <span
-                              style={{
-                                display: "inline-block",
-                                minWidth: "48px",
-                                padding: "2px 8px",
-                                borderRadius: "12px",
-                                background: "#4A352F",
-                                color: "#FAF7F2",
-                                fontSize: "0.75rem",
-                                fontWeight: 700,
-                              }}
-                            >
-                              {supplier.bigScore}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: "0.75rem", color: "#8D6E63" }}>Pending</span>
-                          )}
+                          <BigScoreGauge score={supplier.bigScore} />
                         </td>
                       )}
 
@@ -797,18 +971,13 @@ export default function MatchedSuppliersTable({
                         </td>
                       )}
 
-                      {/* Requirement Fit */}
+                      {/* Requirement Fit (MATCH %) */}
                       {columnVisibility.requirementFit !== false && (
                         <td style={{ padding: cellPadding, textAlign: "center" }}>
-                          <span
-                            style={{
-                              fontSize: "0.95rem",
-                              fontWeight: 700,
-                              color: fitColor,
-                            }}
-                          >
-                            {Math.round(supplier.requirementFit)}%
-                          </span>
+                          <RequirementFitCell
+                            fit={supplier.requirementFit}
+                            onClick={() => onOpenMatchReason && onOpenMatchReason(supplier)}
+                          />
                         </td>
                       )}
 

@@ -13,10 +13,12 @@ import {
   AlertCircle,
   Save,
   UserCheck,
-  FileText
+  FileText,
+  Sparkles,
 } from "lucide-react"
 import { auth, db } from "../../firebaseConfig"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { COMPLETE_BUYER_PROFILE } from "../hooks/useBuyerProfile"
 
 export default function ProcurementSettingsPage() {
   const navigate = useNavigate()
@@ -149,7 +151,7 @@ export default function ProcurementSettingsPage() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "12px" }}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <button
             onClick={() => navigate("/procurement/profile")}
             style={{

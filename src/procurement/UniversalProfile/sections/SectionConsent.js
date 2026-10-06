@@ -52,7 +52,7 @@ export default function SectionConsent({ data = {}, onChange }) {
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
           <Lock size={16} color="#8D6E63" />
           <h5 style={{ margin: 0, fontSize: "0.85rem", fontWeight: 700, color: "#4A352F" }}>
-            Evidence Access Boundaries (Brief Page 4)
+            Evidence Access Boundaries
           </h5>
         </div>
         <p style={{ margin: "0 0 12px 0", fontSize: "0.775rem", color: "#5D4037", lineHeight: "1.45" }}>

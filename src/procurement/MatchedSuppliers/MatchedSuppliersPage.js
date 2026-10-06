@@ -2,15 +2,16 @@
 
 import React, { useState } from "react"
 import {
-  HeartHandshake,
-  Users,
   ShieldCheck,
+  Users,
   AlertTriangle,
   Scale,
   Sparkles,
   Download,
   Filter,
   CheckCircle,
+  FolderCheck,
+  Building,
 } from "lucide-react"
 
 import { useProcurementMatches } from "../hooks/useProcurementMatches"
@@ -37,6 +38,9 @@ export default function MatchedSuppliersPage() {
     recordPortalHandoff,
   } = useProcurementInteractions()
 
+  // Directory Tab state: 'preferred' (Green Passport) | 'directory' (Full Supplier Directory)
+  const [directoryTab, setDirectoryTab] = useState("preferred")
+
   // Modals & Drawers state
   const [selectedSupplierForReason, setSelectedSupplierForReason] = useState(null)
   const [selectedSupplierForDetail, setSelectedSupplierForDetail] = useState(null)
@@ -46,11 +50,15 @@ export default function MatchedSuppliersPage() {
   const [suppliersToCompare, setSuppliersToCompare] = useState([])
   const [notification, setNotification] = useState(null)
 
+  // Preferred suppliers filter (Green Passport active)
+  const preferredSuppliers = suppliers.filter((s) => s.passportStatus === "Active")
+  const displayedSuppliers = directoryTab === "preferred" ? preferredSuppliers : suppliers
+
   // Quick Metrics
   const totalMatches = suppliers.length
-  const strongMatches = suppliers.filter((s) => s.requirementFit >= 75).length
-  const passportActive = suppliers.filter((s) => s.passportStatus === "Active").length
-  const criticalGapsCount = suppliers.filter((s) => s.criticalGaps && s.criticalGaps.length > 0).length
+  const strongMatches = displayedSuppliers.filter((s) => s.requirementFit >= 75).length
+  const passportActive = preferredSuppliers.length
+  const criticalGapsCount = displayedSuppliers.filter((s) => s.criticalGaps && s.criticalGaps.length > 0).length
 
   const showNotification = (msg, type = "success") => {
     setNotification({ msg, type })
@@ -107,17 +115,73 @@ export default function MatchedSuppliersPage() {
       )}
 
       {/* Page Header */}
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-          <HeartHandshake size={28} color="#4A352F" />
+          <FolderCheck size={28} color="#4A352F" />
           <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, color: "#4A352F" }}>
-            Matched Suppliers Explorer
+            Preferred Suppliers
           </h1>
         </div>
         <p style={{ margin: 0, fontSize: "0.875rem", color: "#8D6E63", maxWidth: "800px" }}>
-          Buyer view of shared platform data. Discover pre-vetted suppliers matched against your organisation's demand context,
-          inspect explainable BIG scores, review verified statutory credentials, and manage auditable interactions.
+          Identify pre-qualified suppliers meeting enterprise passport, statutory compliance, and BIG score standards. Search Preferred Suppliers first, or extend discovery to the full directory.
         </p>
+      </div>
+
+      {/* Primary Directory Mode Switch Tabs */}
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          marginBottom: "20px",
+          borderBottom: "1px solid #E8D5C4",
+          paddingBottom: "12px",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setDirectoryTab("preferred")}
+          style={{
+            padding: "10px 20px",
+            borderRadius: "6px",
+            border: "none",
+            background: directoryTab === "preferred" ? "#4A352F" : "#FFFFFF",
+            color: directoryTab === "preferred" ? "#FAF7F2" : "#5D4037",
+            fontSize: "0.85rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: directoryTab === "preferred" ? "0 2px 6px rgba(74,53,47,0.2)" : "0 1px 3px rgba(0,0,0,0.05)",
+            border: directoryTab === "preferred" ? "none" : "1px solid #E6D7C3",
+          }}
+        >
+          <ShieldCheck size={16} color={directoryTab === "preferred" ? "#4CAF50" : "#2E7D32"} />
+          Preferred Suppliers ({passportActive})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDirectoryTab("directory")}
+          style={{
+            padding: "10px 20px",
+            borderRadius: "6px",
+            border: "none",
+            background: directoryTab === "directory" ? "#4A352F" : "#FFFFFF",
+            color: directoryTab === "directory" ? "#FAF7F2" : "#5D4037",
+            fontSize: "0.85rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: directoryTab === "directory" ? "0 2px 6px rgba(74,53,47,0.2)" : "0 1px 3px rgba(0,0,0,0.05)",
+            border: directoryTab === "directory" ? "none" : "1px solid #E6D7C3",
+          }}
+        >
+          <Building size={16} color={directoryTab === "directory" ? "#FAF7F2" : "#8D6E63"} />
+          Full Supplier Directory ({totalMatches})
+        </button>
       </div>
 
       {/* Metrics Row */}
@@ -140,13 +204,13 @@ export default function MatchedSuppliersPage() {
           }}
         >
           <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#8D6E63", textTransform: "uppercase" }}>
-            Total Matched Suppliers
+            {directoryTab === "preferred" ? "Preferred Suppliers" : "Total Directory Suppliers"}
           </div>
           <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#4A352F", marginTop: "4px" }}>
-            {loading ? "..." : totalMatches}
+            {loading ? "..." : displayedSuppliers.length}
           </div>
           <div style={{ fontSize: "0.725rem", color: "#A89482", marginTop: "2px" }}>
-            From shared canonical database
+            {directoryTab === "preferred" ? "Active Green Passport verified" : "Canonical supplier database"}
           </div>
         </div>
 
@@ -188,7 +252,7 @@ export default function MatchedSuppliersPage() {
             {loading ? "..." : passportActive}
           </div>
           <div style={{ fontSize: "0.725rem", color: "#A89482", marginTop: "2px" }}>
-            Fully verified statutory compliance
+            Verified statutory compliance
           </div>
         </div>
 
@@ -231,9 +295,9 @@ export default function MatchedSuppliersPage() {
         </div>
       )}
 
-      {/* Main Matched Suppliers Table */}
+      {/* Main Table */}
       <MatchedSuppliersTable
-        suppliers={suppliers}
+        suppliers={displayedSuppliers}
         loading={loading}
         error={error}
         onInspectSupplier={(supplier) => setSelectedSupplierForDetail(supplier.raw || supplier)}
@@ -242,6 +306,8 @@ export default function MatchedSuppliersPage() {
         onOpenRFI={handleOpenRFI}
         onShortlist={handleToggleShortlist}
         demandContext={demandContext}
+        isPreferredTab={directoryTab === "preferred"}
+        onExtendSearch={() => setDirectoryTab("directory")}
       />
 
       {/* Explainable Fit Reason Drawer */}
@@ -258,80 +324,95 @@ export default function MatchedSuppliersPage() {
           setSelectedSupplierForReason(null)
           handleOpenRFI(supplier)
         }}
-      />
-
-      {/* Supplier Compare Modal */}
-      <SupplierCompareModal
-        isOpen={suppliersToCompare.length > 0}
-        onClose={() => setSuppliersToCompare([])}
-        selectedSuppliers={suppliersToCompare}
-        onOpenSupplierDetail={(supplier) => {
-          setSuppliersToCompare([])
-          setSelectedSupplierForDetail(supplier.raw || supplier)
+        onShortlist={(supplier) => {
+          handleToggleShortlist(supplier)
         }}
+        isShortlisted={selectedSupplierForReason ? isShortlisted(selectedSupplierForReason.id) : false}
       />
 
-      {/* Procurement Supplier 360 Dossier Modal */}
+      {/* Side-by-Side Comparison Modal */}
+      {suppliersToCompare.length > 0 && (
+        <SupplierCompareModal
+          suppliers={suppliersToCompare}
+          onClose={() => setSuppliersToCompare([])}
+          onInspect={(supplier) => {
+            setSuppliersToCompare([])
+            setSelectedSupplierForDetail(supplier.raw || supplier)
+          }}
+        />
+      )}
+
+      {/* Supplier 360 Deep-Dive Modal */}
       {selectedSupplierForDetail && (
         <ProcurementSupplierModal
           supplier={selectedSupplierForDetail}
-          isOpen={!!selectedSupplierForDetail}
           onClose={() => setSelectedSupplierForDetail(null)}
-          onOpenRFI={(s) => {
+          onOpenRFI={(supplier) => {
             setSelectedSupplierForDetail(null)
-            setSelectedSupplierForRFI(s)
+            handleOpenRFI(supplier)
           }}
-          onOpenPortalHandoff={(s) => {
+          onRecordDecision={(supplier) => {
             setSelectedSupplierForDetail(null)
-            setSelectedSupplierForHandoff(s)
+            setSelectedSupplierForDecision(supplier)
           }}
-          onOpenStageDecision={(s) => {
+          onPortalHandoff={(supplier) => {
             setSelectedSupplierForDetail(null)
-            setSelectedSupplierForDecision(s)
+            setSelectedSupplierForHandoff(supplier)
           }}
-          onToggleShortlist={handleToggleShortlist}
-          isShortlisted={selectedSupplierForDetail ? isShortlisted(selectedSupplierForDetail.id) : false}
-          supplierInteractions={interactions.filter((i) => i.supplierId === (selectedSupplierForDetail?.id || selectedSupplierForDetail?.supplierId))}
         />
       )}
 
-      {/* RFI Modal */}
+      {/* RFI Clarification Dialog */}
       {selectedSupplierForRFI && (
         <RFIDialogModal
-          isOpen={!!selectedSupplierForRFI}
-          onClose={() => setSelectedSupplierForRFI(null)}
           supplier={selectedSupplierForRFI}
-          onSubmitRFI={async (payload) => {
-            await createRFI(payload)
-            showNotification(`Auditable RFI dispatched to ${payload.supplierName}.`)
+          onClose={() => setSelectedSupplierForRFI(null)}
+          onSubmit={({ questions, deadline, category }) => {
+            createRFI({
+              supplierId: selectedSupplierForRFI.id,
+              supplierName: selectedSupplierForRFI.name,
+              questions,
+              deadline,
+              category,
+            })
+            showNotification(`RFI dispatched to ${selectedSupplierForRFI.name}.`)
+            setSelectedSupplierForRFI(null)
           }}
         />
       )}
 
-      {/* Stage-Gate Governance Decision Modal */}
+      {/* Stage-Specific Decision Modal */}
       {selectedSupplierForDecision && (
         <StageDecisionModal
-          isOpen={!!selectedSupplierForDecision}
-          onClose={() => setSelectedSupplierForDecision(null)}
           supplier={selectedSupplierForDecision}
-          buyerProfile={buyerProfile}
-          onSaveDecision={async (dec) => {
-            await recordStageDecision(dec)
-            showNotification(`Stage-gate decision for ${dec.supplierName} recorded.`)
+          onClose={() => setSelectedSupplierForDecision(null)}
+          onSubmit={(decisionData) => {
+            recordStageDecision({
+              supplierId: selectedSupplierForDecision.id,
+              supplierName: selectedSupplierForDecision.name,
+              ...decisionData,
+            })
+            showNotification(`Stage decision recorded for ${selectedSupplierForDecision.name}.`)
+            setSelectedSupplierForDecision(null)
           }}
         />
       )}
 
-      {/* External Portal Handoff Modal */}
+      {/* External Portal Registration Handoff Modal */}
       {selectedSupplierForHandoff && (
         <PortalRegistrationModal
-          isOpen={!!selectedSupplierForHandoff}
-          onClose={() => setSelectedSupplierForHandoff(null)}
           supplier={selectedSupplierForHandoff}
-          buyerProfile={buyerProfile}
-          onSaveHandoff={async (handoff) => {
-            await recordPortalHandoff(handoff)
-            showNotification(`External portal handoff reference saved for ${handoff.supplierName}.`)
+          portalUrl={buyerProfile?.currentEnvironment?.portalUrl || "https://suppliers.enterprise.com/register"}
+          instructions={buyerProfile?.currentEnvironment?.onboardingInstructions || ""}
+          onClose={() => setSelectedSupplierForHandoff(null)}
+          onSubmit={(handoffData) => {
+            recordPortalHandoff({
+              supplierId: selectedSupplierForHandoff.id,
+              supplierName: selectedSupplierForHandoff.name,
+              ...handoffData,
+            })
+            showNotification(`Portal registration request dispatched to ${selectedSupplierForHandoff.name}.`)
+            setSelectedSupplierForHandoff(null)
           }}
         />
       )}

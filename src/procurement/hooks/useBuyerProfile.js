@@ -7,46 +7,57 @@ import { evaluateBuyerProfileState } from "../UniversalProfile/buyerProfileState
 
 const LOCAL_STORAGE_KEY = "procurement_buyer_universal_profile_v1"
 
-const INITIAL_PROFILE = {
+export const COMPLETE_BUYER_PROFILE = {
   organisation: {
     legalName: "Anglo American Inyosi Coal (Pty) Ltd",
-    tradingName: "Anglo American Supply Chain",
+    tradingName: "Anglo American Supply Chain & Operations",
+    registrationNumber: "2005/012345/07",
+    entityType: "Large Corporate / Enterprise",
     industry: "Mining & Metals",
     ownershipGroup: "Anglo American plc",
+    headquartersProvince: "Gauteng, South Africa",
     operatingGeographies: ["Gauteng", "Mpumalanga", "Limpopo"],
     primaryContact: {
       name: "Sbonelo Khumalo",
       email: "sbonelo.khumalo@anglo.com",
       phone: "+27 11 373 6111",
-      siteAddress: "55 Marshall Street, Johannesburg",
+      siteAddress: "55 Marshall Street, Johannesburg, 2001",
     },
   },
   objectives: {
-    selectedObjectives: ["pre_vet", "build_pipeline", "improve_onboarding", "manage_esd"],
+    primaryGoal: "esd_development",
+    selectedObjectives: ["pre_vet", "build_pipeline", "improve_onboarding", "manage_esd", "fast_track_rfp"],
+    targetSpendLocal: "45",
+    targetSpendDiverse: "35",
+    sourcingHorizon: "immediate",
     successMeasures: {
       targetVerifiedPercent: "85%",
       targetLocalSpendPercent: "45%",
-      annualSupplierIntake: "120 suppliers/yr",
+      annualSupplierIntake: "120 qualified suppliers/yr",
     },
-  },
-  currentEnvironment: {
-    primaryERP: "SAP S/4HANA",
-    vendorMasterEmail: "vendormaster@anglo.com",
-    portalUrl: "https://suppliers.angloamerican.com/registration",
-    onboardingInstructions: "Upload CIPC certificate, verified Tax Pin, valid COIDA letter, and banking confirmation less than 3 months old.",
-    coexistenceAcknowledged: true,
+    strategicFocusAreas: ["Host Community Sourcing", "Local Black-Owned SMME Incubation", "Zero Environmental Incidents"],
+    esgFocus: "High Priority (Decarbonisation, Water Stewardship, Community Safety)",
   },
   demandContext: {
     categories: [
-      "Information Technology",
+      "PPE & Safety Equipment",
+      "Industrial Equipment & Spares",
       "Facilities Management",
       "Logistics & Freight",
-      "Industrial Equipment & Spares",
+      "Electrical Services",
+      "Engineering & Fabrication",
     ],
-    annualSpendRange: "R 50M - R 250M",
-    typicalOrderRange: "R 100k - R 5M",
-    localRadius: "50km host community radius",
-    deliveryModePreference: "Hybrid",
+    geographyType: "Provincial (Operational Sites + Host Communities)",
+    selectedProvinces: ["Gauteng", "Mpumalanga", "Limpopo"],
+    localRadius: "Within 50km host community radius",
+    annualSpendRange: "R 50,000,000 - R 250,000,000",
+    annualSourcingBudget: "R 180,000,000",
+    typicalOrderRange: "R 100,000 - R 5,000,000",
+    paymentTerms: "30 Days from Invoice",
+    preferredSupplierModel: "preferred_panel",
+    deliveryModePreference: "On-Site Delivery with MHSA Escort",
+    onboardingInstructions: "Suppliers must maintain verified CIPC status, active SARS Tax PIN, valid COIDA letter of good standing, and MHSA compliant safety files prior to site entry.",
+    urgentDemandCategories: ["PPE & Safety Equipment", "Industrial Equipment & Spares"],
   },
   requirements: {
     minBBBEELevel: "Level 1 to 4 (Enterprise Baseline)",
@@ -54,22 +65,54 @@ const INITIAL_PROFILE = {
     mandatoryTax: true,
     mandatoryCOIDA: true,
     mandatoryBank: true,
-    minYearsOperating: "1 year",
+    minOperatingYears: "2 years",
+    minInsurance: "R 5,000,000 Public Liability",
     sheqRequirement: "High Risk (Mining / Heavy Industrial)",
+    requiredAccreditations: [
+      "ISO 9001 (Quality Management)",
+      "ISO 45001 (Occupational Health & Safety)",
+      "Mine Health & Safety Act (MHSA) Compliance",
+      "COIDA Letter of Good Standing",
+      "SARS Tax Compliance PIN",
+    ],
+    strictness: "Strict Statutory Hard-Gate (Zero Exceptions)",
+    disqualificationRules: "Deregistered CIPC status, expired SARS PIN, or fatal safety non-compliance",
   },
   decisionProcess: {
-    approverRole: "Sbonelo Khumalo (CPO)",
-    approvalThreshold: "R 5,000,000",
-    technicalReviewer: "Lindelani Dlamini (SHEQ Lead)",
-    esdManager: "Nhlanhla Mthembu (ESD Lead)",
+    approverRole: "Sbonelo Khumalo (Head of Procurement / CPO)",
+    procurementOfficerName: "Sbonelo Khumalo",
+    procurementOfficerEmail: "approver@anglo.com",
+    approvalThreshold: "R 5,000,000 Single Order Limit",
+    technicalReviewer: "Lindelani Dlamini (Senior Technical Engineer)",
+    technicalReviewerEmail: "sheq@anglo.com",
+    esdManager: "Nhlanhla Mthembu (ESD Program Lead)",
+    esdManagerEmail: "esd@anglo.com",
+    workflowType: "Three-Way Approval Hierarchy (Sourcing, Technical, ESD)",
+    conflictOfInterestMandatory: true,
+  },
+  currentEnvironment: {
+    primaryERP: "SAP S/4HANA",
+    vendorMasterEmail: "vendormaster@anglo.com",
+    portalUrl: "https://suppliers.angloamerican.com/registration",
+    portalName: "SAP S/4HANA Vendor Master",
+    coexistenceAcknowledged: true,
+    zeroScrapingPolicy: true,
+    handoffMechanism: "Secure API / Structured CSV Hand-off",
+    exportFormat: "CSV / JSON Encrypted Package",
+    onboardingInstructions: "Upload CIPC certificate, verified Tax Pin, valid COIDA letter, and banking confirmation less than 3 months old to Anglo American SAP Vendor Portal.",
   },
   dataConsent: {
     strictEvidenceMinimisation: true,
     agreedToBenchmark: true,
+    rfpDirectContactAuthorized: true,
     retentionPeriod: "5 Years (Standard Corporate Audit)",
     policySignedBy: "Sbonelo Khumalo",
+    signatoryTitle: "Chief Procurement Officer",
+    signedAt: new Date().toISOString(),
   },
 }
+
+const INITIAL_PROFILE = COMPLETE_BUYER_PROFILE
 
 export function useBuyerProfile() {
   const [profile, setProfile] = useState(() => {
@@ -153,6 +196,37 @@ export function useBuyerProfile() {
     }
   }, [profile])
 
+  // One-click seed profile with 100% complete corporate information & passport ruleset
+  const seedCompleteProfile = useCallback(async () => {
+    setSaving(true)
+    setSaveSuccess(false)
+    try {
+      setProfile(COMPLETE_BUYER_PROFILE)
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(COMPLETE_BUYER_PROFILE))
+
+      const user = auth.currentUser
+      if (user) {
+        const docRef = doc(db, "universalProfiles", user.uid)
+        await setDoc(
+          docRef,
+          {
+            procurementProfile: COMPLETE_BUYER_PROFILE,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        )
+      }
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3500)
+      return true
+    } catch (err) {
+      console.error("[useBuyerProfile] Failed to seed complete profile:", err)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }, [])
+
   // Evaluated state & completion checklist
   const stateInfo = evaluateBuyerProfileState(profile)
 
@@ -164,5 +238,6 @@ export function useBuyerProfile() {
     saveSuccess,
     updateSection,
     saveProfile,
+    seedCompleteProfile,
   }
 }
