@@ -501,8 +501,8 @@ export default function ProfileView() {
                 <span className="data-label">Website:</span>
                 <span className="data-value">
                   {profileData?.contactDetails?.website ? (
-                    <a href={profileData.contactDetails.website} target="_blank" rel="noopener noreferrer">
-                      {profileData.contactDetails.website}
+                    <a href={profileData?.contactDetails?.website} target="_blank" rel="noopener noreferrer">
+                      {profileData?.contactDetails?.website}
                       <ExternalLink size={14} className="ml-1" />
                     </a>
                   ) : (

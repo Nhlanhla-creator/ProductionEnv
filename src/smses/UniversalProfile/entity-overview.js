@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Info, ChevronDown, ChevronUp, Upload, X, Check } from "lucide-react"
 import { db, auth, storage } from '../../firebaseConfig';
+import { getProfileOwnerId } from "../../utils/profile-context"
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { uploadDocumentWithSync, deleteDocumentWithSync, getDocumentUrlFromAnyLocation } from '../../utils/documentSyncService';
@@ -562,7 +563,7 @@ export default function EntityOverview({ data = {}, updateData }) {
         await uploadDocumentWithSync('Company Logo', downloadURL, { status: 'warning', message: 'Logo uploaded without AI validation' });
       }
 
-      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+      const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId());
       const currentProfileDoc = await getDoc(userDocRef);
       const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
 
@@ -605,7 +606,7 @@ export default function EntityOverview({ data = {}, updateData }) {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
 
-      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+      const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId());
       const currentProfileDoc = await getDoc(userDocRef);
       const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
 
@@ -642,8 +643,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           return;
         }
 
-        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+        const userId = await getProfileOwnerId();
         if (!userId) { setIsLoading(false); return; }
 
         const docRef = doc(db, "universalProfiles", userId);
@@ -770,7 +770,7 @@ export default function EntityOverview({ data = {}, updateData }) {
       const currentUser = auth.currentUser;
       if (!currentUser) throw new Error('User not authenticated');
 
-      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+      const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId());
       const userDoc = await getDoc(userDocRef);
       const registeredName = userDoc.exists() ? userDoc.data()?.entityOverview?.registeredName || "" : "";
 

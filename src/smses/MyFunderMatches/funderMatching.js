@@ -3,9 +3,13 @@
 /* ════════════════════════════════════════════════════════════════════════════
    funderMatching.js
 
-   Scoring, normalising and formatting for funder matches, split out of
-   FundingTable.js so the table file is a table again. funding-table.jsx
-   re-exports everything here by name, so existing imports keep working.
+   Scoring, normalising and formatting for funder matches. Both the SME-side
+   table (funding-table.jsx) and the investor-side table (InvestorSMETable.jsx)
+   must score through this file so the two roles always see the same numbers.
+
+   BIG Score categories (bigEvaluations/{smeId}.scores):
+     compliance · legitimacy · fundability (shown as "Capital Appeal")
+     · governanceLeadership · operational
    ════════════════════════════════════════════════════════════════════════ */
 
 /* ─── Normalising ───────────────────────────────────────────────────────── */
@@ -22,9 +26,11 @@ const STAGE_MAP = {
   "series b": "venture_series_b",
   seriesb: "venture_series_b",
   "series c": "venture_series_c",
+  "series c+": "venture_series_c",
   seriesc: "venture_series_c",
+  "seriesc+": "venture_series_c",
   growth: "late_growth_pe",
-    "growth/pe": "late_growth_pe",
+  "growth/pe": "late_growth_pe",
   pe: "late_growth_pe",
   mbo: "late_mbo",
   mbi: "late_mbi",
@@ -149,21 +155,20 @@ export const SECTOR_SYNONYMS = {
   waste: "utilities",
 }
 
+/* Every non-alphanumeric run becomes one underscore, so "Banking, Finance &
+   Insurance" and "Oil & Gas" reach their synonym keys. The old version only
+   collapsed spaces and hyphens, leaving commas, ampersands and slashes in. */
 export const normalizeSector = (value) => {
   if (!value) return ""
   const key = value
+    .toString()
     .toLowerCase()
     .replace(/\([^)]*\)/g, "")
-    .replace(/[\s-]+/g, "_")
+    .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
   return SECTOR_SYNONYMS[key] || key
 }
 
-/* The old expandSectorsWithSynonyms did `Array.isArray(SECTOR_SYNONYMS[sector])`
-   against a map whose values are all strings, so the branch never ran and the
-   function returned its input unchanged — every synonym in the table above was
-   dead weight. It now canonicalises both sides instead, which is what makes
-   "ICT" on an SME profile match "information_technology" on a fund. */
 export const expandSectorsWithSynonyms = (sectors = []) => {
   const expanded = new Set()
   sectors.forEach((sector) => {
@@ -174,6 +179,33 @@ export const expandSectorsWithSynonyms = (sectors = []) => {
   })
   return [...expanded]
 }
+
+/* ─── Instruments ───────────────────────────────────────────────────────────
+   Investors pick categories ("Grants", "Hybrid/Structured Instruments") and
+   subtypes; SMEs store short values ("grant", "equity", "convertible"). The
+   old comparison was a plain string match, so "grants" never met "grant".
+   Both sides are reduced to a family before they are compared.
+   ──────────────────────────────────────────────────────────────────────── */
+export const normalizeInstrument = (value) => {
+  if (!value) return ""
+  const k = value.toString().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+  if (!k) return ""
+  if (/grant|donation/.test(k)) return "grant"
+  if (/real assets|infrastructure/.test(k)) return "special"
+  if (/secondary|continuation/.test(k)) return "secondary"
+  if (/convertible|\bsafe\b|\basa\b|warrant|hybrid|structured|revenue based|royalty/.test(k)) return "hybrid"
+  if (
+    /mezz|debt|loan|overdraft|revolver|factoring|invoice|purchase order|\bpo finance|asset finance|lease|bridge|trade import export|trade finance|credit/.test(
+      k,
+    )
+  )
+    return "debt"
+  if (/equity|angel|venture capital|private equity|buyout|shares?|stock/.test(k)) return "equity"
+  if (/blended/.test(k)) return "blended"
+  return k.replace(/\s+/g, "_")
+}
+
+const uniqueInstruments = (list) => [...new Set(asListLocal(list).map(normalizeInstrument).filter(Boolean))]
 
 export const normalizeAmount = (value) => {
   if (!value) return 0
@@ -188,6 +220,10 @@ const normalizeArray = (value) => {
   return [normalizeText(value)]
 }
 
+function asListLocal(v) {
+  return Array.isArray(v) ? v : v ? [v] : []
+}
+
 export const normalizeSMEProfile = (profile = {}) => {
   const entity = profile.entityOverview || {}
   const funds = profile.useOfFunds || {}
@@ -199,7 +235,7 @@ export const normalizeSMEProfile = (profile = {}) => {
     economicSectors: normalizeArray(entity.economicSectors),
     applicationStage: normalizeStage(app.fundingStage),
     amountRequested: normalizeAmount(funds.amountRequested),
-    instruments: normalizeArray(funds.fundingInstruments),
+    instruments: uniqueInstruments(funds.fundingInstruments),
     supportNeeded: normalizeArray(profile.productsServices?.support),
     annualRevenue: normalizeAmount(profile.financialOverview?.annualRevenue),
     legalStructure: normalizeText(entity.legalStructure),
@@ -221,9 +257,7 @@ export const normalizeInvestorFund = (fund = {}) => {
     excludedSectors: expandSectorsWithSynonyms(
       Array.isArray(fund.sectorExclusions) ? fund.sectorExclusions : [fund.sectorExclusions],
     ),
-        instruments: (Array.isArray(fund.instruments) ? fund.instruments : [fund.instruments])
-      .map(normalizeText)
-      .filter(Boolean),
+    instruments: uniqueInstruments(fund.instruments),
     ticketMin: ticket(fund.minimumTicket),
     ticketMax: ticket(fund.maximumTicket),
     supportOffered: normalizeArray(fund.supportOffered),
@@ -240,50 +274,64 @@ export const HYBRID_WEIGHTS = {
   type: 0.1,
 }
 
+/* Scoring rules, per component (each worth 0–10 before weighting):
+   - A fund that lists nothing for sector / stage / instrument is unrestricted
+     (the tables label an empty sector list "Generalist"), so it scores full.
+     The old code scored it 0, which cost a generalist fund half its match.
+   - An SME that has not declared the field gets a neutral 5, not 0.
+   - Sector scores on the share of the SME's sectors the fund covers, counted
+     per SME sector (the old code counted raw and canonical forms separately,
+     so one match could count twice). A listed exclusion scores 0.
+   Eligibility (hard pass/fail) is deliberately not decided here. */
 export function calculateHybridScore(sme, investorFund) {
   const fund = normalizeInvestorFund(investorFund)
   const breakdown = {}
   let score = 0
 
-  /* Sector. The old version computed matchRatio and then threw it away,
-     assigning a flat 10 for any overlap — one sector out of five scored the
-     same as five out of five. The ratio is now what it scores on. */
-  const smeSectors = expandSectorsWithSynonyms(sme.economicSectors)
-  const matchedSectors = smeSectors.filter((s) => fund.sectors.includes(s))
-  const hasExclusion = fund.excludedSectors.some((ex) => smeSectors.includes(ex))
-  const sectorRatio = sme.economicSectors.length > 0 ? matchedSectors.length / sme.economicSectors.length : 0
-  const sectorScore = hasExclusion ? 0 : Math.min(1, sectorRatio) * 10
+  const smeSectorList = sme.economicSectors || []
+  const forms = (s) => expandSectorsWithSynonyms([s])
+  const fundSectorUnrestricted = fund.sectors.length === 0 || fund.sectors.includes("generalist")
+  const hasExclusion = smeSectorList.some((s) => forms(s).some((x) => fund.excludedSectors.includes(x)))
+  const matchedSectors = fundSectorUnrestricted ? [...smeSectorList] : smeSectorList.filter((s) => forms(s).some((x) => fund.sectors.includes(x)))
+
+  let sectorScore
+  if (hasExclusion) sectorScore = 0
+  else if (smeSectorList.length === 0) sectorScore = 5
+  else sectorScore = Math.min(1, matchedSectors.length / smeSectorList.length) * 10
   score += sectorScore * HYBRID_WEIGHTS.sector
   breakdown.sector = {
     score: sectorScore * 10,
     matched: matchedSectors,
-    smeSectors: sme.economicSectors,
+    smeSectors: smeSectorList,
     investorSectors: fund.sectors,
+    unrestricted: fundSectorUnrestricted,
     hasExclusion,
     weight: HYBRID_WEIGHTS.sector,
   }
 
-  const stageMatched = fund.stages.includes(sme.applicationStage)
-  const stageScore = stageMatched ? 10 : 0
+  const stageUnrestricted = fund.stages.length === 0
+  const stageMatched = stageUnrestricted || fund.stages.includes(sme.applicationStage)
+  const stageScore = !sme.applicationStage ? 5 : stageMatched ? 10 : 0
   score += stageScore * HYBRID_WEIGHTS.stage
   breakdown.stage = {
     score: stageScore * 10,
     smeStage: sme.applicationStage,
     investorStages: fund.stages,
     matched: stageMatched,
+    unrestricted: stageUnrestricted,
     weight: HYBRID_WEIGHTS.stage,
   }
 
-  const matchedInstruments = fund.instruments.filter((inst) =>
-    sme.instruments.some((smeInst) => smeInst?.toLowerCase() === inst),
-  )
-  const typeScore = matchedInstruments.length > 0 ? 10 : 0
+  const instrumentUnrestricted = fund.instruments.length === 0
+  const matchedInstruments = fund.instruments.filter((inst) => sme.instruments.includes(inst))
+  const typeScore = sme.instruments.length === 0 ? 5 : instrumentUnrestricted || matchedInstruments.length > 0 ? 10 : 0
   score += typeScore * HYBRID_WEIGHTS.type
   breakdown.type = {
     score: typeScore * 10,
     smeInstruments: sme.instruments,
     investorInstruments: fund.instruments,
     matchedInstruments,
+    unrestricted: instrumentUnrestricted,
     weight: HYBRID_WEIGHTS.type,
   }
 
@@ -312,23 +360,41 @@ export function calculateHybridScore(sme, investorFund) {
   return { score: Math.round(score * 10), breakdown }
 }
 
-/* ─── Adjusted BIG Score ────────────────────────────────────────────────────
-   Spec section C column 3: "funders can change weightings, so BIG score may
-   change because of funder-specific weightings".
-
-   The base score in bigEvaluations/{smeId} is computed on the platform's own
-   weighting. A funder that publishes its own weighting gets its own number,
-   and the table shows the delta so an SME can see who scores them kindly.
-
-   Custom weights are looked for at several plausible paths because the
-   authoring UI for them may not exist yet. Where none are found the base score
-   is returned with adjusted:false and the column renders the plain BIG Score.
+/* ─── BIG Score categories + Adjusted BIG Score ─────────────────────────────
+   The investor sets their own criteria in InvestmentRequirements; what is
+   saved at investmentRequirements.weights is keyed exactly like the scores in
+   bigEvaluations, so no translation is needed (legacy keys are still
+   accepted below). weights is null until the investor has rated something,
+   in which case the adjusted score is the plain base score — an investor who
+   never customised is not shown a made-up adjustment.
    ──────────────────────────────────────────────────────────────────────── */
 
-const weightNum = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v))
+export const CATEGORY_KEYS = ["compliance", "legitimacy", "fundability", "governanceLeadership", "operational"]
 
-/* Funder forms use capitalAppeal / governance / leadership; bigEvaluations uses
-   fundability / governanceLeadership / operational. Translate here. */
+export const CATEGORY_LABELS = {
+  compliance: "Compliance",
+  legitimacy: "Legitimacy",
+  fundability: "Capital Appeal",
+  governanceLeadership: "Governance & Leadership",
+  operational: "Operational Strength",
+}
+
+/* governanceLeadership is stored with mixed types across documents (a number
+   in some, an object or string in others). Anything that reads a score goes
+   through here so a non-number is read properly instead of being dropped. */
+export const readScoreValue = (v) => {
+  if (v === null || v === undefined || v === "") return Number.NaN
+  if (typeof v === "number") return v
+  if (typeof v === "string") {
+    const n = Number(v.replace("%", "").trim())
+    return Number.isFinite(n) ? n : Number.NaN
+  }
+  if (typeof v === "object") return readScoreValue(v.score ?? v.value ?? v.total ?? v.overall ?? v.percentage)
+  return Number.NaN
+}
+
+const weightNum = (v) => (v === null || v === undefined || v === "" ? Number.NaN : Number(v))
+
 const normalizeWeightings = (w) => {
   if (!w || typeof w !== "object") return null
   const sum = (...keys) => {
@@ -354,27 +420,32 @@ export const getFunderScoreWeightings = (form = {}) =>
       form.investmentRequirements?.weights,
   )
 
+/* Returns { score, base, adjusted, delta, categories, missing, provisional }.
+   A category the SME has no score for yet (for example operational, which is
+   new) is left out and the remaining weights are re-based; the result is then
+   flagged provisional with the missing categories named, never silently
+   treated as zero. */
 export function calculateAdjustedBigScore(bigEvaluation, funderWeightings) {
   const scores = bigEvaluation?.scores || {}
-  const base = Number(scores.bigScore)
+  const base = readScoreValue(scores.bigScore)
   const baseScore = Number.isFinite(base) ? Math.round(base) : null
+  const plain = { score: baseScore, base: baseScore, adjusted: false, delta: 0, categories: [], missing: [], provisional: false }
 
-  if (!funderWeightings || typeof funderWeightings !== "object") {
-    return { score: baseScore, base: baseScore, adjusted: false, delta: 0, categories: [] }
-  }
+  if (!funderWeightings || typeof funderWeightings !== "object") return plain
 
-  // Every numeric entry other than the headline score is a category.
-  const categories = Object.entries(scores)
-    .filter(([key, value]) => key !== "bigScore" && Number.isFinite(Number(value)))
-    .map(([key, value]) => ({ key, value: Number(value), weight: Number(funderWeightings[key]) }))
-    .filter((c) => Number.isFinite(c.weight) && c.weight > 0)
+  const wanted = CATEGORY_KEYS.map((key) => ({ key, weight: Number(funderWeightings[key]) })).filter(
+    (c) => Number.isFinite(c.weight) && c.weight > 0,
+  )
+  if (wanted.length === 0) return plain
 
-  const totalWeight = categories.reduce((sum, c) => sum + c.weight, 0)
-  if (categories.length === 0 || totalWeight === 0) {
-    return { score: baseScore, base: baseScore, adjusted: false, delta: 0, categories: [] }
-  }
+  const scored = wanted.map((c) => ({ ...c, value: readScoreValue(scores[c.key]) }))
+  const usable = scored.filter((c) => Number.isFinite(c.value))
+  const missing = scored.filter((c) => !Number.isFinite(c.value)).map((c) => c.key)
 
-  const weighted = categories.reduce((sum, c) => sum + c.value * (c.weight / totalWeight), 0)
+  const totalWeight = usable.reduce((sum, c) => sum + c.weight, 0)
+  if (usable.length === 0 || totalWeight === 0) return { ...plain, missing, provisional: missing.length > 0 }
+
+  const weighted = usable.reduce((sum, c) => sum + c.value * (c.weight / totalWeight), 0)
   const score = Math.round(weighted)
 
   return {
@@ -382,7 +453,9 @@ export function calculateAdjustedBigScore(bigEvaluation, funderWeightings) {
     base: baseScore,
     adjusted: true,
     delta: baseScore === null ? 0 : score - baseScore,
-    categories: categories.map((c) => ({ ...c, share: Math.round((c.weight / totalWeight) * 100) })),
+    categories: usable.map((c) => ({ ...c, share: Math.round((c.weight / totalWeight) * 100) })),
+    missing,
+    provisional: missing.length > 0,
   }
 }
 
@@ -467,10 +540,6 @@ export const formatSingleLocation = (loc) => {
   )
 }
 
-/* The old formatLocation had a branch for arrays of single characters, because
-   somewhere upstream a string was being spread into an array. Fixing the cause
-   is better than detecting the symptom: callers now pass arrays or strings and
-   this handles both without guessing. */
 export const formatLocation = (locations) => {
   if (!locations) return "Global"
   const list = Array.isArray(locations) ? locations : locations.toString().split(",")
@@ -529,7 +598,7 @@ export const formatWaitingTime = (value) => {
 /* ─── Funder requirements + shared fund shaping (both tables use these) ─── */
 export const DEFAULT_MIN_BIG_SCORE = 75
 
-const asList = (v) => (Array.isArray(v) ? v : v ? [v] : [])
+const asList = asListLocal
 
 export const buildFundRequirements = (prefs = {}) => ({
   minimumBigScore: normalizeAmount(prefs.minimumBigScore) || DEFAULT_MIN_BIG_SCORE,
@@ -542,7 +611,7 @@ export const buildFundRequirements = (prefs = {}) => ({
 
 export function evaluateFundRequirements(req = {}, { bigScore, adjusted, evaluation, profile } = {}) {
   const unmet = []
-  const num = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v))
+  const num = (v) => readScoreValue(v)
   const scores = evaluation?.scores || {}
 
   // The funder's own weighting decides the score it is judged on.
@@ -577,21 +646,35 @@ export function evaluateFundRequirements(req = {}, { bigScore, adjusted, evaluat
       actual: revenue ? `R${revenue.toLocaleString("en-ZA")}` : "not declared",
     })
   }
-  const years = num(profile?.entityOverview?.yearsInOperation)
+  const years = Number(profile?.entityOverview?.yearsInOperation)
   if (req.minimumYearsTrading > 0 && Number.isFinite(years) && years < req.minimumYearsTrading) {
     unmet.push({ key: "years", label: "Years trading", required: `${req.minimumYearsTrading}`, actual: `${years}` })
   }
   return unmet
 }
 
+/* First value that is actually filled in. `??` is not enough: an untouched
+   form input is "" (not null), so it would stop the fallback chain on an
+   empty string. */
+const firstPresent = (...vals) => vals.find((v) => v !== null && v !== undefined && v !== "")
+
+/* The old fallback used the fund's total size as the maximum ticket when no
+   maximum was entered, which made a R500M fund look like it writes R500M
+   cheques. It now falls back to the General Investment Preferences ticket
+   fields, then to nothing. */
 export const resolveTicketRange = (form = {}, fund = {}, index = 0) => {
   const p = form.fundDetails?.funds?.[index] || fund
+  const prefs = form.generalInvestmentPreference || {}
   const minTicket =
-    p?.minimumTicket ?? p?.minTicket ?? fund.minimumTicket ?? fund.minTicket ??
-    form.fundDetails?.minimumTicket ?? p?.ticketSize?.min ?? 0
+    firstPresent(
+      p?.minimumTicket, p?.minTicket, fund.minimumTicket, fund.minTicket,
+      form.fundDetails?.minimumTicket, p?.ticketSize?.min, prefs.minimumTicketSize,
+    ) ?? 0
   const maxTicket =
-    p?.maximumTicket ?? p?.maxTicket ?? fund.maximumTicket ?? fund.maxTicket ??
-    form.fundDetails?.maximumTicket ?? p?.ticketSize?.max ?? fund.size ?? 0
+    firstPresent(
+      p?.maximumTicket, p?.maxTicket, fund.maximumTicket, fund.maxTicket,
+      form.fundDetails?.maximumTicket, p?.ticketSize?.max, prefs.maximumTicketSize,
+    ) ?? 0
   return { minTicket, maxTicket }
 }
 
@@ -606,7 +689,9 @@ export const buildScoringFund = (form = {}, fund = {}, index = 0) => {
     geographicFocus: asList(prefs.geographicFocus),
     selectedProvinces: asList(prefs.selectedProvinces),
     selectedCountries: asList(prefs.selectedCountries),
-    instruments: asList(prefs.investmentFocus),
+    // Categories and the subtypes picked under them, so "Convertible Notes"
+    // or "Invoice Finance" count even when only the category was ticked.
+    instruments: [...asList(prefs.investmentFocus), ...asList(prefs.investmentFocusSubtype)],
     minimumTicket: minTicket,
     maximumTicket: maxTicket,
     supportOffered: asList(fund.supportOffered),

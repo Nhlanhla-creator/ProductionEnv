@@ -8,9 +8,9 @@ import Instructions from "./Instructions"
 import EntityOverview from "./FundManageOverview"
 import ContactDetails from "./ContactDetails"
 import InvestmentRequirements from "./InvestmentRequirements"
-import OwnershipManagement from "./GeneralInvestmentPreference​"
-import ProductsServices from "./FundDetails​"
-import HowDidYouHear from "./ApplicationBrief​"
+import OwnershipManagement from "./GeneralInvestmentPreference"
+import ProductsServices from "./FundDetails"
+import HowDidYouHear from "./ApplicationBrief"
 import DocumentUpload from "./DocumentUpload"
 import DeclarationConsent from "./DeclarationConsent"
 import InvestorProfileSummary from "./investor-profile-summary"
@@ -38,10 +38,10 @@ const sectionValidations = {
   investmentRequirements: () => true,
   generalInvestmentPreference: () => true,
   contactDetails: (data) => validateContactDetails(data).length === 0,
-  fundDetails: () => true,
+  fundDetails: (data) => validateFundDetails(data).length === 0,
   applicationBrief: () => true,
-  documentUpload: () => true,
-  declarationConsent: (data) => Boolean(data?.accuracy && data?.dataProcessing && data?.termsConditions),
+  documentUpload: (data) => validateDocuments(data).length === 0,
+  declarationConsent: (data) => Boolean(data?.accuracy && data?.dataProcessing),
 }
 
 const validateFundManageOverview = (data) => {
@@ -62,6 +62,44 @@ const validateFundManageOverview = (data) => {
   if (!data.howDidYouHear?.trim()) errors.push("How did you hear about us is required.")
   if (data.howDidYouHear === "other" && !data.howDidYouHearOther?.trim()) errors.push("Please specify how you heard about us.")
   return errors
+}
+
+const digitsOnly = (v) => String(v ?? "").replace(/\D/g, "")
+
+const validateFundDetails = (data) => {
+  const errors = []
+  const funds = data?.funds || []
+  if (funds.length === 0) errors.push("Add at least one fund")
+  funds.forEach((fund, i) => {
+    const label = fund?.name?.trim() || `Fund ${i + 1}`
+    if (!fund?.name?.trim()) errors.push(`${label}: fund name is required`)
+    const min = Number(digitsOnly(fund?.minimumTicket))
+    const max = Number(digitsOnly(fund?.maximumTicket))
+    if (!min) errors.push(`${label}: minimum ticket is required`)
+    if (!max) errors.push(`${label}: maximum ticket is required`)
+    if (min && max && min > max) errors.push(`${label}: minimum ticket cannot be more than the maximum`)
+  })
+  return errors
+}
+
+const validateDocuments = (data) =>
+  documentsList
+    .filter((doc) => doc.required)
+    .filter((doc) => {
+      const value = data?.[doc.id]
+      return Array.isArray(value) ? value.length === 0 : !value
+    })
+    .map((doc) => `${doc.label} is required`)
+
+// Merge each saved section into its default, so fields added after a profile
+// was first saved are not wiped out by the old document.
+const mergeSections = (base, incoming) => {
+  const out = { ...base }
+  Object.keys(incoming || {}).forEach((key) => {
+    const value = incoming[key]
+    out[key] = value && typeof value === "object" && !Array.isArray(value) ? { ...(base[key] || {}), ...value } : value
+  })
+  return out
 }
 
 const validateContactDetails = (data) => {
@@ -161,58 +199,14 @@ export default function UniversalProfile() {
     },
 
     investmentRequirements: {
-      businessStage: null,
-      complianceScores: {
-        registrationCertificate: 0,
-        taxClearance: 0,
-        bbbeeCertificate: 0,
-        shareRegister: 0,
-        directorIDs: 0,
-        addressProof: 0,
-        bankLetter: 0,
-        coidaCertificate: 0,
-        industryLicenses: 0
-      },
-      leadershipScores: {
-        ceoExperience: 0,
-        cfoExperience: 0,
-        ctoExperience: 0,
-        advisoryBoard: 0,
-        managementDepth: 0,
-        successionPlan: 0,
-        leadershipTrackRecord: 0,
-        industryExpertise: 0
-      },
-      capitalScores: {
-        runwayMonths: 0,
-        revenueGrowth: 0,
-        profitMargin: 0,
-        burnRate: 0,
-        customerConcentration: 0,
-        unitEconomics: 0,
-        fundingHistory: 0,
-        valuationReasonableness: 0
-      },
-      marketScores: {
-        tamSize: 0,
-        marketGrowth: 0,
-        competitivePosition: 0,
-        customerValidation: 0,
-        regulatoryRisk: 0,
-        marketTiming: 0,
-        distributionChannels: 0,
-        pricingPower: 0
-      },
-      productScores: {
-        mvpComplete: 0,
-        productMarketFit: 0,
-        technicalDebt: 0,
-        ipProtection: 0,
-        scalability: 0,
-        userGrowth: 0,
-        retentionRate: 0,
-        productRoadmap: 0
-      }
+      businessStage: "",
+      weights: null,
+      categoryScores: {},
+      complianceScores: {},
+      legitimacyScores: {},
+      governanceLeadershipScores: {},
+      operationalScores: {},
+      fundabilityScores: {}
     },
 
     generalInvestmentPreference: {
@@ -273,6 +267,7 @@ export default function UniversalProfile() {
       estimatedReviewTime: "",
       typicalDealClosingTime: "",
       applicationWindow: "",
+      applicationDeadline: "",
       coreDocuments: [],
       coreDocumentsOther: "",
       debtDocuments: [],
@@ -311,7 +306,7 @@ export default function UniversalProfile() {
   const checkDeclarationConsent = (data) => {
     const declarationConsent = data?.formData?.declarationConsent || data?.declarationConsent
     if (!declarationConsent) return false
-    return declarationConsent.accuracy === true && declarationConsent.dataProcessing === true && declarationConsent.termsConditions === true
+    return declarationConsent.accuracy === true && declarationConsent.dataProcessing === true
   }
 
   useEffect(() => {
@@ -343,7 +338,7 @@ export default function UniversalProfile() {
           firebaseCompletedSections = data.completedSections
           const declarationConsentComplete = checkDeclarationConsent(data)
           firebaseSubmissionStatus = declarationConsentComplete || data.profileSubmitted === true
-          if (firebaseData) setFormData(prev => ({ ...prev, ...firebaseData }))
+          if (firebaseData) setFormData(prev => mergeSections(prev, firebaseData))
           if (firebaseCompletedSections) setCompletedSections(prev => ({ ...prev, ...firebaseCompletedSections }))
           if (firebaseSubmissionStatus) { setProfileSubmitted(true); setShowSummary(true) }
         }
@@ -504,6 +499,8 @@ export default function UniversalProfile() {
       let errors = []
       if (activeSection === "fundManageOverview") errors = validateFundManageOverview(sectionData)
       else if (activeSection === "contactDetails") errors = validateContactDetails(sectionData)
+      else if (activeSection === "fundDetails") errors = validateFundDetails(sectionData)
+      else if (activeSection === "documentUpload") errors = validateDocuments(sectionData)
       else errors.push(`${sections.find(s => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or has invalid fields.`)
       setValidationModal({ open: true, title: "Please review the following:", messages: errors })
       return

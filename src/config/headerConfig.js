@@ -1,5 +1,7 @@
 export const roleRoutes = {
   Investor: "/investor-profile",
+  SME: "/profile",
+  SMSE: "/profile",
   SMEs: "/profile",
   SMSEs: "/profile",
   "Small and Medium Social Enterprises": "/profile",
@@ -102,3 +104,20 @@ export const headerProfiles = {
     fallbackName: "Procurement Lead",
   },
 }
+
+const normKey = (s) => String(s || "").toLowerCase().replace(/[^a-z]/g, "")
+const routeByNormKey = Object.fromEntries(
+  Object.entries(roleRoutes).map(([k, v]) => [normKey(k), v])
+)
+
+export const getRoleRoute = (role) =>
+  roleRoutes[role] || routeByNormKey[normKey(role)] || null
+
+export const isSameRole = (a, b) => {
+  if (!a || !b) return false
+  const ra = getRoleRoute(a)
+  const rb = getRoleRoute(b)
+  return ra && rb ? ra === rb : normKey(a) === normKey(b)
+}
+
+export const hasRole = (list, role) => (list || []).some((r) => isSameRole(r, role))

@@ -71,8 +71,7 @@ const VerificationScoreCard = ({ profileData }) => {
             essentials: {
                 legalRegistration: !!data?.documentUpload?.registrationDocs?.length,
                 identifiableLeadership: !!data?.documentUpload?.idOffund?.length,
-                investmentCriteria: !!data?.fundDetails?.funds?.[0]?.minimumTicket &&
-                    !!data?.fundDetails?.funds?.[0]?.maximumTicket,
+                investmentCriteria: (data?.fundDetails?.funds || []).some((f) => !!f?.minimumTicket && !!f?.maximumTicket),
                 contactInformation: !!data?.contactDetails?.businessEmail &&
                     !!data?.contactDetails?.primaryContactMobile
             },
@@ -89,10 +88,9 @@ const VerificationScoreCard = ({ profileData }) => {
                 )
             },
             fundDetails: {
-                fundStructure: !!data?.fundDetails?.funds?.[0]?.fundStructure,
-                fundSize: !!data?.fundDetails?.funds?.[0]?.size,
-                dealSizeRange: !!data?.fundDetails?.funds?.[0]?.minimumTicket && 
-                    !!data?.fundDetails?.funds?.[0]?.maximumTicket,
+                fundStructure: (data?.fundDetails?.funds || []).some((f) => !!f?.fundStructure),
+                fundSize: (data?.fundDetails?.funds || []).some((f) => !!f?.size),
+                dealSizeRange: (data?.fundDetails?.funds || []).some((f) => !!f?.minimumTicket && !!f?.maximumTicket),
                 investmentStage: !!data?.generalInvestmentPreference?.investmentStage?.length,
                 sectorFocus: !!data?.generalInvestmentPreference?.sectorFocus?.length
             },
@@ -106,8 +104,7 @@ const VerificationScoreCard = ({ profileData }) => {
                 registrationNumber: !!data?.fundManageOverview?.registrationNumber,
                 taxNumber: !!data?.fundManageOverview?.taxNumber,
                 legalEntityType: !!data?.fundManageOverview?.legalEntityType,
-                declarationConsent: !!data?.declarationConsent?.termsConditions &&
-                    !!data?.declarationConsent?.dataProcessing &&
+                declarationConsent: !!data?.declarationConsent?.dataProcessing &&
                     !!data?.declarationConsent?.accuracy
             }
         };
