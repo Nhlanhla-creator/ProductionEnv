@@ -415,7 +415,7 @@ const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }
   <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,32,28,0.55)",
     display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1400, padding: "20px" }}>
     <div onClick={(e) => e.stopPropagation()} style={{ background: T.bg, borderRadius: "14px", width: "100%",
-      maxWidth: `${width}px`, maxHeight: "92vh", display: "flex", flexDirection: "column",
+      maxWidth: `${width}px`, maxHeight: "94vh", display: "flex", flexDirection: "column",
       boxShadow: "0 24px 60px rgba(45,32,28,0.28)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "18px 22px 14px", borderBottom: `1px solid ${T.line}` }}>
         <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
@@ -444,7 +444,7 @@ const DIRECTIONS = [
 ];
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Report Generator — Custom Word document export for Operational Performance
+   Report Generator
    ════════════════════════════════════════════════════════════════════════ */
 
 const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, userName }) => {
@@ -459,7 +459,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
   const [generating, setGenerating] = useState(false);
   const [reportTitle, setReportTitle] = useState(`Operational Performance Report - ${new Date().toLocaleDateString()}`);
 
-  // Get actions from governanceCalendar
   const [actions, setActions] = useState([]);
   const [loadingActions, setLoadingActions] = useState(true);
 
@@ -487,7 +486,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
   const generateReport = async () => {
     setGenerating(true);
 
-    // Build the report data structure
     const reportData = {
       title: reportTitle,
       generated: new Date().toISOString(),
@@ -500,11 +498,9 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       actions: [],
     };
 
-    // Process each selected category
     const selectedCatList = structure.filter(c => selectedCategories[c.id] && !c.hidden);
 
     if (includeSummary) {
-      // Build summary statistics
       const allKpis = selectedCatList.flatMap(c => 
         c.subCategories.flatMap(s => s.kpis || [])
       );
@@ -514,7 +510,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
         statusCounts[s.key] = (statusCounts[s.key] || 0) + 1;
       });
       
-      // Count by frequency
       const freqCounts = {};
       allKpis.forEach(k => {
         freqCounts[k.frequency] = (freqCounts[k.frequency] || 0) + 1;
@@ -528,7 +523,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       };
     }
 
-    // Build category data
     selectedCatList.forEach(cat => {
       const catData = {
         name: cat.name,
@@ -546,22 +540,17 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
           const status = getStatus(k, periodForReport, fy);
           const variance = getVariance(k, periodForReport, fy);
           
-          // Build period-by-period breakdown
           const breakdown = [];
           if (k.entries) {
-            // Determine which period keys to show based on frequency and selected period
             let periodKeys = [];
             if (k.frequency === "Daily") {
-              // Show daily entries for the selected month
               const now = new Date();
               const days = daysInMonth(now.getFullYear(), now.getMonth());
               periodKeys = days.map(d => d.key);
             } else if (k.frequency === "Weekly") {
-              // Show weekly entries
               const weeks = fyWeeks(fy.startYear, fy.startMonth);
               periodKeys = weeks.map(w => w.key);
             } else {
-              // Monthly - show all months
               const months = fyMonths(fy.startYear, fy.startMonth);
               periodKeys = months.map(m => m.key);
             }
@@ -609,7 +598,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       reportData.categories.push(catData);
     });
 
-    // Get actions
     if (includeActions) {
       const opActions = actions.filter(a => 
         a.sourceModule === "Operational Performance" || 
@@ -628,10 +616,8 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       }));
     }
 
-    // Generate the Word document
     const htmlContent = generateWordHTML(reportData, includeBreakdown, includeAnalysis);
     
-    // Create the download
     const blob = new Blob([htmlContent], { 
       type: "application/msword;charset=utf-8" 
     });
@@ -745,7 +731,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       return html;
     };
 
-    // Build categories HTML
     let categoriesHtml = "";
     data.categories.forEach(cat => {
       categoriesHtml += `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">${cat.name}</h2>`;
@@ -761,7 +746,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       });
     });
 
-    // Analysis section
     let analysisHtml = "";
     if (includeAnalysis) {
       analysisHtml = `
@@ -785,7 +769,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
         });
       });
 
-      // Summary stats
       const allKpis = data.categories.flatMap(c => 
         c.subCategories.flatMap(s => s.kpis || [])
       );
@@ -803,7 +786,6 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       analysisHtml += `</div>`;
     }
 
-    // Actions section
     let actionsHtml = "";
     if (includeActions && data.actions.length) {
       let actionRows = "";
@@ -1650,7 +1632,7 @@ const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   );
 };
 
-/* ─── Add Data (revised for bulk capture) ─────────────────────────────── */
+/* ─── Add Data (revised for friendly bulk capture) ─────────────────────── */
 const deriveFrequency = (category) => {
   const kpis = category?.subCategories.flatMap((s) => s.kpis) || [];
   if (!kpis.length) return { frequency: "Monthly", mixed: false };
@@ -1677,6 +1659,12 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   const [saveState, setSaveState] = useState("idle");
   const timer = useRef(null);
   const structureRef = useRef(structure);
+
+  /* ── Single-column mode with a switch ──────────────────────────────── */
+  const [mode, setMode] = useState(prefs?.mode || "actual");
+  const [globalMode, setGlobalMode] = useState(prefs?.globalMode ?? true);
+  const [monthModes, setMonthModes] = useState(() => prefs?.monthModes || {});
+
   useEffect(() => { structureRef.current = structure; }, [structure]);
 
   useEffect(() => { if (!freqOverridden) setFrequency(derived.frequency); }, [catId, derived.frequency, freqOverridden]);
@@ -1695,7 +1683,6 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
       return fyMonths(startYear, fy.startMonth).map((m) => ({ key: m.key, label: m.long, short: m.label }));
     }
     if (frequency === "Weekly") {
-      // Show 6 months of weeks at a time
       const allWeeks = fyWeeks(startYear, fy.startMonth);
       const months = fyMonths(startYear, fy.startMonth);
       const startMonth = months[selectedMonthForWeekly];
@@ -1742,17 +1729,19 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       await onSave(merge(structureRef.current, next), { silent: true });
-      onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null });
+      onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null, mode, globalMode, monthModes });
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 1800);
     }, 800);
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const cell = { padding: "5px 6px", textAlign: "center", fontSize: "12.5px", border: `1px solid ${T.lineSoft}`,
-    minWidth: "80px", maxWidth: "100px" };
-  const inputCell = { ...inputS, padding: "5px 6px", textAlign: "center", fontSize: "12.5px", minHeight: "30px",
-    border: "none", borderRadius: 0, background: "transparent" };
+  /* Persist mode prefs on change */
+  useEffect(() => {
+    onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null, mode, globalMode, monthModes });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, globalMode, monthModes]);
+
   const th = { padding: "8px 10px", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
     letterSpacing: "0.5px", background: T.header, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2,
     verticalAlign: "top", borderRight: "1px solid rgba(255,255,255,0.15)" };
@@ -1766,9 +1755,47 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     );
   }
 
+  /* Colour tokens for the two modes */
+  const MODE_TOKENS = {
+    budget: {
+      label: "Budget",
+      headerBg: "#1e3a8a",
+      headerColor: "#dbeafe",
+      cellBg: "#eff6ff",
+      cellBorder: "#bfdbfe",
+      inputBorder: "#bfdbfe",
+      inputFocus: "#2563eb",
+      inputFocusRing: "rgba(37,99,235,0.15)",
+      inputColor: "#1e3a8a",
+    },
+    actual: {
+      label: "Actual",
+      headerBg: "#166534",
+      headerColor: "#dcfce7",
+      cellBg: "#f0fdf4",
+      cellBorder: "#bbf7d0",
+      inputBorder: "#bbf7d0",
+      inputFocus: "#16a34a",
+      inputFocusRing: "rgba(22,163,74,0.15)",
+      inputColor: "#166534",
+    },
+  };
+
+  const effectiveModeForKey = (pk) => (globalMode ? mode : (monthModes[pk] || mode));
+  const toggleModeForKey = (pk) => {
+    if (globalMode) {
+      setMode((v) => (v === "budget" ? "actual" : "budget"));
+    } else {
+      setMonthModes((p) => ({ ...p, [pk]: (p[pk] || mode) === "budget" ? "actual" : "budget" }));
+    }
+  };
+
+  /* Full-width modal — expands to fit all columns without horizontal scroll */
+  const minGridWidth = 200 + periodColumns.length * 86;
+
   return (
-    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Bulk capture mode`} icon={<Database size={17} />}
-      onClose={onClose} width={Math.min(1400, 1000 + periodColumns.length * 40)}
+    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Bulk capture mode · Everything saves as you type`} icon={<Database size={17} />}
+      onClose={onClose} width={Math.max(1000, Math.min(minGridWidth + 80, Math.max(window.innerWidth - 40, 1000)))}
       footer={<> 
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
@@ -1821,6 +1848,58 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
         </div>
       </div>
 
+      {/* Mode switcher bar */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
+        padding: "10px 14px", marginBottom: "10px",
+        background: T.panel, border: `1px solid ${T.line}`, borderRadius: "10px",
+      }}>
+        <span style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent }}>Showing:</span>
+
+        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "999px", padding: "3px" }}>
+          <button
+            onClick={() => setMode("budget")}
+            style={{
+              padding: "6px 16px", borderRadius: "999px", border: "none", cursor: "pointer",
+              fontFamily: "inherit", fontSize: "12.5px", fontWeight: 700,
+              background: mode === "budget" ? "#1e3a8a" : "transparent",
+              color: mode === "budget" ? "#fff" : T.body,
+              boxShadow: mode === "budget" ? "0 1px 3px rgba(0,0,0,0.18)" : "none",
+            }}>
+            Budget
+          </button>
+          <button
+            onClick={() => setMode("actual")}
+            style={{
+              padding: "6px 16px", borderRadius: "999px", border: "none", cursor: "pointer",
+              fontFamily: "inherit", fontSize: "12.5px", fontWeight: 700,
+              background: mode === "actual" ? "#166534" : "transparent",
+              color: mode === "actual" ? "#fff" : T.body,
+              boxShadow: mode === "actual" ? "0 1px 3px rgba(0,0,0,0.18)" : "none",
+            }}>
+            Actual
+          </button>
+        </div>
+
+        <label style={{ display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", color: T.body, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={globalMode}
+            onChange={() => setGlobalMode((v) => !v)}
+          />
+          Use the same mode for every period
+        </label>
+
+        <span style={{ flex: 1 }} />
+
+        <span style={{ fontSize: "11.5px", color: T.muted, display: "flex", alignItems: "center", gap: "5px" }}>
+          <Info size={12} />
+          {globalMode
+            ? "One column per period — switch modes to see the other set of figures."
+            : "Each period has its own tiny switch. Click the ⇄ in the header to flip that period."}
+        </span>
+      </div>
+
       <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px" }}>
         {frequency === "Monthly" ? "Enter actual and budget for each month of the financial year." :
          frequency === "Weekly" ? `Showing 6 months of weekly capture. Change the starting month above to scroll through the year.` :
@@ -1828,74 +1907,136 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
       </div>
 
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ maxHeight: "55vh", overflow: "auto" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "max-content", minWidth: "100%", tableLayout: "auto" }}>
-            <thead>
-              <tr>
-                <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3, background: T.header,
-                  minWidth: "160px", maxWidth: "200px", borderRight: `2px solid ${T.lineStrong}` }}>
-                  KPI
-                </th>
-                {periodColumns.map((p) => (
-                  <th key={p.key} style={{ ...th, textAlign: "center", minWidth: "90px" }}>
-                    <div style={{ fontSize: "10px", fontWeight: 400, color: "rgba(255,255,255,0.7)", marginBottom: "2px" }}>
-                      {p.label}
-                    </div>
-                    <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
-                      <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.6)" }}>A</span>
-                      <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.6)" }}>B</span>
-                    </div>
-                  </th>
-                ))}
-              </tr>
-              {/* Sub-header for Actual / Budget */}
-              <tr>
-                <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3, background: T.header,
-                  minWidth: "160px", maxWidth: "200px", borderRight: `2px solid ${T.lineStrong}`, padding: "4px 10px", fontSize: "10px" }}>
-                  &nbsp;
-                </th>
-                {periodColumns.map((p) => (
-                  <th key={p.key} style={{ ...th, padding: "3px 0", background: "#4a352f" }}>
-                    <div style={{ display: "flex" }}>
-                      <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.8)", borderRight: "1px solid rgba(255,255,255,0.15)", padding: "2px" }}>Actual</span>
-                      <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.8)", padding: "2px" }}>Budget</span>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: "left", width: "200px", borderRight: `2px solid ${T.lineStrong}` }}>
+                KPI
+              </th>
+              {periodColumns.map((p) => {
+                const mk = effectiveModeForKey(p.key);
+                return (
+                  <th key={p.key} style={{ ...th, textAlign: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                      <span>{p.short}</span>
+                      {!globalMode && (
+                        <button
+                          onClick={() => toggleModeForKey(p.key)}
+                          title={`Switch to ${mk === "budget" ? "Actual" : "Budget"}`}
+                          style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1px solid rgba(255,255,255,0.4)",
+                            background: "rgba(255,255,255,0.12)",
+                            color: "#fff", cursor: "pointer", padding: 0,
+                            fontSize: "9px", fontWeight: 700,
+                          }}>
+                          ⇄
+                        </button>
+                      )}
                     </div>
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {kpis.map((k, i) => (
-                <tr key={k.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                  <td style={{ padding: "6px 10px", fontSize: "12.5px", color: T.ink,
-                    borderBottom: `1px solid ${T.lineSoft}`, borderRight: `2px solid ${T.lineStrong}`,
-                    position: "sticky", left: 0, zIndex: 1, background: i % 2 ? T.panel : T.bg,
-                    minWidth: "160px", maxWidth: "200px" }}>
-                    <div style={{ fontWeight: 600, fontSize: "12.5px" }}>{k.name}</div>
-                    <div style={{ fontSize: "10.5px", color: T.muted }}>{k.sub} · {k.units}</div>
+                );
+              })}
+            </tr>
+            <tr>
+              <th style={{ ...th, textAlign: "left", width: "200px", borderRight: `2px solid ${T.lineStrong}`, padding: "6px 12px" }}>
+                &nbsp;
+              </th>
+              {periodColumns.map((p) => {
+                const mk = effectiveModeForKey(p.key);
+                const tok = MODE_TOKENS[mk];
+                return (
+                  <th key={p.key} style={{
+                    ...th, padding: "5px 4px", fontSize: "10px",
+                    textTransform: "uppercase", letterSpacing: "0.4px",
+                    color: tok.headerColor, background: tok.headerBg,
+                    textAlign: "center",
+                    borderRight: "1px solid rgba(255,255,255,0.15)",
+                  }}>
+                    {tok.label}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {kpis.map((k, i) => {
+              const bg = i % 2 ? T.panel : T.bg;
+              return (
+                <tr key={k.id} style={{ background: bg }}>
+                  <td style={{
+                    padding: "8px 12px", fontSize: "12.5px", color: T.ink,
+                    borderBottom: `1px solid ${T.lineSoft}`,
+                    borderRight: `2px solid ${T.lineStrong}`,
+                    background: bg,
+                  }}>
+                    <div style={{ fontWeight: 600, fontSize: "12.5px", lineHeight: 1.3 }}>{k.name}</div>
+                    <div style={{ fontSize: "10.5px", color: T.muted, marginTop: "2px", display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                      <span>{k.sub}</span>
+                      <span style={{
+                        padding: "1px 6px", borderRadius: "999px",
+                        background: T.raised, color: T.accentSoft, fontWeight: 600,
+                        fontSize: "9.5px",
+                      }}>{k.units}</span>
+                    </div>
                   </td>
-                  {periodColumns.map((p) => (
-                    <td key={p.key} style={{ padding: 0, borderBottom: `1px solid ${T.lineSoft}` }}>
-                      <div style={{ display: "flex" }}>
-                        <input type="number" step="any" value={value(k.id, p.key, "actual")} placeholder="—"
-                          onChange={(e) => setValue(k.id, p.key, "actual", e.target.value)}
-                          style={{ ...inputCell, flex: 1, borderRight: `1px solid ${T.lineSoft}` }} />
-                        <input type="number" step="any" value={value(k.id, p.key, "budget")} placeholder="—"
-                          onChange={(e) => setValue(k.id, p.key, "budget", e.target.value)}
-                          style={{ ...inputCell, flex: 1 }} />
-                      </div>
-                    </td>
-                  ))}
+
+                  {periodColumns.map((p) => {
+                    const mk = effectiveModeForKey(p.key);
+                    const tok = MODE_TOKENS[mk];
+                    const val = value(k.id, p.key, mk);
+
+                    return (
+                      <td key={p.key} style={{
+                        padding: "3px 4px", borderBottom: `1px solid ${T.lineSoft}`,
+                        borderRight: `1px solid ${tok.cellBorder}`,
+                        background: val !== "" ? tok.cellBg : bg,
+                      }}>
+                        <input
+                          type="number"
+                          step="any"
+                          value={val}
+                          placeholder="—"
+                          onChange={(e) => setValue(k.id, p.key, mk, e.target.value)}
+                          style={{
+                            width: "100%", padding: "6px 4px",
+                            border: `1.5px solid ${tok.inputBorder}`,
+                            borderRadius: "5px",
+                            fontSize: "12px",
+                            fontFamily: "inherit",
+                            fontVariantNumeric: "tabular-nums",
+                            textAlign: "right",
+                            background: "#ffffff",
+                            color: tok.inputColor,
+                            fontWeight: 600,
+                            outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                          onFocus={(e) => {
+                            e.target.style.borderColor = tok.inputFocus;
+                            e.target.style.boxShadow = `0 0 0 3px ${tok.inputFocusRing}`;
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = tok.inputBorder;
+                            e.target.style.boxShadow = "none";
+                          }}
+                        />
+                      </td>
+                    );
+                  })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
-      <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+      <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "10px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
         <Info size={12} />
-        Each period has two columns: <strong>A</strong> = Actual, <strong>B</strong> = Budget. Values save automatically as you type.
+        {globalMode
+          ? "Toggle Budget / Actual above to switch every period. Filled cells are tinted."
+          : "Click the ⇄ next to any period to flip just that one."}
         {frequency === "Weekly" && " Use the starting month dropdown to view different 6-month windows."}
       </div>
     </Modal>
