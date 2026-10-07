@@ -219,6 +219,13 @@ const useEffectiveUserId = () => {
   const [effectiveUserId, setEffectiveUserId] = useState(null)
 
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+    if (isInvestorView && viewingSMEId) {
+      setEffectiveUserId(viewingSMEId)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setEffectiveUserId(null)

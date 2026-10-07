@@ -201,6 +201,14 @@ export function InternDealflowPage({ interns: internsProp, onStageSelect, classN
   useEffect(() => {
     if (!needsOwnFetch) return undefined
 
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+    if (isInvestorView && viewingSMEId) {
+      setEffectiveUserId(viewingSMEId)
+      setAuthResolved(true)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setEffectiveUserId(null)

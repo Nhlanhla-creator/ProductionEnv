@@ -674,6 +674,14 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
   /* ─── Auth + company membership. Wrapped in onAuthStateChanged so a cold
      load doesn't read auth.currentUser before the session is restored. ─── */
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+    if (isInvestorView && viewingSMEId) {
+      setEffectiveUserId(viewingSMEId)
+      setAuthResolved(true)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setEffectiveUserId(null)

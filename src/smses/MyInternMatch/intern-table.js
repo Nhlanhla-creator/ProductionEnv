@@ -1507,6 +1507,14 @@ const sendMessageToIntern = useCallback(
 
   /* ─── Company membership ──────────────────────────────────────────────── */
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+    if (isInvestorView && viewingSMEId) {
+      setEffectiveUserId(viewingSMEId)
+      setUserRole("viewer")
+      return
+    }
+
     const checkCompanyMembership = async () => {
       const user = auth.currentUser
       if (!user) return

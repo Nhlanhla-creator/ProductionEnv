@@ -174,6 +174,14 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
      Firebase hasn't restored the session yet, so effectiveUserId stayed null
      and every card showed zero permanently. */
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+    if (isInvestorView && viewingSMEId) {
+      setEffectiveUserId(viewingSMEId)
+      setAuthResolved(true)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setEffectiveUserId(null)

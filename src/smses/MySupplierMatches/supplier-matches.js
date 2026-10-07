@@ -57,8 +57,14 @@ export default function SupplierMatchesPage() {
   const [defaultActiveTab, setDefaultActiveTab] = useState("my-matches"); // Set default to my-matches
 
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId");
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+      if (firebaseUser && isInvestorView && viewingSMEId) {
+        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true });
+      } else {
+        setUser(firebaseUser);
+      }
       setAuthChecked(true);
     });
     return () => unsubscribe();
@@ -71,13 +77,12 @@ export default function SupplierMatchesPage() {
 
   useEffect(() => {
     const fetchContactedSuppliers = async () => {
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
+      const targetUid = user?.uid;
+      if (!targetUid) return;
 
       const q = query(
         collection(db, "supplierApplications"),
-        where("customerId", "==", currentUser.uid)
+        where("customerId", "==", targetUid)
       );
       const snapshot = await getDocs(q);
       const contacted = snapshot.docs.map(doc => doc.data().supplierId);

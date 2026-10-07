@@ -167,11 +167,14 @@ const BillingInfo = ({
   const defaultFetchSMSEData = async () => {
     setLoading(true);
     try {
+      const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+      const viewingSMEId = sessionStorage.getItem("viewingSMEId");
       const user = auth.currentUser;
-      if (!user) return;
+      const targetUid = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid;
+      if (!targetUid) return;
 
       // Only get Profile Info from 'universalProfiles'
-      const profileRef = doc(db, "universalProfiles", user.uid);
+      const profileRef = doc(db, "universalProfiles", targetUid);
       const profileSnap = await getDoc(profileRef);
       const profileData = profileSnap.exists() ? profileSnap.data() : {};
 

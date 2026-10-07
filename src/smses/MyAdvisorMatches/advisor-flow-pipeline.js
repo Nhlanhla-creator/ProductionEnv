@@ -146,6 +146,14 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
 
   useEffect(() => {
     if (!needsOwnFetch) return undefined
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+    if (isInvestorView && viewingSMEId) {
+      setEffectiveUserId(viewingSMEId)
+      setAuthResolved(true)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setEffectiveUserId(null)

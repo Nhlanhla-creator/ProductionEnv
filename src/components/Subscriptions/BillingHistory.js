@@ -610,7 +610,11 @@ const ReusableBillingHistory = ({
       }
     };
 
-    unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId");
+
+    unsubscribeAuth = onAuthStateChanged(auth, (rawUser) => {
+      const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser;
       fetchHistory(user);
     });
 
@@ -627,7 +631,10 @@ const ReusableBillingHistory = ({
       setLoadingGrowthTools(true);
       try {
         const auth = getAuth();
-        const user = auth.currentUser;
+        const rawUser = auth.currentUser;
+        const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+        const viewingSMEId = sessionStorage.getItem("viewingSMEId");
+        const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser;
         if (!user) {
           setGrowthTools([]);
           setLoadingGrowthTools(false);

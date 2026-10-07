@@ -235,7 +235,10 @@ const getMessageDateForDisplay = (message) => {
   // SINGLE COMBINED FETCH
   useEffect(() => {
     const auth = getAuth();
-    const user = auth.currentUser;
+    const rawUser = auth.currentUser;
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId");
+    const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser;
     if (!user) return;
 
     let isMounted = true;

@@ -28,9 +28,13 @@ const EventData = () => {
   useEffect(() => {
     let unsubscribeEvents = null;
 
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId");
+
     const unsubscribeAuth = onAuthStateChanged(
       auth,
-      (user) => {
+      (rawUser) => {
+        const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser;
         if (!user) {
           setStats({
             created: 0,

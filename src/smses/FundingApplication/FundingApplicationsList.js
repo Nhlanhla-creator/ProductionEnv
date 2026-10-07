@@ -231,8 +231,11 @@ const FundingApplicationsList = ({
   const navigate = useNavigate()
 
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) fetchApplications(user.uid)
+      const effectiveUserId = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid
+      if (effectiveUserId) fetchApplications(effectiveUserId)
       else {
         setLoading(false)
         setError("Please log in")

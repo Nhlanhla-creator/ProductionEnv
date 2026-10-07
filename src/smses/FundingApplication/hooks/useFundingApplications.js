@@ -730,7 +730,13 @@ export const useFundingApplications = ({
 
   useEffect(() => {
     return onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser || null)
+      const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+      const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+      if (currentUser && isInvestorView && viewingSMEId) {
+        setUser({ ...currentUser, uid: viewingSMEId })
+      } else {
+        setUser(currentUser || null)
+      }
     })
   }, [])
 
