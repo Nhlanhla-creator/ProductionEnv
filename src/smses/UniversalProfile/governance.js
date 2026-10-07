@@ -5,6 +5,7 @@ import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { db, auth, storage } from "../../firebaseConfig"
+import { getProfileOwnerId } from "../../utils/profile-context"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 
@@ -283,8 +284,7 @@ const Governance = ({ data, updateData }) => {
           return;
         }
 
-        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+        const userId = await getProfileOwnerId();
         if (userId) {
           const docRef = doc(db, "universalProfiles", userId)
           const docSnap = await getDoc(docRef)
@@ -367,8 +367,7 @@ const Governance = ({ data, updateData }) => {
     try {
       const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
       if (!isOnboarding) {
-        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+        const userId = await getProfileOwnerId();
         if (userId) {
           const docRef = doc(db, "universalProfiles", userId)
           await updateDoc(docRef, { "governance.governanceChecklist": updatedChecklist })

@@ -22,6 +22,8 @@ import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useOnboardingVetting } from "../../hooks/useOnboardingVetting";
 import { useVerificationNudges } from "../../hooks/useVerificationNudges";
+import { ROLE_PERMISSIONS, resolveProfileContext } from "../../utils/profile-context";
+import ProfileScopeSwitcher from "../../utils/ProfileScopeSwitcher";
 
 const sections = [
   { id: "instructions", label: "Instructions" },
@@ -130,6 +132,7 @@ export default function UniversalProfile() {
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [effectiveUserId, setEffectiveUserId] = useState(null)
   const [userRole, setUserRole] = useState(null)
+  const [companyName, setCompanyName] = useState("")
   const [editPermissions, setEditPermissions] = useState({})
   const [editHistory, setEditHistory] = useState([])
   const { notifyVettingStatusUpdate } = useOnboardingVetting(auth.currentUser);
@@ -142,14 +145,6 @@ export default function UniversalProfile() {
   const [activeSection, setActiveSection] = useState(deepLinkSection || "instructions")
   const [showSummary, setShowSummary] = useState(false)
   const [isEditing, setIsEditing] = useState(!!deepLinkSection)
-  const ROLE_PERMISSIONS = {
-    owner: { canEditAll: true, sections: ["instructions", "entityOverview", "ownershipManagement", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "howDidYouHear", "documents", "declarationConsent"] },
-    companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "documents"] },
-    manager: { canEditAll: false, sections: ["contactDetails", "productsServices", "operationsOverview", "documents"] },
-    employee: { canEditAll: false, sections: ["contactDetails", "documents"] },
-    viewer: { canEditAll: false, sections: [] },
-  }
-
   const canEditSection = (sectionId) => {
     if (!userRole) return false
     const permissions = ROLE_PERMISSIONS[userRole]
@@ -287,7 +282,6 @@ export default function UniversalProfile() {
 
     declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false },
   })
-
   // ── Auth + company membership ──────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -358,11 +352,12 @@ export default function UniversalProfile() {
   useEffect(() => {
     const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
     if (isCmfView) return // skip local storage auto-save during CMF view mode
+    if (isCompanyMember) return // members work on the company's live profile, never a local copy
     const userId = auth.currentUser?.uid; if (!userId) return
     localStorage.setItem(getUserSpecificKey("universalProfileData"), JSON.stringify(formData))
     localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(completedSections))
     localStorage.setItem(getUserSpecificKey("profileSubmitted"), profileSubmitted.toString())
-  }, [formData, completedSections, profileSubmitted])
+  }, [formData, completedSections, profileSubmitted, isCompanyMember])
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
@@ -686,8 +681,6 @@ if (operationalSections.includes(section)) {
 
   const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
   const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
-
-  // Universal facilitator / viewer banner is now rendered universally by SMELayout at the top of every page
   const renderCmfBanner = () => null;
 
   if (showSummary && !isEditing) {
@@ -698,6 +691,8 @@ if (operationalSections.includes(section)) {
       </div>
     )
   }
+
+  const sectionEditable = canEditSection(activeSection)
 
   return (
     <div className="universal-profile-container">
@@ -851,7 +846,8 @@ if (operationalSections.includes(section)) {
       )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
-        <h1 style={{ margin: 0 }}>My Universal Profile</h1>
+        <h1 style={{ margin: 0 }}>{isCompanyMember ? `${companyName || "Company"} – Universal Profile` : "My Universal Profile"}</h1>
+        <ProfileScopeSwitcher />
         {(profileData?.is_verified || profileData?.scoreState?.is_verified || profileData?.status === "approved") && (
           <div style={{
             display: "inline-flex",
@@ -886,6 +882,9 @@ if (operationalSections.includes(section)) {
               {userRole === "employee" && "You can edit contact details and upload documents."}
               {userRole === "viewer" && "You have read-only access. Contact the owner for edit permissions."}
             </p>
+            <p style={{ margin: "0.5rem 0 0 0", color: "#4a5568", fontSize: "0.8rem" }}>
+              You are viewing {companyName ? `${companyName}'s` : "your company's"} profile. Any changes you save are applied to the company profile and recorded in its edit history.
+            </p>
           </div>
         )}
         <div className="profile-tracker-inner">
@@ -900,17 +899,28 @@ if (operationalSections.includes(section)) {
       </div>
 
       <div className="content-card">
-        {renderActiveSection()}
+        {!sectionEditable && activeSection !== "instructions" && (
+          <div style={{ backgroundColor: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "1rem", fontSize: "0.875rem" }}>
+            View only – your role ({userRole}) can't edit this section. Ask the company owner if you need access.
+          </div>
+        )}
+        {sectionEditable ? renderActiveSection() : (
+          <fieldset disabled style={{ border: 0, padding: 0, margin: 0, minWidth: 0, pointerEvents: "none", opacity: 0.85 }}>
+            {renderActiveSection()}
+          </fieldset>
+        )}
         <div className="action-buttons">
           {activeSection !== "instructions" && (<button type="button" onClick={navigateToPreviousSection} className="btn btn-secondary"><ChevronLeft size={16} /> Previous</button>)}
-          <button type="button" onClick={handleSaveSection} className="btn btn-secondary"><Save size={16} /> Save</button>
+          {sectionEditable && (<button type="button" onClick={handleSaveSection} className="btn btn-secondary"><Save size={16} /> Save</button>)}
           {activeSection !== "declarationConsent" ? (
-            <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">Save & Continue <ChevronRight size={16} /></button>
-          ) : (
+            sectionEditable
+              ? <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">Save & Continue <ChevronRight size={16} /></button>
+              : <button type="button" onClick={navigateToNextSection} className="btn btn-primary">Next <ChevronRight size={16} /></button>
+          ) : sectionEditable ? (
             <button type="button" onClick={handleSubmitProfile}
               disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions}
               className="btn btn-primary">Submit Profile</button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

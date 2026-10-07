@@ -13,6 +13,7 @@ import { CustomerReviewsCard } from "./customer-reviews-card"
 import ShopToolsPage from "../../smses/MyGrowthTools/shop"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
+import { resolveProfileContext } from "../../utils/profile-context";
 import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus, ArrowLeft } from 'lucide-react'
 import "./Dashboard.css"
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -1232,6 +1233,9 @@ const [userRole, setUserRole] = useState(null);
   }
 
   // Whichever user's data should actually be displayed: the SME being
+  // viewed (catalyst mode) takes priority over the logged-in user's own
+  // effectiveUserId (company-membership resolution below).
+    // Whichever user's data should actually be displayed: the SME being
   // viewed (facilitator / catalyst / investor mode) takes priority over the logged-in user's own
   // effectiveUserId (company-membership resolution below).
   const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
@@ -1311,47 +1315,14 @@ useEffect(() => {
     if (user) {
       try {
         setIsAuthenticated(true);
-        
-        // Check if user is part of a company
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          const userCompanyId = userData.companyId;
-          const userCompanyRole = userData.userRole;
-          
-          if (userCompanyId) {
-            // User is part of a company, fetch company details
-            const companyDocRef = doc(db, "companies", userCompanyId);
-            const companyDocSnap = await getDoc(companyDocRef);
-            
-            if (companyDocSnap.exists()) {
-              const companyData = companyDocSnap.data();
-              const ownerId = companyData.createdBy;
-              
-              // Set user role
-              setUserRole(userCompanyRole || 'viewer');
-              
-              // Check if current user is the owner
-              if (ownerId === user.uid) {
-                // Current user is the owner
-                setIsCompanyMember(false);
-                setEffectiveUserId(user.uid);
-              } else {
-                // Current user is a member, use owner's ID for data
-                setIsCompanyMember(true);
-                setCompanyOwnerId(ownerId);
-                setEffectiveUserId(ownerId);
-              }
-            }
-          } else {
-            // No company, use current user as owner
-            setIsCompanyMember(false);
-            setEffectiveUserId(user.uid);
-            setUserRole('owner');
-          }
-        }
+
+        // Resolve whose data to show: the company owner's (default for members),
+        // or the member's own profile if they switched scope.
+        const ctx = await resolveProfileContext({ force: true });
+        setUserRole(ctx.role);
+        setIsCompanyMember(ctx.isMember);
+        setCompanyOwnerId(ctx.isMember ? ctx.profileId : null);
+        setEffectiveUserId(ctx.profileId);
       } catch (error) {
         console.error("Error checking company membership:", error);
         setEffectiveUserId(user.uid);
@@ -1461,8 +1432,10 @@ useEffect(() => {
 
       <div className="content">
         <main className="dashboard-main">
-          <DashboardHeader userName={(isInvestorView && storedSMEName) ? storedSMEName : (isBigScoreOnlyView ? viewingSMEName : userName)} />
-
+          <DashboardHeader
+  userName={(isInvestorView && storedSMEName) ? storedSMEName : (isBigScoreOnlyView ? viewingSMEName : userName)}
+  showScopeSwitcher={!isBigScoreOnlyView && !isInvestorView}
+/>
           {/* ─── Catalyst "viewing this SME's BIG Score" banner ────────────
               Only rendered in restricted view mode; this is the "back"
               button the catalyst needs to return to their own view. */}

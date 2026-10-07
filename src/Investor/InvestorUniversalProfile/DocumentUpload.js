@@ -114,6 +114,15 @@ useEffect(() => {
           }
         })
 
+        // Keep files picked this session but not saved yet; the stored copy
+        // would otherwise overwrite them when the tab is reopened.
+        documentsList.forEach((d) => {
+          const local = data?.[d.id]
+          if (Array.isArray(local) && local.some((f) => typeof File !== "undefined" && f instanceof File)) {
+            documentsData[d.id] = local
+          }
+        })
+
         console.log("Final documents data for component:", documentsData)
         setFormData(documentsData)
         updateData(documentsData)
@@ -238,7 +247,7 @@ const getFileDisplayName = (file) => {
           color: "#2e7d32"
         }}>
           <CheckCircle style={{ width: "12px", height: "12px" }} />
-          Uploaded
+          {files.some((f) => typeof File !== "undefined" && f instanceof File) ? "Selected - saves on Save" : "Uploaded"}
         </span>
       )
     } else {
@@ -322,7 +331,7 @@ const handleDeleteFile = async (documentId, fileIndex) => {
         // Method 2: Also try to delete from the full path location
         console.log("=== METHOD 2: Full Path Deletion ===");
         if (userId) {
-          const fullPath = `MyuniversalProfile/${userId}/full/documentUpload/${documentId}/0`;
+          const fullPath = `MyuniversalProfile/${userId}/documentUpload/${documentId}/0`;
           console.log("Trying full path:", fullPath);
           try {
             const fullPathRef = ref(storage, fullPath);

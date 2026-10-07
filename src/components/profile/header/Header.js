@@ -10,7 +10,7 @@ import { useRoles } from "../../../hooks/useRoles"
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
 import Feedback from "../../../Feedback"
 import BookSession from "../../../main_pages/BookSession"
-
+import { getRoleRoute, hasRole, isSameRole } from "../../../config/headerConfig"
 /**
  * Reusable Header Component with Advanced Messages Feature
  * @param {Object} props
@@ -59,9 +59,10 @@ function Header({
   const [imageUploading, setImageUploading] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const roleFromLocalStorage = localStorage.getItem("selectedRole") || null
-  const { availableRoles, selectedRole, addRole, switchRole } = useRoles(roleFromLocalStorage)
+  const { availableRoles, selectedRole, addRole, switchRole } = useRoles()
   const [newRoleInput, setNewRoleInput] = useState("")
 
+  
   const profileRef = useRef(null)
   const messagesRef = useRef(null)
   const modalRef = useRef(null)
@@ -294,39 +295,47 @@ function Header({
     }
   }
 
-  const handleRoleSwitch = async (role) => {
-    if (onRoleSwitch) {
-      onRoleSwitch(role)
-    } else {
-      // Default role switch behavior
-      try {
-        await switchRole(role)
-      } catch (err) {
-        console.error('Failed to switch role', err)
-      }
-      
-      // Navigate based on centralized roleRoutes
-      navigate(roleRoutes[role] || "/auth")
-    }
+const handleRoleSwitch = async (role) => {
+  if (onRoleSwitch) {
+    onRoleSwitch(role)
+    return
   }
-
-  const addNewRole = async () => {
-    if (!newRoleInput) return
-    if (availableRoles.includes(newRoleInput)) {
-      alert("Role already exists.")
-      return
-    }
-
-    try {
-      await addRole(newRoleInput)
-      setShowAddRole(false)
-      setNewRoleInput("")
-      handleRoleSwitch(newRoleInput)
-    } catch (err) {
-      console.error("Failed to add role:", err)
-      alert("Error adding role")
-    }
+  const route = getRoleRoute(role)
+  if (!route) {
+    alert(`No page is configured for the role "${role}".`)
+    return
   }
+  try {
+    await switchRole(role)
+    navigate(route)
+  } catch (err) {
+    console.error("Failed to switch role", err)
+    alert("Could not switch role. Please try again.")
+  }
+}
+
+const addNewRole = async () => {
+  if (!newRoleInput) return
+  if (hasRole(availableRoles, newRoleInput)) {
+    alert("Role already exists.")
+    return
+  }
+  const route = getRoleRoute(newRoleInput)
+  if (!route) {
+    alert(`No page is configured for the role "${newRoleInput}".`)
+    return
+  }
+  try {
+    await addRole(newRoleInput) // also sets currentRole to the new role
+    setShowAddRole(false)
+    setNewRoleInput("")
+    navigate(route)
+  } catch (err) {
+    console.error("Failed to add role:", err)
+    alert("Error adding role")
+  }
+}
+
 
   const handleLogout = () => {
     auth.signOut().then(() => {
@@ -363,9 +372,9 @@ function Header({
     }
   }
 
-  const getAvailableRoleOptions = () => {
-    return roleOptions.filter((role) => !availableRoles.includes(role))
-  }
+const getAvailableRoleOptions = () =>
+  roleOptions.filter((role) => !hasRole(availableRoles, role))
+
 
   const effectiveUserName = propUserName || userName
   const effectiveProfileLogo = propProfileLogo || profileLogo
@@ -612,31 +621,25 @@ function Header({
 
                   {/* Scrollable roles list */}
                   <div className={styles.rolesList}>
-                    {availableRoles.map((role, idx) => (
-                      <button
-                        key={idx}
-                        className={`${styles.dropdownItem} ${
-                          selectedRole === role ? styles.activeRole : ""
-                        }`}
-                        onClick={() => {
-                          // Defensive: prevent switching to the same role
-                          if (selectedRole === role) {
-                            setShowProfileMenu(false)
-                            return
-                          }
-
-                          handleRoleSwitch(role)
-                          setShowProfileMenu(false)
-                        }}
-                        disabled={selectedRole === role}
-                        aria-current={selectedRole === role ? "true" : undefined}
-                        aria-disabled={selectedRole === role}
-                        title={selectedRole === role ? "Currently selected" : undefined}
-                      >
-                        <User size={16} />
-                        <span>{role}</span>
-                      </button>
-                    ))}
+                    {availableRoles.map((role, idx) => {
+  const isCurrent = isSameRole(selectedRole, role)
+  return (
+    <button
+      key={idx}
+      className={`${styles.dropdownItem} ${isCurrent ? styles.activeRole : ""}`}
+      onClick={() => {
+        setShowProfileMenu(false)
+        if (!isCurrent) handleRoleSwitch(role)
+      }}
+      disabled={isCurrent}
+      aria-current={isCurrent ? "true" : undefined}
+      title={isCurrent ? "Currently selected" : undefined}
+    >
+      <User size={16} />
+      <span>{role}</span>
+    </button>
+  )
+})}
                   </div>
                 </>
               )}

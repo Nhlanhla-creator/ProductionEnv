@@ -23,7 +23,8 @@ export default function Settings() {
     paleBrown: "#f0e6d9",
   }
 
-  const TEAM_MEMBERS_ENABLED = false
+  const TEAM_MEMBERS_ENABLED = true
+  const INVITE_ACCEPT_PATH = "/accept-invitation" // route that handles ?token=...
   const [accountLoaded, setAccountLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("account")
   const [formData, setFormData] = useState({
@@ -78,6 +79,11 @@ const [isCompanyOwner, setIsCompanyOwner] = useState(false);
 const [inviteLoading, setInviteLoading] = useState(false);
 const [inviteSuccess, setInviteSuccess] = useState("");
 const [inviteError, setInviteError] = useState("");
+const [companyName, setCompanyName] = useState("");
+const [newCompanyName, setNewCompanyName] = useState("");
+const [companyLoading, setCompanyLoading] = useState(false);
+const [companyError, setCompanyError] = useState("");
+const [teamLoading, setTeamLoading] = useState(false);
 
 // Add this utility function
 const validateEmail = (email) => {
@@ -232,7 +238,7 @@ useEffect(() => {
           : typeof userData.role === "string" ? userData.role.split(",").map(r => r.trim()) : [])
         if (TEAM_MEMBERS_ENABLED && userData.companyId) {
           setCompanyId(userData.companyId)
-          setIsCompanyOwner(userData.userRole === "owner")
+          setIsCompanyOwner(userData.userRole === "owner" || userData.userRole === "companyadmin")
         }
         setAccountLoaded(true)
       } catch (error) {
@@ -379,6 +385,7 @@ const loadCompanyMembers = async (companyId) => {
     
     if (companySnap.exists()) {
       const companyData = companySnap.data();
+      setCompanyName(companyData.name || "");
       
       // Get all users in this company
       const usersQuery = query(
@@ -388,13 +395,35 @@ const loadCompanyMembers = async (companyId) => {
       
       const usersSnapshot = await getDocs(usersQuery);
       const members = [];
-      
+
+      // Existing accounts often have no email/username on their users doc.
+      // The accepted invitation always has the email, so use it as a fallback.
+      const acceptedByUid = {};
+      try {
+        const accSnap = await getDocs(query(
+          collection(db, "invitations"),
+          where("companyId", "==", companyId),
+          where("status", "==", "accepted")
+        ));
+        accSnap.forEach((d) => {
+          const inv = d.data();
+          if (inv.acceptedBy) acceptedByUid[inv.acceptedBy] = inv;
+        });
+      } catch (e) {
+        console.warn("Could not load accepted invitations:", e);
+      }
+
       usersSnapshot.forEach((doc) => {
         const userData = doc.data();
+        const inv = acceptedByUid[doc.id];
+        const email = userData.email || inv?.email || (doc.id === auth.currentUser?.uid ? auth.currentUser?.email : "") || "";
         members.push({
           id: doc.id,
-          email: userData.email,
-          username: userData.username,
+          email,
+          username: userData.username
+            || [userData.firstName, userData.lastName].filter(Boolean).join(" ")
+            || userData.displayName
+            || (email ? email.split("@")[0] : ""),
           role: userData.userRole || 'employee',
           joinedAt: userData.createdAt || new Date().toISOString()
         });
@@ -406,9 +435,103 @@ const loadCompanyMembers = async (companyId) => {
     console.error("Error loading company members:", error);
   }
 };
+
+// Create a company from Settings and make the current user its owner
+const handleCreateCompany = async () => {
+  const name = newCompanyName.trim();
+  if (name.length < 2) {
+    setCompanyError("Please enter a company name (at least 2 characters).");
+    return;
+  }
+  const user = auth.currentUser;
+  if (!user) {
+    setCompanyError("You need to be logged in.");
+    return;
+  }
+  setCompanyLoading(true);
+  setCompanyError("");
+  try {
+    const companyRef = await addDoc(collection(db, "companies"), {
+      name,
+      createdBy: user.uid, // field the Universal Profile reads to find the company owner
+      ownerId: user.uid,
+      ownerEmail: user.email || "",
+      members: [user.uid],
+      createdAt: new Date().toISOString(),
+    });
+    await updateDoc(doc(db, "users", user.uid), {
+      companyId: companyRef.id,
+      userRole: "owner",
+    });
+    setCompanyName(name);
+    setNewCompanyName("");
+    setIsCompanyOwner(true);
+    setCompanyId(companyRef.id); // triggers member + invitation loading
+    setToast({ show: true, message: "Company created!", type: "success" });
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 4000);
+  } catch (error) {
+    console.error("Error creating company:", error);
+    setCompanyError("Failed to create company. Please try again.");
+  } finally {
+    setCompanyLoading(false);
+  }
+};
+
+const showToast = (message, type = "success") => {
+  setToast({ show: true, message, type });
+  setTimeout(() => setToast({ show: false, message: "", type: "success" }), 4000);
+};
+
+const makeToken = () => {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+};
+
+// Cancel a pending invitation
+const handleCancelInvitation = async (invitationId) => {
+  if (!window.confirm("Cancel this invitation?")) return;
+  try {
+    await updateDoc(doc(db, "invitations", invitationId), { status: "cancelled" });
+    await loadInvitations(companyId);
+    showToast("Invitation cancelled.");
+  } catch (error) {
+    console.error("Error cancelling invitation:", error);
+    showToast("Failed to cancel invitation.", "error");
+  }
+};
+
+// Resend: refresh token/expiry and reset emailSent so the Cloud Function sends it again
+const handleResendInvitation = async (invitationId) => {
+  try {
+    await updateDoc(doc(db, "invitations", invitationId), {
+      token: makeToken(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      emailSent: false,
+      emailSentAt: null,
+      resentAt: new Date().toISOString(),
+    });
+    await loadInvitations(companyId);
+    showToast("Invitation resent.");
+  } catch (error) {
+    console.error("Error resending invitation:", error);
+    showToast("Failed to resend invitation.", "error");
+  }
+};
+
+const handleCopyInviteLink = async (token) => {
+  try {
+    await navigator.clipboard.writeText(`${window.location.origin}${INVITE_ACCEPT_PATH}?token=${token}`);
+    showToast("Invite link copied.");
+  } catch {
+    showToast("Could not copy link.", "error");
+  }
+};
+
 const handleInviteMember = async () => {
   if (!TEAM_MEMBERS_ENABLED) return;
-  if (!inviteEmail || !validateEmail(inviteEmail)) {
+  const email = inviteEmail.trim().toLowerCase();
+  if (!email || !validateEmail(email)) {
     setInviteError("Please enter a valid email address.");
     return;
   }
@@ -437,7 +560,7 @@ const handleInviteMember = async () => {
     // Check if user already exists with this email
     const usersQuery = query(
       collection(db, "users"),
-      where("email", "==", inviteEmail)
+      where("email", "==", email)
     );
     const userSnapshot = await getDocs(usersQuery);
 
@@ -451,19 +574,31 @@ const handleInviteMember = async () => {
       }
     }
 
-    // Generate unique invitation code
-    const invitationToken = Math.random().toString(36).substring(2, 15) + 
-                           Math.random().toString(36).substring(2, 15);
+    // Block duplicate pending invitations
+    const pendingQuery = query(
+      collection(db, "invitations"),
+      where("companyId", "==", companyId),
+      where("email", "==", email),
+      where("status", "==", "pending")
+    );
+    const pendingSnap = await getDocs(pendingQuery);
+    if (!pendingSnap.empty) {
+      setInviteError("An invitation is already pending for this email. You can resend it from the list.");
+      return;
+    }
+
+    // Generate unique, unguessable invitation token
+    const invitationToken = makeToken();
 
     // Create invitation - THIS WILL TRIGGER THE CLOUD FUNCTION
     const invitationData = {
-      email: inviteEmail,
+      email: email,
       companyId: companyId,
       companyName: companyData.name || "Your Company",
       role: inviteRole,
       invitedBy: user.uid,
       invitedByEmail: user.email,
-      invitedByName: formData.firstName + " " + formData.lastName,
+      invitedByName: [formData.firstName, formData.lastName].filter(Boolean).join(" ") || user.email,
       status: 'pending',
       token: invitationToken,
       createdAt: new Date().toISOString(),
@@ -476,12 +611,11 @@ const handleInviteMember = async () => {
     await addDoc(collection(db, "invitations"), invitationData);
 
     // Success message
-    setInviteSuccess(`Invitation sent to ${inviteEmail}! The email should arrive shortly.`);
+    setInviteSuccess(`Invitation sent to ${email}! The email should arrive shortly.`);
+    await loadInvitations(companyId);
     setInviteEmail("");
     setInviteRole("employee");
 
-    // Optional: Show invitation code for manual sharing
-    console.log(`Invitation code: ${invitationToken}`);
 
   } catch (error) {
     console.error("Error inviting member:", error);
@@ -493,7 +627,7 @@ const handleInviteMember = async () => {
 
 // Remove a team member
 const handleRemoveMember = async (memberId) => {
-  if (!TEAM_MEMBERS_ENABLED) return;
+  if (!TEAM_MEMBERS_ENABLED || !isCompanyOwner) return;
   if (!window.confirm("Are you sure you want to remove this team member?")) {
     return;
   }
@@ -523,7 +657,7 @@ const handleRemoveMember = async (memberId) => {
 
 // Update member role
 const handleUpdateRole = async (memberId, newRole) => {
-  if (!TEAM_MEMBERS_ENABLED) return;
+  if (!TEAM_MEMBERS_ENABLED || !isCompanyOwner) return;
   try {
     await updateDoc(doc(db, "users", memberId), {
       userRole: newRole
@@ -862,7 +996,7 @@ const handleUpdateRole = async (memberId, newRole) => {
             { key: "appearance", label: "Appearance", disabled: true },
             { key: "notifications", label: "Notifications" },
             // Update your tabs array to include "team"
-{ key: "team", label: "Team Members", disabled: true },
+{ key: "team", label: "Team Members" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1305,15 +1439,52 @@ const handleUpdateRole = async (memberId, newRole) => {
 
     {!companyId ? (
       <div style={{
-        padding: "3rem",
+        padding: "2rem",
         backgroundColor: colors.lightBrown,
         borderRadius: "8px",
-        textAlign: "center",
+        maxWidth: "560px",
       }}>
-        <p style={{ color: colors.textBrown, fontSize: "1rem", marginBottom: "1rem" }}>
-          You don't have a company profile yet.
+        <h3 style={{ color: colors.textBrown, fontSize: "1.1rem", fontWeight: "600", margin: "0 0 0.5rem 0" }}>
+          Create your company
+        </h3>
+        <p style={{ color: "#6b7280", fontSize: "0.95rem", margin: "0 0 1rem 0" }}>
+          Set up a company to add team members and send invitations. You'll be the owner.
         </p>
+        <input
+          type="text"
+          placeholder="Company name"
+          value={newCompanyName}
+          onChange={(e) => setNewCompanyName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !companyLoading) handleCreateCompany() }}
+          maxLength={80}
+          style={{
+            width: "100%",
+            padding: "0.875rem 1rem",
+            border: `1px solid ${colors.mediumBrown}`,
+            borderRadius: "8px",
+            fontSize: "1rem",
+            backgroundColor: "white",
+            color: colors.textBrown,
+            outline: "none",
+            boxSizing: "border-box",
+            marginBottom: "1rem",
+          }}
+        />
+        {companyError && (
+          <div style={{
+            padding: "0.75rem 1rem",
+            backgroundColor: "#fef2f2",
+            color: "#dc2626",
+            borderRadius: "8px",
+            marginBottom: "1rem",
+            fontSize: "0.95rem",
+          }}>
+            {companyError}
+          </div>
+        )}
         <button
+          onClick={handleCreateCompany}
+          disabled={companyLoading}
           style={{
             padding: "0.75rem 1.5rem",
             backgroundColor: colors.primaryBrown,
@@ -1322,15 +1493,21 @@ const handleUpdateRole = async (memberId, newRole) => {
             borderRadius: "8px",
             fontSize: "0.95rem",
             fontWeight: "500",
-            cursor: "pointer",
+            cursor: companyLoading ? "not-allowed" : "pointer",
+            opacity: companyLoading ? 0.7 : 1,
           }}
-          onClick={() => window.location.href = "/profile"}
         >
-          Create Company Profile
+          {companyLoading ? "Creating..." : "Create Company"}
         </button>
       </div>
     ) : (
       <>
+        {companyName && (
+          <p style={{ color: colors.textBrown, fontSize: "1.05rem", fontWeight: "600", margin: "0 0 1rem 0" }}>
+            {companyName}
+          </p>
+        )}
+
         {/* Add Member Button */}
         {isCompanyOwner && (
           <div style={{ marginBottom: "2rem" }}>
@@ -1482,6 +1659,54 @@ const handleUpdateRole = async (memberId, newRole) => {
             </div>
           )}
         </div>
+
+        {/* Pending Invitations */}
+        {isCompanyOwner && (
+          <div style={{
+            backgroundColor: colors.backgroundBrown,
+            borderRadius: "12px",
+            padding: "1.5rem",
+            marginBottom: "2rem",
+          }}>
+            <h3 style={{ color: colors.textBrown, fontSize: "1.1rem", fontWeight: "600", marginBottom: "1rem" }}>
+              Pending Invitations ({invitations.length})
+            </h3>
+            {invitations.length === 0 ? (
+              <p style={{ color: "#6b7280", textAlign: "center", padding: "1rem" }}>
+                No pending invitations.
+              </p>
+            ) : (
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                {invitations.map((inv) => (
+                  <div key={inv.id} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "0.75rem",
+                    padding: "1rem",
+                    backgroundColor: "white",
+                    borderRadius: "8px",
+                    border: `1px solid ${colors.lightBrown}`,
+                  }}>
+                    <div>
+                      <p style={{ color: colors.textBrown, fontWeight: "500", margin: 0 }}>{inv.email}</p>
+                      <p style={{ color: "#6b7280", fontSize: "0.85rem", margin: "0.25rem 0 0 0" }}>
+                        {inv.role} · {inv.emailSent ? "Email sent" : "Sending…"}
+                        {inv.expiresAt ? ` · expires ${new Date(inv.expiresAt).toLocaleDateString()}` : ""}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button onClick={() => handleCopyInviteLink(inv.token)} style={{ padding: "0.5rem 0.9rem", backgroundColor: colors.lightBrown, color: colors.textBrown, border: "none", borderRadius: "6px", fontSize: "0.85rem", cursor: "pointer" }}>Copy link</button>
+                      <button onClick={() => handleResendInvitation(inv.id)} style={{ padding: "0.5rem 0.9rem", backgroundColor: colors.lightBrown, color: colors.textBrown, border: "none", borderRadius: "6px", fontSize: "0.85rem", cursor: "pointer" }}>Resend</button>
+                      <button onClick={() => handleCancelInvitation(inv.id)} style={{ padding: "0.5rem 0.9rem", backgroundColor: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "6px", fontSize: "0.85rem", cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Permissions Info */}
         <div style={{
@@ -2302,7 +2527,12 @@ const handleUpdateRole = async (memberId, newRole) => {
 
       <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
         <button
-          onClick={() => setShowAddMemberModal(false)}
+          onClick={() => {
+            setShowAddMemberModal(false);
+            setInviteEmail("");
+            setInviteError("");
+            setInviteSuccess("");
+          }}
           style={{
             flex: 1,
             padding: "0.875rem",
