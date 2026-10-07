@@ -431,7 +431,7 @@ const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }
   <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,32,28,0.55)",
     display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1400, padding: "20px" }}>
     <div onClick={(e) => e.stopPropagation()} style={{ background: T.bg, borderRadius: "14px", width: "100%",
-      maxWidth: `${width}px`, maxHeight: "92vh", display: "flex", flexDirection: "column",
+      maxWidth: `${width}px`, maxHeight: "94vh", display: "flex", flexDirection: "column",
       boxShadow: "0 24px 60px rgba(45,32,28,0.28)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "18px 22px 14px", borderBottom: `1px solid ${T.line}` }}>
         <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
@@ -2123,7 +2123,7 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Add Data — bulk capture grid with flexible window
+   Add Data — friendly single-column layout with Budget/Actual switch
    ════════════════════════════════════════════════════════════════════════ */
 const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, onPullFinancials, currentTabId }) => {
   const editableTabs = tabs.filter((t) => {
@@ -2147,6 +2147,11 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   const [pulling, setPulling] = useState(false);
   const timer = useRef(null);
   const docsRef = useRef(docs);
+
+  /* ── Single-column mode with a switch ──────────────────────────────── */
+  const [mode, setMode] = useState(prefs?.mode || "actual");
+  const [globalMode, setGlobalMode] = useState(prefs?.globalMode ?? true);
+  const [monthModes, setMonthModes] = useState(() => prefs?.monthModes || {});
 
   useEffect(() => { docsRef.current = docs; }, [docs]);
 
@@ -2207,28 +2212,30 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       await onSaveField({ kpi, which, raw, monthIndex: monthIdx });
-      onSavePrefs({ tabId, startYear, showCount, startMonthOffset });
+      onSavePrefs({ tabId, startYear, showCount, startMonthOffset, mode, globalMode, monthModes });
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 1800);
     }, 800);
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const cell = {
-    ...inputS, padding: "5px 6px", textAlign: "center", fontSize: "12.5px",
-    minHeight: "30px", border: "none", borderRadius: 0, background: "transparent",
-  };
-  const th = {
-    padding: "8px 10px", fontSize: "11px", fontWeight: 700, color: "#fff",
-    textTransform: "uppercase", letterSpacing: "0.5px", background: T.header,
-    whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2,
-    verticalAlign: "top", borderRight: "1px solid rgba(255,255,255,0.15)",
-  };
+  /* Persist mode prefs on change */
+  useEffect(() => {
+    onSavePrefs({ tabId, startYear, showCount, startMonthOffset, mode, globalMode, monthModes });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, globalMode, monthModes]);
+
   const yearOptions = [
     { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
     { value: fy.startYear,     badge: "FY",  label: fyLabel(fy.startYear, fy.startMonth) },
     { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
   ];
+
+  const th = {
+    padding: "8px 10px", fontSize: "11px", fontWeight: 700, color: "#fff",
+    textTransform: "uppercase", letterSpacing: "0.5px", background: T.header,
+    whiteSpace: "nowrap", verticalAlign: "top", borderRight: "1px solid rgba(255,255,255,0.15)",
+  };
 
   if (!tab) {
     return (
@@ -2241,14 +2248,52 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
 
   const kpiRows = rows.filter((r) => !r.isPanel);
 
+  /* Colour tokens for the two modes */
+  const MODE_TOKENS = {
+    budget: {
+      label: "Target",
+      headerBg: "#1e3a8a",
+      headerColor: "#dbeafe",
+      cellBg: "#eff6ff",
+      cellBorder: "#bfdbfe",
+      inputBorder: "#bfdbfe",
+      inputFocus: "#2563eb",
+      inputFocusRing: "rgba(37,99,235,0.15)",
+      inputColor: "#1e3a8a",
+    },
+    actual: {
+      label: "Actual",
+      headerBg: "#166534",
+      headerColor: "#dcfce7",
+      cellBg: "#f0fdf4",
+      cellBorder: "#bbf7d0",
+      inputBorder: "#bbf7d0",
+      inputFocus: "#16a34a",
+      inputFocusRing: "rgba(22,163,74,0.15)",
+      inputColor: "#166534",
+    },
+  };
+
+  const effectiveModeForMonth = (m) => (globalMode ? mode : (monthModes[m.key] || mode));
+  const toggleModeForMonth = (m) => {
+    if (globalMode) {
+      setMode((v) => (v === "budget" ? "actual" : "budget"));
+    } else {
+      setMonthModes((p) => ({ ...p, [m.key]: (p[m.key] || mode) === "budget" ? "actual" : "budget" }));
+    }
+  };
+
+  /* Full-width modal — expands to fit all months without horizontal scroll */
+  const minGridWidth = 200 + months.length * 86;
+
   return (
     <Modal
       title="Add Data"
-      subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Bulk capture mode`}
+      subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Bulk capture mode · Everything saves as you type`}
       icon={<Database size={17} />}
       onClose={onClose}
-      width={Math.min(1500, 1000 + months.length * 60)}
-      footer={<>
+      width={Math.max(1000, Math.min(minGridWidth + 80, Math.max(window.innerWidth - 40, 1000)))}
+      footer={<> 
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
           {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}
@@ -2349,126 +2394,242 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
 
       {kpiRows.length > 0 && (
         <>
-          <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px" }}>
-            Enter Actual and Target for each month. Values save automatically as you type.
-            Use <strong>Starting from</strong> and <strong>Show</strong> to narrow the window.
+          {/* Mode switcher bar */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
+            padding: "10px 14px", marginBottom: "10px",
+            background: T.panel, border: `1px solid ${T.line}`, borderRadius: "10px",
+          }}>
+            <span style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent }}>Showing:</span>
+
+            <div style={{ display: "inline-flex", background: T.raised, borderRadius: "999px", padding: "3px" }}>
+              <button
+                onClick={() => setMode("budget")}
+                style={{
+                  padding: "6px 16px", borderRadius: "999px", border: "none", cursor: "pointer",
+                  fontFamily: "inherit", fontSize: "12.5px", fontWeight: 700,
+                  background: mode === "budget" ? "#1e3a8a" : "transparent",
+                  color: mode === "budget" ? "#fff" : T.body,
+                  boxShadow: mode === "budget" ? "0 1px 3px rgba(0,0,0,0.18)" : "none",
+                }}>
+                Target
+              </button>
+              <button
+                onClick={() => setMode("actual")}
+                style={{
+                  padding: "6px 16px", borderRadius: "999px", border: "none", cursor: "pointer",
+                  fontFamily: "inherit", fontSize: "12.5px", fontWeight: 700,
+                  background: mode === "actual" ? "#166534" : "transparent",
+                  color: mode === "actual" ? "#fff" : T.body,
+                  boxShadow: mode === "actual" ? "0 1px 3px rgba(0,0,0,0.18)" : "none",
+                }}>
+                Actual
+              </button>
+            </div>
+
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", color: T.body, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={globalMode}
+                onChange={() => setGlobalMode((v) => !v)}
+              />
+              Use the same mode for every month
+            </label>
+
+            <span style={{ flex: 1 }} />
+
+            <span style={{ fontSize: "11.5px", color: T.muted, display: "flex", alignItems: "center", gap: "5px" }}>
+              <Info size={12} />
+              {globalMode
+                ? "One column per month — switch modes to see the other set of figures."
+                : "Each month has its own tiny switch. Click the ⇄ in the header to flip that month."}
+            </span>
           </div>
 
+          {/* Entry grid — no fixed height, no horizontal scroll, all months visible */}
           <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-            <div style={{ maxHeight: "58vh", overflow: "auto" }}>
-              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "max-content",
-                minWidth: "100%", tableLayout: "auto" }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3,
-                      background: T.header, minWidth: "200px", maxWidth: "240px",
-                      borderRight: `2px solid ${T.lineStrong}` }}>
-                      KPI
-                    </th>
-                    {months.map((m) => (
-                      <th key={m.key} style={{ ...th, textAlign: "center", minWidth: "110px" }}>
-                        <div style={{ fontSize: "11px", fontWeight: 600, color: "#fff" }}>{m.label}</div>
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    <th style={{ ...th, textAlign: "left", position: "sticky", left: 0, zIndex: 3,
-                      background: T.header, minWidth: "200px", maxWidth: "240px",
-                      borderRight: `2px solid ${T.lineStrong}`, padding: "4px 10px", fontSize: "10px" }}>
-                      &nbsp;
-                    </th>
-                    {months.map((m) => (
-                      <th key={m.key} style={{ ...th, padding: "3px 0", background: "#4a352f" }}>
-                        <div style={{ display: "flex" }}>
-                          <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.85)",
-                            borderRight: "1px solid rgba(255,255,255,0.15)", padding: "2px" }}>Actual</span>
-                          <span style={{ flex: 1, fontSize: "9px", color: "rgba(255,255,255,0.85)", padding: "2px" }}>Target</span>
+            <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%",
+              tableLayout: "fixed" }}>
+              <thead>
+                <tr>
+                  <th style={{
+                    ...th, textAlign: "left", width: "200px",
+                    borderRight: `2px solid ${T.lineStrong}`,
+                  }}>
+                    KPI
+                  </th>
+                  {months.map((m) => {
+                    const mk = effectiveModeForMonth(m);
+                    return (
+                      <th key={m.key} style={{
+                        ...th, textAlign: "center",
+                        borderRight: "1px solid rgba(255,255,255,0.18)",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                          <span>{m.label}</span>
+                          {!globalMode && (
+                            <button
+                              onClick={() => toggleModeForMonth(m)}
+                              title={`Switch to ${mk === "budget" ? "Actual" : "Target"}`}
+                              style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                width: 18, height: 18, borderRadius: "50%",
+                                border: "1px solid rgba(255,255,255,0.4)",
+                                background: "rgba(255,255,255,0.12)",
+                                color: "#fff", cursor: "pointer", padding: 0,
+                                fontSize: "9px", fontWeight: 700,
+                              }}>
+                              ⇄
+                            </button>
+                          )}
                         </div>
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {kpiRows.map(({ kpi, category }, i) => {
-                    const isScalar = !!kpi.field?.scalar;
-                    const hasTarget = !!kpi.field?.b;
-                    return (
-                      <tr key={kpi.id} style={{ background: i % 2 ? T.panel : T.bg }}>
-                        <td style={{ padding: "6px 10px", fontSize: "12.5px", color: T.ink,
-                          borderBottom: `1px solid ${T.lineSoft}`, borderRight: `2px solid ${T.lineStrong}`,
-                          position: "sticky", left: 0, zIndex: 1, background: i % 2 ? T.panel : T.bg,
-                          minWidth: "200px", maxWidth: "240px" }}>
-                          <div style={{ fontWeight: 600, fontSize: "12.5px" }}>{kpi.name}</div>
-                          <div style={{ fontSize: "10.5px", color: T.muted }}>
-                            {category} · {kpi.units}
-                            {isScalar ? " · applies to every month" : ""}
-                          </div>
-                        </td>
-                        {months.map((m) => (
-                          <td key={m.key} style={{ padding: 0, borderBottom: `1px solid ${T.lineSoft}` }}>
-                            <div style={{ display: "flex" }}>
-                              <div style={{ flex: 1, borderRight: `1px solid ${T.lineSoft}` }}>
-                                {kpi.options ? (
-                                  <select
-                                    value={value(kpi, m.month, "actual")}
-                                    onChange={(e) => setValue(kpi, m.month, "actual", e.target.value)}
-                                    style={{ ...cell, textAlign: "left" }}>
-                                    <option value="">—</option>
-                                    {kpi.options.map((o) => (
-                                      <option key={o.value} value={o.value}>{o.label}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type="number" step="any"
-                                    value={isScalar ? value(kpi, 0, "actual") : value(kpi, m.month, "actual")}
-                                    placeholder="—"
-                                    disabled={isScalar && m.month !== 0}
-                                    onChange={(e) => setValue(kpi, isScalar ? 0 : m.month, "actual", e.target.value)}
-                                    style={{ ...cell, opacity: isScalar && m.month !== 0 ? 0.4 : 1 }} />
-                                )}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                {!hasTarget ? (
-                                  <div style={{ textAlign: "center", fontSize: "11px",
-                                    color: T.faint, padding: "8px 4px" }}>
-                                    {kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)}` : "—"}
-                                  </div>
-                                ) : kpi.options ? (
-                                  <select
-                                    value={value(kpi, m.month, "budget")}
-                                    onChange={(e) => setValue(kpi, m.month, "budget", e.target.value)}
-                                    style={{ ...cell, textAlign: "left" }}>
-                                    <option value="">—</option>
-                                    {kpi.options.map((o) => (
-                                      <option key={o.value} value={o.value}>{o.label}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type="number" step="any"
-                                    value={isScalar ? value(kpi, 0, "budget") : value(kpi, m.month, "budget")}
-                                    placeholder="—"
-                                    disabled={isScalar && m.month !== 0}
-                                    onChange={(e) => setValue(kpi, isScalar ? 0 : m.month, "budget", e.target.value)}
-                                    style={{ ...cell, opacity: isScalar && m.month !== 0 ? 0.4 : 1 }} />
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        ))}
-                      </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+                </tr>
+                <tr>
+                  <th style={{
+                    ...th, textAlign: "left", width: "200px",
+                    borderRight: `2px solid ${T.lineStrong}`, padding: "6px 12px",
+                  }}>
+                    &nbsp;
+                  </th>
+                  {months.map((m) => {
+                    const mk = effectiveModeForMonth(m);
+                    const tok = MODE_TOKENS[mk];
+                    return (
+                      <th key={m.key} style={{
+                        ...th, padding: "5px 4px", fontSize: "10px",
+                        textTransform: "uppercase", letterSpacing: "0.4px",
+                        color: tok.headerColor, background: tok.headerBg,
+                        textAlign: "center",
+                        borderRight: "1px solid rgba(255,255,255,0.15)",
+                      }}>
+                        {tok.label}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {kpiRows.map(({ kpi, category }, i) => {
+                  const isScalar = !!kpi.field?.scalar;
+                  const hasTarget = !!kpi.field?.b;
+                  const bg = i % 2 ? T.panel : T.bg;
+                  return (
+                    <tr key={kpi.id} style={{ background: bg }}>
+                      <td style={{
+                        padding: "8px 12px", fontSize: "12.5px", color: T.ink,
+                        borderBottom: `1px solid ${T.lineSoft}`,
+                        borderRight: `2px solid ${T.lineStrong}`,
+                        background: bg,
+                      }}>
+                        <div style={{ fontWeight: 600, fontSize: "12.5px", lineHeight: 1.3 }}>{kpi.name}</div>
+                        <div style={{ fontSize: "10.5px", color: T.muted, marginTop: "2px", display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                          <span>{category}</span>
+                          <span style={{
+                            padding: "1px 6px", borderRadius: "999px",
+                            background: T.raised, color: T.accentSoft, fontWeight: 600,
+                            fontSize: "9.5px",
+                          }}>{kpi.units}</span>
+                          {isScalar && (
+                            <span style={{ fontSize: "9.5px", color: T.faint, fontStyle: "italic" }}>· applies to every month</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {months.map((m) => {
+                        const mk = effectiveModeForMonth(m);
+                        const tok = MODE_TOKENS[mk];
+                        const disabled = mk === "budget" && !hasTarget;
+                        const monthIdx = isScalar ? 0 : m.month;
+                        const val = value(kpi, monthIdx, mk);
+
+                        return (
+                          <td key={m.key} style={{
+                            padding: "3px 4px", borderBottom: `1px solid ${T.lineSoft}`,
+                            borderRight: `1px solid ${tok.cellBorder}`,
+                            background: val !== "" ? tok.cellBg : bg,
+                          }}>
+                            {disabled ? (
+                              <div style={{
+                                textAlign: "center", fontSize: "11px",
+                                color: T.faint, padding: "7px 2px",
+                              }}>
+                                {kpi.benchmark !== null ? `${fmtValue(kpi.benchmark, kpi)}` : "—"}
+                              </div>
+                            ) : kpi.options ? (
+                              <select
+                                value={val}
+                                disabled={isScalar && m.month !== 0}
+                                onChange={(e) => setValue(kpi, monthIdx, mk, e.target.value)}
+                                style={{
+                                  width: "100%", padding: "6px 4px",
+                                  border: `1.5px solid ${tok.inputBorder}`,
+                                  borderRadius: "5px",
+                                  fontSize: "11.5px",
+                                  fontFamily: "inherit",
+                                  background: "#ffffff",
+                                  color: tok.inputColor,
+                                  fontWeight: 600,
+                                  outline: "none",
+                                  boxSizing: "border-box",
+                                  opacity: isScalar && m.month !== 0 ? 0.4 : 1,
+                                }}>
+                                <option value="">—</option>
+                                {kpi.options.map((o) => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="number"
+                                step="any"
+                                value={val}
+                                placeholder="—"
+                                disabled={isScalar && m.month !== 0}
+                                onChange={(e) => setValue(kpi, monthIdx, mk, e.target.value)}
+                                style={{
+                                  width: "100%", padding: "6px 4px",
+                                  border: `1.5px solid ${tok.inputBorder}`,
+                                  borderRadius: "5px",
+                                  fontSize: "12px",
+                                  fontFamily: "inherit",
+                                  fontVariantNumeric: "tabular-nums",
+                                  textAlign: "right",
+                                  background: "#ffffff",
+                                  color: tok.inputColor,
+                                  fontWeight: 600,
+                                  outline: "none",
+                                  boxSizing: "border-box",
+                                  opacity: isScalar && m.month !== 0 ? 0.4 : 1,
+                                }}
+                                onFocus={(e) => {
+                                  e.target.style.borderColor = tok.inputFocus;
+                                  e.target.style.boxShadow = `0 0 0 3px ${tok.inputFocusRing}`;
+                                }}
+                                onBlur={(e) => {
+                                  e.target.style.borderColor = tok.inputBorder;
+                                  e.target.style.boxShadow = "none";
+                                }}
+                              />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "8px",
+          <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "10px",
             display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <Info size={12} />
-            Each month has two columns: <strong>Actual</strong> and <strong>Target</strong>. Values save automatically as you type.
+            {globalMode
+              ? "Toggle Target / Actual above to switch every month. Filled cells are tinted."
+              : "Click the ⇄ next to any month name to flip just that month."}
             {kpiRows.some(({ kpi }) => kpi.field?.scalar) && (
               <> Scalar KPIs (like Head Count) write once and stand for every month.</>
             )}
