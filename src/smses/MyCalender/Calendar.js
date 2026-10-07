@@ -28,8 +28,11 @@ const Calendar = ({ role = "sme" }) => {
 
   useEffect(() => {
     const auth = getAuth();
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId");
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (rawUser) => {
+      const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser;
       if (!user) {
         setMatchesList([]);
         setLoadingRecipients(false);

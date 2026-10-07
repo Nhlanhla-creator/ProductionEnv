@@ -1232,9 +1232,16 @@ const [userRole, setUserRole] = useState(null);
   }
 
   // Whichever user's data should actually be displayed: the SME being
-  // viewed (catalyst mode) takes priority over the logged-in user's own
+  // viewed (facilitator / catalyst / investor mode) takes priority over the logged-in user's own
   // effectiveUserId (company-membership resolution below).
-  const targetUserId = isBigScoreOnlyView ? viewingSMEId : effectiveUserId
+  const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+  const storedSMEId = sessionStorage.getItem("viewingSMEId");
+  const storedSMEName = sessionStorage.getItem("viewingSMEName");
+  const targetUserId = (isInvestorView && storedSMEId)
+    ? storedSMEId
+    : isBigScoreOnlyView
+    ? viewingSMEId
+    : effectiveUserId;
 
   const apiKey = API_KEYS.OPENAI;
   const user = auth.currentUser;
@@ -1454,7 +1461,7 @@ useEffect(() => {
 
       <div className="content">
         <main className="dashboard-main">
-          <DashboardHeader userName={isBigScoreOnlyView ? viewingSMEName : userName} />
+          <DashboardHeader userName={(isInvestorView && storedSMEName) ? storedSMEName : (isBigScoreOnlyView ? viewingSMEName : userName)} />
 
           {/* ─── Catalyst "viewing this SME's BIG Score" banner ────────────
               Only rendered in restricted view mode; this is the "back"

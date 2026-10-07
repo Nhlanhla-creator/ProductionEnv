@@ -559,11 +559,83 @@ function App() {
       obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
       return () => obs.disconnect()
     }, [])
+
+    const isViewerMode =
+      sessionStorage.getItem("investorViewMode") === "true" &&
+      sessionStorage.getItem("viewingSMEId")
+    const viewOrigin = sessionStorage.getItem("viewOrigin")
+    const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
+
+    const renderViewerBanner = () => {
+      if (!isViewerMode) return null
+
+      const isCmf = viewOrigin === "cmf"
+      const isCatalyst = viewOrigin === "catalyst"
+      const label = isCmf ? "Facilitator View" : isCatalyst ? "Catalyst View" : "Investor View"
+      const backUrl = isCmf ? "/cmf-cohorts" : isCatalyst ? "/catalyst/cohorts" : "/my-cohorts"
+
+      return (
+        <div
+          style={{
+            backgroundColor: "#e8f5e9",
+            padding: "14px 24px",
+            borderRadius: "10px",
+            border: "1.5px solid #4caf50",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            margin: "16px 24px 12px 24px",
+            boxShadow: "0 2px 8px rgba(46, 125, 50, 0.12)",
+            position: "sticky",
+            top: "85px",
+            zIndex: 90,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "20px" }}>👁️</span>
+            <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+              {label}: Managing {viewingSMEName}'s Dashboard
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              sessionStorage.removeItem("viewingSMEId")
+              sessionStorage.removeItem("viewingSMEName")
+              sessionStorage.removeItem("investorViewMode")
+              sessionStorage.removeItem("viewOrigin")
+              sessionStorage.removeItem("viewOnlyBigScore")
+              window.location.href = backUrl
+            }}
+            style={{
+              padding: "8px 18px",
+              backgroundColor: "#2e7d32",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+              transition: "background-color 0.2s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1b5e20")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2e7d32")}
+          >
+            ← Back to My Cohorts
+          </button>
+        </div>
+      )
+    }
+
     return (
       <div className="app-layout">
         <SMESidebar companyName={companyName} />
         <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
+          {renderViewerBanner()}
           <div>{children}</div>
         </div>
         <RegistrationSummary data={formData} open={showSummary} onClose={() => setShowSummary(false)} />
@@ -1018,6 +1090,7 @@ function App() {
         <Route path="/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderSMERoute)} />
         <Route path="/billing/info" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
         <Route path="/billing/growth-tools-orders" element={withProtection(BillingHistorySMSE, {}, renderSMERoute)} />
+        <Route path="/billing" element={<Navigate to="/billing/subscriptions" replace />} />
 
         {/* Growth Tools Sub-Routes */}
         <Route path="/growth/my-tools" element={withProtection(MyToolsPage, {}, renderSMERoute)} />
@@ -1159,6 +1232,7 @@ function App() {
         <Route path="/program-sponsor-profile/declaration-consent" element={renderProgramSponsorProfileSection(ProgramSponsorDeclarationConsent, "declarationConsent")} />
 
         {/* Application Routes */}
+        <Route path="/applications" element={<Navigate to="/applications/products-services" replace />} />
         <Route path="/applications/funding" element={withProtection(FundingApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/funding/:section" element={withProtection(FundingApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/product" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
@@ -1210,6 +1284,7 @@ function App() {
         <Route path="accept-invitation" element={<AcceptInvitation />} />
 
         {/* Matches Routes */}
+        <Route path="/matches" element={<Navigate to="/customer-matches" replace />} />
         <Route path="/opportunity-matches" element={withProtection(OpportunityMatchesPage, {}, renderSMERoute)} />
         <Route path="/customer-matches" element={withProtection(CustomerMatchesPage, {}, renderSMERoute)} />
         <Route path="/funding-matches" element={withProtection(FundingMatchesPage, {}, renderSMERoute)} />

@@ -23,9 +23,20 @@ import { smeMenuItems } from "../../config/menuConfig"
 // under a sidebar that can't represent it.
 const VIEWER_MENU_IDS = ["dashboard", "growth-tools", "documents"]
 
-// A facilitator additionally reviews the business's own profile, so they get
-// one extra entry on top of the shared set.
-const CMF_EXTRA_MENU_IDS = ["profile"]
+// While a CMF (Capital & Market Facilitator) is managing an SME's account,
+// they get access to the full dashboard suite up to Billing & Payments.
+const CMF_VIEWER_MENU_IDS = [
+  "profile",
+  "dashboard",
+  "applications",
+  "matches",
+  "growth-tools",
+  "insights",
+  "documents",
+  "messages",
+  "calendar",
+  "billing",
+]
 
 function SMESidebar() {
   const [isInvestorView, setIsInvestorView] = useState(false)
@@ -51,7 +62,7 @@ function SMESidebar() {
       setViewingSMEName(smeName || "SME")
 
       const allowedIds = new Set(
-        viewOrigin === "cmf" ? [...VIEWER_MENU_IDS, ...CMF_EXTRA_MENU_IDS] : VIEWER_MENU_IDS
+        viewOrigin === "cmf" ? CMF_VIEWER_MENU_IDS : VIEWER_MENU_IDS
       )
 
       // filter() preserves smeMenuItems' own order, so the viewer sees the

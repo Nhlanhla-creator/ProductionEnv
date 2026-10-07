@@ -20,7 +20,10 @@ const Messages = () => {
   useEffect(() => {
     const fetchAllRecipients = async () => {
       const auth = getAuth();
-      const user = auth.currentUser;
+      const rawUser = auth.currentUser;
+      const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+      const viewingSMEId = sessionStorage.getItem("viewingSMEId");
+      const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser;
       if (!user) {
         setLoading(false);
         return;

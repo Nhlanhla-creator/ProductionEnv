@@ -687,40 +687,8 @@ if (operationalSections.includes(section)) {
   const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
   const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
 
-  const renderCmfBanner = () => {
-    if (!isCmfView) return null;
-    return (
-      <div style={{
-        backgroundColor: "#e8f5e9", padding: "16px 20px",
-        borderRadius: "8px", border: "2px solid #4caf50",
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "20px"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "20px" }}>👁️</span>
-          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-            Facilitator View: Managing {viewingSMEName}'s Profile
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            sessionStorage.removeItem("viewingSMEId");
-            sessionStorage.removeItem("viewingSMEName");
-            sessionStorage.removeItem("investorViewMode");
-            sessionStorage.removeItem("viewOrigin");
-            window.location.href = "/cmf-cohorts";
-          }}
-          style={{
-            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
-            border: "none", borderRadius: "6px", cursor: "pointer",
-            fontWeight: "600", fontSize: "14px",
-          }}
-        >
-          ← Back to My Cohorts
-        </button>
-      </div>
-    );
-  };
+  // Universal facilitator / viewer banner is now rendered universally by SMELayout at the top of every page
+  const renderCmfBanner = () => null;
 
   if (showSummary && !isEditing) {
     return (

@@ -56,8 +56,14 @@ export default function CustomerMatchesPage() {
   const [successfulDeals, setSuccessfulDeals] = useState([])
 
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser)
+      if (firebaseUser && isInvestorView && viewingSMEId) {
+        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true })
+      } else {
+        setUser(firebaseUser)
+      }
       setAuthChecked(true)
     })
     return () => unsubscribe()

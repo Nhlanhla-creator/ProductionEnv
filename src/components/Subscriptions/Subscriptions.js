@@ -136,7 +136,10 @@ const ReusableSubscription = ({
 }) => {
   const auth = getAuth()
   const db = getFirestore()
-  const user = auth.currentUser
+  const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+  const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+  const rawUser = auth.currentUser
+  const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser
   const navigate = useNavigate()
 
   const {

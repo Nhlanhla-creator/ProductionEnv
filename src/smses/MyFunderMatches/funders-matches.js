@@ -62,8 +62,14 @@ export default function FundingMatchesPage() {
 
 
   useEffect(() => {
+    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser)
+      if (firebaseUser && isInvestorView && viewingSMEId) {
+        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true })
+      } else {
+        setUser(firebaseUser)
+      }
       setAuthChecked(true)
     })
     return () => unsubscribe()
@@ -166,8 +172,9 @@ export default function FundingMatchesPage() {
     )
   }
 
-  // Show Upsell for Basic and Standard plan users
-  if (currentPlan === "basic" || currentPlan === "standard") {
+  const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+  // Show Upsell for Basic and Standard plan users (bypassed in viewer mode)
+  if (!isInvestorView && (currentPlan === "basic" || currentPlan === "standard")) {
     return (
       <Upsell
         userType={"sme"}
