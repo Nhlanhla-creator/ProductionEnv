@@ -51,12 +51,43 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly"];
 const CAPTURE_FREQUENCIES = ["Daily", "Weekly", "Monthly"];
 
+/* ─── Expanded period set (mirrors Financial Performance) ───────────────── */
 const PERIODS = [
-  { key: "week", label: "This week" }, { key: "month", label: "This month" },
-  { key: "quarter", label: "This quarter" }, { key: "year", label: "This year" },
+  { key: "last_week",    label: "Last week" },
+  { key: "this_week",    label: "This week" },
+  { key: "last_month",   label: "Last month" },
+  { key: "this_month",   label: "This month" },
+  { key: "last_quarter", label: "Last quarter" },
+  { key: "this_quarter", label: "This quarter" },
+  { key: "last_year",    label: "Last year" },
+  { key: "this_year",    label: "This year" },
 ];
-const PERIOD_LABEL = { week: "This week", month: "This month", quarter: "This quarter", year: "This year" };
-const PERIOD_PREFIX = { week: "Weekly", month: "Monthly", quarter: "Quarterly", year: "Annual" };
+const PERIOD_LABEL = Object.fromEntries(PERIODS.map((p) => [p.key, p.label]));
+const PERIOD_PREFIX = {
+  last_week: "Last week", this_week: "This week",
+  last_month: "Last month", this_month: "This month",
+  last_quarter: "Last quarter", this_quarter: "This quarter",
+  last_year: "Last year", this_year: "This year",
+};
+
+/* ─── Date helpers ──────────────────────────────────────────────────────── */
+const startOfWeek = (d) => {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = x.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  x.setDate(x.getDate() + diff);
+  return x;
+};
+const weekKeyOf = (d) => {
+  const s = startOfWeek(d);
+  return `W:${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,"0")}-${String(s.getDate()).padStart(2,"0")}`;
+};
+const dayKeyOf = (d) => `D:${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const monthStart = (y, m) => new Date(y, m, 1);
+const monthEnd = (y, m) => new Date(y, m + 1, 0, 23, 59, 59, 999);
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; };
 
 /* ─── Financial year, from Entity Overview's financialYearEnd ────────────── */
 const fyStartMonthFromEnd = (end) => {
@@ -152,11 +183,11 @@ const rollUp = (values, mode) => {
 const mean = (arr) => { const n = arr.filter((v) => Number.isFinite(v)); return n.length ? n.reduce((a,b)=>a+b,0) / n.length : null; };
 
 /* ─── KPI model ─────────────────────────────────────────────────────────── */
-const CHART_VERSION = 2;
+const CHART_VERSION = 3;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
-  actualType: "bar", budgetType: "scatter", varianceType: "scatter",
-  actualColor: "#1e40af", budgetColor: "#4a352f", axisMode: "x",
+  actualType: "bar", budgetType: "line", varianceType: "bar",
+  actualColor: "#1e40af", budgetColor: "#4a352f", axisMode: "both",
 };
 
 const mkKpi = (o) => ({
@@ -292,32 +323,98 @@ const resolveMonth = (kpi, year, month) => {
            budget: rollUp(rows.map((r) => Number(r.budget)), kpi.aggregate) };
 };
 
+/* Range-based rollup — mirrors Financial Performance */
+const rollupRange = (kpi, from, to) => {
+  const freq = kpi.frequency || "Monthly";
+  if (freq === "Quarterly" || freq === "Monthly") {
+    const vals = [];
+    const cur = new Date(from.getFullYear(), from.getMonth(), 1);
+    const end = new Date(to.getFullYear(), to.getMonth(), 1);
+    while (cur <= end) {
+      vals.push(resolveMonth(kpi, cur.getFullYear(), cur.getMonth()));
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return {
+      actual: rollUp(vals.map((r) => Number(r.actual)), kpi.aggregate),
+      budget: rollUp(vals.map((r) => Number(r.budget)), kpi.aggregate),
+    };
+  }
+  const prefix = freq === "Daily" ? "D:" : "W:";
+  const lo = startOfDay(from).getTime();
+  const hi = startOfDay(to).getTime();
+  const vals = Object.entries(kpi.entries || {})
+    .filter(([k]) => k.startsWith(prefix))
+    .filter(([k]) => {
+      const d = startOfDay(new Date(k.slice(2))).getTime();
+      return d >= lo && d <= hi;
+    })
+    .map(([, v]) => v);
+  return {
+    actual: rollUp(vals.map((r) => Number(r.actual)), kpi.aggregate),
+    budget: rollUp(vals.map((r) => Number(r.budget)), kpi.aggregate),
+  };
+};
+
+/* Period → [from, to] window */
+const periodWindow = (period, fy) => {
+  const now = new Date();
+  const today = startOfDay(now);
+
+  switch (period) {
+    case "this_week": {
+      const s = startOfWeek(now);
+      return [s, addDays(s, 6)];
+    }
+    case "last_week": {
+      const s = addDays(startOfWeek(now), -7);
+      return [s, addDays(s, 6)];
+    }
+    case "this_month":
+      return [monthStart(now.getFullYear(), now.getMonth()), monthEnd(now.getFullYear(), now.getMonth())];
+    case "last_month": {
+      const d = addMonths(now, -1);
+      return [monthStart(d.getFullYear(), d.getMonth()), monthEnd(d.getFullYear(), d.getMonth())];
+    }
+    case "this_quarter": {
+      const q = Math.floor(now.getMonth() / 3);
+      const s = new Date(now.getFullYear(), q * 3, 1);
+      const e = monthEnd(now.getFullYear(), q * 3 + 2);
+      return [s, e];
+    }
+    case "last_quarter": {
+      const q = Math.floor(now.getMonth() / 3) - 1;
+      const y = q < 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const qq = ((q % 4) + 4) % 4;
+      const s = new Date(y, qq * 3, 1);
+      const e = monthEnd(y, qq * 3 + 2);
+      return [s, e];
+    }
+    case "this_year": {
+      const sy = fy.startYear;
+      const sm = fy.startMonth;
+      const s = new Date(sy, sm, 1);
+      const e = monthEnd(sy + 1, sm === 0 ? 11 : sm - 1);
+      return [s, e];
+    }
+    case "last_year": {
+      const sy = fy.startYear - 1;
+      const sm = fy.startMonth;
+      const s = new Date(sy, sm, 1);
+      const e = monthEnd(sy + 1, sm === 0 ? 11 : sm - 1);
+      return [s, e];
+    }
+    default:
+      return [monthStart(today.getFullYear(), today.getMonth()), monthEnd(today.getFullYear(), today.getMonth())];
+  }
+};
+
 const periodValues = (kpi, period, fy) => {
-  const { startYear, startMonth } = fy, now = new Date();
-  if (period === "week") {
-    const e = kpi.entries?.[currentWeekKey()];
-    if (e) return { actual: parseNum(e.actual), budget: parseNum(e.budget) };
-    const ws = new Date(currentWeekKey().slice(2));
-    const we = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 7);
-    const rows = Object.entries(kpi.entries || {}).filter(([k]) => k.startsWith("D:"))
-      .filter(([k]) => { const d = new Date(k.slice(2)); return d >= ws && d < we; }).map(([, v]) => v);
-    if (!rows.length) return { actual: null, budget: null };
-    return { actual: rollUp(rows.map((r) => Number(r.actual)), kpi.aggregate),
-             budget: rollUp(rows.map((r) => Number(r.budget)), kpi.aggregate) };
+  const [from, to] = periodWindow(period, fy);
+  // Single calendar month shortcut
+  if (from.getDate() === 1 && from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear() && to.getDate() >= 28) {
+    return resolveMonth(kpi, from.getFullYear(), from.getMonth());
   }
-  if (period === "month") return resolveMonth(kpi, now.getFullYear(), now.getMonth());
-  const months = fyMonths(startYear, startMonth);
-  const elapsed = (l) => l.filter((m) => new Date(m.year, m.month, 1) <= new Date(now.getFullYear(), now.getMonth(), 1));
-  if (period === "quarter") {
-    const qs = fyQuarters(startYear, startMonth);
-    const q = qs.find((qq) => qq.months.some((m) => m.year === now.getFullYear() && m.month === now.getMonth())) || qs[0];
-    const rows = elapsed(q.months).map((m) => resolveMonth(kpi, m.year, m.month));
-    return { actual: rollUp(rows.map((r) => Number(r.actual)), kpi.aggregate),
-             budget: rollUp(rows.map((r) => Number(r.budget)), kpi.aggregate) };
-  }
-  const rows = elapsed(months).map((m) => resolveMonth(kpi, m.year, m.month));
-  return { actual: rollUp(rows.map((r) => Number(r.actual)), kpi.aggregate),
-           budget: rollUp(rows.map((r) => Number(r.budget)), kpi.aggregate) };
+  return rollupRange(kpi, from, to);
 };
 
 /* ─── Status ────────────────────────────────────────────────────────────── */
@@ -444,8 +541,56 @@ const DIRECTIONS = [
 ];
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Report Generator
+   Report Generator — with native split tables
    ════════════════════════════════════════════════════════════════════════ */
+
+/* Build split rows for a KPI at its native frequency */
+const buildSplitRows = (kpi, fy) => {
+  const freq = kpi.frequency || "Monthly";
+
+  if (freq === "Daily") {
+    const keys = Object.keys(kpi.entries || {}).filter((k) => k.startsWith("D:")).sort();
+    if (!keys.length) return { title: "Daily split (no entries captured)", rows: [] };
+    return {
+      title: "Daily split",
+      rows: keys.map((k) => {
+        const d = new Date(k.slice(2));
+        return {
+          label: `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+          budget: kpi.entries[k]?.budget ?? null,
+          actual: kpi.entries[k]?.actual ?? null,
+        };
+      }),
+    };
+  }
+
+  if (freq === "Weekly") {
+    const keys = Object.keys(kpi.entries || {}).filter((k) => k.startsWith("W:")).sort();
+    if (!keys.length) return { title: "Weekly split (no entries captured)", rows: [] };
+    return {
+      title: "Weekly split",
+      rows: keys.map((k) => {
+        const s = new Date(k.slice(2));
+        const e = addDays(s, 6);
+        return {
+          label: `${String(s.getDate()).padStart(2, "0")} ${MONTHS[s.getMonth()]} – ${String(e.getDate()).padStart(2, "0")} ${MONTHS[e.getMonth()]}`,
+          budget: kpi.entries[k]?.budget ?? null,
+          actual: kpi.entries[k]?.actual ?? null,
+        };
+      }),
+    };
+  }
+
+  // Monthly / Quarterly → use resolveMonth so rolled-up data flows through
+  const months = fyMonths(fy.startYear, fy.startMonth);
+  return {
+    title: "Monthly split",
+    rows: months.map((m) => {
+      const r = resolveMonth(kpi, m.year, m.month);
+      return { label: m.long, budget: r.budget ?? null, actual: r.actual ?? null };
+    }),
+  };
+};
 
 const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, userName }) => {
   const [selectedCategories, setSelectedCategories] = useState(() => 
@@ -496,6 +641,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       categories: [],
       summary: null,
       actions: [],
+      includeBreakdown,
     };
 
     const selectedCatList = structure.filter(c => selectedCategories[c.id] && !c.hidden);
@@ -539,39 +685,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
           const v = periodValues(k, periodForReport, fy);
           const status = getStatus(k, periodForReport, fy);
           const variance = getVariance(k, periodForReport, fy);
-          
-          const breakdown = [];
-          if (k.entries) {
-            let periodKeys = [];
-            if (k.frequency === "Daily") {
-              const now = new Date();
-              const days = daysInMonth(now.getFullYear(), now.getMonth());
-              periodKeys = days.map(d => d.key);
-            } else if (k.frequency === "Weekly") {
-              const weeks = fyWeeks(fy.startYear, fy.startMonth);
-              periodKeys = weeks.map(w => w.key);
-            } else {
-              const months = fyMonths(fy.startYear, fy.startMonth);
-              periodKeys = months.map(m => m.key);
-            }
-            
-            periodKeys.forEach(pk => {
-              const entry = k.entries[pk];
-              if (entry) {
-                const entryActual = parseNum(entry.actual);
-                const entryBudget = parseNum(entry.budget);
-                const entryVariance = Number.isFinite(entryActual) && Number.isFinite(entryBudget) 
-                  ? entryActual - entryBudget : null;
-                breakdown.push({
-                  key: pk,
-                  label: pk.replace(/^[A-Z]:/, ""),
-                  actual: entryActual,
-                  budget: entryBudget,
-                  variance: entryVariance,
-                });
-              }
-            });
-          }
+          const split = buildSplitRows(k, fy);
 
           subData.kpis.push({
             id: k.id,
@@ -587,8 +701,8 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
             status: status.label,
             statusKey: status.key,
             notes: k.notes || "",
-            breakdown: breakdown,
-            kpiRef: k,
+            splitTitle: split.title,
+            splitRows: split.rows,
           });
         });
 
@@ -704,30 +818,47 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
       return html;
     };
 
+    /* Split table — native-frequency with running totals */
+    const splitTable = (kpi) => {
+      if (!kpi.splitRows || !kpi.splitRows.length) return "";
+      let html = `<h4 style="color:#4a352f; font-size:10pt; margin:10px 0 4px;">${kpi.name} — ${kpi.splitTitle}</h4>`;
+      html += `<table style="width:100%; border-collapse:collapse; font-size:9pt; margin:4px 0 10px;">
+        <thead><tr style="background:#e9e3df; color:#2d201c;">
+          <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Period</th>
+          <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Budget</th>
+          <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Actual</th>
+          <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Variance</th>
+        </tr></thead><tbody>`;
+
+      let totalBudget = 0, totalActual = 0, hasBudget = false, hasActual = false;
+      kpi.splitRows.forEach((r) => {
+        const b = Number(r.budget), a = Number(r.actual);
+        const variance = Number.isFinite(a) && Number.isFinite(b) ? a - b : null;
+        if (Number.isFinite(b)) { totalBudget += b; hasBudget = true; }
+        if (Number.isFinite(a)) { totalActual += a; hasActual = true; }
+        const vColor = variance !== null && varianceFavourable({ direction: kpi.direction }, variance) ? '#166534' : '#991b1b';
+        html += `<tr>
+          <td style="padding:4px 8px; border:1px solid #ddd;">${r.label}</td>
+          <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(r.budget, kpi.units)}</td>
+          <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(r.actual, kpi.units)}</td>
+          <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${vColor};">${variance !== null ? fmtVal(variance, kpi.units) : "—"}</td>
+        </tr>`;
+      });
+      const totalVar = hasBudget && hasActual ? totalActual - totalBudget : null;
+      const totalVarColor = totalVar !== null && varianceFavourable({ direction: kpi.direction }, totalVar) ? '#166534' : '#991b1b';
+      html += `<tr style="background:#f4efec; font-weight:700;">
+        <td style="padding:4px 8px; border:1px solid #ddd;">Total</td>
+        <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${hasBudget ? fmtVal(totalBudget, kpi.units) : "—"}</td>
+        <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${hasActual ? fmtVal(totalActual, kpi.units) : "—"}</td>
+        <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${totalVarColor};">${totalVar !== null ? fmtVal(totalVar, kpi.units) : "—"}</td>
+      </tr>`;
+      return html + `</tbody></table>`;
+    };
+
     const breakdownRows = (kpis) => {
       if (!kpis.length) return "";
       let html = "";
-      kpis.forEach(k => {
-        if (!k.breakdown || !k.breakdown.length) return;
-        html += `<h4 style="color:#4a352f; font-size:10pt; margin:10px 0 4px;">${k.name} — period breakdown</h4>`;
-        html += `<table style="width:100%; border-collapse:collapse; font-size:9pt; margin:4px 0 10px;">
-          <thead><tr style="background:#f2eeec; color:#4a352f;">
-            <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Period</th>
-            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Budget</th>
-            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Actual</th>
-            <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Variance</th>
-          </tr></thead><tbody>`;
-        k.breakdown.forEach((row, ri) => {
-          const bg = ri % 2 === 0 ? "#ffffff" : "#faf8f7";
-          html += `<tr style="background:${bg};">
-            <td style="padding:4px 8px; border:1px solid #ddd;">${row.label}</td>
-            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${fmtVal(row.budget, k.units)}</td>
-            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; font-weight:600;">${fmtVal(row.actual, k.units)}</td>
-            <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${row.variance !== null && row.variance >= 0 ? '#166534' : '#991b1b'};">${row.variance !== null ? fmtVal(row.variance, k.units) : "—"}</td>
-          </tr>`;
-        });
-        html += `</tbody></table>`;
-      });
+      kpis.forEach(k => { html += splitTable(k); });
       return html;
     };
 
@@ -925,7 +1056,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
             <input type="checkbox" checked={includeBreakdown} onChange={() => setIncludeBreakdown(!includeBreakdown)} />
-            Period-by-period breakdown
+            <strong>Split tables (daily / weekly / monthly)</strong>
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
             <input type="checkbox" checked={includeAnalysis} onChange={() => setIncludeAnalysis(!includeAnalysis)} />
@@ -940,8 +1071,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
 
       <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
         <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
-        The report will be generated as a Word document (.doc) that can be opened in Microsoft Word, Google Docs, or LibreOffice.
-        {includeBreakdown && " Period-by-period breakdown shows the detailed split (daily/weekly/monthly) for each KPI."}
+        The report includes a native-frequency split table under each KPI: daily KPIs show every day captured, weekly show every week, monthly show all 12 months with running totals.
       </div>
     </Modal>
   );
@@ -1032,12 +1162,20 @@ const summaryAnalysis = (kpi, fy) => {
   const withData = rows.filter((r) => r.status.key !== "none");
   const reds = withData.filter((r) => r.status.key === "red");
   const greens = withData.filter((r) => r.status.key === "green");
+  const mth = rows.find((r) => r.key === "this_month"), yr = rows.find((r) => r.key === "this_year");
 
   return {
     observations: [
       ...rows.map((r) => `${r.label}: ${fmtValue(r.v.actual, kpi)}${r.v.budget === null ? " (no budget)" : ` against ${fmtValue(r.v.budget, kpi)} — ${r.status.label.toLowerCase()}`}.`),
       `${withData.length} of ${rows.length} timeframes have both an actual and a budget.`,
     ],
+    trends: withData.length < 2 ? ["Not enough timeframes with a budget to compare the short term against the long."]
+      : [ mth?.status.key !== "none" && yr?.status.key !== "none" && mth.status.key !== yr.status.key
+            ? `The month and the year disagree — ${mth.status.label.toLowerCase()} this month against ${yr.status.label.toLowerCase()} for the year, so treat one as the outlier.`
+            : "Short and long timeframes tell the same story, which makes the signal more trustworthy.",
+          greens.length === withData.length ? "Every timeframe is inside tolerance."
+            : reds.length === withData.length ? "Every timeframe is critical — this is structural, not a bad period."
+            : "The picture is mixed; the shorter timeframe moves first, so watch it for the turn." ],
     issues: reds.length === 0 && withData.every((r) => r.status.key === "green") ? ["No timeframe is outside tolerance."]
       : [...reds.map((r) => `${r.label} is critical${r.variance === null ? "" : ` — off by ${fmtValue(Math.abs(r.variance), kpi)}`}.`),
          ...withData.filter((r) => r.status.key === "amber").map((r) => `${r.label} needs attention.`)],
@@ -1074,7 +1212,7 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         });
         const d = res?.data;
         if (d?.observations && d?.opportunities) {
-          setAnalysis({ observations: d.observations || [], issues: d.issues || [], opportunities: d.opportunities || [] });
+          setAnalysis({ observations: d.observations || [], trends: d.trends || [], issues: d.issues || [], opportunities: d.opportunities || [] });
           setSource("ai"); return;
         }
         throw new Error("The function replied, but not in the expected shape.");
@@ -1114,7 +1252,7 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
         <div style={{ padding: "22px 0", color: T.muted, fontSize: "13.5px", textAlign: "center" }}>Reviewing {kpi.name}…</div>
       ) : analysis && (
         <>
-          <Section label="Observations" items={analysis.observations} color={T.accent} />
+          <Section label="Observations" items={[...(analysis.observations || []), ...(analysis.trends || [])]} color={T.accent} />
           <Section label="Issues" items={analysis.issues} color={T.red} />
           <Section label="Opportunities" items={analysis.opportunities} color={T.green} />
         </>
@@ -1131,12 +1269,19 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => (
   </Modal>
 );
 
-/* ─── Trend chart ──────────────────────────────────────────────────────── */
+/* ─── Trend chart — dynamic base type + proper scatter data ──────────── */
 const CHART_TYPES = [
   { value: "bar", label: "Column Chart" }, { value: "line", label: "Line Chart" },
   { value: "area", label: "Area Chart" }, { value: "scatter", label: "Scatter Chart" },
 ];
 const SWATCHES = ["#1e40af", "#4a352f", "#166534", "#991b1b", "#92400e", "#6d28d9", "#0e7490", "#be185d"];
+
+/* Pick the correct x-axis / chart base type for the given series types */
+const baseChartType = (types) => {
+  if (types.includes("line") || types.includes("area")) return "line";
+  if (types.includes("bar")) return "bar";
+  return "scatter";
+};
 
 const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, readOnly }) => {
   const [noteText, setNoteText] = useState("");
@@ -1148,31 +1293,114 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
 
   const { labels, actual, budget, noteKey, caption } = useMemo(() => {
     const { startYear, startMonth } = fy;
-    if (period === "week") {
-      const weeks = fyWeeks(startYear, startMonth);
-      const idx = Math.max(weeks.findIndex((w) => w.key === currentWeekKey()), 0);
-      const slice = weeks.slice(Math.max(0, idx - 11), idx + 1);
-      return { labels: slice.map((w) => w.label),
-        actual: slice.map((w) => parseNum(kpi.entries?.[w.key]?.actual)),
-        budget: slice.map((w) => parseNum(kpi.entries?.[w.key]?.budget)),
-        noteKey: currentWeekKey(), caption: `Weeks of FY ${fyLabel(startYear, startMonth)}` };
+    const freq = kpi.frequency || "Monthly";
+
+    if (period === "this_week" || period === "last_week") {
+      const [from] = periodWindow(period, fy);
+      if (freq === "Daily") {
+        const labels = [], actual = [], budget = [];
+        for (let i = 0; i < 7; i++) {
+          const d = addDays(from, i);
+          const key = dayKeyOf(d);
+          labels.push(`${MONTHS[d.getMonth()]} ${d.getDate()}`);
+          actual.push(kpi.entries?.[key]?.actual ?? null);
+          budget.push(kpi.entries?.[key]?.budget ?? null);
+        }
+        return { labels, actual, budget, noteKey: weekKeyOf(from), caption: `Week of ${fmtDMY(from)} · daily` };
+      }
+      if (freq === "Weekly") {
+        const key = weekKeyOf(from);
+        return { labels: [`Week of ${fmtDMY(from)}`],
+          actual: [kpi.entries?.[key]?.actual ?? null], budget: [kpi.entries?.[key]?.budget ?? null],
+          noteKey: key, caption: `Week of ${fmtDMY(from)}` };
+      }
+      // Monthly context view
+      const months = fyMonths(startYear, startMonth);
+      const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
+      return { labels: months.map((m) => m.label),
+        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
+        noteKey: weekKeyOf(from), caption: `Week of ${fmtDMY(from)} · monthly context` };
     }
-    if (period === "quarter") {
-      const qs = fyQuarters(startYear, startMonth);
-      const rows = qs.map((q) => {
-        const ms = q.months.map((m) => resolveMonth(kpi, m.year, m.month));
-        return { actual: rollUp(ms.map((r) => Number(r.actual)), kpi.aggregate),
-                 budget: rollUp(ms.map((r) => Number(r.budget)), kpi.aggregate) };
-      });
-      return { labels: qs.map((q) => `${q.label} ${fyLabel(startYear, startMonth)}`),
-        actual: rows.map((r) => r.actual), budget: rows.map((r) => r.budget),
-        noteKey: `Q:${startYear}`, caption: `Quarters of FY ${fyLabel(startYear, startMonth)}` };
+
+    if (period === "this_month" || period === "last_month") {
+      const [from] = periodWindow(period, fy);
+      const y = from.getFullYear(), m = from.getMonth();
+      if (freq === "Daily") {
+        const dim = new Date(y, m + 1, 0).getDate();
+        const labels = [], actual = [], budget = [];
+        for (let d = 1; d <= dim; d++) {
+          const day = new Date(y, m, d);
+          const key = dayKeyOf(day);
+          labels.push(`${d} ${MONTHS[m]}`);
+          actual.push(kpi.entries?.[key]?.actual ?? null);
+          budget.push(kpi.entries?.[key]?.budget ?? null);
+        }
+        return { labels, actual, budget, noteKey: `M:${y}-${String(m+1).padStart(2,"0")}`, caption: `${MONTHS[m]} ${y} · daily` };
+      }
+      if (freq === "Weekly") {
+        const start = startOfWeek(new Date(y, m, 1));
+        const end = new Date(y, m + 1, 0);
+        const labels = [], actual = [], budget = [];
+        let cursor = start;
+        while (cursor <= end) {
+          const key = weekKeyOf(cursor);
+          labels.push(`${String(cursor.getDate()).padStart(2,"0")} ${MONTHS[cursor.getMonth()]}`);
+          actual.push(kpi.entries?.[key]?.actual ?? null);
+          budget.push(kpi.entries?.[key]?.budget ?? null);
+          cursor = addDays(cursor, 7);
+        }
+        return { labels, actual, budget, noteKey: `M:${y}-${String(m+1).padStart(2,"0")}`, caption: `${MONTHS[m]} ${y} · weekly` };
+      }
+      // Monthly context
+      const months = fyMonths(startYear, startMonth);
+      const rows = months.map((mm) => resolveMonth(kpi, mm.year, mm.month));
+      return { labels: months.map((mm) => mm.label),
+        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
+        noteKey: currentMonthKey(), caption: `FY ${fyLabel(startYear, startMonth)} · monthly context` };
     }
+
+    if (period === "this_quarter" || period === "last_quarter") {
+      const [from] = periodWindow(period, fy);
+      const months = [0,1,2].map((i) => addMonths(from, i));
+      if (freq === "Daily") {
+        const labels = [], actual = [], budget = [];
+        months.forEach((mo) => {
+          const dim = new Date(mo.getFullYear(), mo.getMonth() + 1, 0).getDate();
+          for (let d = 1; d <= dim; d++) {
+            const day = new Date(mo.getFullYear(), mo.getMonth(), d);
+            const key = dayKeyOf(day);
+            labels.push(`${d} ${MONTHS[mo.getMonth()]}`);
+            actual.push(kpi.entries?.[key]?.actual ?? null);
+            budget.push(kpi.entries?.[key]?.budget ?? null);
+          }
+        });
+        return { labels, actual, budget, noteKey: `Q:${from.getFullYear()}-${from.getMonth()}`, caption: `Quarter · daily` };
+      }
+      if (freq === "Weekly") {
+        const labels = [], actual = [], budget = [];
+        let cursor = startOfWeek(months[0]);
+        const end = months[2];
+        while (cursor <= end) {
+          const key = weekKeyOf(cursor);
+          labels.push(`${String(cursor.getDate()).padStart(2,"0")} ${MONTHS[cursor.getMonth()]}`);
+          actual.push(kpi.entries?.[key]?.actual ?? null);
+          budget.push(kpi.entries?.[key]?.budget ?? null);
+          cursor = addDays(cursor, 7);
+        }
+        return { labels, actual, budget, noteKey: `Q:${from.getFullYear()}-${from.getMonth()}`, caption: `Quarter · weekly` };
+      }
+      const rows = months.map((m) => resolveMonth(kpi, m.getFullYear(), m.getMonth()));
+      return { labels: months.map((m) => `${MONTHS[m.getMonth()]} ${String(m.getFullYear()).slice(2)}`),
+        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
+        noteKey: `Q:${from.getFullYear()}-${from.getMonth()}`, caption: `Quarter of FY ${fyLabel(startYear, startMonth)}` };
+    }
+
+    // Yearly / fallback → monthly context
     const months = fyMonths(startYear, startMonth);
     const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
     return { labels: months.map((m) => m.label),
       actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-      noteKey: currentMonthKey(), caption: `FY ${fyLabel(startYear, startMonth)} · ${months[0].long} → ${months[11].long}` };
+      noteKey: `Y:${startYear}`, caption: `FY ${fyLabel(startYear, startMonth)} · monthly` };
   }, [kpi, period, fy]);
 
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
@@ -1196,62 +1424,65 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const varColors = variance.map((v) =>
     v === null ? "rgba(138,122,116,0.4)" : varianceFavourable(kpi, v) ? T.green : T.red);
 
-  const buildSeries = (type, data, color, extra = {}) => {
+  const buildSeries = (type, data, color, { label, order } = {}) => {
+    const isArrayColor = Array.isArray(color);
     if (type === "scatter") {
-      return { type: "scatter", data, showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
-        pointBackgroundColor: Array.isArray(color) ? color.map((c) => `${c}22`) : "#ffffff",
-        pointBorderColor: color, pointBorderWidth: 2.4, ...extra };
+      return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
+        showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
+        pointBackgroundColor: isArrayColor ? color.map((c) => `${c}33`) : "#ffffff",
+        pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
     }
     if (type === "line" || type === "area") {
-      return { type: "line", data, borderColor: color, backgroundColor: type === "area" ? `${color}22` : "transparent",
+      return { type: "line", label, data,
+        borderColor: color, backgroundColor: type === "area" ? `${color}22` : "transparent",
         borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: true,
         pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
-        pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, ...extra };
+        pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
     }
-    return { type: "bar", data, backgroundColor: Array.isArray(color) ? color.map((c) => `${c}b3`) : `${color}b3`,
-      borderWidth: 0, borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.78, ...extra };
+    return { type: "bar", label, data,
+      backgroundColor: isArrayColor ? color.map((c) => `${c}b3`) : `${color}b3`,
+      borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
   };
 
-  const varianceData = { labels, datasets: [
-    { label: "Variance", ...buildSeries(prefs.varianceType, variance, varColors) }] };
+  const varianceData = { labels, datasets: [ buildSeries(prefs.varianceType, variance, varColors, { label: "Variance" }) ] };
+  const varianceBaseType = baseChartType([prefs.varianceType]);
   const varianceOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
+    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
     layout: { padding: { top: 10, bottom: 0 } },
     plugins: {
-      legend: { display: false },
-      datalabels: { display: false },
+      legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
         callbacks: { title: (items) => labels[items[0].dataIndex],
-          label: (c) => c.parsed.y === null || c.parsed.y === undefined ? "Variance: no data"
-            : `Variance: ${fmtValue(c.parsed.y, kpi, { signed: true })} (${varianceFavourable(kpi, c.parsed.y) ? "favourable" : "unfavourable"})` } },
-    },
-    scales: {
-      y: { display: false, grid: { display: false } },
-      x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" },
-    },
+          label: (c) => {
+            const y = c.parsed.y ?? c.raw?.y;
+            return y === null || y === undefined ? "Variance: no data"
+              : `Variance: ${fmtValue(y, kpi, { signed: true })} (${varianceFavourable(kpi, y) ? "favourable" : "unfavourable"})`;
+          } } } },
+    scales: { y: { display: false, grid: { display: false } },
+      x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
   };
 
   const mainData = { labels, datasets: [
-    { label: "Budget", ...buildSeries(prefs.budgetType, budget, prefs.budgetColor), order: 1 },
-    { label: "Actual", ...buildSeries(prefs.actualType, actual, prefs.actualColor), order: 2 },
-  ]};
+    buildSeries(prefs.budgetType, budget, prefs.budgetColor, { label: "Budget", order: 1 }),
+    buildSeries(prefs.actualType, actual, prefs.actualColor, { label: "Actual", order: 2 }),
+  ] };
+  const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
   const mainOptions = {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
+    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
     layout: { padding: { top: 10 } },
-    plugins: {
-      legend: { display: false },
-      datalabels: { display: false },
+    plugins: { legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
-        callbacks: { label: (c) => c.parsed.y === null || c.parsed.y === undefined ? `${c.dataset.label}: no data`
-          : `${c.dataset.label}: ${fmtValue(c.parsed.y, kpi)}` } },
-    },
+        callbacks: { label: (c) => {
+          const y = c.parsed.y ?? c.raw?.y;
+          return y === null || y === undefined ? `${c.dataset.label}: no data`
+            : `${c.dataset.label}: ${fmtValue(y, kpi)}`;
+        } } } },
     scales: {
-      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both", grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
+      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both",
+        grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
         ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
       x: { display: prefs.axisMode === "x" || prefs.axisMode === "both", grid: { display: false },
-        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
     },
   };
 
@@ -1278,6 +1509,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
       {swatch}{label}
     </span>
   );
+  const swatchFor = (type, color) => type === "bar" ? barChip(color) : type === "scatter" ? dot(color, false) : dot(color, true);
 
   return (
     <Modal title={`${kpi.name} — (${kpi.units})`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={960}
@@ -1332,16 +1564,16 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
           <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Budget vs Actual</span>
           <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
             {key("Variance", <span style={{ display: "inline-flex", gap: "3px" }}>{dot(T.green)}{dot(T.red)}</span>)}
-            {key("Budget", prefs.budgetType === "bar" ? barChip(prefs.budgetColor) : dot(prefs.budgetColor))}
-            {key("Actual", prefs.actualType === "bar" ? barChip(prefs.actualColor) : dot(prefs.actualColor, true))}
+            {key("Budget", swatchFor(prefs.budgetType, prefs.budgetColor))}
+            {key("Actual", swatchFor(prefs.actualType, prefs.actualColor))}
           </span>
         </div>
 
         <div style={{ height: "112px", marginBottom: "-16px" }}>
-          <Chart type="bar" data={varianceData} options={varianceOptions} />
+          <Chart type={varianceBaseType} data={varianceData} options={varianceOptions} />
         </div>
-        <div style={{ height: "300px" }}>
-          <Chart type="bar" data={mainData} options={mainOptions} />
+        <div style={{ height: "320px" }}>
+          <Chart type={mainBaseType} data={mainData} options={mainOptions} />
         </div>
       </div>
 
@@ -1632,42 +1864,28 @@ const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   );
 };
 
-/* ─── Add Data (revised for friendly bulk capture) ─────────────────────── */
-const deriveFrequency = (category) => {
-  const kpis = category?.subCategories.flatMap((s) => s.kpis) || [];
-  if (!kpis.length) return { frequency: "Monthly", mixed: false };
-  const tally = {};
-  kpis.forEach((k) => {
-    const f = k.frequency === "Quarterly" ? "Monthly" : k.frequency;
-    tally[f] = (tally[f] || 0) + 1;
-  });
-  const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
-  return { frequency: sorted[0][0], mixed: sorted.length > 1 };
-};
-
+/* ════════════════════════════════════════════════════════════════════════════
+   Add Data Wizard — frequency tabs + dual Budget/Actual rows + month selector
+   ════════════════════════════════════════════════════════════════════════ */
 const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onSave }) => {
   const visible = structure.filter((c) => !c.hidden);
   const [catId, setCatId] = useState(prefs?.catId && visible.some((c) => c.id === prefs.catId) ? prefs.catId : visible[0]?.id);
   const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
   const category = structure.find((c) => c.id === catId) || visible[0];
-  const derived = useMemo(() => deriveFrequency(category), [category]);
-  const [frequency, setFrequency] = useState(prefs?.frequency || derived.frequency);
-  const [freqOverridden, setFreqOverridden] = useState(!!prefs?.frequency);
-  const [monthForDays, setMonthForDays] = useState(new Date().getMonth());
-  const [selectedMonthForWeekly, setSelectedMonthForWeekly] = useState(new Date().getMonth());
+
+  // Frequency tab & month pagination
+  const [freqTab, setFreqTab] = useState(prefs?.freqTab || "auto");
+  const [monthCount, setMonthCount] = useState(prefs?.monthCount ?? 12);
+  const [monthStart, setMonthStart] = useState(prefs?.monthStart ?? 0);
+  const [dailyMonthOffset, setDailyMonthOffset] = useState(prefs?.dailyMonthOffset ?? new Date().getMonth());
+  const [weeklyHalf, setWeeklyHalf] = useState(prefs?.weeklyHalf ?? 0);
+
   const [draft, setDraft] = useState({});
   const [saveState, setSaveState] = useState("idle");
   const timer = useRef(null);
   const structureRef = useRef(structure);
 
-  /* ── Single-column mode with a switch ──────────────────────────────── */
-  const [mode, setMode] = useState(prefs?.mode || "actual");
-  const [globalMode, setGlobalMode] = useState(prefs?.globalMode ?? true);
-  const [monthModes, setMonthModes] = useState(() => prefs?.monthModes || {});
-
   useEffect(() => { structureRef.current = structure; }, [structure]);
-
-  useEffect(() => { if (!freqOverridden) setFrequency(derived.frequency); }, [catId, derived.frequency, freqOverridden]);
 
   const yearOptions = [
     { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
@@ -1675,34 +1893,47 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
   ];
 
-  const kpis = useMemo(() => category?.subCategories.flatMap((s) => s.kpis.map((k) => ({ ...k, sub: s.name }))) || [], [category]);
+  /* Group KPIs in the current category by their frequency */
+  const kpiGroups = useMemo(() => {
+    if (!category) return { monthly: [], weekly: [], daily: [], quarterly: [] };
+    const monthly = [], weekly = [], daily = [], quarterly = [];
+    category.subCategories.forEach((sub) => {
+      sub.kpis.forEach((k) => {
+        const freq = k.frequency === "Quarterly" ? "Monthly" : k.frequency;
+        const row = { kpi: k, subCategory: sub.name };
+        if (freq === "Daily") daily.push(row);
+        else if (freq === "Weekly") weekly.push(row);
+        else monthly.push(row);
+      });
+    });
+    return { monthly, weekly, daily, quarterly };
+  }, [category]);
 
-  // Build period columns based on frequency
-  const periodColumns = useMemo(() => {
-    if (frequency === "Monthly") {
-      return fyMonths(startYear, fy.startMonth).map((m) => ({ key: m.key, label: m.long, short: m.label }));
-    }
-    if (frequency === "Weekly") {
-      const allWeeks = fyWeeks(startYear, fy.startMonth);
-      const months = fyMonths(startYear, fy.startMonth);
-      const startMonth = months[selectedMonthForWeekly];
-      if (!startMonth) return allWeeks.slice(0, 26).map((w) => ({ key: w.key, label: w.label, short: w.short }));
-      const endDate = new Date(startMonth.year, startMonth.month + 6, 0);
-      const filtered = allWeeks.filter((w) => w.start >= new Date(startMonth.year, startMonth.month, 1) && w.start <= endDate);
-      return filtered.map((w) => ({ key: w.key, label: w.label, short: w.short }));
-    }
-    // Daily - show full month
-    const months = fyMonths(startYear, fy.startMonth);
-    const m = months.find((x) => x.month === monthForDays) || months[0];
-    return daysInMonth(m.year, m.month).map((d) => ({ key: d.key, label: d.label, short: d.short }));
-  }, [frequency, startYear, fy.startMonth, monthForDays, selectedMonthForWeekly]);
+  /* Which sections have KPIs in this category */
+  const sections = useMemo(() => {
+    const list = [];
+    if (kpiGroups.monthly.length) list.push({ key: "monthly", label: "Monthly", count: kpiGroups.monthly.length });
+    if (kpiGroups.weekly.length)  list.push({ key: "weekly",  label: "Weekly",  count: kpiGroups.weekly.length });
+    if (kpiGroups.daily.length)   list.push({ key: "daily",   label: "Daily",   count: kpiGroups.daily.length });
+    return list;
+  }, [kpiGroups]);
 
+  /* Auto-select first available section */
+  const activeSection = useMemo(() => {
+    if (!sections.length) return null;
+    if (freqTab === "auto") return sections[0].key;
+    return sections.some((s) => s.key === freqTab) ? freqTab : sections[0].key;
+  }, [freqTab, sections]);
+
+  /* Value lookup */
   const value = (kpiId, periodKey, field) => {
     const d = draft[kpiId]?.[periodKey];
     if (d && d[field] !== undefined) return d[field];
-    return kpis.find((k) => k.id === kpiId)?.entries?.[periodKey]?.[field] ?? "";
+    const kpi = (category?.subCategories || []).flatMap((s) => s.kpis).find((k) => k.id === kpiId);
+    return kpi?.entries?.[periodKey]?.[field] ?? "";
   };
 
+  /* Merge draft into the structure for persistence */
   const merge = (currentStructure, rows) => currentStructure.map((cat) => cat.id !== category.id ? cat : {
     ...cat,
     subCategories: cat.subCategories.map((sub) => ({
@@ -1729,22 +1960,409 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       await onSave(merge(structureRef.current, next), { silent: true });
-      onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null, mode, globalMode, monthModes });
+      onSavePrefs({ catId, startYear, freqTab, monthCount, monthStart, dailyMonthOffset, weeklyHalf });
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 1800);
     }, 800);
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  /* Persist mode prefs on change */
   useEffect(() => {
-    onSavePrefs({ catId, startYear, frequency: freqOverridden ? frequency : null, mode, globalMode, monthModes });
+    onSavePrefs({ catId, startYear, freqTab, monthCount, monthStart, dailyMonthOffset, weeklyHalf });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, globalMode, monthModes]);
+  }, [catId, startYear, freqTab, monthCount, monthStart, dailyMonthOffset, weeklyHalf]);
 
-  const th = { padding: "8px 10px", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
-    letterSpacing: "0.5px", background: T.header, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2,
-    verticalAlign: "top", borderRight: "1px solid rgba(255,255,255,0.15)" };
+  /* Colour tokens */
+  const MODE_COLOR = {
+    budget: { hdr: "#1e3a8a", hdrText: "#dbeafe", cell: "#eff6ff", border: "#bfdbfe", input: "#1e3a8a" },
+    actual: { hdr: "#166534", hdrText: "#dcfce7", cell: "#f0fdf4", border: "#bbf7d0", input: "#166534" },
+  };
+
+  /* Render an input inline (focus-safe) */
+  const renderInput = (kpi, periodKey, field, tok) => {
+    const val = value(kpi.id, periodKey, field);
+    return (
+      <input
+        type="number" step="any" value={val} placeholder="—"
+        onChange={(e) => setValue(kpi.id, periodKey, field, e.target.value)}
+        style={{
+          width: "100%", padding: "6px 8px",
+          border: `1.5px solid ${tok.border}`, borderRadius: "5px",
+          fontSize: "12px", fontFamily: "inherit",
+          fontVariantNumeric: "tabular-nums", textAlign: "right",
+          background: "#fff", color: tok.input, fontWeight: 600,
+          outline: "none", boxSizing: "border-box",
+        }}
+        onFocus={(e) => { e.target.style.borderColor = tok.hdr; e.target.style.boxShadow = `0 0 0 3px ${tok.hdr}22`; }}
+        onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }}
+      />
+    );
+  };
+
+  /* ── Monthly grid ── */
+  const renderMonthlyGrid = () => {
+    if (!kpiGroups.monthly.length) return null;
+    const allMonths = fyMonths(startYear, fy.startMonth);
+    const clampedStart = Math.max(0, Math.min(monthStart, 12 - monthCount));
+    const months = allMonths.slice(clampedStart, clampedStart + monthCount);
+    const rowLabelW = 210;
+
+    return (
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ background: T.header, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff", letterSpacing: "0.3px" }}>
+            Monthly · {months[0]?.label} → {months[months.length - 1]?.label}
+          </span>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)" }}>From</span>
+              <select
+                value={clampedStart}
+                onChange={(e) => setMonthStart(Number(e.target.value))}
+                style={{
+                  padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px",
+                  fontFamily: "inherit", background: "rgba(255,255,255,0.15)", color: "#fff",
+                  border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer",
+                }}
+              >
+                {allMonths.map((m, i) => (
+                  <option key={m.key} value={i} disabled={i > 12 - monthCount} style={{ color: "#000" }}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "inline-flex", background: "rgba(255,255,255,0.12)", borderRadius: "8px", padding: "2px" }}>
+              {[3, 6, 12].map((n) => {
+                const on = monthCount === n;
+                return (
+                  <button
+                    key={n}
+                    onClick={() => {
+                      setMonthCount(n);
+                      setMonthStart((s) => Math.max(0, Math.min(s, 12 - n)));
+                    }}
+                    style={{
+                      padding: "4px 12px", borderRadius: "6px",
+                      fontSize: "11.5px", fontWeight: 600, cursor: "pointer",
+                      fontFamily: "inherit", border: "none",
+                      background: on ? "#fff" : "transparent",
+                      color: on ? T.header : "#fff",
+                    }}
+                  >
+                    {n}m
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: `${rowLabelW + months.length * 90}px`, tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={{ background: T.header, width: rowLabelW, padding: "8px 12px", textAlign: "left",
+                  fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.4px",
+                  borderRight: `2px solid ${T.lineStrong}` }}>
+                  KPI
+                </th>
+                {months.map((m) => (
+                  <th key={m.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
+                    fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>
+                    {m.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {kpiGroups.monthly.map(({ kpi, subCategory }, i) => {
+                const alt = i % 2 ? T.panel : T.bg;
+                return (
+                  <React.Fragment key={kpi.id}>
+                    {/* BUDGET ROW */}
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `1px solid ${T.lineSoft}`,
+                        borderRight: `2px solid ${T.lineStrong}`,
+                        background: MODE_COLOR.budget.cell }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.budget.hdr, color: "#fff", fontWeight: 700,
+                            letterSpacing: "0.3px" }}>BUDGET</span>
+                          <span style={{ fontSize: "12px", color: T.ink }}>{kpi.name}</span>
+                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", paddingLeft: "2px" }}>
+                          {subCategory} · {kpi.units}
+                        </div>
+                      </td>
+                      {months.map((m) => {
+                        const tok = MODE_COLOR.budget;
+                        return (
+                          <td key={m.key} style={{ padding: "4px 5px",
+                            borderBottom: `1px solid ${T.lineSoft}`,
+                            borderRight: `1px solid ${tok.border}`,
+                            background: tok.cell }}>
+                            {renderInput(kpi, m.key, "budget", tok)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {/* ACTUAL ROW */}
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `2px solid ${T.lineStrong}`,
+                        borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700,
+                            letterSpacing: "0.3px" }}>ACTUAL</span>
+                          <span style={{ fontSize: "12px", color: T.ink }}>{kpi.name}</span>
+                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", paddingLeft: "2px" }}>
+                          {subCategory} · {kpi.units}
+                        </div>
+                      </td>
+                      {months.map((m) => {
+                        const tok = MODE_COLOR.actual;
+                        return (
+                          <td key={m.key} style={{ padding: "4px 5px",
+                            borderBottom: `2px solid ${T.lineStrong}`,
+                            borderRight: `1px solid ${tok.border}`,
+                            background: alt }}>
+                            {renderInput(kpi, m.key, "actual", tok)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  /* ── Weekly grid ── */
+  const renderWeeklyGrid = () => {
+    if (!kpiGroups.weekly.length) return null;
+    const allWeeks = fyWeeks(startYear, fy.startMonth);
+    const allMonths = fyMonths(startYear, fy.startMonth);
+    const startMonth = weeklyHalf === 0 ? allMonths[0] : allMonths[6];
+    const endMonth = weeklyHalf === 0 ? allMonths[5] : allMonths[11];
+    const weeks = allWeeks.filter((w) =>
+      w.start >= new Date(startMonth.year, startMonth.month, 1) &&
+      w.start <= new Date(endMonth.year, endMonth.month + 1, 0)
+    );
+
+    return (
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ background: T.header, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>
+            Weekly · {weeks.length} weeks · {weeklyHalf === 0 ? "first half" : "second half"} of the FY
+          </span>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button onClick={() => setWeeklyHalf(0)} style={{
+              padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+              background: weeklyHalf === 0 ? "#fff" : "rgba(255,255,255,0.15)",
+              color: weeklyHalf === 0 ? T.header : "#fff",
+              border: "1px solid rgba(255,255,255,0.25)",
+            }}>{allMonths[0].label} – {allMonths[5].label}</button>
+            <button onClick={() => setWeeklyHalf(1)} style={{
+              padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+              background: weeklyHalf === 1 ? "#fff" : "rgba(255,255,255,0.15)",
+              color: weeklyHalf === 1 ? T.header : "#fff",
+              border: "1px solid rgba(255,255,255,0.25)",
+            }}>{allMonths[6].label} – {allMonths[11].label}</button>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: `${210 + weeks.length * 84}px`, tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={{ background: T.header, width: 210, padding: "8px 12px", textAlign: "left",
+                  fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
+                  borderRight: `2px solid ${T.lineStrong}` }}>
+                  KPI
+                </th>
+                {weeks.map((w) => (
+                  <th key={w.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
+                    fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>
+                    {w.short}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {kpiGroups.weekly.map(({ kpi, subCategory }, i) => {
+                const alt = i % 2 ? T.panel : T.bg;
+                return (
+                  <React.Fragment key={kpi.id}>
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `1px solid ${T.lineSoft}`,
+                        borderRight: `2px solid ${T.lineStrong}`, background: MODE_COLOR.budget.cell }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.budget.hdr, color: "#fff", fontWeight: 700 }}>BUDGET</span>
+                          <span style={{ fontSize: "12px" }}>{kpi.name}</span>
+                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px" }}>{subCategory} · {kpi.units}</div>
+                      </td>
+                      {weeks.map((w) => (
+                        <td key={w.key} style={{ padding: "4px 5px",
+                          borderBottom: `1px solid ${T.lineSoft}`,
+                          borderRight: `1px solid ${MODE_COLOR.budget.border}`,
+                          background: MODE_COLOR.budget.cell }}>
+                          {renderInput(kpi, w.key, "budget", MODE_COLOR.budget)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `2px solid ${T.lineStrong}`,
+                        borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700 }}>ACTUAL</span>
+                          <span style={{ fontSize: "12px" }}>{kpi.name}</span>
+                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px" }}>{subCategory} · {kpi.units}</div>
+                      </td>
+                      {weeks.map((w) => (
+                        <td key={w.key} style={{ padding: "4px 5px",
+                          borderBottom: `2px solid ${T.lineStrong}`,
+                          borderRight: `1px solid ${MODE_COLOR.actual.border}`,
+                          background: alt }}>
+                          {renderInput(kpi, w.key, "actual", MODE_COLOR.actual)}
+                        </td>
+                      ))}
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  /* ── Daily grid ── */
+  const renderDailyGrid = () => {
+    if (!kpiGroups.daily.length) return null;
+    const allMonths = fyMonths(startYear, fy.startMonth);
+    const refMonth = allMonths.find((m) => m.month === dailyMonthOffset) || allMonths[0];
+    const days = daysInMonth(refMonth.year, refMonth.month);
+
+    return (
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ background: T.header, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>
+            Daily · {refMonth.long} · {days.length} days
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button onClick={() => {
+              const idx = allMonths.findIndex((m) => m.month === dailyMonthOffset);
+              setDailyMonthOffset(allMonths[idx <= 0 ? 11 : idx - 1].month);
+            }} style={{
+              padding: "4px 10px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit", background: "rgba(255,255,255,0.15)",
+              color: "#fff", border: "1px solid rgba(255,255,255,0.25)",
+            }}>←</button>
+            <select value={dailyMonthOffset} onChange={(e) => setDailyMonthOffset(Number(e.target.value))}
+              style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px",
+                fontFamily: "inherit", background: "rgba(255,255,255,0.15)", color: "#fff",
+                border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
+              {allMonths.map((mn) => <option key={mn.key} value={mn.month} style={{ color: "#000" }}>{mn.long}</option>)}
+            </select>
+            <button onClick={() => {
+              const idx = allMonths.findIndex((m) => m.month === dailyMonthOffset);
+              setDailyMonthOffset(allMonths[idx >= 11 ? 0 : idx + 1].month);
+            }} style={{
+              padding: "4px 10px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit", background: "rgba(255,255,255,0.15)",
+              color: "#fff", border: "1px solid rgba(255,255,255,0.25)",
+            }}>→</button>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: `${210 + days.length * 66}px`, tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={{ background: T.header, width: 210, padding: "8px 12px", textAlign: "left",
+                  fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
+                  borderRight: `2px solid ${T.lineStrong}` }}>
+                  KPI
+                </th>
+                {days.map((d) => (
+                  <th key={d.key} style={{ background: T.header, padding: "4px 2px", fontSize: "10px",
+                    fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>
+                    {d.date.getDate()}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {kpiGroups.daily.map(({ kpi, subCategory }, i) => {
+                const alt = i % 2 ? T.panel : T.bg;
+                return (
+                  <React.Fragment key={kpi.id}>
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `1px solid ${T.lineSoft}`,
+                        borderRight: `2px solid ${T.lineStrong}`, background: MODE_COLOR.budget.cell }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.budget.hdr, color: "#fff", fontWeight: 700 }}>BUDGET</span>
+                          <span style={{ fontSize: "12px" }}>{kpi.name}</span>
+                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px" }}>{subCategory} · {kpi.units}</div>
+                      </td>
+                      {days.map((d) => (
+                        <td key={d.key} style={{ padding: "3px 3px",
+                          borderBottom: `1px solid ${T.lineSoft}`,
+                          borderRight: `1px solid ${MODE_COLOR.budget.border}`,
+                          background: MODE_COLOR.budget.cell }}>
+                          {renderInput(kpi, d.key, "budget", MODE_COLOR.budget)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `2px solid ${T.lineStrong}`,
+                        borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700 }}>ACTUAL</span>
+                          <span style={{ fontSize: "12px" }}>{kpi.name}</span>
+                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px" }}>{subCategory} · {kpi.units}</div>
+                      </td>
+                      {days.map((d) => (
+                        <td key={d.key} style={{ padding: "3px 3px",
+                          borderBottom: `2px solid ${T.lineStrong}`,
+                          borderRight: `1px solid ${MODE_COLOR.actual.border}`,
+                          background: alt }}>
+                          {renderInput(kpi, d.key, "actual", MODE_COLOR.actual)}
+                        </td>
+                      ))}
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   if (!category) {
     return (
@@ -1755,47 +2373,11 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     );
   }
 
-  /* Colour tokens for the two modes */
-  const MODE_TOKENS = {
-    budget: {
-      label: "Budget",
-      headerBg: "#1e3a8a",
-      headerColor: "#dbeafe",
-      cellBg: "#eff6ff",
-      cellBorder: "#bfdbfe",
-      inputBorder: "#bfdbfe",
-      inputFocus: "#2563eb",
-      inputFocusRing: "rgba(37,99,235,0.15)",
-      inputColor: "#1e3a8a",
-    },
-    actual: {
-      label: "Actual",
-      headerBg: "#166534",
-      headerColor: "#dcfce7",
-      cellBg: "#f0fdf4",
-      cellBorder: "#bbf7d0",
-      inputBorder: "#bbf7d0",
-      inputFocus: "#16a34a",
-      inputFocusRing: "rgba(22,163,74,0.15)",
-      inputColor: "#166534",
-    },
-  };
-
-  const effectiveModeForKey = (pk) => (globalMode ? mode : (monthModes[pk] || mode));
-  const toggleModeForKey = (pk) => {
-    if (globalMode) {
-      setMode((v) => (v === "budget" ? "actual" : "budget"));
-    } else {
-      setMonthModes((p) => ({ ...p, [pk]: (p[pk] || mode) === "budget" ? "actual" : "budget" }));
-    }
-  };
-
-  /* Full-width modal — expands to fit all columns without horizontal scroll */
-  const minGridWidth = 200 + periodColumns.length * 86;
-
   return (
-    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Bulk capture mode · Everything saves as you type`} icon={<Database size={17} />}
-      onClose={onClose} width={Math.max(1000, Math.min(minGridWidth + 80, Math.max(window.innerWidth - 40, 1000)))}
+    <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Budget & Actual visible together · Everything saves as you type`}
+      icon={<Database size={17} />}
+      onClose={onClose}
+      width={Math.min(Math.max(window.innerWidth - 60, 900), 1600)}
       footer={<> 
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
@@ -1804,7 +2386,8 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
         <button onClick={onClose} style={btnPrimary}>Done</button>
       </>}>
 
-      <div style={{ display: "grid", gridTemplateColumns: frequency === "Daily" ? "1fr 1fr 1fr 1fr 1fr" : frequency === "Weekly" ? "1fr 1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+      {/* Top controls */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px", alignItems: "end" }}>
         <div>
           <label style={labelS}>Financial year</label>
           <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
@@ -1817,228 +2400,62 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
             {visible.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div>
-          <label style={labelS}>Enter by</label>
-          <select value={frequency}
-            onChange={(e) => { setFrequency(e.target.value); setFreqOverridden(e.target.value !== derived.frequency); }} style={selectS}>
-            {CAPTURE_FREQUENCIES.map((f) => <option key={f} value={f}>{f}{f === derived.frequency ? " (your KPIs)" : ""}</option>)}
-          </select>
-        </div>
-        {frequency === "Daily" && (
-          <div>
-            <label style={labelS}>Month</label>
-            <select value={monthForDays} onChange={(e) => setMonthForDays(Number(e.target.value))} style={selectS}>
-              {fyMonths(startYear, fy.startMonth).map((m) => <option key={m.key} value={m.month}>{m.long}</option>)}
-            </select>
-          </div>
-        )}
-        {frequency === "Weekly" && (
-          <div>
-            <label style={labelS}>Starting month (showing 6 months)</label>
-            <select value={selectedMonthForWeekly} onChange={(e) => setSelectedMonthForWeekly(Number(e.target.value))} style={selectS}>
-              {fyMonths(startYear, fy.startMonth).map((m) => <option key={m.key} value={m.month}>{m.long}</option>)}
-            </select>
-          </div>
-        )}
-        <div>
-          <label style={labelS}>Periods shown</label>
-          <div style={{ padding: "9px 11px", background: T.panel, border: `1px solid ${T.lineStrong}`, borderRadius: "8px", fontSize: "13.5px", color: T.body }}>
-            {periodColumns.length} {frequency === "Daily" ? "days" : frequency === "Weekly" ? "weeks" : "months"}
-          </div>
-        </div>
       </div>
 
-      {/* Mode switcher bar */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
-        padding: "10px 14px", marginBottom: "10px",
-        background: T.panel, border: `1px solid ${T.line}`, borderRadius: "10px",
-      }}>
-        <span style={{ fontSize: "12.5px", fontWeight: 600, color: T.accent }}>Showing:</span>
-
-        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "999px", padding: "3px" }}>
-          <button
-            onClick={() => setMode("budget")}
-            style={{
-              padding: "6px 16px", borderRadius: "999px", border: "none", cursor: "pointer",
-              fontFamily: "inherit", fontSize: "12.5px", fontWeight: 700,
-              background: mode === "budget" ? "#1e3a8a" : "transparent",
-              color: mode === "budget" ? "#fff" : T.body,
-              boxShadow: mode === "budget" ? "0 1px 3px rgba(0,0,0,0.18)" : "none",
-            }}>
-            Budget
-          </button>
-          <button
-            onClick={() => setMode("actual")}
-            style={{
-              padding: "6px 16px", borderRadius: "999px", border: "none", cursor: "pointer",
-              fontFamily: "inherit", fontSize: "12.5px", fontWeight: 700,
-              background: mode === "actual" ? "#166534" : "transparent",
-              color: mode === "actual" ? "#fff" : T.body,
-              boxShadow: mode === "actual" ? "0 1px 3px rgba(0,0,0,0.18)" : "none",
-            }}>
-            Actual
-          </button>
+      {/* Frequency tabs */}
+      {sections.length > 0 && (
+        <div style={{
+          display: "flex", gap: "4px", padding: "4px", borderRadius: "10px",
+          background: T.raised, marginBottom: "14px", flexWrap: "wrap",
+        }}>
+          {sections.map((s) => {
+            const on = activeSection === s.key;
+            return (
+              <button
+                key={s.key}
+                onClick={() => setFreqTab(s.key)}
+                style={{
+                  padding: "8px 16px", borderRadius: "8px",
+                  fontSize: "13.5px", fontWeight: 600,
+                  cursor: "pointer", fontFamily: "inherit", border: "none",
+                  display: "inline-flex", alignItems: "center", gap: "8px",
+                  background: on ? T.bg : "transparent",
+                  color: on ? T.accent : T.body,
+                  boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none",
+                }}
+              >
+                {s.label}
+                <span style={{
+                  fontSize: "11px", padding: "1px 8px", borderRadius: "999px",
+                  background: on ? T.accentTint : T.bg,
+                  color: on ? T.accent : T.muted,
+                  fontWeight: 700,
+                }}>
+                  {s.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
+      )}
 
-        <label style={{ display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", color: T.body, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={globalMode}
-            onChange={() => setGlobalMode((v) => !v)}
-          />
-          Use the same mode for every period
-        </label>
+      {activeSection === "monthly" && renderMonthlyGrid()}
+      {activeSection === "weekly" && renderWeeklyGrid()}
+      {activeSection === "daily" && renderDailyGrid()}
 
-        <span style={{ flex: 1 }} />
+      {sections.length === 0 && (
+        <div style={{ textAlign: "center", padding: "30px", color: T.muted, fontSize: "13.5px" }}>
+          This category has no KPIs to capture yet.
+        </div>
+      )}
 
-        <span style={{ fontSize: "11.5px", color: T.muted, display: "flex", alignItems: "center", gap: "5px" }}>
+      {sections.length > 0 && (
+        <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "12px",
+          display: "flex", alignItems: "center", gap: "6px" }}>
           <Info size={12} />
-          {globalMode
-            ? "One column per period — switch modes to see the other set of figures."
-            : "Each period has its own tiny switch. Click the ⇄ in the header to flip that period."}
-        </span>
-      </div>
-
-      <div style={{ fontSize: "12.5px", color: T.muted, marginBottom: "8px" }}>
-        {frequency === "Monthly" ? "Enter actual and budget for each month of the financial year." :
-         frequency === "Weekly" ? `Showing 6 months of weekly capture. Change the starting month above to scroll through the year.` :
-         "Enter daily actual and budget for the selected month."}
-      </div>
-
-      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
-          <thead>
-            <tr>
-              <th style={{ ...th, textAlign: "left", width: "200px", borderRight: `2px solid ${T.lineStrong}` }}>
-                KPI
-              </th>
-              {periodColumns.map((p) => {
-                const mk = effectiveModeForKey(p.key);
-                return (
-                  <th key={p.key} style={{ ...th, textAlign: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
-                      <span>{p.short}</span>
-                      {!globalMode && (
-                        <button
-                          onClick={() => toggleModeForKey(p.key)}
-                          title={`Switch to ${mk === "budget" ? "Actual" : "Budget"}`}
-                          style={{
-                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1px solid rgba(255,255,255,0.4)",
-                            background: "rgba(255,255,255,0.12)",
-                            color: "#fff", cursor: "pointer", padding: 0,
-                            fontSize: "9px", fontWeight: 700,
-                          }}>
-                          ⇄
-                        </button>
-                      )}
-                    </div>
-                  </th>
-                );
-              })}
-            </tr>
-            <tr>
-              <th style={{ ...th, textAlign: "left", width: "200px", borderRight: `2px solid ${T.lineStrong}`, padding: "6px 12px" }}>
-                &nbsp;
-              </th>
-              {periodColumns.map((p) => {
-                const mk = effectiveModeForKey(p.key);
-                const tok = MODE_TOKENS[mk];
-                return (
-                  <th key={p.key} style={{
-                    ...th, padding: "5px 4px", fontSize: "10px",
-                    textTransform: "uppercase", letterSpacing: "0.4px",
-                    color: tok.headerColor, background: tok.headerBg,
-                    textAlign: "center",
-                    borderRight: "1px solid rgba(255,255,255,0.15)",
-                  }}>
-                    {tok.label}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {kpis.map((k, i) => {
-              const bg = i % 2 ? T.panel : T.bg;
-              return (
-                <tr key={k.id} style={{ background: bg }}>
-                  <td style={{
-                    padding: "8px 12px", fontSize: "12.5px", color: T.ink,
-                    borderBottom: `1px solid ${T.lineSoft}`,
-                    borderRight: `2px solid ${T.lineStrong}`,
-                    background: bg,
-                  }}>
-                    <div style={{ fontWeight: 600, fontSize: "12.5px", lineHeight: 1.3 }}>{k.name}</div>
-                    <div style={{ fontSize: "10.5px", color: T.muted, marginTop: "2px", display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
-                      <span>{k.sub}</span>
-                      <span style={{
-                        padding: "1px 6px", borderRadius: "999px",
-                        background: T.raised, color: T.accentSoft, fontWeight: 600,
-                        fontSize: "9.5px",
-                      }}>{k.units}</span>
-                    </div>
-                  </td>
-
-                  {periodColumns.map((p) => {
-                    const mk = effectiveModeForKey(p.key);
-                    const tok = MODE_TOKENS[mk];
-                    const val = value(k.id, p.key, mk);
-
-                    return (
-                      <td key={p.key} style={{
-                        padding: "3px 4px", borderBottom: `1px solid ${T.lineSoft}`,
-                        borderRight: `1px solid ${tok.cellBorder}`,
-                        background: val !== "" ? tok.cellBg : bg,
-                      }}>
-                        <input
-                          type="number"
-                          step="any"
-                          value={val}
-                          placeholder="—"
-                          onChange={(e) => setValue(k.id, p.key, mk, e.target.value)}
-                          style={{
-                            width: "100%", padding: "6px 4px",
-                            border: `1.5px solid ${tok.inputBorder}`,
-                            borderRadius: "5px",
-                            fontSize: "12px",
-                            fontFamily: "inherit",
-                            fontVariantNumeric: "tabular-nums",
-                            textAlign: "right",
-                            background: "#ffffff",
-                            color: tok.inputColor,
-                            fontWeight: 600,
-                            outline: "none",
-                            boxSizing: "border-box",
-                          }}
-                          onFocus={(e) => {
-                            e.target.style.borderColor = tok.inputFocus;
-                            e.target.style.boxShadow = `0 0 0 3px ${tok.inputFocusRing}`;
-                          }}
-                          onBlur={(e) => {
-                            e.target.style.borderColor = tok.inputBorder;
-                            e.target.style.boxShadow = "none";
-                          }}
-                        />
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "10px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-        <Info size={12} />
-        {globalMode
-          ? "Toggle Budget / Actual above to switch every period. Filled cells are tinted."
-          : "Click the ⇄ next to any period to flip just that one."}
-        {frequency === "Weekly" && " Use the starting month dropdown to view different 6-month windows."}
-      </div>
+          Every KPI shows two rows — Budget above, Actual below — across the entire period. Use the tabs to switch between capture frequencies.
+        </div>
+      )}
     </Modal>
   );
 };
@@ -2227,7 +2644,7 @@ const AddChooser = ({ onPick, onClose, prefs, fy, structure }) => {
 /* ════════════════════════════════════════════════════════════════════════════
    Main
    ════════════════════════════════════════════════════════════════════════ */
-const PREFS_KEY = "opPerf.addData.prefs";
+const PREFS_KEY = "opPerf.addData.prefs.v2";
 
 const OperationalPerformance = () => {
   const [user, setUser] = useState(null);
@@ -2244,7 +2661,7 @@ const OperationalPerformance = () => {
   const [viewOrigin, setViewOrigin] = useState("investor");
 
   const [activeCategoryId, setActiveCategoryId] = useState(null);
-  const [period, setPeriod] = useState("month");
+  const [period, setPeriod] = useState("this_month");
 
   const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", frequency: "all", status: "all" });
   const [openFilter, setOpenFilter] = useState(null);
@@ -2430,18 +2847,43 @@ const OperationalPerformance = () => {
   const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
   const clearFilters = () => { setFilters({ category: "all", kpi: "all", units: "all", frequency: "all", status: "all" }); setSortConfig({ key: null, direction: "asc" }); };
 
+  /* ── CSV export: proper quoting, BOM, split rows ── */
   const downloadCSV = () => {
-    const p = PERIOD_PREFIX[period];
-    const lines = [["Category","Sub-Category","KPI","Units","Frequency", `${p} Budget`, `${p} Actual`, `${p} Variance`, "Status"]];
-    (structure || []).forEach((cat) => cat.subCategories.forEach((sub) => sub.kpis.forEach((kpi) => {
+    const escape = (v) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const lines = [];
+    lines.push(["Category", "Sub-Category", "KPI", "Units", "Frequency", "Period", "Budget", "Actual", "Variance", "Status"].map(escape).join(","));
+
+    const pushKpiRows = (cat, sub, kpi) => {
       const v = periodValues(kpi, period, fy);
-      lines.push([cat.name, sub.name, `"${kpi.name}"`, kpi.units, kpi.frequency,
-        v.budget ?? "", v.actual ?? "", getVariance(kpi, period, fy) ?? "", getStatus(kpi, period, fy).label]);
-    })));
-    const blob = new Blob([lines.map((r) => r.join(",")).join("\n")], { type: "text/csv" });
+      const status = getStatus(kpi, period, fy);
+      const variance = getVariance(kpi, period, fy);
+      lines.push([
+        cat.name, sub.name, kpi.name, kpi.units, kpi.frequency,
+        PERIOD_LABEL[period], v.budget ?? "", v.actual ?? "", variance ?? "", status.label,
+      ].map(escape).join(","));
+      const split = buildSplitRows(kpi, fy);
+      split.rows.forEach((r) => {
+        const varRow = Number.isFinite(Number(r.actual)) && Number.isFinite(Number(r.budget))
+          ? Number(r.actual) - Number(r.budget) : "";
+        lines.push([
+          cat.name, sub.name, kpi.name, kpi.units, kpi.frequency,
+          r.label, r.budget ?? "", r.actual ?? "", varRow, "",
+        ].map(escape).join(","));
+      });
+    };
+
+    (structure || []).forEach((cat) => cat.subCategories.forEach((sub) => sub.kpis.forEach((kpi) => pushKpiRows(cat, sub, kpi))));
+
+    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `operational-performance-${period}-FY${fyLabel(fy.startYear, fy.startMonth).replace("/","-")}.csv`; a.click();
+    a.href = url; a.download = `operational-performance-${period}-FY${fyLabel(fy.startYear, fy.startMonth).replace("/","-")}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
@@ -2515,7 +2957,7 @@ const OperationalPerformance = () => {
             <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
               <li>Pick a timeframe above the table — the column names follow it</li>
               <li>The chart carries its own averages, note and analysis for that timeframe</li>
-              <li>The lightbulb in the table reads all four timeframes together</li>
+              <li>The lightbulb in the table reads all timeframes together</li>
               <li>Manage Categories lets you hide or delete a whole category</li>
             </ul>
           </div>
@@ -2604,12 +3046,12 @@ const OperationalPerformance = () => {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
-        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px" }}>
+        <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px", flexWrap: "wrap" }}>
           {PERIODS.map((p) => {
             const on = p.key === period;
             return (
               <button key={p.key} onClick={() => setPeriod(p.key)}
-                style={{ padding: "7px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13.5px",
+                style={{ padding: "7px 13px", borderRadius: "8px", cursor: "pointer", fontSize: "13px",
                   fontWeight: 600, border: "none", fontFamily: "inherit",
                   background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
                   boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
@@ -2619,7 +3061,7 @@ const OperationalPerformance = () => {
           })}
         </div>
         <span style={{ fontSize: "12.5px", color: T.muted }}>
-          Showing {PERIOD_PREFIX[period].toLowerCase()} budget, actual and variance
+          Showing {PERIOD_PREFIX[period]} budget, actual and variance
         </span>
       </div>
 
