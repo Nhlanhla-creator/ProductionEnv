@@ -1,4 +1,4 @@
-// components/BillingInfo.jsx
+// components/Subscriptions/BillingInfo.jsx
 "use client";
 import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -7,7 +7,7 @@ import { getBillingInfoStyles, defaultFields } from "./Styles";
 import { colors } from "../../shared/theme";
 
 const BillingInfo = ({
-  userType = "catalyst", // 'catalyst' or 'smse'
+  userType = "catalyst", // 'catalyst' | 'smse' | 'cmf'
   customFields = null,
   customValidation = null,
   customFetchData = null,
@@ -32,42 +32,29 @@ const BillingInfo = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // Handle input changes
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setHasUnsavedChanges(true);
   };
 
-  // Detect sidebar collapse state
   useEffect(() => {
     if (!showSidebarSpacing) return;
-
     const checkSidebarState = () => {
-      setIsSidebarCollapsed(
-        document.body.classList.contains("sidebar-collapsed")
-      );
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
     };
-
     checkSidebarState();
-
     const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, [showSidebarSpacing]);
 
   const billingStyles = getBillingInfoStyles(isSidebarCollapsed, userType);
 
-  // Default validation function
   const defaultValidateBilling = () => {
     const newErrors = {};
     if (!formData.fullName) newErrors.fullName = "Full name is required.";
     if (!formData.email) newErrors.email = "Email is required.";
-    if (!formData.companyName)
-      newErrors.companyName = "Company name is required.";
+    if (!formData.companyName) newErrors.companyName = "Company name is required.";
     if (!formData.address) newErrors.address = "Address is required.";
     if (!formData.city) newErrors.city = "City is required.";
     if (!formData.postalCode) newErrors.postalCode = "Postal Code is required.";
@@ -76,18 +63,14 @@ const BillingInfo = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // Default save function
   const defaultHandleSaveBilling = async () => {
     const validate = customValidation || defaultValidateBilling;
     if (!validate()) return;
-
     setSaving(true);
     try {
       const user = auth.currentUser;
       if (!user) return;
-      await setDoc(doc(db, "billingProfiles", user.uid), formData, {
-        merge: true,
-      });
+      await setDoc(doc(db, "billingProfiles", user.uid), formData, { merge: true });
       alert("Billing info saved successfully!");
       setHasUnsavedChanges(false);
     } catch (err) {
@@ -97,36 +80,22 @@ const BillingInfo = ({
     setSaving(false);
   };
 
-  // Default fetch function for Catalyst
   const defaultFetchCatalystData = async () => {
     setLoading(true);
     try {
       const user = auth.currentUser;
       if (!user) return;
-
-      // 1. Get Billing Info (editable)
-      const billingRef = doc(db, "billingProfiles", user.uid);
-      const billingSnap = await getDoc(billingRef);
+      const billingSnap = await getDoc(doc(db, "billingProfiles", user.uid));
       const billingData = billingSnap.exists() ? billingSnap.data() : {};
-
-      // 2. Get User Info (for email/username fallback)
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
+      const userSnap = await getDoc(doc(db, "users", user.uid));
       const userData = userSnap.exists() ? userSnap.data() : {};
+      const profileSnap = await getDoc(doc(db, "catalystProfiles", user.uid));
+      const profileData = profileSnap.exists() ? profileSnap.data().formData || {} : {};
 
-      // 3. Get Profile Info from catalystProfiles
-      const profileRef = doc(db, "catalystProfiles", user.uid);
-      const profileSnap = await getDoc(profileRef);
-      const profileData = profileSnap.exists()
-        ? profileSnap.data().formData || {}
-        : {};
-
-      // Merge priority: billingProfiles > catalystProfiles > users
       const mergedData = {
         fullName:
           billingData.fullName ||
-          (profileData?.contactDetails?.primaryContactName &&
-          profileData?.contactDetails?.primaryContactSurname
+          (profileData?.contactDetails?.primaryContactName && profileData?.contactDetails?.primaryContactSurname
             ? `${profileData.contactDetails.primaryContactName} ${profileData.contactDetails.primaryContactSurname}`
             : profileData?.contactDetails?.primaryContactName || "") ||
           userData?.username ||
@@ -141,19 +110,12 @@ const BillingInfo = ({
           profileData?.contactDetails?.businessEmail ||
           userData?.email ||
           user.email,
-        address:
-          billingData.address ||
-          profileData?.contactDetails?.physicalAddress ||
-          "",
+        address: billingData.address || profileData?.contactDetails?.physicalAddress || "",
         city: billingData.city || userData?.city || "",
         stateRegion: billingData.stateRegion || userData?.stateRegion || "",
         country: billingData.country || userData?.country || "South Africa",
-        postalCode:
-          billingData.postalCode ||
-          profileData?.contactDetails?.postalAddress ||
-          "",
-        taxId:
-          billingData.taxId || profileData?.legalCompliance?.taxNumber || "",
+        postalCode: billingData.postalCode || profileData?.contactDetails?.postalAddress || "",
+        taxId: billingData.taxId || profileData?.legalCompliance?.taxNumber || "",
       };
       setFormData((prev) => ({ ...prev, ...mergedData }));
     } catch (err) {
@@ -163,22 +125,16 @@ const BillingInfo = ({
     }
   };
 
-  // Default fetch function for SMSE
   const defaultFetchSMSEData = async () => {
     setLoading(true);
     try {
       const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
       const viewingSMEId = sessionStorage.getItem("viewingSMEId");
       const user = auth.currentUser;
-      const targetUid = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid;
+      const targetUid = isInvestorView && viewingSMEId ? viewingSMEId : user?.uid;
       if (!targetUid) return;
-
-      // Only get Profile Info from 'universalProfiles'
-      const profileRef = doc(db, "universalProfiles", targetUid);
-      const profileSnap = await getDoc(profileRef);
+      const profileSnap = await getDoc(doc(db, "universalProfiles", targetUid));
       const profileData = profileSnap.exists() ? profileSnap.data() : {};
-
-      // Map data directly from universalProfiles
       const initialBillingData = {
         fullName: profileData?.contactDetails?.contactName || "",
         companyName: profileData?.entityOverview?.registeredName || "",
@@ -190,7 +146,6 @@ const BillingInfo = ({
         postalCode: profileData?.contactDetails?.postalAddress || "",
         taxId: profileData?.legalCompliance?.taxNumber || "",
       };
-
       setFormData((prev) => ({ ...prev, ...initialBillingData }));
     } catch (err) {
       console.error("Failed to fetch billing info:", err);
@@ -198,73 +153,39 @@ const BillingInfo = ({
     setLoading(false);
   };
 
-  // Default fetch function for CMF
   const defaultFetchCMFData = async () => {
     setLoading(true);
     try {
       const user = auth.currentUser;
       if (!user) return;
 
-      // 1. Check billingProfiles (editable billing data)
-      const billingRef = doc(db, "billingProfiles", user.uid);
-      const billingSnap = await getDoc(billingRef);
+      const billingSnap = await getDoc(doc(db, "billingProfiles", user.uid));
       const billingData = billingSnap.exists() ? billingSnap.data() : {};
 
-      // 2. Check cmfProfiles
-      const cmfRef = doc(db, "cmfProfiles", `${user.uid}_cmf`);
-      const cmfSnap = await getDoc(cmfRef);
       let profileData = {};
+      const cmfSnap = await getDoc(doc(db, "cmfProfiles", `${user.uid}_cmf`));
       if (cmfSnap.exists()) {
         profileData = cmfSnap.data().formData || cmfSnap.data() || {};
       } else {
         const altSnap = await getDoc(doc(db, "cmfProfiles", user.uid));
-        if (altSnap.exists()) {
-          profileData = altSnap.data().formData || altSnap.data() || {};
-        }
+        if (altSnap.exists()) profileData = altSnap.data().formData || altSnap.data() || {};
       }
 
       const mergedData = {
-        fullName:
-          billingData.fullName ||
-          profileData?.contactDetails?.contactName ||
-          user.displayName ||
-          "",
+        fullName: billingData.fullName || profileData?.contactDetails?.contactName || user.displayName || "",
         companyName:
           billingData.companyName ||
           profileData?.entityOverview?.registeredName ||
           profileData?.entityOverview?.tradingName ||
           "",
-        email:
-          billingData.email ||
-          profileData?.contactDetails?.email ||
-          user.email ||
-          "",
-        address:
-          billingData.address ||
-          profileData?.contactDetails?.physicalAddress ||
-          "",
-        city:
-          billingData.city ||
-          profileData?.contactDetails?.city ||
-          "",
-        stateRegion:
-          billingData.stateRegion ||
-          profileData?.contactDetails?.province ||
-          "",
-        country:
-          billingData.country ||
-          profileData?.contactDetails?.country ||
-          "South Africa",
-        postalCode:
-          billingData.postalCode ||
-          profileData?.contactDetails?.postalAddress ||
-          "",
-        taxId:
-          billingData.taxId ||
-          profileData?.legalCompliance?.taxNumber ||
-          "",
+        email: billingData.email || profileData?.contactDetails?.email || user.email || "",
+        address: billingData.address || profileData?.contactDetails?.physicalAddress || "",
+        city: billingData.city || profileData?.contactDetails?.city || "",
+        stateRegion: billingData.stateRegion || profileData?.contactDetails?.province || "",
+        country: billingData.country || profileData?.contactDetails?.country || "South Africa",
+        postalCode: billingData.postalCode || profileData?.contactDetails?.postalAddress || "",
+        taxId: billingData.taxId || profileData?.legalCompliance?.taxNumber || "",
       };
-
       setFormData((prev) => ({ ...prev, ...mergedData }));
     } catch (err) {
       console.error("Failed to fetch CMF billing info:", err);
@@ -273,60 +194,40 @@ const BillingInfo = ({
     }
   };
 
-  // Determine which fetch function to use
   const getFetchFunction = () => {
     if (customFetchData) return customFetchData;
     if (userType === "cmf") return defaultFetchCMFData;
-    return userType === "catalyst"
-      ? defaultFetchCatalystData
-      : defaultFetchSMSEData;
+    return userType === "catalyst" ? defaultFetchCatalystData : defaultFetchSMSEData;
   };
 
-  // Determine which fields to display
   const getFields = () => {
     if (customFields) return customFields;
-
     const fields = [...defaultFields];
-
     if (userType === "smse") {
-      // Add country options for SMSE
-      return fields.map((field) => {
-        if (field.key === "country") {
-          return {
-            ...field,
-            isSelect: true,
-            options: [
-              "South Africa",
-              "United States",
-              "United Kingdom",
-              "Canada",
-              "Australia",
-            ],
-          };
-        }
-        return field;
-      });
+      return fields.map((field) =>
+        field.key === "country"
+          ? {
+              ...field,
+              isSelect: true,
+              options: ["South Africa", "United States", "United Kingdom", "Canada", "Australia"],
+            }
+          : field
+      );
     }
-
     return fields;
   };
 
   useEffect(() => {
     const fetchData = getFetchFunction();
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userType]);
 
   const handleSave = customOnSave || defaultHandleSaveBilling;
   const fields = getFields();
 
-  // Handle input focus/blur for better UX
-  const handleInputFocus = (e) => {
-    Object.assign(e.target.style, billingStyles.inputFocus);
-  };
-
-  const handleInputBlur = (e) => {
-    Object.assign(e.target.style, billingStyles.input);
-  };
+  const handleInputFocus = (e) => Object.assign(e.target.style, billingStyles.inputFocus);
+  const handleInputBlur = (e) => Object.assign(e.target.style, billingStyles.input);
 
   if (loading) {
     return (
@@ -334,27 +235,12 @@ const BillingInfo = ({
         <div style={billingStyles.contentWrapper}>
           <div style={{ textAlign: "center", padding: "4rem 0" }}>
             <div style={billingStyles.loadingSpinner}></div>
-            <h2
-              style={{
-                color: colors.darkBrown,
-                fontSize: "1.5rem",
-                fontWeight: 600,
-              }}
-            >
+            <h2 style={{ color: colors.darkBrown, fontSize: "1.5rem", fontWeight: 600 }}>
               Loading billing information...
             </h2>
           </div>
         </div>
-        <style>{`
-          @keyframes spin {
-            0% {
-              transform: rotate(0deg);
-            }
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-        `}</style>
+        <style>{`@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}`}</style>
       </div>
     );
   }
@@ -394,30 +280,18 @@ const BillingInfo = ({
                   onBlur={handleInputBlur}
                 />
               )}
-              {errors[field.key] && (
-                <div style={billingStyles.error}>{errors[field.key]}</div>
-              )}
+              {errors[field.key] && <div style={billingStyles.error}>{errors[field.key]}</div>}
             </div>
           ))}
 
           {hasUnsavedChanges && (
-            <div
-              style={{
-                color: colors.accentGold,
-                fontSize: "0.9rem",
-                marginTop: "1rem",
-                fontStyle: "italic",
-              }}
-            >
+            <div style={{ color: colors.accentGold, fontSize: "0.9rem", marginTop: "1rem", fontStyle: "italic" }}>
               You have unsaved changes
             </div>
           )}
 
           <button
-            style={{
-              ...billingStyles.button,
-              ...(saving ? billingStyles.buttonDisabled : {}),
-            }}
+            style={{ ...billingStyles.button, ...(saving ? billingStyles.buttonDisabled : {}) }}
             onClick={handleSave}
             disabled={saving}
           >
@@ -425,16 +299,7 @@ const BillingInfo = ({
           </button>
         </div>
 
-        <style>{`
-          @keyframes spin {
-            0% {
-              transform: rotate(0deg);
-            }
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-        `}</style>
+        <style>{`@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}`}</style>
       </div>
     </div>
   );

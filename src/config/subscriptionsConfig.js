@@ -1,6 +1,8 @@
-// components/Subscriptions/subscriptionsConfig.js
+// src/config/subscriptionsConfig.js
 
-// Investor Plans
+// ============================================================
+// INVESTOR PLANS
+// ============================================================
 export const investorPlans = {
   discover: {
     name: "Discover",
@@ -95,7 +97,9 @@ export const investorFeatureOrder = [
 
 export const investorPlanOrder = { discover: 0, engage: 1, partner: 2 };
 
-// SME Plans
+// ============================================================
+// SME PLANS
+// ============================================================
 export const smsePlans = {
   free: {
     name: "Free",
@@ -119,15 +123,8 @@ export const smsePlans = {
       "BIG Score Updates": false,
       "Support": "Community forum only",
     },
-    highlights: [
-      "Initial BIG Score Snapshot",
-      "Basic profile",
-      "Limited visibility",
-    ],
-    scoreState: {
-      score_status: "snapshot",
-      is_verified: false,
-    },
+    highlights: ["Initial BIG Score Snapshot", "Basic profile", "Limited visibility"],
+    scoreState: { score_status: "snapshot", is_verified: false },
   },
   verified: {
     name: "Verified",
@@ -151,16 +148,8 @@ export const smsePlans = {
       "BIG Score Updates": "Included",
       "Support": "Email support",
     },
-    highlights: [
-      "Live BIG Score",
-      "Verification status",
-      "Document vault + alerts",
-      "Compliance tracking",
-    ],
-    scoreState: {
-      score_status: "active",
-      is_verified: true,
-    },
+    highlights: ["Live BIG Score", "Verification status", "Document vault + alerts", "Compliance tracking"],
+    scoreState: { score_status: "active", is_verified: true },
     expiryMessage: "Verification expired — update required",
   },
   standard: {
@@ -185,17 +174,9 @@ export const smsePlans = {
       "BIG Score Updates": "Included",
       "Support": "Priority email support",
     },
-    highlights: [
-      "Everything in Verified",
-      "Marketplace visibility",
-      "Matching access",
-      "Basic tools",
-    ],
+    highlights: ["Everything in Verified", "Marketplace visibility", "Matching access", "Basic tools"],
     requiresVerified: true,
-    scoreState: {
-      score_status: "active",
-      is_verified: true,
-    },
+    scoreState: { score_status: "active", is_verified: true },
   },
   premium: {
     name: "Premium",
@@ -219,18 +200,9 @@ export const smsePlans = {
       "BIG Score Updates": "Included",
       "Support": "Dedicated support + check-ins",
     },
-    highlights: [
-      "Everything in Standard",
-      "Funder access",
-      "Deal room",
-      "Full Growth Suite",
-      "Priority placement",
-    ],
+    highlights: ["Everything in Standard", "Funder access", "Deal room", "Full Growth Suite", "Priority placement"],
     requiresVerified: true,
-    scoreState: {
-      score_status: "active",
-      is_verified: true,
-    },
+    scoreState: { score_status: "active", is_verified: true },
   },
 };
 
@@ -252,7 +224,11 @@ export const smseFeatureOrder = [
   "Support",
 ];
 
-// Catalyst Plans
+export const smsePlanOrder = { free: 0, verified: 1, standard: 2, premium: 3 };
+
+// ============================================================
+// CATALYST PLANS
+// ============================================================
 export const catalystPlans = {
   core: {
     name: "Core Programme",
@@ -436,7 +412,6 @@ export const catalystFeatureOrder = [
 
 export const catalystPlanOrder = { core: 0, scaled: 1, enterprise: 2 };
 
-// Add-ons
 export const catalystAddOns = [
   {
     id: "reporting-customisation",
@@ -500,15 +475,20 @@ export const catalystBackendConfig = {
 
 export const catalystUICopy = {
   header: "Catalyst Plans – SME Programme Infrastructure",
-  subtext: "Structured governance, monitoring, and reporting infrastructure for ESD programmes, accelerators, and enterprise development initiatives.",
-  footerNote: "Customisation, integrations, and advanced analytics are scoped separately based on programme requirements.",
+  subtext:
+    "Structured governance, monitoring, and reporting infrastructure for ESD programmes, accelerators, and enterprise development initiatives.",
+  footerNote:
+    "Customisation, integrations, and advanced analytics are scoped separately based on programme requirements.",
   ctaLabel: "Request Proposal",
   formTitle: "Request Programme Proposal",
   successTitle: "Request Received",
-  successMessage: "Thank you for your interest in BIG Marketplace.\nOur team will review your requirements and be in touch to structure a tailored proposal based on your programme scope, cohort size, and reporting needs.",
+  successMessage:
+    "Thank you for your interest in BIG Marketplace.\nOur team will review your requirements and be in touch to structure a tailored proposal based on your programme scope, cohort size, and reporting needs.",
 };
 
-export const smsePlanOrder = { free: 0, verified: 1, standard: 2, premium: 3 };
+// ============================================================
+// ADD-ONS (Investor + SME)
+// ============================================================
 export const investorAddOns = [
   {
     id: "api-access",
@@ -571,7 +551,9 @@ export const smseAddOns = [
   },
 ];
 
-// CMF Plans (Capital & Market Facilitator)
+// ============================================================
+// CMF PLANS (Capital & Market Facilitator)
+// ============================================================
 export const cmfPlans = {
   pilot: {
     name: "Pilot",
@@ -582,10 +564,7 @@ export const cmfPlans = {
       monthly: "90-day pilot · monthly billing",
       annually: "90-day pilot · monthly billing",
     },
-    displayPrice: {
-      monthly: "R2,500",
-      annually: "R2,500",
-    },
+    displayPrice: { monthly: "R2,500", annually: "R2,500" },
     periodText: "/ month",
     description: "Test the CMF workflow with a small, mutually agreed SME cohort.",
     actionLabel: "Apply for a CMF Pilot",
@@ -620,14 +599,8 @@ export const cmfPlans = {
     tag: "Best for small cohorts",
     isFeatured: true,
     isPopular: true,
-    billedText: {
-      monthly: "Monthly billing",
-      annually: "R45,000 billed annually",
-    },
-    displayPrice: {
-      monthly: "R4,500",
-      annually: "R3,750",
-    },
+    billedText: { monthly: "Monthly billing", annually: "R45,000 billed annually" },
+    displayPrice: { monthly: "R4,500", annually: "R3,750" },
     periodText: "/ month",
     description: "For independent facilitators managing a focused SME portfolio.",
     actionLabel: "Choose Launch",
@@ -660,14 +633,8 @@ export const cmfPlans = {
     price: { monthly: 8500, annually: 85000 },
     currency: "ZAR",
     tag: "Growing practice",
-    billedText: {
-      monthly: "Monthly billing",
-      annually: "R85,000 billed annually",
-    },
-    displayPrice: {
-      monthly: "R8,500",
-      annually: "R7,083",
-    },
+    billedText: { monthly: "Monthly billing", annually: "R85,000 billed annually" },
+    displayPrice: { monthly: "R8,500", annually: "R7,083" },
     periodText: "/ month",
     description: "For established teams managing several clients and SME cohorts.",
     actionLabel: "Choose Growth",
@@ -701,14 +668,8 @@ export const cmfPlans = {
     currency: "ZAR",
     tag: "Multi-client practice",
     isPartner: true,
-    billedText: {
-      monthly: "Monthly billing",
-      annually: "R150,000 billed annually",
-    },
-    displayPrice: {
-      monthly: "R15,000",
-      annually: "R12,500",
-    },
+    billedText: { monthly: "Monthly billing", annually: "R150,000 billed annually" },
+    displayPrice: { monthly: "R15,000", annually: "R12,500" },
     periodText: "/ month",
     description: "For larger facilitator teams running multiple mandates and portfolios.",
     actionLabel: "Choose Partner",
@@ -776,7 +737,99 @@ export const cmfAddOns = [
   },
 ];
 
-// Card Backgrounds and Default User Data
+// ============================================================
+// CMF BILLING & MANAGED GROUPS
+// ============================================================
+export const cmfManagedRateDiscount = 0.2;
+export const cmfReferralFeeRate = 0.2;
+export const cmfSuccessFeeRate = 0.05;
+export const cmfVatRate = 0.15;
+
+export const smePremiumMonthly = 1200;
+export const smePremiumPilotMonthly = 600;
+
+export const cmfManagedGroupPricing = {
+  funder: {
+    label: "Funder or investor",
+    options: [
+      { key: "discover", label: "Discover (free, browse-only)", price: 0, licences: 0, countsAgainstPlan: false },
+      { key: "engage", label: "Engage (R2,000/mo)", price: 2000, licences: 3, countsAgainstPlan: true },
+      { key: "partner", label: "Partner (R6,500/mo)", price: 6500, licences: 10, countsAgainstPlan: true },
+    ],
+  },
+  catalyst: {
+    label: "Catalyst (ESD, accelerator, incubator)",
+    options: [
+      { key: "standard", label: "Standard (R2,000/mo)", price: 2000, licences: 3, countsAgainstPlan: true },
+      { key: "full", label: "Full (R6,500/mo)", price: 6500, licences: 10, countsAgainstPlan: true },
+    ],
+  },
+  corporate: {
+    label: "Corporate or procurement team",
+    options: [
+      { key: "standard", label: "Standard (R2,000/mo)", price: 2000, licences: 3, countsAgainstPlan: true },
+      { key: "full", label: "Full (R6,500/mo)", price: 6500, licences: 10, countsAgainstPlan: true },
+    ],
+  },
+  internSponsor: {
+    label: "Intern sponsor",
+    options: [
+      { key: "standard", label: "Standard (R2,000/mo)", price: 2000, licences: 3, countsAgainstPlan: true },
+      { key: "full", label: "Full (R6,500/mo)", price: 6500, licences: 10, countsAgainstPlan: true },
+    ],
+  },
+  sme: {
+    label: "SME (always Premium)",
+    options: [
+      { key: "premium", label: "Premium (R1,200/mo)", price: 1200, licences: 5, countsAgainstPlan: false },
+    ],
+  },
+  anotherCmf: {
+    label: "Another CMF (its own plan)",
+    options: [
+      { key: "launch", label: "Launch (R4,500/mo)", price: 4500, licences: 0, countsAgainstPlan: false },
+      { key: "growth", label: "Growth (R8,500/mo)", price: 8500, licences: 0, countsAgainstPlan: false },
+      { key: "partner", label: "Partner (R15,000/mo)", price: 15000, licences: 0, countsAgainstPlan: false },
+    ],
+  },
+};
+
+export const cmfSeatAndStorageAddOns = {
+  extraTeamSeatCmf: { label: "Extra team seat (CMF)", price: 350, unit: "per user per month" },
+  extraGuestSeatsCmf: { label: "Extra guest seats (CMF)", price: 500, unit: "per 10 per month" },
+  extraTeamSeatSme: { label: "Extra team seat (SME)", price: 150, unit: "per user per month" },
+  extraGuestSeatsSme: { label: "Extra guest seats (SME)", price: 200, unit: "per 5 per month" },
+  extraStorageCmf: { label: "Extra storage (CMF)", price: 150, unit: "per 10 GB per month" },
+};
+
+export const cmfWhiteLabelLevels = {
+  bigStandard: { label: "BIG standard", availableOn: ["pilot", "launch"], price: "Included" },
+  coBranded: { label: "Co-branded", availableOn: ["growth", "partner"], price: "Included in the plan" },
+  whiteLabel: {
+    label: "White-label",
+    availableOn: ["partner"],
+    price: "One-off setup plus a monthly uplift, quoted. Amounts TBC",
+  },
+};
+
+export const cmfProgrammeFees = {
+  core: { label: "Core", priceRange: "R250k – R400k", period: "per programme per year" },
+  scaled: { label: "Scaled", priceRange: "R400k – R700k", period: "per programme per year" },
+  enterprise: { label: "Enterprise", priceRange: "R700k – R1.5m+", period: "per programme per year" },
+};
+
+export const cmfVoucherFields = [
+  { key: "sponsor", label: "Sponsor", type: "text" },
+  { key: "beneficiary", label: "Beneficiary", type: "text" },
+  { key: "package", label: "Package", type: "select", options: ["Premium"] },
+  { key: "term", label: "Term (months)", type: "number" },
+  { key: "value", label: "Value", type: "computed" },
+  { key: "expiry", label: "Expiry", type: "date" },
+];
+
+// ============================================================
+// CARD BACKGROUNDS & DEFAULT USER DATA
+// ============================================================
 const cardBackgrounds = {
   investor: {
     discover: "linear-gradient(135deg, #F5F2F0 0%, #EFEBE9 100%)",
@@ -803,37 +856,15 @@ const cardBackgrounds = {
 };
 
 const defaultUserData = {
-  investor: {
-    name: "",
-    company: "",
-    email: "",
-    role: "investor",
-    fullName: "",
-  },
-  smse: {
-    name: "",
-    businessName: "",
-    email: "",
-    role: "smse",
-    fullName: "",
-  },
-  catalyst: {
-    name: "",
-    organization: "",
-    email: "",
-    role: "catalyst",
-    fullName: "",
-  },
-  cmf: {
-    name: "",
-    company: "",
-    email: "",
-    role: "cmf",
-    fullName: "",
-  },
+  investor: { name: "", company: "", email: "", role: "investor", fullName: "" },
+  smse: { name: "", businessName: "", email: "", role: "smse", fullName: "" },
+  catalyst: { name: "", organization: "", email: "", role: "catalyst", fullName: "" },
+  cmf: { name: "", company: "", email: "", role: "cmf", fullName: "" },
 };
 
-// Helper functions
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
 export const getPlanData = (userType) => {
   switch (userType) {
     case "investor": return investorPlans;

@@ -1,4 +1,4 @@
-// components/Subscriptions/ReusableSubscription.js
+// src/components/Subscriptions/Subscriptions.js
 "use client"
 import { useState, useEffect } from "react"
 import { v4 as uuidv4 } from "uuid"
@@ -97,7 +97,6 @@ const updateCurrentPlan = async (planName, billingCycle, additionalData = {}) =>
     if (!user) throw new Error("No user logged in")
     const userRef = doc(db, "users", user.uid)
     
-    // ✅ If this is a voucher source, include warningSent: false
     const updateData = {
       plan: planName,
       cycle: billingCycle,
@@ -105,7 +104,6 @@ const updateCurrentPlan = async (planName, billingCycle, additionalData = {}) =>
       ...additionalData
     }
     
-    // If voucher is being activated, add warningSent: false
     if (additionalData.source === "voucher" || additionalData.source === "voucher_expired") {
       updateData.warningSent = false
     }
@@ -192,7 +190,6 @@ const ReusableSubscription = ({
 
   const baseStyles = getSubStyles()
 
-  // ─── SME score state helpers ─────────────────────────────────────────────
   const isSme = userType === "smse"
 
   const getCurrentScoreState = () => {
@@ -214,135 +211,127 @@ const ReusableSubscription = ({
     return false
   }
 
-  // ─── CHECK FOR EXPIRED VOUCHER AND REVERT TO BASIC ──────────────────────
-const checkAndHandleExpiredVoucher = async () => {
-  if (!isSme || !currentSubscription) return false
-  
-  // Check if subscription came from a voucher
-  if (currentSubscription.source === "voucher" && currentSubscription.voucherExpiresAt) {
-    const expiryDate = new Date(currentSubscription.voucherExpiresAt)
-    const now = new Date()
+  const checkAndHandleExpiredVoucher = async () => {
+    if (!isSme || !currentSubscription) return false
     
-    // ✅ CALCULATE ALL TIME REMAINING VARIABLES
-    const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))
-    const hoursRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60))
-    const minutesRemaining = Math.ceil((expiryDate - now) / (1000 * 60))
-    
-    // ─── SEND EXPIRY WARNING EMAIL (3 days before) ──────────────────────
-    if (daysRemaining <= 3 && daysRemaining > 0 && !currentSubscription.warningSent) {
-      try {
-        const functions = getFunctions()
-        const sendVoucherExpiryWarningEmail = httpsCallable(functions, 'sendVoucherExpiryWarningEmail')
-        
-        const userEmail = user?.email
-        const companyName = companyName || user?.displayName || "User"
-        
-        if (userEmail) {
-          await sendVoucherExpiryWarningEmail({
-            to: userEmail,
-            name: companyName,
-            daysRemaining: daysRemaining,
-            voucherCode: currentSubscription.voucherCode || "N/A",
-            planName: currentSubscription.plan || "Premium",
-            expiryDate: expiryDate.toISOString()
-          })
-          
-          // Mark warning as sent to avoid duplicate emails
-          await updateDoc(doc(db, "users", user?.uid), {
-            "subscription.warningSent": true
-          })
-          
-          console.log(`✅ Voucher expiry warning email sent (${daysRemaining} days remaining)`)
-        }
-      } catch (emailError) {
-        console.error("❌ Failed to send voucher expiry warning email:", emailError)
-      }
-    }
-    
-    // ─── CHECK IF EXPIRED ──────────────────────────────────────────────────
-    if (now > expiryDate) {
-      console.log("⚠️ Voucher has expired! Reverting to basic plan...")
+    if (currentSubscription.source === "voucher" && currentSubscription.voucherExpiresAt) {
+      const expiryDate = new Date(currentSubscription.voucherExpiresAt)
+      const now = new Date()
       
-      const freePlan = plans[freePlanKey]
-      const scoreState = getSmeScoreState(freePlanKey)
+      const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))
+      const hoursRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60))
+      const minutesRemaining = Math.ceil((expiryDate - now) / (1000 * 60))
       
-      try {
-        const userRef = doc(db, "users", user?.uid)
-        const expiryRecord = {
-          id: uuidv4(),
-          email: user?.email,
-          plan: freePlan.name,
-          cycle: "monthly",
-          amount: 0,
-          fullName: fullName || user?.displayName,
-          companyName,
-          createdAt: new Date().toISOString(),
-          status: "Success",
-          autoRenew: false,
-          userId: user?.uid,
-          userType,
-          action: "voucher_expired",
-          previousPlan: currentSubscription.plan,
-          previousVoucherCode: currentSubscription.voucherCode,
-          expiryDate: expiryDate.toISOString(),
-          scoreState
-        }
-        
-        await saveSubscriptionToFirebase(expiryRecord)
-        await updateCurrentPlan(freePlan.name, "monthly", { 
-          userType, 
-          scoreState,
-          source: "voucher_expired",
-          previousVoucherCode: currentSubscription.voucherCode,
-          warningSent: false
-        })
-        
-        setCurrentSubscription(expiryRecord)
-        setSelectedPlan(freePlanKey)
-        
-        // ─── SEND EXPIRY NOTIFICATION EMAIL ──────────────────────────────
+      if (daysRemaining <= 3 && daysRemaining > 0 && !currentSubscription.warningSent) {
         try {
           const functions = getFunctions()
-          const sendVoucherExpiredEmail = httpsCallable(functions, 'sendVoucherExpiredEmail')
+          const sendVoucherExpiryWarningEmail = httpsCallable(functions, 'sendVoucherExpiryWarningEmail')
           
           const userEmail = user?.email
           const companyName = companyName || user?.displayName || "User"
           
           if (userEmail) {
-            await sendVoucherExpiredEmail({
+            await sendVoucherExpiryWarningEmail({
               to: userEmail,
               name: companyName,
+              daysRemaining: daysRemaining,
               voucherCode: currentSubscription.voucherCode || "N/A",
-              previousPlan: currentSubscription.plan || "Premium",
+              planName: currentSubscription.plan || "Premium",
               expiryDate: expiryDate.toISOString()
             })
-            console.log("✅ Voucher expired notification email sent")
+            
+            await updateDoc(doc(db, "users", user?.uid), {
+              "subscription.warningSent": true
+            })
+            
+            console.log(`✅ Voucher expiry warning email sent (${daysRemaining} days remaining)`)
           }
         } catch (emailError) {
-          console.error("❌ Failed to send voucher expired email:", emailError)
+          console.error("❌ Failed to send voucher expiry warning email:", emailError)
         }
-        
-        setTimeout(() => {
-          alert(`⚠️ Your voucher has expired!\n\nYou have been reverted to the ${freePlan.name} plan.\n\nTo regain premium features, please purchase a subscription or contact your catalyst for a new voucher.`)
-        }, 500)
-        
-        return true
-      } catch (error) {
-        console.error("Error handling expired voucher:", error)
       }
-    } else {
-      // Log time remaining
-      if (daysRemaining <= 3 && daysRemaining > 0) {
-        console.log(`⏰ Voucher expires in ${daysRemaining} days`)
-      } else if (hoursRemaining <= 24 && hoursRemaining > 0) {
-        console.log(`⏰ Voucher expires in ${hoursRemaining} hours`)
-      } else if (minutesRemaining <= 60 && minutesRemaining > 0) {
-        console.log(`⏰ Voucher expires in ${minutesRemaining} minutes`)
+      
+      if (now > expiryDate) {
+        console.log("⚠️ Voucher has expired! Reverting to basic plan...")
+        
+        const freePlan = plans[freePlanKey]
+        const scoreState = getSmeScoreState(freePlanKey)
+        
+        try {
+          const userRef = doc(db, "users", user?.uid)
+          const expiryRecord = {
+            id: uuidv4(),
+            email: user?.email,
+            plan: freePlan.name,
+            cycle: "monthly",
+            amount: 0,
+            fullName: fullName || user?.displayName,
+            companyName,
+            createdAt: new Date().toISOString(),
+            status: "Success",
+            autoRenew: false,
+            userId: user?.uid,
+            userType,
+            action: "voucher_expired",
+            previousPlan: currentSubscription.plan,
+            previousVoucherCode: currentSubscription.voucherCode,
+            expiryDate: expiryDate.toISOString(),
+            scoreState
+          }
+          
+          await saveSubscriptionToFirebase(expiryRecord)
+          await updateCurrentPlan(freePlan.name, "monthly", { 
+            userType, 
+            scoreState,
+            source: "voucher_expired",
+            previousVoucherCode: currentSubscription.voucherCode,
+            warningSent: false
+          })
+          
+          setCurrentSubscription(expiryRecord)
+          setSelectedPlan(freePlanKey)
+          
+          try {
+            const functions = getFunctions()
+            const sendVoucherExpiredEmail = httpsCallable(functions, 'sendVoucherExpiredEmail')
+            
+            const userEmail = user?.email
+            const companyName = companyName || user?.displayName || "User"
+            
+            if (userEmail) {
+              await sendVoucherExpiredEmail({
+                to: userEmail,
+                name: companyName,
+                voucherCode: currentSubscription.voucherCode || "N/A",
+                previousPlan: currentSubscription.plan || "Premium",
+                expiryDate: expiryDate.toISOString()
+              })
+              console.log("✅ Voucher expired notification email sent")
+            }
+          } catch (emailError) {
+            console.error("❌ Failed to send voucher expired email:", emailError)
+          }
+          
+          setTimeout(() => {
+            alert(`⚠️ Your voucher has expired!\n\nYou have been reverted to the ${freePlan.name} plan.\n\nTo regain premium features, please purchase a subscription or contact your catalyst for a new voucher.`)
+          }, 500)
+          
+          return true
+        } catch (error) {
+          console.error("Error handling expired voucher:", error)
+        }
+      } else {
+        if (daysRemaining <= 3 && daysRemaining > 0) {
+          console.log(`⏰ Voucher expires in ${daysRemaining} days`)
+        } else if (hoursRemaining <= 24 && hoursRemaining > 0) {
+          console.log(`⏰ Voucher expires in ${hoursRemaining} hours`)
+        } else if (minutesRemaining <= 60 && minutesRemaining > 0) {
+          console.log(`⏰ Voucher expires in ${minutesRemaining} minutes`)
+        }
       }
     }
+    return false
   }
-  return false
-}
 
   const styles = {
     ...baseStyles,
@@ -577,7 +566,6 @@ const checkAndHandleExpiredVoucher = async () => {
           const planKey = getCurrentPlanKey()
           setSelectedPlan(planKey)
           
-          // Check 3-day renewal reminder (SP8.47)
           if (subscriptionFromUser.autoRenew && subscriptionFromUser.amount > 0) {
             let renewalDate = subscriptionFromUser.renewalDate || subscriptionFromUser.trialEndDate;
             if (!renewalDate && subscriptionFromUser.createdAt) {
@@ -606,7 +594,6 @@ const checkAndHandleExpiredVoucher = async () => {
             }
           }
 
-          // Check if voucher expired (for SME users only)
           if (isSme) {
             await checkAndHandleExpiredVoucher()
           }
@@ -651,7 +638,6 @@ const checkAndHandleExpiredVoucher = async () => {
     }
   }
 
-  // ── Voucher functions with expiration handling ──────────────────────────────────
   const validateVoucher = async () => {
     if (!voucherCode.trim()) { setVoucherMessage("Please enter a voucher code"); setVoucherMessageType("error"); return }
     const auth = getAuth(); const user = auth.currentUser
@@ -665,7 +651,6 @@ const checkAndHandleExpiredVoucher = async () => {
       const voucherDoc = querySnapshot.docs[0]
       const voucherData = { id: voucherDoc.id, ...voucherDoc.data() }
       
-      // CHECK IF VOUCHER HAS EXPIRED
       if (voucherData.expiresAt && new Date(voucherData.expiresAt) < new Date()) { 
         setVoucherMessage(`❌ This voucher expired on ${new Date(voucherData.expiresAt).toLocaleString()}. Please request a new one.`); 
         setVoucherMessageType("error"); 
@@ -720,7 +705,6 @@ const checkAndHandleExpiredVoucher = async () => {
       if (!voucherDoc.exists()) { setVoucherMessage("Voucher not found"); setVoucherMessageType("error"); setAppliedVoucher(null); setValidatingVoucher(false); return }
       const voucherData = voucherDoc.data()
       
-      // DOUBLE CHECK EXPIRATION BEFORE REDEEMING
       if (voucherData.expiresAt && new Date(voucherData.expiresAt) < new Date()) { 
         setVoucherMessage(`❌ This voucher expired on ${new Date(voucherData.expiresAt).toLocaleString()}. Cannot redeem.`); 
         setVoucherMessageType("error"); 
@@ -771,7 +755,7 @@ const checkAndHandleExpiredVoucher = async () => {
           source: "voucher", 
           voucherId: appliedVoucher.id, 
           voucherCode: appliedVoucher.code,
-          voucherExpiresAt: appliedVoucher.expiresAt, // STORE EXPIRATION DATE
+          voucherExpiresAt: appliedVoucher.expiresAt,
           lastUpdated: new Date().toISOString(), 
           isTrialPeriod: false, 
           autoRenew: false, 
@@ -831,7 +815,6 @@ const checkAndHandleExpiredVoucher = async () => {
 
   const clearVoucher = () => { setAppliedVoucher(null); setVoucherCode(""); setVoucherMessage(""); setVoucherMessageType("") }
 
-  // ── Billing cycle toggle ───────────────────────────────────────────────
   const BillingCycleToggle = () => (
     <div style={baseStyles.billingToggleContainer}>
       <span style={{ color: colors.mediumBrown, fontWeight: 600, marginRight: "1rem" }}>Billing:</span>
@@ -856,7 +839,6 @@ const checkAndHandleExpiredVoucher = async () => {
     </div>
   )
 
-  // ── Feature comparison table ───────────────────────────────────────────
   const FeatureComparisonTable = () => {
     const planKeys = Object.keys(plans)
     return (
@@ -921,7 +903,6 @@ const checkAndHandleExpiredVoucher = async () => {
     )
   }
 
-  // ─── Direct upgrade/downgrade handler ───────────────────────────
   const handleUpgradeDowngrade = async (targetPlanKey) => {
     if (!user) {
       alert("Please log in to manage your subscription")
@@ -930,7 +911,6 @@ const checkAndHandleExpiredVoucher = async () => {
 
     const currentPlanKey = getCurrentPlanKey()
     
-    // If no current subscription or same plan, just subscribe
     if (!currentSubscription || currentPlanKey === targetPlanKey) {
       setSelectedPlan(targetPlanKey)
       await processSubscription(targetPlanKey)
@@ -940,7 +920,6 @@ const checkAndHandleExpiredVoucher = async () => {
     const isUpgrade = planOrder[targetPlanKey] > planOrder[currentPlanKey]
     const action = isUpgrade ? "upgrade" : "downgrade"
 
-    // Show confirmation modal
     setUpgradeDowngradeAction(action)
     setSelectedPlan(targetPlanKey)
     setShowPlanChangeConfirm(true)
@@ -951,21 +930,17 @@ const checkAndHandleExpiredVoucher = async () => {
     const planPrice = plan.price[billingCycle]
     const scoreState = isSme ? getSmeScoreState(planKey) : null
 
-    // Get user details from Firebase Auth as fallback
     const userEmail = user?.email
     const userFullName = user?.displayName || user?.email?.split('@')[0] || "Valued Customer"
     
-    // For existing users, use their auth data automatically
     if (isExistingUser && currentSubscription) {
       if (!userEmail) {
         alert("Please ensure your account has a valid email address")
         return
       }
-      // Set the state if not already set
       if (!email) setEmail(userEmail)
       if (!fullName) setFullName(userFullName)
     } else {
-      // For new users, validate the form
       const validationResult = validate(email || userEmail, fullName || userFullName)
       if (!validationResult.isValid) {
         setErrors(validationResult.errors)
@@ -974,7 +949,6 @@ const checkAndHandleExpiredVoucher = async () => {
       }
     }
 
-    // For free plan
     if (planPrice === 0) {
       setPaymentProcessing(true)
       try {
@@ -999,7 +973,6 @@ const checkAndHandleExpiredVoucher = async () => {
         setCurrentSubscription(newRecord)
         setIsExistingUser(true)
 
-        // Multi-channel notification dispatch
         notifySubscriptionStarted({
           planName: plan.name,
           billingCycle,
@@ -1024,7 +997,6 @@ const checkAndHandleExpiredVoucher = async () => {
       return
     }
 
-    // For paid plan - continue with payment processing
     setPaymentProcessing(true)
     try {
       const mockPaymentResult = await processMockPayment({
@@ -1081,7 +1053,6 @@ const checkAndHandleExpiredVoucher = async () => {
         setCurrentSubscription(newRecord)
         setIsExistingUser(true)
 
-        // Multi-channel notification dispatch
         notifySubscriptionStarted({
           planName: plan.name,
           billingCycle,
@@ -1094,7 +1065,6 @@ const checkAndHandleExpiredVoucher = async () => {
           customerName: fullName || userFullName,
         }).catch(err => console.error("Notification dispatch error:", err))
 
-        // Check if this action is an upgrade (SP8.51)
         const isUpgrade = isExistingUser && planOrder[planKey] > planOrder[getCurrentPlanKey()];
         if (isUpgrade) {
           notifyPlanUpgrade({
@@ -1122,7 +1092,6 @@ const checkAndHandleExpiredVoucher = async () => {
       }
     } catch (error) {
       console.error("Payment processing error:", error)
-      // Multi-channel payment failed dispatch with interactive retry
       notifyPaymentFailed({
         planName: plan.name,
         billingCycle,
@@ -1187,7 +1156,6 @@ const checkAndHandleExpiredVoucher = async () => {
       setCurrentSubscription(cancellationRecord)
       setSelectedPlan(freePlanKey)
 
-      // Multi-channel cancellation dispatch
       notifySubscriptionCancelled({
         planName: currentSubscription.plan,
         effectiveDate: currentSubscription.trialEndDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1204,7 +1172,6 @@ const checkAndHandleExpiredVoucher = async () => {
     }
   }
 
-  // ── Add-on handlers ───────────────────────────────────────────────────
   const handleAddOnClick = (addOn) => { setSelectedAddOn(addOn); setShowAddOnModal(true) }
   const handleAddOnPayment = async () => {
     if (!user || !selectedAddOn) { alert("Please log in to purchase add-ons"); return }
@@ -1216,7 +1183,6 @@ const checkAndHandleExpiredVoucher = async () => {
         await saveSubscriptionToFirebase(addOnRecord)
         setHistory([addOnRecord, ...history])
 
-        // Multi-channel notification dispatch
         notifySubscriptionStarted({
           planName: selectedAddOn.name,
           billingCycle: "one-time",
@@ -1249,7 +1215,6 @@ const checkAndHandleExpiredVoucher = async () => {
     finally { setPaymentProcessing(false) }
   }
 
-  // ── Load user data on mount ───────────────────────────────────────────
   useEffect(() => {
     const loadUserData = async () => {
       if (user) {
@@ -1276,18 +1241,16 @@ const checkAndHandleExpiredVoucher = async () => {
     loadUserData()
   }, [user])
 
-  // Check for voucher expiry periodically (every minute)
   useEffect(() => {
     if (!isSme || !currentSubscription) return
     
     const interval = setInterval(() => {
       checkAndHandleExpiredVoucher()
-    }, 60000) // Check every minute
+    }, 60000)
     
     return () => clearInterval(interval)
   }, [currentSubscription, isSme])
 
-  // ── Loading state ─────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div style={baseStyles.container}>
@@ -1301,19 +1264,14 @@ const checkAndHandleExpiredVoucher = async () => {
     )
   }
 
-  // Check if current subscription has expired voucher (for display)
   const isVoucherExpired = isSme && currentSubscription?.source === "voucher" && 
     currentSubscription?.voucherExpiresAt && new Date(currentSubscription.voucherExpiresAt) < new Date()
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div style={baseStyles.container}>
       <div style={baseStyles.mainCard}>
         <div style={baseStyles.decorativeElement}></div>
 
-        {/* Beta / Trial Notice */}
         <div style={baseStyles.betaNotice}>
           <span style={baseStyles.betaIcon}>🎉</span>
           <strong>Special Launch Offer:</strong> Get your first{" "}
@@ -1324,7 +1282,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </small>
         </div>
 
-        {/* EXPIRED VOUCHER BANNER - Show if voucher expired and user is on basic */}
         {isSme && isVoucherExpired && (
           <div style={styles.expiredVoucherBanner}>
             <AlertCircle size={22} style={{ flexShrink: 0 }} />
@@ -1338,7 +1295,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* SME Score State Banner */}
         {isSme && showStaleWarning() && (
           <div style={styles.staleWarningBanner}>
             <ShieldOff size={22} style={{ flexShrink: 0, marginTop: "2px" }} />
@@ -1351,7 +1307,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Voucher Section - ONLY SHOW FOR SME USERS */}
         {isSme && (
           <>
             <div style={styles.voucherToggle} onClick={() => setShowVoucherInput(!showVoucherInput)}>
@@ -1397,7 +1352,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </>
         )}
 
-        {/* Page title & current sub info */}
         {isExistingUser && currentSubscription ? (
           <>
             <h1 style={baseStyles.pageTitle}>{customTitle || "Manage Your Subscription"}</h1>
@@ -1435,10 +1389,8 @@ const checkAndHandleExpiredVoucher = async () => {
           </>
         )}
 
-        {/* Feature Comparison Table */}
         <FeatureComparisonTable />
 
-        {/* ── PRICING CARDS WITH DIRECT UPGRADE/DOWNGRADE BUTTONS ── */}
         <div style={styles.planGrid}>
           {Object.entries(plans).map(([planKey, plan]) => {
             const isCurrentPlan = isExistingUser && getCurrentPlanKey() === planKey
@@ -1448,7 +1400,6 @@ const checkAndHandleExpiredVoucher = async () => {
             const cardBackground = cardBackgrounds[planKey] || colors.offWhite
             const cardScoreState = isSme ? getSmeScoreState(planKey) : null
 
-            // Determine button text based on subscription state
             const getButtonText = () => {
               if (isCurrentPlan) return "Current Plan"
               if (!isExistingUser) {
@@ -1564,7 +1515,6 @@ const checkAndHandleExpiredVoucher = async () => {
           })}
         </div>
 
-        {/* Add-ons */}
         {showAddOns && addOns.length > 0 && (
           <div style={baseStyles.addOnsSection}>
             <h3 style={baseStyles.addOnsTitle}>Add-ons</h3>
@@ -1580,7 +1530,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Downgrade Section */}
         {isExistingUser && currentSubscription && getCurrentPlanKey() !== freePlanKey && !isVoucherExpired && (
           <div style={baseStyles.downgradeSection}>
             <h3 style={{ color: colors.darkBrown, marginBottom: "1rem", fontSize: "1.25rem" }}>Need to change your plan?</h3>
@@ -1589,7 +1538,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Subscription Management */}
         {isExistingUser && currentSubscription && !isVoucherExpired && (
           <div style={{ background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, borderRadius: "16px", padding: "2rem", marginTop: "3rem", border: `1px solid ${colors.lightTan}` }}>
             <h3 style={{ color: colors.darkBrown, marginBottom: "1.5rem", fontSize: "1.5rem", fontWeight: 700, textAlign: "center" }}>Subscription Management</h3>
@@ -1600,7 +1548,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Processing Modal */}
         {paymentProcessing && (
           <div style={baseStyles.planChangeModal}>
             <div style={{ background: colors.offWhite, padding: "2rem", borderRadius: "24px", maxWidth: "400px", width: "100%", boxShadow: `0 24px 60px ${colors.darkBrown}33`, border: `1px solid ${colors.lightTan}`, position: "relative", textAlign: "center" }}>
@@ -1611,7 +1558,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Failed Payment Modal */}
         {failedPayment.hasFailed && (
           <div style={baseStyles.planChangeModal}>
             <div style={{ ...baseStyles.modalContent, borderTop: `5px solid ${colors.errorRed || '#ef4444'}` }}>
@@ -1658,7 +1604,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Plan Change Confirmation Modal */}
         {showPlanChangeConfirm && (
           <div style={baseStyles.planChangeModal}>
             <div style={baseStyles.modalContent}>
@@ -1676,7 +1621,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Downgrade Options Modal */}
         {showDowngradeOptions && (
           <div style={baseStyles.planChangeModal}>
             <div style={baseStyles.modalContent}>
@@ -1698,7 +1642,6 @@ const checkAndHandleExpiredVoucher = async () => {
           </div>
         )}
 
-        {/* Add-on Modal */}
         {showAddOnModal && selectedAddOn && (
           <div style={baseStyles.planChangeModal}>
             <div style={baseStyles.modalContent}>
