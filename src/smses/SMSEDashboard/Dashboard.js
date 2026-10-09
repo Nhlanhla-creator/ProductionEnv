@@ -27,6 +27,11 @@ import {
 } from "firebase/firestore";
 import { API_KEYS } from "../../API"
 
+// ─── ADDED FOR OPERATIONS SETUP ─────────────────────────────────────────
+import OperationsSetupCard from "../../digitalTwin/components/OperationsSetupCard"
+import { shouldShowTwinCard } from "../../digitalTwin/utils/detectTwinRelevance"
+// ────────────────────────────────────────────────────────────────────────
+
 const sendMessageToChatGPT = async (message) => {
   try {
     const functions = getFunctions();
@@ -79,11 +84,9 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
       setError(null);
 
       try {
-        // STEP 1: Check if there's a trigger flag asking for a fresh evaluation
         const shouldTriggerNew = await checkAnyEvaluationTrigger(userId);
 
         if (shouldTriggerNew) {
-          // Trigger wins – always regenerate
           console.log("Trigger detected → generating new evaluation");
           setIsGeneratingNew(true);
           await generateNewEvaluation(userId);
@@ -92,16 +95,13 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
           return;
         }
 
-        // STEP 2: Try to load an existing summary from Firebase
         const existingSummary = await loadSummaryFromFirebase(userId);
 
         if (existingSummary && existingSummary.reportData) {
-          // Validate the saved summary isn't a stub / fallback
           const summaryIsFallback = isFallbackSummary(existingSummary.improvementSummary);
           const reportHasData = hasValidEvaluationData(existingSummary.reportData);
 
           if (!summaryIsFallback && reportHasData) {
-            // STEP 2a: Good existing data – use it
             console.log("Using cached summary from Firebase");
             setReportData(existingSummary.reportData);
             setTopPriorities(existingSummary.topPriorities || []);
@@ -109,13 +109,11 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
             return;
           }
 
-          // STEP 2b: Cached data exists but is a fallback stub – regenerate
           console.log("Cached summary is a fallback → regenerating");
           await generateNewEvaluation(userId);
           return;
         }
 
-        // STEP 3: No data found at all (new user) – generate from scratch
         console.log("No existing summary found (new user) → generating from scratch");
         await generateNewEvaluation(userId);
 
@@ -149,7 +147,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         };
       }
 
-      // Fallback paths (legacy / alternative storage)
       const [altSnap1, altSnap2] = await Promise.all([
         getDoc(doc(db, "users", userId, "summary", "latest")),
         getDoc(doc(db, "summaryReports", userId)),
@@ -158,7 +155,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
       if (altSnap1.exists()) return processSnapshotData(altSnap1);
       if (altSnap2.exists()) return processSnapshotData(altSnap2);
 
-      return null; // truly new user
+      return null;
     } catch (error) {
       console.error("loadSummaryFromFirebase error:", error.message);
       return null;
@@ -190,12 +187,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  // Was named "...Fundability..." but only ever checked triggerLegitimacyEvaluation
-  // — the summary would silently miss regeneration whenever a governance,
-  // leadership, operational, or fundability trigger fired on its own. Now
-  // checks every trigger flag that any of the 5 pillar cards can set,
-  // including the shared triggerGovernanceEvaluation flag Operational
-  // Strength piggybacks on for now.
   const ALL_TRIGGER_FLAGS = [
     "triggerComplianceEvaluation",
     "triggerLegitimacyEvaluation",
@@ -230,10 +221,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
 
   // ─── Validation helpers ──────────────────────────────────────────────────────
 
-  /**
-   * Returns true when the stored improvement summary is clearly a stub/fallback
-   * and should NOT be treated as real content.
-   */
   const isFallbackSummary = (summary) => {
     if (!summary || summary.trim().length === 0) return true;
     const fallbackPhrases = [
@@ -306,7 +293,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         operational: false,
       };
 
-      // Combined evaluations
       const combinedQuery = query(
         collection(db, "combinedEvaluations"),
         where("userId", "==", userId)
@@ -322,7 +308,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
           combinedData.status || getScoreLevel(newReportData.overallScore).level;
       }
 
-      // All individual evaluations in parallel
       const [fundSnap, legitSnap, profileSnap, governanceSnap, leadershipSnap, operationalSnap, bigEvalSnap] =
   await Promise.all([
     getDoc(doc(db, "aiFundabilityEvaluations", userId)),
@@ -333,16 +318,10 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     getDoc(doc(db, "aiOperationalEvaluations", userId)),
     getDoc(doc(db, "bigEvaluations", userId)),
   ]);
-// ── Authoritative scores from bigEvaluations ──────────────────────
-// big-score.js now saves scores.governanceLeadership and scores.operational
-// (the combined Leadership & Governance card + standalone Operational
-// Strength card) — NOT scores.governance / scores.leadership / scores.pis,
-// which no longer exist in this document. Reading those old keys always
-// silently resolved to undefined.
 if (bigEvalSnap.exists()) {
   const bigEvalData = bigEvalSnap.data();
   const scores = bigEvalData.scores || {};
-  newReportData.bigScore            = scores.bigScore       ?? 0;  // ← explicit bigScore
+  newReportData.bigScore            = scores.bigScore       ?? 0;
   newReportData.overallScore        = scores.bigScore       ?? newReportData.overallScore;
   newReportData.governanceLeadershipScore = scores.governanceLeadership ?? newReportData.governanceLeadershipScore;
   newReportData.operationalScore    = scores.operational    ?? newReportData.operationalScore;
@@ -372,7 +351,6 @@ if (bigEvalSnap.exists()) {
   const profileData = profileSnap.data();
   availableData.profile = true;
   newReportData.aiEvaluations.profile = profileData;
-  // Only use profile scores as fallback if bigEvaluations didn't provide them
   if (!bigEvalSnap.exists()) {
     newReportData.overallScore = profileData.bigScore || newReportData.overallScore;
     if (!availableData.combinedEvaluations) {
@@ -380,7 +358,6 @@ if (bigEvalSnap.exists()) {
     }
   }
 
-  // ── Compliance document analysis ──────────────────────────────────
   const complianceRubric = [
     {
       label: "CIPC business registration",
@@ -438,7 +415,6 @@ if (bigEvalSnap.exists()) {
     },
   ];
 
-  // Also pull rejected/flagged docs from *_multiple arrays
   const multipleDocFields = [
     { key: "CV_multiple", label: "CV" },
     { key: "cv_multiple", label: "CV" },
@@ -468,14 +444,6 @@ if (bigEvalSnap.exists()) {
   newReportData.rejectedDocs = rejectedDocs;
 }
 
-      // aiGovernanceEvaluation / aiLeadershipEvaluation only ever store
-      // { result, timestamp, profileSnapshot } — there is no numeric score
-      // field on either doc, so reading governanceData.governanceScore or
-      // leadershipData.leadershipScore always silently resolved to 0. The
-      // real combined Leadership & Governance number lives in bigEvaluations
-      // (handled above); these two docs are only used here for their raw AI
-      // text, which feeds the "Leadership & Governance Evaluation" section
-      // of the improvement summary below.
       if (governanceSnap.exists()) {
         availableData.governance = true;
         newReportData.aiEvaluations.governance = governanceSnap.data() || {};
@@ -487,15 +455,11 @@ if (bigEvalSnap.exists()) {
         availableData.leadership = true;
         newReportData.aiEvaluations.leadership = leadershipSnap.data() || {};
       } else if (!governanceSnap.exists()) {
-        // Avoid double-listing "missing" when both docs are absent — the
-        // combined card fires both AI calls together, so if one is missing
-        // both usually are.
+        // Avoid double-listing
       } else {
         newReportData.missingSections.push("Leadership & Governance Evaluation");
       }
 
-      // aiOperationalEvaluations similarly only stores { result, timestamp }
-      // — the numeric Operational Strength score comes from bigEvaluations.
       if (operationalSnap.exists()) {
         availableData.operational = true;
         newReportData.aiEvaluations.operational = operationalSnap.data() || {};
@@ -503,9 +467,6 @@ if (bigEvalSnap.exists()) {
         newReportData.missingSections.push("Operational Strength Evaluation");
       }
 
-      // Weighted average — only used as a fallback when bigEvaluations
-      // itself hasn't been computed yet; once it exists, its own bigScore
-      // is authoritative and this block is skipped.
       const scores = [];
       if (newReportData.governanceLeadershipScore) scores.push(newReportData.governanceLeadershipScore);
       if (newReportData.operationalScore) scores.push(newReportData.operationalScore);
@@ -521,7 +482,6 @@ if (bigEvalSnap.exists()) {
         }
       }
 
-      // Detailed scores from markdown
       if (newReportData.structuredContent.governance?.rawContent) {
         newReportData.detailedScores = [
           ...newReportData.detailedScores,
@@ -568,7 +528,6 @@ if (bigEvalSnap.exists()) {
 
       setReportData(newReportData);
 
-      // Generate AI narrative – always try; fall back to basic if no data at all
       const hasAnyData = Object.values(availableData).some((v) => v);
       if (hasAnyData) {
         await generateAIInsights(newReportData, userId);
@@ -609,8 +568,6 @@ if (bigEvalSnap.exists()) {
     await saveSummaryToFirebase(userId, {
       reportData,
       topPriorities: fallbackPriorities,
-      // Use the full markdown text (not the stub phrase) so isFallbackSummary
-      // won't trigger a re-generation on the next load.
       improvementSummary: basicSummary,
       userId,
     });
@@ -634,7 +591,6 @@ const rejectedDocsText = (reportData.rejectedDocs || []).length
   : "No rejected documents.";
 
   const scoreSummaryText = `
-
 Compliance: ${reportData.complianceScore ?? "N/A"}
 Legitimacy: ${reportData.legitimacyScore ?? "N/A"}
 Leadership & Governance: ${reportData.governanceLeadershipScore ?? "N/A"}
@@ -750,7 +706,6 @@ Keep it concise, professional, and actionable.
     } catch (err) {
       console.error("generateAIInsights error:", err);
 
-      // Even on error, set something meaningful so the UI isn't empty
       const fallbackPriorities = generateIntelligentFallback(reportData);
       const fallbackSummary =
         "### Evaluation Summary\n- Complete all profile sections for a detailed analysis.\n- Provide financial documentation to improve your fundability score.\n- Strengthen governance and leadership documentation.";
@@ -768,8 +723,6 @@ Keep it concise, professional, and actionable.
       setPrioritiesLoading(false);
     }
   };
-
-  // ─── Fallback / utility helpers ──────────────────────────────────────────────
 
   const generateIntelligentFallback = (reportData) => {
     const scores = {
@@ -901,8 +854,6 @@ Keep it concise, professional, and actionable.
         ];
   };
 
-  // ─── Download ────────────────────────────────────────────────────────────────
-
   const handleDownloadReport = () => {
     if (!reportData) return;
 
@@ -984,8 +935,6 @@ Keep it concise, professional, and actionable.
     window.URL.revokeObjectURL(url);
   };
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
       <div style={{ padding: 20, color: "#5D4037" }}>
@@ -1008,7 +957,6 @@ Keep it concise, professional, and actionable.
 
   return (
     <>
-      {/* ── Compact card ── */}
       <div
         className="summary-report-card"
         style={{
@@ -1036,7 +984,6 @@ Keep it concise, professional, and actionable.
       >
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "4px", background: "linear-gradient(90deg, #8D6E63, #A1887F, #BCAAA4)" }} />
 
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div style={{ padding: "12px", backgroundColor: "rgba(255,255,255,0.15)", borderRadius: "12px" }}>
@@ -1053,7 +1000,6 @@ Keep it concise, professional, and actionable.
           </div>
         </div>
 
-        {/* Top 3 Priorities */}
         <div style={{ marginBottom: "20px" }}>
           <h4 style={{ fontSize: "0.9rem", fontWeight: "600", color: "#EFEBE9", margin: "0 0 16px 0", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ padding: "4px", backgroundColor: "rgba(255,255,255,0.15)", borderRadius: "6px" }}>🎯</span>
@@ -1088,7 +1034,6 @@ Keep it concise, professional, and actionable.
           )}
         </div>
 
-        {/* View Full Report */}
         <button
           onClick={() => setShowReportModal(true)}
           style={{ width: "100%", background: "linear-gradient(135deg, #8D6E63, #A1887F)", border: "none", color: "white", fontSize: "1rem", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", padding: "12px 24px", borderRadius: "12px", transition: "all 0.3s ease", boxShadow: "0 4px 16px rgba(141,110,99,0.3)", textTransform: "uppercase", letterSpacing: "0.5px" }}
@@ -1100,7 +1045,6 @@ Keep it concise, professional, and actionable.
         </button>
       </div>
 
-      {/* ── Full Report Modal ── */}
       {showReportModal && reportData && (
         <div
           className="modal-overlay"
@@ -1112,7 +1056,6 @@ Keep it concise, professional, and actionable.
             style={{ backgroundColor: "#ffffff", borderRadius: "20px", maxWidth: "900px", width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 60px rgba(0,0,0,0.4)", position: "relative", overflow: "hidden" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
             <div style={{ background: "linear-gradient(135deg, #5D4037 0%, #3E2723 100%)", color: "white", padding: "32px", position: "relative" }}>
               <button
                 onClick={() => setShowReportModal(false)}
@@ -1129,7 +1072,6 @@ Keep it concise, professional, and actionable.
               </div>
             </div>
 
-            {/* Modal Body */}
             <div style={{ padding: "40px", overflowY: "auto", flex: 1 }}>
               <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "32px", border: "1px solid #dee2e6", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
@@ -1184,29 +1126,19 @@ export function Dashboard() {
   const [currentDashboardStep, setCurrentDashboardStep] = useState(0)
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [activeTab, setActiveTab] = useState("bigscore") // New state for tab management
+  const [activeTab, setActiveTab] = useState("bigscore")
 
-  // Score states for BIG Score calculation
   const [complianceScore, setComplianceScore] = useState(0)
   const [legitimacyScore, setLegitimacyScore] = useState(0)
-  const [governanceLeadershipScore, setGovernanceLeadershipScore] = useState(0) // Leadership & Governance, combined
-  const [operationalScore, setOperationalScore] = useState(0) // Operational Strength
+  const [governanceLeadershipScore, setGovernanceLeadershipScore] = useState(0)
+  const [operationalScore, setOperationalScore] = useState(0)
   const [fundabilityScore, setFundabilityScore] = useState(0)
-  // Add these state variables after existing state declarations in Dashboard component
+
 const [companyOwnerId, setCompanyOwnerId] = useState(null);
 const [isCompanyMember, setIsCompanyMember] = useState(false);
 const [effectiveUserId, setEffectiveUserId] = useState(null);
 const [userRole, setUserRole] = useState(null);
 
-  // ─── Investor / catalyst "viewing this SME's dashboard" mode ─────────────
-  // Set by SupportSMETable.jsx's "Open BIG Score Page" action (and, more
-  // generally, anywhere else that already uses this session-storage
-  // pattern for Growth Suite / Documents navigation): viewingSMEId,
-  // viewingSMEName, investorViewMode, viewOrigin. viewOnlyBigScore is new —
-  // it's what tells *this* page specifically to lock down to just the BIG
-  // Score tab (no "Improve My BIG Score" tools tab, no tab switching) and
-  // show a Back control, rather than rendering the logged-in catalyst's own
-  // dashboard data.
   const [isBigScoreOnlyView, setIsBigScoreOnlyView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
@@ -1232,12 +1164,6 @@ const [userRole, setUserRole] = useState(null);
     window.history.back()
   }
 
-  // Whichever user's data should actually be displayed: the SME being
-  // viewed (catalyst mode) takes priority over the logged-in user's own
-  // effectiveUserId (company-membership resolution below).
-    // Whichever user's data should actually be displayed: the SME being
-  // viewed (facilitator / catalyst / investor mode) takes priority over the logged-in user's own
-  // effectiveUserId (company-membership resolution below).
   const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
   const storedSMEId = sessionStorage.getItem("viewingSMEId");
   const storedSMEName = sessionStorage.getItem("viewingSMEName");
@@ -1286,7 +1212,6 @@ const [userRole, setUserRole] = useState(null);
     backgroundBrown: "#EFEBE9",
   }
 
-  // Add/remove body class to prevent scrolling when modal is open
   useEffect(() => {
     if (showDashboardPopup) {
       document.body.classList.add('modal-open');
@@ -1298,7 +1223,6 @@ const [userRole, setUserRole] = useState(null);
       document.body.style.width = '';
     }
 
-    // Cleanup on unmount
     return () => {
       document.body.classList.remove('modal-open');
       document.body.style.position = '';
@@ -1310,14 +1234,13 @@ const [userRole, setUserRole] = useState(null);
     const userId = auth.currentUser?.uid
     return userId ? `${baseKey}_${userId}` : baseKey
   }
+
 useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     if (user) {
       try {
         setIsAuthenticated(true);
 
-        // Resolve whose data to show: the company owner's (default for members),
-        // or the member's own profile if they switched scope.
         const ctx = await resolveProfileContext({ force: true });
         setUserRole(ctx.role);
         setIsCompanyMember(ctx.isMember);
@@ -1344,7 +1267,7 @@ useEffect(() => {
 
   const fetchProfileData = async () => {
     try {
-      const userId = targetUserId; // The SME being viewed (catalyst mode) or the logged-in user's own effective ID
+      const userId = targetUserId;
 
       const docRef = doc(db, "universalProfiles", userId);
       const docSnap = await getDoc(docRef);
@@ -1355,8 +1278,6 @@ useEffect(() => {
         console.error("No profile found");
       }
 
-      // Don't show the first-time onboarding tour while a catalyst is
-      // viewing someone else's BIG Score — it's not their dashboard.
       if (!isBigScoreOnlyView) {
         const hasSeenDashboardPopup = localStorage.getItem(getUserSpecificKey("hasSeenDashboardPopup")) === "true";
         if (!hasSeenDashboardPopup) {
@@ -1436,9 +1357,31 @@ useEffect(() => {
   userName={(isInvestorView && storedSMEName) ? storedSMEName : (isBigScoreOnlyView ? viewingSMEName : userName)}
   showScopeSwitcher={!isBigScoreOnlyView && !isInvestorView}
 />
-          {/* ─── Catalyst "viewing this SME's BIG Score" banner ────────────
-              Only rendered in restricted view mode; this is the "back"
-              button the catalyst needs to return to their own view. */}
+
+          {/* ─── ADDED FOR OPERATIONS SETUP ────────────────────────────────
+              The Operations Command Centre setup card. Renders only when:
+                - not in catalyst/facilitator/investor view
+                - user is not a read-only viewer
+                - the SME's declared sector/offerings indicate they run
+                  physical operations (see detectTwinRelevance.js)
+              The card itself then picks one of three states based on the
+              tenant's onboarding record: start / resume / live. */}
+          {!isBigScoreOnlyView && !isInvestorView && userRole !== "viewer" && shouldShowTwinCard(profileData) && (
+            <div style={{ marginTop: "20px" }}>
+              <OperationsSetupCard
+                onNavigate={(target) => {
+                  if (target === "dashboard") {
+                    window.location.href = "/digital-twin/dashboard"
+                  } else if (target === "setup") {
+                    window.location.href = "/digital-twin/setup"
+                  }
+                }}
+              />
+            </div>
+          )}
+          {/* ─────────────────────────────────────────────────────────────── */}
+
+          {/* ─── Catalyst "viewing this SME's BIG Score" banner ──────────── */}
           {isBigScoreOnlyView && (
             <div style={{
               display: 'flex',
@@ -1512,9 +1455,6 @@ useEffect(() => {
     </p>
   </div>
 )}
-          {/* Tab Navigation — hidden entirely in the BIG-Score-only view;
-              there's nothing to switch to and no reason to expose the
-              tools tab for a business the catalyst is just reviewing. */}
           {!isBigScoreOnlyView && (
           <section className="tab-navigation" style={{ marginTop: '40px', marginBottom: '30px' }}>
             <div style={{
@@ -1583,20 +1523,13 @@ useEffect(() => {
           </section>
           )}
 
-          {/* Conditional Content Based on Active Tab — forced to "bigscore"
-              and never "tools" while isBigScoreOnlyView is active, since
-              there's no UI left that can set activeTab to "tools" in that
-              mode (the tab nav above is hidden) and the mode-entry effect
-              always sets it to "bigscore". */}
           {activeTab === "bigscore" ? (
             <>
-              {/* Top Row - Application Tracker (full width) */}
               <section className="tracker-section" style={{ marginBottom: '20px' }}>
                <ApplicationTracker styles={styles} userId={targetUserId} />
 
               </section>
 
-              {/* Row 1 - BIG Score, Customer Reviews, and wider Summary Report */}
               <section className="big-score-reviews-row" style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1.5fr',
@@ -1677,7 +1610,7 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setComplianceScore}
   apiKey={apiKey}
-  userId={targetUserId} // Add this prop
+  userId={targetUserId}
 />
 
 <LegitimacyScoreCard
@@ -1685,7 +1618,7 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setLegitimacyScore}
   apiKey={apiKey}
-  userId={targetUserId} // Add this prop
+  userId={targetUserId}
 />
 
 <GovernanceLeadershipScoreCard
@@ -1693,7 +1626,7 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setGovernanceLeadershipScore}
   apiKey={apiKey}
-  userId={targetUserId} // Add this prop
+  userId={targetUserId}
 />
 
 <OperationalStrengthScoreCard
@@ -1701,19 +1634,18 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setOperationalScore}
   apiKey={apiKey}
-  userId={targetUserId} // Add this prop
+  userId={targetUserId}
 />
 
 <FundabilityScoreCard
   profileData={profileData?.formData}
-  userId={targetUserId} // Changed from profileData?.id
+  userId={targetUserId}
   onScoreUpdate={setFundabilityScore}
   apiKey={apiKey}
 />
                 </section>
               )}
 
-              {/* Loading indicator while API key is being fetched */}
               {!apiKey && (
                 <section className="individual-scores-row" style={{
                   display: 'grid',
@@ -1755,7 +1687,6 @@ useEffect(() => {
               )}
             </>
           ) : (
-            // Tools & Templates Tab Content
             <section className="tools-section">
               <ShopToolsPage />
             </section>
@@ -1763,7 +1694,6 @@ useEffect(() => {
         </main>
       </div>
 
-      {/* Additional CSS for responsive design - UPDATED for 5 cards */}
       <style>{`
         /* Prevent body scroll when modal is open */
         body.modal-open {
@@ -1902,31 +1832,31 @@ useEffect(() => {
 
         @media (max-width: 1400px) {
           .individual-scores-row {
-            grid-template-columns: repeat(3, 1fr) !important; /* 3 columns on smaller desktops */
+            grid-template-columns: repeat(3, 1fr) !important;
           }
         }
 
         @media (max-width: 1200px) {
           .big-score-reviews-row {
-            grid-template-columns: 1fr 2fr !important; /* Stack BIG Score and Customer Reviews, keep Summary Report wider */
+            grid-template-columns: 1fr 2fr !important;
           }
           
           .individual-scores-row {
-            grid-template-columns: repeat(3, 1fr) !important; /* 3 columns on tablets */
+            grid-template-columns: repeat(3, 1fr) !important;
           }
         }
 
         @media (max-width: 1024px) {
           .big-score-reviews-row {
-            grid-template-columns: repeat(2, 1fr) !important; /* Two columns on tablets */
+            grid-template-columns: repeat(2, 1fr) !important;
           }
           
           .summary-report-card {
-            grid-column: 1 / -1; /* Summary Report spans full width on tablets */
+            grid-column: 1 / -1;
           }
           
           .individual-scores-row {
-            grid-template-columns: repeat(2, 1fr) !important; /* 2 columns on smaller tablets */
+            grid-template-columns: repeat(2, 1fr) !important;
           }
 
           .explanation-card {
@@ -1945,7 +1875,7 @@ useEffect(() => {
         @media (max-width: 768px) {
           .big-score-reviews-row,
           .individual-scores-row {
-            grid-template-columns: 1fr !important; /* Single column on mobile */
+            grid-template-columns: 1fr !important;
           }
 
           .summary-report-card {
@@ -1977,7 +1907,6 @@ useEffect(() => {
             font-size: 0.8rem !important;
           }
 
-          /* Modal adjustments for mobile */
           .modal-content {
             max-width: 95vw !important;
             max-height: 95vh !important;
