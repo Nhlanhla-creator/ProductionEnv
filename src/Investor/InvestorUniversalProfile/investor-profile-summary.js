@@ -349,6 +349,82 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
             </div>
           </div>
 
+          {/* Funding module CTAs */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: 16,
+              marginBottom: 24,
+            }}
+          >
+            <a
+              href="/investor-setup"
+              style={{
+                padding: "18px 20px",
+                borderRadius: 14,
+                background: "linear-gradient(135deg, rgba(166,124,82,0.14), rgba(125,90,80,0.08))",
+                border: "1px solid rgba(166,124,82,0.32)",
+                textDecoration: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 10px 24px rgba(166,124,82,0.18)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "#4a352f" }}>
+                🏦 Set up your firm & opportunities
+              </div>
+              <div style={{ fontSize: 12.5, color: "#7d5a50", lineHeight: 1.5 }}>
+                Create your firm, define programmes and mandates, publish live opportunities for SMEs to match against.
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#a67c52", marginTop: 4 }}>
+                Open investor setup →
+              </div>
+            </a>
+
+            <a
+              href="/investor-submissions"
+              style={{
+                padding: "18px 20px",
+                borderRadius: 14,
+                background: "linear-gradient(135deg, rgba(166,124,82,0.14), rgba(125,90,80,0.08))",
+                border: "1px solid rgba(166,124,82,0.32)",
+                textDecoration: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 10px 24px rgba(166,124,82,0.18)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "#4a352f" }}>
+                📥 View incoming submissions
+              </div>
+              <div style={{ fontSize: 12.5, color: "#7d5a50", lineHeight: 1.5 }}>
+                Your pipeline of SME submissions. Review applications, scores, evidence and download packages.
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#a67c52", marginTop: 4 }}>
+                Open submissions →
+              </div>
+            </a>
+          </div>
+
           {/* Profile Sections */}
           <div style={{
             display: 'grid',

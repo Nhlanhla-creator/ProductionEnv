@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom"
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams, useNavigate } from "react-router-dom"
 import "./App.css"
 import styles from "./AdminLayout.module.css"
 import HomeHeader from "./main_pages/SMEs/HomeHeader"
@@ -357,6 +357,24 @@ import GovernanceCalendar from "smses/MyGrowthTools/GovernanceCalendar"
 import RapsActions from "smses/MyGrowthTools/RapsActions"
 import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 
+// ─── Digital Twin — Heavy Industry Module (Phases 1–6 + Option 1A) ──────────
+import DigitalTwinHome from "./digitalTwin/components/DigitalTwinHome"
+import DigitalTwinDashboard from "./digitalTwin/components/DigitalTwinDashboard"
+import CapabilityToTwinConverter from "./digitalTwin/components/CapabilityToTwinConverter"
+import SectorPackLoader from "./digitalTwin/components/SectorPackLoader"
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Funding Application Module (Phases 1–6) ────────────────────────────────
+import FundingRequestWizard from "./funding/components/FundingRequestWizard"
+import FundingRequestList from "./funding/components/FundingRequestList"
+import InvestorSetup from "./funding/components/investor/InvestorSetup"
+import MatchingPage from "./funding/components/matching/MatchingPage"
+import OpportunityDialog from "./funding/components/opportunity/OpportunityDialog"
+import InvestorPipelineTable from "./funding/components/investor/InvestorPipelineTable"
+import InvestorCaseView from "./funding/components/investor/InvestorCaseView"
+import MySubmissionsList from "./funding/components/sme/MySubmissionsList"
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Advisor Components
 import AdvisorSettings from "./advisors/AdvisorSettings/advisor-settings"
 import AdvisorSidebar from "./advisors/AdvisorSidebar/advisorSidebar"
@@ -460,6 +478,102 @@ const initialFormData = {
     declarationConsent: {},
   },
 }
+
+// ─── Digital Twin route wrappers ────────────────────────────────────────────
+function DigitalTwinSetupRoute()    { return <DigitalTwinHome initialActive="setup" /> }
+function DigitalTwinAssetsRoute()   { return <DigitalTwinHome initialActive="assets" /> }
+function DigitalTwinDowntimeRoute() { return <DigitalTwinHome initialActive="downtime" /> }
+function DigitalTwinImportsRoute()  { return <DigitalTwinHome initialActive="import" /> }
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Funding request route wrappers ─────────────────────────────────────────
+function FundingRequestListRoute() {
+  return (
+    <FundingRequestList
+      onCreateNew={() => (window.location.href = "/funding-new/request")}
+      onOpenRequest={(id) => (window.location.href = `/funding-new/request/${id}`)}
+    />
+  )
+}
+function FundingRequestNewRoute() {
+  return (
+    <FundingRequestWizard
+      isNew
+      onBack={() => (window.location.href = "/funding-new")}
+      onContinueToMatches={(id) => (window.location.href = `/funding-new/request/${id}/matches`)}
+    />
+  )
+}
+function FundingRequestOpenRoute() {
+  const { requestId } = useParams()
+  return (
+    <FundingRequestWizard
+      requestId={requestId}
+      onBack={() => (window.location.href = "/funding-new")}
+      onContinueToMatches={(id) => (window.location.href = `/funding-new/request/${id}/matches`)}
+    />
+  )
+}
+function FundingMatchesRoute() {
+  const { requestId } = useParams()
+  const navigate = useNavigate()
+  return (
+    <MatchingPage
+      requestId={requestId}
+      onBack={() => navigate(`/funding-new/request/${requestId}`)}
+      onApply={(opportunityId) => navigate(`/funding-new/request/${requestId}/apply/${opportunityId}`)}
+    />
+  )
+}
+function FundingApplyRoute() {
+  const { requestId, opportunityId } = useParams()
+  const navigate = useNavigate()
+  return (
+    <OpportunityDialog
+      requestId={requestId}
+      opportunityId={opportunityId}
+      onBack={() => navigate(`/funding-new/request/${requestId}/matches`)}
+      onSubmitted={() => navigate(`/funding-new/request/${requestId}/matches`)}
+    />
+  )
+}
+function MySubmissionsRoute() {
+  const navigate = useNavigate()
+  return (
+    <MySubmissionsList
+      onOpenCase={(submissionId) => navigate(`/funding-new/submissions/${submissionId}`)}
+    />
+  )
+}
+function MySubmissionCaseRoute() {
+  const { submissionId } = useParams()
+  const navigate = useNavigate()
+  return (
+    <InvestorCaseView
+      submissionId={submissionId}
+      onBack={() => navigate("/funding-new/submissions")}
+    />
+  )
+}
+function InvestorPipelineRoute() {
+  const navigate = useNavigate()
+  return (
+    <InvestorPipelineTable
+      onOpenCase={(submissionId) => navigate(`/investor-submissions/${submissionId}`)}
+    />
+  )
+}
+function InvestorCaseRoute() {
+  const { submissionId } = useParams()
+  const navigate = useNavigate()
+  return (
+    <InvestorCaseView
+      submissionId={submissionId}
+      onBack={() => navigate("/investor-submissions")}
+    />
+  )
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function App() {
   const [profileImage, setProfileImage] = useState(null)
@@ -1109,6 +1223,28 @@ function App() {
         <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
         <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
 
+        {/* ─── Digital Twin — Heavy Industry Module (Phases 1–6 + Option 1A) ─── */}
+        <Route path="/digital-twin" element={withProtection(DigitalTwinHome, {}, renderSMERoute)} />
+        <Route path="/digital-twin/dashboard" element={withProtection(DigitalTwinDashboard, {}, renderSMERoute)} />
+        <Route path="/digital-twin/convert" element={withProtection(CapabilityToTwinConverter, {}, renderSMERoute)} />
+        <Route path="/digital-twin/packs" element={withProtection(SectorPackLoader, {}, renderSMERoute)} />
+
+        {/* Deep-linkable sub-screens — the wizard and the sidebar entries */}
+        <Route path="/digital-twin/setup"    element={withProtection(DigitalTwinSetupRoute, {}, renderSMERoute)} />
+        <Route path="/digital-twin/assets"   element={withProtection(DigitalTwinAssetsRoute, {}, renderSMERoute)} />
+        <Route path="/digital-twin/downtime" element={withProtection(DigitalTwinDowntimeRoute, {}, renderSMERoute)} />
+        <Route path="/digital-twin/imports"  element={withProtection(DigitalTwinImportsRoute, {}, renderSMERoute)} />
+        {/* ────────────────────────────────────────────────────────────────────── */}
+
+        {/* ─── Funding Application Module (Phases 1–6) ─── */}
+        <Route path="/funding-new" element={withProtection(FundingRequestListRoute, {}, renderSMERoute)} />
+        <Route path="/funding-new/request" element={withProtection(FundingRequestNewRoute, {}, renderSMERoute)} />
+        <Route path="/funding-new/request/:requestId" element={withProtection(FundingRequestOpenRoute, {}, renderSMERoute)} />
+        <Route path="/funding-new/request/:requestId/matches" element={withProtection(FundingMatchesRoute, {}, renderSMERoute)} />
+        <Route path="/funding-new/request/:requestId/apply/:opportunityId" element={withProtection(FundingApplyRoute, {}, renderSMERoute)} />
+        <Route path="/funding-new/submissions" element={withProtection(MySubmissionsRoute, {}, renderSMERoute)} />
+        <Route path="/funding-new/submissions/:submissionId" element={withProtection(MySubmissionCaseRoute, {}, renderSMERoute)} />
+        {/* ────────────────────────────────────────────────────────────────────── */}
 
         {/* Investor Billing and Payments Routes */}
         <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
@@ -1126,6 +1262,15 @@ function App() {
         <Route path="/investor-settings" element={withProtection(InvestorSettings, {}, renderInvestorRoute)} />
         <Route path="/my-investments" element={withProtection(MyInvestments, {}, renderInvestorRoute)} />
         <Route path="/my-cohorts" element={withProtection(MyCohorts, {}, renderInvestorRoute)} />
+
+        {/* ─── Investor Setup + Submissions — Funding module (Phases 3 & 6) ─── */}
+        <Route path="/investor-setup" element={withProtection(InvestorSetup, {}, renderInvestorRoute)} />
+        <Route path="/investor-setup/:firmId" element={withProtection(InvestorSetup, {}, renderInvestorRoute)} />
+        <Route path="/investor-setup/:firmId/:programmeId" element={withProtection(InvestorSetup, {}, renderInvestorRoute)} />
+        <Route path="/investor-setup/:firmId/:programmeId/:opportunityId" element={withProtection(InvestorSetup, {}, renderInvestorRoute)} />
+        <Route path="/investor-submissions" element={withProtection(InvestorPipelineRoute, {}, renderInvestorRoute)} />
+        <Route path="/investor-submissions/:submissionId" element={withProtection(InvestorCaseRoute, {}, renderInvestorRoute)} />
+        {/* ──────────────────────────────────────────────────────────────────── */}
 
         {/* Protected Intern Dashboard Routes */}
         <Route path="/intern-dashboard" element={withProtection(InternDashboard, {}, renderInternRoute)} />
