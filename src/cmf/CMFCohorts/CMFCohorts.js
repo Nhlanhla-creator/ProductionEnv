@@ -158,8 +158,8 @@ const getDealflowApplicationStatus = (app) => {
   const lower = raw.toLowerCase()
 
   let label = raw
-  if (!raw || lower === "application sent" || lower === "sent" || lower === "applied") {
-    label = type === "Advisor" ? "Contacted" : "Applied"
+  if (!raw || lower === "application sent" || lower === "sent" || lower === "applied" || lower === "contacted") {
+    label = "Applied"
   } else if (lower === "under review" || lower === "in review") {
     label = type === "Catalyst" ? "Evaluation" : "Under Review"
   } else if (lower.includes("eval")) {
@@ -487,6 +487,135 @@ const LoadingSkeleton = () => (
     </div>
   </div>
 )
+
+const defaultMockFunders = [
+  {
+    id: "mock_funder_1",
+    docId: "mock_funder_1",
+    smeName: "Vanguard Capital Partners",
+    dealAmount: "R 1,000,000 - R 10,000,000",
+    dealAmountRaw: 10000000,
+    dealType: "Venture Capital",
+    completionDate: "2024-01-15T09:00:00Z",
+    sector: "Technology, Fintech, Logistics",
+    location: "Johannesburg, Gauteng",
+    teamSize: "N/A",
+    description: "Focuses on early stage technology startups and scale-ups across Southern Africa.",
+    currentStatus: "Active",
+    lastUpdated: null,
+    supportProvided: "David Kramer (vanguard.capital@mailinator.com)",
+    archived: false,
+    source: "onboarded",
+    bigScore: 85,
+    raw: {}
+  },
+  {
+    id: "mock_funder_2",
+    docId: "mock_funder_2",
+    smeName: "Apex Horizon Impact Fund",
+    dealAmount: "R 2,000,000 - R 15,000,000",
+    dealAmountRaw: 15000000,
+    dealType: "Impact Investment",
+    completionDate: "2024-02-10T10:00:00Z",
+    sector: "Agriculture, Manufacturing, Green Energy",
+    location: "Cape Town, Western Cape",
+    teamSize: "N/A",
+    description: "Finances sustainable African enterprises delivering commercial returns and social impact.",
+    currentStatus: "Active",
+    lastUpdated: null,
+    supportProvided: "Nomsa Dlamini (apex@mailinator.com)",
+    archived: false,
+    source: "onboarded",
+    bigScore: 88,
+    raw: {}
+  }
+]
+
+const defaultMockCatalysts = [
+  {
+    id: "mock_catalyst_1",
+    docId: "mock_catalyst_1",
+    smeName: "Impact Hub Africa Pty Ltd",
+    dealAmount: "African Social Innovators Accelerator",
+    dealAmountRaw: 0,
+    dealType: "Incubator & Accelerator",
+    completionDate: "2024-01-20T11:00:00Z",
+    sector: "Education & Enterprise Development, Digital Enterprise",
+    location: "Johannesburg, Gauteng",
+    teamSize: "N/A",
+    description: "Provides incubator and accelerator programs to social entrepreneurs across Southern Africa.",
+    currentStatus: "Active",
+    lastUpdated: null,
+    supportProvided: "Lerato Molefe (info.catalyst@mailinator.com)",
+    archived: false,
+    source: "onboarded",
+    bigScore: 82,
+    raw: {}
+  },
+  {
+    id: "mock_catalyst_2",
+    docId: "mock_catalyst_2",
+    smeName: "Genesis Enterprise Accelerator NPC",
+    dealAmount: "CleanTech Scale & Industrial Acceleration 2026",
+    dealAmountRaw: 0,
+    dealType: "Enterprise Development",
+    completionDate: "2024-03-01T08:30:00Z",
+    sector: "Manufacturing, Renewable Energy, Agri-Processing",
+    location: "Durban, KwaZulu-Natal",
+    teamSize: "N/A",
+    description: "Delivers high-impact commercialization programmes, technical readiness, and corporate supply chain integration.",
+    currentStatus: "Active",
+    lastUpdated: null,
+    supportProvided: "Sipho Ndlovu (genesis.programmes@mailinator.com)",
+    archived: false,
+    source: "onboarded",
+    bigScore: 86,
+    raw: {}
+  }
+]
+
+const defaultMockCMFs = [
+  {
+    id: "mock_cmf_1",
+    docId: "mock_cmf_1",
+    smeName: "Capital Access Group Ltd",
+    dealAmount: "R 500,000 - R 5,000,000",
+    dealAmountRaw: 5000000,
+    dealType: "Public Company Ltd",
+    completionDate: "2024-01-10T12:00:00Z",
+    sector: "Manufacturing, Services, Technology",
+    location: "Sandton, Gauteng",
+    teamSize: "N/A",
+    description: "Acts as a market maker and capital facilitator for SMEs in South Africa.",
+    currentStatus: "Active",
+    lastUpdated: null,
+    supportProvided: "Richard Bowes (richard.bowes.cmf@mailinator.com)",
+    archived: false,
+    source: "onboarded",
+    bigScore: 90,
+    raw: {}
+  },
+  {
+    id: "mock_cmf_2",
+    docId: "mock_cmf_2",
+    smeName: "Vanguard Market Makers & Syndications Ltd",
+    dealAmount: "R 1,500,000 - R 20,000,000",
+    dealAmountRaw: 20000000,
+    dealType: "Private Company (Pty) Ltd",
+    completionDate: "2024-02-18T14:00:00Z",
+    sector: "Information Technology, Agriculture, Healthcare, Logistics",
+    location: "Sandton, Gauteng",
+    teamSize: "N/A",
+    description: "Orchestrates syndicated deal pipelines, blends catalytic funding with commercial debt, and accelerates transaction closure.",
+    currentStatus: "Active",
+    lastUpdated: null,
+    supportProvided: "Kagiso Matlala (kagiso.matlala.syndicates@mailinator.com)",
+    archived: false,
+    source: "onboarded",
+    bigScore: 92,
+    raw: {}
+  }
+]
 
 export default function CMFCohorts() {
   const { smeMatches, funderMatches, catalystMatches, loading: contextLoading, reloadMatches, updateMatchStage } = useCMFMatches()
@@ -820,7 +949,21 @@ export default function CMFCohorts() {
     if (!smeMatches || smeMatches.length === 0) return []
     return smeMatches
       .map((sme) => {
-        const isDirectOnboarded = onboardedUserIds.has(sme.id)
+        const isDirectOnboarded = Boolean(
+          (onboardedUserIds && onboardedUserIds.has(sme.id)) ||
+          sme.source === "onboarded" ||
+          sme.isOnboarded ||
+          sme.onboardedBy ||
+          (typeof sme.reason === "string" && sme.reason.toLowerCase().includes("onboarded")) ||
+          (typeof sme.raw?.reason === "string" && sme.raw.reason.toLowerCase().includes("onboarded")) ||
+          sme.sponsorType === "CMF" ||
+          sme.raw?.sponsorType === "CMF" ||
+          sme.raw?.entityOverview?.sponsorType === "CMF" ||
+          sme.raw?.entityOverview?.sponsorName?.toLowerCase?.().includes("cmf") ||
+          sme.corporateId ||
+          (typeof sme.currentStatus === "string" && sme.currentStatus.toLowerCase().includes("active support")) ||
+          (typeof sme.pipelineStage === "string" && sme.pipelineStage.toLowerCase().includes("active support"))
+        )
         return {
           id: sme.id,
           docId: sme.id,
@@ -834,7 +977,9 @@ export default function CMFCohorts() {
           location: formatLabel(sme.location) || "Not specified",
           teamSize: sme.teamSize || "Not specified",
           description: sme.supportRequired || sme.reason || "No description available",
-          currentStatus: sme.currentStatus || sme.pipelineStage || "Matched",
+          currentStatus: (isDirectOnboarded && (!sme.currentStatus || sme.currentStatus === "Matched"))
+            ? "Active Support"
+            : (sme.currentStatus || sme.pipelineStage || (isDirectOnboarded ? "Active Support" : "Matched")),
           lastUpdated: sme.lastActivity || null,
           dealStructure: "Support Program",
           dealDuration: "Ongoing",
@@ -849,6 +994,7 @@ export default function CMFCohorts() {
           archived: sme.archived || false,
           statusHistory: sme.statusHistory || [],
           source: isDirectOnboarded ? "onboarded" : "matched",
+          isOnboarded: isDirectOnboarded,
           bigScore: sme.bigScore || 0,
           compliance: sme.compliance || 0,
           legitimacy: sme.legitimacy || 0,
@@ -955,13 +1101,27 @@ export default function CMFCohorts() {
     if (!funderMatches || funderMatches.length === 0) return []
     return funderMatches
       .filter((funder) => {
-        const isDirectOnboarded = onboardedUserIds.has(funder.id)
+        const isDirectOnboarded = Boolean(
+          (onboardedUserIds && onboardedUserIds.has(funder.id)) ||
+          funder.source === "onboarded" ||
+          funder.isOnboarded ||
+          funder.onboardedBy ||
+          (typeof funder.reason === "string" && funder.reason.toLowerCase().includes("onboarded")) ||
+          (typeof funder.raw?.reason === "string" && funder.raw.reason.toLowerCase().includes("onboarded"))
+        )
         const status = (funder.status || funder.currentStatus || "").toLowerCase()
         const isMatchedCohort = status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
         return isDirectOnboarded || isMatchedCohort
       })
       .map((funder) => {
-        const isDirectOnboarded = onboardedUserIds.has(funder.id)
+        const isDirectOnboarded = Boolean(
+          (onboardedUserIds && onboardedUserIds.has(funder.id)) ||
+          funder.source === "onboarded" ||
+          funder.isOnboarded ||
+          funder.onboardedBy ||
+          (typeof funder.reason === "string" && funder.reason.toLowerCase().includes("onboarded")) ||
+          (typeof funder.raw?.reason === "string" && funder.raw.reason.toLowerCase().includes("onboarded"))
+        )
         return {
           id: funder.id,
           docId: funder.id,
@@ -979,6 +1139,7 @@ export default function CMFCohorts() {
           supportProvided: funder.contactPerson ? `${funder.contactPerson} (${funder.email})` : funder.email || "Not specified",
           archived: funder.archived || false,
           source: isDirectOnboarded ? "onboarded" : "matched",
+          isOnboarded: isDirectOnboarded,
           bigScore: funder.bigScore || 0,
           raw: funder
         }
@@ -989,13 +1150,27 @@ export default function CMFCohorts() {
     if (!catalystMatches || catalystMatches.length === 0) return []
     return catalystMatches
       .filter((cat) => {
-        const isDirectOnboarded = onboardedUserIds.has(cat.id)
+        const isDirectOnboarded = Boolean(
+          (onboardedUserIds && onboardedUserIds.has(cat.id)) ||
+          cat.source === "onboarded" ||
+          cat.isOnboarded ||
+          cat.onboardedBy ||
+          (typeof cat.reason === "string" && cat.reason.toLowerCase().includes("onboarded")) ||
+          (typeof cat.raw?.reason === "string" && cat.raw.reason.toLowerCase().includes("onboarded"))
+        )
         const status = (cat.status || cat.currentStatus || "").toLowerCase()
         const isMatchedCohort = status.includes("active") || status.includes("exit") || status.includes("completed") || status.includes("support")
         return isDirectOnboarded || isMatchedCohort
       })
       .map((cat) => {
-        const isDirectOnboarded = onboardedUserIds.has(cat.id)
+        const isDirectOnboarded = Boolean(
+          (onboardedUserIds && onboardedUserIds.has(cat.id)) ||
+          cat.source === "onboarded" ||
+          cat.isOnboarded ||
+          cat.onboardedBy ||
+          (typeof cat.reason === "string" && cat.reason.toLowerCase().includes("onboarded")) ||
+          (typeof cat.raw?.reason === "string" && cat.raw.reason.toLowerCase().includes("onboarded"))
+        )
         return {
           id: cat.id,
           docId: cat.id,
@@ -1013,6 +1188,7 @@ export default function CMFCohorts() {
           supportProvided: cat.contactPerson ? `${cat.contactPerson} (${cat.email})` : cat.email || "Not specified",
           archived: cat.archived || false,
           source: isDirectOnboarded ? "onboarded" : "matched",
+          isOnboarded: isDirectOnboarded,
           bigScore: cat.bigScore || 0,
           raw: cat
         }
@@ -1045,13 +1221,25 @@ export default function CMFCohorts() {
     })
   }, [cmfCohorts])
 
+  const resolvedFunders = useMemo(() => {
+    return fundersCohorts && fundersCohorts.length > 0 ? fundersCohorts : defaultMockFunders
+  }, [fundersCohorts])
+
+  const resolvedCatalysts = useMemo(() => {
+    return catalystsCohorts && catalystsCohorts.length > 0 ? catalystsCohorts : defaultMockCatalysts
+  }, [catalystsCohorts])
+
+  const resolvedCmfs = useMemo(() => {
+    return cmfCohortsMapped && cmfCohortsMapped.length > 0 ? cmfCohortsMapped : defaultMockCMFs
+  }, [cmfCohortsMapped])
+
   const cohortsFromContext = useMemo(() => {
     if (activeCohortTab === "businesses") return businessesCohorts
-    if (activeCohortTab === "funders") return fundersCohorts
-    if (activeCohortTab === "catalysts") return catalystsCohorts
-    if (activeCohortTab === "cmfs") return cmfCohortsMapped
+    if (activeCohortTab === "funders") return resolvedFunders
+    if (activeCohortTab === "catalysts") return resolvedCatalysts
+    if (activeCohortTab === "cmfs") return resolvedCmfs
     return []
-  }, [activeCohortTab, businessesCohorts, fundersCohorts, catalystsCohorts, cmfCohortsMapped])
+  }, [activeCohortTab, businessesCohorts, resolvedFunders, resolvedCatalysts, resolvedCmfs])
 
   const [cohorts, setCohorts] = useState([])
 
@@ -2359,9 +2547,9 @@ export default function CMFCohorts() {
         <div className="flex gap-2 p-2 bg-gradient-to-r from-[#f5f0e1] to-[#faf7f2] rounded-t-2xl border border-[#e6d7c3] border-b-0 shadow-sm overflow-x-auto">
           {[
             { id: "businesses", label: "Businesses", icon: <Building size={16} />, count: businessesCohorts.length },
-            { id: "funders", label: "Funders", icon: <DollarSign size={16} />, count: fundersCohorts.length },
-            { id: "catalysts", label: "Catalysts", icon: <Trophy size={16} />, count: catalystsCohorts.length },
-            { id: "cmfs", label: "Capital & Market Facilitators", icon: <Users size={16} />, count: cmfCohorts.length },
+            { id: "funders", label: "Funders", icon: <DollarSign size={16} />, count: resolvedFunders.length },
+            { id: "catalysts", label: "Catalysts", icon: <Trophy size={16} />, count: resolvedCatalysts.length },
+            { id: "cmfs", label: "Capital & Market Facilitators", icon: <Users size={16} />, count: resolvedCmfs.length },
           ].map(({ id, label, icon, count }) => {
             const isActive = activeCohortTab === id;
             return (
@@ -2498,13 +2686,13 @@ export default function CMFCohorts() {
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-wrap">
                               <span className="text-[#4a352f] font-semibold">{cohort.smeName}</span>
-                              {cohort.source && (
+                              {(cohort.source || cohort.isOnboarded) && (
                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider border flex-shrink-0 ${
-                                  cohort.source === "onboarded"
+                                  cohort.source === "onboarded" || cohort.isOnboarded
                                     ? "bg-amber-50 text-amber-700 border-amber-200"
                                     : "bg-blue-50 text-blue-700 border-blue-200"
                                 }`}>
-                                  {cohort.source === "onboarded" ? "Onboarded" : "Matched"}
+                                  {cohort.source === "onboarded" || cohort.isOnboarded ? "Onboarded" : "Matched"}
                                 </span>
                               )}
                               <button
