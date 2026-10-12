@@ -49,7 +49,7 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
       .filter((doc) => doc.required)
       .map((doc, idx) => {
         const fileUrl = data?.documentUpload?.[doc.id]
-        const isUploaded = !!fileUrl
+        const isUploaded = Array.isArray(fileUrl) ? fileUrl.length > 0 : !!fileUrl
 
         return (
           <div key={idx} style={{
@@ -152,14 +152,22 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
 
   const investmentReqs = data?.investmentRequirements || {}
   const businessStage = investmentReqs.businessStage || "Not selected"
-  const stageDisplay = businessStage === "pre-seed" ? "Pre-Seed Business" : businessStage === "startup" ? "Startup Business" : businessStage
+  const STAGE_LABELS = {
+    ideation: "Ideation", prototype: "Prototype / MVP", startup: "Startup", "early-growth": "Early Growth",
+    growth: "Growth", "scale-up": "Scale-up", mature: "Mature",
+  }
+  const stageDisplay = STAGE_LABELS[businessStage] || businessStage
 
-  const complianceAvg = getCategoryAverage(investmentReqs.complianceScores)
-  const leadershipAvg = getCategoryAverage(investmentReqs.leadershipScores)
-  const capitalAvg = getCategoryAverage(investmentReqs.capitalScores)
-  const marketAvg = getCategoryAverage(investmentReqs.marketScores)
-  const productAvg = getCategoryAverage(investmentReqs.productScores)
-  const overallAvg = Math.round((complianceAvg + leadershipAvg + capitalAvg + marketAvg + productAvg) / 5)
+  // Category averages and weights are saved by InvestmentRequirements, keyed like the BIG Score
+  const savedCategories = investmentReqs.categoryScores || {}
+  const savedWeights = investmentReqs.weights || null
+  const catAvg = (id) => (Number.isFinite(Number(savedCategories[id])) ? Math.round(Number(savedCategories[id])) : 0)
+  const complianceAvg = catAvg("compliance")
+  const legitimacyAvg = catAvg("legitimacy")
+  const governanceLeadershipAvg = catAvg("governanceLeadership")
+  const operationalAvg = catAvg("operational")
+  const fundabilityAvg = catAvg("fundability")
+  const overallAvg = Math.round((complianceAvg + legitimacyAvg + governanceLeadershipAvg + operationalAvg + fundabilityAvg) / 5)
 
   const getScoreColor = (score) => {
     if (score >= 80) return "#1B5E20"
@@ -341,6 +349,82 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
             </div>
           </div>
 
+          {/* Funding module CTAs */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: 16,
+              marginBottom: 24,
+            }}
+          >
+            <a
+              href="/investor-setup"
+              style={{
+                padding: "18px 20px",
+                borderRadius: 14,
+                background: "linear-gradient(135deg, rgba(166,124,82,0.14), rgba(125,90,80,0.08))",
+                border: "1px solid rgba(166,124,82,0.32)",
+                textDecoration: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 10px 24px rgba(166,124,82,0.18)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "#4a352f" }}>
+                🏦 Set up your firm & opportunities
+              </div>
+              <div style={{ fontSize: 12.5, color: "#7d5a50", lineHeight: 1.5 }}>
+                Create your firm, define programmes and mandates, publish live opportunities for SMEs to match against.
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#a67c52", marginTop: 4 }}>
+                Open investor setup →
+              </div>
+            </a>
+
+            <a
+              href="/investor-submissions"
+              style={{
+                padding: "18px 20px",
+                borderRadius: 14,
+                background: "linear-gradient(135deg, rgba(166,124,82,0.14), rgba(125,90,80,0.08))",
+                border: "1px solid rgba(166,124,82,0.32)",
+                textDecoration: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 10px 24px rgba(166,124,82,0.18)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "#4a352f" }}>
+                📥 View incoming submissions
+              </div>
+              <div style={{ fontSize: 12.5, color: "#7d5a50", lineHeight: 1.5 }}>
+                Your pipeline of SME submissions. Review applications, scores, evidence and download packages.
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#a67c52", marginTop: 4 }}>
+                Open submissions →
+              </div>
+            </a>
+          </div>
+
           {/* Profile Sections */}
           <div style={{
             display: 'grid',
@@ -432,7 +516,7 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                           fontWeight: "500",
                           lineHeight: '1.4'
                         }}>
-                          {Array.isArray(val) ? formatArray(val) : val || "Not provided"}
+                          {Array.isArray(val) ? formatArray(val) : typeof val === "boolean" ? (val ? "Yes" : "No") : val || "Not provided"}
                         </span>
                       </div>
                     ))}
@@ -553,11 +637,11 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                     marginBottom: "24px"
                   }}>
                     {[
-                      { label: "Compliance", score: complianceAvg, icon: "📋" },
-                      { label: "Leadership", score: leadershipAvg, icon: "👥" },
-                      { label: "Capital", score: capitalAvg, icon: "💰" },
-                      { label: "Market", score: marketAvg, icon: "📊" },
-                      { label: "Product", score: productAvg, icon: "⚙️" }
+                      { label: "Compliance", score: complianceAvg, icon: "📋", weight: savedWeights?.compliance },
+                      { label: "Legitimacy", score: legitimacyAvg, icon: "✅", weight: savedWeights?.legitimacy },
+                      { label: "Governance & Leadership", score: governanceLeadershipAvg, icon: "👥", weight: savedWeights?.governanceLeadership },
+                      { label: "Operational Strength", score: operationalAvg, icon: "⚙️", weight: savedWeights?.operational },
+                      { label: "Capital Appeal", score: fundabilityAvg, icon: "💰", weight: savedWeights?.fundability }
                     ].map((cat, idx) => (
                       <div key={idx} style={{
                         background: 'rgba(250, 247, 242, 0.8)',
@@ -570,6 +654,7 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                         <div style={{ fontSize: '13px', fontWeight: '600', color: '#7d5a50', marginBottom: '4px' }}>{cat.label}</div>
                         <div style={{ fontSize: '28px', fontWeight: '700', color: getScoreColor(cat.score) }}>{cat.score}</div>
                         <div style={{ fontSize: '11px', color: getScoreColor(cat.score) }}>{getScoreLabel(cat.score)}</div>
+                        {cat.weight != null && <div style={{ fontSize: '11px', color: '#8d6e63', marginTop: '4px' }}>{cat.weight}% of matching</div>}
                       </div>
                     ))}
                   </div>
@@ -586,19 +671,29 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                       View Detailed Score Breakdown
                     </summary>
                     <div style={{ marginTop: '16px' }}>
-                      {investmentReqs.complianceScores && Object.keys(investmentReqs.complianceScores).length > 0 && (
-                        <div style={{ marginBottom: '20px' }}>
-                          <h4 style={{ color: '#5d4037', marginBottom: '12px' }}>Compliance Details</h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                            {Object.entries(investmentReqs.complianceScores).map(([key, val]) => (
-                              <div key={key} style={{ background: 'rgba(250, 247, 242, 0.6)', borderRadius: '8px', padding: '8px 12px' }}>
-                                <span style={{ fontSize: '11px', color: '#8d6e63' }}>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
-                                <div style={{ fontSize: '16px', fontWeight: '600', color: getScoreColor(val) }}>{val}</div>
-                              </div>
-                            ))}
+                      {[
+                        ["Compliance", "complianceScores"],
+                        ["Legitimacy", "legitimacyScores"],
+                        ["Governance & Leadership", "governanceLeadershipScores"],
+                        ["Operational Strength", "operationalScores"],
+                        ["Capital Appeal", "fundabilityScores"],
+                      ].map(([title, field]) => {
+                        const rated = Object.entries(investmentReqs[field] || {}).filter(([, val]) => Number(val) > 0)
+                        if (rated.length === 0) return null
+                        return (
+                          <div key={field} style={{ marginBottom: '20px' }}>
+                            <h4 style={{ color: '#5d4037', marginBottom: '12px' }}>{title} Details</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                              {rated.map(([key, val]) => (
+                                <div key={key} style={{ background: 'rgba(250, 247, 242, 0.6)', borderRadius: '8px', padding: '8px 12px' }}>
+                                  <span style={{ fontSize: '11px', color: '#8d6e63' }}>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
+                                  <div style={{ fontSize: '16px', fontWeight: '600', color: getScoreColor(val) }}>{val}</div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )
+                      })}
                     </div>
                   </details>
 
@@ -702,7 +797,7 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                           fontWeight: "500",
                           lineHeight: '1.4'
                         }}>
-                          {Array.isArray(val) ? formatArray(val) : val || "Not provided"}
+                          {Array.isArray(val) ? formatArray(val) : typeof val === "boolean" ? (val ? "Yes" : "No") : val || "Not provided"}
                         </span>
                       </div>
                     ))}
@@ -899,7 +994,7 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                               color: "#4a352f",
                               fontWeight: "500"
                             }}>
-                              {Array.isArray(v) ? formatArray(v) : v || "Not provided"}
+                              {Array.isArray(v) ? formatArray(v) : typeof v === "boolean" ? (v ? "Yes" : "No") : v || "Not provided"}
                             </span>
                           </div>
                         ))}
@@ -1008,7 +1103,7 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                           fontWeight: "500",
                           lineHeight: '1.4'
                         }}>
-                          {Array.isArray(val) ? formatArray(val) : val || "Not provided"}
+                          {Array.isArray(val) ? formatArray(val) : typeof val === "boolean" ? (val ? "Yes" : "No") : val || "Not provided"}
                         </span>
                       </div>
                     ))}

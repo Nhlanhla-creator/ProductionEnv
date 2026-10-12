@@ -237,7 +237,9 @@ export function parseAnalysisByElement(text) {
 
 // ═════════════════════════════════════════════════════════════════════════
 
-export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, apiKey, onNavigate }) {
+export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, apiKey, onNavigate, userId: propUserId }) {
+  // The profile whose scores are shown: passed by the Dashboard (company owner's, or own), else the logged-in user
+  const profileUid = propUserId || auth?.currentUser?.uid
   const [showModal, setShowModal] = useState(false);
   // Narratives are per application. `localNarratives` holds ones written this session,
   // `userNarrative` is the latest saved one on aiFundabilityEvaluations/{uid}.
@@ -307,7 +309,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     if (dataLoadPromiseRef.current) return dataLoadPromiseRef.current;
 
     const loadPromise = (async () => {
-      const userId = auth.currentUser.uid;
+      const userId = profileUid;
       const fresh = {
         businessPlanAnalysis: null, pitchDeckAnalysis: null, creditReportAnalysis: null,
         profileSecurity: [], solvencyAnalysis: null, financialStatementsAnalysis: null,
@@ -421,14 +423,14 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     dataLoadPromiseRef.current = loadPromise;
     try { return await loadPromise; }
     finally { dataLoadPromiseRef.current = null; }
-  }, [auth?.currentUser?.uid]);
+  }, [profileUid]);
 
   // ── Live funding applications ──
   // Fires on mount and again whenever an application is created, edited,
   // completed, submitted or deleted. This is what makes applications a
   // trigger for Fundability.
   useEffect(() => {
-    const uid = auth?.currentUser?.uid;
+    const uid = profileUid;
     if (!uid) return;
     let first = true;
 
@@ -477,7 +479,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     );
 
     return () => unsubscribe();
-  }, [auth?.currentUser?.uid, fetchFundingApplicationData]);
+  }, [profileUid, fetchFundingApplicationData]);
 
   // ── Score — a pure function of the profile, the applications and the stored analyses ──
   // One assessment per complete application; they share one Capital Appeal headline.
@@ -772,7 +774,7 @@ ${outputFormat}
       return { content: result?.content || "", target };
     } catch (error) {
       console.error("Capital appeal AI evaluation error:", error);
-       await logAnalysisFailure(db, auth?.currentUser?.uid, "fundability", error);
+       await logAnalysisFailure(db, profileUid, "fundability", error);
       setEvaluationError(`Analysis failed: ${error.message}`);
       return null;
     } finally {
@@ -795,7 +797,7 @@ ${outputFormat}
   // The narrative is stored on the application it explains, and also on the
   // user-level document the dashboard report reads (latest run wins there).
   const saveNarrative = async (content, target, { auto = false } = {}) => {
-    const userId = auth?.currentUser?.uid;
+    const userId = profileUid;
     if (!userId || !content) return;
     const iso = new Date().toISOString();
     const meta = metaFor(target);
@@ -828,7 +830,7 @@ ${outputFormat}
   useEffect(() => { saveNarrativeRef.current = saveNarrative; });
 
   const refreshAiEvaluation = async () => {
-    const userId = auth?.currentUser?.uid;
+    const userId = profileUid;
     if (!userId) return;
     try {
       const out = await runAiEvaluation(selectedIdRef.current || selected?.id || null);
@@ -842,8 +844,8 @@ ${outputFormat}
   // The funding application sets fundabilityEvaluationApplicationId when it asks for
   // an evaluation, so the narrative is written for the application that was saved.
   useEffect(() => {
-    if (!auth?.currentUser?.uid || !apiKey) return;
-    const userId = auth.currentUser.uid;
+    if (!profileUid || !apiKey) return;
+    const userId = profileUid;
     const docRef = doc(db, "universalProfiles", userId);
     const aiEvalRef = doc(db, "aiFundabilityEvaluations", userId);
 
@@ -889,7 +891,7 @@ ${outputFormat}
     });
 
     return () => unsubscribe();
-  }, [auth?.currentUser?.uid, apiKey]);
+  }, [profileUid, apiKey]);
 
   // ─────────────────────────────────────────────────────────────────────
   // Presentation

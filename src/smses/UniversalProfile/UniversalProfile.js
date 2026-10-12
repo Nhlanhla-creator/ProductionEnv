@@ -22,6 +22,8 @@ import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useOnboardingVetting } from "../../hooks/useOnboardingVetting";
 import { useVerificationNudges } from "../../hooks/useVerificationNudges";
+import { ROLE_PERMISSIONS, resolveProfileContext } from "../../utils/profile-context";
+import ProfileScopeSwitcher from "../../utils/ProfileScopeSwitcher";
 
 const sections = [
   { id: "instructions", label: "Instructions" },
@@ -103,6 +105,31 @@ const validateAllSections = (formData, completedSections) => {
   return { allValid, sectionStatus }
 }
 
+// ── Role helpers ─────────────────────────────────────────────────────────────
+// The role coming back from profile-context (or stored on the user doc) is normalised here,
+// so an unexpected value ("admin", "Owner", "facilitator", undefined) can never lock a user out.
+const ALL_SECTION_IDS = sections.map((s) => s.id)
+const FALLBACK_ROLE_PERMISSIONS = {
+  owner: { canEditAll: true, sections: ALL_SECTION_IDS },
+  companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "documents"] },
+  manager: { canEditAll: false, sections: ["contactDetails", "productsServices", "operationsOverview", "documents"] },
+  employee: { canEditAll: false, sections: ["contactDetails", "documents"] },
+  viewer: { canEditAll: false, sections: [] },
+}
+const ROLE_ALIASES = {
+  owner: "owner", facilitator: "owner", cmf: "owner",
+  companyadmin: "companyadmin", company_admin: "companyadmin", "company admin": "companyadmin", admin: "companyadmin",
+  manager: "manager", employee: "employee", viewer: "viewer",
+}
+const normalizeRole = (role) => (typeof role === "string" ? ROLE_ALIASES[role.trim().toLowerCase()] || null : null)
+const getRolePermissions = (role) => {
+  const r = normalizeRole(role)
+  if (!r) return null
+  const imported = ROLE_PERMISSIONS && ROLE_PERMISSIONS[r]
+  const usable = imported && (imported.canEditAll === true || Array.isArray(imported.sections))
+  return usable ? imported : FALLBACK_ROLE_PERMISSIONS[r]
+}
+
 const readDeepLinkSection = () => {
   if (typeof window === "undefined") return null
   const requested = new URLSearchParams(window.location.search).get("section")
@@ -130,6 +157,7 @@ export default function UniversalProfile() {
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [effectiveUserId, setEffectiveUserId] = useState(null)
   const [userRole, setUserRole] = useState(null)
+  const [companyName, setCompanyName] = useState("")
   const [editPermissions, setEditPermissions] = useState({})
   const [editHistory, setEditHistory] = useState([])
   const { notifyVettingStatusUpdate } = useOnboardingVetting(auth.currentUser);
@@ -142,19 +170,11 @@ export default function UniversalProfile() {
   const [activeSection, setActiveSection] = useState(deepLinkSection || "instructions")
   const [showSummary, setShowSummary] = useState(false)
   const [isEditing, setIsEditing] = useState(!!deepLinkSection)
-  const ROLE_PERMISSIONS = {
-    owner: { canEditAll: true, sections: ["instructions", "entityOverview", "ownershipManagement", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "howDidYouHear", "documents", "declarationConsent"] },
-    companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "documents"] },
-    manager: { canEditAll: false, sections: ["contactDetails", "productsServices", "operationsOverview", "documents"] },
-    employee: { canEditAll: false, sections: ["contactDetails", "documents"] },
-    viewer: { canEditAll: false, sections: [] },
-  }
-
   const canEditSection = (sectionId) => {
-    if (!userRole) return false
-    const permissions = ROLE_PERMISSIONS[userRole]
+    if (normalizeRole(userRole) === "owner") return true
+    const permissions = getRolePermissions(userRole)
     if (!permissions) return false
-    return permissions.canEditAll || permissions.sections.includes(sectionId)
+    return permissions.canEditAll === true || (Array.isArray(permissions.sections) && permissions.sections.includes(sectionId))
   }
 
   const isProfileComplete = () => {
@@ -168,7 +188,7 @@ export default function UniversalProfile() {
   const [completedSections, setCompletedSections] = useState({
     instructions: true, entityOverview: false, ownershipManagement: false,
     contactDetails: false, legalCompliance: false, operationsOverview: false,
-    financialOverview: false, productsServices: false, howDidYouHear: false,
+    financialOverview: false, governance: false, productsServices: false, howDidYouHear: false,
     documents: false, declarationConsent: false,
   })
 
@@ -293,43 +313,33 @@ export default function UniversalProfile() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-          if (isCmfView) {
-            const viewingId = sessionStorage.getItem("viewingSMEId")
-            setIsCompanyMember(false)
-            setEffectiveUserId(viewingId)
-            setUserRole("owner")
-            setEditPermissions(ROLE_PERMISSIONS.owner)
-          } else {
-            const userDocRef = doc(db, "users", user.uid)
-            const userDocSnap = await getDoc(userDocRef)
-            if (userDocSnap.exists()) {
-              const userData = userDocSnap.data()
-              const userCompanyId = userData.companyId
-              const userCompanyRole = userData.userRole
-              if (userCompanyId) {
-                const companyDocRef = doc(db, "companies", userCompanyId)
-                const companyDocSnap = await getDoc(companyDocRef)
-                if (companyDocSnap.exists()) {
-                  const companyData = companyDocSnap.data()
-                  const ownerId = companyData.createdBy
-                  setUserRole(userCompanyRole || "viewer")
-                  if (ownerId === user.uid) {
-                    setIsCompanyMember(false); setEffectiveUserId(user.uid); setEditPermissions(ROLE_PERMISSIONS.owner)
-                  } else {
-                    setIsCompanyMember(true); setCompanyOwnerId(ownerId); setEffectiveUserId(ownerId); setEditPermissions(ROLE_PERMISSIONS[userCompanyRole] || ROLE_PERMISSIONS.viewer)
-                  }
-                }
-              } else {
-                setIsCompanyMember(false); setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
-              }
-            }
+          // Resolve whose profile this is: own / company owner's (for members) / facilitator-viewed SME
+          const ctx = await resolveProfileContext({ force: true })
+          // Never leave the role empty/unknown: members default to viewer, everyone else (own profile / CMF) to owner
+          const resolvedRole = normalizeRole(ctx.role) || (ctx.isMember && !ctx.isCmf ? "viewer" : "owner")
+          setUserRole(resolvedRole)
+          setIsCompanyMember(ctx.isMember)
+          setCompanyOwnerId(ctx.isMember ? ctx.profileId : null)
+          setEffectiveUserId(ctx.profileId)
+          setCompanyName(ctx.companyName || "")
+          setEditPermissions(getRolePermissions(resolvedRole) || FALLBACK_ROLE_PERMISSIONS.viewer)
+          // Never restore the member's personal local cache over the company's profile
+          if (!ctx.isCmf && !ctx.isMember) {
             const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"))
             const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"))
             const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"))
             const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true"
-            if (savedData) setFormData(JSON.parse(savedData))
-            if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
+            if (savedData) {
+              const parsed = JSON.parse(savedData)
+              setFormData((prev) => {
+                const merged = { ...prev }
+                Object.keys(parsed).forEach((k) => {
+                  merged[k] = prev[k] && typeof prev[k] === "object" && !Array.isArray(prev[k]) ? { ...prev[k], ...parsed[k] } : parsed[k]
+                })
+                return merged
+              })
+            }
+            if (savedCompletedSections) setCompletedSections((prev) => ({ ...prev, ...JSON.parse(savedCompletedSections), instructions: true }))
            if (savedSubmissionStatus === "true") {
             setProfileSubmitted(true)
             if (!deepLinkSection) setShowSummary(true)
@@ -338,7 +348,7 @@ export default function UniversalProfile() {
           }
         } catch (error) {
           console.error("Error checking company membership:", error)
-          setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(ROLE_PERMISSIONS.owner)
+          setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(getRolePermissions("owner"))
         }
       } else { navigate("/login") }
       setLoading(false)
@@ -358,11 +368,12 @@ export default function UniversalProfile() {
   useEffect(() => {
     const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
     if (isCmfView) return // skip local storage auto-save during CMF view mode
+    if (isCompanyMember) return // members work on the company's live profile, never a local copy
     const userId = auth.currentUser?.uid; if (!userId) return
     localStorage.setItem(getUserSpecificKey("universalProfileData"), JSON.stringify(formData))
     localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(completedSections))
     localStorage.setItem(getUserSpecificKey("profileSubmitted"), profileSubmitted.toString())
-  }, [formData, completedSections, profileSubmitted])
+  }, [formData, completedSections, profileSubmitted, isCompanyMember])
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
@@ -434,8 +445,8 @@ export default function UniversalProfile() {
     const profileSnap = await getDoc(docRef)
     const existingHistory = profileSnap.exists() ? profileSnap.data().editHistory || [] : []
     const dataToSave = {
-      ...uploaded, completedSections,
-      ...(isFinalSubmit || !section ? { completedSections } : {}),
+      ...uploaded,
+      completedSections: isFinalSubmit ? { ...completedSections, declarationConsent: true } : completedSections,
       lastEditedBy: currentUser.uid, lastEditedByName: userName,
       lastEditedAt: new Date().toISOString(), lastEditedByRole: userRole,
       editHistory: [...existingHistory, editLogEntry],
@@ -537,8 +548,8 @@ if (operationalSections.includes(section)) {
   }
 
   const handleSubmitProfile = async () => {
-    markSectionAsCompleted("declarationConsent")
-    const { allValid, sectionStatus } = validateAllSections(formData, completedSections)
+    const completedWithDeclaration = { ...completedSections, declarationConsent: true }
+    const { allValid, sectionStatus } = validateAllSections(formData, completedWithDeclaration)
     if (!allValid) {
       const issues = Object.entries(sectionStatus)
         .filter(([_, status]) => !status.valid || !status.completed)
@@ -562,6 +573,7 @@ if (operationalSections.includes(section)) {
       //   }
       // }
       
+      await markSectionAsCompleted("declarationConsent")
       await saveDataToFirebase(null, true)
       const userEmail = formData.contactDetails?.email;
       const smeName = formData.entityOverview?.registeredName || "there";
@@ -687,8 +699,40 @@ if (operationalSections.includes(section)) {
   const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
   const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
 
-  // Universal facilitator / viewer banner is now rendered universally by SMELayout at the top of every page
-  const renderCmfBanner = () => null;
+  const renderCmfBanner = () => {
+    if (!isCmfView) return null;
+    return (
+      <div style={{
+        backgroundColor: "#e8f5e9", padding: "16px 20px",
+        borderRadius: "8px", border: "2px solid #4caf50",
+        display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: "20px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "20px" }}>👁️</span>
+          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+            Facilitator View: Managing {viewingSMEName}'s Profile
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("viewingSMEId");
+            sessionStorage.removeItem("viewingSMEName");
+            sessionStorage.removeItem("investorViewMode");
+            sessionStorage.removeItem("viewOrigin");
+            window.location.href = "/cmf-cohorts";
+          }}
+          style={{
+            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
+            border: "none", borderRadius: "6px", cursor: "pointer",
+            fontWeight: "600", fontSize: "14px",
+          }}
+        >
+          ← Back to My Cohorts
+        </button>
+      </div>
+    );
+  };
 
   if (showSummary && !isEditing) {
     return (
@@ -698,6 +742,8 @@ if (operationalSections.includes(section)) {
       </div>
     )
   }
+
+  const sectionEditable = canEditSection(activeSection)
 
   return (
     <div className="universal-profile-container">
@@ -851,7 +897,8 @@ if (operationalSections.includes(section)) {
       )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
-        <h1 style={{ margin: 0 }}>My Universal Profile</h1>
+        <h1 style={{ margin: 0 }}>{isCompanyMember ? `${companyName || "Company"} – Universal Profile` : "My Universal Profile"}</h1>
+        <ProfileScopeSwitcher />
         {(profileData?.is_verified || profileData?.scoreState?.is_verified || profileData?.status === "approved") && (
           <div style={{
             display: "inline-flex",
@@ -886,6 +933,9 @@ if (operationalSections.includes(section)) {
               {userRole === "employee" && "You can edit contact details and upload documents."}
               {userRole === "viewer" && "You have read-only access. Contact the owner for edit permissions."}
             </p>
+            <p style={{ margin: "0.5rem 0 0 0", color: "#4a5568", fontSize: "0.8rem" }}>
+              You are viewing {companyName ? `${companyName}'s` : "your company's"} profile. Any changes you save are applied to the company profile and recorded in its edit history.
+            </p>
           </div>
         )}
         <div className="profile-tracker-inner">
@@ -900,17 +950,28 @@ if (operationalSections.includes(section)) {
       </div>
 
       <div className="content-card">
-        {renderActiveSection()}
+        {!sectionEditable && activeSection !== "instructions" && (
+          <div style={{ backgroundColor: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "1rem", fontSize: "0.875rem" }}>
+            View only – your role ({userRole}) can't edit this section. Ask the company owner if you need access.
+          </div>
+        )}
+        {sectionEditable ? renderActiveSection() : (
+          <fieldset disabled style={{ border: 0, padding: 0, margin: 0, minWidth: 0, pointerEvents: "none", opacity: 0.85 }}>
+            {renderActiveSection()}
+          </fieldset>
+        )}
         <div className="action-buttons">
           {activeSection !== "instructions" && (<button type="button" onClick={navigateToPreviousSection} className="btn btn-secondary"><ChevronLeft size={16} /> Previous</button>)}
-          <button type="button" onClick={handleSaveSection} className="btn btn-secondary"><Save size={16} /> Save</button>
+          {sectionEditable && (<button type="button" onClick={handleSaveSection} className="btn btn-secondary"><Save size={16} /> Save</button>)}
           {activeSection !== "declarationConsent" ? (
-            <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">Save & Continue <ChevronRight size={16} /></button>
-          ) : (
+            sectionEditable
+              ? <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary">Save & Continue <ChevronRight size={16} /></button>
+              : <button type="button" onClick={navigateToNextSection} className="btn btn-primary">Next <ChevronRight size={16} /></button>
+          ) : sectionEditable ? (
             <button type="button" onClick={handleSubmitProfile}
               disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions}
               className="btn btn-primary">Submit Profile</button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

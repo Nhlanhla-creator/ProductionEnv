@@ -503,6 +503,51 @@ const filteredMessages = useMemo(() => {
     return "User";
   };
 
+  const [nameCache, setNameCache] = useState({});
+
+const GENERIC_NAMES = ["User", "Unknown", "Unknown SME", "Unknown Sender", "SME", "Investment Team"];
+const isGenericName = (n) => !n || GENERIC_NAMES.includes(n);
+const emailPrefix = (e) => (e ? e.split("@")[0] : null);
+
+useEffect(() => {
+  const uids = new Set();
+  visibleMessages.forEach((m) => {
+    const otherId = m.type === "inbox" ? m.from : m.to;
+    const stored = m.type === "inbox" ? m.fromName : m.toName;
+    if (otherId && otherId !== "system" && isGenericName(stored) && !(otherId in nameCache)) {
+      uids.add(otherId);
+    }
+  });
+  if (uids.size === 0) return;
+
+  let cancelled = false;
+  (async () => {
+    const entries = await Promise.all(
+      [...uids].map(async (id) => [id, await getCurrentUserName(id)])
+    );
+    if (!cancelled) setNameCache((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+  })();
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [visibleMessages]);
+
+const getDisplayName = (m) => {
+  const isInbox = m.type === "inbox";
+  if (isInbox && m.from === "system") return "BIG Marketplace Team 🌍";
+  const stored = isInbox
+    ? m.fromName || m.sender
+    : m.toName || m.recipient || m.recipientName;
+  if (!isGenericName(stored)) return stored;
+  const cached = nameCache[isInbox ? m.from : m.to];
+  if (!isGenericName(cached)) return cached;
+  return (
+    emailPrefix(isInbox ? m.fromEmail : m.toEmail) ||
+    stored ||
+    (isInbox ? "Unknown Sender" : "Unknown Recipient")
+  );
+};
+
+
   const handleMessageSelect = async (msg) => {
     if (selectMode) {
       setSelectedMessages((prev) => {
@@ -531,15 +576,14 @@ const filteredMessages = useMemo(() => {
         const fetchedName = await getCurrentUserName(msg.from);
         setSenderName(
           (fetchedName && fetchedName !== "User" ? fetchedName : null) ||
-          msg.fromName ||
-          "Unknown Sender"
+          msg.fromName || emailPrefix(msg.fromEmail) || "BIG system"
         );
       } catch (error) {
         console.error("Error fetching sender name:", error);
-        setSenderName(msg.fromName || "Unknown Sender");
+        setSenderName(msg.fromName || emailPrefix(msg.fromEmail) || "BIG system");
       }
     } else {
-      setSenderName(msg.fromName || "Unknown Sender");
+      setSenderName(msg.fromName || "BIG system");
     }
   };
 
@@ -876,10 +920,14 @@ const filteredMessages = useMemo(() => {
     }
 
     const messagePayload = {
-      from: user.uid,
-      fromName: fromName,
-      to: newMessage.to,
-      toName: newMessage.toName,
+       from: user.uid,
+  fromName: fromName,
+  fromEmail: user.email || null,
+  to: newMessage.to,
+  toName: newMessage.toName,
+  toEmail: recipients.find((r) => r.id === newMessage.to)?.email || null,
+     
+    
       subject: newMessage.subject,
       content: newMessage.content,
       attachments: attachmentURLs,
@@ -1443,11 +1491,9 @@ const filteredMessages = useMemo(() => {
               {visibleMessages.length > 0 ? (
                 <>
                   {visibleMessages.map((message) => {
-                    const displayName = message.type === "inbox"
-                      ? message.from === "system"
-                        ? "BIG Marketplace Team 🌍"
-                        : message.fromName || message.sender || "Investment Team"
-                      : message.toName || message.recipient || message.recipientName || "Unknown SME";
+                 
+
+const displayName = getDisplayName(message) ||"BIG system";
                     const isSelected = selectedMessages.has(message.id);
 
                     return (

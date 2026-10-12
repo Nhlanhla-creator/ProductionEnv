@@ -38,31 +38,10 @@ import {
   Sparkles,
 } from "lucide-react"
 import { getFunctions, httpsCallable } from "firebase/functions"
-/**
- * FundingApplicationsList
- *
- * Funder matches are read on the Funding Matches table; this list opens it.
- *
- * AI capital navigation (moved here from the Dashboard summary card): each
- * application gets its own analysis. Results are cached on the application
- * doc (fundingApplicationsV2/{id}.capitalNavigation) and only re-run on demand
- * — nothing calls the AI on page load, so the 4/min and 20/day limits on
- * analyzeCapitalNavigation aren't burned just by opening this page.
- *
- * Props:
- * - onViewSummary: (applicationId, applicationData) => void
- * - onEditApplication: (applicationId) => void
- * - onCreateNew: () => void
- * - onNavigateToMatches: (applicationId, matchRange) => void   optional; wins over the route
- * - onSubmitApplication: (applicationId, applicationData) => void  optional; without
- *   it this component writes status: "submitted" itself
- * - embedded: boolean
- */
 
 /* ⚠️ CONFIRM THIS PATH — set it to whatever route renders <FundingTable />. */
 const MATCHES_ROUTE = "/funding-matches"
 
-/* Must match the constants exported by the funding table. */
 const FUNDING_APPLICATION_FILTER_EVENT = "funding-application-filter"
 const FUNDING_MATCH_RANGE_EVENT = "funding-match-range-filter"
 
@@ -95,9 +74,6 @@ const Portal = ({ children }) => {
 
 const parseAmount = (v) => parseInt((v ?? "").toString().replace(/[^\d]/g, ""), 10) || 0
 
-/* UseOfFunds.jsx writes fundingCategory, fundingInstrument and preferredFunderType
-   (plus the *Other free-text fields). The old fundingInstruments array is only
-   used as a fallback for applications saved before that form changed. */
 const getRequestedRoute = (useOfFunds = {}) => {
   const pick = (main, other) => (main && main.startsWith("Other") ? other || main : main) || null
   const legacy = Array.isArray(useOfFunds.fundingInstruments)
@@ -128,8 +104,6 @@ const buildCapitalNavSignature = (appData, scores = {}, guaranteesEvaluation, pr
   })
 }
 
-/* blocking: the analysis can't run without these.
-   optional: it runs, but is provisional until they're provided. */
 const getMissingInfo = (appData, ctx) => {
   const blocking = []
   const optional = []
@@ -217,10 +191,9 @@ const FundingApplicationsList = ({
   const [submittingId, setSubmittingId] = useState(null)
   const [navNotice, setNavNotice] = useState(null)
 
-  /* Capital navigation */
-  const [capitalNavByApp, setCapitalNavByApp] = useState({}) // appId -> result | { success:false, error }
-  const [capitalNavLoadingByApp, setCapitalNavLoadingByApp] = useState({}) // appId -> bool
-  const [navCtx, setNavCtx] = useState(null) // { scores, profile, guaranteesEvaluation }
+  const [capitalNavByApp, setCapitalNavByApp] = useState({})
+  const [capitalNavLoadingByApp, setCapitalNavLoadingByApp] = useState({})
+  const [navCtx, setNavCtx] = useState(null)
   const navCtxRef = useRef(null)
   const [analysisModalId, setAnalysisModalId] = useState(null)
 
@@ -263,8 +236,6 @@ const FundingApplicationsList = ({
     }
   }
 
-  /* Shared inputs for every application's analysis: BIG scores, the universal
-     profile and the guarantees evaluation. Read once and reused. */
   const fetchSharedCapitalNavContext = async (userId) => {
     const [bigEvalSnap, profileSnap, aiEvalSnap] = await Promise.all([
       getDoc(doc(db, "bigEvaluations", userId)),
@@ -337,7 +308,6 @@ const FundingApplicationsList = ({
 
       setApplications(apps)
 
-      // Show saved analyses straight away — no AI call here.
       const cached = {}
       apps.forEach((a) => {
         const r = a.raw?.capitalNavigation?.result
@@ -347,7 +317,6 @@ const FundingApplicationsList = ({
 
       await fetchMatchCounts(userId)
 
-      // Context is read so "more info needed" and "out of date" can be shown per row.
       try {
         await ensureNavCtx(userId, true)
       } catch (ctxErr) {
@@ -390,11 +359,10 @@ const FundingApplicationsList = ({
       lastUpdatedTimestamp,
       isComplete,
       status: data.status || (isComplete ? "complete" : "draft"),
-      raw: data, // full doc — needed to build the capital-nav payload
+      raw: data,
     }
   }
 
-  /* ─── Capital navigation: per application ───────────────────────────── */
   const generateCapitalNavForApp = async (app, { force = false } = {}) => {
     const appId = app.id
     const appData = app.raw || {}
@@ -403,7 +371,6 @@ const FundingApplicationsList = ({
       const ctx = await ensureNavCtx(null, force)
       if (!ctx) throw new Error("Please log in again.")
 
-      // Nothing to send yet — the modal lists what's needed.
       if (getMissingInfo(appData, ctx).blocking.length > 0) return
 
       const { scores, profile, guaranteesEvaluation } = ctx
@@ -472,7 +439,6 @@ const FundingApplicationsList = ({
 
       const result = resp?.data
       if (!result || result.success === false) {
-        // Not cached, so the next attempt actually retries.
         setCapitalNavByApp((p) => ({
           ...p,
           [appId]: { success: false, error: result?.error || "The analysis service returned no result." },
@@ -499,7 +465,6 @@ const FundingApplicationsList = ({
     }
   }
 
-  /* Opens the analysis modal; runs the analysis first if there's no saved result. */
   const openAnalysis = (app) => {
     setAnalysisModalId(app.id)
     const existing = capitalNavByApp[app.id]
@@ -514,7 +479,6 @@ const FundingApplicationsList = ({
     return saved.signature !== buildCapitalNavSignature(app.raw || {}, navCtx.scores, navCtx.guaranteesEvaluation, navCtx.profile)
   }
 
-  /* ─── Match bands ───────────────────────────────────────────────────── */
   const countInBand = useMemo(
     () => (appId, bandKey) => {
       const scores = matchScores[appId] || []
@@ -525,7 +489,6 @@ const FundingApplicationsList = ({
 
   const totalMatches = (appId) => (matchScores[appId] || []).length
 
-  /* ─── Actions ───────────────────────────────────────────────────────── */
   const handleDelete = async (appId) => {
     try {
       setDeleting(true)
@@ -598,7 +561,6 @@ const FundingApplicationsList = ({
     return { label: "Draft", color: "#6b7280", bg: "#f3f4f6", Icon: Clock }
   }
 
-  /* One line under each application: what the AI analysis says, or what to do next. */
   const renderNavLine = (app) => {
     const result = capitalNavByApp[app.id]
     const hasResult = result && result.success !== false && result.suitabilityScore != null
@@ -639,7 +601,6 @@ const FundingApplicationsList = ({
     )
   }
 
-  /* ─── Analysis modal ────────────────────────────────────────────────── */
   const renderAnalysisModal = () => {
     const app = applications.find((a) => a.id === analysisModalId)
     if (!app) return null
@@ -685,7 +646,6 @@ const FundingApplicationsList = ({
             style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 680, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 28px 56px rgba(0,0,0,0.25)", fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div style={{ background: "linear-gradient(135deg,#5D4037,#3E2723)", color: "#fff", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 17, fontWeight: 700 }}>
@@ -705,7 +665,6 @@ const FundingApplicationsList = ({
               </button>
             </div>
 
-            {/* Body */}
             <div style={{ padding: "18px 22px 22px", overflowY: "auto", flex: 1 }}>
               {isLoading ? (
                 <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: 44, color: "#6c757d", fontSize: 14 }}>
@@ -807,7 +766,6 @@ const FundingApplicationsList = ({
               )}
             </div>
 
-            {/* Footer */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "12px 22px", borderTop: "1px solid #eee", background: "#fff" }}>
               <button
                 onClick={() => setAnalysisModalId(null)}
@@ -819,7 +777,7 @@ const FundingApplicationsList = ({
                 onClick={() => generateCapitalNavForApp(app, { force: true })}
                 disabled={isLoading || missing.blocking.length > 0}
                 title={missing.blocking.length > 0 ? "Provide the missing information first" : "Run the analysis again with the latest data"}
-                style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#faf7f2", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: isLoading || missing.blocking.length > 0 ? "not-allowed" : "pointer", opacity: isLoading || missing.blocking.length > 0 ? 0.5 : 1 }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#ffffff", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: isLoading || missing.blocking.length > 0 ? "not-allowed" : "pointer", opacity: isLoading || missing.blocking.length > 0 ? 0.5 : 1 }}
               >
                 <RefreshCw size={14} /> {hasResult ? "Re-run analysis" : "Run analysis"}
               </button>
@@ -844,7 +802,8 @@ const FundingApplicationsList = ({
       <h3 style={{ color: "#4a352f", marginBottom: 8 }}>Error Loading Applications</h3>
       <p style={{ color: "#dc2626", marginBottom: 20 }}>{error}</p>
       <button onClick={() => auth.currentUser && fetchApplications(auth.currentUser.uid)}
-        style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+        className="funding-cta-btn"
+        style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#ffffff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
         <RefreshCw size={15} /> Retry
       </button>
     </div>
@@ -855,6 +814,20 @@ const FundingApplicationsList = ({
       <style>{`
         @keyframes fl-spin{to{transform:rotate(360deg)}}
         @keyframes fl-fadein { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+        /* ── Force white text on every CTA button in this module ─────────── */
+        .funding-cta-btn,
+        .funding-cta-btn:link,
+        .funding-cta-btn:visited,
+        .funding-cta-btn:hover,
+        .funding-cta-btn:active,
+        .funding-cta-btn:focus {
+          color: #ffffff !important;
+          -webkit-text-fill-color: #ffffff !important;
+          text-decoration: none !important;
+        }
+        .funding-cta-btn svg { color: #ffffff !important; }
+
         .fl-wrap {
           width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
           border-radius:14px; border:1px solid rgba(200,182,166,0.3);
@@ -888,7 +861,6 @@ const FundingApplicationsList = ({
         .ell { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
         .fl-appid { display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:linear-gradient(135deg,#5d4037,#4a332a);color:#FAF7F2;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.5px;white-space:nowrap;font-family:'SF Mono','Monaco','Consolas',monospace; }
 
-        /* AI analysis link under each application */
         .fl-nav-link {
           display:inline-flex; align-items:center; gap:4px; max-width:100%;
           margin-top:3px; padding:0; background:none; border:none;
@@ -955,12 +927,38 @@ const FundingApplicationsList = ({
               {applications.length} {applications.length === 1 ? "Application" : "Applications"}
             </p>
           </div>
-          <button onClick={onCreateNew} style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#faf7f2", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(166,124,82,0.3)", transition: "all 0.22s" }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 7px 20px rgba(166,124,82,0.4)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 14px rgba(166,124,82,0.3)" }}
-          >
-            <Plus size={16} /> Create New Application
-          </button>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <a
+              href="/funding-new"
+              className="funding-cta-btn"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "10px 20px",
+                background: "linear-gradient(135deg,#a67c52,#7d5a50)",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 700,
+                textDecoration: "none",
+                boxShadow: "0 4px 14px rgba(166,124,82,0.3)",
+                transition: "all 0.22s",
+              }}
+            >
+              <Sparkles size={15} /> New funding flow
+            </a>
+            <button
+              onClick={onCreateNew}
+              className="funding-cta-btn"
+              style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#ffffff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(166,124,82,0.3)", transition: "all 0.22s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 7px 20px rgba(166,124,82,0.4)" }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 14px rgba(166,124,82,0.3)" }}
+            >
+              <Plus size={16} /> Create New Application
+            </button>
+          </div>
         </div>
 
         {navNotice && (
@@ -978,7 +976,11 @@ const FundingApplicationsList = ({
             <DollarSign size={42} style={{ color: "#c8b6a6", margin: "0 auto 12px" }} />
             <h3 style={{ color: "#4a352f", marginBottom: 6, fontSize: 18, fontWeight: 700 }}>No Funding Applications Yet</h3>
             <p style={{ color: "#6b7280", marginBottom: 20 }}>Create your first funding application to get started.</p>
-            <button onClick={onCreateNew} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 24px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#faf7f2", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(166,124,82,0.3)" }}>
+            <button
+              onClick={onCreateNew}
+              className="funding-cta-btn"
+              style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 24px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#ffffff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(166,124,82,0.3)" }}
+            >
               <Plus size={16} /> Create Application
             </button>
           </div>
@@ -1044,7 +1046,6 @@ const FundingApplicationsList = ({
                         </span>
                       </td>
 
-                      {/* Application + this application's AI analysis */}
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                           <div style={{ width: 32, height: 32, flexShrink: 0, background: "rgba(166,124,82,0.1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>

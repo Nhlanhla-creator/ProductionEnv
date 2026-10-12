@@ -1,0 +1,550 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ────────────────────────────────────────────────────────────────────
+    // HELPERS
+    // ────────────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && uid() == userId;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(uid())).data;
+    }
+
+    function userRole() {
+      return userDoc().userRole;
+    }
+
+    function companyId() {
+      return userDoc().companyId;
+    }
+
+    function isCompanyOwner() {
+      return isSignedIn() && userRole() == 'owner';
+    }
+
+    function isCompanyMember(company) {
+      return isSignedIn() && companyId() != null && companyId() == company;
+    }
+
+    // Admin emails (matches your current admin check)
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@bigmarketplace.co.za' ||
+        request.auth.token.email.matches('.*@bigmarketplace\\.co\\.za')
+      );
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // USERS — own document only, plus company members can read the owner's
+    // ────────────────────────────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin() ||
+        (isSignedIn() && companyId() == userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // COMPANIES — members read; owner creates/updates; owner deletes
+    // ────────────────────────────────────────────────────────────────────
+
+    match /companies/{companyId} {
+      allow read: if isSignedIn() && (
+        resource.data.members is list &&
+        uid() in resource.data.members
+      );
+      allow create: if isSignedIn();
+      allow update: if isCompanyOwner() && (
+        uid() in resource.data.members
+      );
+      allow delete: if isCompanyOwner();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // UNIVERSAL PROFILE (SME)
+    // - Anyone signed in may READ (needed for matching / funder view)
+    // - Only the owner (or the company owner for member profiles) may WRITE
+    // ────────────────────────────────────────────────────────────────────
+
+    match /universalProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) ||
+        (isSignedIn() && userRole() in ['owner', 'companyadmin'] && companyId() == userId);
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // Sub-collections (solvencyScores, etc.)
+      match /{sub=**} {
+        allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // INVESTOR PROFILE (MyuniversalProfiles)
+    // ────────────────────────────────────────────────────────────────────
+
+    match /MyuniversalProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
+
+      match /{sub=**} {
+        allow read: if isSignedIn();
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // OTHER PROFILE TYPES — read for all signed-in, write for owner
+    // ────────────────────────────────────────────────────────────────────
+
+    match /catalystProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+
+    match /advisorProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+
+    match /cmfProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // FUNDING APPLICATIONS (V2) — owner only
+    // ────────────────────────────────────────────────────────────────────
+
+    match /fundingApplicationsV2/{appId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == uid() || isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.userId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.userId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // MATCHES — SME reads their own matches; funder reads matches for them
+    // ────────────────────────────────────────────────────────────────────
+
+    match /smseFundingMatches/{matchId} {
+      allow read: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // APPLICATIONS — SME owns their application, funder sees what they receive
+    // ────────────────────────────────────────────────────────────────────
+
+    match /smeApplications/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.smeId == uid();
+      allow update: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /investorApplications/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.investorId == uid() ||
+        resource.data.smeId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.investorId == uid() ||
+        resource.data.smeId == uid()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /productApplications/{documentId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == uid() ||
+        resource.data.funderId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.userId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.userId == uid();
+    }
+
+    match /supplierApplications/{applicationId} {
+      allow create: if isSignedIn() &&
+        request.resource.data.supplierId == uid();
+      allow read: if isSignedIn() && (
+        resource.data.supplierId == uid() ||
+        resource.data.customerId == uid() ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (resource.data.customerId == uid() &&
+          request.resource.data.keys().hasOnly(['status', 'currentStage', 'nextStage', 'lastActivity'])) ||
+        (resource.data.supplierId == uid() &&
+          request.resource.data.keys().hasOnly(['lastActivity']))
+      );
+      allow delete: if false;
+    }
+
+    match /advisoryApplications/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    match /internshipApplications/{application} {
+      allow read: if isSignedIn() && (
+        resource.data.sponsorId == uid() ||
+        resource.data.applicantId == uid() ||
+        isAdmin()
+      );
+      allow write: if isSignedIn() &&
+        request.resource.data.applicantId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // AI EVALUATIONS — own only
+    // ────────────────────────────────────────────────────────────────────
+
+    match /aiEvaluations/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == uid() || isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.userId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.userId == uid();
+    }
+
+    match /aiPitchEvaluations/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == uid() || isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.userId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.userId == uid();
+    }
+
+    match /creditAnalyses/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == uid() || isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.userId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.userId == uid();
+    }
+
+    match /aiFinancialEvaluations/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    match /aiFundabilityEvaluations/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    match /aiLegitimacyEvaluation/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    match /aiAcademicEvaluation/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    match /profileEvaluations/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    match /combinedEvaluations/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == uid() || isAdmin()
+      );
+      allow write: if isSignedIn() &&
+        request.resource.data.userId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // BIG EVALUATIONS — own only
+    // ────────────────────────────────────────────────────────────────────
+
+    match /bigEvaluations/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // SCORES (new, from the brief §6)
+    // ────────────────────────────────────────────────────────────────────
+
+    match /scores/{scoreId} {
+      allow read: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if false;   // score records are immutable
+      allow delete: if isAdmin();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // MATCH RECORDS (brief §8)
+    // ────────────────────────────────────────────────────────────────────
+
+    match /matchRecords/{matchId} {
+      allow read: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // OPPORTUNITY SUBMISSIONS (brief §8) — owner + recipient funder + admin
+    // ────────────────────────────────────────────────────────────────────
+
+    match /opportunitySubmissions/{submissionId} {
+      allow read: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.funderId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.smeId == uid();
+      allow update: if false;   // immutable; new version = new document
+      allow delete: if isAdmin();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // REQUIREMENT RULES (funder-authored, SME read-only)
+    // ────────────────────────────────────────────────────────────────────
+
+    match /requirementRules/{ruleId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.funderId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.funderId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.funderId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // INVESTOR SCORING PROFILE (funder-authored)
+    // ────────────────────────────────────────────────────────────────────
+
+    match /investorScoringProfiles/{profileId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.funderId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.funderId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.funderId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // VAULT DOCUMENTS (brief §8)
+    // ────────────────────────────────────────────────────────────────────
+
+    match /vaultDocuments/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.ownerId == uid() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.ownerId == uid();
+      allow update: if isSignedIn() &&
+        resource.data.ownerId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.ownerId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // SOLVENCY SCORES (subcollection under users)
+    // ────────────────────────────────────────────────────────────────────
+
+    match /users/{userId}/solvencyScores/{year} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/cachedAnalyses/{analysisId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/savedAnalyses/{savedId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/aiAnalyses/{analysisId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /solvencyScores/{docId} {
+      allow read, write: if isSignedIn() && docId.matches(uid() + '.*');
+    }
+
+    match /financialData/{docId} {
+      allow read, write: if isSignedIn() && docId.matches(uid() + '.*');
+    }
+
+    match /cap-table/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /dividend-history/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /rateLimits/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // MESSAGES / NOTIFICATIONS — recipient only
+    // ────────────────────────────────────────────────────────────────────
+
+    match /messages/{messageId} {
+      allow read: if isSignedIn() && (
+        resource.data.to == uid() ||
+        resource.data.from == uid()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.to == uid();
+      allow delete: if isSignedIn() && resource.data.to == uid();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() &&
+        resource.data.userId == uid();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+        resource.data.userId == uid();
+      allow delete: if isSignedIn() &&
+        resource.data.userId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // SME CALENDAR EVENTS
+    // ────────────────────────────────────────────────────────────────────
+
+    match /smeCalendarEvents/{eventId} {
+      allow create: if isSignedIn() && (
+        request.resource.data.createdBy == uid() ||
+        request.resource.data.catalystId == uid() ||
+        request.resource.data.requesterId == uid()
+      );
+      allow read: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.createdBy == uid() ||
+        resource.data.catalystId == uid() ||
+        resource.data.requesterId == uid()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.smeId == uid() ||
+        resource.data.createdBy == uid() ||
+        resource.data.catalystId == uid() ||
+        resource.data.requesterId == uid()
+      );
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // ARTICLES — public read, admin write
+    // ────────────────────────────────────────────────────────────────────
+
+    match /articles/{articleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // BUSINESS CARDS — public read, owner write
+    // ────────────────────────────────────────────────────────────────────
+
+    match /businessCards/{cardId} {
+      allow read: if true;
+      allow write: if isSignedIn() &&
+        request.resource.data.userId == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // INVITATIONS — signed-in read, signed-in create, owner update
+    // ────────────────────────────────────────────────────────────────────
+
+    match /invitations/{invitationId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() &&
+        resource.data.createdBy == uid();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // FALLBACK — deny everything else by default
+    // ────────────────────────────────────────────────────────────────────
+    // Previously this was:
+    //   match /{document=**} { allow read, write: if request.auth != null; }
+    // That allowed every signed-in user to read/write the whole database.
+    // The following denies anything not covered above.
+
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

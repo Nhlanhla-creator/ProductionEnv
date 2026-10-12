@@ -5,6 +5,7 @@ import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { db, auth, storage } from '../../firebaseConfig';
+import { getProfileOwnerId } from "../../utils/profile-context"
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { validateCV } from '../../services/documentValidationService';
@@ -544,8 +545,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
           return;
         }
 
-        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+        const userId = await getProfileOwnerId();
         if (!userId) { setIsLoading(false); return; }
         const docRef = doc(db, "universalProfiles", userId);
         const docSnap = await getDoc(docRef);

@@ -707,6 +707,8 @@ const isProfileComplete = (snap) => {
       "Investor/Funder": <Rocket size={16} />,
       "Corporate": <Building size={16} />,
       "Catalyst": <Building2 size={16} />,
+      "Capital and Market Facilitator": <Landmark size={16} />,
+      
       "CapitalMarketFacilitators": <Landmark size={16} />,
       "Capital and Market Facilitators": <Landmark size={16} />,
       "Advisor": <Users size={16} />,
@@ -744,6 +746,7 @@ const isProfileComplete = (snap) => {
       "Corporate": "/corporate-profile",
       "Catalyst": "/support-profile",
       "CapitalMarketFacilitators": "/cmf-profile",
+      "Capital and Market Facilitator":"/cmf-profile",
       "Advisor": "/advisor-profile",
       "Intern": "/intern-profile",
       "Intern Sponsor": "/intern-sponsor-profile",

@@ -10,6 +10,7 @@ import { Button } from "./custom-button"
 const Download = () => <span>📥</span>
 const X = () => <span>✕</span>
 const Check = () => <span>✓</span>
+const Star = () => <span>★</span>
 
 export default function RegistrationSummary({ data, open, onClose, onComplete }) {
   const [isGenerating, setIsGenerating] = useState(false)
@@ -27,6 +28,18 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
   const getOptionLabel = (options, value) => {
     const option = options.find((opt) => opt.value === value)
     return option ? option.label : value
+  }
+
+  // ── Shared offerings extractor (handles both new + legacy shapes) ──
+  const extractOfferings = (ps) => {
+    if (!ps) return { products: [], services: [], legacyProductCats: [], legacyServiceCats: [] }
+    const offerings = Array.isArray(ps.offerings) ? ps.offerings : []
+    return {
+      products: offerings.filter((o) => o.offeringType === "Product"),
+      services: offerings.filter((o) => o.offeringType === "Service"),
+      legacyProductCats: ps.productCategories || [],
+      legacyServiceCats: ps.serviceCategories || [],
+    }
   }
 
   const generatePDF = async () => {
@@ -160,27 +173,118 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
         yPos += 3
       }
     } else if (title === "Products & Services") {
-      // Product Categories
-      if (sectionData.productCategories && sectionData.productCategories.length > 0) {
+      const { products, services, legacyProductCats, legacyServiceCats } = extractOfferings(sectionData)
+
+      // Modern offerings — Products
+      if (products.length > 0) {
+        if (yPos > 270) { doc.addPage(); yPos = 20 }
         doc.setFont(undefined, "bold")
-        doc.text("Product Categories:", 15, yPos)
+        doc.text(`Products (${products.length}):`, 15, yPos)
         yPos += 5
         doc.setFont(undefined, "normal")
 
-        sectionData.productCategories.forEach((category, index) => {
-          if (yPos > 270) {
-            doc.addPage()
-            yPos = 20
+        products.forEach((offering, idx) => {
+          if (yPos > 265) { doc.addPage(); yPos = 20 }
+          const name = offering.name || "Untitled product"
+          const primary = offering.isPrimary ? " [PRIMARY]" : ""
+          doc.text(`${idx + 1}. ${name}${primary}`, 20, yPos)
+          yPos += 5
+          if (offering.breadcrumb) {
+            doc.setFontSize(9)
+            doc.setTextColor(120, 90, 70)
+            doc.text(`   Category: ${offering.breadcrumb}`, 22, yPos)
+            yPos += 4
+            doc.setFontSize(10)
+            doc.setTextColor(0, 0, 0)
           }
+          if (offering.description) {
+            doc.setFontSize(9)
+            const desc = offering.description.length > 100
+              ? offering.description.substring(0, 97) + "..."
+              : offering.description
+            const lines = doc.splitTextToSize(desc, 165)
+            lines.forEach((line) => {
+              if (yPos > 270) { doc.addPage(); yPos = 20 }
+              doc.text(line, 22, yPos)
+              yPos += 4
+            })
+            doc.setFontSize(10)
+          }
+          if (offering.industries?.length > 0) {
+            doc.setFontSize(9)
+            doc.setTextColor(120, 90, 70)
+            doc.text(`   Industries: ${offering.industries.slice(0, 4).join(", ")}${offering.industries.length > 4 ? ` +${offering.industries.length - 4} more` : ""}`, 22, yPos)
+            yPos += 4
+            doc.setFontSize(10)
+            doc.setTextColor(0, 0, 0)
+          }
+          yPos += 1
+        })
+        yPos += 3
+      }
+
+      // Modern offerings — Services
+      if (services.length > 0) {
+        if (yPos > 270) { doc.addPage(); yPos = 20 }
+        doc.setFont(undefined, "bold")
+        doc.text(`Services (${services.length}):`, 15, yPos)
+        yPos += 5
+        doc.setFont(undefined, "normal")
+
+        services.forEach((offering, idx) => {
+          if (yPos > 265) { doc.addPage(); yPos = 20 }
+          const name = offering.name || "Untitled service"
+          const primary = offering.isPrimary ? " [PRIMARY]" : ""
+          doc.text(`${idx + 1}. ${name}${primary}`, 20, yPos)
+          yPos += 5
+          if (offering.breadcrumb) {
+            doc.setFontSize(9)
+            doc.setTextColor(120, 90, 70)
+            doc.text(`   Category: ${offering.breadcrumb}`, 22, yPos)
+            yPos += 4
+            doc.setFontSize(10)
+            doc.setTextColor(0, 0, 0)
+          }
+          if (offering.description) {
+            doc.setFontSize(9)
+            const desc = offering.description.length > 100
+              ? offering.description.substring(0, 97) + "..."
+              : offering.description
+            const lines = doc.splitTextToSize(desc, 165)
+            lines.forEach((line) => {
+              if (yPos > 270) { doc.addPage(); yPos = 20 }
+              doc.text(line, 22, yPos)
+              yPos += 4
+            })
+            doc.setFontSize(10)
+          }
+          if (offering.industries?.length > 0) {
+            doc.setFontSize(9)
+            doc.setTextColor(120, 90, 70)
+            doc.text(`   Industries: ${offering.industries.slice(0, 4).join(", ")}${offering.industries.length > 4 ? ` +${offering.industries.length - 4} more` : ""}`, 22, yPos)
+            yPos += 4
+            doc.setFontSize(10)
+            doc.setTextColor(0, 0, 0)
+          }
+          yPos += 1
+        })
+        yPos += 3
+      }
+
+      // Legacy product categories (fallback for older profiles)
+      if (legacyProductCats.length > 0) {
+        if (yPos > 270) { doc.addPage(); yPos = 20 }
+        doc.setFont(undefined, "bold")
+        doc.text("Legacy Product Categories:", 15, yPos)
+        yPos += 5
+        doc.setFont(undefined, "normal")
+        legacyProductCats.forEach((category, index) => {
+          if (yPos > 270) { doc.addPage(); yPos = 20 }
           doc.text(`${index + 1}. ${category.name || "Unnamed Category"}`, 20, yPos)
           yPos += 5
-
           if (category.products && category.products.length > 0) {
             category.products.forEach((product) => {
-              if (yPos > 270) {
-                doc.addPage()
-                yPos = 20
-              }
+              if (yPos > 270) { doc.addPage(); yPos = 20 }
               doc.text(`   • ${product.name || "Unnamed Product"}`, 25, yPos)
               yPos += 5
             })
@@ -189,31 +293,20 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
         yPos += 3
       }
 
-      // Service Categories
-      if (sectionData.serviceCategories && sectionData.serviceCategories.length > 0) {
-        if (yPos > 270) {
-          doc.addPage()
-          yPos = 20
-        }
+      // Legacy service categories (fallback)
+      if (legacyServiceCats.length > 0) {
+        if (yPos > 270) { doc.addPage(); yPos = 20 }
         doc.setFont(undefined, "bold")
-        doc.text("Service Categories:", 15, yPos)
+        doc.text("Legacy Service Categories:", 15, yPos)
         yPos += 5
         doc.setFont(undefined, "normal")
-
-        sectionData.serviceCategories.forEach((category, index) => {
-          if (yPos > 270) {
-            doc.addPage()
-            yPos = 20
-          }
+        legacyServiceCats.forEach((category, index) => {
+          if (yPos > 270) { doc.addPage(); yPos = 20 }
           doc.text(`${index + 1}. ${category.name || "Unnamed Category"}`, 20, yPos)
           yPos += 5
-
           if (category.services && category.services.length > 0) {
             category.services.forEach((service) => {
-              if (yPos > 270) {
-                doc.addPage()
-                yPos = 20
-              }
+              if (yPos > 270) { doc.addPage(); yPos = 20 }
               doc.text(`   • ${service.name || "Unnamed Service"}`, 25, yPos)
               yPos += 5
             })
@@ -224,10 +317,11 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
     } else {
       // Standard key-value pairs for other sections
       Object.entries(sectionData).forEach(([key, value]) => {
-        // Skip file uploads and arrays
+        // Skip file uploads, arrays, nested objects we don't want shown
         if (Array.isArray(value) || value instanceof File || key.includes("Url") || key.includes("Doc")) {
           return
         }
+        if (value && typeof value === "object") return
 
         if (yPos > 270) {
           doc.addPage()
@@ -258,17 +352,54 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
 
   // Function to handle completion and redirection
   const handleDone = () => {
-    // Close the modal
     onClose()
-
-    // Call the onComplete callback if provided
     if (onComplete) {
       onComplete()
     } else {
-      // Default behavior: redirect to dashboard
       navigate("/dashboard")
     }
   }
+
+  // ── Render helpers for the on-screen summary ──
+  const renderOfferingRow = (offering, idx) => (
+    <div
+      key={offering.id || idx}
+      style={{
+        marginBottom: "10px",
+        padding: "10px 12px",
+        background: "rgba(166,124,82,0.05)",
+        borderRadius: "8px",
+        border: "1px solid rgba(200,182,166,0.2)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+        {offering.isPrimary && <Star />}
+        <span style={{ fontWeight: "600", color: "#4a352f", fontSize: "14px" }}>
+          {offering.name || "Untitled"}
+        </span>
+      </div>
+      {offering.breadcrumb && (
+        <div style={{ fontSize: "12px", color: "#7d5a50", marginBottom: "4px" }}>
+          {offering.breadcrumb}
+        </div>
+      )}
+      {!offering.breadcrumb && offering.customCategoryRequest && (
+        <div style={{ fontSize: "12px", color: "#92400e", marginBottom: "4px", fontStyle: "italic" }}>
+          Category pending review: "{offering.customCategoryRequest}"
+        </div>
+      )}
+      {offering.description && (
+        <div style={{ fontSize: "13px", color: "#4a352f", lineHeight: 1.5, marginBottom: "4px" }}>
+          {offering.description}
+        </div>
+      )}
+      {offering.industries?.length > 0 && (
+        <div style={{ fontSize: "11px", color: "#7d5a50" }}>
+          <strong>Industries:</strong> {offering.industries.join(" • ")}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -294,44 +425,18 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p>
-                    <span className="font-medium">Registered Name:</span>{" "}
-                    {formatValue(data.entityOverview.registeredName)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Trading Name:</span> {formatValue(data.entityOverview.tradingName)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Registration Number:</span>{" "}
-                    {formatValue(data.entityOverview.registrationNumber)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Entity Type:</span> {formatValue(data.entityOverview.entityType)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Entity Size:</span> {formatValue(data.entityOverview.entitySize)}
-                  </p>
+                  <p><span className="font-medium">Registered Name:</span> {formatValue(data.entityOverview.registeredName)}</p>
+                  <p><span className="font-medium">Trading Name:</span> {formatValue(data.entityOverview.tradingName)}</p>
+                  <p><span className="font-medium">Registration Number:</span> {formatValue(data.entityOverview.registrationNumber)}</p>
+                  <p><span className="font-medium">Entity Type:</span> {formatValue(data.entityOverview.entityType)}</p>
+                  <p><span className="font-medium">Entity Size:</span> {formatValue(data.entityOverview.entitySize)}</p>
                 </div>
                 <div>
-                  <p>
-                    <span className="font-medium">Years in Operation:</span>{" "}
-                    {formatValue(data.entityOverview.yearsInOperation)}
-                  </p>
-                  <p>
-                    <span className="font-medium">No. of Employees:</span>{" "}
-                    {formatValue(data.entityOverview.employeeCount)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Operation Stage:</span>{" "}
-                    {formatValue(data.entityOverview.operationStage)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Location:</span> {formatValue(data.entityOverview.location)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Business Description:</span>{" "}
-                    {formatValue(data.entityOverview.businessDescription)}
-                  </p>
+                  <p><span className="font-medium">Years in Operation:</span> {formatValue(data.entityOverview.yearsInOperation)}</p>
+                  <p><span className="font-medium">No. of Employees:</span> {formatValue(data.entityOverview.employeeCount)}</p>
+                  <p><span className="font-medium">Operation Stage:</span> {formatValue(data.entityOverview.operationStage)}</p>
+                  <p><span className="font-medium">Location:</span> {formatValue(data.entityOverview.location)}</p>
+                  <p><span className="font-medium">Business Description:</span> {formatValue(data.entityOverview.businessDescription)}</p>
                 </div>
               </div>
             </div>
@@ -344,9 +449,7 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
                 Ownership & Management
               </h3>
 
-              <p>
-                <span className="font-medium">Total Shares:</span> {formatValue(data.ownershipManagement.totalShares)}
-              </p>
+              <p><span className="font-medium">Total Shares:</span> {formatValue(data.ownershipManagement.totalShares)}</p>
 
               {data.ownershipManagement.shareholders && data.ownershipManagement.shareholders.length > 0 && (
                 <div className="mt-4">
@@ -355,24 +458,12 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
                     <table className="min-w-full bg-white border border-brown-200 rounded-lg">
                       <thead>
                         <tr className="bg-brown-100">
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Name
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            ID/Reg No.
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Country
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            % Shareholding
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Race
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Gender
-                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Name</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">ID/Reg No.</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Country</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">% Shareholding</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Race</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Gender</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -399,21 +490,11 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
                     <table className="min-w-full bg-white border border-brown-200 rounded-lg">
                       <thead>
                         <tr className="bg-brown-100">
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Name
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            ID
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Position
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Nationality
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">
-                            Exec/Non-Exec
-                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Name</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">ID</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Position</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Nationality</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b">Exec/Non-Exec</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -437,41 +518,20 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
           {/* Contact Details */}
           {data.contactDetails && (
             <div className="bg-brown-50 p-4 rounded-lg" style={{ backgroundColor: "#efebe9" }}>
-              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>
-                Contact Details
-              </h3>
+              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>Contact Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p>
-                    <span className="font-medium">Primary Contact:</span>{" "}
-                    {formatValue(data.contactDetails.contactTitle)} {formatValue(data.contactDetails.contactName)}
-                  </p>
-                  <p>
-                    <span className="font-medium">ID Number:</span> {formatValue(data.contactDetails.contactId)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Business Phone:</span>{" "}
-                    {formatValue(data.contactDetails.businessPhone)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Mobile:</span> {formatValue(data.contactDetails.mobile)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Email:</span> {formatValue(data.contactDetails.email)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Website:</span> {formatValue(data.contactDetails.website)}
-                  </p>
+                  <p><span className="font-medium">Primary Contact:</span> {formatValue(data.contactDetails.contactTitle)} {formatValue(data.contactDetails.contactName)}</p>
+                  <p><span className="font-medium">ID Number:</span> {formatValue(data.contactDetails.contactId)}</p>
+                  <p><span className="font-medium">Business Phone:</span> {formatValue(data.contactDetails.businessPhone)}</p>
+                  <p><span className="font-medium">Mobile:</span> {formatValue(data.contactDetails.mobile)}</p>
+                  <p><span className="font-medium">Email:</span> {formatValue(data.contactDetails.email)}</p>
+                  <p><span className="font-medium">Website:</span> {formatValue(data.contactDetails.website)}</p>
                 </div>
                 <div>
-                  <p>
-                    <span className="font-medium">Physical Address:</span>
-                  </p>
+                  <p><span className="font-medium">Physical Address:</span></p>
                   <p className="whitespace-pre-line">{formatValue(data.contactDetails.physicalAddress)}</p>
-
-                  <p className="mt-2">
-                    <span className="font-medium">Postal Address:</span>
-                  </p>
+                  <p className="mt-2"><span className="font-medium">Postal Address:</span></p>
                   <p className="whitespace-pre-line">
                     {data.contactDetails.sameAsPhysical
                       ? formatValue(data.contactDetails.physicalAddress)
@@ -485,164 +545,133 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
           {/* Legal & Compliance */}
           {data.legalCompliance && (
             <div className="bg-brown-50 p-4 rounded-lg" style={{ backgroundColor: "#efebe9" }}>
-              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>
-                Legal & Compliance
-              </h3>
+              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>Legal & Compliance</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p>
-                    <span className="font-medium">Tax Number:</span> {formatValue(data.legalCompliance.taxNumber)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Tax Clearance Number:</span>{" "}
-                    {formatValue(data.legalCompliance.taxClearanceNumber)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Tax Clearance Expiry:</span>{" "}
-                    {formatValue(data.legalCompliance.taxClearanceDate)}
-                  </p>
-                  <p>
-                    <span className="font-medium">VAT Number:</span> {formatValue(data.legalCompliance.vatNumber)}
-                  </p>
-                  <p>
-                    <span className="font-medium">RSC Number:</span> {formatValue(data.legalCompliance.rscNumber)}
-                  </p>
+                  <p><span className="font-medium">Tax Number:</span> {formatValue(data.legalCompliance.taxNumber)}</p>
+                  <p><span className="font-medium">Tax Clearance Number:</span> {formatValue(data.legalCompliance.taxClearanceNumber)}</p>
+                  <p><span className="font-medium">Tax Clearance Expiry:</span> {formatValue(data.legalCompliance.taxClearanceDate)}</p>
+                  <p><span className="font-medium">VAT Number:</span> {formatValue(data.legalCompliance.vatNumber)}</p>
+                  <p><span className="font-medium">RSC Number:</span> {formatValue(data.legalCompliance.rscNumber)}</p>
                 </div>
                 <div>
-                  <p>
-                    <span className="font-medium">UIF Number:</span> {formatValue(data.legalCompliance.uifNumber)}
-                  </p>
-                  <p>
-                    <span className="font-medium">PAYE Number:</span> {formatValue(data.legalCompliance.payeNumber)}
-                  </p>
-                  <p>
-                    <span className="font-medium">B-BBEE Level:</span> {formatValue(data.legalCompliance.bbbeeLevel)}
-                  </p>
-                  <p>
-                    <span className="font-medium">B-BBEE Renewal Date:</span>{" "}
-                    {formatValue(data.legalCompliance.bbbeeCertRenewalDate)}
-                  </p>
-                  <p>
-                    <span className="font-medium">CIPC Returns Status:</span>{" "}
-                    {formatValue(data.legalCompliance.cipcStatus)}
-                  </p>
-                  <p>
-                    <span className="font-medium">COIDA Number:</span> {formatValue(data.legalCompliance.coidaNumber)}
-                  </p>
+                  <p><span className="font-medium">UIF Number:</span> {formatValue(data.legalCompliance.uifNumber)}</p>
+                  <p><span className="font-medium">PAYE Number:</span> {formatValue(data.legalCompliance.payeNumber)}</p>
+                  <p><span className="font-medium">B-BBEE Level:</span> {formatValue(data.legalCompliance.bbbeeLevel)}</p>
+                  <p><span className="font-medium">B-BBEE Renewal Date:</span> {formatValue(data.legalCompliance.bbbeeCertRenewalDate)}</p>
+                  <p><span className="font-medium">CIPC Returns Status:</span> {formatValue(data.legalCompliance.cipcStatus)}</p>
+                  <p><span className="font-medium">COIDA Number:</span> {formatValue(data.legalCompliance.coidaNumber)}</p>
                 </div>
               </div>
             </div>
           )}
 
           {/* Products & Services */}
-          {data.productsServices && (
-            <div className="bg-brown-50 p-4 rounded-lg" style={{ backgroundColor: "#efebe9" }}>
-              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>
-                Products & Services
-              </h3>
+          {data.productsServices && (() => {
+            const { products, services, legacyProductCats, legacyServiceCats } = extractOfferings(data.productsServices)
+            const hasAny = products.length || services.length || legacyProductCats.length || legacyServiceCats.length
+            if (!hasAny) return null
+            return (
+              <div className="bg-brown-50 p-4 rounded-lg" style={{ backgroundColor: "#efebe9" }}>
+                <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>Products & Services</h3>
 
-              <p>
-                <span className="font-medium">Entity Type:</span> {formatValue(data.productsServices.entityType)}
-              </p>
+                <p><span className="font-medium">Entity Type:</span> {formatValue(data.productsServices.entityType)}</p>
+                <p><span className="font-medium">Offering Type:</span> {formatValue(data.productsServices.offeringType)}</p>
 
-              {data.productsServices.productCategories && data.productsServices.productCategories.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-md font-medium text-brown-700 mb-2">Product Categories</h4>
-                  {data.productsServices.productCategories.map((category, index) => (
-                    <div key={index} className="mb-3 pl-4 border-l-2 border-brown-300">
-                      <p className="font-medium">{formatValue(category.name)}</p>
-                      {category.products && category.products.length > 0 && (
-                        <ul className="list-disc pl-6 mt-1">
-                          {category.products.map((product, idx) => (
-                            <li key={idx}>
-                              <span className="font-medium">{formatValue(product.name)}</span>
-                              {product.description && <span> - {formatValue(product.description)}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                {products.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-md font-medium text-brown-700 mb-2">Products ({products.length})</h4>
+                    {products.map(renderOfferingRow)}
+                  </div>
+                )}
 
-              {data.productsServices.serviceCategories && data.productsServices.serviceCategories.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-md font-medium text-brown-700 mb-2">Service Categories</h4>
-                  {data.productsServices.serviceCategories.map((category, index) => (
-                    <div key={index} className="mb-3 pl-4 border-l-2 border-brown-300">
-                      <p className="font-medium">{formatValue(category.name)}</p>
-                      {category.services && category.services.length > 0 && (
-                        <ul className="list-disc pl-6 mt-1">
-                          {category.services.map((service, idx) => (
-                            <li key={idx}>
-                              <span className="font-medium">{formatValue(service.name)}</span>
-                              {service.description && <span> - {formatValue(service.description)}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                {services.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-md font-medium text-brown-700 mb-2">Services ({services.length})</h4>
+                    {services.map(renderOfferingRow)}
+                  </div>
+                )}
 
-              {data.productsServices.keyClients && data.productsServices.keyClients.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-md font-medium text-brown-700 mb-2">Key Clients</h4>
-                  <ul className="list-disc pl-6">
-                    {data.productsServices.keyClients.map((client, index) => (
-                      <li key={index}>
-                        <span className="font-medium">{formatValue(client.name)}</span>
-                        {client.industry && <span> - {formatValue(client.industry)}</span>}
-                      </li>
+                {legacyProductCats.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-md font-medium text-brown-700 mb-2">Product Categories (legacy)</h4>
+                    {legacyProductCats.map((category, index) => (
+                      <div key={index} className="mb-3 pl-4 border-l-2 border-brown-300">
+                        <p className="font-medium">{formatValue(category.name)}</p>
+                        {category.products && category.products.length > 0 && (
+                          <ul className="list-disc pl-6 mt-1">
+                            {category.products.map((product, idx) => (
+                              <li key={idx}>
+                                <span className="font-medium">{formatValue(product.name)}</span>
+                                {product.description && <span> - {formatValue(product.description)}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+
+                {legacyServiceCats.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-md font-medium text-brown-700 mb-2">Service Categories (legacy)</h4>
+                    {legacyServiceCats.map((category, index) => (
+                      <div key={index} className="mb-3 pl-4 border-l-2 border-brown-300">
+                        <p className="font-medium">{formatValue(category.name)}</p>
+                        {category.services && category.services.length > 0 && (
+                          <ul className="list-disc pl-6 mt-1">
+                            {category.services.map((service, idx) => (
+                              <li key={idx}>
+                                <span className="font-medium">{formatValue(service.name)}</span>
+                                {service.description && <span> - {formatValue(service.description)}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {data.productsServices.keyClients && data.productsServices.keyClients.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-md font-medium text-brown-700 mb-2">Key Clients</h4>
+                    <ul className="list-disc pl-6">
+                      {data.productsServices.keyClients.map((client, index) => (
+                        <li key={index}>
+                          <span className="font-medium">{formatValue(client.name)}</span>
+                          {client.industry && <span> - {formatValue(client.industry)}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* How Did You Hear About Us */}
           {data.howDidYouHear && (
             <div className="bg-brown-50 p-4 rounded-lg" style={{ backgroundColor: "#efebe9" }}>
-              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>
-                How Did You Hear About Us
-              </h3>
-              <p>
-                <span className="font-medium">Source:</span> {formatValue(data.howDidYouHear.source)}
-              </p>
+              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>How Did You Hear About Us</h3>
+              <p><span className="font-medium">Source:</span> {formatValue(data.howDidYouHear.source)}</p>
 
               {data.howDidYouHear.source === "referral" && data.howDidYouHear.referralName && (
-                <p>
-                  <span className="font-medium">Referred by:</span> {formatValue(data.howDidYouHear.referralName)}
-                </p>
+                <p><span className="font-medium">Referred by:</span> {formatValue(data.howDidYouHear.referralName)}</p>
               )}
-
               {data.howDidYouHear.source === "partner_org" && data.howDidYouHear.partnerName && (
-                <p>
-                  <span className="font-medium">Partner Organization:</span>{" "}
-                  {formatValue(data.howDidYouHear.partnerName)}
-                </p>
+                <p><span className="font-medium">Partner Organization:</span> {formatValue(data.howDidYouHear.partnerName)}</p>
               )}
-
               {data.howDidYouHear.source === "event" && data.howDidYouHear.eventName && (
-                <p>
-                  <span className="font-medium">Event Name:</span> {formatValue(data.howDidYouHear.eventName)}
-                </p>
+                <p><span className="font-medium">Event Name:</span> {formatValue(data.howDidYouHear.eventName)}</p>
               )}
-
               {data.howDidYouHear.source === "other" && data.howDidYouHear.otherSource && (
-                <p>
-                  <span className="font-medium">Other Source:</span> {formatValue(data.howDidYouHear.otherSource)}
-                </p>
+                <p><span className="font-medium">Other Source:</span> {formatValue(data.howDidYouHear.otherSource)}</p>
               )}
-
               {data.howDidYouHear.additionalComments && (
                 <div className="mt-2">
-                  <p>
-                    <span className="font-medium">Additional Comments:</span>
-                  </p>
+                  <p><span className="font-medium">Additional Comments:</span></p>
                   <p className="whitespace-pre-line">{formatValue(data.howDidYouHear.additionalComments)}</p>
                 </div>
               )}
@@ -652,21 +681,10 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
           {/* Declaration & Consent */}
           {data.declarationConsent && (
             <div className="bg-brown-50 p-4 rounded-lg" style={{ backgroundColor: "#efebe9" }}>
-              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>
-                Declaration & Consent
-              </h3>
-              <p>
-                <span className="font-medium">Accuracy Declaration:</span>{" "}
-                {data.declarationConsent.accuracy ? "Confirmed" : "Not Confirmed"}
-              </p>
-              <p>
-                <span className="font-medium">Data Processing Consent:</span>{" "}
-                {data.declarationConsent.dataProcessing ? "Given" : "Not Given"}
-              </p>
-              <p>
-                <span className="font-medium">Terms & Conditions Agreement:</span>{" "}
-                {data.declarationConsent.termsConditions ? "Agreed" : "Not Agreed"}
-              </p>
+              <h3 className="text-lg font-semibold text-brown-700 mb-2" style={{ color: "#5d4037" }}>Declaration & Consent</h3>
+              <p><span className="font-medium">Accuracy Declaration:</span> {data.declarationConsent.accuracy ? "Confirmed" : "Not Confirmed"}</p>
+              <p><span className="font-medium">Data Processing Consent:</span> {data.declarationConsent.dataProcessing ? "Given" : "Not Given"}</p>
+              <p><span className="font-medium">Terms & Conditions Agreement:</span> {data.declarationConsent.termsConditions ? "Agreed" : "Not Agreed"}</p>
             </div>
           )}
 
@@ -681,7 +699,6 @@ export default function RegistrationSummary({ data, open, onClose, onComplete })
               <Download /> {isGenerating ? "Generating PDF..." : "Download PDF"}
             </Button>
 
-            {/* Done button */}
             <Button
               onClick={handleDone}
               className="bg-green-600"
