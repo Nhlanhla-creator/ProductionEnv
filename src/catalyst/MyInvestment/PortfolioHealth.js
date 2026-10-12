@@ -165,10 +165,16 @@ const normalizeFundingData = raw =>
     return acc;
   }, {});
 
+// Helper to get active or cohort metrics
+const useActiveMetrics = () => {
+  const { portfolioMetrics, metrics } = usePortfolio();
+  return (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
+};
+
 // ── Composition ──────────────────────────────────────────────────────────────
 const TotalSMEsCount = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const ACTUAL = portfolioMetrics?.totalSMEs || 0;
+  const activeMetrics = useActiveMetrics();
+  const ACTUAL = activeMetrics?.totalSMEs || 0;
   const TARGET = 50;
   const R = 54, CIRC = 2 * Math.PI * R;
   const offset = CIRC - (CIRC * Math.min(ACTUAL, TARGET)) / TARGET;
@@ -190,10 +196,10 @@ const TotalSMEsCount = () => {
 
 // Revenue: Distribution pie (≤5 → pie, >5 → hbar) + Per-SME vertical bar
 const SMEsByRevenue = () => {
-  const { portfolioMetrics } = usePortfolio();
+  const activeMetrics = useActiveMetrics();
   const [view, setView] = useState("pie");
-  const buckets = portfolioMetrics?.revenue?.buckets || {};
-  const perSME  = [...(portfolioMetrics?.revenue?.perSME || [])].sort((a, b) => b.revenue - a.revenue);
+  const buckets = activeMetrics?.revenue?.buckets || {};
+  const perSME  = [...(activeMetrics?.revenue?.perSME || [])].sort((a, b) => b.revenue - a.revenue);
   const labels  = Object.keys(buckets).filter(k => buckets[k] > 0);
   const values  = labels.map(k => buckets[k]);
   const hasData = values.length > 0;
@@ -220,8 +226,8 @@ const SMEsByRevenue = () => {
 
 // ── Support Focus ─────────────────────────────────────────────────────────────
 const FundingAllocationBySector = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const bySector = portfolioMetrics?.funding?.bySector || {};
+  const activeMetrics = useActiveMetrics();
+  const bySector = activeMetrics?.funding?.bySector || {};
   return (
     <HBarCard
       title="Funding Required by Sector (R)"
@@ -234,11 +240,11 @@ const FundingAllocationBySector = () => {
 };
 
 const AverageFundingPerSME = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const avg   = portfolioMetrics?.funding?.avg   || 0;
-  const total = portfolioMetrics?.funding?.total || 0;
-  const n     = portfolioMetrics?.totalSMEs      || 0;
-  const perSME = [...(portfolioMetrics?.revenue?.perSME || [])]
+  const activeMetrics = useActiveMetrics();
+  const avg   = activeMetrics?.funding?.avg   || 0;
+  const total = activeMetrics?.funding?.total || 0;
+  const n     = activeMetrics?.totalSMEs      || 0;
+  const perSME = [...(activeMetrics?.revenue?.perSME || [])]
     .filter(s => s.fundingRequired > 0)
     .sort((a, b) => b.fundingRequired - a.fundingRequired);
 
@@ -276,14 +282,15 @@ const SUBS = [
 
 const PortfolioHealth = () => {
   const [sub, setSub] = useState("composition");
-  const { portfolioMetrics, loading } = usePortfolio();
+  const { portfolioMetrics, metrics, loading } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
 
   if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading portfolio data…</div>;
 
-  if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
+  if (!activeMetrics || activeMetrics.totalSMEs === 0) {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
-        No SMEs with "Active" status yet.
+        No SMEs in portfolio yet.
       </div>
     );
   }
@@ -302,37 +309,37 @@ const PortfolioHealth = () => {
           <SmartCard
             title="SMEs by Headcount"
             subLabel="Employee count bands — smart chart (pie ≤5 slices, hbar if more)"
-            data={portfolioMetrics?.headcount || {}}
+            data={activeMetrics?.headcount || {}}
           />
 
           <SmartCard
             title="SMEs by Business Lifecycle Stage"
             subLabel="Operational stage — smart chart (pie ≤5, hbar if more)"
-            data={portfolioMetrics?.lifecycle || {}}
+            data={activeMetrics?.lifecycle || {}}
           />
 
           {/* Geography: likely >5 provinces → auto hbar */}
           <SmartCard
             title="SMEs by Geography"
             subLabel="Province / location — smart chart (pie ≤5, hbar if more)"
-            data={portfolioMetrics?.geography || {}}
+            data={activeMetrics?.geography || {}}
           />
 
           {/* Sector: likely >5 → auto hbar */}
           <SmartCard
             title="SMEs by Sector"
             subLabel="Economic sector — smart chart (pie ≤5, hbar if more)"
-            data={portfolioMetrics?.sector || {}}
+            data={activeMetrics?.sector || {}}
           />
         </div>
       )}
 
       {sub === "demographics" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <SmartCard title="SMEs by Gender"            subLabel="Shareholder gender breakdown"          data={portfolioMetrics?.gender     || {}} />
-          <SmartCard title="SMEs by Disability Status" subLabel="Disability disclosed by shareholders"  data={portfolioMetrics?.disability || {}} />
-          <SmartCard title="SMEs by Youth Status"      subLabel="Youth shareholders"                   data={portfolioMetrics?.youth      || {}} />
-          <SmartCard title="SMEs by HDI Ownership"     subLabel="Black ownership > 50%"                data={portfolioMetrics?.hdi        || {}} />
+          <SmartCard title="SMEs by Gender"            subLabel="Shareholder gender breakdown"          data={activeMetrics?.gender     || {}} />
+          <SmartCard title="SMEs by Disability Status" subLabel="Disability disclosed by shareholders"  data={activeMetrics?.disability || {}} />
+          <SmartCard title="SMEs by Youth Status"      subLabel="Youth shareholders"                   data={activeMetrics?.youth      || {}} />
+          <SmartCard title="SMEs by HDI Ownership"     subLabel="Black ownership > 50%"                data={activeMetrics?.hdi        || {}} />
           <SMEsByRevenue />
         </div>
       )}
@@ -344,7 +351,7 @@ const PortfolioHealth = () => {
           <HBarCard
             title="SMEs by Funding Instrument"
             subLabel="Instrument type from profile (equity / grant / debt / skills_training)"
-            data={normalizeFundingData(portfolioMetrics?.fundingType || {})}
+            data={normalizeFundingData(activeMetrics?.fundingType || {})}
           />
           <FundingAllocationBySector />
           <AverageFundingPerSME />
@@ -353,12 +360,12 @@ const PortfolioHealth = () => {
           <HBarCard
             title="SMEs by Support Focus"
             subLabel="Support type requested"
-            data={portfolioMetrics?.supportFocus  || {}}
+            data={activeMetrics?.supportFocus  || {}}
           />
           <HBarCard
             title="SMEs by Services Requested"
             subLabel="Services type requested"
-            data={portfolioMetrics?.servicesFocus || {}}
+            data={activeMetrics?.servicesFocus || {}}
           />
         </div>
         </>

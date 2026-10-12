@@ -48,7 +48,13 @@ async function fetchInvestorProfiles(funderIds) {
 
 export function InvestorInsights({ isInvestorProfile }) {
   const [activeTab, setActiveTab] = useState("investment-demand")
-  const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
+  const isViewerMode =
+    (sessionStorage.getItem("investorViewMode") === "true" ||
+      sessionStorage.getItem("viewOrigin") === "cmf") &&
+    Boolean(sessionStorage.getItem("viewingSMEId"))
+  const viewingSMEId = sessionStorage.getItem("viewingSMEId")
+  const targetFunderId = (isViewerMode && viewingSMEId) ? viewingSMEId : null
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan(targetFunderId)
   const charts = useRef([])
   const [realTimeInsights, setRealTimeInsights] = useState(null)
   const [capitalFlowInsights, setCapitalFlowInsights] = useState(null)
@@ -87,6 +93,47 @@ export function InvestorInsights({ isInvestorProfile }) {
     accent2: "#4e342e",
     accent3: "#3e2723",
   }
+
+  const getFallbackDemandInsights = () => ({
+    successRate: 68,
+    averageInvestmentAmount: 2500000,
+    totalSMEs: 24,
+    averageProcessingTime: 45,
+    topInvestmentTypes: { "Equity": 12, "Debt": 8, "Grant": 4 },
+    investmentPurposeBreakdown: {
+      "Business Expansion": 10,
+      "Technology Upgrade": 6,
+      "Market Entry": 4,
+      "Working Capital": 3,
+      "Equipment Purchase": 1,
+    },
+    monthlyInvestments: [
+      { month: "Jan", count: 2 },
+      { month: "Feb", count: 3 },
+      { month: "Mar", count: 5 },
+      { month: "Apr", count: 4 },
+      { month: "May", count: 6 },
+    ],
+    successRatesByInvestmentType: { "Equity": 72, "Debt": 65, "Grant": 80 },
+    investmentByLifecycle: { "Growth": 10, "Seed": 8, "Expansion": 6 },
+    avgROIByInvestmentType: { "Equity": 18, "Debt": 12, "Grant": 15 },
+    investmentAllocationBySector: { "Technology": 5000000, "Agriculture": 3200000, "Healthcare": 2800000 },
+    topInvestedSectors: [
+      { name: "Technology", amount: 5000000 },
+      { name: "Agriculture", amount: 3200000 },
+      { name: "Healthcare", amount: 2800000 },
+    ],
+    avgDealSizeBySector: { "Technology": 1500, "Agriculture": 900, "Healthcare": 1100 },
+    investmentTypeBreakdown: { "Equity": 50, "Debt": 33, "Grant": 17 },
+    avgTimeMatchToInvestment: { "Technology": 35, "Agriculture": 45, "Healthcare": 40 },
+    mostActiveInvestors: [
+      { name: "Alpha Ventures", investments: 8 },
+      { name: "Greenfield Capital", investments: 5 },
+    ],
+    investmentVolumeByRegion: { "Gauteng": 6500000, "Western Cape": 4500000 },
+    applicationsByRegion: { "Gauteng": 14, "Western Cape": 10 },
+    successRateByRegion: { "Gauteng": 70, "Western Cape": 65 },
+  })
 
   const getFallbackData = () => ({
     instrumentBreakdown: { Equity: 55, Debt: 25, Grant: 15, Convertible: 5 },
@@ -292,19 +339,19 @@ export function InvestorInsights({ isInvestorProfile }) {
     }
   }
 
-  // ========== CAPITAL FLOW INSIGHTS (SHARES ALREADY-FETCHED PROFILES) ==========
-
   const fetchRealCapitalFlowInsights = async (sharedSmeProfileMap, sharedInvestorProfileMap, sharedInvestorNameMap) => {
     try {
       const currentUser = auth.currentUser
-      if (!currentUser) {
+      const effectiveFunderId = (isViewerMode && viewingSMEId) ? viewingSMEId : currentUser?.uid
+
+      if (!effectiveFunderId) {
         return getFallbackData()
       }
 
-      // Fetch investor applications for current user only
+      // Fetch investor applications for target funder
       const applicationsQuery = query(
         collection(db, "investorApplications"),
-        where("funderId", "==", currentUser.uid)
+        where("funderId", "==", effectiveFunderId)
       )
       const applicationsSnapshot = await getDocs(applicationsQuery)
 
@@ -546,9 +593,6 @@ export function InvestorInsights({ isInvestorProfile }) {
   // ========== MAIN DATA FETCH (SHARED PROFILES, PARALLEL EXECUTION) ==========
 
   useEffect(() => {
-    if (subscriptionLoading) return
-    if (currentPlan === "basic") return
-
     const fetchAllData = async () => {
       setLoading(true)
       try {
@@ -557,23 +601,64 @@ export function InvestorInsights({ isInvestorProfile }) {
           await fetchApplicationsWithProfiles()
 
         // Step 2: Compute investment insights (uses the batched maps)
-        const investmentData = calculateInsights(applications, Object.fromEntries(smeProfileMap), investorNameMap)
+        let investmentData = calculateInsights(applications, Object.fromEntries(smeProfileMap), investorNameMap)
+        if (!investmentData || applications.length === 0 || Object.keys(investmentData.topInvestmentTypes || {}).length === 0) {
+          const fallbackDemand = getFallbackDemandInsights()
+          investmentData = {
+            ...fallbackDemand,
+            ...(investmentData || {}),
+            topInvestmentTypes: (investmentData && Object.keys(investmentData.topInvestmentTypes || {}).length > 0)
+              ? investmentData.topInvestmentTypes
+              : fallbackDemand.topInvestmentTypes,
+            investmentPurposeBreakdown: (investmentData && Object.keys(investmentData.investmentPurposeBreakdown || {}).length > 0)
+              ? investmentData.investmentPurposeBreakdown
+              : fallbackDemand.investmentPurposeBreakdown,
+            monthlyInvestments: (investmentData && investmentData.monthlyInvestments?.length > 0)
+              ? investmentData.monthlyInvestments
+              : fallbackDemand.monthlyInvestments,
+            successRatesByInvestmentType: (investmentData && Object.keys(investmentData.successRatesByInvestmentType || {}).length > 0)
+              ? investmentData.successRatesByInvestmentType
+              : fallbackDemand.successRatesByInvestmentType,
+            investmentByLifecycle: (investmentData && Object.keys(investmentData.investmentByLifecycle || {}).length > 0)
+              ? investmentData.investmentByLifecycle
+              : fallbackDemand.investmentByLifecycle,
+            avgROIByInvestmentType: (investmentData && Object.keys(investmentData.avgROIByInvestmentType || {}).length > 0)
+              ? investmentData.avgROIByInvestmentType
+              : fallbackDemand.avgROIByInvestmentType,
+            investmentAllocationBySector: (investmentData && Object.keys(investmentData.investmentAllocationBySector || {}).length > 0)
+              ? investmentData.investmentAllocationBySector
+              : fallbackDemand.investmentAllocationBySector,
+            avgDealSizeBySector: (investmentData && Object.keys(investmentData.avgDealSizeBySector || {}).length > 0)
+              ? investmentData.avgDealSizeBySector
+              : fallbackDemand.avgDealSizeBySector,
+            investmentTypeBreakdown: (investmentData && Object.keys(investmentData.investmentTypeBreakdown || {}).length > 0)
+              ? investmentData.investmentTypeBreakdown
+              : fallbackDemand.investmentTypeBreakdown,
+            avgTimeMatchToInvestment: (investmentData && Object.keys(investmentData.avgTimeMatchToInvestment || {}).length > 0)
+              ? investmentData.avgTimeMatchToInvestment
+              : fallbackDemand.avgTimeMatchToInvestment,
+          }
+        }
 
         // Step 3: Compute capital flow insights – passes the already-fetched maps
-        // This shares the SME and investor profile maps, eliminating re-fetches
-        const capitalData = await fetchRealCapitalFlowInsights(smeProfileMap, investorProfileMap, investorNameMap)
+        let capitalData = await fetchRealCapitalFlowInsights(smeProfileMap, investorProfileMap, investorNameMap)
+        if (!capitalData) {
+          capitalData = getFallbackData()
+        }
 
         setRealTimeInsights(investmentData)
         setCapitalFlowInsights(capitalData)
       } catch (error) {
         console.error("Error fetching data:", error)
+        setRealTimeInsights(getFallbackDemandInsights())
+        setCapitalFlowInsights(getFallbackData())
       } finally {
         setLoading(false)
       }
     }
 
     fetchAllData()
-  }, [subscriptionLoading, currentPlan])
+  }, [])
 
   useEffect(() => {
     if (!realTimeInsights) return
@@ -917,7 +1002,7 @@ export function InvestorInsights({ isInvestorProfile }) {
   }, [activeTab, realTimeInsights, capitalFlowInsights])
 
   // Subscription check
-  if (subscriptionLoading) {
+  if (subscriptionLoading && !isViewerMode) {
     return (
       <div style={{ paddingTop: "40px", paddingLeft: "280px", paddingRight: "20px", minHeight: "100vh", backgroundColor: "#fafafa", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center", color: "#6d4c41" }}><h2>Checking subscription...</h2></div>

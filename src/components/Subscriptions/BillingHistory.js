@@ -538,8 +538,17 @@ const ReusableBillingHistory = ({
             }
           }
         } else {
-          const userDocRef = doc(db, "MyuniversalProfiles", user.uid);
-          const userDocSnap = await getDoc(userDocRef);
+          const isViewerMode =
+            (sessionStorage.getItem("investorViewMode") === "true" ||
+              sessionStorage.getItem("viewOrigin") === "cmf") &&
+            Boolean(sessionStorage.getItem("viewingSMEId"));
+          const targetUid = isViewerMode ? sessionStorage.getItem("viewingSMEId") : user.uid;
+          let userDocRef = doc(db, "MyuniversalProfiles", targetUid);
+          let userDocSnap = await getDoc(userDocRef);
+          if (!userDocSnap.exists()) {
+            userDocRef = doc(db, "universalProfiles", targetUid);
+            userDocSnap = await getDoc(userDocRef);
+          }
           if (userDocSnap.exists()) {
             setFirebaseData(userDocSnap.data().formData || {});
           }
@@ -547,7 +556,12 @@ const ReusableBillingHistory = ({
 
         // Get subscription history
         const subscriptionsRef = collection(db, "subscriptions");
-        const q = query(subscriptionsRef, where("userId", "==", user.uid));
+        const isViewerMode =
+          (sessionStorage.getItem("investorViewMode") === "true" ||
+            sessionStorage.getItem("viewOrigin") === "cmf") &&
+          Boolean(sessionStorage.getItem("viewingSMEId"));
+        const targetUid = isViewerMode ? sessionStorage.getItem("viewingSMEId") : user.uid;
+        const q = query(subscriptionsRef, where("userId", "==", targetUid));
         const querySnapshot = await getDocs(q);
 
         const transactions = [];

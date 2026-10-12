@@ -60,11 +60,12 @@ const HBarFromObj = ({ title, subLabel, data, emptyMsg, summaryFn }) => {
 };
 
 const MostRequestedSupportArea = () => {
-  const { portfolioMetrics } = usePortfolio();
+  const { portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
   // Combine supportRequired and servicesRequired from applications
   const combined = {};
-  const support  = portfolioMetrics?.learnings?.support   || {};
-  const services = portfolioMetrics?.learnings?.services  || {};
+  const support  = activeMetrics?.learnings?.support   || {};
+  const services = activeMetrics?.learnings?.services  || {};
   Object.entries(support).forEach(([k, v]) => { combined[k] = (combined[k] || 0) + v; });
   Object.entries(services).forEach(([k, v]) => { combined[k] = (combined[k] || 0) + v; });
 
@@ -80,8 +81,9 @@ const MostRequestedSupportArea = () => {
 };
 
 const CapabilityGapDistribution = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const barriers = portfolioMetrics?.learnings?.barriers || {};
+  const { portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
+  const barriers = activeMetrics?.learnings?.barriers || {};
 
   return (
     <HBarFromObj

@@ -548,6 +548,76 @@ function App() {
     )
   }
 
+  // ─── Universal Viewer Banner ────────────────────────────────────────────────
+  const renderUniversalViewerBanner = (partnerType = "Dashboard") => {
+    const isViewerMode =
+      (sessionStorage.getItem("investorViewMode") === "true" || sessionStorage.getItem("viewOrigin") === "cmf") &&
+      sessionStorage.getItem("viewingSMEId")
+    if (!isViewerMode) return null
+
+    const viewOrigin = sessionStorage.getItem("viewOrigin")
+    const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
+    const isCmf = viewOrigin === "cmf"
+    const isCatalyst = viewOrigin === "catalyst"
+    const label = isCmf ? "Facilitator View" : isCatalyst ? "Catalyst View" : "Investor View"
+    const backUrl = isCmf ? "/cmf-cohorts" : isCatalyst ? "/catalyst/cohorts" : "/my-cohorts"
+
+    return (
+      <div
+        style={{
+          backgroundColor: "#e8f5e9",
+          padding: "14px 24px",
+          borderRadius: "10px",
+          border: "1.5px solid #4caf50",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          margin: "16px 24px 12px 24px",
+          boxShadow: "0 2px 8px rgba(46, 125, 50, 0.12)",
+          position: "sticky",
+          top: "85px",
+          zIndex: 90,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "20px" }}>👁️</span>
+          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+            {label}: Managing {viewingSMEName}'s {partnerType}
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("viewingSMEId")
+            sessionStorage.removeItem("viewingSMEName")
+            sessionStorage.removeItem("investorViewMode")
+            sessionStorage.removeItem("viewOrigin")
+            sessionStorage.removeItem("viewOnlyBigScore")
+            window.location.href = backUrl
+          }}
+          style={{
+            padding: "8px 18px",
+            backgroundColor: "#2e7d32",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            transition: "background-color 0.2s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1b5e20")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2e7d32")}
+        >
+          ← Back to My Cohorts
+        </button>
+      </div>
+    )
+  }
+
   // ─── SME Layout ───────────────────────────────────────────────────────────────
   const SMELayout = ({ children }) => {
     const location = useLocation()
@@ -560,82 +630,12 @@ function App() {
       return () => obs.disconnect()
     }, [])
 
-    const isViewerMode =
-      sessionStorage.getItem("investorViewMode") === "true" &&
-      sessionStorage.getItem("viewingSMEId")
-    const viewOrigin = sessionStorage.getItem("viewOrigin")
-    const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
-
-    const renderViewerBanner = () => {
-      if (!isViewerMode) return null
-
-      const isCmf = viewOrigin === "cmf"
-      const isCatalyst = viewOrigin === "catalyst"
-      const label = isCmf ? "Facilitator View" : isCatalyst ? "Catalyst View" : "Investor View"
-      const backUrl = isCmf ? "/cmf-cohorts" : isCatalyst ? "/catalyst/cohorts" : "/my-cohorts"
-
-      return (
-        <div
-          style={{
-            backgroundColor: "#e8f5e9",
-            padding: "14px 24px",
-            borderRadius: "10px",
-            border: "1.5px solid #4caf50",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            margin: "16px 24px 12px 24px",
-            boxShadow: "0 2px 8px rgba(46, 125, 50, 0.12)",
-            position: "sticky",
-            top: "85px",
-            zIndex: 90,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <span style={{ fontSize: "20px" }}>👁️</span>
-            <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-              {label}: Managing {viewingSMEName}'s Dashboard
-            </span>
-          </div>
-          <button
-            onClick={() => {
-              sessionStorage.removeItem("viewingSMEId")
-              sessionStorage.removeItem("viewingSMEName")
-              sessionStorage.removeItem("investorViewMode")
-              sessionStorage.removeItem("viewOrigin")
-              sessionStorage.removeItem("viewOnlyBigScore")
-              window.location.href = backUrl
-            }}
-            style={{
-              padding: "8px 18px",
-              backgroundColor: "#2e7d32",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-              transition: "background-color 0.2s ease",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1b5e20")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2e7d32")}
-          >
-            ← Back to My Cohorts
-          </button>
-        </div>
-      )
-    }
-
     return (
       <div className="app-layout">
         <SMESidebar companyName={companyName} />
         <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
-          {renderViewerBanner()}
+          {renderUniversalViewerBanner("Dashboard")}
           <div>{children}</div>
         </div>
         <RegistrationSummary data={formData} open={showSummary} onClose={() => setShowSummary(false)} />
@@ -659,6 +659,7 @@ function App() {
         <InvestorSidebar companyName={companyName} />
         <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <InvestorHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
+          {renderUniversalViewerBanner("Funder Profile")}
           <div>{children}</div>
         </div>
       </div>
@@ -681,6 +682,7 @@ function App() {
         <SupportProgramSidebar companyName={companyName} />
         <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <SupportProgramHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
+          {renderUniversalViewerBanner("Catalyst Profile")}
           <div>{children}</div>
         </div>
       </div>

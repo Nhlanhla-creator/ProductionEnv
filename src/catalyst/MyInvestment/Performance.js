@@ -64,8 +64,9 @@ const EmptyState = ({ message }) => (
 
 // ── Revenue per SME ───────────────────────────────────────────────────────────
 const RevenuePerSME = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const perSME = [...(portfolioMetrics?.revenue?.perSME || [])]
+  const { portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
+  const perSME = [...(activeMetrics?.revenue?.perSME || [])]
     .filter(s => s.revenue > 0)
     .sort((a, b) => b.revenue - a.revenue);
   const innerH = Math.max(parseInt(CHART_HEIGHT), perSME.length * 36);
@@ -73,10 +74,10 @@ const RevenuePerSME = () => {
   const footer = perSME.length > 0 && (
     <div style={{ display: "flex", justifyContent: "space-between" }}>
       <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>
-        Total: <strong>R{(portfolioMetrics.revenue.total / 1_000_000).toFixed(1)}M</strong>
+        Total: <strong>R{((activeMetrics.revenue?.total || 0) / 1_000_000).toFixed(1)}M</strong>
       </span>
       <span style={{ fontSize: "12px", color: B.warm }}>
-        Avg: R{(portfolioMetrics.revenue.avg / 1_000_000).toFixed(1)}M / SME
+        Avg: R{((activeMetrics.revenue?.avg || 0) / 1_000_000).toFixed(1)}M / SME
       </span>
     </div>
   );
@@ -99,8 +100,9 @@ const RevenuePerSME = () => {
 
 // ── Profitability Status ──────────────────────────────────────────────────────
 const ProfitabilityStatus = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const perSME   = portfolioMetrics?.revenue?.perSME || [];
+  const { portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
+  const perSME   = activeMetrics?.revenue?.perSME || [];
   const statuses = perSME.filter(s => s.profitability && s.profitability !== "Unknown");
   // mock data to test distribution
   // const statuses = [...perSME.filter(s => s.profitability && s.profitability !== "Unknown"), ...[...Array(20)].map((_, i) => ({ profitability: ["Profitable", "Breakeven", "Unprofitable"][i % 3] }))];
@@ -198,8 +200,9 @@ const PortfolioQualityGauge = () => {
 // ── Key Clients per SME ───────────────────────────────────────────────────────
 const ClientsPerSME = () => {
   // portfolioEnriched is already filtered to Active pipeline stage
-  const { portfolioEnriched } = usePortfolio();
-  const smeClients = (portfolioEnriched || [])
+  const { portfolioEnriched, enriched } = usePortfolio();
+  const activeEnriched = (portfolioEnriched && portfolioEnriched.length > 0) ? portfolioEnriched : enriched;
+  const smeClients = (activeEnriched || [])
     .map(a => ({
       name: a.smeName || "Unknown",
       count: (a.profile?.productsServices?.keyClients || []).length,
@@ -231,14 +234,15 @@ const SUBS = [
 
 const Performance = () => {
   const [sub, setSub] = useState("financial");
-  const { loading, portfolioMetrics } = usePortfolio();
+  const { loading, portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : metrics;
 
   if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading performance data…</div>;
 
-  if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
+  if (!activeMetrics || activeMetrics.totalSMEs === 0) {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
-        No SMEs with "Active" status yet.
+        No SMEs in portfolio yet.
       </div>
     );
   }

@@ -1,6 +1,6 @@
 // components/Subscriptions/ReusableSubscription.js
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { v4 as uuidv4 } from "uuid"
 import { getAuth } from "firebase/auth"
 import { collection, getFirestore, query, where, getDocs, doc, getDoc, setDoc, addDoc, updateDoc } from "firebase/firestore"
@@ -136,10 +136,21 @@ const ReusableSubscription = ({
 }) => {
   const auth = getAuth()
   const db = getFirestore()
-  const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+  const isInvestorView =
+    (sessionStorage.getItem("investorViewMode") === "true" ||
+      sessionStorage.getItem("viewOrigin") === "cmf") &&
+    Boolean(sessionStorage.getItem("viewingSMEId"))
   const viewingSMEId = sessionStorage.getItem("viewingSMEId")
   const rawUser = auth.currentUser
-  const user = (isInvestorView && viewingSMEId && rawUser) ? { ...rawUser, uid: viewingSMEId } : rawUser
+  const effectiveUserId = (isInvestorView && viewingSMEId) ? viewingSMEId : rawUser?.uid
+
+  const user = useMemo(() => {
+    if (!rawUser) return null
+    if (isInvestorView && viewingSMEId) {
+      return { ...rawUser, uid: viewingSMEId }
+    }
+    return rawUser
+  }, [rawUser?.uid, isInvestorView, viewingSMEId])
   const navigate = useNavigate()
 
   const {
@@ -574,8 +585,8 @@ const checkAndHandleExpiredVoucher = async () => {
           }
           setCurrentSubscription(subscriptionFromUser)
           setIsExistingUser(true)
-          const planKey = getCurrentPlanKey()
-          setSelectedPlan(planKey)
+          const matchedPlanKey = Object.keys(plans).find(k => plans[k].name === subscriptionFromUser.plan) || freePlanKey
+          setSelectedPlan(matchedPlanKey)
           
           // Check 3-day renewal reminder (SP8.47)
           if (subscriptionFromUser.autoRenew && subscriptionFromUser.amount > 0) {
@@ -635,8 +646,8 @@ const checkAndHandleExpiredVoucher = async () => {
         if (!currentSubscription || new Date(latestSubscription.createdAt) > new Date(currentSubscription.createdAt || 0)) {
           setCurrentSubscription(latestSubscription)
           setIsExistingUser(true)
-          const planKey = getCurrentPlanKey()
-          setSelectedPlan(planKey)
+          const matchedPlanKey = Object.keys(plans).find(k => plans[k].name === latestSubscription.plan) || freePlanKey
+          setSelectedPlan(matchedPlanKey)
         }
       }
 
@@ -1252,29 +1263,29 @@ const checkAndHandleExpiredVoucher = async () => {
   // ── Load user data on mount ───────────────────────────────────────────
   useEffect(() => {
     const loadUserData = async () => {
-      if (user) {
+      if (effectiveUserId) {
         try {
-          const userDoc = await getDoc(doc(db, "users", user.uid))
+          const userDoc = await getDoc(doc(db, "users", effectiveUserId))
           if (userDoc.exists()) {
             const userData = userDoc.data()
-            setEmail(userData.email || user.email || defaultData.email)
+            setEmail(userData.email || rawUser?.email || defaultData.email)
             setFullName(userData.displayName || userData.fullName || defaultData.fullName)
             setCompanyName(userData.companyName || "")
           } else {
-            setEmail(user.email || defaultData.email)
-            setFullName(user.displayName || defaultData.fullName)
+            setEmail(rawUser?.email || defaultData.email)
+            setFullName(rawUser?.displayName || defaultData.fullName)
           }
-          await loadUserSubscription(user.uid)
+          await loadUserSubscription(effectiveUserId)
         } catch (error) {
           console.error("Error loading user data:", error)
-          setEmail(user.email || defaultData.email)
-          setFullName(user.displayName || defaultData.fullName)
-          await loadUserSubscription(user.uid)
+          setEmail(rawUser?.email || defaultData.email)
+          setFullName(rawUser?.displayName || defaultData.fullName)
+          await loadUserSubscription(effectiveUserId)
         }
       }
     }
     loadUserData()
-  }, [user])
+  }, [effectiveUserId])
 
   // Check for voucher expiry periodically (every minute)
   useEffect(() => {

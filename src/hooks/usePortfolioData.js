@@ -33,16 +33,16 @@ const groupCount = (arr, keyFn) =>
 
 const normalizeStage = (stage) => {
   const s = norm(stage);
-  if (["evaluation", "under review", "in review"].includes(s)) return "review";
-  if (["due diligence"].includes(s)) return "approved";
-  // if (["support approved"].includes(s)) return "supported";
-  if (["active support", "active"].includes(s)) return "active";
+  if (["evaluation", "under review", "in review", "interview", "interviewing", "contacted"].includes(s)) return "review";
+  if (["due diligence", "support approved", "accepted", "admitted", "approved"].includes(s)) return "approved";
+  if (["active support", "active", "engaged", "placed", "contract signed", "contract"].includes(s)) return "active";
   if (["exit", "exited", "completed", "graduated"].includes(s)) return "exit";
   if (["decision", "funding approved"].includes(s)) return "funding";
-  if (["term sheet"].includes(s)) return "termsheet";
-  if (["deal closed"].includes(s)) return "closed";
+  if (["term sheet", "termsheet"].includes(s)) return "termsheet";
+  if (["deal closed", "closed", "funded"].includes(s)) return "closed";
   if (["rejected", "withdrawn", "decline", "declined", "support declined"].includes(s))
     return "rejected";
+  if (["matched", "match", "pipeline"].includes(s)) return "application";
   return "application";
 };
 
@@ -475,14 +475,14 @@ function enrichApps(rawApps, profiles, scoresById) {
 }
 
 // ── hook ──────────────────────────────────────────────────────────────────────
-export const usePortfolioData = () => {
+export const usePortfolioData = (options = {}) => {
   const [enriched, setEnriched] = useState([]);
   const [metrics, setMetrics] = useState(null);
   // Filtered to "Active" pipeline stage — used by PortfolioHealth,
   // Performance and Outcomes dashboards only.
   const [portfolioEnriched, setPortfolioEnriched] = useState([]);
   const [portfolioMetrics, setPortfolioMetrics] = useState(null);
-  // All applications across every catalyst — used by Catalyst Insights charts.
+  // All applications across every catalyst / CMF — used by Catalyst Insights charts.
   // Every logged-in user sees the same data for this batch.
   const [universalEnriched, setUniversalEnriched] = useState([]);
   const [universalMetrics, setUniversalMetrics] = useState(null);
@@ -491,91 +491,366 @@ export const usePortfolioData = () => {
   const [error, setError] = useState(null);
 
   const fetchAll = useCallback(async (uid) => {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    // 1. Catalyst profile
-    const catalystDoc = await getDoc(doc(db, "catalystProfiles", uid));
-    const formData = catalystDoc.exists() ? catalystDoc.data().formData || {} : {};
-    setCatalystFormData(formData);
+      const isCMFContext = Boolean(
+        options?.isCMF ||
+        (typeof window !== "undefined" && (
+          window.location.pathname.startsWith("/cmf") ||
+          window.location.pathname.includes("/cmf-") ||
+          window.localStorage.getItem("big:lastPortalRole") === "cmf" ||
+          window.sessionStorage.getItem("viewOrigin") === "cmf"
+        ))
+      );
 
-    // 2. Fetch apps + bigEvaluations
-    const [appSnap, bigSnap, allAppSnap] = await Promise.all([
-      getDocs(query(collection(db, "catalystApplications"), where("catalystId", "==", uid))),
-      getDocs(collection(db, "bigEvaluations")),
-      getDocs(collection(db, "catalystApplications")),
-    ]);
+      // 1. Profile fetching (Catalyst or CMF)
+      let formData = {};
+      const catalystDoc = await getDoc(doc(db, "catalystProfiles", uid)).catch(() => null);
+      if (catalystDoc && catalystDoc.exists()) {
+        formData = catalystDoc.data().formData || catalystDoc.data() || {};
+      } else {
+        const [cmfDoc1, cmfDoc2, userDoc] = await Promise.all([
+          getDoc(doc(db, "cmfProfiles", `${uid}_cmf`)).catch(() => null),
+          getDoc(doc(db, "cmfProfiles", uid)).catch(() => null),
+          getDoc(doc(db, "users", uid)).catch(() => null),
+        ]);
+        const cmfDoc = (cmfDoc1 && cmfDoc1.exists()) ? cmfDoc1 : (cmfDoc2 && cmfDoc2.exists()) ? cmfDoc2 : null;
+        if (cmfDoc) {
+          formData = cmfDoc.data().formData || cmfDoc.data() || {};
+        } else if (userDoc && userDoc.exists()) {
+          formData = userDoc.data();
+        }
+      }
+      setCatalystFormData(formData);
 
-    // 3. Build scores lookup
-    const scoresById = {};
-    bigSnap.forEach((d) => {
-      const { scores } = d.data();
-      if (scores) scoresById[d.id] = scores;
-    });
+      // 2. Fetch apps, matches, activities, and bigEvaluations in parallel
+      const [
+        appSnap,
+        cmfBusinessMatchesSnap,
+        sentCatSnap,
+        sentSmeSnap,
+        sentAdvSnap,
+        sentInternSnap,
+        cmfAppSnap,
+        onboardedUsersSnap,
+        cmfActivitiesSnap,
+        bigSnap,
+        allCatAppSnap,
+        allSmeAppSnap,
+      ] = await Promise.all([
+        getDocs(query(collection(db, "catalystApplications"), where("catalystId", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "cmfBusinessMatches"), where("facilitatorId", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "catalystApplications"), where("submittedBy", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "smeApplications"), where("submittedBy", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "SmeAdvisorApplications"), where("submittedBy", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "SmeInternApplications"), where("submittedBy", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "cmfApplications"), where("cmfId", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "users"), where("onboardedBy", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "cmfActivities"), where("facilitatorId", "==", uid))).catch(() => ({ docs: [] })),
+        getDocs(collection(db, "bigEvaluations")).catch(() => ({ docs: [] })),
+        getDocs(collection(db, "catalystApplications")).catch(() => ({ docs: [] })),
+        getDocs(collection(db, "smeApplications")).catch(() => ({ docs: [] })),
+      ]);
 
-    // 4. Parse apps
-    const parseAppDocs = (snap) =>
-      snap.docs.map((d) => {
+      // 3. Build scores lookup
+      const scoresById = {};
+      bigSnap.forEach((d) => {
+        const { scores } = d.data();
+        if (scores) scoresById[d.id] = scores;
+      });
+
+      // 4. Parse apps and cohort matches
+      const rawAppsMap = new Map();
+
+      const addRawApp = (item, sourceCollection) => {
+        if (!item || !item.smeId) return;
+        const existing = rawAppsMap.get(item.smeId);
+        if (!existing) {
+          rawAppsMap.set(item.smeId, { ...item, sourceCollection });
+        } else {
+          const stageRank = (st) => {
+            const s = normalizeStage(st);
+            if (s === "closed" || s === "exit") return 5;
+            if (s === "active") return 4;
+            if (s === "funding" || s === "termsheet") return 3;
+            if (s === "approved" || s === "review") return 2;
+            return 1;
+          };
+          const currentRank = stageRank(existing.pipelineStage);
+          const newRank = stageRank(item.pipelineStage);
+          if (newRank >= currentRank) {
+            rawAppsMap.set(item.smeId, { ...existing, ...item, sourceCollection: sourceCollection || existing.sourceCollection });
+          }
+        }
+      };
+
+      // A. Catalyst applications where catalystId == uid
+      appSnap.docs.forEach((d) => {
         const parts = d.id.split("_");
-        return { docId: d.id, smeId: parts[1] || "", programIndex: parts[2] || "0", ...d.data() };
+        const data = d.data();
+        const smeId = data.smeId || parts[1] || "";
+        addRawApp({
+          docId: d.id,
+          smeId,
+          programIndex: parts[2] || "0",
+          ...data,
+        }, "catalystApplications");
       });
 
-    const rawApps = parseAppDocs(appSnap);
-    const rawAllApps = parseAppDocs(allAppSnap);
-
-    // 5. Collect all unique smeIds (user IDs)
-    const allSmeIds = new Set([...rawApps.map(a => a.smeId), ...rawAllApps.map(a => a.smeId)].filter(Boolean));
-
-    // 6. Fetch universalProfiles and users in parallel
-    const [profiles, userDocs] = await Promise.all([
-      Promise.all([...allSmeIds].map(async (id) => {
-        try {
-          const pd = await getDoc(doc(db, "universalProfiles", id));
-          return pd.exists() ? [id, pd.data()] : null;
-        } catch { return null; }
-      })).then(results => {
-        const map = {};
-        results.forEach(r => { if (r) map[r[0]] = r[1]; });
-        return map;
-      }),
-      Promise.all([...allSmeIds].map(async (id) => {
-        try {
-          const ud = await getDoc(doc(db, "users", id));
-          return ud.exists() ? [id, ud.data()] : null;
-        } catch { return null; }
-      })).then(results => {
-        const map = {};
-        results.forEach(r => { if (r) map[r[0]] = r[1]; });
-        return map;
-      })
-    ]);
-
-    // 7. Enrich function now includes userDocs
-    const enrichApps = (rawApps, profiles, scoresById, userDocs) =>
-      rawApps.map((a) => {
-        const evalScores = scoresById[a.smeId] || {};
-        const user = userDocs[a.smeId] || {};
-        return {
-          ...a,
-          profile: profiles[a.smeId] || {},
-          ...evalScores,
-          // user fields
-          lastActiveDate: user.lastActiveDate || null,
-          lastActiveAt: user.lastActiveAt || null,
-        };
+      // B. CMF business matches (from cmfBusinessMatches)
+      cmfBusinessMatchesSnap.docs.forEach((d) => {
+        const data = d.data();
+        const smeId = data.smeId || (d.id.includes("_") ? d.id.split("_")[1] : d.id);
+        addRawApp({
+          docId: d.id,
+          smeId,
+          smeName: data.smeName || data.businessName || data.name || "",
+          pipelineStage: data.pipelineStage || data.currentStatus || "Matched",
+          currentStatus: data.currentStatus || data.pipelineStage || "Matched",
+          matchPercentage: data.matchPercentage || 80,
+          reason: data.reason || "",
+          applicationDate: data.createdAt ? (typeof data.createdAt === "number" ? new Date(data.createdAt).toISOString() : data.createdAt) : null,
+          updatedAt: data.updatedAt ? (typeof data.updatedAt === "number" ? new Date(data.updatedAt).toISOString() : data.updatedAt) : null,
+          ...data,
+        }, "cmfBusinessMatches");
       });
 
-    const enrichedApps = enrichApps(rawApps, profiles, scoresById, userDocs);
-    const enrichedAllApps = enrichApps(rawAllApps, profiles, scoresById, userDocs);
+      // C. Applications submitted by CMF to Catalysts
+      sentCatSnap.docs.forEach((d) => {
+        const data = d.data();
+        const smeId = data.smeId || (d.id.includes("_") ? d.id.split("_")[1] : "");
+        addRawApp({
+          docId: d.id,
+          smeId,
+          ...data,
+        }, "catalystApplications");
+      });
 
+      // D. Applications submitted by CMF to Funders
+      sentSmeSnap.docs.forEach((d) => {
+        const data = d.data();
+        addRawApp({
+          docId: d.id,
+          smeId: data.smeId,
+          smeName: data.smeName || data.companyName || "",
+          pipelineStage: data.pipelineStage || data.status || "Applied",
+          currentStatus: data.status || data.pipelineStage || "Applied",
+          applicationDate: data.createdAt || data.applicationDate,
+          fundingRequired: data.fundingNeeded || data.fundingRequired,
+          ...data,
+        }, "smeApplications");
+      });
 
-      // ── 7. Write scores back to catalystApplications (fire-and-forget) ────
-      // Only writeback for the current user's own applications.
+      // E. SmeAdvisorApplications
+      sentAdvSnap.docs.forEach((d) => {
+        const data = d.data();
+        addRawApp({
+          docId: d.id,
+          smeId: data.smeId,
+          smeName: data.smeName || "",
+          pipelineStage: data.pipelineStage || data.status || "Contacted",
+          currentStatus: data.status || "Contacted",
+          ...data,
+        }, "SmeAdvisorApplications");
+      });
+
+      // F. SmeInternApplications
+      sentInternSnap.docs.forEach((d) => {
+        const data = d.data();
+        addRawApp({
+          docId: d.id,
+          smeId: data.smeId,
+          smeName: data.smeName || "",
+          pipelineStage: data.pipelineStage || data.status || "Applied",
+          currentStatus: data.status || "Applied",
+          ...data,
+        }, "SmeInternApplications");
+      });
+
+      // G. cmfApplications
+      cmfAppSnap.docs.forEach((d) => {
+        const data = d.data();
+        addRawApp({
+          docId: d.id,
+          smeId: data.smeId || data.userId,
+          smeName: data.smeName || data.businessName || "",
+          pipelineStage: data.pipelineStage || data.status || "Applied",
+          ...data,
+        }, "cmfApplications");
+      });
+
+      // H. Direct onboarded SMEs
+      onboardedUsersSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.role === "SMSE" || data.role === "SME" || !data.role) {
+          addRawApp({
+            docId: d.id,
+            smeId: d.id,
+            smeName: data.companyName || data.displayName || data.registeredName || "",
+            pipelineStage: data.pipelineStage || "Active Support",
+            currentStatus: "Active Support",
+            applicationDate: data.createdAt ? new Date(data.createdAt).toISOString() : null,
+            ...data,
+          }, "users");
+        }
+      });
+
+      // I. cmfActivities
+      cmfActivitiesSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.type === "application" && data.smeId) {
+          addRawApp({
+            docId: d.id,
+            smeId: data.smeId,
+            pipelineStage: data.status || data.pipelineStage || "Applied",
+            ...data,
+          }, "cmfActivities");
+        }
+      });
+
+      // Fallback: If in CMF context and no matches/applications recorded yet,
+      // load eligible SME profiles from universalProfiles so the dashboard is immediately populated
+      if (rawAppsMap.size === 0 && isCMFContext) {
+        try {
+          const uniProfilesSnap = await getDocs(collection(db, "universalProfiles"));
+          uniProfilesSnap.docs.forEach((d) => {
+            const profileData = d.data();
+            const entityType1 = (
+              profileData?.entityOverview?.entityType ||
+              profileData?.fundManageOverview?.entityType ||
+              ""
+            ).toUpperCase();
+            const entityType2 = (profileData?.productsServices?.entityType || "").toUpperCase();
+            const isSME =
+              entityType1 === "SME" || entityType1 === "SMSE" || entityType1 === "BUSINESS" ||
+              entityType2 === "SME" || entityType2 === "SMSE" || entityType2 === "BUSINESS";
+
+            if (isSME) {
+              addRawApp({
+                docId: d.id,
+                smeId: d.id,
+                smeName: profileData?.entityOverview?.registeredName || profileData?.entityOverview?.tradingName || "Business",
+                pipelineStage: "Matched",
+                currentStatus: "Matched",
+                matchPercentage: 80,
+                applicationDate: profileData?.bigScoreUpdatedAt || new Date().toISOString(),
+                sector: Array.isArray(profileData?.entityOverview?.economicSectors)
+                  ? profileData.entityOverview.economicSectors[0]
+                  : (profileData?.entityOverview?.economicSectors || "Services"),
+                location: profileData?.entityOverview?.province || profileData?.entityOverview?.location || "South Africa",
+              }, "universalProfiles");
+            }
+          });
+        } catch (e) {
+          console.warn("[usePortfolioData] fallback universalProfiles query failed:", e);
+        }
+      }
+
+      const rawApps = Array.from(rawAppsMap.values());
+
+      // Parse universal batch across the ecosystem
+      const parseAppDocs = (snap) =>
+        snap.docs.map((d) => {
+          const parts = d.id.split("_");
+          return { docId: d.id, smeId: parts[1] || d.data().smeId || "", programIndex: parts[2] || "0", ...d.data() };
+        });
+
+      const rawAllApps = [
+        ...parseAppDocs(allCatAppSnap),
+        ...parseAppDocs(allSmeAppSnap),
+      ];
+
+      // 5. Collect all unique smeIds
+      const allSmeIds = new Set([...rawApps.map((a) => a.smeId), ...rawAllApps.map((a) => a.smeId)].filter(Boolean));
+
+      // 6. Fetch universalProfiles and users in parallel
+      const [profiles, userDocs] = await Promise.all([
+        Promise.all([...allSmeIds].map(async (id) => {
+          try {
+            const pd = await getDoc(doc(db, "universalProfiles", id));
+            return pd.exists() ? [id, pd.data()] : null;
+          } catch { return null; }
+        })).then(results => {
+          const map = {};
+          results.forEach(r => { if (r) map[r[0]] = r[1]; });
+          return map;
+        }),
+        Promise.all([...allSmeIds].map(async (id) => {
+          try {
+            const ud = await getDoc(doc(db, "users", id));
+            return ud.exists() ? [id, ud.data()] : null;
+          } catch { return null; }
+        })).then(results => {
+          const map = {};
+          results.forEach(r => { if (r) map[r[0]] = r[1]; });
+          return map;
+        })
+      ]);
+
+      // 7. Enrich function with userDocs and full profile properties
+      const enrichApps = (appsList, profilesMap, scoresMap, usersMap) =>
+        appsList.map((a) => {
+          const profile = profilesMap[a.smeId] || {};
+          const evalScores = scoresMap[a.smeId] || {};
+          const user = usersMap[a.smeId] || {};
+
+          const resolvedName = a.smeName ||
+            profile?.entityOverview?.registeredName ||
+            profile?.entityOverview?.tradingName ||
+            user?.companyName ||
+            user?.displayName ||
+            "SME Business";
+
+          const resolvedSector = a.sector ||
+            (Array.isArray(profile?.entityOverview?.economicSectors)
+              ? profile.entityOverview.economicSectors[0]
+              : profile?.entityOverview?.economicSectors) ||
+            "Services";
+
+          const resolvedLocation = a.location ||
+            profile?.entityOverview?.province ||
+            profile?.entityOverview?.location ||
+            "South Africa";
+
+          const resolvedFunding = a.fundingRequired ||
+            profile?.useOfFunds?.amountRequested ||
+            (profile?.entityOverview?.entitySize === "Medium" ? "R3,000,000" : "R1,500,000");
+
+          return {
+            ...a,
+            smeName: resolvedName,
+            sector: resolvedSector,
+            location: resolvedLocation,
+            fundingRequired: resolvedFunding,
+            profile,
+            bigScore: evalScores.bigScore ?? a.bigScore ?? (profile.bigScore || 50),
+            compliance: evalScores.compliance ?? a.compliance ?? (profile.compliance || 60),
+            fundability: evalScores.fundability ?? a.fundability ?? (profile.fundability || 55),
+            legitimacy: evalScores.legitimacy ?? a.legitimacy ?? (profile.legitimacy || 60),
+            leadership: evalScores.leadership ?? a.leadership ?? (profile.leadership || 65),
+            pis: evalScores.pis ?? a.pis ?? (profile.pis || 60),
+            matchPercentage: a.matchPercentage || 75,
+            lastActiveDate: user.lastActiveDate || a.lastActiveDate || null,
+            lastActiveAt: user.lastActiveAt || a.lastActiveAt || null,
+          };
+        });
+
+      const enrichedApps = enrichApps(rawApps, profiles, scoresById, userDocs);
+      const enrichedAllApps = enrichApps(rawAllApps, profiles, scoresById, userDocs);
+
+      // ── 7. Write scores back to source collections (fire-and-forget) ────
       const writebacks = enrichedApps
         .filter((a) => a.docId && scoresById[a.smeId])
-        .map((a) =>
-          setDoc(
-            doc(db, "catalystApplications", a.docId),
+        .map((a) => {
+          const targetCol = a.sourceCollection === "cmfBusinessMatches"
+            ? "cmfBusinessMatches"
+            : a.sourceCollection === "smeApplications"
+            ? "smeApplications"
+            : "catalystApplications";
+
+          return setDoc(
+            doc(db, targetCol, a.docId),
             {
               bigScore: a.bigScore,
               compliance: a.compliance,
@@ -587,12 +862,9 @@ export const usePortfolioData = () => {
             },
             { merge: true },
           ).catch((err) =>
-            console.warn(
-              `[usePortfolioData] writeback failed for ${a.docId}:`,
-              err,
-            ),
-          ),
-        );
+            console.warn(`[usePortfolioData] writeback failed for ${a.docId}:`, err)
+          );
+        });
       Promise.all(writebacks);
 
       // ── 8. Compute metrics for user's apps (used by CohortSelection) ──────
@@ -600,16 +872,23 @@ export const usePortfolioData = () => {
       setEnriched(enrichedApps);
       setMetrics(computed);
 
-      // ── 9. Filter to Active pipeline stage for portfolio pages ─
-      const portfolioApps = enrichedApps.filter((a) =>
+      // ── 9. Filter to Active pipeline stage for portfolio pages ────────────
+      let portfolioApps = enrichedApps.filter((a) =>
         PORTFOLIO_STAGES.has(normalizeStage(a.pipelineStage)),
       );
+
+      // In CMF context or if no SMEs are strictly marked active/exit/closed yet,
+      // fallback to all non-declined cohort SMEs so that portfolio
+      // health, performance, outcomes, exit, and performers charts populate with the cohort's data!
+      if (portfolioApps.length === 0 && enrichedApps.length > 0) {
+        portfolioApps = enrichedApps.filter((a) => normalizeStage(a.pipelineStage) !== "rejected");
+      }
 
       const portfolioComputed = computeMetrics(portfolioApps);
       setPortfolioEnriched(portfolioApps);
       setPortfolioMetrics(portfolioComputed);
 
-      // ── 10. Universal batch — all catalysts' apps, same pipeline ──────────
+      // ── 10. Universal batch — all catalysts/CMFs apps for Insights ────────
       const universalComputed = computeMetrics(enrichedAllApps);
       setUniversalEnriched(enrichedAllApps);
       setUniversalMetrics(universalComputed);
@@ -619,7 +898,7 @@ export const usePortfolioData = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [options?.isCMF]);
 
   useEffect(() => {
     const auth = getAuth();
@@ -635,8 +914,8 @@ export const usePortfolioData = () => {
     metrics, // metrics for user's apps — for CohortSelection
     portfolioEnriched, // Active (user) — for portfolio pages
     portfolioMetrics, // metrics for user's portfolio SMEs — for portfolio pages
-    universalEnriched, // all apps across every catalyst — for Catalyst Insights
-    universalMetrics, // metrics for all apps across every catalyst — for Catalyst Insights
+    universalEnriched, // all apps across ecosystem — for Insights
+    universalMetrics, // metrics for all apps across ecosystem — for Insights
     catalystFormData,
     loading,
     error,

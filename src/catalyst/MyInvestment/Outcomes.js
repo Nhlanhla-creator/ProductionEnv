@@ -48,8 +48,9 @@ const Card = ({ title, footer, children }) => (
 
 // ── Total Jobs KPI ────────────────────────────────────────────────────────────
 const TotalJobsCreated = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const j        = portfolioMetrics?.jobs || {};
+  const { portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
+  const j        = activeMetrics?.jobs || {};
   const total    = j.total    || 0;
   const direct   = j.direct   || 0;
   const indirect = j.indirect || 0;
@@ -97,21 +98,22 @@ const Pill = ({ label, active, onClick }) => (
 
 // ── Jobs per SME / Sector (merged toggleable card) ─────────────────────────────
 const JobsBreakdown = () => {
-  const { portfolioMetrics } = usePortfolio();
+  const { portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
   const [view, setView] = React.useState("sme");
 
   // Per-SME: only SMEs that have any jobs
-  const perSME = [...(portfolioMetrics?.jobs?.perSME || [])]
+  const perSME = [...(activeMetrics?.jobs?.perSME || [])]
     .filter(s => s.jobs > 0)
     .sort((a, b) => b.jobs - a.jobs);
 
   // Per-sector: only sectors present among the SMEs that have jobs
   const activeSectors = new Set(perSME.map(s => s.sector));
-  const perSector = [...(portfolioMetrics?.jobs?.perSector || [])]
+  const perSector = [...(activeMetrics?.jobs?.perSector || [])]
     .filter(s => s.jobs > 0 && activeSectors.has(s.sector))
     .sort((a, b) => b.jobs - a.jobs);
 
-  const totalSMEs = portfolioMetrics?.totalSMEs || 1;
+  const totalSMEs = activeMetrics?.totalSMEs || 1;
   const avgJobs   = perSME.length > 0
     ? (perSME.reduce((a, b) => a + b.jobs, 0) / totalSMEs).toFixed(1)
     : 0;
@@ -174,14 +176,15 @@ const JobsBreakdown = () => {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 const Outcomes = () => {
-  const { loading, portfolioMetrics } = usePortfolio();
+  const { loading, portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : metrics;
 
   if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading outcomes data…</div>;
 
-  if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
+  if (!activeMetrics || activeMetrics.totalSMEs === 0) {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
-        No SMEs with "Active" status yet.
+        No SMEs in portfolio yet.
       </div>
     );
   }

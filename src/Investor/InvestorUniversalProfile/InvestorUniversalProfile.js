@@ -332,20 +332,24 @@ export default function UniversalProfile() {
       if (!userId) { setLoading(false); return }
       try {
         setLoading(true)
-        const docRef = doc(db, "MyuniversalProfiles", userId)
-        const docSnap = await getDoc(docRef)
+        let docRef = doc(db, "MyuniversalProfiles", userId)
+        let docSnap = await getDoc(docRef)
+        if (!docSnap.exists()) {
+          docRef = doc(db, "universalProfiles", userId)
+          docSnap = await getDoc(docRef)
+        }
         let firebaseData = null
         let firebaseCompletedSections = null
         let firebaseSubmissionStatus = false
         if (docSnap.exists()) {
           const data = docSnap.data()
-          firebaseData = data.formData
-          firebaseCompletedSections = data.completedSections
+          firebaseData = data.formData || data
+          firebaseCompletedSections = data.completedSections || {}
           const declarationConsentComplete = checkDeclarationConsent(data)
           firebaseSubmissionStatus = declarationConsentComplete || data.profileSubmitted === true
           if (firebaseData) setFormData(prev => ({ ...prev, ...firebaseData }))
           if (firebaseCompletedSections) setCompletedSections(prev => ({ ...prev, ...firebaseCompletedSections }))
-          if (firebaseSubmissionStatus) { setProfileSubmitted(true); setShowSummary(true) }
+          if (firebaseSubmissionStatus || isCmfView) { setProfileSubmitted(true); setShowSummary(true) }
         }
         if (!isCmfView && (!firebaseData || !firebaseSubmissionStatus)) {
           const savedData = localStorage.getItem("investorProfileData")
@@ -565,40 +569,7 @@ export default function UniversalProfile() {
   const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
   const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
 
-  const renderCmfBanner = () => {
-    if (!isCmfView) return null;
-    return (
-      <div style={{
-        backgroundColor: "#e8f5e9", padding: "16px 20px",
-        borderRadius: "8px", border: "2px solid #4caf50",
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "20px"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "20px" }}>👁️</span>
-          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-            Facilitator View: Managing {viewingSMEName}'s Profile
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            sessionStorage.removeItem("viewingSMEId");
-            sessionStorage.removeItem("viewingSMEName");
-            sessionStorage.removeItem("investorViewMode");
-            sessionStorage.removeItem("viewOrigin");
-            window.location.href = "/cmf-cohorts";
-          }}
-          style={{
-            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
-            border: "none", borderRadius: "6px", cursor: "pointer",
-            fontWeight: "600", fontSize: "14px",
-          }}
-        >
-          ← Back to My Cohorts
-        </button>
-      </div>
-    );
-  };
+  const renderCmfBanner = () => null;
 
   if (showSummary && !showCongratulationsPopup) {
     return (

@@ -29,21 +29,24 @@ export function useHeaderProfile(
     if (!currentUser) return
     try {
       const userDocRef = doc(db, collection, customDocId || currentUser.uid)
-      const userDocSnap = await getDoc(userDocRef)
+      let userDocSnap = await getDoc(userDocRef)
+      if (!userDocSnap.exists() && collection === "MyuniversalProfiles") {
+        userDocSnap = await getDoc(doc(db, "universalProfiles", customDocId || currentUser.uid))
+      }
       if (userDocSnap.exists()) {
         const data = userDocSnap.data()
         setProfileData(data)
-        setUserName(getDisplayName(data, currentUser, nameField, fallbackName))
+        setUserName(getDisplayName(data, customDocId ? null : currentUser, nameField, fallbackName))
         setProfileLogo(getLogoFromData(data, logoField))
       } else {
         setProfileData({})
-        setUserName(getDisplayName(null, currentUser, nameField, fallbackName))
+        setUserName(fallbackName || getDisplayName(null, currentUser, nameField, fallbackName))
         setProfileLogo(null)
       }
     } catch (err) {
       console.error("Error fetching header profile:", err)
       setError(err)
-      setUserName(getDisplayName(null, currentUser, nameField, fallbackName))
+      setUserName(fallbackName || getDisplayName(null, currentUser, nameField, fallbackName))
     }
   }, [collection, nameField, logoField, fallbackName, customDocId])
 

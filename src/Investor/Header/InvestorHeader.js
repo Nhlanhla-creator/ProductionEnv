@@ -8,11 +8,18 @@ import { headerProfiles, profileRoleOptions } from "../../config/headerConfig"
 function InvestorHeader() {
   const config = headerProfiles.investor
 
+  const isViewerMode =
+    (sessionStorage.getItem("investorViewMode") === "true" || sessionStorage.getItem("viewOrigin") === "cmf") &&
+    sessionStorage.getItem("viewingSMEId")
+  const customDocId = isViewerMode ? sessionStorage.getItem("viewingSMEId") : null
+  const viewingName = isViewerMode ? sessionStorage.getItem("viewingSMEName") : null
+
   const { user, userName, profileLogo, profileData } = useHeaderProfile(
     config.collection,
     config.nameField,
     config.logoField,
-    config.fallbackName
+    viewingName || config.fallbackName,
+    customDocId
   )
 
   const { unreadCount } = useMessages(user)

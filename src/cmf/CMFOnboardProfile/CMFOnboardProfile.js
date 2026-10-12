@@ -313,28 +313,165 @@ const mockFunders = [
       primaryContactMobile: "+27821112222",
       primaryContactEmail: "david.kramer.vanguard@mailinator.com"
     },
-    investmentRequirements: {},
+    investmentRequirements: {
+      selectedStage: "growth",
+      scores: {
+        registrationCertificate: 80,
+        taxClearance: 90,
+        bbbeeCertificate: 75,
+        professionalWebsite: 85,
+        businessEmail: 90,
+        companyLogo: 80,
+        boardGovernance: 70,
+        financialStatements: 85,
+        auditedAccounts: 80
+      }
+    },
     generalInvestmentPreference: {
       minimumSupportTicket: "R 1,000,000",
       maximumSupportTicket: "R 10,000,000",
-      sectorFocus: ["Technology", "Fintech"],
+      sectorFocus: ["Technology", "Fintech", "Logistics"],
       geographicFocus: ["South Africa"],
       selectedProvinces: ["Gauteng", "Western Cape"],
       legalEntity: ["Pty Ltd"],
       businessLifecycleStage: ["Early Stage", "Growth Stage"],
       ticketSize: "R 5,000,000"
     },
-    fundDetails: {},
-    applicationBrief: {},
+    fundDetails: {
+      funds: [
+        {
+          name: "Vanguard Tech Growth Fund I",
+          size: "R 250,000,000",
+          targetInvestorType: "Institutional Limited Partner (LPs)",
+          captiveFund: false,
+          lpComposition: "DFIs and Private Foundations",
+          fundStructure: "Closed-end",
+          fundLegalStructure: "Corporate (Pty Ltd)",
+          fundSizeCategory: "Small",
+          averageDealSize: "R 5,000,000",
+          minimumTicket: "R 1,000,000",
+          maximumTicket: "R 10,000,000",
+          reservesForFollowOn: true,
+          followOnPercentage: "30%",
+          proRataRights: true,
+          revenueThreshold: "5m-20m"
+        }
+      ]
+    },
+    applicationBrief: {
+      overviewObjectives: "We fund high-potential African startups and growth-stage technology ventures with proven market traction.",
+      coreDocuments: ["pitch_deck", "financials", "business_plan", "compliance_cert"],
+      conditionalDocuments: ["bank_statements", "cap_table"]
+    },
     documentUploadPlaceholder: {
-      cipcRegistration: [{ name: "funder_cipc.pdf", type: "application/pdf" }],
-      taxCompliancePin: [{ name: "funder_tax.pdf", type: "application/pdf" }]
+      registrationDocs: [{ name: "vanguard_registration.pdf", type: "application/pdf" }],
+      idOffund: [{ name: "fund_director_id.pdf", type: "application/pdf" }],
+      fundMandate: [{ name: "vanguard_investment_mandate.pdf", type: "application/pdf" }]
     },
     declarationConsentPlaceholder: {
       accuracy: true,
       dataProcessing: true,
       termsConditions: true,
       cmfPermissionAgreement: { name: "funder_agreement.pdf", type: "application/pdf" }
+    }
+  },
+  {
+    fundManageOverview: {
+      registeredName: "Apex Horizon Impact Fund",
+      tradingName: "Apex Horizon Capital",
+      registrationNumber: "2020/432109/07",
+      financialYearStart: "January",
+      regulatoryLicenseNumber: "FSP 887766",
+      legalEntityType: "Private Company",
+      firmType: "Impact Investment",
+      firmSubtype: ["Growth Stage"],
+      investorRole: "Co-Investor",
+      yearsInOperation: "5",
+      numberOfInvestmentExecutives: "4",
+      taxNumber: "9111222333",
+      vatRegistrationNumbers: "4111222333",
+      briefDescription: "Apex Horizon Capital finances sustainable African enterprises across agriculture, green energy, and logistics.",
+      portfolioCompanies: "18",
+      numberOfInvestments: "22",
+      valueDeployed: "R 75,000,000",
+      additionalSupport: ["Operational Scaling", "Financial Structuring"],
+      howDidYouHear: "Industry Referral",
+      sponsorName: "CMF Onboarded",
+      sponsorType: "CMF",
+      sponsorViewPermission: "yes"
+    },
+    contactDetails: {
+      businessTel: "+27214445555",
+      businessEmail: "apex@mailinator.com",
+      physicalAddress: "100 Bree Street, Cape Town, 8001",
+      postalAddress: "100 Bree Street, Cape Town, 8001",
+      primaryContactTitle: "Ms",
+      primaryContactName: "Nomsa",
+      primaryContactSurname: "Dlamini",
+      primaryContactPosition: "Managing Partner",
+      primaryContactMobile: "+27834445555",
+      primaryContactEmail: "nomsa.dlamini.apex@mailinator.com"
+    },
+    investmentRequirements: {
+      selectedStage: "scale-up",
+      scores: {
+        registrationCertificate: 90,
+        taxClearance: 95,
+        bbbeeCertificate: 85,
+        professionalWebsite: 90,
+        businessEmail: 95,
+        companyLogo: 85,
+        boardGovernance: 80,
+        financialStatements: 90,
+        auditedAccounts: 85
+      }
+    },
+    generalInvestmentPreference: {
+      minimumSupportTicket: "R 2,000,000",
+      maximumSupportTicket: "R 15,000,000",
+      sectorFocus: ["Agriculture", "Manufacturing", "Green Energy"],
+      geographicFocus: ["South Africa"],
+      selectedProvinces: ["Western Cape", "Gauteng", "KwaZulu-Natal"],
+      legalEntity: ["Pty Ltd"],
+      businessLifecycleStage: ["Growth Stage", "Scale-up"],
+      ticketSize: "R 7,500,000"
+    },
+    fundDetails: {
+      funds: [
+        {
+          name: "Apex Green Impact Fund II",
+          size: "R 400,000,000",
+          targetInvestorType: "Mixed",
+          captiveFund: false,
+          lpComposition: "Commercial Banks and Impact Investors",
+          fundStructure: "Closed-end",
+          fundLegalStructure: "Corporate (Pty Ltd)",
+          fundSizeCategory: "Small",
+          averageDealSize: "R 7,500,000",
+          minimumTicket: "R 2,000,000",
+          maximumTicket: "R 15,000,000",
+          reservesForFollowOn: true,
+          followOnPercentage: "25%",
+          proRataRights: true,
+          revenueThreshold: "20m-50m"
+        }
+      ]
+    },
+    applicationBrief: {
+      overviewObjectives: "We accelerate revenue-generating African businesses delivering both strong commercial returns and social/environmental impact.",
+      coreDocuments: ["pitch_deck", "financials", "business_plan", "compliance_cert"],
+      conditionalDocuments: ["bank_statements", "cap_table"]
+    },
+    documentUploadPlaceholder: {
+      registrationDocs: [{ name: "apex_registration.pdf", type: "application/pdf" }],
+      idOffund: [{ name: "nomsa_dlamini_id.pdf", type: "application/pdf" }],
+      fundMandate: [{ name: "apex_fund_mandate.pdf", type: "application/pdf" }]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "apex_cmf_agreement.pdf", type: "application/pdf" }
     }
   }
 ]
@@ -1397,6 +1534,7 @@ export default function CMFOnboardProfile() {
           roleName: "Investor",
           payload: {
             ...cleanFormData,
+            formData: cleanFormData,
             completedSections,
             profileSubmitted: true
           }
@@ -1406,6 +1544,7 @@ export default function CMFOnboardProfile() {
           roleName: "Catalyst",
           payload: {
             ...cleanFormData,
+            formData: cleanFormData,
             completedSections,
             profileSubmitted: true
           }
