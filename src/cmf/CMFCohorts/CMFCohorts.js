@@ -1206,8 +1206,22 @@ export default function CMFCohorts() {
       message: `Archive ${cohort.smeName}? It will be hidden from the default view but can still be found via "Show archived".`,
       onConfirm: async () => {
         try {
-          await updateDoc(doc(db, "cmfApplications", cohort.docId), { archived: true })
+          const user = auth.currentUser
+          if (activeCohortTab === "funders" && user) {
+            await setDoc(doc(db, "cmfFunderMatches", `${user.uid}_${cohort.id}`), { archived: true }, { merge: true })
+          } else if (activeCohortTab === "catalysts" && user) {
+            await setDoc(doc(db, "cmfCatalystMatches", `${user.uid}_${cohort.id}`), { archived: true }, { merge: true })
+          } else {
+            try {
+              await updateDoc(doc(db, "cmfApplications", cohort.docId), { archived: true })
+            } catch (err) {
+              if (user) {
+                await setDoc(doc(db, "cmfBusinessMatches", `${user.uid}_${cohort.id}`), { archived: true }, { merge: true })
+              }
+            }
+          }
           setCohorts((prev) => prev.map((c) => (c.id === cohort.id ? { ...c, archived: true } : c)))
+          if (reloadMatches) reloadMatches()
         } catch (error) {
           console.error("Error archiving record:", error)
           alert("Failed to archive. Please try again.")
@@ -1215,6 +1229,44 @@ export default function CMFCohorts() {
       },
     })
     setRowMenu(null)
+  }
+
+  // ─── Delete Partner ───────────────────────────────────────────────────────
+  const handleDeleteCohort = async (cohort) => {
+    if (!cohort) return
+    const partnerName = cohort.smeName || "this partner"
+    if (!window.confirm(`Are you sure you want to permanently delete "${partnerName}"? This will remove this profile from your cohorts and ecosystem records.`)) {
+      return
+    }
+    try {
+      const user = auth.currentUser
+      const targetId = cohort.id
+
+      if (user) {
+        try { await deleteDoc(doc(db, "cmfFunderMatches", `${user.uid}_${targetId}`)) } catch (e) {}
+        try { await deleteDoc(doc(db, "cmfBusinessMatches", `${user.uid}_${targetId}`)) } catch (e) {}
+        try { await deleteDoc(doc(db, "cmfCatalystMatches", `${user.uid}_${targetId}`)) } catch (e) {}
+      }
+      if (cohort.docId) {
+        try { await deleteDoc(doc(db, "cmfApplications", cohort.docId)) } catch (e) {}
+      }
+      try { await deleteDoc(doc(db, "users", targetId)) } catch (e) {}
+      try { await deleteDoc(doc(db, "MyuniversalProfiles", targetId)) } catch (e) {}
+      try { await deleteDoc(doc(db, "universalProfiles", targetId)) } catch (e) {}
+      try { await deleteDoc(doc(db, "catalystProfiles", targetId)) } catch (e) {}
+
+      setCohorts((prev) => prev.filter((c) => c.id !== targetId))
+      setOnboardedUserIds((prev) => {
+        const next = new Set(prev)
+        next.delete(targetId)
+        return next
+      })
+
+      if (reloadMatches) reloadMatches()
+    } catch (err) {
+      console.error("Error deleting cohort partner:", err)
+      alert("Failed to delete partner. Please try again.")
+    }
   }
 
   const handleUpdateStatus = async (cohortId, newStatus) => {
@@ -2851,6 +2903,16 @@ export default function CMFCohorts() {
             )}
             <button onClick={() => handleArchive(rowMenu.cohort)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#7d5a50] hover:bg-[#faf7f2] text-left">
               <Archive size={12} /> Archive Record
+            </button>
+            <button
+              onClick={() => {
+                const c = rowMenu.cohort
+                setRowMenu(null)
+                handleDeleteCohort(c)
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-rose-700 hover:bg-rose-50 text-left font-medium"
+            >
+              <Trash2 size={12} /> Delete Partner
             </button>
           </div>
         </Portal>

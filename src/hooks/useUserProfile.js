@@ -30,14 +30,23 @@ export function useUserProfile(collection, nameField, fallback = "User", customD
         setUser(currentUser)
         try {
           const userDocRef = doc(db, collection, customDocId || currentUser.uid)
-          const userDocSnap = await getDoc(userDocRef)
+          let userDocSnap = await getDoc(userDocRef)
+          if (!userDocSnap.exists() && collection === "MyuniversalProfiles") {
+            userDocSnap = await getDoc(doc(db, "universalProfiles", customDocId || currentUser.uid))
+          }
           
           if (userDocSnap.exists()) {
             const data = userDocSnap.data()
             
-            // First try to get the trading name, then registered name directly from formData.entityOverview
-            const tradingName = getNestedValue(data, 'formData.entityOverview.tradingName')
-            const registeredName = getNestedValue(data, 'formData.entityOverview.registeredName')
+            // First try entityOverview or fundManageOverview trading / registered name
+            const tradingName = getNestedValue(data, 'formData.entityOverview.tradingName') ||
+              getNestedValue(data, 'formData.fundManageOverview.tradingName') ||
+              getNestedValue(data, 'entityOverview.tradingName') ||
+              getNestedValue(data, 'fundManageOverview.tradingName')
+            const registeredName = getNestedValue(data, 'formData.entityOverview.registeredName') ||
+              getNestedValue(data, 'formData.fundManageOverview.registeredName') ||
+              getNestedValue(data, 'entityOverview.registeredName') ||
+              getNestedValue(data, 'fundManageOverview.registeredName')
             
             if (tradingName) {
               setUserName(tradingName)
@@ -45,14 +54,14 @@ export function useUserProfile(collection, nameField, fallback = "User", customD
               setUserName(registeredName)
             } else {
               // Fall back to the generic display name helper
-              setUserName(getDisplayName(data, currentUser, nameField, fallback))
+              setUserName(getDisplayName(data, customDocId ? null : currentUser, nameField, fallback))
             }
           } else {
-            setUserName(getDisplayName(null, currentUser, nameField, fallback))
+            setUserName(fallback || getDisplayName(null, currentUser, nameField, fallback))
           }
         } catch (error) {
           console.error("Error fetching user profile:", error)
-          setUserName(getDisplayName(null, currentUser, nameField, fallback))
+          setUserName(fallback || getDisplayName(null, currentUser, nameField, fallback))
         }
       } else {
         setUserName(fallback)

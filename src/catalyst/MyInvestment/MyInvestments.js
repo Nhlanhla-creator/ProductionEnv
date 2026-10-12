@@ -19,7 +19,7 @@ const TABS = [
   { id: "learnings",        label: "Learnings",         icon: FiBookOpen,   purpose: "Identify the support areas and capability gaps most frequently requested by cohort SMEs." },
 ];
 
-const MyPortfolioContent = () => {
+const MyPortfolioContent = ({ isCMF }) => {
   const [activeTab, setActiveTab] = useState("cohort-selection");
 
   const renderTab = () => {
@@ -45,7 +45,7 @@ const MyPortfolioContent = () => {
           My Portfolio
         </h1>
         <p className="text-xs text-warmBrown m-0">
-          Catalyst deal flow & cohort analytics
+          {isCMF ? "Capital Market Facilitator deal flow & cohort analytics" : "Catalyst deal flow & cohort analytics"}
         </p>
       </div>
 
@@ -90,10 +90,19 @@ const MyPortfolioContent = () => {
   );
 };
 
-const MyPortfolio = () => (
-  <PortfolioProvider>
-    <MyPortfolioContent />
-  </PortfolioProvider>
-);
+const MyPortfolio = () => {
+  const isCmf = typeof window !== "undefined" && (
+    window.location.pathname.startsWith("/cmf") ||
+    window.location.pathname.includes("/cmf-") ||
+    window.localStorage.getItem("big:lastPortalRole") === "cmf" ||
+    window.sessionStorage.getItem("viewOrigin") === "cmf"
+  );
+
+  return (
+    <PortfolioProvider isCMF={isCmf}>
+      <MyPortfolioContent isCMF={isCmf} />
+    </PortfolioProvider>
+  );
+};
 
 export default MyPortfolio;

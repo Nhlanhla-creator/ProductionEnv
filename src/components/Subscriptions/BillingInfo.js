@@ -167,15 +167,22 @@ const BillingInfo = ({
   const defaultFetchSMSEData = async () => {
     setLoading(true);
     try {
-      const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+      const isInvestorView =
+        (sessionStorage.getItem("investorViewMode") === "true" ||
+          sessionStorage.getItem("viewOrigin") === "cmf") &&
+        Boolean(sessionStorage.getItem("viewingSMEId"));
       const viewingSMEId = sessionStorage.getItem("viewingSMEId");
       const user = auth.currentUser;
       const targetUid = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid;
       if (!targetUid) return;
 
-      // Only get Profile Info from 'universalProfiles'
-      const profileRef = doc(db, "universalProfiles", targetUid);
-      const profileSnap = await getDoc(profileRef);
+      // Get Profile Info from 'universalProfiles' with 'MyuniversalProfiles' fallback
+      let profileRef = doc(db, "universalProfiles", targetUid);
+      let profileSnap = await getDoc(profileRef);
+      if (!profileSnap.exists()) {
+        profileRef = doc(db, "MyuniversalProfiles", targetUid);
+        profileSnap = await getDoc(profileRef);
+      }
       const profileData = profileSnap.exists() ? profileSnap.data() : {};
 
       // Map data directly from universalProfiles

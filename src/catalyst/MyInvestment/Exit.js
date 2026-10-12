@@ -13,9 +13,10 @@ const Card = ({ title, children }) => (
 );
 
 const GraduateCount = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const ex    = portfolioMetrics?.exit || {};
-  const total = portfolioMetrics?.totalSMEs || 0;
+  const { portfolioMetrics, metrics } = usePortfolio();
+  const activeMetrics = (portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : (metrics || {});
+  const ex    = activeMetrics?.exit || {};
+  const total = activeMetrics?.totalSMEs || 0;
   const grad  = ex.graduates   || 0;
   const active = ex.active     || 0;
   const exit = ex.exit         || 0;
@@ -49,8 +50,9 @@ const GraduateCount = () => {
 };
 
 const AverageTimeInProgram = () => {
-  const { metrics } = usePortfolio();
-  const ex        = metrics?.exit || {};
+  const { metrics, portfolioMetrics } = usePortfolio();
+  const activeMetrics = (metrics?.totalSMEs > 0) ? metrics : (portfolioMetrics || {});
+  const ex        = activeMetrics?.exit || {};
   const AVG_MONTHS = ex.avgMonths || 0;
   const TARGET     = 12;
   const R = 54, CIRC = 2 * Math.PI * R;

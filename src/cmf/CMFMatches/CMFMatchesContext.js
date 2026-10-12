@@ -202,7 +202,9 @@ export const CMFMatchesProvider = ({ children }) => {
   }
 
   const mapFunderProfileToMatch = (funderId, data, matchRecord, cmfPref) => {
-    let name = getNestedField(data, "entityOverview.registeredName") ||
+    let name = getNestedField(data, "fundManageOverview.registeredName") ||
+      getNestedField(data, "fundManageOverview.tradingName") ||
+      getNestedField(data, "entityOverview.registeredName") ||
       getNestedField(data, "entityOverview.tradingName") ||
       getNestedField(data, "registeredName") ||
       getNestedField(data, "tradingName") ||
@@ -215,7 +217,9 @@ export const CMFMatchesProvider = ({ children }) => {
       name = funderId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
     }
 
-    let type = getNestedField(data, "entityOverview.legalEntityType") ||
+    let type = getNestedField(data, "fundManageOverview.firmType") ||
+      getNestedField(data, "fundManageOverview.legalEntityType") ||
+      getNestedField(data, "entityOverview.legalEntityType") ||
       getNestedField(data, "fundingType") ||
       getNestedField(data, "legalEntity") ||
       "Growth Fund"
@@ -224,28 +228,43 @@ export const CMFMatchesProvider = ({ children }) => {
     }
     type = formatCustomTerm(type)
 
-    let minTicket = getNestedField(data, "minimumSupportTicket") || getNestedField(data, "programBriefMatchingPreference.minimumSupportTicket") || ""
-    let maxTicket = getNestedField(data, "maximumSupportTicket") || getNestedField(data, "programBriefMatchingPreference.maximumSupportTicket") || ""
+    let minTicket = getNestedField(data, "generalInvestmentPreference.minimumSupportTicket") ||
+      getNestedField(data, "minimumSupportTicket") ||
+      getNestedField(data, "programBriefMatchingPreference.minimumSupportTicket") || ""
+    let maxTicket = getNestedField(data, "generalInvestmentPreference.maximumSupportTicket") ||
+      getNestedField(data, "maximumSupportTicket") ||
+      getNestedField(data, "programBriefMatchingPreference.maximumSupportTicket") || ""
     let fundingRange = "R500K - R5.0M"
     if (minTicket || maxTicket) {
       fundingRange = `${minTicket ? 'R ' + minTicket : 'R0'} - ${maxTicket ? 'R ' + maxTicket : 'Open'}`
     }
 
-    const loc = formatCustomTerm(getNestedField(data, "location") || getNestedField(data, "entityOverview.contactDetails.province") || getNestedField(data, "entityOverview.province") || "National")
+    const loc = formatCustomTerm(getNestedField(data, "location") ||
+      getNestedField(data, "contactDetails.physicalAddress") ||
+      getNestedField(data, "entityOverview.contactDetails.province") ||
+      getNestedField(data, "entityOverview.province") || "National")
 
-    let sectors = getNestedField(data, "entityOverview.economicSectors") || getNestedField(data, "programBriefMatchingPreference.sectorFocus") || ["Technology", "Logistics", "Retail"]
+    let sectors = getNestedField(data, "generalInvestmentPreference.sectorFocus") ||
+      getNestedField(data, "entityOverview.economicSectors") ||
+      getNestedField(data, "programBriefMatchingPreference.sectorFocus") || ["Technology", "Logistics", "Retail"]
     if (!Array.isArray(sectors)) {
       sectors = [sectors]
     }
     const formattedSectors = sectors.map(formatCustomTerm)
 
-    const description = getNestedField(data, "entityOverview.briefDescription") || getNestedField(data, "programBriefMatchingPreference.aboutProgram") || "Growth support and financial investment partner."
+    const description = getNestedField(data, "fundManageOverview.briefDescription") ||
+      getNestedField(data, "entityOverview.briefDescription") ||
+      getNestedField(data, "programBriefMatchingPreference.aboutProgram") || "Growth support and financial investment partner."
 
     const contactName = getNestedField(data, "contactDetails.contactName") ||
       getNestedField(data, "entityOverview.contactDetails.contactName") ||
       (getNestedField(data, "contactDetails.primaryContactName") ? `${getNestedField(data, "contactDetails.primaryContactName")} ${getNestedField(data, "contactDetails.primaryContactSurname") || ""}`.trim() : "Representative")
 
-    const email = getNestedField(data, "contactDetails.email") || getNestedField(data, "entityOverview.contactDetails.email") || getNestedField(data, "contactDetails.businessEmail") || getNestedField(data, "contactDetails.primaryContactEmail") || "info@funder.org"
+    const email = getNestedField(data, "contactDetails.primaryContactEmail") ||
+      getNestedField(data, "contactDetails.businessEmail") ||
+      getNestedField(data, "contactDetails.email") ||
+      getNestedField(data, "entityOverview.contactDetails.email") ||
+      "info@funder.org"
 
     return {
       id: funderId,

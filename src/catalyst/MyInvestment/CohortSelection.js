@@ -230,12 +230,13 @@ const ScoreRangeView = ({ min, pipelineAvg, max, cohortAvg, target, suffix = "%"
 
 // ── Average Match Strength ────────────────────────────────────────────────────
 const AverageMatchStrength = () => {
-  const { portfolioMetrics } = usePortfolio();
+  const { metrics, portfolioMetrics } = usePortfolio();
+  const activeMetrics = (metrics?.totalSMEs > 0) ? metrics : (portfolioMetrics || {});
   const [view, setView] = useState("range");
 
-  const m = portfolioMetrics?.match || {};
-  const dist = portfolioMetrics?.match?.dist || {};
-  const cohortAvg = portfolioMetrics?.match?.avg || 0;
+  const m = activeMetrics?.match || {};
+  const dist = activeMetrics?.match?.dist || {};
+  const cohortAvg = activeMetrics?.match?.avg || 0;
   const hasData = m.min > 0 || m.avg > 0 || cohortAvg > 0;
 
   return (
@@ -260,12 +261,13 @@ const AverageMatchStrength = () => {
 
 // ── Average BIG Score ─────────────────────────────────────────────────────────
 const AverageBIGScore = () => {
-  const { portfolioMetrics } = usePortfolio();
+  const { metrics, portfolioMetrics } = usePortfolio();
+  const activeMetrics = (metrics?.totalSMEs > 0) ? metrics : (portfolioMetrics || {});
   const [view, setView] = useState("range");
 
-  const b = portfolioMetrics?.bigScore || {};
-  const dist = portfolioMetrics?.bigScore?.dist || {};
-  const cohortAvg = portfolioMetrics?.bigScore?.avg || 0;
+  const b = activeMetrics?.bigScore || {};
+  const dist = activeMetrics?.bigScore?.dist || {};
+  const cohortAvg = activeMetrics?.bigScore?.avg || 0;
   const hasData = b.min > 0 || b.avg > 0 || cohortAvg > 0;
 
   return (
@@ -290,9 +292,10 @@ const AverageBIGScore = () => {
 
 // ── Funding Readiness Rate ────────────────────────────────────────────────────
 const FundingReadinessRate = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rate = portfolioMetrics?.fundingReadinessRate ?? 0;
-  const total = portfolioMetrics?.totalSMEs ?? 0;
+  const { metrics, portfolioMetrics } = usePortfolio();
+  const activeMetrics = (metrics?.totalSMEs > 0) ? metrics : (portfolioMetrics || {});
+  const rate = activeMetrics?.fundingReadinessRate ?? 0;
+  const total = activeMetrics?.totalSMEs ?? 0;
   const ready = Math.round((rate / 100) * total);
 
   return (
@@ -318,9 +321,10 @@ const FundingReadinessRate = () => {
 
 // ── Average Vetting Time ──────────────────────────────────────────────────────
 const AverageVettingTime = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const ACTUAL = portfolioMetrics?.vetting?.avg || 0;
-  const TARGET = portfolioMetrics?.vetting?.target || 10;
+  const { metrics, portfolioMetrics } = usePortfolio();
+  const activeMetrics = (metrics?.totalSMEs > 0) ? metrics : (portfolioMetrics || {});
+  const ACTUAL = activeMetrics?.vetting?.avg || 0;
+  const TARGET = activeMetrics?.vetting?.target || 10;
   const VARIANCE = ACTUAL - TARGET;
   const R = 54, CIRC = 2 * Math.PI * R;
   const offset = CIRC - (CIRC * Math.min(ACTUAL, 60)) / 60;

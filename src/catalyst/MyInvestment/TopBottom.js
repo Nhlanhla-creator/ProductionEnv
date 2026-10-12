@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { usePortfolio } from "../../context/PortfolioContext";
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
@@ -170,8 +170,8 @@ const SUBS = [
 
 const TopBottom = ({ metrics }) => {
   const [sub, setSub] = useState("top-3");
-  const { loading, portfolioMetrics } = usePortfolio();
-  const sourceMetrics = metrics || portfolioMetrics;
+  const { loading, portfolioMetrics, metrics: fullMetrics } = usePortfolio();
+  const sourceMetrics = metrics || ((portfolioMetrics?.totalSMEs > 0) ? portfolioMetrics : fullMetrics);
 
   const uniqueNamesFromRows = (arr = []) => arr.map(r => (r?.name || "").trim().toLowerCase()).filter(Boolean);
   const totalSMEs = sourceMetrics?.totalSMEs || new Set([

@@ -28,6 +28,8 @@ export function getDisplayName(data, currentUser, nameField, fallback = "User") 
   if (isRequestingEntityName) {
     // Entity Mode: tradingName -> registeredName -> contact person
     candidates = [
+      getField('fundManageOverview.tradingName'),
+      getField('fundManageOverview.registeredName'),
       getField('entityOverview.tradingName'),
       getField('entityOverview.registeredName'),
       nameFromPath,
@@ -47,6 +49,8 @@ export function getDisplayName(data, currentUser, nameField, fallback = "User") 
       getField('contactDetails.name'),
       getField('personalOverview.fullName'),
       nameFromPath,
+      getField('fundManageOverview.tradingName'),
+      getField('fundManageOverview.registeredName'),
       getField('entityOverview.tradingName'),
       getField('entityOverview.registeredName'),
       data?.registeredName,

@@ -4,8 +4,8 @@ import { usePortfolioData } from "../hooks/usePortfolioData";
 
 const PortfolioContext = createContext(null);
 
-export const PortfolioProvider = ({ children }) => {
-  const portfolio = usePortfolioData();
+export const PortfolioProvider = ({ children, isCMF }) => {
+  const portfolio = usePortfolioData({ isCMF });
   return (
     <PortfolioContext.Provider value={portfolio}>
       {children}
