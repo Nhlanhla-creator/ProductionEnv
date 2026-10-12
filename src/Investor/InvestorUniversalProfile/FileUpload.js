@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Upload, X, FileText, Loader2 } from "lucide-react"
 
 export default function FileUpload({
@@ -14,6 +14,7 @@ export default function FileUpload({
 }) {
   const [files, setFiles] = useState([])
   const [isDragging, setIsDragging] = useState(false)
+  const inputRef = useRef(null)
 
   // Sync with parent value prop - FIXED: Ensure files is always an array
   useEffect(() => {
@@ -62,7 +63,11 @@ export default function FileUpload({
     
     if (isUploading) return // Prevent uploads while processing
 
-    const droppedFiles = Array.from(e.dataTransfer.files)
+    // Dropping bypasses the input's accept attribute, so filter by extension here
+    const allowed = accept.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+    const droppedFiles = Array.from(e.dataTransfer.files).filter((f) =>
+      allowed.length === 0 || allowed.some((ext) => f.name.toLowerCase().endsWith(ext))
+    )
     if (droppedFiles.length === 0) return
 
     const safeFiles = Array.isArray(files) ? files : []
@@ -224,7 +229,7 @@ export default function FileUpload({
 
   const clickHandler = () => {
     if (!isUploading) {
-      document.getElementById(`file-upload-${label || 'default'}`).click()
+      inputRef.current?.click()
     }
   }
 
@@ -248,17 +253,17 @@ export default function FileUpload({
         onClick={clickHandler}
         onMouseEnter={(e) => {
           if (!isDragging && !isUploading) {
-            e.target.style.borderColor = '#8B4513'
+            e.currentTarget.style.borderColor = '#8B4513'
           }
         }}
         onMouseLeave={(e) => {
           if (!isDragging && !isUploading) {
-            e.target.style.borderColor = '#D2B48C'
+            e.currentTarget.style.borderColor = '#D2B48C'
           }
         }}
       >
         <input
-          id={`file-upload-${label || 'default'}`}
+          ref={inputRef}
           type="file"
           style={styles.hiddenInput}
           accept={accept}
@@ -301,12 +306,12 @@ export default function FileUpload({
                   disabled={isUploading}
                   onMouseEnter={(e) => {
                     if (!isUploading) {
-                      e.target.style.color = '#8B4513'
+                      e.currentTarget.style.color = '#8B4513'
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isUploading) {
-                      e.target.style.color = '#A0522D'
+                      e.currentTarget.style.color = '#A0522D'
                     }
                   }}
                 >

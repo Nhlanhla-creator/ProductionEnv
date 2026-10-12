@@ -6,8 +6,12 @@ import FileUpload from "./FileUpload";
 import styles from "./InvestorUniversalProfile.module.css";
 
 export default function ContactDetails({ data = {}, updateData }) {
-  const [showSecondaryContact, setShowSecondaryContact] = useState(false)
-  const [sameAsPhysical, setSameAsPhysical] = useState(false)
+  const [showSecondaryContact, setShowSecondaryContact] = useState(
+    Boolean(data.secondaryContactName || data.secondaryContactEmail || data.secondaryContactMobile || data.secondaryContactSurname)
+  )
+  const [sameAsPhysical, setSameAsPhysical] = useState(
+    Boolean(data.postalAddress) && data.postalAddress === data.physicalAddress
+  )
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -32,10 +36,7 @@ export default function ContactDetails({ data = {}, updateData }) {
     if (isChecked && data.physicalAddress) {
       updateData({ postalAddress: data.physicalAddress })
     }
-    // If unchecked, clear postal address
-    else if (!isChecked) {
-      updateData({ postalAddress: "" })
-    }
+    // If unchecked, keep what is there so it can be edited
   }
 
   const handleFileChange = (name, files) => {
@@ -83,7 +84,7 @@ export default function ContactDetails({ data = {}, updateData }) {
 
           <FormField label="Business Tel" required>
             <input
-              type="text"
+              type="tel"
               name="businessTel"
               value={data.businessTel || ""}
               onChange={handleChange}
@@ -270,12 +271,12 @@ export default function ContactDetails({ data = {}, updateData }) {
             onClick={toggleSecondaryContact}
             style={buttonStyle}
             onMouseEnter={(e) => {
-              e.target.style.opacity = '0.9'
-              e.target.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.opacity = '0.9'
+              e.currentTarget.style.transform = 'translateY(-1px)'
             }}
             onMouseLeave={(e) => {
-              e.target.style.opacity = '1'
-              e.target.style.transform = 'translateY(0)'
+              e.currentTarget.style.opacity = '1'
+              e.currentTarget.style.transform = 'translateY(0)'
             }}
           >
             {showSecondaryContact ? (

@@ -112,9 +112,8 @@ export default function DeclarationConsent({ data = {}, updateData }) {
                 checked={data.termsConditions || false}
                 onChange={handleChange}
                 className={`${styles.checkbox} h-4 w-4`}
-                required
               />
-              <span className="ml-2 text-brown-700">    We consent to our program being listed publicity</span>
+              <span className="ml-2 text-brown-700">    We consent to our program being listed publicly</span>
             </label>
           </div>
         </div>

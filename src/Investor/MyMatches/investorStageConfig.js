@@ -200,15 +200,20 @@ export const mapStatusToStageId = (status, stages = DEFAULT_STAGES) => {
     if (norm(stage.name) === value) return stage.id;
     if ((stage.aliases || []).some((a) => norm(a) === value)) return stage.id;
   }
-  // Looser pass for values like "Deal Complete — funds released".
+  // Looser pass for values like "Deal Complete — funds released". Whole words
+  // only, and never for very short aliases ("dd", "new"): a plain includes()
+  // sent any value containing "dd" (e.g. "Added") to Due Diligence.
+  const hasWord = (text, word) => new RegExp(`(^| )${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`).test(text);
   for (const stage of list) {
-    if ((stage.aliases || []).some((a) => a && value.includes(norm(a)))) return stage.id;
+    if ((stage.aliases || []).some((a) => a && norm(a).length > 3 && hasWord(value, norm(a)))) return stage.id;
   }
   return fallback;
 };
 
-export const getStageById = (id, stages = DEFAULT_STAGES) =>
-  (stages?.length ? stages : DEFAULT_STAGES).find((s) => s.id === id) || stages[0];
+export const getStageById = (id, stages = DEFAULT_STAGES) => {
+  const list = stages?.length ? stages : DEFAULT_STAGES;
+  return list.find((s) => s.id === id) || list[0];
+};
 
 // ─── Customization ───────────────────────────────────────────────────────────
 export const DEFAULT_PIPELINE_CUSTOMIZATION = {
@@ -258,7 +263,11 @@ export const applyStageCustomization = (baseStages, customization = {}) => {
 // have no next stage.
 export const getNextStageId = (stages, currentId) => {
   const list = stages?.length ? stages : DEFAULT_STAGES;
-  const live = list.filter((s) => !s.terminal).sort((a, b) => a.order - b.order);
+  // DEFAULT_STAGES carry no `order`, so fall back to list position.
+  const live = list
+    .map((s, i) => ({ ...s, order: s.order ?? i }))
+    .filter((s) => !s.terminal)
+    .sort((a, b) => a.order - b.order);
   const current = list.find((s) => s.id === currentId);
   if (current?.terminal) return current.id;
 

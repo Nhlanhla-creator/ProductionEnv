@@ -3,6 +3,53 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp, Edit, Printer, ExternalLink, FileText, Mail, MapPin, Calendar, Briefcase, User, Heart, Share2, MessageSquare, X } from "lucide-react"
 
+const asArr = (v) => (Array.isArray(v) ? v : v ? [v] : [])
+const urlOf = (v) => {
+  if (!v) return null
+  if (typeof v === "string") return v
+  if (Array.isArray(v)) return urlOf(v[0])
+  return v.url || null
+}
+const rand = (v) => {
+  const n = String(v ?? "").replace(/\D/g, "")
+  return n ? "R" + n.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : v
+}
+const fromInvestorForm = (d) => {
+  if (!d || d.entityOverview || !(d.fundManageOverview || d.fundDetails)) return d || {}
+  const o = d.fundManageOverview || {}
+  const p = d.generalInvestmentPreference || {}
+  const c = d.contactDetails || {}
+  const docs = d.documentUpload || {}
+  return {
+    entityOverview: {
+      tradingName: o.tradingName,
+      registeredName: o.registeredName,
+      registrationNumber: o.registrationNumber,
+      entityType: o.legalEntityType,
+      employeeCount: o.numberOfInvestmentExecutives,
+      yearsInOperation: o.yearsInOperation,
+      location: c.physicalAddress,
+      investmentType: asArr(p.investmentFocus).join(", ") || o.firmType,
+      businessDescription: o.briefDescription,
+      economicSectors: asArr(p.sectorFocus),
+    },
+    productsServices: {
+      funds: (d.fundDetails?.funds || []).map((f) => ({
+        name: f.name,
+        size: rand(f.size),
+        type: asArr(p.investmentFocus),
+        stages: asArr(p.investmentStage),
+        ticketMin: rand(f.minimumTicket),
+        ticketMax: rand(f.maximumTicket),
+        sectors: asArr(p.sectorFocus),
+        support: asArr(o.additionalSupport),
+      })),
+      fundMandate: urlOf(docs.fundMandate),
+      fundProspectus: urlOf(docs.fundProspectus),
+    },
+  }
+}
+
 const InvestorProfileSummary = ({ data = {}, match = 85, onEdit = () => {} }) => {
   const [expandedSections, setExpandedSections] = useState({
     entityOverview: false,
@@ -57,50 +104,10 @@ const InvestorProfileSummary = ({ data = {}, match = 85, onEdit = () => {} }) =>
     window.print()
   }
 
-  // Sample data for demo
-  const sampleData = {
-    entityOverview: {
-      tradingName: "Venture Capital Partners",
-      registeredName: "VCP Investment Holdings Ltd",
-      registrationNumber: "12345678",
-      entityType: "Private Investment Fund",
-      entitySize: "Large",
-      employeeCount: "50-100",
-      yearsInOperation: "12",
-      location: "Cape Town, South Africa",
-      investmentType: "Venture Capital",
-      businessDescription: "Leading venture capital firm focused on technology startups in emerging markets with a track record of successful exits and portfolio companies.",
-      economicSectors: ["Technology", "Healthcare", "Fintech", "E-commerce"]
-    },
-    productsServices: {
-      funds: [
-        {
-          name: "Tech Innovation Fund I",
-          size: "R500M",
-          type: ["Venture Capital"],
-          stages: ["Series A", "Series B"],
-          ticketMin: "R5M",
-          ticketMax: "R50M",
-          sectors: ["AI/ML", "Fintech", "SaaS", "Mobility"],
-          support: ["Strategic Guidance", "Network Access", "Board Participation", "Follow-on Funding"]
-        },
-        {
-          name: "Healthcare Growth Fund",
-          size: "R300M",
-          type: ["Growth Capital"],
-          stages: ["Growth", "Expansion"],
-          ticketMin: "R10M",
-          ticketMax: "R75M",
-          sectors: ["Digital Health", "Biotech", "Medical Devices"],
-          support: ["Operational Support", "Market Access", "Regulatory Guidance"]
-        }
-      ],
-      fundMandate: "https://example.com/mandate.pdf",
-      fundProspectus: "https://example.com/prospectus.pdf"
-    }
-  }
-
-  const profileData = { ...sampleData, ...data }
+  // The investor form saves fundManageOverview / fundDetails / generalInvestmentPreference,
+  // not the entityOverview shape this view reads, so convert. The old version merged in
+  // hard-coded sample data, which showed a made-up investor when real keys were missing.
+  const profileData = fromInvestorForm(data)
 
 const styles = {
   profileContainer: {

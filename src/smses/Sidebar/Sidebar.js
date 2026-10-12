@@ -1,30 +1,13 @@
-// File: src/smses/Sidebar/Sidebar.jsx (or wherever your SMESidebar is located)
+// File: src/smses/Sidebar/Sidebar.jsx
 import { useState, useEffect } from "react"
+import { Boxes, Rocket, BarChart3, Truck, Wrench, Upload } from "lucide-react"
 import Sidebar from "../../components/profile/sidebar/Sidebar"
 import { useUserProfile } from "../../hooks/useUserProfile"
 import { smeMenuItems } from "../../config/menuConfig"
 
 // ─── What an outside viewer can reach ───────────────────────────────────────
-// While a catalyst / investor / facilitator is viewing an SME's account, the
-// sidebar is narrowed to the screens their cohorts table can actually send
-// them to. That set is now driven by one list instead of a per-case filter,
-// because the per-case version was the bug: it kept only "growth-tools", so
-// "View Documents" navigated correctly to /my-documents but arrived with no
-// Documents entry in the menu — the page rendered under a sidebar that had
-// filtered its own destination out.
-//
-// The three ids below map 1:1 onto the three row actions:
-//   Open BIG Score Page → dashboard     (/dashboard)
-//   Open Growth Suite   → growth-tools  (/overall-company-health et al)
-//   View Documents      → documents     (/my-documents)
-//
-// Keep this in sync with the quick-actions menus in MyCohorts — if an action
-// is added there, its menu id belongs here, or the destination will load
-// under a sidebar that can't represent it.
 const VIEWER_MENU_IDS = ["dashboard", "growth-tools", "documents"]
 
-// While a CMF (Capital & Market Facilitator) is managing an SME's account,
-// they get access to the full dashboard suite up to Billing & Payments.
 const CMF_VIEWER_MENU_IDS = [
   "profile",
   "dashboard",
@@ -38,6 +21,40 @@ const CMF_VIEWER_MENU_IDS = [
   "billing",
 ]
 
+// ─── Operations — the digital twin entry point ──────────────────────────────
+// The shared Sidebar component reads:
+//   - item.hasSubmenu  (boolean)  → renders as expandable parent
+//   - item.subItems    (array)    → the child menu items
+//   - item.route       (string)   → where clicking navigates
+//   - item.label       (string)   → display text
+//   - item.icon        (JSX)      → the leading icon
+//
+// NOTE: This menu is intentionally NOT in VIEWER_MENU_IDS or
+// CMF_VIEWER_MENU_IDS — facilitators/catalysts/investors reviewing an
+// SME's account do not operate the twin.
+const OPERATIONS_MENU = {
+  id: "operations",
+  label: "Operations",
+  icon: <Boxes size={18} />,
+  hasSubmenu: true,
+  route: "/digital-twin/dashboard",
+  subItems: [
+    { id: "operations-setup",    label: "Setup Guide",    route: "/digital-twin/setup",     icon: <Rocket size={16} /> },
+    { id: "operations-overview", label: "Command Centre", route: "/digital-twin/dashboard", icon: <BarChart3 size={16} /> },
+    { id: "operations-assets",   label: "My Assets",      route: "/digital-twin/assets",    icon: <Truck size={16} /> },
+    { id: "operations-downtime", label: "Downtime",       route: "/digital-twin/downtime",  icon: <Wrench size={16} /> },
+    { id: "operations-imports",  label: "Data Imports",   route: "/digital-twin/imports",   icon: <Upload size={16} /> },
+  ],
+}
+function injectOperations(items) {
+  // Place Operations right after "dashboard" so it sits naturally in the
+  // SME's working menus. Falls back to the top if "dashboard" isn't found.
+  const idx = items.findIndex((i) => i.id === "dashboard")
+  const next = [...items]
+  next.splice(idx >= 0 ? idx + 1 : 0, 0, OPERATIONS_MENU)
+  return next
+}
+
 function SMESidebar() {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEName, setViewingSMEName] = useState("")
@@ -50,7 +67,6 @@ function SMESidebar() {
     "Company"
   )
 
-  // Check for investor view mode
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
     const smeId = sessionStorage.getItem("viewingSMEId")
@@ -65,17 +81,13 @@ function SMESidebar() {
         viewOrigin === "cmf" ? CMF_VIEWER_MENU_IDS : VIEWER_MENU_IDS
       )
 
-      // filter() preserves smeMenuItems' own order, so the viewer sees the
-      // same sequence the SME does — just fewer entries.
       const visible = smeMenuItems.filter((item) => allowedIds.has(item.id))
       setFilteredMenuItems(visible.length > 0 ? visible : smeMenuItems)
 
-      // Growth Suite holds its children behind a collapsed parent, so it's
-      // expanded on arrival — otherwise landing on /overall-company-health
-      // shows a collapsed menu with nothing marked active.
       setAutoExpandMenus({ "growth-tools": true, raps: true })
     } else {
-      setFilteredMenuItems(smeMenuItems)
+      // Normal SME view — inject the Operations menu.
+      setFilteredMenuItems(injectOperations(smeMenuItems))
       setAutoExpandMenus({})
     }
   }, [])

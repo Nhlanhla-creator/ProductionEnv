@@ -614,7 +614,10 @@ export function OperationalStrengthScoreCard({
   onScoreUpdate,
   apiKey,
   onNavigate,
+  userId: propUserId,
 }) {
+  // The profile whose scores are shown: passed by the Dashboard (company owner's, or own), else the logged-in user
+  const profileUid = propUserId || auth?.currentUser?.uid;
   const { callFunction } = useFirebaseFunctions();
 
   const [showModal, setShowModal] = useState(false);
@@ -672,7 +675,7 @@ export function OperationalStrengthScoreCard({
     } catch (error) {
       console.error("Operational AI evaluation error:", error);
       setEvaluationError(`Analysis failed: ${error.message}`);
-      await logAnalysisFailure(db, auth?.currentUser?.uid, "operational", error);
+      await logAnalysisFailure(db, profileUid, "operational", error);
       return null;
     } finally {
       setIsEvaluating(false);
@@ -680,7 +683,7 @@ export function OperationalStrengthScoreCard({
   };
 
   const refreshAiEvaluation = async () => {
-    const userId = auth?.currentUser?.uid;
+    const userId = profileUid;
     if (!userId) return;
     try {
       const result = await runAiEvaluation();
@@ -703,8 +706,8 @@ export function OperationalStrengthScoreCard({
 
   // ── Auto-trigger + load saved narrative ──
   useEffect(() => {
-    if (!auth?.currentUser?.uid || !apiKey) return;
-    const userId = auth.currentUser.uid;
+    if (!profileUid || !apiKey) return;
+    const userId = profileUid;
     const profileRef = doc(db, "universalProfiles", userId);
     const aiEvalRef = doc(db, "aiOperationalEvaluations", userId);
 
@@ -747,7 +750,7 @@ export function OperationalStrengthScoreCard({
     });
 
     return () => unsubscribe();
-  }, [auth?.currentUser?.uid, apiKey]);
+  }, [profileUid, apiKey]);
 
   // ─────────────────────────────────────────────────────────────────────
   // Presentation

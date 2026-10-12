@@ -1,4 +1,6 @@
-export function DashboardHeader({ userName }) {
+import ProfileScopeSwitcher from "../../utils/ProfileScopeSwitcher"
+
+export function DashboardHeader({ userName, showScopeSwitcher = true }) {
     return (
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -6,6 +8,7 @@ export function DashboardHeader({ userName }) {
           <p className="text-[#8D6E63]">Welcome back, {userName}</p> */}
         </div>
         <div className="flex items-center gap-2">
+          {showScopeSwitcher && <ProfileScopeSwitcher />}
           {/* <button className="rounded-md bg-[#A67C52] px-4 py-2 text-white hover:bg-[#8D6E63]">
             View Profile
           </button> */}
@@ -13,4 +16,3 @@ export function DashboardHeader({ userName }) {
       </div>
     )
   }
-  

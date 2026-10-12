@@ -124,7 +124,7 @@ export default function AcceptInvitation() {
       const user = userCredential.user;
       
       // Check if logged in user matches invitation email
-      if (user.email !== invitation.email) {
+      if ((user.email || "").toLowerCase() !== (invitation.email || "").toLowerCase()) {
         setError(`Please log in with ${invitation.email} to accept this invitation.`);
         setLoading(false);
         return;
@@ -178,86 +178,61 @@ export default function AcceptInvitation() {
     }
   };
   
-  const acceptInvitation = async (user, username = null) => {
-    try {
-      // Create user document if it doesn't exist
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        // Create new user document
-        await setDoc(userRef, {
-          email: invitation.email,
-          username: username || user.email.split('@')[0],
-          companyId: invitation.companyId,
-          userRole: invitation.role,
-          roleArray: [invitation.role],
-          createdAt: new Date().toISOString(),
-          joinedAt: new Date().toISOString(),
-          profileComplete: false
-        });
-      } else {
-        // Update existing user document
-        await updateDoc(userRef, {
-          companyId: invitation.companyId,
-          userRole: invitation.role,
-          joinedAt: new Date().toISOString(),
-          ...(username && { username: username })
-        });
-        
-        // Add role to roleArray if not already present
-        const userData = userSnap.data();
-        const existingRoles = userData.roleArray || [];
-        if (!existingRoles.includes(invitation.role)) {
-          await updateDoc(userRef, {
-            roleArray: [...existingRoles, invitation.role]
-          });
-        }
-      }
-      
-      // Update company members list
-      const companyRef = doc(db, "companies", invitation.companyId);
-      const companySnap = await getDoc(companyRef);
-      
-      if (companySnap.exists()) {
-        const companyData = companySnap.data();
-        const members = companyData.members || [];
-        
-        if (!members.includes(user.uid)) {
-          await updateDoc(companyRef, {
-            members: arrayUnion(user.uid),
-            updatedAt: new Date().toISOString()
-          });
-        }
-      }
-      
-      // Mark invitation as accepted
-      await updateDoc(doc(db, "invitations", invitation.id), {
-        status: 'accepted',
-        acceptedAt: new Date().toISOString(),
-        acceptedBy: user.uid
+ const acceptInvitation = async (user, username = null) => {
+  try {
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+    const now = new Date().toISOString();
+
+    if (!userSnap.exists()) {
+      // New user: company membership only, no roleArray
+      await setDoc(userRef, {
+        email: invitation.email,
+        username: username || user.email.split("@")[0],
+        companyId: invitation.companyId,
+        userRole: invitation.role,
+        createdAt: now,
+        joinedAt: now,
+        profileComplete: false,
       });
-      
-      setSuccess(`Successfully joined ${invitation.companyName} as ${invitation.role}!`);
-      
-      // Redirect based on role
-      setTimeout(() => {
-        const dashboardMap = {
-          'owner': '/profile',
-          'companyadmin': '/profile',
-          'manager': '/profile',
-          'employee': '/profile',
-          'viewer': '/profile'
-        };
-        
-        navigate(dashboardMap[invitation.role] || '/profile');
-      }, 2000);
-      
-    } catch (err) {
-      console.error("Error accepting invitation:", err);
-      throw new Error("Failed to process invitation.");
+    } else {
+      // Existing user: set company + company role only
+      await updateDoc(userRef, {
+        companyId: invitation.companyId,
+        userRole: invitation.role,
+        ...(!userSnap.data().email && { email: invitation.email }),
+        joinedAt: now,
+        ...(username && { username }),
+      });
     }
-  };
+
+    // Company members list (unchanged)
+    const companyRef = doc(db, "companies", invitation.companyId);
+    const companySnap = await getDoc(companyRef);
+    if (companySnap.exists()) {
+      const members = companySnap.data().members || [];
+      if (!members.includes(user.uid)) {
+        await updateDoc(companyRef, {
+          members: arrayUnion(user.uid),
+          updatedAt: now,
+        });
+      }
+    }
+
+    // Mark invitation as accepted (unchanged)
+    await updateDoc(doc(db, "invitations", invitation.id), {
+      status: "accepted",
+      acceptedAt: now,
+      acceptedBy: user.uid,
+    });
+
+    setSuccess(`Successfully joined ${invitation.companyName} as ${invitation.role}!`);
+    setTimeout(() => navigate("/profile"), 2000);
+  } catch (err) {
+    console.error("Error accepting invitation:", err);
+    throw new Error("Failed to process invitation.");
+  }
+};
   
   if (loading) {
     return (

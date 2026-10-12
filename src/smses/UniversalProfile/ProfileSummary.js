@@ -1,31 +1,10 @@
 "use client"
 import { useState } from "react"
 import {
-  ChevronDown,
-  ChevronUp,
-  Edit,
-  FileText,
-  ExternalLink,
-  Building,
-  Users,
-  Mail,
-  Shield,
-  Package,
-  MessageCircle,
-  CheckSquare,
-  Linkedin,
-  DollarSign,
-  FileCheck,
-  Target,
-  AlertTriangle,
-  Phone,
-  MapPin,
-  Award,
-  Clock,
-  Layers,
-  Truck,
-  Briefcase,
-  TrendingUp,
+  ChevronDown, ChevronUp, Edit, FileText, ExternalLink, Building, Users, Mail,
+  Shield, Package, MessageCircle, CheckSquare, Linkedin, DollarSign, FileCheck,
+  Target, AlertTriangle, Phone, MapPin, Award, Clock, Layers, Truck, Briefcase,
+  TrendingUp, Star,
 } from "lucide-react"
 
 const ProfileSummary = ({ data, onEdit }) => {
@@ -97,11 +76,6 @@ const ProfileSummary = ({ data, onEdit }) => {
 
   const formatBoolean = (value) => (value ? "✅ Yes" : "❌ No")
 
-  const formatArray = (arr) => {
-    if (!arr || !arr.length) return "None specified"
-    return arr.map(formatLabel).join(" • ")
-  }
-
   const handleEdit = () => { if (onEdit) onEdit() }
 
   // ── Shared styles ──────────────────────────────────────────────────────────
@@ -143,80 +117,310 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  const renderFieldGrid = (fields) => {
-    const safeFields = fields.filter(item => {
-      if (item.value && typeof item.value === "object") {
-        return false
-      }
-      return true
-    })
-    return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-        {safeFields.map((item, i) => (
-          <div key={i} style={fieldCardStyle}>
-            <span style={fieldLabelStyle}>{item.label}</span>
-            <span style={fieldValueStyle}>{item.value || "Not provided"}</span>
-          </div>
-        ))}
-      </div>
-    )
-  }
+  // ── Products & Services Section ──────────────────────────────────────────
+  // Renders BOTH the modern `offerings` array (from products-services.js v1)
+  // AND the legacy productCategories/serviceCategories shape for compat.
+  const renderProductsServices = () => {
+    const ps = data?.productsServices || {}
 
-  // Helper to render dropdown-based question sections in summary
-  const renderQuestionSummary = (title, questions, dataObj) => {
-    if (!dataObj || Object.keys(dataObj).length === 0) return null
-    const safeDataObj = dataObj || {}
-    const hasValues = questions.some(q => safeDataObj[q.field])
-    if (!hasValues) return null
-    return (
-      <div style={{ marginTop: "20px" }}>
-        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>{title}</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
-          {questions.map((q) => {
-            const val = safeDataObj[q.field]
-            if (!val) return null
-            if (typeof val === "object") return null
-            const optLabel = q.options?.find(o => o.value === val)?.label || formatLabel(val)
-            return (
-              <div key={q.field} style={{ padding: "10px 14px", background: "rgba(166,124,82,0.05)", borderRadius: "8px", border: "1px solid rgba(200,182,166,0.2)" }}>
-                <span style={{ fontSize: "11px", fontWeight: "600", color: "#7d5a50", display: "block", marginBottom: "4px", textTransform: "uppercase" }}>{q.dimension}</span>
-                <span style={{ fontSize: "13px", color: "#4a352f", fontWeight: "500" }}>{optLabel}</span>
+    const getOfferingTypeLabel = () => {
+      const type = ps.offeringType
+      if (type === "products") return "Products only"
+      if (type === "services") return "Services only"
+      if (type === "both") return "Both products and services"
+      return "Not specified"
+    }
+
+    // ── NEW: render modern offerings array ──
+    const renderOfferingCard = (offering, idx) => (
+      <div key={offering.id || idx} style={{ ...fieldCardStyle, marginBottom: "12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "8px" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "15px", fontWeight: "600", color: "#4a352f", display: "flex", alignItems: "center", gap: "8px" }}>
+              {offering.isPrimary && <Star size={14} fill="#8B4513" color="#8B4513" />}
+              {offering.name || "Untitled offering"}
+            </div>
+            {offering.breadcrumb && (
+              <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "3px" }}>{offering.breadcrumb}</div>
+            )}
+            {!offering.breadcrumb && offering.customCategoryRequest && (
+              <div style={{ fontSize: "12px", color: "#92400e", marginTop: "3px", fontStyle: "italic" }}>
+                Category pending review: "{offering.customCategoryRequest}"
               </div>
-            )
-          })}
+            )}
+          </div>
+        </div>
+        {offering.description && (
+          <p style={{ fontSize: "13px", color: "#4a352f", margin: "6px 0 10px", lineHeight: 1.5 }}>{offering.description}</p>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", fontSize: "12px" }}>
+          {offering.deliveryRole?.length > 0 && (
+            <div>
+              <div style={{ fontSize: "10px", fontWeight: "600", color: "#7d5a50", textTransform: "uppercase", marginBottom: "2px" }}>Delivery Model</div>
+              <div style={{ color: "#4a352f" }}>{offering.deliveryRole.join(" • ")}</div>
+            </div>
+          )}
+          {offering.industries?.length > 0 && (
+            <div>
+              <div style={{ fontSize: "10px", fontWeight: "600", color: "#7d5a50", textTransform: "uppercase", marginBottom: "2px" }}>Industries Served</div>
+              <div style={{ color: "#4a352f" }}>{offering.industries.join(" • ")}</div>
+            </div>
+          )}
+          {offering.geographicCoverage?.length > 0 && (
+            <div>
+              <div style={{ fontSize: "10px", fontWeight: "600", color: "#7d5a50", textTransform: "uppercase", marginBottom: "2px" }}>Geographic Coverage</div>
+              <div style={{ color: "#4a352f" }}>{offering.geographicCoverage.join(" • ")}</div>
+            </div>
+          )}
         </div>
       </div>
     )
+
+    const renderOfferings = () => {
+      const offerings = Array.isArray(ps.offerings) ? ps.offerings : []
+      if (offerings.length === 0) return null
+
+      const products = offerings.filter((o) => o.offeringType === "Product")
+      const services = offerings.filter((o) => o.offeringType === "Service")
+
+      return (
+        <>
+          {products.length > 0 && (
+            <div style={{ marginBottom: "24px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+                <Layers size={16} style={{ display: "inline", marginRight: "8px" }} /> Products ({products.length})
+              </h3>
+              {products.map(renderOfferingCard)}
+            </div>
+          )}
+          {services.length > 0 && (
+            <div style={{ marginBottom: "24px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+                <Briefcase size={16} style={{ display: "inline", marginRight: "8px" }} /> Services ({services.length})
+              </h3>
+              {services.map(renderOfferingCard)}
+            </div>
+          )}
+        </>
+      )
+    }
+
+    // ── LEGACY: still render old structure if present ──
+    const renderProductCategories = () => {
+      const categories = ps.productCategories || []
+      if (categories.length === 0) return null
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Layers size={16} style={{ display: "inline", marginRight: "8px" }} /> Product Categories
+          </h3>
+          {categories.map((category, idx) => (
+            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
+              <div style={{ marginBottom: "12px" }}>
+                <span style={fieldLabelStyle}>Category Name(s)</span>
+                <span style={fieldValueStyle}>
+                  {category.categories?.length > 0
+                    ? category.categories.map((c) => formatLabel(c)).join(" • ")
+                    : "Not specified"}
+                </span>
+              </div>
+              {category.products?.length > 0 && (
+                <div>
+                  <span style={fieldLabelStyle}>Products</span>
+                  {category.products.map((product, pIdx) => (
+                    <div key={pIdx} style={{ marginTop: "12px", padding: "12px", background: "rgba(166,124,82,0.05)", borderRadius: "8px" }}>
+                      <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "6px" }}>{product.name || "Unnamed product"}</div>
+                      <div style={{ fontSize: "13px", color: "#7d5a50" }}>{product.description || "No description provided"}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    const renderServiceCategories = () => {
+      const categories = ps.serviceCategories || []
+      if (categories.length === 0) return null
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Briefcase size={16} style={{ display: "inline", marginRight: "8px" }} /> Service Categories
+          </h3>
+          {categories.map((category, idx) => (
+            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
+              <div style={{ marginBottom: "12px" }}>
+                <span style={fieldLabelStyle}>Category Name(s)</span>
+                <span style={fieldValueStyle}>
+                  {category.categories?.length > 0
+                    ? category.categories.map((c) => formatLabel(c)).join(" • ")
+                    : "Not specified"}
+                </span>
+              </div>
+              {category.services?.length > 0 && (
+                <div>
+                  <span style={fieldLabelStyle}>Services</span>
+                  {category.services.map((service, sIdx) => (
+                    <div key={sIdx} style={{ marginTop: "12px", padding: "12px", background: "rgba(166,124,82,0.05)", borderRadius: "8px" }}>
+                      <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "6px" }}>{service.name || "Unnamed service"}</div>
+                      <div style={{ fontSize: "13px", color: "#7d5a50" }}>{service.description || "No description provided"}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    const renderDeliveryStandards = () => {
+      const deliveryModes = ps.deliveryModes || []
+      const minLeadTime = ps.minLeadTime
+      const maxLeadTime = ps.maxLeadTime
+      const minUnit = ps.minLeadTimeUnit || "days"
+      const maxUnit = ps.maxLeadTimeUnit || "days"
+
+      if (deliveryModes.length === 0 && !minLeadTime && !maxLeadTime) return null
+
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Truck size={16} style={{ display: "inline", marginRight: "8px" }} /> Delivery Standards
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+            {deliveryModes.length > 0 && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Delivery Modes</span>
+                <span style={fieldValueStyle}>{deliveryModes.map((m) => formatLabel(m)).join(" • ")}</span>
+              </div>
+            )}
+            {(minLeadTime || maxLeadTime) && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Lead Time</span>
+                <span style={fieldValueStyle}>
+                  {minLeadTime && maxLeadTime
+                    ? `${minLeadTime} ${minUnit} - ${maxLeadTime} ${maxUnit}`
+                    : minLeadTime
+                      ? `Minimum ${minLeadTime} ${minUnit}`
+                      : `Maximum ${maxLeadTime} ${maxUnit}`}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    const renderTargetMarket = () => {
+      if (!ps.targetMarket) return null
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Target size={16} style={{ display: "inline", marginRight: "8px" }} /> Target Market
+          </h3>
+          <div style={fieldCardStyle}>
+            <span style={fieldValueStyle}>{ps.targetMarket}</span>
+          </div>
+        </div>
+      )
+    }
+
+    const renderKeyClients = () => {
+      const clients = ps.keyClients || []
+      if (clients.length === 0) return null
+
+      const totalRevenuePercent = clients.reduce((sum, c) => {
+        const val = parseFloat(c.revenuePercentage) || 0
+        return sum + val
+      }, 0)
+
+      return (
+        <div>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Key Clients / Customers</h3>
+          {totalRevenuePercent > 0 && (
+            <div
+              style={{
+                ...fieldCardStyle,
+                marginBottom: "16px",
+                background: totalRevenuePercent > 100 ? "rgba(207, 19, 34, 0.05)" : "rgba(56, 158, 13, 0.05)",
+                border: `1px solid ${totalRevenuePercent > 100 ? "#ffccc7" : "#b7eb8f"}`,
+              }}
+            >
+              <span style={fieldLabelStyle}>Revenue Allocation</span>
+              <span style={{
+                fontSize: "14px",
+                fontWeight: "600",
+                color: totalRevenuePercent > 100 ? "#cf1322" : "#389e0d",
+              }}>
+                {totalRevenuePercent > 100
+                  ? `⚠️ Total exceeds 100% (${totalRevenuePercent}%)`
+                  : totalRevenuePercent === 100
+                    ? `✅ Full revenue allocated (${totalRevenuePercent}%)`
+                    : `Revenue allocated: ${totalRevenuePercent}% of 100%`}
+              </span>
+            </div>
+          )}
+
+          {clients.map((client, idx) => (
+            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                <div>
+                  <span style={fieldLabelStyle}>Client Name</span>
+                  <span style={fieldValueStyle}>{client.name || "Not provided"}</span>
+                </div>
+                <div>
+                  <span style={fieldLabelStyle}>Type</span>
+                  <span style={fieldValueStyle}>{client.clientType || "Not provided"}</span>
+                </div>
+                <div>
+                  <span style={fieldLabelStyle}>Contact</span>
+                  <span style={fieldValueStyle}>{client.contactNumber || "Not provided"}</span>
+                </div>
+                <div>
+                  <span style={fieldLabelStyle}>% of Revenue</span>
+                  <span style={fieldValueStyle}>{client.revenuePercentage ? `${client.revenuePercentage}%` : "Not provided"}</span>
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <span style={fieldLabelStyle}>Industries</span>
+                  <span style={fieldValueStyle}>
+                    {client.industries?.length > 0
+                      ? client.industries.map((i) => formatLabel(i)).join(" • ")
+                      : "Not specified"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    return (
+      <div style={sectionCardStyle}>
+        {renderSectionHeader("productsServices", Package, "Products & Services")}
+        {expandedSections.productsServices && (
+          <div style={sectionContentStyle}>
+            <div style={fieldCardStyle}>
+              <span style={fieldLabelStyle}>Offering Type</span>
+              <span style={fieldValueStyle}>{getOfferingTypeLabel()}</span>
+            </div>
+
+            <div style={{ marginTop: "16px" }}>
+              {renderOfferings()}
+              {renderProductCategories()}
+              {renderServiceCategories()}
+              {renderDeliveryStandards()}
+              {renderTargetMarket()}
+              {renderKeyClients()}
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
-
-  // Strategic Clarity questions for summary
-  const strategicClarityQs = [
-    { field: "strategicDirection", dimension: "Strategic Direction", options: [{ value: "documented_shared", label: "Documented & shared" }, { value: "informal", label: "Informal" }, { value: "none", label: "None" }] },
-    { field: "planningDepth", dimension: "Planning Depth", options: [{ value: "3_4_selected", label: "3–4 selected" }, { value: "1_2_selected", label: "1–2 selected" }, { value: "none", label: "None" }] },
-    { field: "marketStrategy", dimension: "Market Strategy", options: [{ value: "clearly_defined", label: "Clearly defined & validated" }, { value: "partially_defined", label: "Partially defined" }, { value: "unclear", label: "Unclear" }] },
-    { field: "executionRoadmap", dimension: "Execution Roadmap", options: [{ value: "detailed_roadmap", label: "Detailed roadmap with milestones" }, { value: "high_level_plan", label: "High-level plan" }, { value: "no_roadmap", label: "No roadmap" }] },
-    { field: "decisionMaking", dimension: "Decision-Making", options: [{ value: "structured_data_driven", label: "Structured & data-driven" }, { value: "semi_structured", label: "Semi-structured" }, { value: "informal_reactive", label: "Informal/reactive" }] },
-    { field: "adaptability", dimension: "Adaptability", options: [{ value: "structured_review", label: "Structured review + adjustment" }, { value: "some_adjustment", label: "Some adjustment" }, { value: "reactive_none", label: "Reactive / none" }] },
-  ]
-
-  const riskManagementQs = [
-    { field: "riskIdentification", dimension: "Risk Identification", options: [{ value: "documented_risk_register", label: "Documented risk register" }, { value: "informal_awareness", label: "Informal awareness" }, { value: "no_structured_identification", label: "No structured identification" }] },
-    { field: "riskAssessment", dimension: "Risk Assessment", options: [{ value: "structured_assessment", label: "Structured assessment" }, { value: "basic_informal", label: "Basic / informal" }, { value: "no_formal_assessment", label: "No formal assessment" }] },
-    { field: "riskMitigation", dimension: "Risk Mitigation", options: [{ value: "defined_mitigation_plans", label: "Defined mitigation plans" }, { value: "some_mitigation_actions", label: "Some mitigation actions" }, { value: "no_clear_approach", label: "No clear approach" }] },
-    { field: "businessContinuity", dimension: "Business Continuity", options: [{ value: "formal_documented_plan", label: "Formal documented plan" }, { value: "partial_informal_plan", label: "Partial / informal plan" }, { value: "none", label: "None" }] },
-    { field: "crisisPreparedness", dimension: "Crisis Preparedness", options: [{ value: "clear_response_protocols", label: "Clear response protocols" }, { value: "some_readiness", label: "Some readiness" }, { value: "reactive_unprepared", label: "Reactive / unprepared" }] },
-    { field: "riskOwnership", dimension: "Risk Ownership", options: [{ value: "clear_ownership", label: "Clear ownership & accountability" }, { value: "shared_unclear", label: "Shared but unclear" }, { value: "no_ownership_defined", label: "No ownership defined" }] },
-  ]
-
-  const transparencyQs = [
-    { field: "reportingFrequency", dimension: "Reporting Frequency", options: [{ value: "monthly", label: "Monthly" }, { value: "quarterly", label: "Quarterly" }, { value: "ad_hoc_none", label: "Ad hoc / none" }] },
-    { field: "performanceReviewCycle", dimension: "Performance Review Cycle", options: [{ value: "monthly", label: "Monthly" }, { value: "quarterly_biannual", label: "Quarterly / Bi-annual" }, { value: "ad_hoc_none", label: "Ad hoc / none" }] },
-    { field: "kpiMonitoring", dimension: "KPI Monitoring", options: [{ value: "defined_kpis_tracked", label: "Defined KPIs + tracked" }, { value: "some_kpis_tracked", label: "Some KPIs tracked" }, { value: "no_structured_tracking", label: "No structured tracking" }] },
-    { field: "stakeholderCommunication", dimension: "Stakeholder Communication", options: [{ value: "structured_reports", label: "Structured" }, { value: "informal_updates", label: "Informal" }, { value: "minimal", label: "Minimal" }] },
-    { field: "complianceAndRisk", dimension: "Compliance & Risk", options: [{ value: "formal_risk_register_audits", label: "Formal" }, { value: "partial_some_controls", label: "Partial" }, { value: "none", label: "None" }] },
-    { field: "dataGovernance", dimension: "Data Governance", options: [{ value: "formal_popia_aligned", label: "Formal (POPIA aligned)" }, { value: "basic_controls", label: "Basic controls" }, { value: "no_formal_approach", label: "No formal approach" }] },
-    { field: "auditAndAssurance", dimension: "Audit & Assurance", options: [{ value: "regular_internal_external", label: "Regular internal + external" }, { value: "occasional_audits", label: "Occasional" }, { value: "none", label: "None" }] },
-  ]
 
   // ── Contact Details Section ──────────────────────────────────────────────
   const renderContactDetails = () => {
@@ -326,243 +530,10 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  // ── Products & Services Section ──────────────────────────────────────────
-  const renderProductsServices = () => {
-    const ps = data?.productsServices || {}
-    
-    const getOfferingTypeLabel = () => {
-      const type = ps.offeringType
-      if (type === "products") return "Products only"
-      if (type === "services") return "Services only"
-      if (type === "both") return "Both products and services"
-      return "Not specified"
-    }
-
-    const renderProductCategories = () => {
-      const categories = ps.productCategories || []
-      if (categories.length === 0) return null
-      return (
-        <div style={{ marginBottom: "24px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-            <Layers size={16} style={{ display: "inline", marginRight: "8px" }} /> Product Categories
-          </h3>
-          {categories.map((category, idx) => (
-            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
-              <div style={{ marginBottom: "12px" }}>
-                <span style={fieldLabelStyle}>Category Name(s)</span>
-                <span style={fieldValueStyle}>
-                  {category.categories?.length > 0 
-                    ? category.categories.map(c => formatLabel(c)).join(" • ")
-                    : "Not specified"}
-                </span>
-              </div>
-              {category.products?.length > 0 && (
-                <div>
-                  <span style={fieldLabelStyle}>Products</span>
-                  {category.products.map((product, pIdx) => (
-                    <div key={pIdx} style={{ marginTop: "12px", padding: "12px", background: "rgba(166,124,82,0.05)", borderRadius: "8px" }}>
-                      <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "6px" }}>{product.name || "Unnamed product"}</div>
-                      <div style={{ fontSize: "13px", color: "#7d5a50" }}>{product.description || "No description provided"}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )
-    }
-
-    const renderServiceCategories = () => {
-      const categories = ps.serviceCategories || []
-      if (categories.length === 0) return null
-      return (
-        <div style={{ marginBottom: "24px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-            <Briefcase size={16} style={{ display: "inline", marginRight: "8px" }} /> Service Categories
-          </h3>
-          {categories.map((category, idx) => (
-            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
-              <div style={{ marginBottom: "12px" }}>
-                <span style={fieldLabelStyle}>Category Name(s)</span>
-                <span style={fieldValueStyle}>
-                  {category.categories?.length > 0 
-                    ? category.categories.map(c => formatLabel(c)).join(" • ")
-                    : "Not specified"}
-                </span>
-              </div>
-              {category.services?.length > 0 && (
-                <div>
-                  <span style={fieldLabelStyle}>Services</span>
-                  {category.services.map((service, sIdx) => (
-                    <div key={sIdx} style={{ marginTop: "12px", padding: "12px", background: "rgba(166,124,82,0.05)", borderRadius: "8px" }}>
-                      <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "6px" }}>{service.name || "Unnamed service"}</div>
-                      <div style={{ fontSize: "13px", color: "#7d5a50" }}>{service.description || "No description provided"}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )
-    }
-
-    const renderDeliveryStandards = () => {
-      const deliveryModes = ps.deliveryModes || []
-      const minLeadTime = ps.minLeadTime
-      const maxLeadTime = ps.maxLeadTime
-      const minUnit = ps.minLeadTimeUnit || "days"
-      const maxUnit = ps.maxLeadTimeUnit || "days"
-      
-      if (deliveryModes.length === 0 && !minLeadTime && !maxLeadTime) return null
-      
-      return (
-        <div style={{ marginBottom: "24px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-            <Truck size={16} style={{ display: "inline", marginRight: "8px" }} /> Delivery Standards
-          </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-            {deliveryModes.length > 0 && (
-              <div style={fieldCardStyle}>
-                <span style={fieldLabelStyle}>Delivery Modes</span>
-                <span style={fieldValueStyle}>{deliveryModes.map(m => formatLabel(m)).join(" • ")}</span>
-              </div>
-            )}
-            {(minLeadTime || maxLeadTime) && (
-              <div style={fieldCardStyle}>
-                <span style={fieldLabelStyle}>Lead Time</span>
-                <span style={fieldValueStyle}>
-                  {minLeadTime && maxLeadTime
-                    ? `${minLeadTime} ${minUnit} - ${maxLeadTime} ${maxUnit}`
-                    : minLeadTime
-                      ? `Minimum ${minLeadTime} ${minUnit}`
-                      : `Maximum ${maxLeadTime} ${maxUnit}`}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )
-    }
-
-    const renderTargetMarket = () => {
-      if (!ps.targetMarket) return null
-      return (
-        <div style={{ marginBottom: "24px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-            <Target size={16} style={{ display: "inline", marginRight: "8px" }} /> Target Market
-          </h3>
-          <div style={fieldCardStyle}>
-            <span style={fieldValueStyle}>{ps.targetMarket}</span>
-          </div>
-        </div>
-      )
-    }
-
-    const renderKeyClients = () => {
-      const clients = ps.keyClients || []
-      if (clients.length === 0) return null
-      
-      const totalRevenuePercent = clients.reduce((sum, c) => {
-        const val = parseFloat(c.revenuePercentage) || 0
-        return sum + val
-      }, 0)
-      
-      return (
-        <div>
-          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Key Clients / Customers</h3>
-          {totalRevenuePercent > 0 && (
-            <div style={{ 
-              ...fieldCardStyle, 
-              marginBottom: "16px",
-              background: totalRevenuePercent > 100 ? "rgba(207, 19, 34, 0.05)" : "rgba(56, 158, 13, 0.05)",
-              border: `1px solid ${totalRevenuePercent > 100 ? "#ffccc7" : "#b7eb8f"}`
-            }}>
-              <span style={fieldLabelStyle}>Revenue Allocation</span>
-              <span style={{ 
-                fontSize: "14px", 
-                fontWeight: "600",
-                color: totalRevenuePercent > 100 ? "#cf1322" : "#389e0d"
-              }}>
-                {totalRevenuePercent > 100 
-                  ? `⚠️ Total exceeds 100% (${totalRevenuePercent}%)`
-                  : totalRevenuePercent === 100 
-                    ? `✅ Full revenue allocated (${totalRevenuePercent}%)`
-                    : `Revenue allocated: ${totalRevenuePercent}% of 100%`}
-              </span>
-            </div>
-          )}
-          
-          {clients.map((client, idx) => (
-            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-                <div>
-                  <span style={fieldLabelStyle}>Client Name</span>
-                  <span style={fieldValueStyle}>{client.name || "Not provided"}</span>
-                </div>
-                <div>
-                  <span style={fieldLabelStyle}>Type</span>
-                  <span style={fieldValueStyle}>{client.clientType || "Not provided"}</span>
-                </div>
-                <div>
-                  <span style={fieldLabelStyle}>Contact</span>
-                  <span style={fieldValueStyle}>{client.contactNumber || "Not provided"}</span>
-                </div>
-                <div>
-                  <span style={fieldLabelStyle}>% of Revenue</span>
-                  <span style={fieldValueStyle}>{client.revenuePercentage ? `${client.revenuePercentage}%` : "Not provided"}</span>
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <span style={fieldLabelStyle}>Industries</span>
-                  <span style={fieldValueStyle}>
-                    {client.industries?.length > 0 
-                      ? client.industries.map(i => formatLabel(i)).join(" • ")
-                      : "Not specified"}
-                  </span>
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <span style={fieldLabelStyle}>Revenue Growth Potential</span>
-                  <span style={fieldValueStyle}>{client.revenueGrowthPotential || "Not specified"}</span>
-                </div>
-                {client.revenueGrowthPotential === "Yes" && client.revenueGrowthDetails && (
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <span style={fieldLabelStyle}>Growth Opportunity Details</span>
-                    <span style={fieldValueStyle}>{client.revenueGrowthDetails}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )
-    }
-
-    return (
-      <div style={sectionCardStyle}>
-        {renderSectionHeader("productsServices", Package, "Products & Services")}
-        {expandedSections.productsServices && (
-          <div style={sectionContentStyle}>
-            <div style={fieldCardStyle}>
-              <span style={fieldLabelStyle}>Offering Type</span>
-              <span style={fieldValueStyle}>{getOfferingTypeLabel()}</span>
-            </div>
-            
-            {renderProductCategories()}
-            {renderServiceCategories()}
-            {renderDeliveryStandards()}
-            {renderTargetMarket()}
-            {renderKeyClients()}
-          </div>
-        )}
-      </div>
-    )
-  }
-
   // ── Ownership & Management Section ───────────────────────────────────────
   const renderOwnershipManagement = () => {
     const om = data?.ownershipManagement || {}
-    
+
     const renderShareholders = () => {
       const shareholders = om.shareholders || []
       if (shareholders.length === 0) return null
@@ -573,8 +544,8 @@ const ProfileSummary = ({ data, onEdit }) => {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                  {["Name", "Country", "Shareholding", "Issued Shares", "Race", "Gender", "DOA", "LinkedIn", "Youth", "Disabled", "Also Director"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  {["Name", "Country", "Shareholding", "Issued Shares", "Race", "Gender", "DOA", "Youth", "Disabled", "Also Director"].map((h) => (
+                    <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -588,7 +559,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{sh.race || "Not provided"}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{sh.gender || "Not provided"}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{formatDate(sh.doa)}</td>
-                    <td style={{ padding: "8px 6px" }}>{sh.linkedin ? renderLinkedInLink(sh.linkedin) : "Not provided"}</td>
                     <td style={{ padding: "8px 6px", fontSize: "12px" }}>{formatBoolean(sh.isYouth)}</td>
                     <td style={{ padding: "8px 6px", fontSize: "12px" }}>{formatBoolean(sh.isDisabled)}</td>
                     <td style={{ padding: "8px 6px", fontSize: "12px" }}>{formatBoolean(sh.isAlsoDirector)}</td>
@@ -603,18 +573,18 @@ const ProfileSummary = ({ data, onEdit }) => {
 
     const renderBusinessLeadership = () => {
       const bl = om.businessLeadership || {}
-      const hasValues = Object.values(bl).some(v => v)
+      const hasValues = Object.values(bl).some((v) => v)
       if (!hasValues) return null
-      
-      const labels = { 
-        ownerLed: "Owner-Led", 
-        primaryMotivation: "Primary Motivation", 
-        growthAmbition: "Growth Ambition", 
-        founderFullTime: "Founder Full-Time", 
-        opennessToAdvice: "Openness to Advice", 
-        decisionGovernance: "Decision Governance" 
+
+      const labels = {
+        ownerLed: "Owner-Led",
+        primaryMotivation: "Primary Motivation",
+        growthAmbition: "Growth Ambition",
+        founderFullTime: "Founder Full-Time",
+        opennessToAdvice: "Openness to Advice",
+        decisionGovernance: "Decision Governance",
       }
-      
+
       return (
         <div style={{ marginBottom: "24px" }}>
           <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Business Leadership – Profile Assessment</h3>
@@ -643,8 +613,8 @@ const ProfileSummary = ({ data, onEdit }) => {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                  {["Name", "Roles", "Nationality", "DOA", "Committee", "Exec/Non-Exec", "Race", "Gender", "LinkedIn & CV", "Youth", "Disabled"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  {["Name", "Roles", "Nationality", "DOA", "Committee", "Exec/Non-Exec", "Race", "Gender", "LinkedIn & CV", "Youth", "Disabled"].map((h) => (
+                    <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -656,12 +626,12 @@ const ProfileSummary = ({ data, onEdit }) => {
                       {d.linkedShareholderId !== null && <span style={{ marginLeft: "4px", fontSize: "10px", color: "#3b82f6" }}>🔗</span>}
                     </td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "11px" }}>
-                      {(d.roles || []).map(r => r === "Other" ? (d.customRole || "Other") : r).join(", ") || "Not provided"}
+                      {(d.roles || []).map((r) => r === "Other" ? (d.customRole || "Other") : r).join(", ") || "Not provided"}
                     </td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{d.nationality || "Not provided"}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{formatDate(d.doa)}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "11px" }}>
-                      {(d.committeeMembership || []).map(c => c === "Other" ? (d.customCommittee || "Other") : c).join(", ") || "None"}
+                      {(d.committeeMembership || []).map((c) => c === "Other" ? (d.customCommittee || "Other") : c).join(", ") || "None"}
                     </td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{d.execType || "Not provided"}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{d.race || "Not provided"}</td>
@@ -693,8 +663,8 @@ const ProfileSummary = ({ data, onEdit }) => {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                  {["Name", "Position", "Department", "Nationality", "DOA", "Race", "Gender", "LinkedIn & CV", "Youth", "Disabled"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  {["Name", "Position", "Nationality", "DOA", "Race", "Gender", "Youth", "Disabled"].map((h) => (
+                    <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -705,17 +675,10 @@ const ProfileSummary = ({ data, onEdit }) => {
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>
                       {ex.position === "Other" ? (ex.customPosition || "Other") : (ex.position || "Not provided")}
                     </td>
-                    <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{ex.department || "Not provided"}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{ex.nationality || "Not provided"}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{formatDate(ex.doa)}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{ex.race || "Not provided"}</td>
                     <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{ex.gender || "Not provided"}</td>
-                    <td style={{ padding: "8px 6px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        {ex.linkedin ? renderLinkedInLink(ex.linkedin) : "No LinkedIn"}
-                        {ex.cv ? renderDocumentLink(ex.cv.url, "CV") : "No CV"}
-                      </div>
-                    </td>
                     <td style={{ padding: "8px 6px", fontSize: "12px" }}>{formatBoolean(ex.isYouth)}</td>
                     <td style={{ padding: "8px 6px", fontSize: "12px" }}>{formatBoolean(ex.isDisabled)}</td>
                   </tr>
@@ -731,7 +694,7 @@ const ProfileSummary = ({ data, onEdit }) => {
       const active = om.activeInterests || []
       const previous = om.previousInterests || []
       if (active.length === 0 && previous.length === 0) return null
-      
+
       const renderInterestTable = (title, interests) => {
         if (interests.length === 0) return null
         return (
@@ -741,8 +704,8 @@ const ProfileSummary = ({ data, onEdit }) => {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", backgroundColor: "white", borderRadius: "8px", border: "1px solid #d6c4a8" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#5c3a1e" }}>
-                    {["Assigned To", "Company Name", "Registration No.", "Business Status"].map((h, i) => (
-                      <th key={i} style={{ padding: "6px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px", borderBottom: "2px solid #3d2b1f" }}>{h}</th>
+                    {["Assigned To", "Company Name", "Registration No.", "Business Status"].map((h) => (
+                      <th key={h} style={{ padding: "6px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px", borderBottom: "2px solid #3d2b1f" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -761,7 +724,7 @@ const ProfileSummary = ({ data, onEdit }) => {
           </div>
         )
       }
-      
+
       return (
         <div style={{ marginBottom: "24px" }}>
           <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Interests Declaration</h3>
@@ -774,47 +737,27 @@ const ProfileSummary = ({ data, onEdit }) => {
     const renderEmployees = () => {
       const employees = om.employees || []
       const hasEmployeeCount = om.permanentEmployees || om.contractEmployees || om.internshipEmployees || om.temporaryEmployees
-      
+
       return (
         <div>
           <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Employee Qualification & Clearance</h3>
-          
+
           {hasEmployeeCount && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "16px" }}>
-              {om.permanentEmployees && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Permanent</span>
-                  <span style={fieldValueStyle}>{om.permanentEmployees}</span>
-                </div>
-              )}
-              {om.contractEmployees && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Contract</span>
-                  <span style={fieldValueStyle}>{om.contractEmployees}</span>
-                </div>
-              )}
-              {om.internshipEmployees && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Internship</span>
-                  <span style={fieldValueStyle}>{om.internshipEmployees}</span>
-                </div>
-              )}
-              {om.temporaryEmployees && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Temporary</span>
-                  <span style={fieldValueStyle}>{om.temporaryEmployees}</span>
-                </div>
-              )}
+              {om.permanentEmployees && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Permanent</span><span style={fieldValueStyle}>{om.permanentEmployees}</span></div>}
+              {om.contractEmployees && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Contract</span><span style={fieldValueStyle}>{om.contractEmployees}</span></div>}
+              {om.internshipEmployees && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Internship</span><span style={fieldValueStyle}>{om.internshipEmployees}</span></div>}
+              {om.temporaryEmployees && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Temporary</span><span style={fieldValueStyle}>{om.temporaryEmployees}</span></div>}
             </div>
           )}
-          
+
           {employees.length > 0 && (
             <div style={{ ...fieldCardStyle, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                 <thead>
                   <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                    {["Employee Name", "Certification Compulsory?", "Qualification", "Role"].map((h, i) => (
-                      <th key={i} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                    {["Employee Name", "Certification Compulsory?", "Qualification", "Role"].map((h) => (
+                      <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -835,7 +778,7 @@ const ProfileSummary = ({ data, onEdit }) => {
               </table>
             </div>
           )}
-          
+
           {!hasEmployeeCount && employees.length === 0 && (
             <div style={{ textAlign: "center", color: "#7d5a50", padding: "16px", fontSize: "13px" }}>
               No employee information provided.
@@ -850,7 +793,6 @@ const ProfileSummary = ({ data, onEdit }) => {
         {renderSectionHeader("ownershipManagement", Users, "Ownership & Management")}
         {expandedSections.ownershipManagement && (
           <div style={sectionContentStyle}>
-            {/* Total Authorised & Issued Shares */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px", marginBottom: "24px" }}>
               <div style={fieldCardStyle}>
                 <span style={fieldLabelStyle}>Total Authorised Shares</span>
@@ -898,12 +840,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                 <span style={fieldValueStyle}>{how.referredByName}</span>
               </div>
             )}
-            {how.referredByContact && (
-              <div style={fieldCardStyle}>
-                <span style={fieldLabelStyle}>Referrer Contact</span>
-                <span style={fieldValueStyle}>{how.referredByContact}</span>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -920,7 +856,6 @@ const ProfileSummary = ({ data, onEdit }) => {
       `}</style>
       <div className="main-container" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", minHeight: "100vh", width: "100%", padding: "16px", boxSizing: "border-box" }}>
         <div style={{ width: "100%", maxWidth: "none" }}>
-          {/* Header */}
           <div style={{ background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))", borderRadius: "16px", padding: "20px", marginBottom: "20px", boxShadow: "0 20px 40px rgba(74, 53, 47, 0.1)", border: "1px solid rgba(200, 182, 166, 0.3)", position: "relative", overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 2, gap: "16px", flexWrap: "wrap" }}>
               <div style={{ flex: "1", minWidth: "250px" }}>
@@ -934,131 +869,47 @@ const ProfileSummary = ({ data, onEdit }) => {
           </div>
 
           <div style={{ display: "grid", gap: "16px" }}>
-
-            {/* ── Entity Overview ────────────────────────────────────── */}
+            {/* Entity Overview */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("entityOverview", Building, "Entity Overview")}
               {expandedSections.entityOverview && (
                 <div style={sectionContentStyle}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Registered Name</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.registeredName || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Trading Name</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.tradingName || "Same as registered name"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Registration Number</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.registrationNumber || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Entity Type</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.entityType || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Legal Structure</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.legalStructure || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Entity Size</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.entitySize || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Financial Year End</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.financialYearEnd || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Years in Operation</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.yearsInOperation || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Operation Stage</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.operationStage || "Not provided"}</span>
-                    </div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Registered Name</span><span style={fieldValueStyle}>{data?.entityOverview?.registeredName || "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Trading Name</span><span style={fieldValueStyle}>{data?.entityOverview?.tradingName || "Same as registered name"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Registration Number</span><span style={fieldValueStyle}>{data?.entityOverview?.registrationNumber || "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Entity Type</span><span style={fieldValueStyle}>{data?.entityOverview?.entityType || "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Legal Structure</span><span style={fieldValueStyle}>{data?.entityOverview?.legalStructure || "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Entity Size</span><span style={fieldValueStyle}>{data?.entityOverview?.entitySize || "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Financial Year End</span><span style={fieldValueStyle}>{data?.entityOverview?.financialYearEnd || "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Years in Operation</span><span style={fieldValueStyle}>{data?.entityOverview?.yearsInOperation || "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Operation Stage</span><span style={fieldValueStyle}>{data?.entityOverview?.operationStage || "Not provided"}</span></div>
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Economic Sectors</span>
                       <span style={fieldValueStyle}>
-                        {data?.entityOverview?.economicSectors?.length > 0 
-                          ? data.entityOverview.economicSectors.map(s => formatLabel(s)).join(" • ")
+                        {data?.entityOverview?.economicSectors?.length > 0
+                          ? data.entityOverview.economicSectors.map((s) => formatLabel(s)).join(" • ")
                           : "Not provided"}
                       </span>
                     </div>
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Countries of Operation</span>
                       <span style={fieldValueStyle}>
-                        {data?.entityOverview?.operatingCountries?.length > 0 
-                          ? data.entityOverview.operatingCountries.map(c => formatLabel(c)).join(" • ")
+                        {data?.entityOverview?.operatingCountries?.length > 0
+                          ? data.entityOverview.operatingCountries.map((c) => formatLabel(c)).join(" • ")
                           : "Not provided"}
                       </span>
                     </div>
                     {data?.entityOverview?.operatingCountries?.includes("South Africa") && data?.entityOverview?.operatingProvinces?.length > 0 && (
                       <div style={fieldCardStyle}>
                         <span style={fieldLabelStyle}>Provinces (SA)</span>
-                        <span style={fieldValueStyle}>
-                          {data.entityOverview.operatingProvinces.map(p => formatLabel(p)).join(" • ")}
-                        </span>
+                        <span style={fieldValueStyle}>{data.entityOverview.operatingProvinces.map((p) => formatLabel(p)).join(" • ")}</span>
                       </div>
                     )}
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Member of Industry Association</span>
                       <span style={fieldValueStyle}>{data?.entityOverview?.memberOfAssociation === "yes" ? "✅ Yes" : "❌ No"}</span>
                     </div>
-                    {data?.entityOverview?.memberOfAssociation === "yes" && (
-                      <>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Industry Associations</span>
-                          <span style={fieldValueStyle}>
-                            {data?.entityOverview?.industryAssociations?.length > 0 
-                              ? data.entityOverview.industryAssociations.map(a => formatLabel(a)).join(" • ")
-                              : "Not provided"}
-                          </span>
-                        </div>
-                        {data?.entityOverview?.industryAssociations?.includes("Other") && data?.entityOverview?.industryAssociationsOther && (
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Other Association</span>
-                            <span style={fieldValueStyle}>{data.entityOverview.industryAssociationsOther}</span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Brands Owned</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.brandsOwned || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Brands Represented</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.brandsRepresented || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Holds Franchises</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.holdsFranchises === "yes" ? "✅ Yes" : data?.entityOverview?.holdsFranchises === "no" ? "❌ No" : "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Holds Agencies</span>
-                      <span style={fieldValueStyle}>{data?.entityOverview?.holdsAgencies === "yes" ? "✅ Yes" : data?.entityOverview?.holdsAgencies === "no" ? "❌ No" : "Not provided"}</span>
-                    </div>
-                    {data?.entityOverview?.companyLogo && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Company Logo</span>
-                        <div style={{ marginTop: "8px" }}>
-                          <img src={data.entityOverview.companyLogo} alt="Company Logo" style={{ maxWidth: "100px", maxHeight: "80px", borderRadius: "8px", border: "1px solid #d6c4a8" }} />
-                        </div>
-                      </div>
-                    )}
-                    {data?.entityOverview?.companyLetterhead && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Company Letterhead</span>
-                        {renderDocumentLink(data.entityOverview.companyLetterhead, "View Letterhead")}
-                      </div>
-                    )}
-                    {data?.entityOverview?.orgStructure && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Org Structure</span>
-                        {renderDocumentLink(data.entityOverview.orgStructure, "View Org Structure")}
-                      </div>
-                    )}
                   </div>
                   <div style={{ background: "rgba(166, 124, 82, 0.1)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(166, 124, 82, 0.2)", marginTop: "16px" }}>
                     <span style={{ ...fieldLabelStyle, fontWeight: "700" }}>Business Description</span>
@@ -1067,27 +918,26 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
-            
-            {/* ── Products & Services ─────────────────────────────────── */}
+
+            {/* Products & Services */}
             {renderProductsServices()}
 
-            {/* ── Ownership & Management ─────────────────────────────── */}
+            {/* Ownership & Management */}
             {renderOwnershipManagement()}
 
-            {/* ── Contact Details ────────────────────────────────────── */}
+            {/* Contact Details */}
             {renderContactDetails()}
 
-            {/* ── Legal & Compliance ─────────────────────────────────── */}
+            {/* Legal & Compliance */}
             {renderLegalCompliance()}
 
-            {/* ── Financial Overview ─────────────────────────────────── */}
+            {/* Financial Overview */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("financialOverview", DollarSign, "Financial Overview")}
               {expandedSections.financialOverview && (
                 <div style={sectionContentStyle}>
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>A. Financial Performance</h3>
-                  
-                  {/* Income Statement */}
+
                   <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#5c3a1e", marginBottom: "8px", marginTop: "12px" }}>Income Statement</h4>
                   <div style={{ ...fieldCardStyle, overflowX: "auto", marginBottom: "16px" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -1120,7 +970,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </table>
                   </div>
 
-                  {/* Balance Sheet */}
                   <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#5c3a1e", marginBottom: "8px", marginTop: "12px" }}>Balance Sheet</h4>
                   <div style={{ ...fieldCardStyle, overflowX: "auto", marginBottom: "16px" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -1155,174 +1004,22 @@ const ProfileSummary = ({ data, onEdit }) => {
 
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>B. Financial Management & Systems</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Books Up to Date</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.booksUpToDate)}</span>
-                    </div>
-                    {data?.financialOverview?.booksUpToDateDetails && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Books Up to Date Details</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.booksUpToDateDetails}</span>
-                      </div>
-                    )}
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Management Accounts</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasManagementAccounts)}</span>
-                    </div>
-                    {data?.financialOverview?.latestManagementAccounts && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Latest Management Accounts</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.latestManagementAccounts}</span>
-                      </div>
-                    )}
-                    {data?.financialOverview?.managementAccountsDocs?.length > 0 && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Management Accounts Docs</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.managementAccountsDocs.length} file(s) uploaded</span>
-                      </div>
-                    )}
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Books Up to Date</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.booksUpToDate)}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Management Accounts</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasManagementAccounts)}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Accounting Software</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasAccountingSoftware)}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Insured</span><span style={fieldValueStyle}>{data?.financialOverview?.isInsured === "yes" ? "✅ Yes" : data?.financialOverview?.isInsured === "no" ? "❌ No" : "Not provided"}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Financial Statements</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasFinancialStatements)}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Financials Audited</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.financialsAudited)}</span></div>
                   </div>
 
-                  <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>C. Financial Credibility</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Accounting Software</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasAccountingSoftware)}</span>
-                    </div>
-                    {data?.financialOverview?.accountingSoftwareName && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Software Name</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.accountingSoftwareName}</span>
-                      </div>
-                    )}
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Insured</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.isInsured === "yes" ? "✅ Yes" : data?.financialOverview?.isInsured === "no" ? "❌ No" : "Not provided"}</span>
-                    </div>
-                    {data?.financialOverview?.isInsured === "yes" && (
-                      <>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Insurance Broker</span>
-                          <span style={fieldValueStyle}>{data?.financialOverview?.insuranceBrokerName || "Not provided"}</span>
-                        </div>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Insurance Contact</span>
-                          <span style={fieldValueStyle}>{data?.financialOverview?.insuranceBrokerContact || "Not provided"}</span>
-                        </div>
-                      </>
-                    )}
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Financial Statements</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasFinancialStatements)}</span>
-                    </div>
-                    {data?.financialOverview?.financialStatementsYears?.length > 0 && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Financial Statements Years</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.financialStatementsYears.join(" • ")}</span>
-                      </div>
-                    )}
-                    {data?.financialOverview?.financialStatementsDocs?.length > 0 && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Financial Statements Docs</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.financialStatementsDocs.length} file(s) uploaded</span>
-                      </div>
-                    )}
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Financials Audited</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.financialsAudited)}</span>
-                    </div>
-                    {data?.financialOverview?.auditedFinancialsDocs?.length > 0 && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Audited Financials Docs</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.auditedFinancialsDocs.length} file(s) uploaded</span>
-                      </div>
-                    )}
-                    {data?.financialOverview?.auditorCompanyName && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Auditor</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.auditorCompanyName}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Liabilities */}
-                  <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>Liabilities</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-                    {data?.financialOverview?.salesTerms && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Sales Terms</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.salesTerms}</span>
-                      </div>
-                    )}
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Has Overdraft</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.hasOverdraft === "yes" ? "✅ Yes" : data?.financialOverview?.hasOverdraft === "no" ? "❌ No" : "Not provided"}</span>
-                    </div>
-                    {data?.financialOverview?.hasOverdraft === "yes" && (
-                      <>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Overdraft Value</span>
-                          <span style={fieldValueStyle}>{data?.financialOverview?.overdraftValue || "Not provided"}</span>
-                        </div>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Overdraft Utilised</span>
-                          <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.overdraftUtilised)}</span>
-                        </div>
-                      </>
-                    )}
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Directors Surety</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.directorsSurety === "yes" ? "✅ Yes" : data?.financialOverview?.directorsSurety === "no" ? "❌ No" : "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Debtors Ceded</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.debtorsCeded === "yes" ? "✅ Yes" : data?.financialOverview?.debtorsCeded === "no" ? "❌ No" : "Not provided"}</span>
-                    </div>
-                    {data?.financialOverview?.bonds && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Bonds</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.bonds}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Financial Challenges */}
-                  {(data?.financialOverview?.financialChallenges?.length > 0 || data?.financialOverview?.financialChallengesElaboration) && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>D. Financial Challenges</h3>
-                      {data?.financialOverview?.financialChallenges?.length > 0 && (
-                        <div style={{ ...fieldCardStyle, marginBottom: "12px" }}>
-                          <span style={fieldLabelStyle}>Challenges</span>
-                          <span style={fieldValueStyle}>{data?.financialOverview?.financialChallenges.map(c => formatLabel(c)).join(" • ")}</span>
-                        </div>
-                      )}
-                      {data?.financialOverview?.financialChallengesElaboration && (
-                        <div style={{ background: "rgba(166,124,82,0.1)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(166,124,82,0.2)" }}>
-                          <span style={{ ...fieldLabelStyle, fontWeight: "700" }}>Elaboration</span>
-                          <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{data?.financialOverview?.financialChallengesElaboration}</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Support Intent */}
-                  <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>E. Support Intent</h3>
+                  <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>C. Support Intent</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Seeking Funding</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.seekingFunding)}</span>
-                    </div>
-                    {data?.financialOverview?.fundraisingHistory && (
-                      <div style={fieldCardStyle}>
-                        <span style={fieldLabelStyle}>Fundraising History</span>
-                        <span style={fieldValueStyle}>{data?.financialOverview?.fundraisingHistory}</span>
-                      </div>
-                    )}
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Seeking Funding</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.seekingFunding)}</span></div>
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Support Type Needed</span>
                       <span style={fieldValueStyle}>
-                        {data?.financialOverview?.supportTypeNeeded?.length > 0 
-                          ? data?.financialOverview?.supportTypeNeeded.map(s => formatLabel(s)).join(" • ") 
+                        {data?.financialOverview?.supportTypeNeeded?.length > 0
+                          ? data?.financialOverview?.supportTypeNeeded.map((s) => formatLabel(s)).join(" • ")
                           : "None"}
                       </span>
                     </div>
@@ -1331,209 +1028,38 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
 
-            {/* ── Operations Overview ─────────────────────────────────── */}
+            {/* Operations Overview */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("operationsOverview", FileCheck, "Operations Overview")}
               {expandedSections.operationsOverview && (
                 <div style={sectionContentStyle}>
                   <p style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "20px", fontWeight: "500", fontStyle: "italic" }}>BIG Score – Operational Strength (Risk-Based Yes/No Model)</p>
-                  
-                  {/* BIG Score Questions */}
+
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Q1. Multiple Key Suppliers</span>
-                      <span style={fieldValueStyle}>{data?.operationsOverview?.multipleSuppliers === "yes" ? "✅ Yes" : data?.operationsOverview?.multipleSuppliers === "no" ? "❌ No" : "Not answered"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Q2. Documented Contingency Plan</span>
-                      <span style={fieldValueStyle}>{data?.operationsOverview?.contingencyPlan === "yes" ? "✅ Yes" : data?.operationsOverview?.contingencyPlan === "no" ? "❌ No" : "Not answered"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Q3. Track Performance Metrics</span>
-                      <span style={fieldValueStyle}>{data?.operationsOverview?.trackPerformanceMetrics === "yes" ? "✅ Yes" : data?.operationsOverview?.trackPerformanceMetrics === "no" ? "❌ No" : "Not answered"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Q4. 3+ Successful Deliveries</span>
-                      <span style={fieldValueStyle}>{data?.operationsOverview?.threeSuccessfulDeliveries === "yes" ? "✅ Yes" : data?.operationsOverview?.threeSuccessfulDeliveries === "no" ? "❌ No" : "Not answered"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Q5. Capacity to Increase Output</span>
-                      <span style={fieldValueStyle}>{data?.operationsOverview?.hasCapacityToIncrease === "yes" ? "✅ Yes" : data?.operationsOverview?.hasCapacityToIncrease === "no" ? "❌ No" : "Not answered"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Q6. Formal Safety/Compliance</span>
-                      <span style={fieldValueStyle}>{data?.operationsOverview?.hasFormalProcedures === "yes" ? "✅ Yes" : data?.operationsOverview?.hasFormalProcedures === "no" ? "❌ No" : "Not answered"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Q7. Major Incidents (24 months)</span>
-                      <span style={fieldValueStyle}>{data?.operationsOverview?.hasMajorIncidents === "yes" ? "✅ Yes" : data?.operationsOverview?.hasMajorIncidents === "no" ? "❌ No" : "Not answered"}</span>
-                    </div>
+                    {[
+                      { q: "Q1. Multiple Key Suppliers", key: "multipleSuppliers" },
+                      { q: "Q2. Documented Contingency Plan", key: "contingencyPlan" },
+                      { q: "Q3. Track Performance Metrics", key: "trackPerformanceMetrics" },
+                      { q: "Q4. 3+ Successful Deliveries", key: "threeSuccessfulDeliveries" },
+                      { q: "Q5. Capacity to Increase Output", key: "hasCapacityToIncrease" },
+                      { q: "Q6. Formal Safety/Compliance", key: "hasFormalProcedures" },
+                      { q: "Q7. Major Incidents (24 months)", key: "hasMajorIncidents" },
+                    ].map(({ q, key }) => {
+                      const v = data?.operationsOverview?.[key]
+                      return (
+                        <div key={key} style={fieldCardStyle}>
+                          <span style={fieldLabelStyle}>{q}</span>
+                          <span style={fieldValueStyle}>{v === "yes" ? "✅ Yes" : v === "no" ? "❌ No" : "Not answered"}</span>
+                        </div>
+                      )
+                    })}
                   </div>
 
-                  {/* 1. Outsourcing & Value Chain */}
-                  {data?.operationsOverview?.outsourcesValueChain && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>1. Outsourcing & Value Chain</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "12px" }}>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Outsources Value Chain</span>
-                          <span style={fieldValueStyle}>{data?.operationsOverview?.outsourcesValueChain === "yes" ? "✅ Yes" : "❌ No"}</span>
-                        </div>
-                      </div>
-                      {data?.operationsOverview?.outsourcesValueChain === "yes" && (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Outsourced Services</span>
-                            <span style={fieldValueStyle}>{data?.operationsOverview?.outsourcedServices || "Not provided"}</span>
-                          </div>
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Annual Outsourced Value</span>
-                            <span style={fieldValueStyle}>
-                              {data?.operationsOverview?.outsourcedValue 
-                                ? `${data?.operationsOverview?.outsourcedCurrency || "ZAR"} ${data?.operationsOverview?.outsourcedValue}` 
-                                : "Not provided"}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* 2. Import / Export */}
-                  {data?.operationsOverview?.importExport && data?.operationsOverview?.importExport !== "none" && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>2. Import / Export</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Import/Export Status</span>
-                          <span style={fieldValueStyle}>{formatLabel(data?.operationsOverview?.importExport)}</span>
-                        </div>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Annual Import/Export Value</span>
-                          <span style={fieldValueStyle}>
-                            {data?.operationsOverview?.importExportValue 
-                              ? `${data?.operationsOverview?.importExportCurrency || "ZAR"} ${data?.operationsOverview?.importExportValue}` 
-                              : "Not provided"}
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* 3. Contract Operations */}
-                  {data?.operationsOverview?.operatesOnContract && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>3. Contract Operations</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Operates on Contract</span>
-                          <span style={fieldValueStyle}>{data?.operationsOverview?.operatesOnContract === "yes" ? "✅ Yes" : "❌ No"}</span>
-                        </div>
-                        {data?.operationsOverview?.operatesOnContract === "yes" && (
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Total Contracts Value</span>
-                            <span style={fieldValueStyle}>
-                              {data?.operationsOverview?.totalContractValue 
-                                ? `${data?.operationsOverview?.contractCurrency || "ZAR"} ${data?.operationsOverview?.totalContractValue}` 
-                                : "Not provided"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-
-                  {/* 4. Supplier References */}
-                  {(data?.operationsOverview?.supplier1Name || data?.operationsOverview?.supplier2Name || data?.operationsOverview?.supplier3Name) && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>4. Supplier References</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        {[1, 2, 3].map(num => {
-                          const name = data?.operationsOverview?.[`supplier${num}Name`]
-                          const contact = data?.operationsOverview?.[`supplier${num}Contact`]
-                          if (!name && !contact) return null
-                          return (
-                            <div key={num} style={fieldCardStyle}>
-                              <span style={fieldLabelStyle}>Supplier {num}</span>
-                              <span style={fieldValueStyle}>{name || "Not provided"}</span>
-                              {contact && <div style={{ fontSize: "13px", color: "#7d5a50", marginTop: "4px" }}>Contact: {contact}</div>}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>
-                  )}
-
-                  {/* 5. Premises & Facilities */}
-                  {data?.operationsOverview?.premisesStatus && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>5. Premises & Facilities</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "12px" }}>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Premises Status</span>
-                          <span style={fieldValueStyle}>{formatLabel(data?.operationsOverview?.premisesStatus)}</span>
-                        </div>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Premises Type</span>
-                          <span style={fieldValueStyle}>{formatLabel(data?.operationsOverview?.premisesType) || "Not provided"}</span>
-                        </div>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Premises Size (sqm)</span>
-                          <span style={fieldValueStyle}>{data?.operationsOverview?.premisesSize || "Not provided"}</span>
-                        </div>
-                      </div>
-                      {data?.operationsOverview?.premisesStatus === "rented" && data?.operationsOverview?.leaseExpiryDate && (
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Lease Expiry Date</span>
-                          <span style={fieldValueStyle}>{formatDate(data?.operationsOverview?.leaseExpiryDate)}</span>
-                        </div>
-                      )}
-                      {data?.operationsOverview?.hasBranches === "yes" && (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginTop: "12px" }}>
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Has Branches</span>
-                            <span style={fieldValueStyle}>✅ Yes</span>
-                          </div>
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Number of Branches</span>
-                            <span style={fieldValueStyle}>{data?.operationsOverview?.numberOfBranches || "Not provided"}</span>
-                          </div>
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Branch Locations</span>
-                            <span style={fieldValueStyle}>{data?.operationsOverview?.branchLocations || "Not provided"}</span>
-                          </div>
-                          <div style={fieldCardStyle}>
-                            <span style={fieldLabelStyle}>Staff at Branches</span>
-                            <span style={fieldValueStyle}>{data?.operationsOverview?.branchStaff || "Not provided"}</span>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* 6. Industry Accreditations */}
-                  {data?.operationsOverview?.industryAccreditations?.length > 0 && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>6. Industry Accreditations</h3>
-                      <div style={fieldCardStyle}>
-                        <span style={fieldValueStyle}>
-                          {data?.operationsOverview?.industryAccreditations.map(a => formatLabel(a)).join(" • ")}
-                          {data?.operationsOverview?.industryAccreditations.includes("Other") && data?.operationsOverview?.industryAccreditationsOther && (
-                            <span style={{ display: "block", marginTop: "6px", fontSize: "13px", color: "#7d5a50" }}>
-                              Other: {data?.operationsOverview?.industryAccreditationsOther}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    </>
-                  )}
-
-                  {/* 9. Operational Challenges */}
                   {data?.operationsOverview?.operationalChallenges && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>9. Operational Challenges</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Operational Challenges</h3>
                       <div style={{ background: "rgba(166,124,82,0.1)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(166,124,82,0.2)" }}>
-                        <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{data?.operationsOverview?.operationalChallenges}</p>
+                        <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{data.operationsOverview.operationalChallenges}</p>
                       </div>
                     </>
                   )}
@@ -1541,12 +1067,11 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
 
-            {/* ── Governance ─────────────────────────────────────────── */}
+            {/* Governance */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("governance", FileCheck, "Governance")}
               {expandedSections.governance && (
                 <div style={sectionContentStyle}>
-                  {/* Policies checklist progress */}
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Policies & Controls Progress</h3>
                   {data?.governance?.governanceChecklist && Object.keys(data.governance.governanceChecklist).length > 0 ? (
                     <>
@@ -1574,39 +1099,12 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </div>
                   )}
 
-                  {/* Conflict of Interest */}
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Conflict of Interest</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Members Have Multiple Businesses</span>
-                      <span style={fieldValueStyle}>{data?.governance?.membersHaveMultipleBusinesses || "Not specified"}</span>
-                    </div>
+                  <div style={fieldCardStyle}>
+                    <span style={fieldLabelStyle}>Members Have Multiple Businesses</span>
+                    <span style={fieldValueStyle}>{data?.governance?.membersHaveMultipleBusinesses || "Not specified"}</span>
                   </div>
-                  {data?.governance?.membersHaveMultipleBusinesses === "Yes" && data?.governance?.conflictOfInterest?.length > 0 && (
-                    <div style={{ ...fieldCardStyle, marginTop: "12px", overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                        <thead>
-                          <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                            {["Person Name", "Other Positions", "Company Name", "Business Type"].map((h, i) => (
-                              <th key={i} style={{ padding: "8px 6px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase" }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data.governance.conflictOfInterest.map((entry, i) => (
-                            <tr key={i} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                              <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{entry.personName || "Not provided"}</td>
-                              <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{entry.otherPositions || "Not provided"}</td>
-                              <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{entry.companyName || "Not provided"}</td>
-                              <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>{entry.businessType || "Not provided"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
 
-                  {/* Ethics Training */}
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "24px" }}>Ethics Training</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
                     <div style={fieldCardStyle}>
@@ -1618,52 +1116,12 @@ const ProfileSummary = ({ data, onEdit }) => {
                       <span style={fieldValueStyle}>{formatDate(data?.governance?.lastEthicsTrainingDate) || "Not specified"}</span>
                     </div>
                   </div>
-
-                  {/* Strategic Clarity & Planning */}
-                  {renderQuestionSummary("Strategic Clarity & Planning", strategicClarityQs, data?.governance?.strategicClarity)}
-
-                  {/* Risk Management */}
-                  {renderQuestionSummary("Risk Management", riskManagementQs, data?.governance?.riskManagement)}
-
-                  {/* Transparency & Reporting */}
-                  {renderQuestionSummary("Transparency & Reporting", transparencyQs, data?.governance?.transparencyReporting)}
-
-                  {/* Risk & Legal */}
-                  {(data?.governance?.adverseListings || data?.governance?.courtNotices) && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Risk & Legal</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Adverse Listings</span>
-                          <span style={fieldValueStyle}>{data?.governance?.adverseListings || "Not specified"}</span>
-                        </div>
-                        <div style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>Court Notices</span>
-                          <span style={fieldValueStyle}>{data?.governance?.courtNotices || "Not specified"}</span>
-                        </div>
-                      </div>
-                      {data?.governance?.adverseListings === "Yes" && data?.governance?.adverseListingsDetails && (
-                        <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
-                          <span style={fieldLabelStyle}>Adverse Listings Details</span>
-                          <span style={fieldValueStyle}>{data?.governance?.adverseListingsDetails}</span>
-                        </div>
-                      )}
-                      {data?.governance?.courtNotices === "Yes" && data?.governance?.courtNoticesDetails && (
-                        <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
-                          <span style={fieldLabelStyle}>Court Notices Details</span>
-                          <span style={fieldValueStyle}>{data?.governance?.courtNoticesDetails}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
                 </div>
               )}
             </div>
 
-            {/* ── How Did You Hear ────────────────────────────────────── */}
             {renderHowDidYouHear()}
 
-            {/* ── Declaration & Consent ──────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("declarationConsent", CheckSquare, "Declaration & Consent")}
               {expandedSections.declarationConsent && (
@@ -1687,7 +1145,6 @@ const ProfileSummary = ({ data, onEdit }) => {
             </div>
           </div>
 
-          {/* Footer */}
           <div style={{ marginTop: "24px", textAlign: "center", background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))", borderRadius: "16px", padding: "20px", border: "1px solid rgba(200, 182, 166, 0.3)" }}>
             <button
               onClick={() => (window.location.href = "/applications/funding")}

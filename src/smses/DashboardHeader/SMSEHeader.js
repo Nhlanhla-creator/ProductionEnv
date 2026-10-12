@@ -32,7 +32,7 @@ function SMSEHeader({ sidebarCollapsed }) {
         portalName={config.portalName}
         availableRoles={availableRoles}
         selectedRole={selectedRole}
-        roleOptions={["Investor", "Advisor", "Catalyst", "Program Sponsor", "Intern"]} // Original SMSE options
+        roleOptions={profileRoleOptions.sme}
         onAddRole={addRole}
         NotificationComponent={Notifications}
         userCollection={config.collection}

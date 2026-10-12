@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
+import { formatDocumentLabel, normalizeAmount } from "./funderMatching"
 import { Building, MapPin, DollarSign, FileText, Award, BarChart3, Globe, X } from "lucide-react"
 
 const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
@@ -25,7 +26,10 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
         { id: "application", label: "Application",  icon: FileText },
     ]
 
-    const formatArr = (v) => Array.isArray(v) ? v.join(", ") : (v || "Not specified")
+    const formatArr = (v) => Array.isArray(v) ? (v.length ? v.join(", ") : "Not specified") : (v || "Not specified")
+    const rand = (v) => { const n = normalizeAmount(v); return n ? `R${n.toLocaleString("en-ZA")}` : null }
+    // Ids saved by the old investor option list, shown by the label the investor saw.
+    const LEGACY_DOC_IDS = { financials: "company_registration", market_analysis: "proof_of_address", team_bios: "tax_clearance", compliance_cert: "bbbee_certificate", letters: "client_references" }
 
     return createPortal(
         <div style={overlayStyle}>
@@ -38,14 +42,14 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
                                 {funder.anonymous ? "Anonymous Funder" : funder.name}
                             </h2>
                             <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
-                                {funder.geographicFocus && (
-                                    <span style={metaBadgeStyle}><MapPin size={14} />{funder.geographicFocus}</span>
+                                {funder.geographicMandate && (
+                                    <span style={metaBadgeStyle}><MapPin size={14} />{funder.geographicMandate}</span>
                                 )}
                                 {funder.matchPercentage !== undefined && (
                                     <span style={metaBadgeStyle}>{funder.matchPercentage}% Match</span>
                                 )}
-                                {funder.investmentType && (
-                                    <span style={metaBadgeStyle}>{funder.investmentType}</span>
+                                {funder.fundingInstrument && (
+                                    <span style={metaBadgeStyle}>{funder.fundingInstrument}</span>
                                 )}
                             </div>
                         </div>
@@ -78,8 +82,6 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
                                     <InfoItem label="Registered Name"     value={funder.anonymous ? "Anonymous" : overview.registeredName} />
                                     <InfoItem label="Trading Name"        value={overview.tradingName} />
                                     <InfoItem label="Registration No."    value={overview.registrationNumber} />
-                                    <InfoItem label="Tax Number"          value={overview.taxNumber} />
-                                    <InfoItem label="VAT Number"          value={overview.vatRegistrationNumbers} />
                                     <InfoItem label="Years in Operation"  value={overview.yearsInOperation} />
                                 </div>
                                 <div style={cardStyle}>
@@ -112,12 +114,12 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
                                     </h3>
                                     <div style={gridStyle}>
                                         <div>
-                                            <InfoItem label="Fund Size"         value={fund.size} />
+                                            <InfoItem label="Fund Size"         value={rand(fund.size)} />
                                             <InfoItem label="Fund Structure"    value={fund.fundStructure} />
                                             <InfoItem label="Legal Structure"   value={fund.fundLegalStructure} />
-                                            <InfoItem label="Minimum Ticket"    value={fund.minimumTicket} />
-                                            <InfoItem label="Maximum Ticket"    value={fund.maximumTicket} />
-                                            <InfoItem label="Average Deal Size" value={fund.averageDealSize} />
+                                            <InfoItem label="Minimum Ticket"    value={rand(fund.minimumTicket)} />
+                                            <InfoItem label="Maximum Ticket"    value={rand(fund.maximumTicket)} />
+                                            <InfoItem label="Average Deal Size" value={rand(fund.averageDealSize)} />
                                             <InfoItem label="Revenue Threshold" value={fund.revenueThreshold} />
                                         </div>
                                         <div>
@@ -140,7 +142,7 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
                             <div style={gridStyle}>
                                 <div style={cardStyle}>
                                     <h3 style={cardTitleStyle}><BarChart3 size={18} />Investment Preferences</h3>
-                                    <InfoItem label="Investment Focus"  value={prefs.investmentFocus} />
+                                    <InfoItem label="Investment Focus"  value={formatArr(prefs.investmentFocus)} />
                                     <InfoItem label="Investment Stage"  value={formatArr(prefs.investmentStage)} />
                                     <InfoItem label="Sector Focus"      value={formatArr(prefs.sectorFocus)} />
                                     <InfoItem label="Geographic Focus"  value={formatArr(prefs.geographicFocus)} />
@@ -150,13 +152,12 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
                                 <div style={cardStyle}>
                                     <h3 style={cardTitleStyle}><Globe size={18} />Match Summary</h3>
                                     <InfoItem label="Match %"         value={funder.matchPercentage ? `${funder.matchPercentage}%` : null} />
-                                    <InfoItem label="Sector Focus"    value={funder.sectorFocus} />
-                                    <InfoItem label="Target Stage"    value={funder.targetStage} />
-                                    <InfoItem label="Ticket Size"     value={funder.ticketSize} />
-                                    <InfoItem label="Pipeline Stage"  value={funder.pipelineStage} />
+                                    <InfoItem label="Sector Focus"    value={funder.sectorMandate} />
+                                    <InfoItem label="Target Stage"    value={funder.businessStage} />
+                                    <InfoItem label="Ticket Size"     value={funder.fundingRange} />
                                     <InfoItem label="Support Offered" value={funder.supportOffered} />
-                                    <InfoItem label="Deadline"        value={funder.deadline} />
-                                    <InfoItem label="Waiting Time"    value={funder.waitingTime} />
+                                    <InfoItem label="Deadline"        value={brief.applicationDeadline || funder.deadline} />
+                                    <InfoItem label="Review Time"     value={funder.reviewTime} />
                                 </div>
                             </div>
                         </div>
@@ -168,6 +169,7 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
                             <div style={cardStyle}>
                                 <h3 style={cardTitleStyle}><FileText size={18} />Application Process</h3>
                                 <InfoItem label="Application Window"       value={brief.applicationWindow} />
+                                <InfoItem label="Application Deadline"     value={brief.applicationDeadline} />
                                 <InfoItem label="Typical Deal Close Time"  value={brief.typicalDealClosingTime} />
                                 <InfoItem label="Estimated Review Time"    value={brief.estimatedReviewTime} />
                                 <InfoItem label="Overview & Objectives"    value={brief.overviewObjectives} />
@@ -180,7 +182,7 @@ const FunderDetailsModal = ({ funder, isOpen, onClose }) => {
                                     <h3 style={cardTitleStyle}><FileText size={18} />Required Documents</h3>
                                     {brief.coreDocuments.map((doc, i) => (
                                         <div key={i} style={{ padding:"6px 0", borderBottom:"1px solid #f0e6dd", fontSize:"0.8rem", color:"#5D2A0A" }}>
-                                            • {doc}
+                                            • {formatDocumentLabel(LEGACY_DOC_IDS[doc] || doc)}
                                         </div>
                                     ))}
                                 </div>

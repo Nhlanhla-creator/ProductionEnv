@@ -22,6 +22,9 @@ const cipcStatusOptions = [
 ]
 
 export default function LegalCompliance({ data = {}, updateData }) {
+  // Option values are "None" and "Exempt" (capitalised), so compare lower-case.
+  const bbbeeRequired = !!data.bbbeeLevel && !["none", "exempt"].includes(String(data.bbbeeLevel).toLowerCase())
+
   const handleChange = (e) => {
     const { name, value } = e.target
     updateData({ [name]: value })
@@ -54,7 +57,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
           </FormField>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Pin Number" required>
+            <FormField label="Tax Compliance PIN" required>
               <input
                 type="text"
                 name="taxClearanceNumber"
@@ -132,7 +135,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
 
             <FormField
               label="Certificate Renewal Date"
-              required={data.bbbeeLevel && data.bbbeeLevel !== "none" && data.bbbeeLevel !== "exempt"}
+              required={bbbeeRequired}
             >
               <input
                 type="date"
@@ -140,7 +143,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
                 value={data.bbbeeCertRenewalDate || ""}
                 onChange={handleDateChange}
                 className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                required={data.bbbeeLevel && data.bbbeeLevel !== "none" && data.bbbeeLevel !== "exempt"}
+                required={bbbeeRequired}
               />
             </FormField>
           </div>
@@ -254,7 +257,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
           <FileUpload
             label="B-BBEE Certificate"
             accept=".pdf,.jpg,.jpeg,.png"
-            required={data.bbbeeLevel && data.bbbeeLevel !== "none" && data.bbbeeLevel !== "exempt"}
+            required={bbbeeRequired}
             onChange={(files) => handleFileChange("bbbeeCert", files)}
             value={data.bbbeeCert || []}
           />

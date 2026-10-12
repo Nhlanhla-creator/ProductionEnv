@@ -7,7 +7,9 @@ import { doc, onSnapshot, updateDoc, setDoc, getDoc, collection, getDocs } from 
 import { API_KEYS } from "../../API" // Make sure this path is correct
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
+export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey, userId: propUserId }) {
+  // The profile whose scores are shown: passed by the Dashboard (company owner's, or own), else the logged-in user
+  const profileUid = propUserId || auth?.currentUser?.uid
   const [showModal, setShowModal] = useState(false)
   const [leadershipScore, setLeadershipScore] = useState(0)
   const [scoreBreakdown, setScoreBreakdown] = useState([])
@@ -140,7 +142,7 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
   }
 
   const refreshAiEvaluation = async () => {
-    const userId = auth?.currentUser?.uid
+    const userId = profileUid
     if (!userId) return
 
     try {
@@ -164,9 +166,9 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
   }
 
   useEffect(() => {
-    if (!auth?.currentUser?.uid) return
+    if (!profileUid) return
 
-    const docRef = doc(db, "universalProfiles", auth.currentUser.uid)
+    const docRef = doc(db, "universalProfiles", profileUid)
     const unsubscribe = onSnapshot(docRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data()
@@ -182,10 +184,10 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
       }
     })
     return () => unsubscribe()
-  }, [auth?.currentUser?.uid, isEvaluating])
+  }, [profileUid, isEvaluating])
 
   const manualRun = async () => {
-    const userId = auth?.currentUser?.uid
+    const userId = profileUid
     if (!userId) return
 
     const result = await runAiEvaluation(userId)
@@ -223,9 +225,9 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
   };
 
   useEffect(() => {
-    if (!auth?.currentUser?.uid || !apiKey) return
+    if (!profileUid || !apiKey) return
 
-    const userId = auth.currentUser.uid
+    const userId = profileUid
     const profileRef = doc(db, "universalProfiles", userId)
     const aiEvalRef = doc(db, "aiLeadershipEvaluation", userId)
 
@@ -268,7 +270,7 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
       }
     })
     return () => unsubscribe()
-  }, [auth?.currentUser?.uid, apiKey, isEvaluating])
+  }, [profileUid, apiKey, isEvaluating])
 
   const fetchExtractedCvData = async (userId) => {
     if (!userId) return []
@@ -337,7 +339,7 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
         ...(profileData?.ownershipManagement?.executives || []).map((e, i) => ({ ...e, role: 'executive', index: i }))
       ]
 
-      const evaluatedUserId = userId || auth?.currentUser?.uid
+      const evaluatedUserId = userId || profileUid
       const extractedCvs = await fetchExtractedCvData(evaluatedUserId)
       console.log(`Loaded ${extractedCvs.length} extracted CV record(s) from userCVData`)
 
@@ -489,7 +491,7 @@ do not punish for being unable to verify qualifications if CVs are missing, but 
 
       const result = await sendMessageToChatGPT(combinedMessage)
 
-      const currentUserId = auth?.currentUser?.uid
+      const currentUserId = profileUid
       if (currentUserId) {
         const aiEvalRef = doc(db, "aiLeadershipEvaluation", currentUserId)
         await updateDoc(aiEvalRef, {

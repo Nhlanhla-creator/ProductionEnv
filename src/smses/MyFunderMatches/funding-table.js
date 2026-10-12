@@ -68,6 +68,12 @@ import {
   formatInvestmentStage,
   formatSupport,
   formatWaitingTime,
+  buildScoringFund,
+  buildFundRequirements,
+  evaluateFundRequirements,
+  resolveTicketRange,
+  DEFAULT_MIN_BIG_SCORE,
+  CATEGORY_LABELS,
 } from "./funderMatching"
 import { RESPONSIVENESS_COLLECTION, ResponsivenessBadge, responsivenessSortValue } from "./responsiveness"
 
@@ -120,58 +126,7 @@ export const fundKeyOf = (funderId, fundName) => `${funderId}__${fundName}`
 export const applicationIdOf = (smeId, funderId, fundName) => `${smeId}__${funderId}__${fundName}`
 
 /* Default only. Each funder's own generalInvestmentPreference.minimumBigScore wins. */
-export const BIG_SCORE_MINIMUM = 75
-
-/* ─── Funder minimums (generalInvestmentPreference) ─────────────────────── */
-const buildRequirements = (prefs = {}) => ({
-  minBigScore: normalizeAmount(prefs.minimumBigScore) || BIG_SCORE_MINIMUM,
-  minCompliance: normalizeAmount(prefs.minimumComplianceScore),
-  minFinancial: normalizeAmount(prefs.minimumFinancialStrength),
-  minOperational: normalizeAmount(prefs.minimumOperationalStrength),
-  minRevenue: normalizeAmount(prefs.minimumRevenue),
-  minYears: normalizeAmount(prefs.minimumYearsTrading),
-})
-
-/* Returns what the SME misses. BIG Score is judged on the funder-weighted
-   score; pillar minimums are skipped when that pillar has no score. */
-const evaluateRequirements = (fund, { bigScore, evaluation, profile }) => {
-  const req = fund.requirements || buildRequirements({})
-  const unmet = []
-  const num = (v) => (v === null || v === undefined || v === "" ? NaN : Number(v))
-  const scores = evaluation?.scores || {}
-
-  const effective = Number.isFinite(fund.adjustedBigScore?.score) ? fund.adjustedBigScore.score : num(bigScore)
-  if (!Number.isFinite(effective) || effective < req.minBigScore) {
-    unmet.push({
-      key: "bigScore",
-      label: "BIG Score",
-      required: `${req.minBigScore}%`,
-      actual: Number.isFinite(effective) ? `${effective}%` : "not scored yet",
-    })
-  }
-  const pillar = (key, label, min, raw) => {
-    const v = num(raw)
-    if (min > 0 && Number.isFinite(v) && v < min) unmet.push({ key, label, required: `${min}%`, actual: `${Math.round(v)}%` })
-  }
-  pillar("compliance", "Compliance score", req.minCompliance, scores.compliance)
-  pillar("financial", "Financial strength (Capital Appeal)", req.minFinancial, scores.fundability)
-  pillar("operational", "Operational strength", req.minOperational, scores.operational)
-
-  const revenue = normalizeAmount(profile?.financialOverview?.annualRevenue)
-  if (req.minRevenue > 0 && revenue < req.minRevenue) {
-    unmet.push({
-      key: "revenue",
-      label: "Annual revenue",
-      required: `R${req.minRevenue.toLocaleString("en-ZA")}`,
-      actual: revenue ? `R${revenue.toLocaleString("en-ZA")}` : "not declared",
-    })
-  }
-  const years = num(profile?.entityOverview?.yearsInOperation)
-  if (req.minYears > 0 && Number.isFinite(years) && years < req.minYears) {
-    unmet.push({ key: "years", label: "Years trading", required: `${req.minYears}`, actual: `${years}` })
-  }
-  return unmet
-}
+export const BIG_SCORE_MINIMUM = DEFAULT_MIN_BIG_SCORE
 
 /* ─── Funder document ids -> My Documents labels ──────────────────────────
    Documents live at profile.documents.<getDocumentId(label)> (single) or
@@ -197,6 +152,22 @@ const FUNDER_DOC_LABELS = {
   ids_directors: "IDs of Directors & Shareholders",
   loan_agreements: "Loan Agreements",
   client_references: "Client References & Support Letters",
+  // Conditional documents (debt / equity). Check these labels exist in documentMapping.
+  asset_register: "Asset Register",
+  bank_statements: "Bank Statements",
+  cap_table: "Cap Table",
+  shareholder_agreements: "Shareholder Agreements",
+}
+
+/* Ids saved by the old investor option list, mapped by the label the investor
+   saw (for example "Tax Clearance Certificate" used to be stored as team_bios,
+   which this table reads as a CV). */
+const LEGACY_DOC_IDS = {
+  financials: "company_registration",
+  market_analysis: "proof_of_address",
+  team_bios: "tax_clearance",
+  compliance_cert: "bbbee_certificate",
+  letters: "client_references",
 }
 const compactKey = (s) => (s || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "")
 const BAD_DOC_STATUS = ["wrong_type", "name_mismatch", "incomplete", "rejected", "expired"]
@@ -706,19 +677,15 @@ const mapFund = (investor, funderId, fund, index) => {
   const isAnonymous = investor.anonymous === true
   const funderName = isAnonymous ? "Anonymous funder" : overview.registeredName || overview.tradingName || "Unnamed funder"
 
-  const minTicket =
-    fundProfile?.minimumTicket ?? fundProfile?.minTicket ?? fund.minimumTicket ?? fund.minTicket ??
-    form.fundDetails?.minimumTicket ?? fundProfile?.ticketSize?.min ?? 0
-  const maxTicket =
-    fundProfile?.maximumTicket ?? fundProfile?.maxTicket ?? fund.maximumTicket ?? fund.maxTicket ??
-    form.fundDetails?.maximumTicket ?? fundProfile?.ticketSize?.max ?? fund.size ?? 0
+  const { minTicket, maxTicket } = resolveTicketRange(form, fund, index)
 
   const instruments = asList(prefs.investmentFocus)
   const stages = asList(prefs.investmentStage)
   const sectors = asList(prefs.sectorFocus)
   const geography = [...asList(prefs.geographicFocus), ...asList(prefs.selectedProvinces), ...asList(prefs.selectedCountries)]
 
-  const documentCount = asList(brief.coreDocuments).length
+  const coreDocs = [...new Set(asList(brief.coreDocuments).map((id) => LEGACY_DOC_IDS[id] || id))]
+  const documentCount = coreDocs.length
 
   return {
     id: fundKeyOf(funderId, fund.name || `fund-${index}`),
@@ -728,20 +695,7 @@ const mapFund = (investor, funderId, fund, index) => {
     anonymous: isAnonymous,
     fullProfile: form,
 
-    scoringFund: {
-      ...fund,
-      stages,
-      sectorFocus: sectors,
-      sectorExclusions: asList(prefs.sectorExclusions),
-      geographicFocus: asList(prefs.geographicFocus),
-      selectedProvinces: asList(prefs.selectedProvinces),
-      selectedCountries: asList(prefs.selectedCountries),
-      instruments,
-      minimumTicket: minTicket,
-      maximumTicket: maxTicket,
-      supportOffered: asList(fund.supportOffered),
-      dueDiligenceTimeline: fund.dueDiligenceTimeline || prefs.typicalDealClosingTime,
-    },
+    scoringFund: buildScoringFund(form, fund, index),
 
     fundingInstrument: formatLabel(instruments.join(", ")) || "Various",
     fundingRange: formatTicketSize(minTicket, maxTicket),
@@ -763,11 +717,11 @@ const mapFund = (investor, funderId, fund, index) => {
     coFundingRequirement: fundProfile?.coFundingRequirement || fund.coFundingRequirement || "-",
     supportOffered: formatSupport(fund.supportOffered),
     documentCount,
-    requiredDocuments: asList(brief.coreDocuments),
+    requiredDocuments: coreDocs,
     website: contact.website || null,
 
     scoreWeightings: getFunderScoreWeightings(form),
-    requirements: buildRequirements(prefs),
+    requirements: buildFundRequirements(prefs),
 
     matchPercentage: 0,
     matchBreakdown: null,
@@ -1179,6 +1133,16 @@ export function FundingTable({
         const fundList = investor.formData?.fundDetails?.funds || []
         fundList.forEach((fund, index) => {
           const row = mapFund(investor, docSnap.id, fund, index)
+          // Debt / equity documents the investor ticked apply only to businesses seeking that instrument.
+          const investorBrief = row.fullProfile.applicationBrief || {}
+          const conditionalDocs = [
+            ...(smeProfile.instruments.includes("debt") ? asList(investorBrief.debtDocuments) : []),
+            ...(smeProfile.instruments.includes("equity") ? asList(investorBrief.equityDocuments) : []),
+          ]
+          if (conditionalDocs.length > 0) {
+            row.requiredDocuments = [...new Set([...row.requiredDocuments, ...conditionalDocs])]
+            row.documentCount = row.requiredDocuments.length
+          }
           const result = calculateHybridScore(smeProfile, row.scoringFund)
           const adjusted = calculateAdjustedBigScore(evaluation, row.scoreWeightings)
           rows.push({ ...row, matchPercentage: result.score, matchBreakdown: result.breakdown, adjustedBigScore: adjusted })
@@ -1580,7 +1544,12 @@ export function FundingTable({
       toast("info", "Checking your BIG Score...")
       return
     }
-    const unmet = evaluateRequirements(fund, { bigScore, evaluation: bigEvaluation, profile: profileData })
+    const unmet = evaluateFundRequirements(fund.requirements, {
+      bigScore,
+      adjusted: fund.adjustedBigScore,
+      evaluation: bigEvaluation,
+      profile: profileData,
+    })
     if (unmet.length > 0) {
       setGateFund(fund)
       setGateUnmet(unmet)
@@ -2294,8 +2263,8 @@ export function FundingTable({
             <span
               className="inline-block px-2.5 py-1 rounded-full text-xs font-bold"
               style={{
-                backgroundColor: adjusted.score >= r.requirements.minBigScore ? "#E8F5E8" : "#FFF3E0",
-                color: adjusted.score >= r.requirements.minBigScore ? "#388E3C" : "#F57C00",
+                backgroundColor: adjusted.score >= r.requirements.minimumBigScore ? "#E8F5E8" : "#FFF3E0",
+                color: adjusted.score >= r.requirements.minimumBigScore ? "#388E3C" : "#F57C00",
               }}
             >
               {adjusted.score}
@@ -2304,6 +2273,14 @@ export function FundingTable({
               <div className="text-[10px] text-[#a89482] mt-0.5">
                 {adjusted.delta > 0 ? "+" : ""}
                 {adjusted.delta} vs base {adjusted.base}
+              </div>
+            )}
+            {adjusted.provisional && (
+              <div
+                className="text-[10px] text-[#a89482] mt-0.5"
+                title={`No score yet for: ${adjusted.missing.map((k) => CATEGORY_LABELS[k] || k).join(", ")}`}
+              >
+                provisional
               </div>
             )}
           </td>
@@ -2414,7 +2391,7 @@ export function FundingTable({
   }
 
   const eligible = bigScore !== null && bigScore >= BIG_SCORE_MINIMUM
-  const gateMin = gateFund?.requirements?.minBigScore ?? BIG_SCORE_MINIMUM
+  const gateMin = gateFund?.requirements?.minimumBigScore ?? BIG_SCORE_MINIMUM
   const gateScore = Number.isFinite(gateFund?.adjustedBigScore?.score) ? gateFund.adjustedBigScore.score : bigScore
 
   /* Every chip-list filter is driven by this one array. */

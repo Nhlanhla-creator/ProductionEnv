@@ -1,460 +1,394 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 
-const businessStages = [
-  { id: "ideation", name: "Ideation", description: "Concept stage, idea validation" },
-  { id: "prototype", name: "Prototype", description: "MVP development, testing" },
-  { id: "startup", name: "Startup", description: "Early revenue, product-market fit" },
-  { id: "early-growth", name: "Early Growth", description: "Scaling operations" },
-  { id: "growth", name: "Growth", description: "Expanding market share" },
-  { id: "scale-up", name: "Scale-up", description: "Rapid expansion" },
-  { id: "mature", name: "Mature", description: "Established business" },
-]
+/* ════════════════════════════════════════════════════════════════════════════
+   Investment Requirements — the investor's own criteria.
 
-const stageWeights = {
-  ideation:      { compliance: 32, legitimacy: 13, leadership: 10, governance: 13, capitalAppeal: 32 },
-  prototype:     { compliance: 32, legitimacy: 13, leadership: 10, governance: 13, capitalAppeal: 32 },
-  startup:       { compliance: 32, legitimacy: 13, leadership: 10, governance: 13, capitalAppeal: 32 },
-  "early-growth":{ compliance: 32, legitimacy: 13, leadership: 10, governance: 13, capitalAppeal: 32 },
-  growth:        { compliance: 32, legitimacy: 13, leadership: 10, governance: 13, capitalAppeal: 32 },
-  "scale-up":    { compliance: 32, legitimacy: 13, leadership: 10, governance: 13, capitalAppeal: 32 },
-  mature:        { compliance: 32, legitimacy: 13, leadership: 10, governance: 13, capitalAppeal: 32 },
-}
+   The investor rates how much each item matters to their investment decision
+   (0–100). Those ratings are the criteria. Category ids are the same keys the
+   BIG Score uses in bigEvaluations/{smeId}.scores, so what is saved lines up
+   with the score it is applied to:
+
+     compliance · legitimacy · fundability (Capital Appeal)
+     · governanceLeadership · operational
+
+   Saved under investmentRequirements:
+     <categoryId>Scores   item ratings, e.g. complianceScores
+     categoryScores       average rating per category (0–100)
+     weights              share of 100 per category, from the ratings; null
+                          until at least one item is rated, so matching falls
+                          back to the plain BIG Score for an investor who has
+                          not set criteria
+   ════════════════════════════════════════════════════════════════════════ */
+
+const businessStages = [
+  { id: "ideation", label: "Ideation Stage" },
+  { id: "prototype", label: "Prototype/MVP Stage" },
+  { id: "startup", label: "Startup Stage" },
+  { id: "early-growth", label: "Early Growth Stage" },
+  { id: "growth", label: "Growth Stage" },
+  { id: "scale-up", label: "Scale-up Stage" },
+  { id: "mature", label: "Mature Business" },
+]
 
 const categories = [
   {
     id: "compliance",
-    label: "Compliance",
-    color: "#533DB7",
-    weight: "compliance",
+    title: "Compliance",
+    icon: "📋",
     items: [
-      { id: "registrationCertificate", name: "Company registration certificate" },
-      { id: "taxClearance",            name: "Tax clearance certificate" },
-      { id: "bbbeeCertificate",        name: "B-BBEE certificate" },
-      { id: "shareRegister",           name: "Share register" },
-      { id: "directorIDs",             name: "IDs of directors & shareholders" },
-      { id: "addressProof",            name: "Proof of address" },
-      { id: "bankLetter",              name: "Bank confirmation letter" },
-      { id: "coidaCertificate",        name: "COIDA letter of good standing" },
-      { id: "industryLicenses",        name: "Industry accreditations" },
+      { id: "registrationCertificate", label: "Company registration certificate" },
+      { id: "taxClearance", label: "Tax clearance certificate" },
+      { id: "bbbeeCertificate", label: "B-BBEE certificate" },
+      { id: "shareRegister", label: "Share register" },
+      { id: "directorIDs", label: "IDs of directors & shareholders" },
+      { id: "addressProof", label: "Proof of address" },
+      { id: "bankLetter", label: "Bank confirmation letter" },
+      { id: "coidaCertificate", label: "COIDA letter of good standing" },
+      { id: "industryLicenses", label: "Industry accreditations" },
     ],
   },
   {
     id: "legitimacy",
-    label: "Legitimacy",
-    color: "#0F6E56",
-    weight: "legitimacy",
+    title: "Legitimacy",
+    icon: "✅",
     items: [
-      { id: "professionalWebsite", name: "Professional website" },
-      { id: "businessEmail",       name: "Business email domain" },
-      { id: "companyLogo",         name: "Company logo & branding" },
-      { id: "linkedinPage",        name: "LinkedIn company page" },
-      { id: "clientTestimonials",  name: "Client testimonials / references" },
-      { id: "caseStudies",         name: "Case studies / portfolio" },
-      { id: "pressMentions",       name: "News / press mentions" },
-      { id: "googleBusiness",      name: "Google business profile" },
+      { id: "professionalWebsite", label: "Professional website" },
+      { id: "businessEmail", label: "Business email domain" },
+      { id: "companyLogo", label: "Company logo & branding" },
+      { id: "linkedinPage", label: "LinkedIn company page" },
+      { id: "clientTestimonials", label: "Client testimonials / references" },
+      { id: "caseStudies", label: "Case studies / portfolio" },
+      { id: "pressMentions", label: "News / press mentions" },
+      { id: "googleBusiness", label: "Google business profile" },
     ],
   },
   {
-    id: "leadership",
-    label: "Leadership",
-    color: "#993C1D",
-    weight: "leadership",
+    id: "governanceLeadership",
+    title: "Governance & Leadership",
+    icon: "👥",
     items: [
-      { id: "directorCVs",      name: "Director CVs / resumes" },
-      { id: "executiveCVs",     name: "Executive team CVs" },
-      { id: "linkedinProfiles", name: "LinkedIn profiles" },
-      { id: "certifications",   name: "Professional certifications" },
-      { id: "boardMinutes",     name: "Board meeting minutes" },
-      { id: "orgChart",         name: "Organizational chart" },
-      { id: "successionPlan",   name: "Succession plan" },
-      { id: "advisoryBoard",    name: "Advisory board" },
+      { id: "directorCVs", label: "Director CVs / resumes" },
+      { id: "executiveCVs", label: "Executive team CVs" },
+      { id: "linkedinProfiles", label: "LinkedIn profiles" },
+      { id: "certifications", label: "Professional certifications" },
+      { id: "boardMinutes", label: "Board meeting minutes" },
+      { id: "orgChart", label: "Organizational chart" },
+      { id: "successionPlan", label: "Succession plan" },
+      { id: "advisoryBoard", label: "Advisory board" },
+      { id: "boardStructure", label: "Board structure" },
+      { id: "strategicPlanning", label: "Strategic planning" },
+      { id: "riskManagement", label: "Risk management" },
+      { id: "transparency", label: "Transparency & reporting" },
+      { id: "policies", label: "Policies & documentation" },
+      { id: "complianceFramework", label: "Compliance framework" },
+      { id: "internalControls", label: "Internal controls" },
+      { id: "ethicsCode", label: "Code of ethics" },
     ],
   },
   {
-    id: "governance",
-    label: "Governance",
-    color: "#854F0B",
-    weight: "governance",
+    // Proposed items for the new Operational pillar. Edit labels freely;
+    // ids are stored, so keep an id once investors have rated it.
+    id: "operational",
+    title: "Operational Strength",
+    icon: "⚙️",
     items: [
-      { id: "boardStructure",      name: "Board structure" },
-      { id: "strategicPlanning",   name: "Strategic planning" },
-      { id: "riskManagement",      name: "Risk management" },
-      { id: "transparency",        name: "Transparency & reporting" },
-      { id: "policies",            name: "Policies & documentation" },
-      { id: "complianceFramework", name: "Compliance framework" },
-      { id: "internalControls",    name: "Internal controls" },
-      { id: "ethicsCode",          name: "Code of ethics" },
+      { id: "operatingProcesses", label: "Documented operating processes (SOPs)" },
+      { id: "qualityManagement", label: "Quality management or certification" },
+      { id: "supplyChain", label: "Supplier agreements and supply-chain resilience" },
+      { id: "customerContracts", label: "Customer contracts and repeat business" },
+      { id: "capacity", label: "Production or service capacity" },
+      { id: "systemsTechnology", label: "Systems and technology (accounting, CRM, ERP)" },
+      { id: "staffManagement", label: "Staff contracts and HR practices" },
+      { id: "healthSafety", label: "Health, safety and environmental compliance" },
     ],
   },
   {
-    id: "capitalAppeal",
-    label: "Capital appeal",
-    color: "#185FA5",
-    weight: "capitalAppeal",
+    id: "fundability",
+    title: "Capital Appeal",
+    icon: "💰",
     items: [
-      { id: "auditedFinancials",   name: "Audited financial statements" },
-      { id: "businessPlan",        name: "Business plan" },
-      { id: "pitchDeck",           name: "Pitch deck" },
-      { id: "financialProjections",name: "Financial projections" },
-      { id: "creditReport",        name: "Credit report" },
-      { id: "managementAccounts",  name: "Management accounts" },
-      { id: "capTable",            name: "Cap table" },
-      { id: "dueDiligence",        name: "Due diligence reports" },
+      { id: "auditedFinancials", label: "Audited financial statements" },
+      { id: "businessPlan", label: "Business plan" },
+      { id: "pitchDeck", label: "Pitch deck" },
+      { id: "financialProjections", label: "Financial projections" },
+      { id: "creditReport", label: "Credit report" },
+      { id: "managementAccounts", label: "Management accounts" },
+      { id: "capTable", label: "Cap table" },
+      { id: "dueDiligence", label: "Due diligence reports" },
     ],
   },
 ]
 
-// ── helpers ────────────────────────────────────────────────────────────────────
+const CATEGORY_IDS = categories.map((c) => c.id)
 
-function calcAvg(scores, items) {
-  if (!items.length) return 0
-  const total = items.reduce((sum, item) => sum + (scores[item.id] || 0), 0)
-  return Math.round(total / items.length)
+/* Item ratings saved by earlier versions are carried over: leadership and
+   governance were separate cards, and Capital Appeal was saved under
+   capitalAppealScores. Only ids that still exist in the category are kept, so
+   old junk keys drop out. */
+const pick = (obj, ids) => Object.fromEntries(ids.filter((id) => obj && obj[id] !== undefined && obj[id] !== null).map((id) => [id, obj[id]]))
+
+const readSavedScores = (data, cat) => {
+  const ids = cat.items.map((i) => i.id)
+  switch (cat.id) {
+    case "governanceLeadership":
+      return pick(
+        { ...(data.leadershipScores || {}), ...(data.governanceScores || {}), ...(data.governanceLeadershipScores || {}) },
+        ids,
+      )
+    case "fundability":
+      return pick({ ...(data.capitalAppealScores || {}), ...(data.fundabilityScores || {}) }, ids)
+    default:
+      return pick(data[`${cat.id}Scores`], ids)
+  }
 }
 
-function badgeStyle(score) {
-  if (score >= 60) return { background: "#EAF3DE", color: "#3B6D11" }
-  if (score >= 40) return { background: "#FAEEDA", color: "#854F0B" }
-  return { background: "#FCEBEB", color: "#A32D2D" }
+const LEGACY_KEYS_TO_CLEAR = {
+  leadershipScores: null,
+  governanceScores: null,
+  capitalAppealScores: null,
+  capitalScores: null,
+  marketScores: null,
+  productScores: null,
+  bigScore: null,
 }
 
-function levelText(score) {
-  if (score >= 80) return "High priority"
-  if (score >= 60) return "Moderate-high"
-  if (score >= 40) return "Moderate"
-  if (score >= 20) return "Low priority"
-  return "Minimal"
+const clampScore = (raw) => {
+  if (raw === "") return 0
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(100, n))
 }
 
-// ── CategoryCard ───────────────────────────────────────────────────────────────
-
-function CategoryCard({ category, scores, onScoreChange, weightPct, fullWidth }) {
-  const [open, setOpen] = useState(true)
-  const avg = calcAvg(scores, category.items)
-  const bs = badgeStyle(avg)
-
-  return (
-    <div
-      style={{
-        background: "white",
-        border: "0.5px solid #e5e7eb",
-        borderRadius: 12,
-        overflow: "hidden",
-        gridColumn: fullWidth ? "1 / -1" : undefined,
-      }}
-    >
-      {/* header */}
-      <div
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "10px 14px",
-          borderBottom: open ? "0.5px solid #f0f0f0" : "none",
-          cursor: "pointer",
-          userSelect: "none",
-        }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 500, fontSize: 13, color: "#111" }}>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: category.color,
-              flexShrink: 0,
-            }}
-          />
-          {category.label}
-        </span>
-
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              ...bs,
-              fontSize: 11,
-              fontWeight: 500,
-              padding: "2px 8px",
-              borderRadius: 20,
-            }}
-          >
-            {avg}
-          </span>
-          <span style={{ fontSize: 11, color: "#9ca3af" }}>{weightPct}%</span>
-          {open ? (
-            <ChevronUp size={14} color="#9ca3af" />
-          ) : (
-            <ChevronDown size={14} color="#9ca3af" />
-          )}
-        </span>
-      </div>
-
-      {/* table */}
-      {open && (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ background: "#f9fafb", borderBottom: "0.5px solid #f0f0f0" }}>
-              <th style={{ padding: "6px 14px", textAlign: "left", fontWeight: 400, fontSize: 11, color: "#6b7280" }}>
-                Requirement
-              </th>
-              <th style={{ padding: "6px 14px", textAlign: "center", fontWeight: 400, fontSize: 11, color: "#6b7280", width: 90 }}>
-                Weighting
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {category.items.map((item, idx) => (
-              <tr
-                key={item.id}
-                style={{
-                  borderBottom: idx < category.items.length - 1 ? "0.5px solid #f0f0f0" : "none",
-                  background: idx % 2 === 0 ? "white" : "#fafafa",
-                }}
-              >
-                <td style={{ padding: "6px 14px", color: "#374151" }}>{item.name}</td>
-                <td style={{ padding: "6px 14px", textAlign: "center" }}>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={scores[item.id] ?? 0}
-                    onChange={(e) => {
-                      const v = Math.min(100, Math.max(0, parseInt(e.target.value) || 0))
-                      onScoreChange(item.id, v)
-                    }}
-                    style={{
-                      width: 56,
-                      padding: "4px 6px",
-                      border: "0.5px solid #d1d5db",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      textAlign: "center",
-                      background: "white",
-                      color: "#111",
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  )
+/* Shares that add up to exactly 100 (largest-remainder rounding). */
+const toWeights = (averages) => {
+  const total = CATEGORY_IDS.reduce((s, id) => s + (averages[id] || 0), 0)
+  if (total <= 0) return null
+  const raw = CATEGORY_IDS.map((id) => ({ id, exact: ((averages[id] || 0) / total) * 100 }))
+  const floored = raw.map((r) => ({ ...r, whole: Math.floor(r.exact), rem: r.exact - Math.floor(r.exact) }))
+  let left = 100 - floored.reduce((s, r) => s + r.whole, 0)
+  floored
+    .slice()
+    .sort((a, b) => b.rem - a.rem)
+    .forEach((r) => {
+      if (left > 0) {
+        r.whole += 1
+        left -= 1
+      }
+    })
+  return Object.fromEntries(floored.map((r) => [r.id, r.whole]))
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+const getScoreColor = (score) => (score >= 75 ? "#2e7d32" : score >= 50 ? "#a67c52" : score > 0 ? "#c0392b" : "#a89482")
 
 export default function InvestmentRequirements({ data = {}, updateData }) {
   const [businessStage, setBusinessStage] = useState(data.businessStage || "")
-  const [allScores, setAllScores] = useState(() => {
-    const initial = {}
-    categories.forEach((cat) => {
-      initial[cat.id] = data[`${cat.id}Scores`] || {}
-    })
-    return initial
-  })
-
-  const currentWeights = businessStage ? stageWeights[businessStage] : stageWeights.ideation
-
-  // compute per-category averages
-  const catAvgs = {}
-  categories.forEach((cat) => {
-    catAvgs[cat.id] = calcAvg(allScores[cat.id], cat.items)
-  })
-
-  // compute BIG score
-  const bigScore = Math.round(
-    categories.reduce((sum, cat) => sum + catAvgs[cat.id] * currentWeights[cat.weight], 0) / 100
+  const [expanded, setExpanded] = useState({})
+  const [allScores, setAllScores] = useState(() =>
+    Object.fromEntries(categories.map((cat) => [cat.id, readSavedScores(data, cat)])),
   )
 
-  // propagate changes upward
+  const averages = useMemo(
+    () =>
+      Object.fromEntries(
+        categories.map((cat) => {
+          const sum = cat.items.reduce((s, item) => s + (Number(allScores[cat.id]?.[item.id]) || 0), 0)
+          return [cat.id, Math.round(sum / cat.items.length)]
+        }),
+      ),
+    [allScores],
+  )
+
+  const weights = useMemo(() => toWeights(averages), [averages])
+  const overall = Math.round(CATEGORY_IDS.reduce((s, id) => s + averages[id], 0) / CATEGORY_IDS.length)
+  const ratedCount = categories.reduce(
+    (n, cat) => n + cat.items.filter((item) => Number(allScores[cat.id]?.[item.id]) > 0).length,
+    0,
+  )
+  const totalItems = categories.reduce((n, cat) => n + cat.items.length, 0)
+
   useEffect(() => {
-    if (!updateData) return
-    const payload = { businessStage, weights: currentWeights, bigScore, categoryScores: catAvgs }
-    categories.forEach((cat) => {
-      payload[`${cat.id}Scores`] = allScores[cat.id]
+    updateData({
+      businessStage,
+      weights,
+      categoryScores: averages,
+      ...Object.fromEntries(categories.map((cat) => [`${cat.id}Scores`, allScores[cat.id]])),
+      ...LEGACY_KEYS_TO_CLEAR,
     })
-    updateData(payload)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allScores, businessStage])
 
-  const handleScoreChange = (catId, itemId, value) => {
+  const handleScoreChange = (categoryId, itemId, raw) => {
     setAllScores((prev) => ({
       ...prev,
-      [catId]: { ...prev[catId], [itemId]: value },
+      [categoryId]: { ...prev[categoryId], [itemId]: clampScore(raw) },
     }))
   }
 
-  const bigBs = badgeStyle(bigScore)
+  const toggle = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
+
+  const card = {
+    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+    borderRadius: "16px",
+    border: "1px solid rgba(200, 182, 166, 0.3)",
+    overflow: "hidden",
+    marginBottom: "16px",
+  }
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 0 40px" }}>
-
-      {/* heading */}
-      <h2 style={{ fontSize: 20, fontWeight: 500, color: "#111", margin: "0 0 4px" }}>
-        Investment requirements
+    <div>
+      <h2 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#4a352f", marginBottom: "8px" }}>
+        Investment Requirements
       </h2>
-      <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 24px" }}>
-        Rate each item (0–100) based on its weighting in your investment decision. The BIG Score
-        aggregates across all categories.
+      <p style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "24px", maxWidth: "720px", lineHeight: 1.5 }}>
+        Rate how much each item matters to your investment decision, from 0 (irrelevant) to 100 (essential). Your
+        ratings are your criteria: they set the weight each BIG Score category carries when businesses are scored
+        against your fund. Leave everything at 0 to use the standard BIG Score.
       </p>
 
-      {/* stage selector */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          marginBottom: 24,
-        }}
-      >
-        <span style={{ fontSize: 13, color: "#6b7280", whiteSpace: "nowrap" }}>
-          Business stage
-        </span>
+      <div style={{ marginBottom: "24px", maxWidth: "420px" }}>
+        <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "#4a352f", marginBottom: "6px" }}>
+          Business stage you mainly invest in (optional)
+        </label>
         <select
           value={businessStage}
           onChange={(e) => setBusinessStage(e.target.value)}
-          style={{
-            padding: "6px 10px",
-            fontSize: 13,
-            borderRadius: 8,
-            border: "0.5px solid #d1d5db",
-            background: "white",
-            color: businessStage ? "#111" : "#9ca3af",
-            maxWidth: 280,
-          }}
+          style={{ width: "100%", padding: "10px 12px", border: "1px solid #c8b6a6", borderRadius: "8px", fontSize: "14px" }}
         >
-          <option value="">Select stage…</option>
+          <option value="">Select a stage</option>
           {businessStages.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name} — {s.description}
+              {s.label}
             </option>
           ))}
         </select>
       </div>
 
-      {businessStage && (
-        <>
-          {/* 2-column grid of category cards */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            {categories.map((cat, idx) => (
-              <CategoryCard
-                key={cat.id}
-                category={cat}
-                scores={allScores[cat.id]}
-                onScoreChange={(itemId, value) => handleScoreChange(cat.id, itemId, value)}
-                weightPct={currentWeights[cat.weight]}
-                fullWidth={idx === categories.length - 1}
-              />
-            ))}
+      {/* How the ratings turn into weights */}
+      <div
+        style={{
+          ...card,
+          padding: "20px",
+          display: "flex",
+          gap: "24px",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ textAlign: "center", minWidth: "110px" }}>
+          <div style={{ fontSize: "12px", color: "#7d5a50", fontWeight: 600, textTransform: "uppercase" }}>
+            Overall priority
           </div>
+          <div style={{ fontSize: "40px", fontWeight: 800, color: getScoreColor(overall) }}>{overall}</div>
+          <div style={{ fontSize: "11px", color: "#a89482" }}>
+            {ratedCount} of {totalItems} items rated
+          </div>
+        </div>
 
-          {/* BIG Score panel */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr auto",
-              gap: 24,
-              alignItems: "center",
-              background: "#f9fafb",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 12,
-              padding: "20px 24px",
-            }}
-          >
-            {/* breakdown bars */}
-            <div>
-              <p style={{ fontSize: 12, fontWeight: 500, color: "#6b7280", margin: "0 0 12px" }}>
-                Score breakdown
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {categories.map((cat) => (
-                  <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span
+        <div style={{ flex: 1, minWidth: "260px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "#4a352f", marginBottom: "8px" }}>
+            {weights ? "Weight each category carries in your matching" : "No criteria set yet: the standard BIG Score is used"}
+          </div>
+          {categories.map((cat) => (
+            <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              <span style={{ width: "170px", fontSize: "12px", color: "#4a352f" }}>{cat.title}</span>
+              <div style={{ flex: 1, height: "8px", background: "#e6d7c3", borderRadius: "4px", overflow: "hidden" }}>
+                <div
+                  style={{
+                    width: `${weights ? weights[cat.id] : 0}%`,
+                    height: "100%",
+                    background: "#a67c52",
+                    transition: "width 0.2s",
+                  }}
+                />
+              </div>
+              <span style={{ width: "36px", textAlign: "right", fontSize: "12px", fontWeight: 600, color: "#4a352f" }}>
+                {weights ? `${weights[cat.id]}%` : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {categories.map((cat) => {
+        const open = !!expanded[cat.id]
+        return (
+          <div key={cat.id} style={card}>
+            <div
+              onClick={() => toggle(cat.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 20px",
+                cursor: "pointer",
+                background: open ? "linear-gradient(135deg, #4a352f, #7d5a50)" : "transparent",
+                color: open ? "#faf7f2" : "#4a352f",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <span style={{ fontSize: "22px" }}>{cat.icon}</span>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: 700 }}>{cat.title}</div>
+                  <div style={{ fontSize: "12px", opacity: 0.8 }}>
+                    Average rating {averages[cat.id]}
+                    {weights ? ` · ${weights[cat.id]}% of matching` : ""}
+                  </div>
+                </div>
+              </div>
+              {open ? <ChevronUp size={22} /> : <ChevronDown size={22} />}
+            </div>
+
+            {open && (
+              <div style={{ padding: "16px 20px" }}>
+                {cat.items.map((item) => {
+                  const value = Number(allScores[cat.id]?.[item.id]) || 0
+                  return (
+                    <div
+                      key={item.id}
                       style={{
-                        fontSize: 12,
-                        color: "#6b7280",
-                        flex: 1,
                         display: "flex",
                         alignItems: "center",
-                        gap: 6,
+                        justifyContent: "space-between",
+                        gap: "16px",
+                        padding: "10px 0",
+                        borderBottom: "1px solid rgba(200, 182, 166, 0.25)",
                       }}
                     >
-                      <span
+                      <label htmlFor={`${cat.id}-${item.id}`} style={{ fontSize: "14px", color: "#4a352f", flex: 1 }}>
+                        {item.label}
+                      </label>
+                      <input
+                        id={`${cat.id}-${item.id}`}
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="5"
+                        inputMode="numeric"
+                        value={value === 0 ? "" : value}
+                        placeholder="0"
+                        onChange={(e) => handleScoreChange(cat.id, item.id, e.target.value)}
                         style={{
-                          display: "inline-block",
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: cat.color,
-                        }}
-                      />
-                      {cat.label} ({currentWeights[cat.weight]}%)
-                    </span>
-                    <div
-                      style={{
-                        flex: 2,
-                        height: 4,
-                        borderRadius: 2,
-                        background: "#e5e7eb",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${catAvgs[cat.id]}%`,
-                          height: "100%",
-                          borderRadius: 2,
-                          background: cat.color,
-                          transition: "width 0.3s",
+                          width: "80px",
+                          padding: "8px",
+                          textAlign: "center",
+                          border: "1px solid #c8b6a6",
+                          borderRadius: "8px",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          color: getScoreColor(value),
                         }}
                       />
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "#111", minWidth: 24, textAlign: "right" }}>
-                      {catAvgs[cat.id]}
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
-            </div>
-
-            {/* BIG Score circle */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-              <div
-                style={{
-                  width: 100,
-                  height: 100,
-                  borderRadius: "50%",
-                  border: "0.5px solid #e5e7eb",
-                  background: "white",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <span style={{ fontSize: 32, fontWeight: 500, lineHeight: 1, color: "#111" }}>
-                  {bigScore}
-                </span>
-                <span style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>BIG Score</span>
-              </div>
-              <span style={{ fontSize: 11, color: "#6b7280" }}>{levelText(bigScore)}</span>
-            </div>
+            )}
           </div>
-        </>
-      )}
+        )
+      })}
     </div>
   )
 }

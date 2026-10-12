@@ -55,6 +55,7 @@ const ROLE_ALIASES = {
   smes: "sme",
   smse: "sme",
   smses: "sme",
+  Business:"sme",
   business: "sme",
   businesses: "sme",
   npo: "sme",

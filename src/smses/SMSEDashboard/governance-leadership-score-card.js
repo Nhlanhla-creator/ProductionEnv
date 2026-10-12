@@ -469,7 +469,9 @@ function EvidenceGaps({ gaps }) {
 
 // ═════════════════════════════════════════════════════════════════════════
 
-export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey, onNavigate }) {
+export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey, onNavigate, userId: propUserId }) {
+  // The profile whose scores are shown: passed by the Dashboard (company owner's, or own), else the logged-in user
+  const profileUid = propUserId || auth?.currentUser?.uid
   const [showModal, setShowModal] = useState(false)
   const [assessment, setAssessment] = useState(null)
   const [potential, setPotential] = useState(null)
@@ -488,7 +490,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   }, [showModal])
 
   useEffect(() => {
-    const userId = auth?.currentUser?.uid
+    const userId = profileUid
     if (!userId) return
     let cancelled = false
     ;(async () => {
@@ -500,7 +502,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       }
     })()
     return () => { cancelled = true }
-  }, [auth?.currentUser?.uid])
+  }, [profileUid])
 
   // ── Score — a pure function of (profile, CVs). The AI is not in this path ──
   useEffect(() => {
@@ -541,7 +543,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     setIsEvaluating(true)
     setEvaluationError("")
     try {
-      const userId = auth?.currentUser?.uid
+      const userId = profileUid
       const functions = getFunctions()
       const generateLeadershipAnalysis = httpsCallable(functions, "generateLeadershipAnalysis")
       const generateGovernanceAnalysis = httpsCallable(functions, "generateGovernanceAnalysis")
@@ -600,7 +602,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     } catch (error) {
       console.error("Governance & Leadership AI evaluation error:", error)
       setEvaluationError(`Failed to get AI evaluation: ${error.message}`)
-      await logAnalysisFailure(db, auth?.currentUser?.uid, "governanceLeadership", error)
+      await logAnalysisFailure(db, profileUid, "governanceLeadership", error)
       return false
     } finally {
       setIsEvaluating(false)
@@ -610,8 +612,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   const triggerTried = useRef(false)
 
   useEffect(() => {
-    if (!auth?.currentUser?.uid || !apiKey) return
-    const userId = auth.currentUser.uid
+    if (!profileUid || !apiKey) return
+    const userId = profileUid
     const profileRef = doc(db, "universalProfiles", userId)
     const leadershipRef = doc(db, "aiLeadershipEvaluation", userId)
     const governanceRef = doc(db, "aiGovernanceEvaluation", userId)
@@ -640,7 +642,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       }
     })
     return () => unsubscribe()
-  }, [auth?.currentUser?.uid, apiKey])
+  }, [profileUid, apiKey])
 
   // ─────────────────────────────────────────────────────────────────────
   // Assemble what the explorer needs

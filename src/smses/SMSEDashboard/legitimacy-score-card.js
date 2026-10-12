@@ -133,7 +133,9 @@ export function parseNarrative(text) {
 
 // ═════════════════════════════════════════════════════════════════════════
 
-export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey, onNavigate }) {
+export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey, onNavigate, userId: propUserId }) {
+  // The profile whose scores are shown: passed by the Dashboard (company owner's, or own), else the logged-in user
+  const profileUid = propUserId || auth?.currentUser?.uid
   const [showModal, setShowModal] = useState(false)
   const [verdicts, setVerdicts] = useState({})
   const [verdictsLoaded, setVerdictsLoaded] = useState(false)
@@ -153,7 +155,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
 
   // ── Free-text verdict cache ──
   useEffect(() => {
-    const userId = auth?.currentUser?.uid
+    const userId = profileUid
     if (!userId) return
     const ref = doc(db, "legitimacyVerdicts", userId)
     const unsub = onSnapshot(
@@ -162,7 +164,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       (e) => { console.error("Verdict cache error:", e); setVerdictsLoaded(true) }
     )
     return () => unsub()
-  }, [auth?.currentUser?.uid])
+  }, [profileUid])
 
   // ── Score — pure function of (profile, cached text verdicts) ──
   useEffect(() => {
@@ -184,7 +186,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
 
   // ── Free-text verification pass ──
   const runVerification = async (force = false) => {
-    const userId = auth?.currentUser?.uid
+    const userId = profileUid
     if (!userId || !apiKey?.trim() || !profileData) return
     const a = buildLegitimacyAssessment(profileData, force ? {} : verdicts)
     const todo = a.allItems.filter(
@@ -230,7 +232,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
   // ── Appeal — only applies to typed entries; documents are re-checked by
   // re-uploading them in My Documents. ──
   const appealVerdict = async (item) => {
-    const userId = auth?.currentUser?.uid
+    const userId = profileUid
     if (!userId || !item.fingerprint) return
     const next = { ...verdicts }
     delete next[item.fingerprint]
@@ -260,7 +262,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       const timestamp = new Date()
       setAiEvaluationResult(result)
       setEvaluationTimestamp(timestamp.toLocaleString())
-      const userId = auth?.currentUser?.uid
+      const userId = profileUid
       if (userId) {
         await setDoc(
           doc(db, "aiLegitimacyEvaluation", userId),
@@ -272,7 +274,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     } catch (e) {
       console.error("Legitimacy AI evaluation error:", e)
       setEvaluationError(`Analysis failed: ${e.message}`)
-      await logAnalysisFailure(db, auth?.currentUser?.uid, "legitimacy", e)
+      await logAnalysisFailure(db, profileUid, "legitimacy", e)
       return false
     } finally {
       setIsEvaluating(false)
@@ -282,8 +284,8 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
   const triggerTried = useRef(false)
 
   useEffect(() => {
-    if (!auth?.currentUser?.uid) return
-    const userId = auth.currentUser.uid
+    if (!profileUid) return
+    const userId = profileUid
     const profileRef = doc(db, "universalProfiles", userId)
     const aiEvalRef = doc(db, "aiLegitimacyEvaluation", userId)
     const unsub = onSnapshot(profileRef, async (snap) => {
@@ -306,7 +308,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       } catch (e) { console.error("Error loading saved analysis:", e) }
     })
     return () => unsub()
-  }, [auth?.currentUser?.uid, apiKey])
+  }, [profileUid, apiKey])
 
   // ─────────────────────────────────────────────────────────────────────
   // Assemble what the explorer needs

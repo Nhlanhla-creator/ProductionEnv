@@ -30,6 +30,10 @@ import {
   getNextStageId, getStageActionConfig, loadPipelineSettings, getActiveStages,
   PIPELINE_SETTINGS_EVENT, notifyPipelineRefresh,
 } from "./investorStageConfig";
+import {
+  calculateHybridScore, calculateAdjustedBigScore, getFunderScoreWeightings, normalizeSMEProfile,
+  buildScoringFund, normalizeAmount, formatInvestmentStage, readScoreValue,
+} from "./funderMatching";
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 const BIG_SCORE_LABELS = {
@@ -146,123 +150,8 @@ const getAttentionReasons = (sme, stages = DEFAULT_STAGES) => {
   return reasons;
 };
 
-// ─── Match scoring ────────────────────────────────────────────────────────────
-const normalizeText = (str) => {
-  if (!str) return "";
-  return str.toString().toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, "_");
-};
-
-const normalizeArray = (value) => {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map((i) => normalizeText(i)).filter(Boolean);
-  return [normalizeText(value)].filter(Boolean);
-};
-
-const normalizeAmount = (value) => {
-  if (!value) return 0;
-  if (typeof value === "number") return value;
-  const clean = value.toString().replace(/[^\d.]/g, "").replace(/^\./, "0.");
-  return Math.round((Number.parseFloat(clean) || 0) * 100) / 100;
-};
-
-const SECTOR_SYNONYMS = {
-  general: "generalist", generalist: "generalist",
-  agri: "agriculture", agriculture: "agriculture", farming: "agriculture",
-  auto: "automotive", automotive: "automotive", cars: "automotive", vehicles: "automotive",
-  banking: "banking_finance_insurance", finance: "banking_finance_insurance",
-  insurance: "banking_finance_insurance", financial_services: "banking_finance_insurance",
-  banking_finance_insurance: "banking_finance_insurance",
-};
-
-const INSTRUMENT_SYNONYMS = {
-  equity: "equity", preferred_equity: "preferred_equity", preferred: "preferred_equity",
-  debt: "debt", loan: "debt", grant: "grant", funding: "grant",
-  skills_training: "skills_training", training: "skills_training", mentorship: "skills_training",
-};
-
-const STAGE_SYNONYMS = {
-  pre_seed: "early_pre_seed", seed: "early_seed", series_a: "venture_series_a",
-  series_b: "venture_series_b", series_c: "venture_series_c", growth: "late_growth_pe",
-  pe: "late_growth_pe", mbo: "late_mbo", mbi: "late_mbi", lbo: "late_lbo",
-  early_pre_seed: "early_pre_seed", early_seed: "early_seed",
-  venture_series_a: "venture_series_a", venture_series_b: "venture_series_b",
-  late_growth_pe: "late_growth_pe",
-};
-
-const normalizeSector = (value) => (value ? SECTOR_SYNONYMS[normalizeText(value)] || normalizeText(value) : "");
-const normalizeInstrument = (value) => (value ? INSTRUMENT_SYNONYMS[normalizeText(value)] || normalizeText(value) : "");
-const normalizeStage = (value) => (value ? STAGE_SYNONYMS[normalizeText(value)] || normalizeText(value) : "");
-
-const formatInvestmentStage = (stage) => {
-  const stageMap = {
-    early_pre_seed: "Pre-Seed", early_seed: "Seed", venture_series_a: "Series A",
-    venture_series_b: "Series B", late_growth_pe: "Growth",
-  };
-  if (Array.isArray(stage)) return stage.map((s) => stageMap[s?.toLowerCase()] || s).join(", ");
-  if (typeof stage === "string") {
-    if (stage.includes(",")) {
-      return stage.split(",").map((s) => stageMap[s.trim().toLowerCase()] || s.trim()).join(", ");
-    }
-    return stageMap[stage.toLowerCase()] || stage;
-  }
-  return "Various";
-};
-
-// Match breakdown carries a score and a weight per component, so the popup can
-// show both the component score and how much it actually moved the total.
-const calculateInvestorMatchScore = (investorProfile, smeApplication) => {
-  const weights = { sector: 0.5, stage: 0.2, ticket: 0.2, type: 0.1 };
-  let score = 0;
-  const breakdown = {
-    sector: { score: 0, matched: [], investorSectors: [], smeSectors: [], weight: weights.sector },
-    stage: { score: 0, investorStages: [], smeStage: "", matched: false, weight: weights.stage },
-    ticket: { score: 0, investorMin: 0, investorMax: 0, smeAmount: 0, inRange: false, weight: weights.ticket },
-    type: { score: 0, investorInstruments: [], smeInstruments: [], matchedInstruments: [], weight: weights.type },
-  };
-  if (!investorProfile || !smeApplication) return { score: 0, breakdown };
-
-  const investorSectors = normalizeArray(investorProfile.generalInvestmentPreference?.sectorFocus).map(normalizeSector);
-  const investorStages = normalizeArray(investorProfile.generalInvestmentPreference?.investmentStage).map(normalizeStage);
-  const investorInstruments = normalizeArray(investorProfile.generalInvestmentPreference?.investmentFocus).map(normalizeInstrument);
-  const investorMinTicket = normalizeAmount(investorProfile.fundDetails?.funds?.[0]?.minimumTicket || 0);
-  const investorMaxTicket = normalizeAmount(investorProfile.fundDetails?.funds?.[0]?.maximumTicket || 0) || Infinity;
-
-  const smeSectors = normalizeArray(smeApplication.entityOverview?.economicSectors).map(normalizeSector);
-  const smeStage = normalizeStage(smeApplication.applicationOverview?.fundingStage);
-  const smeAmount = normalizeAmount(smeApplication.useOfFunds?.amountRequested);
-  const smeInstruments = normalizeArray(smeApplication.useOfFunds?.fundingInstruments).map(normalizeInstrument);
-
-  const matchedSectors = smeSectors.filter((s) => investorSectors.includes(s));
-  const sectorScore = matchedSectors.length > 0 ? 10 : 0;
-  score += sectorScore * weights.sector;
-  breakdown.sector = { ...breakdown.sector, score: sectorScore * 10, matched: matchedSectors, investorSectors, smeSectors };
-
-  const stageMatch = investorStages.includes(smeStage) ? 10 : 0;
-  score += stageMatch * weights.stage;
-  breakdown.stage = { ...breakdown.stage, score: stageMatch * 10, investorStages, smeStage, matched: stageMatch > 0 };
-
-  let ticketScore = 0;
-  if (smeAmount >= investorMinTicket && smeAmount <= investorMaxTicket) {
-    ticketScore = 10;
-  } else {
-    const distance = smeAmount < investorMinTicket ? investorMinTicket - smeAmount : smeAmount - investorMaxTicket;
-    const range = (investorMaxTicket === Infinity ? investorMinTicket : investorMaxTicket - investorMinTicket) || 1;
-    ticketScore = Math.max(0, 10 - Math.min((distance / range) * 10, 10));
-  }
-  score += ticketScore * weights.ticket;
-  breakdown.ticket = {
-    ...breakdown.ticket, score: ticketScore * 10, investorMin: investorMinTicket,
-    investorMax: investorMaxTicket === Infinity ? 0 : investorMaxTicket, smeAmount,
-    inRange: smeAmount >= investorMinTicket && smeAmount <= investorMaxTicket,
-  };
-
-  const matchedInstruments = investorInstruments.filter((inv) => smeInstruments.includes(inv));
-  const typeMatch = matchedInstruments.length > 0 ? 10 : 0;
-  score += typeMatch * weights.type;
-  breakdown.type = { ...breakdown.type, score: typeMatch * 10, investorInstruments, smeInstruments, matchedInstruments };
-
-  return { score: Math.round(score * 10), breakdown };
-};
+// Match and Adjusted BIG Score come from funderMatching.js so the investor and the
+// business always see the same numbers.
 
 // Small helper component so all popups can be portaled straight to <body>.
 const PopupPortal = ({ children }) => {
@@ -312,7 +201,7 @@ const HeaderInfoTooltip = ({ text }) => {
 const COLUMN_DEFS = {
   bigScore: {
     label: "BIG Score", align: "center", width: 150, filterType: "bigScore",
-    tooltip: "Business credibility and readiness — compliance, legitimacy, fundability, PIS and leadership. Click a score to see the full breakdown.",
+    tooltip: "Business credibility and readiness — compliance, legitimacy, capital appeal, governance & leadership and operational strength. \"Adj.\" is the score on your own category weights. Click a score for the full breakdown.",
   },
   match: {
     label: "Match %", align: "center", width: 150, filterType: "match",
@@ -672,7 +561,6 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   const [investorProfile, setInvestorProfile] = useState(null);
   const [bigScoresMap, setBigScoresMap] = useState({});
   const [matchBreakdowns, setMatchBreakdowns] = useState({});
-  const [termsheetStatuses, setTermsheetStatuses] = useState({});
   const [updatedStages, setUpdatedStages] = useState({});
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -728,7 +616,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
   const [bigScoreLoading, setBigScoreLoading] = useState(false);
   const [bigScoreData, setBigScoreData] = useState({
     compliance: { score: 0 }, legitimacy: { score: 0 }, fundability: { score: 0 },
-    pis: { score: 0 }, leadership: { score: 0 }
+    governanceLeadership: { score: 0 }, operational: { score: 0 }
   });
   const [matchBreakdownData, setMatchBreakdownData] = useState(null);
   const [showGuarantees, setShowGuarantees] = useState(null); // { guarantees, name }
@@ -973,7 +861,12 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                   if (profileSnap.exists()) {
                     profile = profileSnap.data();
                     if (investorData) {
-                      const result = calculateInvestorMatchScore(investorData, profile);
+                      const investorFunds = investorData.fundDetails?.funds || [];
+                      const fundIndex = Math.max(0, investorFunds.findIndex((f) => f?.name === data.fundName));
+                      const result = calculateHybridScore(
+                        normalizeSMEProfile(profile),
+                        buildScoringFund(investorData, investorFunds[fundIndex] || {}, fundIndex)
+                      );
                       matchPercentage = result.score;
                       breakdowns[docSnap.id] = result.breakdown;
                     }
@@ -1009,37 +902,36 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     };
   }, []);
 
-  // BIG Scores come from their own collection.
+  // BIG Scores: only for the businesses that applied (this used to read the
+  // whole bigEvaluations collection, i.e. every business on the platform).
   useEffect(() => {
-    const fetchBigScores = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "bigEvaluations"));
-        const scores = {};
-        snapshot.forEach((d) => { scores[d.id] = d.data(); });
-        setBigScoresMap(scores);
-      } catch (err) {
-        console.error("Error fetching BIG Scores:", err);
-      }
-    };
-    fetchBigScores();
-  }, []);
-
-  useEffect(() => {
-    const fetchTermsheetStatuses = async () => {
-      const statusMap = {};
-      for (const app of rawApps) {
-        if (!app.id) continue;
+    const ids = [...new Set(rawApps.map((a) => a.smeId).filter(Boolean))];
+    if (ids.length === 0) return undefined;
+    let cancelled = false;
+    Promise.all(
+      ids.map(async (id) => {
         try {
-          const snap = await getDoc(doc(db, "investorApplications", app.id));
-          if (snap.exists() && snap.data().termsheetStatus) statusMap[app.id] = snap.data().termsheetStatus;
+          const snap = await getDoc(doc(db, "bigEvaluations", id));
+          return snap.exists() ? [id, snap.data()] : null;
         } catch (err) {
-          console.error("Error fetching termsheet status:", err);
+          console.error("Error fetching BIG Score for", id, err);
+          return null;
         }
-      }
-      setTermsheetStatuses(statusMap);
-    };
-    if (rawApps.length > 0) fetchTermsheetStatuses();
+      })
+    ).then((rows) => {
+      if (!cancelled) setBigScoresMap(Object.fromEntries(rows.filter(Boolean)));
+    });
+    return () => { cancelled = true; };
   }, [rawApps]);
+
+  // Already on each application document, so no extra reads.
+  const termsheetStatuses = useMemo(
+    () => Object.fromEntries(rawApps.filter((a) => a.termsheetStatus).map((a) => [a.id, a.termsheetStatus])),
+    [rawApps]
+  );
+
+  // The investor's own category weights (null until they have set criteria).
+  const investorWeights = useMemo(() => getFunderScoreWeightings(investorProfile || {}), [investorProfile]);
 
   // ─── Row mapping ──────────────────────────────────────────────────────────
   const smes = useMemo(() => {
@@ -1088,7 +980,8 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
           ? new Date(a.lastActivity).toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" })
           : "N/A",
         matchPercentage: a.matchPercentage || 0,
-        bigScore: bigScoresMap[a.smeId]?.scores?.bigScore || 0,
+        bigScore: Math.round(readScoreValue(bigScoresMap[a.smeId]?.scores?.bigScore)) || 0,
+        adjustedBigScore: calculateAdjustedBigScore(bigScoresMap[a.smeId], investorWeights),
         currentStatus,
         pipelineStage: currentStatus,
         nextStage: getNextStage(currentStatus, activeStages),
@@ -1116,7 +1009,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
     }
 
     return mapped;
-  }, [rawApps, bigScoresMap, updatedStages, activeStages, stageFilter]);
+  }, [rawApps, bigScoresMap, updatedStages, activeStages, stageFilter, investorWeights]);
 
   useEffect(() => { onSMEsLoaded?.(smes); }, [smes, onSMEsLoaded]);
 
@@ -1505,19 +1398,19 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
       setBigScoreLoading(true);
       setBigScoreData({
         compliance: { score: 0 }, legitimacy: { score: 0 }, fundability: { score: 0 },
-        pis: { score: 0 }, leadership: { score: 0 }
+        governanceLeadership: { score: 0 }, operational: { score: 0 }
       });
       getDoc(doc(db, "bigEvaluations", sme.smeId))
         .then((snap) => {
           if (snap.exists()) {
             const s = snap.data().scores || {};
             setBigScoreData({
-              compliance: { score: s.compliance || 0 },
-              legitimacy: { score: s.legitimacy || 0 },
-              fundability: { score: s.fundability || 0 },
-              pis: { score: s.pis || 0 },
-              leadership: { score: s.leadership || 0 },
-              _bigScore: s.bigScore || 0,
+              compliance: { score: readScoreValue(s.compliance) || 0 },
+              legitimacy: { score: readScoreValue(s.legitimacy) || 0 },
+              fundability: { score: readScoreValue(s.fundability) || 0 },
+              governanceLeadership: { score: readScoreValue(s.governanceLeadership) || 0 },
+              operational: { score: readScoreValue(s.operational) || 0 },
+              _bigScore: readScoreValue(s.bigScore) || 0,
               _lastUpdated: s.lastUpdated || null,
             });
           }
@@ -1596,13 +1489,16 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
           .filter((needed) => !history.includes(needed));
         if (missing.length > 0) {
           const names = missing.map((id) => activeStages.find((s) => s.id === id)?.name).join(" and ");
-          return `Complete ${names} before closing the deal`;
+          return `Complete ${names} before closing the deal. Pick it from the stage list: moving back is allowed.`;
         }
       }
       return null;
     }
     if (current.terminal) return "This application has reached a final stage";
-    if (target.order < current.order) return "Stages move forward only — use a terminal outcome to close or decline";
+    // Moving back to an earlier live stage is allowed, so a skipped step (for
+    // example Decision) can be completed before closing. Only the entry pool is
+    // off limits: an application cannot go back to "Matches".
+    if (target.order < current.order && target.id === "matched") return "An application can't move back to Matches";
     return null;
   };
 
@@ -1662,6 +1558,14 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
         lastMessage: stageUpdateData.message,
         lastActivity: new Date().toISOString(),
       };
+
+      // Moving back re-opens the earlier step, so a term sheet response given
+      // at the later step no longer applies.
+      const fromStage = activeStages.find((s) => s.id === mapStatusToStageId(sme.currentStatus, activeStages));
+      if (fromStage && targetStage && !targetStage.terminal && targetStage.order < fromStage.order) {
+        updateData.termsheetStatus = null;
+        updateData.reopenedFrom = sme.currentStatus;
+      }
 
       if (stageFields.showMeeting) {
         updateData.meetingLocation = stageUpdateData.meetingLocation;
@@ -2336,6 +2240,14 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                                     <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-semibold`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
                                   </div>
                                   <span className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
+                                  {sme.adjustedBigScore?.adjusted && (
+                                    <span
+                                      className="text-[10px] text-[#7d5a50] whitespace-nowrap"
+                                      title={sme.adjustedBigScore.provisional ? "Provisional: some categories are not scored yet" : "Scored with your own category weights"}
+                                    >
+                                      Adj. {sme.adjustedBigScore.score}{sme.adjustedBigScore.provisional ? "*" : ""}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                             );
@@ -2778,8 +2690,8 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                   { key: "compliance", label: "Compliance", desc: "Regulatory & legal standing" },
                   { key: "legitimacy", label: "Legitimacy", desc: "Business verification status" },
                   { key: "fundability", label: "Capital Appeal", desc: "Investment readiness & fundability" },
-                  { key: "pis", label: "Performance", desc: "Performance indicators & strategic metrics" },
-                  { key: "leadership", label: "Leadership", desc: "Management team quality & experience" },
+                  { key: "governanceLeadership", label: "Governance & Leadership", desc: "Management quality, board and controls" },
+                  { key: "operational", label: "Operational Strength", desc: "Processes, capacity and delivery" },
                 ].map(({ key, label, desc }) => {
                   const score = bigScoreData[key]?.score || 0;
                   const lbl = getBigScoreLabel(score);
@@ -2863,7 +2775,7 @@ export function InvestorSMETable({ filters, stageFilter, onDealComplete, onSMEsL
                     )}
                     {key === "ticket" && (
                       <p className="text-[11px] text-[#7d5a50]">
-                        Your range: R{(data.investorMin || 0).toLocaleString("en-ZA")} – {data.investorMax ? `R${data.investorMax.toLocaleString("en-ZA")}` : "no max"} · Requested: R{(data.smeAmount || 0).toLocaleString("en-ZA")}
+                        Your range: R{(data.minTicket || 0).toLocaleString("en-ZA")} – {data.maxTicket ? `R${data.maxTicket.toLocaleString("en-ZA")}` : "no max"} · Requested: R{(data.smeAmount || 0).toLocaleString("en-ZA")}
                       </p>
                     )}
                     {key === "type" && (
