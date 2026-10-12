@@ -172,6 +172,17 @@ export const CMFMatchesProvider = ({ children }) => {
     const score = smeData.bigScore || 45
     const name = getNestedField(smeData, "entityOverview.registeredName") || getNestedField(smeData, "entityOverview.tradingName") || "Unnamed Business"
 
+    const isDirectOnboarded = Boolean(
+      (matchRecord?.reason && matchRecord.reason.toLowerCase().includes("onboarded")) ||
+      matchRecord?.pipelineStage === "Active Support" ||
+      matchRecord?.currentStatus === "Active Support" ||
+      smeData.onboardedBy ||
+      smeData.sponsorType === "CMF" ||
+      smeData.entityOverview?.sponsorType === "CMF" ||
+      smeData.entityOverview?.sponsorName?.toLowerCase?.().includes("cmf") ||
+      smeData.corporateId
+    )
+
     return {
       id: smeId,
       name,
@@ -185,10 +196,10 @@ export const CMFMatchesProvider = ({ children }) => {
       supportRequired: getNestedField(smeData, "entityOverview.businessDescription") || "Operations and scaling advisory",
       servicesRequired: getNestedField(smeData, "productsServices.offeringType") || "Advisory",
       applicationDate: smeData.bigScoreUpdatedAt ? smeData.bigScoreUpdatedAt.split("T")[0] : new Date().toISOString().split("T")[0],
-      pipelineStage: matchRecord?.pipelineStage || "Matched",
-      currentStatus: matchRecord?.currentStatus || "Matched",
-      matchPercentage: (matchRecord?.reason && matchRecord.reason.includes("Directly onboarded"))
-        ? (matchRecord.matchPercentage || 100)
+      pipelineStage: matchRecord?.pipelineStage || (isDirectOnboarded ? "Active Support" : "Matched"),
+      currentStatus: matchRecord?.currentStatus || (isDirectOnboarded ? "Active Support" : "Matched"),
+      matchPercentage: isDirectOnboarded
+        ? 100
         : calculateMatchPercentage(smeData, cmfPref),
       bigScore: score,
       compliance: getNestedField(smeData, "legalCompliance.bbbeeLevel") ? 80 : 50,
@@ -197,7 +208,10 @@ export const CMFMatchesProvider = ({ children }) => {
       leadership: 65,
       pis: 60,
       lastActivity: matchRecord?.updatedAt ? new Date(matchRecord.updatedAt).toISOString() : "N/A",
-      reason: matchRecord?.reason || getMatchReason(smeData, 75)
+      reason: matchRecord?.reason || (isDirectOnboarded ? "Directly onboarded by Capital and Market Facilitator." : getMatchReason(smeData, 75)),
+      source: isDirectOnboarded ? "onboarded" : "matched",
+      isOnboarded: isDirectOnboarded,
+      onboardedBy: smeData.onboardedBy || null
     }
   }
 
@@ -266,6 +280,17 @@ export const CMFMatchesProvider = ({ children }) => {
       getNestedField(data, "entityOverview.contactDetails.email") ||
       "info@funder.org"
 
+    const isDirectOnboarded = Boolean(
+      (matchRecord?.reason && matchRecord.reason.toLowerCase().includes("onboarded")) ||
+      matchRecord?.pipelineStage === "Active Support" ||
+      matchRecord?.currentStatus === "Active Support" ||
+      data.onboardedBy ||
+      data.sponsorType === "CMF" ||
+      data.entityOverview?.sponsorType === "CMF" ||
+      data.entityOverview?.sponsorName?.toLowerCase?.().includes("cmf") ||
+      data.corporateId
+    )
+
     return {
       id: funderId,
       name,
@@ -279,13 +304,17 @@ export const CMFMatchesProvider = ({ children }) => {
       contactPerson: contactName,
       email,
       description,
-      status: matchRecord?.currentStatus || "Matched",
+      status: matchRecord?.currentStatus || (isDirectOnboarded ? "Active Support" : "Matched"),
+      currentStatus: matchRecord?.currentStatus || (isDirectOnboarded ? "Active Support" : "Matched"),
       bigScore: data.bigScore || 0,
       compliance: data.compliance || 0,
       legitimacy: data.legitimacy || 0,
       fundability: data.fundability || 0,
       leadership: data.leadership || 0,
-      pis: data.pis || 0
+      pis: data.pis || 0,
+      source: isDirectOnboarded ? "onboarded" : "matched",
+      isOnboarded: isDirectOnboarded,
+      onboardedBy: data.onboardedBy || null
     }
   }
 
@@ -334,6 +363,17 @@ export const CMFMatchesProvider = ({ children }) => {
 
     const email = getNestedField(data, "contactDetails.businessEmail") || getNestedField(data, "contactDetails.email") || getNestedField(data, "contactDetails.primaryContactEmail") || "info@catalyst.africa"
 
+    const isDirectOnboarded = Boolean(
+      (matchRecord?.reason && matchRecord.reason.toLowerCase().includes("onboarded")) ||
+      matchRecord?.pipelineStage === "Active Support" ||
+      matchRecord?.currentStatus === "Active Support" ||
+      data.onboardedBy ||
+      data.sponsorType === "CMF" ||
+      data.entityOverview?.sponsorType === "CMF" ||
+      data.entityOverview?.sponsorName?.toLowerCase?.().includes("cmf") ||
+      data.corporateId
+    )
+
     return {
       id: catalystId,
       name,
@@ -347,13 +387,17 @@ export const CMFMatchesProvider = ({ children }) => {
       contactPerson: contactName,
       email,
       description,
-      status: matchRecord?.currentStatus || "Matched",
+      status: matchRecord?.currentStatus || (isDirectOnboarded ? "Active Support" : "Matched"),
+      currentStatus: matchRecord?.currentStatus || (isDirectOnboarded ? "Active Support" : "Matched"),
       bigScore: data.bigScore || 0,
       compliance: data.compliance || 0,
       legitimacy: data.legitimacy || 0,
       fundability: data.fundability || 0,
       leadership: data.leadership || 0,
-      pis: data.pis || 0
+      pis: data.pis || 0,
+      source: isDirectOnboarded ? "onboarded" : "matched",
+      isOnboarded: isDirectOnboarded,
+      onboardedBy: data.onboardedBy || null
     }
   }
 
@@ -467,11 +511,17 @@ export const CMFMatchesProvider = ({ children }) => {
         const completeness = calculateCompleteness(profileData)
 
         if (isSME) {
-          if (completeness < 90) continue
           let matchRecord = existingSmeMatchesMap[profileId]
+          const isDirectOnboarded = profileData.onboardedBy === user.uid ||
+            profileData.onboardedBy === currentEffectiveId ||
+            profileData.sponsorType === "CMF" ||
+            !!profileData.corporateId
+
+          if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
+
           if (!matchRecord) {
             const matchPct = calculateMatchPercentage(profileData, cmfPref)
-            if (matchPct >= 50) {
+            if (matchPct >= 50 || isDirectOnboarded) {
               const reason = getMatchReason(profileData, matchPct)
               const matchDocId = `${user.uid}_${profileId}`
               const matchDocRef = doc(db, "cmfBusinessMatches", matchDocId)
@@ -479,14 +529,14 @@ export const CMFMatchesProvider = ({ children }) => {
                 id: matchDocId,
                 facilitatorId: user.uid,
                 smeId: profileId,
-                pipelineStage: "Matched",
-                currentStatus: "Matched",
-                matchPercentage: matchPct,
+                pipelineStage: isDirectOnboarded ? "Active Support" : "Matched",
+                currentStatus: isDirectOnboarded ? "Active Support" : "Matched",
+                matchPercentage: isDirectOnboarded ? 100 : matchPct,
                 reason: reason,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
               }
-              await setDoc(matchDocRef, matchRecord)
+              await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set matchDoc:", e))
             }
           }
           if (matchRecord) {
@@ -501,11 +551,13 @@ export const CMFMatchesProvider = ({ children }) => {
             continue
           }
 
-          if (completeness < 90) continue
           let matchRecord = existingFunderMatchesMap[profileId]
+          const isDirectOnboarded = isCmfOnboarded || onboardedBy === user.uid || onboardedBy === currentEffectiveId
+          if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
+
           if (!matchRecord) {
             const matchPct = calculateMatchPercentage(profileData, cmfPref)
-            if (matchPct >= 50) {
+            if (matchPct >= 50 || isDirectOnboarded) {
               const reason = getMatchReason(profileData, matchPct)
               const matchDocId = `${user.uid}_${profileId}`
               const matchDocRef = doc(db, "cmfFunderMatches", matchDocId)
@@ -515,12 +567,12 @@ export const CMFMatchesProvider = ({ children }) => {
                 funderId: profileId,
                 pipelineStage: "Matched",
                 currentStatus: "Matched",
-                matchPercentage: matchPct,
+                matchPercentage: isDirectOnboarded ? 100 : matchPct,
                 reason: reason,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
               }
-              await setDoc(matchDocRef, matchRecord)
+              await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set funder matchDoc:", e))
             }
           }
           if (matchRecord) {
@@ -535,11 +587,13 @@ export const CMFMatchesProvider = ({ children }) => {
             continue
           }
 
-          if (completeness < 90) continue
           let matchRecord = existingCatalystMatchesMap[profileId]
+          const isDirectOnboarded = isCmfOnboarded || onboardedBy === user.uid || onboardedBy === currentEffectiveId
+          if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
+
           if (!matchRecord) {
             const matchPct = calculateMatchPercentage(profileData, cmfPref)
-            if (matchPct >= 50) {
+            if (matchPct >= 50 || isDirectOnboarded) {
               const reason = getMatchReason(profileData, matchPct)
               const matchDocId = `${user.uid}_${profileId}`
               const matchDocRef = doc(db, "cmfCatalystMatches", matchDocId)
@@ -549,12 +603,12 @@ export const CMFMatchesProvider = ({ children }) => {
                 catalystId: profileId,
                 pipelineStage: "Matched",
                 currentStatus: "Matched",
-                matchPercentage: matchPct,
+                matchPercentage: isDirectOnboarded ? 100 : matchPct,
                 reason: reason,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
               }
-              await setDoc(matchDocRef, matchRecord)
+              await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set catalyst matchDoc:", e))
             }
           }
           if (matchRecord) {
@@ -578,13 +632,14 @@ export const CMFMatchesProvider = ({ children }) => {
           continue
         }
 
-        const completeness = calculateCompleteness(profileData)
-        if (completeness < 90) continue
-
         let matchRecord = existingFunderMatchesMap[profileId]
+        const isDirectOnboarded = isCmfOnboarded || onboardedBy === user.uid || onboardedBy === currentEffectiveId
+        const completeness = calculateCompleteness(profileData)
+        if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
+
         if (!matchRecord) {
           const matchPct = calculateMatchPercentage(profileData, cmfPref)
-          if (matchPct >= 50) {
+          if (matchPct >= 50 || isDirectOnboarded) {
             const reason = getMatchReason(profileData, matchPct)
             const matchDocId = `${user.uid}_${profileId}`
             const matchDocRef = doc(db, "cmfFunderMatches", matchDocId)
@@ -594,12 +649,12 @@ export const CMFMatchesProvider = ({ children }) => {
               funderId: profileId,
               pipelineStage: "Matched",
               currentStatus: "Matched",
-              matchPercentage: matchPct,
+              matchPercentage: isDirectOnboarded ? 100 : matchPct,
               reason: reason,
               createdAt: Date.now(),
               updatedAt: Date.now()
             }
-            await setDoc(matchDocRef, matchRecord)
+            await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set funder matchDoc:", e))
           }
         }
         if (matchRecord) {
@@ -621,13 +676,14 @@ export const CMFMatchesProvider = ({ children }) => {
           continue
         }
 
-        const completeness = calculateCompleteness(profileData)
-        if (completeness < 90) continue
-
         let matchRecord = existingCatalystMatchesMap[profileId]
+        const isDirectOnboarded = isCmfOnboarded || onboardedBy === user.uid || onboardedBy === currentEffectiveId
+        const completeness = calculateCompleteness(profileData)
+        if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
+
         if (!matchRecord) {
           const matchPct = calculateMatchPercentage(profileData, cmfPref)
-          if (matchPct >= 50) {
+          if (matchPct >= 50 || isDirectOnboarded) {
             const reason = getMatchReason(profileData, matchPct)
             const matchDocId = `${user.uid}_${profileId}`
             const matchDocRef = doc(db, "cmfCatalystMatches", matchDocId)
@@ -637,12 +693,12 @@ export const CMFMatchesProvider = ({ children }) => {
               catalystId: profileId,
               pipelineStage: "Matched",
               currentStatus: "Matched",
-              matchPercentage: matchPct,
+              matchPercentage: isDirectOnboarded ? 100 : matchPct,
               reason: reason,
               createdAt: Date.now(),
               updatedAt: Date.now()
             }
-            await setDoc(matchDocRef, matchRecord)
+            await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set catalyst matchDoc:", e))
           }
         }
         if (matchRecord) {

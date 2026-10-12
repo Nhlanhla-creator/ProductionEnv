@@ -486,7 +486,7 @@ const mockCatalysts = [
       industrySector: "Education & Enterprise Development",
       companySize: "Small",
       yearEstablished: "2020",
-      briefDescription: "Impact Hub Africa provides incubator and accelerator programs to social entrepreneurs.",
+      briefDescription: "Impact Hub Africa provides incubator and accelerator programs to social entrepreneurs across Southern Africa.",
       referralSource: "CMF Onboarded",
       sponsorName: "CMF Onboarded",
       sponsorType: "CMF",
@@ -506,12 +506,19 @@ const mockCatalysts = [
       programDuration: "6 Months",
       intangibleSupport: "Mentorship & Networking",
       geographicFocus: ["South Africa"],
-      sectorFocus: ["Agriculture", "Education"],
-      selectedProvinces: ["Gauteng"],
+      sectorFocus: ["Agriculture", "Education", "Digital Enterprise"],
+      selectedProvinces: ["Gauteng", "Western Cape"],
       selectedCountries: ["South Africa"]
     },
-    applicationBrief: {},
+    applicationBrief: {
+      overviewObjectives: "Incubating early-stage social impact ventures to achieve investment readiness.",
+      cohortCapacity: "12",
+      targetLifecycle: "Early Stage"
+    },
     documentUploadPlaceholder: {
+      standardNda: [{ name: "hub_standard_nda.pdf", type: "application/pdf" }],
+      standardContract: [{ name: "hub_catalyst_contract.pdf", type: "application/pdf" }],
+      programBrochures: [{ name: "hub_program_brochure.pdf", type: "application/pdf" }],
       cipcRegistration: [{ name: "catalyst_cipc.pdf", type: "application/pdf" }],
       taxCompliancePin: [{ name: "catalyst_tax.pdf", type: "application/pdf" }]
     },
@@ -520,6 +527,58 @@ const mockCatalysts = [
       dataProcessing: true,
       termsConditions: true,
       cmfPermissionAgreement: { name: "catalyst_agreement.pdf", type: "application/pdf" }
+    }
+  },
+  {
+    entityOverview: {
+      registeredName: "Genesis Enterprise Accelerator NPC",
+      tradingName: "Genesis Accelerator",
+      legalEntityType: "Non-Profit Company (NPC)",
+      registrationNumber: "2017/556677/08",
+      industrySector: "Technology & Clean Energy Incubation",
+      companySize: "Medium",
+      yearEstablished: "2017",
+      briefDescription: "Genesis Enterprise Accelerator delivers high-impact commercialization programmes, technical readiness, and corporate supply chain integration for clean-tech and industrial ventures.",
+      referralSource: "CMF Onboarded",
+      sponsorName: "CMF Onboarded",
+      sponsorType: "CMF",
+      sponsorViewPermission: "yes"
+    },
+    contactDetails: {
+      businessTel: "+27315559988",
+      businessEmail: "genesis.programmes@mailinator.com",
+      physicalAddress: "14 Umhlanga Rocks Drive, Durban, 4319",
+      postalAddress: "14 Umhlanga Rocks Drive, Durban, 4319",
+      primaryContactName: "Sipho Ndlovu",
+      primaryContactMobile: "+27827773344",
+      primaryContactEmail: "sipho.ndlovu.genesis@mailinator.com"
+    },
+    programBriefMatchingPreference: {
+      programName: "CleanTech Scale & Industrial Acceleration 2026",
+      programDuration: "12 Months",
+      intangibleSupport: "Export Readiness, Technical Standards & Corporate Procurement Access",
+      geographicFocus: ["South Africa"],
+      sectorFocus: ["Manufacturing", "Renewable Energy", "Agri-Processing"],
+      selectedProvinces: ["KwaZulu-Natal", "Gauteng", "Eastern Cape"],
+      selectedCountries: ["South Africa"]
+    },
+    applicationBrief: {
+      overviewObjectives: "Accelerating commercially viable energy and industrial technology enterprises to corporate supply chains.",
+      cohortCapacity: "15",
+      targetLifecycle: "Growth Stage"
+    },
+    documentUploadPlaceholder: {
+      standardNda: [{ name: "genesis_standard_nda.pdf", type: "application/pdf" }],
+      standardContract: [{ name: "genesis_programme_contract.pdf", type: "application/pdf" }],
+      programBrochures: [{ name: "genesis_cohort_brochure.pdf", type: "application/pdf" }],
+      cipcRegistration: [{ name: "genesis_npc_cert.pdf", type: "application/pdf" }],
+      taxCompliancePin: [{ name: "genesis_tax_pin.pdf", type: "application/pdf" }]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "genesis_cmf_mandate.pdf", type: "application/pdf" }
     }
   }
 ]
@@ -540,23 +599,48 @@ const mockCMFs = [
       contactName: "Richard Bowes",
       businessPhone: "+27116667777",
       email: "richard.bowes.cmf@mailinator.com",
+      businessEmail: "richard.bowes.cmf@mailinator.com",
       physicalAddress: "22 Alice Lane, Sandton, Johannesburg, 2196",
       postalAddress: "22 Alice Lane, Sandton, Johannesburg, 2196"
     },
-    productsServices: {},
-    ownershipManagement: {},
-    legalCompliance: {},
-    howDidYouHear: {},
+    productsServices: {
+      coreCapabilities: ["Deal Structuring", "Syndication", "Due Diligence Support", "Capital Readiness"],
+      targetAssetClasses: ["Venture Capital", "Private Debt", "Blended Finance"],
+      serviceOfferings: "Capital facilitation, investment readiness, transaction advisory and cohort development."
+    },
+    ownershipManagement: {
+      shareholders: [
+        { name: "Richard Bowes", shareholding: "60", race: "White", gender: "Male", country: "South Africa" },
+        { name: "Ayanda Sithole", shareholding: "40", race: "African", gender: "Female", country: "South Africa" }
+      ],
+      directors: [{ name: "Richard Bowes", roles: ["Managing Director"] }]
+    },
+    legalCompliance: {
+      taxNumber: "9012345678",
+      vatNumber: "4012345678",
+      bbbeeLevel: "Level 2"
+    },
+    howDidYouHear: {
+      referral: "Industry Network"
+    },
     documentsPlaceholder: {
       cipcRegistration: [{ name: "cmf_cipc.pdf", type: "application/pdf" }],
-      taxCompliancePin: [{ name: "cmf_tax.pdf", type: "application/pdf" }]
+      taxCompliancePin: [{ name: "cmf_tax.pdf", type: "application/pdf" }],
+      companyProfile: [{ name: "cmf_company_profile.pdf", type: "application/pdf" }],
+      logo: [{ name: "cmf_logo.png", type: "image/png" }],
+      proofOfAddress: [{ name: "cmf_proof_of_address.pdf", type: "application/pdf" }]
     },
-    fundDetails: {},
-    applicationBrief: {},
+    fundDetails: {
+      portfolioFocus: "Early & Growth Stage Companies",
+      annualDealVolume: "R 200,000,000"
+    },
+    applicationBrief: {
+      dealCriteria: "Revenue > R1M, proven business model, clear growth plan."
+    },
     generalInvestmentPreference: {
       minimumSupportTicket: "R 500,000",
       maximumSupportTicket: "R 5,000,000",
-      sectorFocus: ["Manufacturing", "Services"],
+      sectorFocus: ["Manufacturing", "Services", "Technology"],
       geographicFocus: ["South Africa"]
     },
     declarationConsentPlaceholder: {
@@ -564,6 +648,72 @@ const mockCMFs = [
       dataProcessing: true,
       termsConditions: true,
       cmfPermissionAgreement: { name: "cmf_agreement.pdf", type: "application/pdf" }
+    }
+  },
+  {
+    entityOverview: {
+      registeredName: "Vanguard Market Makers & Syndications Ltd",
+      tradingName: "Vanguard Syndicates",
+      registrationNumber: "2016/778899/07",
+      entityType: "CMF",
+      legalStructure: "Private Company (Pty) Ltd",
+      entitySize: "Medium",
+      yearsInOperation: "9",
+      businessDescription: "Vanguard Market Makers orchestrates syndicated deal pipelines, blends catalytic funding with commercial debt, and accelerates transaction closure for mid-market cohorts."
+    },
+    contactDetails: {
+      contactName: "Kagiso Matlala",
+      businessPhone: "+27118889900",
+      email: "kagiso.matlala.syndicates@mailinator.com",
+      businessEmail: "kagiso.matlala.syndicates@mailinator.com",
+      physicalAddress: "100 Grayston Drive, Sandton, Johannesburg, 2196",
+      postalAddress: "100 Grayston Drive, Sandton, Johannesburg, 2196"
+    },
+    productsServices: {
+      coreCapabilities: ["Syndication Structuring", "Capital Readiness Advisory", "Transaction Facilitation", "Pipeline Analytics"],
+      targetAssetClasses: ["Private Equity", "Venture Debt", "Development Finance"],
+      serviceOfferings: "Facilitating corporate and institutional matchings with growth-stage cohorts."
+    },
+    ownershipManagement: {
+      shareholders: [
+        { name: "Kagiso Matlala", shareholding: "51", race: "African", gender: "Male", country: "South Africa" },
+        { name: "Helen van der Merwe", shareholding: "49", race: "White", gender: "Female", country: "South Africa" }
+      ],
+      directors: [{ name: "Kagiso Matlala", roles: ["Managing Director"] }]
+    },
+    legalCompliance: {
+      taxNumber: "9555666777",
+      vatNumber: "4555666777",
+      bbbeeLevel: "Level 1"
+    },
+    howDidYouHear: {
+      referral: "Institutional Network"
+    },
+    documentsPlaceholder: {
+      cipcRegistration: [{ name: "vanguard_cmf_cipc.pdf", type: "application/pdf" }],
+      taxCompliancePin: [{ name: "vanguard_cmf_tax.pdf", type: "application/pdf" }],
+      companyProfile: [{ name: "vanguard_cmf_profile.pdf", type: "application/pdf" }],
+      logo: [{ name: "vanguard_cmf_logo.png", type: "image/png" }],
+      proofOfAddress: [{ name: "vanguard_cmf_poa.pdf", type: "application/pdf" }]
+    },
+    fundDetails: {
+      portfolioFocus: "Mid-Market Growth & Supply Chain Companies",
+      annualDealVolume: "R 350,000,000"
+    },
+    applicationBrief: {
+      dealCriteria: "Established enterprises with strong EBITDA and audited track record."
+    },
+    generalInvestmentPreference: {
+      minimumSupportTicket: "R 1,500,000",
+      maximumSupportTicket: "R 20,000,000",
+      sectorFocus: ["Information Technology", "Agriculture", "Healthcare", "Logistics"],
+      geographicFocus: ["South Africa", "SADC"]
+    },
+    declarationConsentPlaceholder: {
+      accuracy: true,
+      dataProcessing: true,
+      termsConditions: true,
+      cmfPermissionAgreement: { name: "vanguard_cmf_partnership.pdf", type: "application/pdf" }
     }
   }
 ]
@@ -588,8 +738,8 @@ export default function CMFOnboardProfile() {
   const storage = getStorage()
   const auth = getAuth()
 
-  // Developer auto-fill egg state
-  const [showEasterEgg, setShowEasterEgg] = useState(false)
+  // Developer auto-fill egg state (default visible for seamless workflow)
+  const [showEasterEgg, setShowEasterEgg] = useState(true)
 
   // Listen for Alt + T key listener to toggle visibility of developer auto-fill helper (explicitly supports AltRight)
   useEffect(() => {
@@ -618,16 +768,28 @@ export default function CMFOnboardProfile() {
     return result
   }
 
-  const handleAutoFill = () => {
-    const uniqueSuffix = Math.floor(Math.random() * 100000)
+  const handleAutoFill = (targetIndex = null) => {
+    const timestamp = Date.now().toString().slice(-4)
+    const randNum = Math.floor(100 + Math.random() * 900)
+    const uniqueSuffix = `${timestamp}${randNum}`
     let selected = null
 
     if (profileType === "Business") {
-      const idx = Math.floor(Math.random() * mockBusinesses.length)
+      const idx = (targetIndex !== null && targetIndex !== undefined)
+        ? Math.abs(targetIndex) % mockBusinesses.length
+        : Math.floor(Math.random() * mockBusinesses.length)
       selected = JSON.parse(JSON.stringify(mockBusinesses[idx]))
       if (selected.contactDetails?.email) {
         const parts = selected.contactDetails.email.split('@')
         selected.contactDetails.email = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      if (selected.entityOverview?.registrationNumber) {
+        const parts = selected.entityOverview.registrationNumber.split("/")
+        selected.entityOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}01/${parts[2] || "07"}`
+      }
+      if (selected.legalCompliance) {
+        selected.legalCompliance.taxNumber = `9${Math.floor(10000000 + Math.random() * 90000000)}`
+        selected.legalCompliance.vatNumber = `4${Math.floor(10000000 + Math.random() * 90000000)}`
       }
       selected.documents = createMockFiles(selected.documentsPlaceholder)
       selected.declarationConsent = {
@@ -640,7 +802,9 @@ export default function CMFOnboardProfile() {
       delete selected.declarationConsentPlaceholder
 
     } else if (profileType === "Funder") {
-      const idx = Math.floor(Math.random() * mockFunders.length)
+      const idx = (targetIndex !== null && targetIndex !== undefined)
+        ? Math.abs(targetIndex) % mockFunders.length
+        : Math.floor(Math.random() * mockFunders.length)
       selected = JSON.parse(JSON.stringify(mockFunders[idx]))
       if (selected.contactDetails?.primaryContactEmail) {
         const parts = selected.contactDetails.primaryContactEmail.split('@')
@@ -649,6 +813,15 @@ export default function CMFOnboardProfile() {
       if (selected.contactDetails?.businessEmail) {
         const parts = selected.contactDetails.businessEmail.split('@')
         selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      selected.contactDetails.email = selected.contactDetails.businessEmail || selected.contactDetails.primaryContactEmail
+      if (selected.fundManageOverview?.registrationNumber) {
+        const parts = selected.fundManageOverview.registrationNumber.split("/")
+        selected.fundManageOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}02/${parts[2] || "07"}`
+      }
+      if (selected.fundManageOverview) {
+        selected.fundManageOverview.taxNumber = `9${Math.floor(10000000 + Math.random() * 90000000)}`
+        selected.fundManageOverview.vatRegistrationNumbers = `4${Math.floor(10000000 + Math.random() * 90000000)}`
       }
       selected.documentUpload = createMockFiles(selected.documentUploadPlaceholder)
       selected.declarationConsent = {
@@ -661,7 +834,9 @@ export default function CMFOnboardProfile() {
       delete selected.declarationConsentPlaceholder
 
     } else if (profileType === "Catalyst") {
-      const idx = Math.floor(Math.random() * mockCatalysts.length)
+      const idx = (targetIndex !== null && targetIndex !== undefined)
+        ? Math.abs(targetIndex) % mockCatalysts.length
+        : Math.floor(Math.random() * mockCatalysts.length)
       selected = JSON.parse(JSON.stringify(mockCatalysts[idx]))
       if (selected.contactDetails?.primaryContactEmail) {
         const parts = selected.contactDetails.primaryContactEmail.split('@')
@@ -670,6 +845,11 @@ export default function CMFOnboardProfile() {
       if (selected.contactDetails?.businessEmail) {
         const parts = selected.contactDetails.businessEmail.split('@')
         selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      selected.contactDetails.email = selected.contactDetails.businessEmail || selected.contactDetails.primaryContactEmail
+      if (selected.entityOverview?.registrationNumber) {
+        const parts = selected.entityOverview.registrationNumber.split("/")
+        selected.entityOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}03/${parts[2] || "08"}`
       }
       selected.documentUpload = createMockFiles(selected.documentUploadPlaceholder)
       selected.declarationConsent = {
@@ -682,11 +862,28 @@ export default function CMFOnboardProfile() {
       delete selected.declarationConsentPlaceholder
 
     } else if (profileType === "CMF") {
-      const idx = Math.floor(Math.random() * mockCMFs.length)
+      const idx = (targetIndex !== null && targetIndex !== undefined)
+        ? Math.abs(targetIndex) % mockCMFs.length
+        : Math.floor(Math.random() * mockCMFs.length)
       selected = JSON.parse(JSON.stringify(mockCMFs[idx]))
       if (selected.contactDetails?.email) {
         const parts = selected.contactDetails.email.split('@')
         selected.contactDetails.email = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      if (selected.contactDetails?.businessEmail) {
+        const parts = selected.contactDetails.businessEmail.split('@')
+        selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      }
+      if (!selected.contactDetails?.businessEmail && selected.contactDetails?.email) {
+        selected.contactDetails.businessEmail = selected.contactDetails.email
+      }
+      if (selected.entityOverview?.registrationNumber) {
+        const parts = selected.entityOverview.registrationNumber.split("/")
+        selected.entityOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}04/${parts[2] || "07"}`
+      }
+      if (selected.legalCompliance) {
+        selected.legalCompliance.taxNumber = `9${Math.floor(10000000 + Math.random() * 90000000)}`
+        selected.legalCompliance.vatNumber = `4${Math.floor(10000000 + Math.random() * 90000000)}`
       }
       selected.documents = createMockFiles(selected.documentsPlaceholder)
       selected.declarationConsent = {
@@ -700,6 +897,8 @@ export default function CMFOnboardProfile() {
     }
 
     if (selected) {
+      setEmailConflictWarning("")
+      setDuplicateEntity(null)
       setFormData(selected)
       const list = getSectionsList(profileType)
       const completed = {}
@@ -1793,21 +1992,45 @@ export default function CMFOnboardProfile() {
   return (
     <div className="flex flex-col font-sans w-full p-4">
       {showEasterEgg && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-[#faf7f2] to-[#f5ebd8] border border-[#e6d7c3] rounded-2xl flex items-center justify-between shadow-md transition-all">
+        <div className="mb-6 p-4 bg-gradient-to-r from-[#faf7f2] via-[#f7f0e4] to-[#f5ebd8] border border-[#e6d7c3] rounded-2xl flex items-center justify-between shadow-md transition-all flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <span className="text-xl">🪄</span>
             <div>
-              <h4 className="text-sm font-bold text-[#4a352f] m-0">Developer Easter Egg Auto-Fill</h4>
-              <p className="text-[11px] text-[#7d5a50] m-0">Click the button to fill all sections with randomized mock partner details and bypass document uploads.</p>
+              <h4 className="text-sm font-bold text-[#4a352f] m-0">Auto-Fill Tool — {profileType}</h4>
+              <p className="text-[11px] text-[#7d5a50] m-0">
+                Populates all required sections with realistic mock partner profiles, unique credentials, and complete compliance data without duplicate conflicts.
+              </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleAutoFill}
-            className="bg-[#7d5a50] hover:bg-[#6b4c43] text-white rounded-xl px-4 py-2 text-xs font-semibold shadow-md transition-all border border-[#7d5a50]"
-          >
-            Auto-Fill Random {profileType}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {profileType !== "Business" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleAutoFill(0)}
+                  className="bg-[#faf7f2] hover:bg-[#f0e8de] text-[#4a352f] border border-[#c8b6a6] rounded-xl px-3.5 py-2 text-xs font-semibold shadow-sm transition-all"
+                  title="Auto-fill Profile 1"
+                >
+                  Profile 1: {profileType === "Funder" ? "Vanguard Capital" : profileType === "Catalyst" ? "Impact Hub Africa" : "Capital Access Group"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAutoFill(1)}
+                  className="bg-[#faf7f2] hover:bg-[#f0e8de] text-[#4a352f] border border-[#c8b6a6] rounded-xl px-3.5 py-2 text-xs font-semibold shadow-sm transition-all"
+                  title="Auto-fill Profile 2"
+                >
+                  Profile 2: {profileType === "Funder" ? "Apex Horizon Impact" : profileType === "Catalyst" ? "Genesis Accelerator" : "Vanguard Syndicates"}
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => handleAutoFill(null)}
+              className="bg-[#7d5a50] hover:bg-[#6b4c43] text-white rounded-xl px-4 py-2 text-xs font-semibold shadow-md transition-all border border-[#7d5a50]"
+            >
+              Auto-Fill Random {profileType}
+            </button>
+          </div>
         </div>
       )}
 
@@ -1844,16 +2067,14 @@ export default function CMFOnboardProfile() {
               <span className="text-xs font-bold text-[#4a352f]">{completionPercentage}%</span>
             </div>
           </div>
-          {window.location.hostname === "localhost" && (
-            <button
-              type="button"
-              onClick={() => setShowEasterEgg(prev => !prev)}
-              className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold shadow-sm transition-all"
-            >
-              <Settings size={14} className="animate-spin" style={{ animationDuration: '3s' }} />
-              Auto-Fill Tool
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setShowEasterEgg(prev => !prev)}
+            className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold shadow-sm transition-all"
+          >
+            <Settings size={14} className="animate-spin" style={{ animationDuration: '3s' }} />
+            Auto-Fill Tool
+          </button>
           <button
             onClick={handleSaveDraft}
             disabled={saving}

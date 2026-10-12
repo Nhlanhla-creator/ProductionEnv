@@ -35,8 +35,8 @@ export const getDealflowApplicationStatus = (app) => {
   const lower = raw.toLowerCase()
 
   let label = raw
-  if (!raw || lower === "application sent" || lower === "sent" || lower === "applied") {
-    label = type === "Advisor" ? "Contacted" : "Applied"
+  if (!raw || lower === "application sent" || lower === "sent" || lower === "applied" || lower === "contacted") {
+    label = "Applied"
   } else if (lower === "under review" || lower === "in review") {
     label = type === "Catalyst" ? "Evaluation" : "Under Review"
   } else if (lower.includes("eval")) {
@@ -103,11 +103,7 @@ export const SME_DEALFLOW_PIPELINES = {
     headerIcon: Landmark,
     subtitle: "Funder match dealflow progression, stage by stage",
     stages: [
-      { id: "new_match", name: "New Match", icon: Target, statuses: ["new match", "match", "matched"], tooltip: "Funds matched to profile that haven't been acted on yet." },
-      { id: "viewed", name: "Viewed", icon: Eye, statuses: ["viewed"], tooltip: "Funds opened but not shortlisted." },
-      { id: "shortlisted", name: "Shortlisted", icon: ListChecks, statuses: ["shortlisted"], tooltip: "Funds saved as worth applying to." },
-      { id: "started", name: "Application Started", icon: FilePlus, statuses: ["application started", "started", "draft"], tooltip: "Application opened but not yet submitted." },
-      { id: "applied", name: "Applied", icon: Send, statuses: ["applied", "application sent", "sent"], tooltip: "Application submitted and with the funder." },
+      { id: "applied", name: "Applied", icon: Send, statuses: ["applied", "application sent", "sent", "new match", "match", "matched", "viewed", "shortlisted", "started", "draft"], tooltip: "Application submitted and with the funder." },
       { id: "review", name: "Under Review", icon: Search, statuses: ["under review", "in review", "review", "screening", "evaluation"], tooltip: "The funder is assessing the application." },
       { id: "accepted", name: "Accepted", icon: BadgeCheck, statuses: ["accepted", "approved"], tooltip: "Funding approved in principle." },
       { id: "termsheet", name: "Termsheet", icon: ScrollText, statuses: ["termsheet", "term sheet"], tooltip: "Terms issued and under negotiation." },
@@ -123,8 +119,7 @@ export const SME_DEALFLOW_PIPELINES = {
     headerIcon: Briefcase,
     subtitle: "Accelerator & incubator match dealflow, stage by stage",
     stages: [
-      { id: "matched", name: "Matched", icon: Target, statuses: ["matched", "match", "new match"], tooltip: "BIG identified the SME as potential fit, but not applied yet." },
-      { id: "applied", name: "Applied", icon: FileText, statuses: ["applied", "application sent", "sent"], tooltip: "Application submitted and acknowledged." },
+      { id: "applied", name: "Applied", icon: FileText, statuses: ["applied", "application sent", "sent", "matched", "match", "new match"], tooltip: "Application submitted and acknowledged." },
       { id: "evaluation", name: "Evaluation", icon: Search, statuses: ["evaluation", "under review", "in review", "screening"], tooltip: "Catalyst reviewing fit and cohort readiness." },
       { id: "dueDiligence", name: "Due Diligence", icon: Shield, statuses: ["due diligence", "shortlisted"], tooltip: "Detailed assessment and verification of SME information." },
       { id: "decision", name: "Decision", icon: AlertCircle, statuses: ["decision", "committee review", "interview", "pitch"], tooltip: "Catalyst making a final decision on whether to proceed." },
@@ -141,10 +136,7 @@ export const SME_DEALFLOW_PIPELINES = {
     headerIcon: Briefcase,
     subtitle: "Advisor engagement dealflow, stage by stage",
     stages: [
-      { id: "new_match", name: "New Match", icon: Target, statuses: ["new match", "match", "matched"], tooltip: "Advisors matched that haven't been acted on yet." },
-      { id: "viewed", name: "Viewed", icon: Eye, statuses: ["viewed"], tooltip: "Profiles opened but not shortlisted." },
-      { id: "shortlisted", name: "Shortlisted", icon: ListChecks, statuses: ["shortlisted"], tooltip: "Advisors flagged as worth approaching." },
-      { id: "contacted", name: "Contacted", icon: Send, statuses: ["contacted", "applied", "application sent", "sent"], tooltip: "Connection request or application sent." },
+      { id: "applied", name: "Applied", icon: Send, statuses: ["applied", "application sent", "sent", "contacted", "new match", "match", "matched", "viewed", "shortlisted"], tooltip: "Connection request or application sent to advisor." },
       { id: "under_review", name: "Under Review", icon: Search, statuses: ["under review", "in review", "evaluation"], tooltip: "Advisor considering the engagement request." },
       { id: "interviewing", name: "Interviewing", icon: Phone, statuses: ["interviewing", "interview", "discovery call"], tooltip: "Introductory calls arranged or held." },
       { id: "accepted", name: "Accepted", icon: Award, statuses: ["accepted", "approved"], tooltip: "Advisor has agreed to work with SME." },
@@ -160,10 +152,7 @@ export const SME_DEALFLOW_PIPELINES = {
     headerIcon: GraduationCap,
     subtitle: "Candidate internship dealflow, stage by stage",
     stages: [
-      { id: "matched", name: "Matched", icon: Target, statuses: ["matched", "match", "new match"], tooltip: "Candidates matched to request not acted on yet." },
-      { id: "shortlisted", name: "Shortlisted", icon: ListChecks, statuses: ["shortlisted"], tooltip: "Candidates flagged as worth pursuing." },
-      { id: "requested", name: "Requested", icon: Send, statuses: ["requested"], tooltip: "Invited candidate to apply." },
-      { id: "applied", name: "Applied", icon: FileText, statuses: ["applied", "application sent"], tooltip: "Application sent or candidate applied." },
+      { id: "applied", name: "Applied", icon: FileText, statuses: ["applied", "application sent", "sent", "matched", "match", "new match", "shortlisted", "requested"], tooltip: "Application sent or candidate applied." },
       { id: "interviewed", name: "Contacted / Interview", icon: Phone, statuses: ["contacted/interview", "interviewed", "contacted", "interview"], tooltip: "Interview arranged or held." },
       { id: "confirmed", name: "Confirmed", icon: CheckCircle, statuses: ["confirmed"], tooltip: "Placement agreed in principle." },
       { id: "confirmed_ts", name: "Term Sheet Signed", icon: FileCheck, statuses: ["confirmed/term sheet sign", "term sheet signed", "term sheet"], tooltip: "Terms issued and signed." },
@@ -212,17 +201,16 @@ const resolveStageProgression = (pipelineConfig, currentStatus) => {
 
   // If no direct status match, default based on common patterns
   if (matchedIndex === -1) {
-    if (normStatus.includes("appl") || normStatus.includes("sent")) {
+    if (normStatus.includes("appl") || normStatus.includes("sent") || normStatus.includes("contact")) {
       matchedIndex = liveStages.findIndex((s) => s.id === "applied" || s.id === "contacted")
     } else if (normStatus.includes("review") || normStatus.includes("eval")) {
       matchedIndex = liveStages.findIndex((s) => s.id === "review" || s.id === "evaluation" || s.id === "under_review")
     }
   }
 
-  // Default to the first live stage after submission (usually "applied" or "contacted")
+  // Default to the first live stage after submission (which is "applied" at index 0)
   if (matchedIndex === -1) {
-    const appliedIdx = liveStages.findIndex((s) => s.id === "applied" || s.id === "contacted")
-    matchedIndex = appliedIdx !== -1 ? appliedIdx : 0
+    matchedIndex = 0
   }
 
   const currentStage = liveStages[matchedIndex]

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { db } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import {
   collection,
@@ -901,8 +901,12 @@ export const usePortfolioData = (options = {}) => {
   }, [options?.isCMF]);
 
   useEffect(() => {
-    const auth = getAuth();
-    const unsub = onAuthStateChanged(auth, (user) => {
+    const current = auth?.currentUser || getAuth().currentUser;
+    if (current) {
+      fetchAll(current.uid);
+    }
+    const targetAuth = auth || getAuth();
+    const unsub = onAuthStateChanged(targetAuth, (user) => {
       if (user) fetchAll(user.uid);
       else setLoading(false);
     });
@@ -920,7 +924,7 @@ export const usePortfolioData = (options = {}) => {
     loading,
     error,
     refetch: () => {
-      const u = getAuth().currentUser;
+      const u = auth?.currentUser || getAuth().currentUser;
       if (u) fetchAll(u.uid);
     },
   };
