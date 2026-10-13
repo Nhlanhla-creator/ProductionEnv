@@ -105,6 +105,13 @@ const parseCurrency = (value) => {
 const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2,9)}`
 const errText = (e) => String(e?.message ?? e ?? "Unknown error")
 
+const DEFAULT_INTEREST = {
+  companyName: "",
+  registrationNo: "",
+  businessStatus: "",
+  assignedTo: ""
+};
+
 // ─── Shared UI Components ──────────────────────────────────────────────────
 const btnBase = { padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 500,
   cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "7px", fontFamily: "inherit" }
@@ -3041,6 +3048,7 @@ const GovernanceTab = ({ userData, onSave, isInvestorView }) => {
     if (type === 'previousInterests') setPreviousInterests(updatedList);
     onSave(updated);
   };
+
   // Mock data for KPI Summary Table (This would ideally be fetched or calculated)
   const governanceKPIs = [
     {
