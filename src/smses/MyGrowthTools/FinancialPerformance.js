@@ -52,7 +52,6 @@ const RAPS_CATEGORIES = [
 const ACTION_STATUSES = ["Not Done", "In Progress", "Done"];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-/* ─── Expanded period set ───────────────────────────────────────────────── */
 const PERIODS = [
   { key: "last_week",    label: "Last week" },
   { key: "this_week",    label: "This week" },
@@ -71,7 +70,6 @@ const PERIOD_PREFIX = {
   last_year: "Last year", this_year: "This year",
 };
 
-/* ─── Financial year ────────────────────────────────────────────────────── */
 const fyStartMonthFromEnd = (end) => {
   if (!end) return 0;
   const m = Number(String(end).split("-")[1]);
@@ -100,7 +98,6 @@ const fyQuarters = (sy, sm) => {
 };
 const currentMonthKey = () => { const d = new Date(); return `M:${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 
-/* ─── Date helpers ─────────────────────────────────────────────────────── */
 const startOfWeek = (d) => {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const day = x.getDay();
@@ -119,7 +116,6 @@ const monthEnd = (y, m) => new Date(y, m + 1, 0, 23, 59, 59, 999);
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; };
 
-/* ─── Formatting ────────────────────────────────────────────────────────── */
 const LOCALE = "en-US";
 const trimNum = (n) => {
   if (!Number.isFinite(n)) return "";
@@ -253,9 +249,6 @@ const buildContext = (docs, year, mi) => {
   };
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   KPI registry
-   ════════════════════════════════════════════════════════════════════════ */
 const K = (o) => ({
   id: o.id, name: o.name, units: o.units, direction: o.direction || "higher",
   aggregate: o.aggregate || "avg",
@@ -268,8 +261,122 @@ const K = (o) => ({
 
 const TAB_DEFS = [
   {
-    id: "summary",
-    name: "Financial Performance",
+    id: "profit-costs",
+    name: "Profit & Costs",
+    categories: [
+      { name: "Revenue & Costs", kpis: [
+        K({ id: "sales", name: "Revenue", units: "R", direction: "higher", aggregate: "sum", frequency: "Monthly",
+          field: { src: "pnl", a: "sales", b: "salesBudget" }, source: "Entered manually",
+          meaning: "Everything you invoiced in the period.", measured: "=SUM(Sales)",
+          actual: (c) => c.sales, budget: (c) => c.salesB }),
+        K({ id: "cogs", name: "Cost of Sales", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
+          field: { src: "pnl", a: "cogs", b: "cogsBudget" }, source: "Entered manually",
+          meaning: "What it cost you to deliver what you sold.", measured: "=SUM(COGS)",
+          actual: (c) => c.cogs, budget: (c) => c.cogsB }),
+        K({ id: "opex", name: "Operating Expenses", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
+          field: { src: "pnl", a: "opex", b: "opexBudget" }, source: "Entered manually",
+          meaning: "Running the business — salaries, rent, marketing, admin.", measured: "=SUM(Opex)",
+          actual: (c) => c.opex, budget: (c) => c.opexB }),
+      ]},
+      { name: "Profitability & Margins", kpis: [
+        K({ id: "grossProfit", name: "Gross Profit", units: "R", direction: "higher", aggregate: "sum",
+          source: "Calculated from P&L", meaning: "What's left after paying for what you sold.",
+          measured: "=SUM(Sales) - SUM(COGS)", actual: (c) => c.gp, budget: (c) => c.gpB }),
+        K({ id: "ebitda", name: "EBITDA", units: "R", direction: "higher", aggregate: "sum",
+          source: "Calculated from P&L", meaning: "Operating profit before depreciation, amortisation, interest and tax.",
+          measured: "=SUM(Sales) - SUM(COGS) - SUM(Opex)", actual: (c) => c.ebitda, budget: (c) => c.ebitdaB }),
+        K({ id: "netProfit", name: "Net Profit", units: "R", direction: "higher", aggregate: "sum",
+          source: "Calculated from P&L", meaning: "What the owners actually keep after every cost.",
+          measured: "=EBITDA - Depreciation - Amortisation - InterestExpense + InterestIncome - Tax",
+          actual: (c) => c.np, budget: (c) => c.npB }),
+        K({ id: "gpMargin", name: "Gross Profit Margin", units: "%", direction: "higher", aggregate: "avg",
+          source: "Calculated from P&L", meaning: "Cents of gross profit in every rand of revenue.",
+          measured: "=(SUM(Sales) - SUM(COGS)) / SUM(Sales) * 100",
+          actual: (c) => { const r = div(c.gp, c.sales); return r === null ? null : r * 100; },
+          budget: (c) => { const r = div(c.gpB, c.salesB); return r === null ? null : r * 100; } }),
+        K({ id: "npMargin", name: "Net Profit Margin", units: "%", direction: "higher", aggregate: "avg",
+          source: "Calculated from P&L", meaning: "Cents of profit in every rand of revenue once everything is paid.",
+          measured: "=NetProfit / SUM(Sales) * 100",
+          actual: (c) => { const r = div(c.np, c.sales); return r === null ? null : r * 100; },
+          budget: (c) => { const r = div(c.npB, c.salesB); return r === null ? null : r * 100; } }),
+      ]},
+      { name: "Cost Flexibility", kpis: [
+        K({ id: "fixedVariableRatio", name: "Fixed / Variable Ratio", units: "%", direction: "lower", aggregate: "avg",
+          source: "Calculated from Cost Agility", meaning: "How much of your cost base you cannot switch off if revenue drops.",
+          measured: "=SUM(FixedCosts) / (SUM(FixedCosts) + SUM(VariableCosts)) * 100",
+          actual: (c) => { const r = div(c.fixedCosts, (c.fixedCosts || 0) + (c.variableCosts || 0)); return r === null ? null : r * 100; } }),
+        K({ id: "discretionaryPct", name: "Discretionary Spend", units: "%", direction: "higher", aggregate: "avg",
+          source: "Calculated from Cost Agility", meaning: "The share of spend you could pause next month without breaking anything.",
+          measured: "=SUM(DiscretionaryCosts) / SUM(TotalCosts) * 100",
+          actual: (c) => { const r = div(c.discretionary, c.totalCost); return r === null ? null : r * 100; } }),
+        K({ id: "lockInDuration", name: "Cost Lock-in", units: "months", direction: "lower", aggregate: "avg", frequency: "Monthly",
+          field: { src: "cost", a: "lockInDuration" }, source: "Entered manually",
+          meaning: "How long you'd stay committed to your fixed costs.", measured: "=AVERAGE(RemainingContractMonths)",
+          actual: (c) => c.lockIn }),
+        K({ id: "fixedCosts", name: "Fixed Costs", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
+          field: { src: "cost", a: "fixedCosts" }, source: "Entered manually",
+          meaning: "Costs that arrive whether you sell anything or not.", measured: "=SUM(FixedCosts)",
+          actual: (c) => c.fixedCosts }),
+        K({ id: "variableCosts", name: "Variable Costs", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
+          field: { src: "cost", a: "variableCosts" }, source: "Entered manually",
+          meaning: "Costs that rise and fall with volume.", measured: "=SUM(VariableCosts)",
+          actual: (c) => c.variableCosts }),
+      ]},
+    ],
+  },
+  {
+    id: "cash-liquidity",
+    name: "Cash & Liquidity",
+    categories: [
+      { name: "Cash Position & Runway", kpis: [
+        K({ id: "cashBalance", name: "Cash Balance", units: "R", direction: "higher", aggregate: "avg", frequency: "Monthly",
+          field: { src: "liq", a: "cashBalance" }, source: "Entered manually",
+          meaning: "What is actually in the bank at month end.", measured: "=SUM(BankAccounts) + PettyCash",
+          actual: (c) => (Number.isFinite(c.cashBalance) ? c.cashBalance : c.cash) }),
+        K({ id: "burnRate", name: "Burn Rate", units: "R", direction: "lower", aggregate: "avg", frequency: "Monthly",
+          field: { src: "liq", a: "burnRate" }, source: "Entered manually",
+          meaning: "How much cash the business consumes in a month once everything is paid.",
+          measured: "=(OpeningCash - ClosingCash) / MonthsElapsed", actual: (c) => c.burnRate }),
+        K({ id: "cashCover", name: "Cash Cover", units: "months", direction: "higher", aggregate: "avg", frequency: "Monthly",
+          field: { src: "liq", a: "cashCover" }, source: "Entered manually or calculated",
+          meaning: "How many months the cash on hand would last at the current burn.",
+          measured: "=CashBalance / BurnRate",
+          actual: (c) => (Number.isFinite(c.cashCover) ? c.cashCover : div(c.cashBalance, c.burnRate)) }),
+      ]},
+      { name: "Working Capital & Liquidity", kpis: [
+        K({ id: "workingCapital", name: "Working Capital", units: "R", direction: "higher", aggregate: "avg", frequency: "Monthly",
+          field: { src: "liq", a: "workingCapital" }, source: "Entered manually or calculated",
+          meaning: "The buffer between what you're owed and what you owe.",
+          measured: "=CurrentAssets - CurrentLiabilities",
+          actual: (c) => (Number.isFinite(c.workingCapital) ? c.workingCapital
+            : (Number.isFinite(c.currentAssets) && Number.isFinite(c.currentLiabilities) ? c.currentAssets - c.currentLiabilities : null)) }),
+        K({ id: "currentRatio", name: "Current Ratio", units: "×", direction: "higher", aggregate: "avg", frequency: "Monthly",
+          field: { src: "liq", a: "currentRatio" }, source: "Entered manually or calculated",
+          meaning: "Whether short-term assets cover short-term bills.", measured: "=CurrentAssets / CurrentLiabilities",
+          actual: (c) => (Number.isFinite(c.currentRatio) ? c.currentRatio : div(c.currentAssets, c.currentLiabilities)) }),
+        K({ id: "quickRatio", name: "Quick Ratio", units: "×", direction: "higher", aggregate: "avg", frequency: "Monthly",
+          field: { src: "liq", a: "quickRatio" }, source: "Entered manually or calculated",
+          meaning: "Same test with stock stripped out.", measured: "=(CurrentAssets - Inventory) / CurrentLiabilities",
+          actual: (c) => (Number.isFinite(c.quickRatio) ? c.quickRatio
+            : div(Number.isFinite(c.currentAssets) ? c.currentAssets - (c.inventory || 0) : null, c.currentLiabilities)) }),
+        K({ id: "cashRatio", name: "Cash Ratio", units: "×", direction: "higher", aggregate: "avg", frequency: "Monthly",
+          field: { src: "liq", a: "cashRatio" }, source: "Entered manually or calculated",
+          meaning: "The harshest test — cash alone against short-term bills.", measured: "=CashAndEquivalents / CurrentLiabilities",
+          actual: (c) => (Number.isFinite(c.cashRatio) ? c.cashRatio : div(c.cash, c.currentLiabilities)) }),
+      ]},
+      { name: "Collections", kpis: [
+        K({ id: "dailyCash", name: "Daily Cash Collected", units: "R", direction: "higher", aggregate: "sum", frequency: "Daily",
+          source: "Entered daily", meaning: "Cash collected per day. Rolls up to monthly, quarterly and annual.",
+          measured: "=SUM(DailyCollections) entered directly per day.", actual: () => null }),
+        K({ id: "dailyTxns", name: "Daily Transaction Count", units: "#", direction: "higher", aggregate: "sum", frequency: "Daily",
+          source: "Entered daily", meaning: "Completed transactions per day.", measured: "Entered directly per day.",
+          actual: () => null }),
+      ]},
+    ],
+  },
+  {
+    id: "financial-strength",
+    name: "Financial Strength",
     categories: [
       { name: "Solvency", kpis: [
         K({ id: "nav", name: "Net Asset Value", units: "R", direction: "higher", aggregate: "avg",
@@ -278,200 +385,36 @@ const TAB_DEFS = [
           measured: "=SUM(TotalAssets) - SUM(TotalLiabilities)",
           actual: (c) => (Number.isFinite(c.assets) && Number.isFinite(c.liabilities) ? c.assets - c.liabilities : null) }),
         K({ id: "equityRatio", name: "Equity Ratio", units: "%", direction: "higher", aggregate: "avg",
-          source: "Calculated from Balance Sheet",
-          meaning: "How much of the business is funded by owners rather than lenders.",
+          source: "Calculated from Balance Sheet", meaning: "How much of the business is funded by owners rather than lenders.",
           measured: "=TotalEquity / TotalAssets * 100",
           actual: (c) => { const r = div(c.equity, c.assets); return r === null ? null : r * 100; } }),
         K({ id: "interestCoverage", name: "Interest Coverage", units: "×", direction: "higher", aggregate: "avg",
-          source: "Calculated from P&L",
-          meaning: "How many times over your operating profit covers the interest bill.",
-          measured: "=EBIT / InterestExpense",
-          actual: (c) => div(c.ebit, c.intExp) }),
+          source: "Calculated from P&L", meaning: "How many times over your operating profit covers the interest bill.",
+          measured: "=EBIT / InterestExpense", actual: (c) => div(c.ebit, c.intExp) }),
       ]},
       { name: "Leverage", kpis: [
         K({ id: "debtToAssets", name: "Debt to Assets", units: "×", direction: "lower", aggregate: "avg",
-          source: "Calculated from Balance Sheet",
-          meaning: "How much of what you own is funded by debt.",
-          measured: "=TotalLiabilities / TotalAssets",
-          actual: (c) => div(c.liabilities, c.assets) }),
+          source: "Calculated from Balance Sheet", meaning: "How much of what you own is funded by debt.",
+          measured: "=TotalLiabilities / TotalAssets", actual: (c) => div(c.liabilities, c.assets) }),
         K({ id: "debtToEquity", name: "Debt to Equity", units: "×", direction: "lower", aggregate: "avg",
-          source: "Calculated from Balance Sheet",
-          meaning: "Rand of debt for every rand of owners' capital.",
-          measured: "=TotalLiabilities / TotalEquity",
-          actual: (c) => div(c.liabilities, c.equity) }),
+          source: "Calculated from Balance Sheet", meaning: "Rand of debt for every rand of owners' capital.",
+          measured: "=TotalLiabilities / TotalEquity", actual: (c) => div(c.liabilities, c.equity) }),
         K({ id: "equityMultiplier", name: "Equity Multiplier", units: "×", direction: "lower", aggregate: "avg",
-          source: "Calculated from Balance Sheet",
-          meaning: "How far the asset base is stretched over the equity behind it.",
-          measured: "=TotalAssets / TotalEquity",
-          actual: (c) => div(c.assets, c.equity) }),
+          source: "Calculated from Balance Sheet", meaning: "How far the asset base is stretched over the equity behind it.",
+          measured: "=TotalAssets / TotalEquity", actual: (c) => div(c.assets, c.equity) }),
       ]},
-      { name: "Revenue & Costs", kpis: [
-        K({ id: "sales", name: "Revenue", units: "R", direction: "higher", aggregate: "sum", frequency: "Monthly",
-          field: { src: "pnl", a: "sales", b: "salesBudget" },
-          source: "Entered manually",
-          meaning: "Everything you invoiced in the period.",
-          measured: "=SUM(Sales)",
-          actual: (c) => c.sales, budget: (c) => c.salesB }),
-        K({ id: "cogs", name: "Cost of Sales", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
-          field: { src: "pnl", a: "cogs", b: "cogsBudget" },
-          source: "Entered manually",
-          meaning: "What it cost you to deliver what you sold.",
-          measured: "=SUM(COGS)",
-          actual: (c) => c.cogs, budget: (c) => c.cogsB }),
-        K({ id: "opex", name: "Operating Expenses", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
-          field: { src: "pnl", a: "opex", b: "opexBudget" },
-          source: "Entered manually",
-          meaning: "Running the business — salaries, rent, marketing, admin.",
-          measured: "=SUM(Opex)",
-          actual: (c) => c.opex, budget: (c) => c.opexB }),
-      ]},
-      { name: "Profitability", kpis: [
-        K({ id: "grossProfit", name: "Gross Profit", units: "R", direction: "higher", aggregate: "sum",
-          source: "Calculated from P&L",
-          meaning: "What's left after paying for what you sold.",
-          measured: "=SUM(Sales) - SUM(COGS)",
-          actual: (c) => c.gp, budget: (c) => c.gpB }),
-        K({ id: "ebitda", name: "EBITDA", units: "R", direction: "higher", aggregate: "sum",
-          source: "Calculated from P&L",
-          meaning: "Operating profit before depreciation, amortisation, interest and tax.",
-          measured: "=SUM(Sales) - SUM(COGS) - SUM(Opex)",
-          actual: (c) => c.ebitda, budget: (c) => c.ebitdaB }),
-        K({ id: "netProfit", name: "Net Profit", units: "R", direction: "higher", aggregate: "sum",
-          source: "Calculated from P&L",
-          meaning: "What the owners actually keep after every cost.",
-          measured: "=EBITDA - Depreciation - Amortisation - InterestExpense + InterestIncome - Tax",
-          actual: (c) => c.np, budget: (c) => c.npB }),
-      ]},
-      { name: "Margins", kpis: [
-        K({ id: "gpMargin", name: "Gross Profit Margin", units: "%", direction: "higher", aggregate: "avg",
-          source: "Calculated from P&L",
-          meaning: "Cents of gross profit in every rand of revenue.",
-          measured: "=(SUM(Sales) - SUM(COGS)) / SUM(Sales) * 100",
-          actual: (c) => { const r = div(c.gp, c.sales); return r === null ? null : r * 100; },
-          budget: (c) => { const r = div(c.gpB, c.salesB); return r === null ? null : r * 100; } }),
-        K({ id: "npMargin", name: "Net Profit Margin", units: "%", direction: "higher", aggregate: "avg",
-          source: "Calculated from P&L",
-          meaning: "Cents of profit in every rand of revenue once everything is paid.",
-          measured: "=NetProfit / SUM(Sales) * 100",
-          actual: (c) => { const r = div(c.np, c.sales); return r === null ? null : r * 100; },
-          budget: (c) => { const r = div(c.npB, c.salesB); return r === null ? null : r * 100; } }),
-      ]},
-      { name: "Liquidity Ratios", kpis: [
-        K({ id: "currentRatio", name: "Current Ratio", units: "×", direction: "higher", aggregate: "avg", frequency: "Monthly",
-          field: { src: "liq", a: "currentRatio" },
-          source: "Entered manually or calculated",
-          meaning: "Whether short-term assets cover short-term bills.",
-          measured: "=CurrentAssets / CurrentLiabilities",
-          actual: (c) => (Number.isFinite(c.currentRatio) ? c.currentRatio : div(c.currentAssets, c.currentLiabilities)) }),
-        K({ id: "quickRatio", name: "Quick Ratio", units: "×", direction: "higher", aggregate: "avg", frequency: "Monthly",
-          field: { src: "liq", a: "quickRatio" },
-          source: "Entered manually or calculated",
-          meaning: "Same test with stock stripped out.",
-          measured: "=(CurrentAssets - Inventory) / CurrentLiabilities",
-          actual: (c) => (Number.isFinite(c.quickRatio) ? c.quickRatio
-            : div(Number.isFinite(c.currentAssets) ? c.currentAssets - (c.inventory || 0) : null, c.currentLiabilities)) }),
-        K({ id: "cashRatio", name: "Cash Ratio", units: "×", direction: "higher", aggregate: "avg", frequency: "Monthly",
-          field: { src: "liq", a: "cashRatio" },
-          source: "Entered manually or calculated",
-          meaning: "The harshest test — cash alone against short-term bills.",
-          measured: "=CashAndEquivalents / CurrentLiabilities",
-          actual: (c) => (Number.isFinite(c.cashRatio) ? c.cashRatio : div(c.cash, c.currentLiabilities)) }),
-      ]},
-      { name: "Survival", kpis: [
-        K({ id: "burnRate", name: "Burn Rate", units: "R", direction: "lower", aggregate: "avg", frequency: "Monthly",
-          field: { src: "liq", a: "burnRate" },
-          source: "Entered manually",
-          meaning: "How much cash the business consumes in a month once everything is paid.",
-          measured: "=(OpeningCash - ClosingCash) / MonthsElapsed",
-          actual: (c) => c.burnRate }),
-        K({ id: "cashCover", name: "Cash Cover", units: "months", direction: "higher", aggregate: "avg", frequency: "Monthly",
-          field: { src: "liq", a: "cashCover" },
-          source: "Entered manually or calculated",
-          meaning: "How many months the cash on hand would last at the current burn.",
-          measured: "=CashBalance / BurnRate",
-          actual: (c) => (Number.isFinite(c.cashCover) ? c.cashCover : div(c.cashBalance, c.burnRate)) }),
-        K({ id: "cashflow", name: "Free Cashflow", units: "R", direction: "higher", aggregate: "sum", frequency: "Monthly",
-          field: { src: "liq", a: "cashflow" },
-          source: "Entered manually",
-          meaning: "Cash left over after running the business and keeping the assets going.",
-          measured: "=OperatingCashflow - CapitalExpenditure",
-          actual: (c) => c.cashflow }),
-        K({ id: "workingCapital", name: "Working Capital", units: "R", direction: "higher", aggregate: "avg", frequency: "Monthly",
-          field: { src: "liq", a: "workingCapital" },
-          source: "Entered manually or calculated",
-          meaning: "The buffer between what you're owed and what you owe.",
-          measured: "=CurrentAssets - CurrentLiabilities",
-          actual: (c) => (Number.isFinite(c.workingCapital) ? c.workingCapital
-            : (Number.isFinite(c.currentAssets) && Number.isFinite(c.currentLiabilities) ? c.currentAssets - c.currentLiabilities : null)) }),
-        K({ id: "cashBalance", name: "Cash Balance", units: "R", direction: "higher", aggregate: "avg", frequency: "Monthly",
-          field: { src: "liq", a: "cashBalance" },
-          source: "Entered manually",
-          meaning: "What is actually in the bank at month end.",
-          measured: "=SUM(BankAccounts) + PettyCash",
-          actual: (c) => (Number.isFinite(c.cashBalance) ? c.cashBalance : c.cash) }),
-      ]},
-      { name: "Cost Agility", kpis: [
-        K({ id: "fixedVariableRatio", name: "Fixed / Variable Ratio", units: "%", direction: "lower", aggregate: "avg",
-          source: "Calculated from Cost Agility",
-          meaning: "How much of your cost base you cannot switch off if revenue drops.",
-          measured: "=SUM(FixedCosts) / (SUM(FixedCosts) + SUM(VariableCosts)) * 100",
-          actual: (c) => { const r = div(c.fixedCosts, (c.fixedCosts || 0) + (c.variableCosts || 0)); return r === null ? null : r * 100; } }),
-        K({ id: "discretionaryPct", name: "Discretionary Spend", units: "%", direction: "higher", aggregate: "avg",
-          source: "Calculated from Cost Agility",
-          meaning: "The share of spend you could pause next month without breaking anything.",
-          measured: "=SUM(DiscretionaryCosts) / SUM(TotalCosts) * 100",
-          actual: (c) => { const r = div(c.discretionary, c.totalCost); return r === null ? null : r * 100; } }),
-        K({ id: "lockInDuration", name: "Cost Lock-in", units: "months", direction: "lower", aggregate: "avg", frequency: "Monthly",
-          field: { src: "cost", a: "lockInDuration" },
-          source: "Entered manually",
-          meaning: "How long you'd stay committed to your fixed costs.",
-          measured: "=AVERAGE(RemainingContractMonths)",
-          actual: (c) => c.lockIn }),
-        K({ id: "fixedCosts", name: "Fixed Costs", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
-          field: { src: "cost", a: "fixedCosts" },
-          source: "Entered manually",
-          meaning: "Costs that arrive whether you sell anything or not.",
-          measured: "=SUM(FixedCosts)",
-          actual: (c) => c.fixedCosts }),
-        K({ id: "variableCosts", name: "Variable Costs", units: "R", direction: "lower", aggregate: "sum", frequency: "Monthly",
-          field: { src: "cost", a: "variableCosts" },
-          source: "Entered manually",
-          meaning: "Costs that rise and fall with volume.",
-          measured: "=SUM(VariableCosts)",
-          actual: (c) => c.variableCosts }),
-      ]},
-      { name: "Daily Operations", kpis: [
-        K({ id: "dailyCash", name: "Daily Cash Collected", units: "R", direction: "higher", aggregate: "sum", frequency: "Daily",
-          source: "Entered daily",
-          meaning: "Cash collected per day. Rolls up to monthly, quarterly and annual.",
-          measured: "=SUM(DailyCollections) entered directly per day.",
-          actual: () => null }),
-        K({ id: "dailyTxns", name: "Daily Transaction Count", units: "#", direction: "higher", aggregate: "sum", frequency: "Daily",
-          source: "Entered daily",
-          meaning: "Completed transactions per day.",
-          measured: "Entered directly per day.",
-          actual: () => null }),
-      ]},
-      { name: "Weekly Operations", kpis: [
-        K({ id: "weeklyProduction", name: "Weekly Production Output", units: "units", direction: "higher", aggregate: "sum", frequency: "Weekly",
-          source: "Entered weekly",
-          meaning: "Units produced per week. Rolls up to monthly.",
-          measured: "Entered directly per week.",
-          actual: () => null }),
-        K({ id: "weeklyOvertime", name: "Weekly Overtime Hours", units: "hrs", direction: "lower", aggregate: "sum", frequency: "Weekly",
-          source: "Entered weekly",
-          meaning: "Overtime hours per week. Rolls up to monthly.",
-          measured: "Entered directly per week.",
-          actual: () => null }),
+      { name: "Debt Servicing Capacity", kpis: [
+        K({ id: "interestCoverage2", name: "Interest Coverage", units: "×", direction: "higher", aggregate: "avg",
+          source: "Calculated from P&L", meaning: "How many times over your operating profit covers the interest bill.",
+          measured: "=EBIT / InterestExpense", actual: (c) => div(c.ebit, c.intExp) }),
       ]},
     ],
   },
-  { id: "equity-structure", name: "Equity Structure", custom: "equity", categories: [] },
-  { id: "liquidity", name: "Loan Repayments", categories: [ { name: "Loan Repayments", custom: "loans" } ] },
   { id: "balance-sheet", name: "Balance Sheet", custom: "balanceSheet", categories: [] },
+  { id: "loans", name: "Loan Repayments", categories: [ { name: "Loan Repayments", custom: "loans" } ] },
+  { id: "equity-structure", name: "Equity Structure", custom: "equity", categories: [] },
 ];
 
-/* ─── Status helpers ───────────────────────────────────────────────────── */
 const S = {
   green: { key: "green", label: "On budget", color: T.green, bg: T.greenBg },
   amber: { key: "amber", label: "Needs attention", color: T.amber, bg: T.amberBg },
@@ -506,9 +449,6 @@ const StatusIcon = ({ status, size = 22 }) => {
   return <Info {...p} />;
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Period resolution
-   ════════════════════════════════════════════════════════════════════════ */
 const resolveMonth = (kpi, year, mi) => {
   const mKey = `M:${year}-${String(mi + 1).padStart(2, "0")}`;
   const direct = kpi.entries?.[mKey];
@@ -627,7 +567,6 @@ const getVariance = (kpi, period, fy) => {
   return Number.isFinite(b) && Number.isFinite(a) ? a - b : null;
 };
 
-/* ─── Columns ───────────────────────────────────────────────────────────── */
 const COLUMN_DEFS = {
   category:  { label: "Category", width: 168, tip: "The category this KPI sits under.", filter: true, sort: true, hideable: true },
   kpi:       { label: "KPI", width: 258, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
@@ -643,7 +582,6 @@ const ACTIONS_KEY = "__actions__";
 const columnLines = (key, period) =>
   ["budget","actual","variance"].includes(key) ? [PERIOD_PREFIX[period] || "Period", COLUMN_DEFS[key].label] : [COLUMN_DEFS[key].label];
 
-/* ─── Shared UI ─────────────────────────────────────────────────────────── */
 const InfoTip = ({ text, light = false }) => {
   const [rect, setRect] = useState(null);
   if (!text) return null;
@@ -718,7 +656,6 @@ const DIRECTIONS = [
   { value: "match", label: "Matching is better" },
 ];
 
-/* ─── KPI info modal ───────────────────────────────────────────────────── */
 const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [editing, setEditing] = useState(false);
   const [meaning, setMeaning] = useState(kpi.meaning || "");
@@ -766,7 +703,6 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Analysis ─────────────────────────────────────────────────────────── */
 const localAnalysis = (kpi, period, v, fy) => {
   const status = statusFromPair(kpi, v.budget, v.actual);
   const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
@@ -914,9 +850,6 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => (
   </Modal>
 );
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Trend chart
-   ════════════════════════════════════════════════════════════════════════ */
 const CHART_VERSION = 4;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
@@ -1240,7 +1173,6 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   );
 };
 
-/* ─── Add Action ───────────────────────────────────────────────────────── */
 const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClose, onSaved }) => {
   const [meetings, setMeetings] = useState([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
@@ -1406,7 +1338,6 @@ const AddActionModal = ({ kpi, period, fy, categoryName, tabName, userId, onClos
   );
 };
 
-/* ─── KPI notes ────────────────────────────────────────────────────────── */
 const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   const [notes, setNotes] = useState(kpi.notes || "");
   const [state, setState] = useState("idle");
@@ -1434,7 +1365,6 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
   );
 };
 
-/* ─── Enhanced table hook ─────────────────────────────────────────────── */
 function useEnhancedTable(initialCols, dataRows) {
   const [colOrder, setColOrder] = useState(initialCols.map(c => c.key));
   const [widths, setWidths] = useState(() => Object.fromEntries(initialCols.map(c => [c.key, c.width || 140])));
@@ -1494,7 +1424,6 @@ function useEnhancedTable(initialCols, dataRows) {
     handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData };
 }
 
-/* ─── Filter dropdown ──────────────────────────────────────────────────── */
 const FilterDropdown = ({ options, value, onChange, onClose }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -2073,182 +2002,546 @@ const CapTableOverview = ({ investors, irrInvestments, readOnly, onSaveCapTable 
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Loan Repayments
+   Global Style Constants for Data Grids
    ════════════════════════════════════════════════════════════════════════ */
-const LoanRepaymentsPanel = ({ loans, readOnly, onSave }) => {
-  const [editingIdx, setEditingIdx] = useState(null);
-  const [editDraft, setEditDraft] = useState({});
-  const [addingNew, setAddingNew] = useState(false);
-  const [newLoan, setNewLoan] = useState({ name: "", scheduled: "", paid: "" });
+const MODE_COLOR = {
+  budget: { hdr: "#1e3a8a", hdrText: "#dbeafe", cell: "#eff6ff", border: "#bfdbfe", input: "#1e3a8a" },
+  actual: { hdr: "#166534", hdrText: "#dcfce7", cell: "#f0fdf4", border: "#bbf7d0", input: "#166534" },
+};
 
-  const cols = [
-    { key: "name", label: "Loan Name", tip: "Loan facility name." },
-    { key: "scheduled", label: "Scheduled", tip: "Amount due." },
-    { key: "paid", label: "Paid", tip: "Amount paid." },
-    { key: "variance", label: "Variance", tip: "Paid minus Scheduled." },
-  ];
-  const rows = loans.map((l, idx) => ({
-    __idx: idx, __raw: l,
-    name: l.name, scheduled: parseFloat(l.scheduled) || 0, paid: parseFloat(l.paid) || 0,
-    variance: (parseFloat(l.paid) || 0) - (parseFloat(l.scheduled) || 0),
-  }));
-  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
-  const totalScheduled = rows.reduce((s, r) => s + r.scheduled, 0);
-  const totalPaid = rows.reduce((s, r) => s + r.paid, 0);
-  const totalVar = totalPaid - totalScheduled;
-  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+/* ════════════════════════════════════════════════════════════════════════════
+   SimpleTrendChartModal — full-featured, matching the KPI trend chart
+   ════════════════════════════════════════════════════════════════════════ */
+const SimpleTrendChartModal = ({
+  title, subtitle, labels, actual, budget,
+  actualLabel = "Actual", budgetLabel = "Budget",
+  storageKey, savedPrefs, onSavePrefs,
+  onClose,
+}) => {
+  const [showCustomise, setShowCustomise] = useState(false);
+  const DEFAULTS = {
+    actualType: "line", budgetType: "bar", varianceType: "bar",
+    actualColor: "#1e40af", budgetColor: "#4a352f", axisMode: "both",
+  };
+  const [prefs, setPrefs] = useState(() => ({ ...DEFAULTS, ...(savedPrefs || {}) }));
+  const setPref = (patch) => {
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    if (onSavePrefs && storageKey) onSavePrefs(storageKey, next);
+  };
 
-  const startEdit = (row) => { setEditingIdx(row.__idx); setEditDraft({ name: row.__raw.name || "", scheduled: row.__raw.scheduled ?? "", paid: row.__raw.paid ?? "" }); };
-  const cancelEdit = () => { setEditingIdx(null); setEditDraft({}); };
-  const saveEdit = () => {
-    if (!onSave) { cancelEdit(); return; }
-    const next = loans.map((l, i) => i === editingIdx ? { ...l, name: editDraft.name, scheduled: editDraft.scheduled, paid: editDraft.paid } : l);
-    onSave(next);
-    cancelEdit();
+  const kpiShape = { units: "R" };
+
+  const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
+  const varColors = variance.map((v) => v === null ? "rgba(138,122,116,0.4)" : v <= 0 ? T.green : T.red);
+
+  const buildSeries = (type, data, color, { label, order } = {}) => {
+    const isArrayColor = Array.isArray(color);
+    if (type === "scatter") {
+      return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
+        showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
+        pointBackgroundColor: isArrayColor ? color.map((c) => `${c}33`) : "#ffffff",
+        pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
+    }
+    if (type === "line" || type === "area") {
+      return { type: "line", label, data,
+        borderColor: color, backgroundColor: type === "area" ? `${color}22` : "transparent",
+        borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: true,
+        pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
+        pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
+    }
+    return { type: "bar", label, data,
+      backgroundColor: isArrayColor ? color.map((c) => `${c}b3`) : `${color}b3`,
+      borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
   };
-  const deleteRow = (row) => {
-    if (!window.confirm("Remove this loan?")) return;
-    if (!onSave) return;
-    onSave(loans.filter((_, i) => i !== row.__idx));
+
+  const varianceData = { labels, datasets: [ buildSeries(prefs.varianceType, variance, varColors, { label: "Variance" }) ] };
+  const varianceBaseType = baseChartType([prefs.varianceType]);
+  const varianceOptions = {
+    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: 10, bottom: 0 } },
+    plugins: { legend: { display: false }, datalabels: { display: false },
+      tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
+        callbacks: { title: (items) => labels[items[0].dataIndex],
+          label: (c) => {
+            const y = c.parsed.y ?? c.raw?.y;
+            return y === null || y === undefined ? "Variance: no data"
+              : `Variance: ${fmtValue(y, kpiShape, { signed: true })} (${y <= 0 ? "favourable" : "unfavourable"})`;
+          } } } },
+    scales: { y: { display: false, grid: { display: false } },
+      x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
   };
-  const addNew = () => {
-    if (!onSave || !newLoan.name.trim()) return;
-    onSave([...(loans || []), { id: uid(), name: newLoan.name.trim(), scheduled: newLoan.scheduled, paid: newLoan.paid }]);
-    setNewLoan({ name: "", scheduled: "", paid: "" });
-    setAddingNew(false);
+
+  const mainData = { labels, datasets: [
+    buildSeries(prefs.budgetType, budget, prefs.budgetColor, { label: budgetLabel, order: 1 }),
+    buildSeries(prefs.actualType, actual, prefs.actualColor, { label: actualLabel, order: 2 }),
+  ] };
+  const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
+  const mainOptions = {
+    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: 10 } },
+    plugins: { legend: { display: false }, datalabels: { display: false },
+      tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
+        callbacks: { label: (c) => {
+          const y = c.parsed.y ?? c.raw?.y;
+          return y === null || y === undefined ? `${c.dataset.label}: no data`
+            : `${c.dataset.label}: ${fmtValue(y, kpiShape)}`;
+        } } } },
+    scales: {
+      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both",
+        grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
+        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpiShape, { bare: true }) } },
+      x: { display: prefs.axisMode === "x" || prefs.axisMode === "both", grid: { display: false },
+        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+    },
   };
+
+  const avgBudget = mean(budget), avgActual = mean(actual), avgVar = mean(variance);
+  const onBudget = variance.filter((v) => v !== null && v <= 0).length;
+  const counted = variance.filter((v) => v !== null).length;
+
+  const stat = (label, value, color) => (
+    <div key={label} style={{ ...cardS, padding: "11px 14px", flex: "1 1 150px" }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: T.muted }}>{label}</div>
+      <div style={{ fontSize: "18px", fontWeight: 700, color: color || T.ink, marginTop: "3px", fontVariantNumeric: "tabular-nums" }}>{value}</div>
+    </div>
+  );
+  const dot = (color, filled) => (<span style={{ width: 11, height: 11, borderRadius: "50%", border: `2.4px solid ${color}`, background: filled ? color : "#ffffff", display: "inline-block" }} />);
+  const barChip = (color) => (<span style={{ width: 11, height: 11, borderRadius: "3px", background: `${color}b3`, display: "inline-block" }} />);
+  const keyRow = (label, swatch) => (<span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: T.body }}>{swatch}{label}</span>);
+  const swatchFor = (type, color) => type === "bar" ? barChip(color) : type === "scatter" ? dot(color, false) : dot(color, true);
 
   return (
-    <div style={cardS}>
-      <div style={{ marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-        <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Loan Repayments</div>
-          <div style={{ fontSize: "12.5px", color: T.muted }}>Scheduled vs paid, per loan facility</div>
-        </div>
-        {!readOnly && (
-          <button onClick={() => setAddingNew(true)} style={{ ...btnGhost, padding: "5px 10px", fontSize: "12px" }}>
-            <Plus size={12} /> Add loan
-          </button>
-        )}
+    <Modal title={title} subtitle={subtitle} icon={<LineChartIcon size={17} />} onClose={onClose} width={980}
+      footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
+        <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
       </div>
 
-      {addingNew && (
-        <div style={{ ...cardS, background: T.panel, marginBottom: "12px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-            <div><label style={labelS}>Name</label>
-              <input value={newLoan.name} onChange={(e) => setNewLoan({ ...newLoan, name: e.target.value })} style={inputS} /></div>
-            <div><label style={labelS}>Scheduled</label>
-              <input type="number" value={newLoan.scheduled} onChange={(e) => setNewLoan({ ...newLoan, scheduled: e.target.value })} style={inputS} /></div>
-            <div><label style={labelS}>Paid</label>
-              <input type="number" value={newLoan.paid} onChange={(e) => setNewLoan({ ...newLoan, paid: e.target.value })} style={inputS} /></div>
+      {showCustomise && (
+        <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+            {[
+              ["actualType", `${actualLabel} as`],
+              ["budgetType", `${budgetLabel} as`],
+              ["varianceType", "Variance as"],
+            ].map(([k, l]) => (
+              <div key={k}>
+                <label style={labelS}>{l}</label>
+                <Select value={prefs[k]} onChange={(e) => setPref({ [k]: e.target.value })}>
+                  {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </Select>
+              </div>
+            ))}
+            <div>
+              <label style={labelS}>Axis</label>
+              <Select value={prefs.axisMode} onChange={(e) => setPref({ axisMode: e.target.value })}>
+                <option value="y">Show Y-Axis</option>
+                <option value="x">Show X-Axis</option>
+                <option value="both">Show Both</option>
+              </Select>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: "6px" }}>
-            <button onClick={addNew} disabled={!newLoan.name.trim()} style={{ ...btnPrimary, padding: "5px 10px", fontSize: "12px", opacity: !newLoan.name.trim() ? 0.6 : 1 }}>
-              <Check size={12} /> Save
-            </button>
-            <button onClick={() => { setAddingNew(false); setNewLoan({ name: "", scheduled: "", paid: "" }); }} style={{ ...btnGhost, padding: "5px 10px", fontSize: "12px" }}>
-              <X size={12} /> Cancel
-            </button>
+          <div style={{ display: "flex", gap: "22px", flexWrap: "wrap", marginTop: "12px" }}>
+            {[{ k: "actualColor", l: `${actualLabel} colour` }, { k: "budgetColor", l: `${budgetLabel} colour` }].map((c) => (
+              <div key={c.k}>
+                <label style={labelS}>{c.l}</label>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {SWATCHES.map((s) => (
+                    <button key={s} onClick={() => setPref({ [c.k]: s })} title={s}
+                      style={{ width: 22, height: 22, borderRadius: "6px", background: s, cursor: "pointer",
+                        border: prefs[c.k] === s ? `2px solid ${T.ink}` : `1px solid ${T.line}`,
+                        display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {prefs[c.k] === s && <Check size={12} color="#fff" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {loans.length === 0 ? (
-        <div style={{ padding: "26px 16px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>
-          No loans captured yet — use the <strong>Add loan</strong> button to start.
+      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "2px" }}>
+          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>{budgetLabel} vs {actualLabel}</span>
+          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            {keyRow("Variance", <span style={{ display: "inline-flex", gap: "3px" }}>{dot(T.green)}{dot(T.red)}</span>)}
+            {keyRow(budgetLabel, swatchFor(prefs.budgetType, prefs.budgetColor))}
+            {keyRow(actualLabel, swatchFor(prefs.actualType, prefs.actualColor))}
+          </span>
         </div>
-      ) : (
-        <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+        <div style={{ height: "112px", marginBottom: "-16px" }}>
+          <Chart type={varianceBaseType} data={varianceData} options={varianceOptions} />
+        </div>
+        <div style={{ height: "320px" }}>
+          <Chart type={mainBaseType} data={mainData} options={mainOptions} />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        {stat(`Average ${budgetLabel.toLowerCase()}`, fmtValue(avgBudget, kpiShape))}
+        {stat(`Average ${actualLabel.toLowerCase()}`, fmtValue(avgActual, kpiShape))}
+        {stat("Average variance", fmtValue(avgVar, kpiShape, { signed: true }), avgVar === null ? T.ink : avgVar <= 0 ? T.green : T.red)}
+        {stat("Periods on budget", counted ? `${onBudget} of ${counted}` : "—")}
+      </div>
+    </Modal>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Loan Repayments — vertical layout with Scheduled vs Paid + trend chart
+   ════════════════════════════════════════════════════════════════════════ */
+const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveChartPrefs }) => {
+  const allMonths = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
+  const [monthRange, setMonthRange] = useState(12);
+  const [monthStartIdx, setMonthStartIdx] = useState(0);
+  const [chartLoan, setChartLoan] = useState(null);
+
+  const clampedStart = useMemo(
+    () => Math.max(0, Math.min(monthStartIdx, 12 - monthRange)),
+    [monthStartIdx, monthRange]
+  );
+  const months = useMemo(
+    () => allMonths.slice(clampedStart, clampedStart + monthRange),
+    [allMonths, clampedStart, monthRange]
+  );
+
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") });
+  const [addingNew, setAddingNew] = useState(false);
+  const [newLoan, setNewLoan] = useState({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") });
+
+  const startEdit = (loan, idx) => {
+    setEditingId(idx);
+    setEditDraft({
+      name: loan.name || "",
+      scheduled: Array.isArray(loan.scheduled) ? [...loan.scheduled] : Array(12).fill(""),
+      paid: Array.isArray(loan.paid) ? [...loan.paid] : Array(12).fill(""),
+    });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setEditDraft({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") }); };
+
+  const saveEdit = () => {
+    if (!onSave) return;
+    const next = loans.map((l, i) => i === editingId ? { ...l, name: editDraft.name, scheduled: editDraft.scheduled, paid: editDraft.paid } : l);
+    onSave(next);
+    cancelEdit();
+  };
+
+  const deleteRow = (idx) => {
+    if (!window.confirm("Remove this loan?")) return;
+    if (!onSave) return;
+    onSave(loans.filter((_, i) => i !== idx));
+  };
+
+  const addNew = () => {
+    if (!onSave || !newLoan.name.trim()) return;
+    onSave([...(loans || []), { id: uid(), name: newLoan.name.trim(), scheduled: newLoan.scheduled, paid: newLoan.paid }]);
+    setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") });
+    setAddingNew(false);
+  };
+
+  const updateDraft = (which, monthIdx, val) => {
+    setEditDraft(prev => {
+      const arr = [...prev[which]];
+      arr[monthIdx] = val;
+      return { ...prev, [which]: arr };
+    });
+  };
+
+  const updateNew = (which, monthIdx, val) => {
+    setNewLoan(prev => {
+      const arr = [...prev[which]];
+      arr[monthIdx] = val;
+      return { ...prev, [which]: arr };
+    });
+  };
+
+  const fmt = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? fmtValue(n, { units: "R" }, { bare: true }) : "—";
+  };
+
+  const renderLoanCard = (loan, idx) => {
+    const isEditing = editingId === idx;
+    const data = isEditing ? editDraft : {
+      name: loan.name,
+      scheduled: Array.isArray(loan.scheduled) ? loan.scheduled : Array(12).fill(""),
+      paid: Array.isArray(loan.paid) ? loan.paid : Array(12).fill(""),
+    };
+
+    // Visible window totals
+    const totalScheduled = months.reduce((s, m) => s + (parseFloat(data.scheduled[m.index]) || 0), 0);
+    const totalPaid = months.reduce((s, m) => s + (parseFloat(data.paid[m.index]) || 0), 0);
+    const totalVar = totalPaid - totalScheduled;
+
+    // Full-FY totals — for the badge
+    const fyScheduled = allMonths.reduce((s, m) => s + (parseFloat(data.scheduled[m.index]) || 0), 0);
+    const fyPaid = allMonths.reduce((s, m) => s + (parseFloat(data.paid[m.index]) || 0), 0);
+    const fyVar = fyPaid - fyScheduled;
+
+    return (
+      <div key={idx} style={{ ...cardS, marginBottom: "16px", padding: 0, overflow: "hidden" }}>
+        <div style={{ background: T.header, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          {isEditing ? (
+            <input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+              style={{ ...inputS, background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)", fontWeight: 600, fontSize: "14px", flex: 1, minWidth: "200px" }} />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>{loan.name || "Unnamed Loan"}</span>
+              <span title={`Based on the full financial year · Scheduled ${fyScheduled.toLocaleString()} / Paid ${fyPaid.toLocaleString()}`}
+                style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "999px", background: fyVar <= 0 ? T.greenBg : T.redBg, color: fyVar <= 0 ? T.green : T.red, fontWeight: 700 }}>
+                {fyVar <= 0 ? "On Track" : "Behind"} · FY
+              </span>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "6px" }}>
+            {!isEditing && (
+              <button onClick={() => setChartLoan({ loan, idx })} title="Trend chart"
+                style={{ ...btnGhost, padding: "5px 10px", fontSize: "12px", background: "transparent", color: "#fff", borderColor: "rgba(255,255,255,0.3)" }}>
+                <LineChartIcon size={12} />
+              </button>
+            )}
+            {!readOnly && (
+              isEditing ? (
+                <>
+                  <button onClick={saveEdit} style={{ ...btnPrimary, padding: "5px 12px", fontSize: "12px" }}><Check size={12} /> Save</button>
+                  <button onClick={cancelEdit} style={{ ...btnGhost, padding: "5px 12px", fontSize: "12px", background: "transparent", color: "#fff", borderColor: "rgba(255,255,255,0.3)" }}><X size={12} /> Cancel</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => startEdit(loan, idx)} style={{ ...btnGhost, padding: "5px 10px", fontSize: "12px", background: "transparent", color: "#fff", borderColor: "rgba(255,255,255,0.3)" }}><Pencil size={12} /></button>
+                  <button onClick={() => deleteRow(idx)} style={{ ...btnGhost, padding: "5px 10px", fontSize: "12px", background: "transparent", color: "#fca5a5", borderColor: "rgba(255,255,255,0.3)" }}><Trash2 size={12} /></button>
+                </>
+              )
+            )}
+          </div>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: `${months.length * 90 + 220}px`, tableLayout: "fixed" }}>
             <thead>
-              <tr style={{ background: T.header, color: "#fff" }}>
-                {colOrder.map((key) => {
-                  const col = cols.find(c => c.key === key);
-                  if (!col) return null;
-                  return (
-                    <th key={key} draggable onDragStart={(e) => handleDragStart(e, key)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, key)}
-                      style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}>
-                      <div style={{ padding: "10px 12px 8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
-                        <InfoTip text={col.tip} light />
-                        <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })} style={iconBtn("rgba(255,255,255,0.6)")}>
-                          {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
-                        </button>
-                        <FilterDropdown options={getFilterOptions(key)} value={filters[key] || "All"}
-                          onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))} onClose={() => {}} />
-                      </div>
-                      <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
-                    </th>
-                  );
-                })}
-                {!readOnly && (
-                  <th style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", width: 110, borderLeft: "1px solid rgba(255,255,255,0.14)" }}>
-                    Actions
-                  </th>
-                )}
+              <tr>
+                <th style={{ background: T.panel, padding: "8px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: T.accent, textTransform: "uppercase", borderRight: `2px solid ${T.lineStrong}`, width: 140 }}>Month</th>
+                <th style={{ background: MODE_COLOR.budget.cell, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: MODE_COLOR.budget.hdr, textTransform: "uppercase", borderRight: `1px solid ${T.lineStrong}` }}>Scheduled</th>
+                <th style={{ background: MODE_COLOR.actual.cell, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: MODE_COLOR.actual.hdr, textTransform: "uppercase", borderRight: `1px solid ${T.lineStrong}` }}>Paid</th>
+                <th style={{ background: T.panel, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: T.accent, textTransform: "uppercase" }}>Variance</th>
               </tr>
             </thead>
             <tbody>
-              {sortedData.map((row, i) => {
-                const editing = editingIdx === row.__idx;
+              {months.map((m, i) => {
+                const origIdx = m.index;
+                const sch = data.scheduled[origIdx];
+                const pd = data.paid[origIdx];
+                const schNum = parseFloat(sch) || 0;
+                const pdNum = parseFloat(pd) || 0;
+                const variance = pdNum - schNum;
+                const hasData = sch !== "" || pd !== "";
+
                 return (
-                  <tr key={i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
-                    {colOrder.map((key) => (
-                      <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {editing ? (
-                          key === "name" ? (
-                            <input value={editDraft.name || ""} onChange={(e) => setEditDraft(d => ({ ...d, name: e.target.value }))}
-                              style={{ ...inputS, padding: "3px 5px", fontSize: "12px" }} />
-                          ) : key === "scheduled" || key === "paid" ? (
-                            <input type="number" value={editDraft[key] ?? ""} onChange={(e) => setEditDraft(d => ({ ...d, [key]: e.target.value }))}
-                              style={{ ...inputS, padding: "3px 5px", fontSize: "12px", textAlign: "right" }} />
-                          ) : (
-                            <span style={{ color: T.faint }}>—</span>
-                          )
-                        ) : key === "variance" ? (
-                          <span style={{ fontWeight: 700, color: row[key] <= 0 ? T.green : T.red }}>
-                            {fmtValue(row[key], { units: "R" }, { signed: true })}
-                          </span>
-                        ) : key === "scheduled" || key === "paid" ? fmtValue(row[key], { units: "R" }) : row[key]}
-                      </td>
-                    ))}
-                    {!readOnly && (
-                      <td style={{ padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" }}>
-                        {editing ? (
-                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
-                            <button onClick={saveEdit} style={{ ...btnPrimary, padding: "3px 7px" }} title="Save"><Check size={13} /></button>
-                            <button onClick={cancelEdit} style={{ ...btnGhost, padding: "3px 7px" }} title="Cancel"><X size={13} /></button>
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
-                            <button onClick={() => startEdit(row)} style={{ ...btnGhost, padding: "3px 7px" }} title="Edit"><Pencil size={13} /></button>
-                            <button onClick={() => deleteRow(row)} style={{ ...btnGhost, padding: "3px 7px", color: T.red }} title="Delete"><Trash2 size={13} /></button>
-                          </div>
-                        )}
-                      </td>
-                    )}
+                  <tr key={m.key} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                    <td style={{ padding: "8px 12px", fontSize: "13px", fontWeight: 600, color: T.ink, borderRight: `1px solid ${T.lineSoft}` }}>
+                      {m.long}
+                    </td>
+                    <td style={{ padding: "4px 8px", borderRight: `1px solid ${T.lineSoft}`, background: MODE_COLOR.budget.cell }}>
+                      {isEditing ? (
+                        <input type="number" value={editDraft.scheduled[origIdx] ?? ""} placeholder="—"
+                          onChange={(e) => updateDraft("scheduled", origIdx, e.target.value)}
+                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right", border: `1.5px solid ${MODE_COLOR.budget.border}`, color: MODE_COLOR.budget.input, fontWeight: 600 }} />
+                      ) : (
+                        <span style={{ display: "block", textAlign: "right", fontSize: "13px", fontVariantNumeric: "tabular-nums", color: T.body }}>{fmt(sch)}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "4px 8px", borderRight: `1px solid ${T.lineSoft}`, background: MODE_COLOR.actual.cell }}>
+                      {isEditing ? (
+                        <input type="number" value={editDraft.paid[origIdx] ?? ""} placeholder="—"
+                          onChange={(e) => updateDraft("paid", origIdx, e.target.value)}
+                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right", border: `1.5px solid ${MODE_COLOR.actual.border}`, color: MODE_COLOR.actual.input, fontWeight: 600 }} />
+                      ) : (
+                        <span style={{ display: "block", textAlign: "right", fontSize: "13px", fontVariantNumeric: "tabular-nums", color: T.body }}>{fmt(pd)}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontSize: "13px", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: !hasData ? T.faint : variance <= 0 ? T.green : T.red }}>
+                      {!hasData ? "—" : fmt(variance)}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
-              <tr style={{ background: T.accentTint }}>
-                <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent }}>Total</td>
-                <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent, textAlign: "right" }}>{fmtValue(totalScheduled, { units: "R" })}</td>
-                <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent, textAlign: "right" }}>{fmtValue(totalPaid, { units: "R" })}</td>
-                <td style={{ padding: "10px 12px", fontWeight: 700, color: totalVar <= 0 ? T.green : T.red, textAlign: "right" }}>{fmtValue(totalVar, { units: "R" }, { signed: true })}</td>
-                {!readOnly && <td />}
+              <tr style={{ background: T.accentTint, borderTop: `2px solid ${T.lineStrong}` }}>
+                <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent, fontSize: "13px" }}>Total · {months.length}m window</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{fmt(totalScheduled)}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{fmt(totalPaid)}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: totalVar <= 0 ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>{fmt(totalVar)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={cardS}>
+      <div style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+        <div>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: T.accent }}>Loan Repayments</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>Track scheduled vs paid amounts per loan, broken down by month</div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "12px", color: T.muted }}>From</span>
+            <select
+              value={clampedStart}
+              onChange={(e) => setMonthStartIdx(Number(e.target.value))}
+              style={{
+                padding: "6px 10px", borderRadius: "8px", fontSize: "12.5px",
+                fontFamily: "inherit", background: T.bg, color: T.body,
+                border: `1px solid ${T.lineStrong}`, cursor: "pointer",
+              }}
+            >
+              {allMonths.map((m, i) => (
+                <option key={m.key} value={i} disabled={i > 12 - monthRange}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "inline-flex", background: T.raised, borderRadius: "8px", padding: "2px", gap: "2px" }}>
+            {[3, 6, 12].map((n) => {
+              const on = monthRange === n;
+              return (
+                <button
+                  key={n}
+                  onClick={() => {
+                    setMonthRange(n);
+                    setMonthStartIdx((s) => Math.max(0, Math.min(s, 12 - n)));
+                  }}
+                  style={{
+                    padding: "6px 14px", borderRadius: "6px",
+                    fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
+                    fontFamily: "inherit", border: "none",
+                    background: on ? T.bg : "transparent",
+                    color: on ? T.accent : T.body,
+                    boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none",
+                  }}
+                >
+                  {n}m
+                </button>
+              );
+            })}
+          </div>
+
+          {!readOnly && (
+            <button onClick={() => setAddingNew(true)} style={{ ...btnPrimary, padding: "7px 14px", fontSize: "12.5px" }}>
+              <Plus size={13} /> Add loan
+            </button>
+          )}
+        </div>
+      </div>
+
+      {addingNew && (
+        <div style={{ ...cardS, background: T.panel, marginBottom: "16px", border: `1px solid ${T.accent}33` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: T.accent }}>New Loan</span>
+            <button onClick={() => { setAddingNew(false); setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") }); }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={14} /></button>
+          </div>
+          <div style={{ marginBottom: "12px" }}>
+            <label style={labelS}>Loan Name *</label>
+            <input value={newLoan.name} onChange={(e) => setNewLoan({ ...newLoan, name: e.target.value })} style={inputS} placeholder="e.g. Business Term Loan" />
+          </div>
+          <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "8px" }}>
+            <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: `${months.length * 90 + 140}px`, tableLayout: "fixed" }}>
+              <thead>
+                <tr>
+                  <th style={{ background: T.header, padding: "8px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase", width: 120 }}>Month</th>
+                  <th style={{ background: MODE_COLOR.budget.hdr, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>Scheduled</th>
+                  <th style={{ background: MODE_COLOR.actual.hdr, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {months.map((m, i) => {
+                  const origIdx = m.index;
+                  return (
+                    <tr key={m.key} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", fontWeight: 600, color: T.ink, borderRight: `1px solid ${T.lineSoft}` }}>{m.long}</td>
+                      <td style={{ padding: "4px 8px", borderRight: `1px solid ${T.lineSoft}` }}>
+                        <input type="number" value={newLoan.scheduled[origIdx] ?? ""} placeholder="—"
+                          onChange={(e) => updateNew("scheduled", origIdx, e.target.value)}
+                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right" }} />
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <input type="number" value={newLoan.paid[origIdx] ?? ""} placeholder="—"
+                          onChange={(e) => updateNew("paid", origIdx, e.target.value)}
+                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right" }} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+            <button onClick={addNew} disabled={!newLoan.name.trim()} style={{ ...btnPrimary, opacity: !newLoan.name.trim() ? 0.6 : 1 }}>
+              <Check size={13} /> Save Loan
+            </button>
+            <button onClick={() => { setAddingNew(false); setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") }); }} style={btnGhost}>
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
+
+      {loans.length === 0 && !addingNew ? (
+        <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: "13.5px", background: T.panel, borderRadius: "10px" }}>
+          <ClipboardList size={32} color={T.faint} style={{ marginBottom: "10px" }} />
+          <p style={{ margin: 0 }}>No loans captured yet. Click <strong>Add loan</strong> to start tracking your repayment schedule.</p>
+        </div>
+      ) : (
+        loans.map((loan, idx) => renderLoanCard(loan, idx))
+      )}
+
+      {chartLoan && (() => {
+        const l = chartLoan.loan;
+        const labels = allMonths.map(m => m.label);
+        const scheduled = allMonths.map(m => {
+          const v = Array.isArray(l.scheduled) ? l.scheduled[m.index] : null;
+          return v === "" || v === null || v === undefined ? null : Number(v);
+        });
+        const paid = allMonths.map(m => {
+          const v = Array.isArray(l.paid) ? l.paid[m.index] : null;
+          return v === "" || v === null || v === undefined ? null : Number(v);
+        });
+        const storageKey = `loan:${l.id || l.name || chartLoan.idx}`;
+        return (
+          <SimpleTrendChartModal
+            title={`${l.name || "Loan"} — Repayment trend`}
+            subtitle={`FY ${fyLabel(fy.startYear, fy.startMonth)} · Scheduled vs Paid`}
+            labels={labels}
+            actual={paid}
+            budget={scheduled}
+            actualLabel="Paid"
+            budgetLabel="Scheduled"
+            storageKey={storageKey}
+            savedPrefs={chartPrefs?.[storageKey]}
+            onSavePrefs={onSaveChartPrefs}
+            onClose={() => setChartLoan(null)}
+          />
+        );
+      })()}
     </div>
   );
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Balance Sheet
+   Balance Sheet — Grid + Budget/Actual + Trend charts
    ════════════════════════════════════════════════════════════════════════ */
 const prettify = (k) => k.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
 const NEGATIVE_KEYS = new Set(["lessAmortization","treasuryShares","lessDepreciationBuildings","lessDepreciationComputer",
@@ -2277,33 +2570,90 @@ const BLANK_BS = {
   customCategories: [], customLiabilitiesCategories: [], customEquityCategories: [],
 };
 
-/* BsLineModal — values indexed by calendar month (0=Jan..11=Dec) */
-const BsLineModal = ({ mode, lineName, initialValues, months, onClose, onSave }) => {
+const getBsRoot = (bsDoc, mode = "actual") =>
+  mode === "budget" ? (bsDoc?.balanceSheetBudget || {}) : (bsDoc?.balanceSheetData || BLANK_BS);
+
+const setBsValue = (root, path, monthIdx, raw) => {
+  let node = root;
+  const keys = pathArr(path);
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!node[keys[i]]) node[keys[i]] = {};
+    node = node[keys[i]];
+  }
+  const finalKey = keys[keys.length - 1];
+  if (!Array.isArray(node[finalKey])) node[finalKey] = Array(12).fill("");
+  node[finalKey][monthIdx] = raw;
+};
+
+/* ════════════════════════════════════════════════════════════════════════
+   BsLineModal — NOW WITH ACTUAL / BUDGET TABS
+   ════════════════════════════════════════════════════════════════════════ */
+const BsLineModal = ({ mode, lineName, initialValues, initialBudgetValues, months, onClose, onSave }) => {
   const [name, setName] = useState(lineName || "");
+  const [tab, setTab] = useState("actual");
   const [values, setValues] = useState(() => {
     const v = {};
     months.forEach((m) => { v[m.calIndex] = initialValues?.[m.calIndex] ?? ""; });
     return v;
   });
+  const [budgetValues, setBudgetValues] = useState(() => {
+    const v = {};
+    months.forEach((m) => { v[m.calIndex] = initialBudgetValues?.[m.calIndex] ?? ""; });
+    return v;
+  });
   const [saving, setSaving] = useState(false);
+
+  const activeValues = tab === "actual" ? values : budgetValues;
+  const setActiveValues = tab === "actual" ? setValues : setBudgetValues;
+  const tok = tab === "actual" ? MODE_COLOR.actual : MODE_COLOR.budget;
 
   const handleSave = async () => {
     if (mode === "add" && !name.trim()) return;
     setSaving(true);
     try {
       const fullArr = Array(12).fill("");
-      months.forEach((m) => { fullArr[m.calIndex] = values[m.calIndex] ?? ""; });
-      await onSave({ name: name.trim(), values: fullArr });
+      const fullBudgetArr = Array(12).fill("");
+      months.forEach((m) => {
+        fullArr[m.calIndex] = values[m.calIndex] ?? "";
+        fullBudgetArr[m.calIndex] = budgetValues[m.calIndex] ?? "";
+      });
+      await onSave({ name: name.trim(), values: fullArr, budgetValues: fullBudgetArr });
       onClose();
     } catch (err) {
       console.error(err);
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filledCount = (obj) => months.filter((m) => obj[m.calIndex] !== "" && obj[m.calIndex] !== null && obj[m.calIndex] !== undefined).length;
+
+  const tabBtn = (key, label, count) => {
+    const on = tab === key;
+    return (
+      <button key={key} onClick={() => setTab(key)}
+        style={{
+          padding: "7px 16px", borderRadius: "7px", fontSize: "13px",
+          fontWeight: 600, cursor: "pointer", fontFamily: "inherit", border: "none",
+          display: "inline-flex", alignItems: "center", gap: "8px",
+          background: on ? T.bg : "transparent",
+          color: on ? T.accent : T.body,
+          boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none",
+        }}>
+        {label}
+        <span style={{
+          fontSize: "10.5px", padding: "1px 7px", borderRadius: "999px",
+          background: on ? T.accentTint : T.bg,
+          color: on ? T.accent : T.muted, fontWeight: 700,
+        }}>{count}</span>
+      </button>
+    );
   };
 
   return (
     <Modal title={mode === "add" ? "Add line" : `Edit ${lineName}`}
-      subtitle={mode === "add" ? "Give the line a name and enter its monthly values" : "Update the monthly values for this line"}
-      icon={<Database size={17} />} onClose={onClose} width={720}
+      subtitle={mode === "add" ? "Give the line a name and enter its monthly actual and budget values" : "Update monthly actual and budget values for this line"}
+      icon={<Database size={17} />} onClose={onClose} width={760}
       footer={
         <>
           <button onClick={onClose} style={btnGhost}>Cancel</button>
@@ -2320,11 +2670,17 @@ const BsLineModal = ({ mode, lineName, initialValues, months, onClose, onSave })
           <p style={{ fontSize: "11.5px", color: T.muted, marginTop: "6px", marginBottom: 0 }}>Use camelCase — no spaces. This becomes the key on the balance sheet.</p>
         </div>
       )}
-      <label style={labelS}>Monthly values (calendar months)</label>
+
+      <div style={{ display: "inline-flex", background: T.raised, borderRadius: "9px", padding: "3px", marginBottom: "14px", gap: "2px" }}>
+        {tabBtn("actual", "Actual", filledCount(values))}
+        {tabBtn("budget", "Budget", filledCount(budgetValues))}
+      </div>
+
+      <label style={labelS}>{tab === "actual" ? "Actual values" : "Budget values"} (calendar months)</label>
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
           <thead>
-            <tr style={{ background: T.header, color: "#fff" }}>
+            <tr style={{ background: tok.hdr, color: "#fff" }}>
               <th style={{ padding: "8px 12px", fontSize: "11.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", textAlign: "left", width: "45%" }}>Month</th>
               <th style={{ padding: "8px 12px", fontSize: "11.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", textAlign: "right" }}>Value (R)</th>
             </tr>
@@ -2334,15 +2690,21 @@ const BsLineModal = ({ mode, lineName, initialValues, months, onClose, onSave })
               <tr key={m.key} style={{ background: i % 2 ? T.panel : T.bg }}>
                 <td style={{ padding: "6px 12px", fontSize: "13.5px", color: T.ink, fontWeight: 500,
                   borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>{m.long}</td>
-                <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}` }}>
-                  <input type="number" step="any" value={values[m.calIndex] ?? ""} placeholder="—"
-                    onChange={(e) => setValues((p) => ({ ...p, [m.calIndex]: e.target.value }))}
-                    style={{ ...inputS, padding: "6px 9px", fontSize: "13px", textAlign: "right" }} />
+                <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, background: tok.cell }}>
+                  <input type="number" step="any" value={activeValues[m.calIndex] ?? ""} placeholder="—"
+                    onChange={(e) => setActiveValues((p) => ({ ...p, [m.calIndex]: e.target.value }))}
+                    style={{ ...inputS, padding: "6px 9px", fontSize: "13px", textAlign: "right",
+                      border: `1.5px solid ${tok.border}`, color: tok.input, fontWeight: 600, background: "#fff" }} />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+        <Info size={12} />
+        Both Actual and Budget values save together when you click Save.
       </div>
     </Modal>
   );
@@ -2359,7 +2721,9 @@ const BsSectionModal = ({ onClose, onSave }) => {
     try {
       await onSave({ sectionName: name.trim(), firstLine: firstLine.trim() || null });
       onClose();
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -2386,7 +2750,7 @@ const BsSectionModal = ({ onClose, onSave }) => {
   );
 };
 
-const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, onDeleteLine }) => {
+const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, onDeleteLine, chartPrefs, onSaveChartPrefs }) => {
   const months = useMemo(() => fyMonths(fy.startYear, fy.startMonth), [fy]);
   const [monthKey, setMonthKey] = useState(() => months.find((m) => m.key === currentMonthKey())?.key || months[0].key);
   const meta = months.find((m) => m.key === monthKey) || months[0];
@@ -2394,10 +2758,13 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
   const calIndex = meta.month;
   const bsDoc = docs[`${DOC.bs}_${meta.year}`];
   const bs = bsDoc?.balanceSheetData || BLANK_BS;
+  const bsBudget = bsDoc?.balanceSheetBudget || {};
   const totals = bsTotals({ balanceSheetData: bs }, calIndex);
 
   const [lineModal, setLineModal] = useState(null);
   const [sectionModal, setSectionModal] = useState(null);
+  const [bsMode, setBsMode] = useState("actual");
+  const [chartLine, setChartLine] = useState(null);
 
   const modalMonths = useMemo(() => months.map((m) => ({ key: m.key, long: m.long, calIndex: m.month })), [months]);
 
@@ -2427,12 +2794,30 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
           <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={3} style={{ padding: "14px 12px", fontSize: "12.5px", color: T.muted, textAlign: "center", fontStyle: "italic" }}>No lines yet — use <strong>Add line</strong> above to start.</td></tr>
+                <tr><td colSpan={bsMode === "both" ? 4 : 3} style={{ padding: "14px 12px", fontSize: "12.5px", color: T.muted, textAlign: "center", fontStyle: "italic" }}>No lines yet — use <strong>Add line</strong> above to start.</td></tr>
               )}
               {items.map(([key, arr], i) => {
                 const negative = NEGATIVE_KEYS.has(key);
-                const raw = arr?.[calIndex];
-                const val = raw === "" || raw === null || raw === undefined ? null : Number(raw);
+
+                const linePath = path === "__custom__"
+                  ? (sectionType === "assets" ? ["customCategories", customIndex, "items", key]
+                    : sectionType === "liabilities" ? ["customLiabilitiesCategories", customIndex, "items", key]
+                    : ["customEquityCategories", customIndex, "items", key])
+                  : [...path.split("."), key];
+
+                const actualRaw = pathArr(linePath).reduce((o, k) => (o == null ? undefined : o[k]), bs);
+                const budgetRaw = pathArr(linePath).reduce((o, k) => (o == null ? undefined : o[k]), bsBudget);
+                const actualArr = Array.isArray(actualRaw) ? actualRaw : Array(12).fill("");
+                const budgetArr = Array.isArray(budgetRaw) ? budgetRaw : Array(12).fill("");
+
+                const readAt = (arr) => {
+                  const v = arr?.[calIndex];
+                  return v === "" || v === null || v === undefined ? null : Number(v);
+                };
+                const actualVal = readAt(actualArr);
+                const budgetVal = readAt(budgetArr);
+
+                const fmtCell = (v) => (v === null || !Number.isFinite(v) ? "—" : fmtValue(v, { units: "R" }));
                 return (
                   <tr key={key} style={{ background: i % 2 ? T.panel : T.bg }}>
                     <td style={{ padding: "8px 12px", fontSize: "13.5px", color: negative ? T.muted : T.ink,
@@ -2440,28 +2825,49 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
                       {negative && <span style={{ color: T.faint, marginRight: "5px" }}>−</span>}
                       {prettify(key)}
                     </td>
-                    <td style={{ padding: "8px 12px", textAlign: "right", fontSize: "13.5px", color: T.ink,
-                      fontVariantNumeric: "tabular-nums", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>
-                      {val === null || !Number.isFinite(val) ? "—" : fmtValue(val, { units: "R" })}
-                    </td>
-                    <td style={{ padding: "6px 8px", width: "70px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
-                      {!readOnly && (
-                        <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
-                          <button onClick={() => setLineModal({ mode: "edit", sectionPath: path, sectionType, customIndex, lineName: key, values: arr })}
-                            style={{ background: "none", border: "none", cursor: "pointer", color: T.accent, padding: "2px" }}>
-                            <Pencil size={13} />
-                          </button>
-                          <button onClick={() => onDeleteLine(sectionType, path, key, customIndex)}
-                            style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "2px" }}>
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
+
+                    {(bsMode === "actual" || bsMode === "both") && (
+                      <td style={{ padding: "8px 12px", textAlign: "right", fontSize: "13.5px", color: T.ink,
+                        fontVariantNumeric: "tabular-nums", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}`,
+                        background: bsMode === "both" ? MODE_COLOR.actual.cell : "transparent" }}>
+                        {bsMode === "both" && <div style={{ fontSize: "9.5px", color: MODE_COLOR.actual.hdr, fontWeight: 700, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: "2px" }}>Actual</div>}
+                        {fmtCell(actualVal)}
+                      </td>
+                    )}
+                    {(bsMode === "budget" || bsMode === "both") && (
+                      <td style={{ padding: "8px 12px", textAlign: "right", fontSize: "13.5px", color: T.ink,
+                        fontVariantNumeric: "tabular-nums", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}`,
+                        background: bsMode === "both" ? MODE_COLOR.budget.cell : "transparent" }}>
+                        {bsMode === "both" && <div style={{ fontSize: "9.5px", color: MODE_COLOR.budget.hdr, fontWeight: 700, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: "2px" }}>Budget</div>}
+                        {fmtCell(budgetVal)}
+                      </td>
+                    )}
+
+                    <td style={{ padding: "6px 8px", width: "100px", textAlign: "center", borderBottom: `1px solid ${T.lineSoft}` }}>
+                      <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
+                        <button onClick={() => setChartLine({ name: prettify(key), path: linePath })}
+                          title="Trend chart"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: T.body, padding: "2px" }}>
+                          <LineChartIcon size={13} />
+                        </button>
+                        {!readOnly && (
+                          <>
+                            <button onClick={() => setLineModal({ mode: "edit", sectionPath: path, sectionType, customIndex, lineName: key, values: actualArr, budgetValues: budgetArr })}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: T.accent, padding: "2px" }}>
+                              <Pencil size={13} />
+                            </button>
+                            <button onClick={() => onDeleteLine(sectionType, path, key, customIndex)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: T.red, padding: "2px" }}>
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
               })}
-              {total !== undefined && (
+              {total !== undefined && bsMode !== "both" && (
                 <tr style={{ background: T.accentTint }}>
                   <td style={{ padding: "9px 12px", fontSize: "13.5px", fontWeight: 700, color: T.accent, borderRight: `1px solid ${T.lineSoft}` }}>Total {title.toLowerCase()}</td>
                   <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "14px", fontWeight: 700, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{fmtValue(total, { units: "R" })}</td>
@@ -2506,40 +2912,56 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
     return node;
   };
 
-  const handleLineSave = async ({ name, values }) => {
+  const handleLineSave = async ({ name, values, budgetValues }) => {
     const lm = lineModal;
     if (!lm) return;
     const docKey = `${DOC.bs}_${meta.year}`;
-    const existing = bsDoc?.balanceSheetData || BLANK_BS;
-    const next = JSON.parse(JSON.stringify(existing));
+    const existingDoc = bsDoc || {};
+    const next = JSON.parse(JSON.stringify(existingDoc.balanceSheetData || BLANK_BS));
+    const nextBudget = JSON.parse(JSON.stringify(existingDoc.balanceSheetBudget || {}));
     const node = resolveNode(next, lm.sectionPath, lm.sectionType, lm.customIndex);
+    const nodeB = resolveNode(nextBudget, lm.sectionPath, lm.sectionType, lm.customIndex);
     if (!node) { console.warn("Could not resolve balance sheet section node", lm); return; }
+
     if (!node.items && lm.sectionPath === "__custom__") node.items = {};
+    if (nodeB && !nodeB.items && lm.sectionPath === "__custom__") nodeB.items = {};
     const target = lm.sectionPath === "__custom__" ? node.items : node;
+    const targetB = nodeB ? (lm.sectionPath === "__custom__" ? nodeB.items : nodeB) : null;
+
     if (lm.mode === "add") {
       const clean = name.replace(/\s+/g, "");
       if (!clean) return;
       if (target[clean] && Array.isArray(target[clean])) return;
       target[clean] = values;
+      if (targetB) targetB[clean] = budgetValues || Array(12).fill("");
     } else {
+      // edit: always write BOTH actual and budget
       target[lm.lineName] = values;
+      if (targetB) targetB[lm.lineName] = budgetValues || Array(12).fill("");
     }
-    await onSaveBsFull(docKey, next);
+    await onSaveBsFull(docKey, { ...existingDoc, balanceSheetData: next, balanceSheetBudget: nextBudget, year: meta.year }, true);
   };
 
   const handleSectionSave = async ({ sectionName, firstLine }) => {
     const docKey = `${DOC.bs}_${meta.year}`;
-    const existing = bsDoc?.balanceSheetData || BLANK_BS;
-    const next = JSON.parse(JSON.stringify(existing));
+    const existingDoc = bsDoc || {};
+    const next = JSON.parse(JSON.stringify(existingDoc.balanceSheetData || BLANK_BS));
+    const nextBudget = JSON.parse(JSON.stringify(existingDoc.balanceSheetBudget || {}));
     const st = sectionModal.sectionType;
     const field = st === "assets" ? "customCategories"
       : st === "liabilities" ? "customLiabilitiesCategories"
       : "customEquityCategories";
     if (!Array.isArray(next[field])) next[field] = [];
+    if (!Array.isArray(nextBudget[field])) nextBudget[field] = [];
     const newSection = { id: uid(), name: sectionName, items: {} };
-    if (firstLine) newSection.items[firstLine.replace(/\s+/g, "")] = Array(12).fill("");
+    const newSectionB = { id: uid(), name: sectionName, items: {} };
+    if (firstLine) {
+      newSection.items[firstLine.replace(/\s+/g, "")] = Array(12).fill("");
+      newSectionB.items[firstLine.replace(/\s+/g, "")] = Array(12).fill("");
+    }
     next[field].push(newSection);
-    await onSaveBsFull(docKey, next);
+    nextBudget[field].push(newSectionB);
+    await onSaveBsFull(docKey, { ...existingDoc, balanceSheetData: next, balanceSheetBudget: nextBudget, year: meta.year }, true);
   };
 
   const balanceGap = Number.isFinite(totals.assets) && Number.isFinite(totals.liabilities) && Number.isFinite(totals.equity)
@@ -2552,6 +2974,22 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
       <div style={{ fontSize: "19px", fontWeight: 700, color: color || T.ink, marginTop: "3px", fontVariantNumeric: "tabular-nums" }}>{value}</div>
     </div>
   );
+
+  const modeBtn = (key, label) => {
+    const on = bsMode === key;
+    return (
+      <button key={key} onClick={() => setBsMode(key)}
+        style={{
+          padding: "6px 14px", borderRadius: "7px", fontSize: "12.5px",
+          fontWeight: 600, cursor: "pointer", fontFamily: "inherit", border: "none",
+          background: on ? T.bg : "transparent",
+          color: on ? T.accent : T.body,
+          boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none",
+        }}>
+        {label}
+      </button>
+    );
+  };
 
   return (
     <div>
@@ -2566,6 +3004,16 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
           style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex <= 0 ? 0.4 : 1 }}><ChevronLeft size={14} /></button>
         <button onClick={() => setMonthKey(months[Math.min(months.length - 1, monthIndex + 1)]?.key)} disabled={monthIndex >= months.length - 1}
           style={{ ...btnGhost, padding: "9px 11px", opacity: monthIndex >= months.length - 1 ? 0.4 : 1 }}><ChevronRight size={14} /></button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "1px" }}>
+          <span style={{ fontSize: "12px", color: T.muted, fontWeight: 600 }}>View</span>
+          <div style={{ display: "inline-flex", background: T.raised, borderRadius: "8px", padding: "3px", gap: "2px" }}>
+            {modeBtn("actual", "Actual")}
+            {modeBtn("budget", "Budget")}
+            {modeBtn("both", "Both")}
+          </div>
+        </div>
+
         <span style={{ flex: 1 }} />
         {!readOnly && (
           <span style={{ fontSize: "12.5px", color: T.muted, paddingBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -2626,7 +3074,7 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
             )}
           </div>
           <Section title="Current liabilities" path="liabilities.currentLiabilities" obj={bs.liabilities?.currentLiabilities} total={sumObj(bs.liabilities?.currentLiabilities, calIndex)} sectionType="liabilities" />
-          <Section title="Non-current liabilities" path="liabilities.nonCurrentLiabilities" obj={bs.liabilities?.nonCurrentLiabilities} total={sumObj(bs.liabilities?.nonCurrentLiabilities, calIndex)} sectionType="liabilities" />
+          <Section title="Non-current liabilities" path={["liabilities","nonCurrentLiabilities"]} obj={bs.liabilities?.nonCurrentLiabilities} total={sumObj(bs.liabilities?.nonCurrentLiabilities, calIndex)} sectionType="liabilities" />
           <CustomSections list={bs.customLiabilitiesCategories} sectionType="liabilities" />
           <Section title="Equity" path="equity" obj={bs.equity} total={sumObj(bs.equity, calIndex) - 2 * (parseFloat(bs.equity?.treasuryShares?.[calIndex]) || 0)} sectionType="equity" />
           <CustomSections list={bs.customEquityCategories} sectionType="equity" />
@@ -2638,6 +3086,7 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
           mode={lineModal.mode}
           lineName={lineModal.lineName}
           initialValues={lineModal.values}
+          initialBudgetValues={lineModal.budgetValues}
           months={modalMonths}
           onClose={() => setLineModal(null)}
           onSave={handleLineSave}
@@ -2646,6 +3095,35 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
       {sectionModal && (
         <BsSectionModal onClose={() => setSectionModal(null)} onSave={handleSectionSave} />
       )}
+      {chartLine && (() => {
+        const labels = months.map(m => m.label);
+        const actualSeries = months.map(m => {
+          const raw = pathArr(chartLine.path).reduce((o, k) => (o == null ? undefined : o[k]), bs);
+          const v = Array.isArray(raw) ? raw[m.month] : null;
+          return v === "" || v === null || v === undefined ? null : Number(v);
+        });
+        const budgetSeries = months.map(m => {
+          const raw = pathArr(chartLine.path).reduce((o, k) => (o == null ? undefined : o[k]), bsBudget);
+          const v = Array.isArray(raw) ? raw[m.month] : null;
+          return v === "" || v === null || v === undefined ? null : Number(v);
+        });
+        const storageKey = `bs:${chartLine.path.join(".")}`;
+        return (
+          <SimpleTrendChartModal
+            title={`${chartLine.name} — Balance Sheet trend`}
+            subtitle={`FY ${fyLabel(fy.startYear, fy.startMonth)} · Actual vs Budget`}
+            labels={labels}
+            actual={actualSeries}
+            budget={budgetSeries}
+            actualLabel="Actual"
+            budgetLabel="Budget"
+            storageKey={storageKey}
+            savedPrefs={chartPrefs?.[storageKey]}
+            onSavePrefs={onSaveChartPrefs}
+            onClose={() => setChartLine(null)}
+          />
+        );
+      })()}
     </div>
   );
 };
@@ -2967,8 +3445,8 @@ const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userI
       let totalScheduled = 0, totalPaid = 0;
       data.loans.forEach((l, i) => {
         const bg = i % 2 === 0 ? "#ffffff" : "#faf8f7";
-        const s = parseFloat(l.scheduled) || 0;
-        const p = parseFloat(l.paid) || 0;
+        const s = Array.isArray(l.scheduled) ? l.scheduled.reduce((a, v) => a + (parseFloat(v) || 0), 0) : parseFloat(l.scheduled) || 0;
+        const p = Array.isArray(l.paid) ? l.paid.reduce((a, v) => a + (parseFloat(v) || 0), 0) : parseFloat(l.paid) || 0;
         totalScheduled += s; totalPaid += p;
         rows += `<tr style="background:${bg};">
           <td style="padding:4px 8px; border:1px solid #ddd;">${l.name}</td>
@@ -3138,9 +3616,6 @@ const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userI
   );
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   AddChooser + AddKpiWizard
-   ════════════════════════════════════════════════════════════════════════ */
 const AddChooser = ({ onPick, onClose }) => (
   <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
@@ -3166,7 +3641,7 @@ const AddChooser = ({ onPick, onClose }) => (
 
 const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
   const [form, setForm] = useState({
-    id: uid(), name: "", units: "", category: "", tabId: currentTabId || tabs[0]?.id || "summary",
+    id: uid(), name: "", units: "", category: "", tabId: currentTabId || tabs[0]?.id || "profit-costs",
     direction: "higher", aggregate: "avg", frequency: "Monthly", meaning: "", measured: "",
   });
   const [saving, setSaving] = useState(false);
@@ -3240,20 +3715,14 @@ const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   Add Data Wizard — redesigned: Budget + Actual rows visible for the whole period
-   ════════════════════════════════════════════════════════════════════════ */
-/* ════════════════════════════════════════════════════════════════════════════
-   Add Data Wizard — with frequency tabs + month-count selector
-   ════════════════════════════════════════════════════════════════════════ */
-/* ════════════════════════════════════════════════════════════════════════════
-   Add Data Wizard — frequency tabs + month-count selector
-   Focus-safe input rendering (no remounts on keystroke)
+   Add Data Wizard — unified grid layout for all tabs
    ════════════════════════════════════════════════════════════════════════ */
 const AddDataWizard = ({
   tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, currentTabId,
   meta, dividends, investors, irrInvestments,
   onSaveDividends, onSaveCapTable, onSaveLoans,
   onSaveBsFull, onDeleteLine, onDeleteSection,
+  chartPrefs, onSaveChartPrefs,
 }) => {
   const editableTabs = tabs.filter((t) => {
     const hasEditableKpis = t.categories.some((c) => (c.kpis || []).some((k) => k.field || k.custom || (k.frequency && k.frequency !== "Monthly")));
@@ -3278,25 +3747,35 @@ const AddDataWizard = ({
   const [monthStart, setMonthStart] = useState(prefs?.monthStart ?? 0);
 
   const [draft, setDraft] = useState({});
+  const [chartLine, setChartLine] = useState(null);
 
-  /* Keep a live ref of draft so the debounced saver sees the latest value */
   const draftRef = useRef(draft);
   useEffect(() => { draftRef.current = draft; }, [draft]);
+
+  // Refs for accumulating pending writes
+  const pendingKpiRef = useRef({});
+  const pendingBsRef = useRef({});
+  const docsRef = useRef(docs);
+  useEffect(() => { docsRef.current = docs; }, [docs]);
 
   const tab = editableTabs.find((t) => t.id === tabId) || editableTabs[0];
   const allMonths = useMemo(() => fyMonths(startYear, fy.startMonth), [startYear, fy.startMonth]);
 
+  const bsDoc = useMemo(() => {
+    if (tab?.custom !== "balanceSheet") return null;
+    return docs[`${DOC.bs}_${startYear}`] || null;
+  }, [tab, docs, startYear]);
+
+  const bsData = useMemo(() => bsDoc?.balanceSheetData || BLANK_BS, [bsDoc]);
+  const bsBudget = useMemo(() => bsDoc?.balanceSheetBudget || {}, [bsDoc]);
+
   const kpiRows = useMemo(() => {
     if (!tab) return { monthly: [], weekly: [], daily: [], panels: [] };
-    if (tab.custom === "balanceSheet" || tab.custom === "equity") {
-      return { monthly: [], weekly: [], daily: [], panels: [{ id: tab.custom, label: tab.name }] };
-    }
+    if (tab.custom === "balanceSheet") return { monthly: [], weekly: [], daily: [], panels: [], isBs: true };
+    if (tab.custom === "equity") return { monthly: [], weekly: [], daily: [], panels: [{ id: "equity", label: tab.name }] };
     const monthly = [], weekly = [], daily = [], panels = [];
     tab.categories.forEach((cat) => {
-      if (cat.custom === "loans") {
-        panels.push({ id: "loans", label: cat.name });
-        return;
-      }
+      if (cat.custom === "loans") { panels.push({ id: "loans", label: cat.name }); return; }
       (cat.kpis || []).forEach((k) => {
         if (!k.field && !k.custom && k.frequency === "Monthly") return;
         const freq = k.frequency || "Monthly";
@@ -3312,13 +3791,14 @@ const AddDataWizard = ({
   const hasPanels = kpiRows.panels.length > 0;
 
   const sections = useMemo(() => {
+    if (tab?.custom === "balanceSheet") return [];
     const list = [];
     if (kpiRows.monthly.length) list.push({ key: "monthly", label: "Monthly", count: kpiRows.monthly.length });
     if (kpiRows.weekly.length)  list.push({ key: "weekly",  label: "Weekly",  count: kpiRows.weekly.length });
     if (kpiRows.daily.length)   list.push({ key: "daily",   label: "Daily",   count: kpiRows.daily.length });
     if (hasPanels)              list.push({ key: "panels",  label: "Setup",   count: kpiRows.panels.length });
     return list;
-  }, [kpiRows, hasPanels]);
+  }, [kpiRows, hasPanels, tab]);
 
   const activeSection = useMemo(() => {
     if (!sections.length) return null;
@@ -3348,19 +3828,92 @@ const AddDataWizard = ({
     return "";
   };
 
-  const setEntry = (kpi, bucketKey, which, raw) => {
-    const dk = draftKey(kpi.id, bucketKey, which);
-    // Update draft immediately — input stays responsive
+  const getBsEntry = (path, monthIdx, mode = "actual") => {
+    const pathKey = path.join(".");
+    const dk = `bs|${mode}|${pathKey}|${monthIdx}`;
+    if (draft[dk] !== undefined) return draft[dk];
+    const root = mode === "budget" ? bsBudget : bsData;
+    const raw = pathArr(path).reduce((o, k) => (o == null ? undefined : o[k]), root);
+    const v = Array.isArray(raw) ? raw[monthIdx] : null;
+    return v === undefined || v === null ? "" : String(v);
+  };
+
+  // ── Flush all pending writes in one hit ──────────────────────────────
+  const flushAll = useCallback(async () => {
+    const kpiJobs = Object.values(pendingKpiRef.current);
+    pendingKpiRef.current = {};
+
+    const bsByDoc = pendingBsRef.current;
+    pendingBsRef.current = {};
+
+    // Flush KPI writes
+    for (const job of kpiJobs) {
+      try { await onSaveField(job); } catch (e) { console.error("KPI save failed:", e); }
+    }
+
+    // Flush BS writes (batched per doc)
+    for (const [docKey, data] of Object.entries(bsByDoc)) {
+      try {
+        const currentDoc = docsRef.current[docKey] || {};
+        const nextDoc = { ...currentDoc, year: Number(docKey.split("_").pop()) };
+
+        if (Object.keys(data.actual).length) {
+          const root = JSON.parse(JSON.stringify(currentDoc.balanceSheetData || BLANK_BS));
+          for (const [pathStr, monthsMap] of Object.entries(data.actual)) {
+            const path = pathStr.split(".");
+            for (const [mIdx, raw] of Object.entries(monthsMap)) {
+              setBsValue(root, path, Number(mIdx), raw);
+            }
+          }
+          nextDoc.balanceSheetData = root;
+        }
+        if (Object.keys(data.budget).length) {
+          const root = JSON.parse(JSON.stringify(currentDoc.balanceSheetBudget || {}));
+          for (const [pathStr, monthsMap] of Object.entries(data.budget)) {
+            const path = pathStr.split(".");
+            for (const [mIdx, raw] of Object.entries(monthsMap)) {
+              setBsValue(root, path, Number(mIdx), raw);
+            }
+          }
+          nextDoc.balanceSheetBudget = root;
+        }
+        await onSaveBsFull(docKey, nextDoc, true);
+      } catch (e) { console.error("BS save failed:", e); }
+    }
+
+    onSavePrefs({ tabId, startYear, dailyMonthOffset, weeklyHalf, freqTab, monthCount, monthStart });
+    setSaveState("saved");
+    setTimeout(() => setSaveState("idle"), 1500);
+  }, [onSaveField, onSaveBsFull, onSavePrefs, tabId, startYear, dailyMonthOffset, weeklyHalf, freqTab, monthCount, monthStart]);
+
+  const flushRef = useRef(flushAll);
+  useEffect(() => { flushRef.current = flushAll; }, [flushAll]);
+
+  const scheduleFlush = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { flushRef.current(); }, 700);
+  };
+
+  const setBsEntry = (path, monthIdx, raw, mode = "actual") => {
+    const pathKey = path.join(".");
+    const dk = `bs|${mode}|${pathKey}|${monthIdx}`;
     setDraft((p) => ({ ...p, [dk]: raw }));
     setSaveState("saving");
-    // Debounce the actual persistence
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      await onSaveField({ kpi, which, raw, periodKey: bucketKey });
-      onSavePrefs({ tabId, startYear, dailyMonthOffset, weeklyHalf, freqTab, monthCount, monthStart });
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1500);
-    }, 700);
+
+    const docKey = `${DOC.bs}_${startYear}`;
+    if (!pendingBsRef.current[docKey]) pendingBsRef.current[docKey] = { actual: {}, budget: {} };
+    if (!pendingBsRef.current[docKey][mode][pathKey]) pendingBsRef.current[docKey][mode][pathKey] = {};
+    pendingBsRef.current[docKey][mode][pathKey][monthIdx] = raw;
+
+    scheduleFlush();
+  };
+
+  const setEntry = (kpi, bucketKey, which, raw) => {
+    const dk = draftKey(kpi.id, bucketKey, which);
+    setDraft((p) => ({ ...p, [dk]: raw }));
+    setSaveState("saving");
+    pendingKpiRef.current[dk] = { kpi, which, raw, periodKey: bucketKey };
+    scheduleFlush();
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -3384,12 +3937,6 @@ const AddDataWizard = ({
     );
   }
 
-  const MODE_COLOR = {
-    budget: { hdr: "#1e3a8a", hdrText: "#dbeafe", cell: "#eff6ff", border: "#bfdbfe", input: "#1e3a8a" },
-    actual: { hdr: "#166534", hdrText: "#dcfce7", cell: "#f0fdf4", border: "#bbf7d0", input: "#166534" },
-  };
-
-  /* ──────────── MONTHLY GRID ──────────── */
   const renderMonthlyGrid = () => {
     if (!kpiRows.monthly.length) return null;
     const clampedStart = Math.max(0, Math.min(monthStart, 12 - monthCount));
@@ -3405,19 +3952,11 @@ const AddDataWizard = ({
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)" }}>From</span>
-              <select
-                value={clampedStart}
-                onChange={(e) => setMonthStart(Number(e.target.value))}
-                style={{
-                  padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px",
-                  fontFamily: "inherit", background: "rgba(255,255,255,0.15)", color: "#fff",
-                  border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer",
-                }}
-              >
+              <select value={clampedStart} onChange={(e) => setMonthStart(Number(e.target.value))}
+                style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px", fontFamily: "inherit",
+                  background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
                 {allMonths.map((m, i) => (
-                  <option key={m.key} value={i} disabled={i > 12 - monthCount} style={{ color: "#000" }}>
-                    {m.label}
-                  </option>
+                  <option key={m.key} value={i} disabled={i > 12 - monthCount} style={{ color: "#000" }}>{m.label}</option>
                 ))}
               </select>
             </div>
@@ -3425,20 +3964,10 @@ const AddDataWizard = ({
               {[3, 6, 12].map((n) => {
                 const on = monthCount === n;
                 return (
-                  <button
-                    key={n}
-                    onClick={() => {
-                      setMonthCount(n);
-                      setMonthStart((s) => Math.max(0, Math.min(s, 12 - n)));
-                    }}
-                    style={{
-                      padding: "4px 12px", borderRadius: "6px",
-                      fontSize: "11.5px", fontWeight: 600, cursor: "pointer",
-                      fontFamily: "inherit", border: "none",
-                      background: on ? "#fff" : "transparent",
-                      color: on ? T.header : "#fff",
-                    }}
-                  >
+                  <button key={n} onClick={() => { setMonthCount(n); setMonthStart((s) => Math.max(0, Math.min(s, 12 - n))); }}
+                    style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+                      cursor: "pointer", fontFamily: "inherit", border: "none",
+                      background: on ? "#fff" : "transparent", color: on ? T.header : "#fff" }}>
                     {n}m
                   </button>
                 );
@@ -3452,15 +3981,11 @@ const AddDataWizard = ({
               <tr>
                 <th style={{ background: T.header, width: rowLabelW, padding: "8px 12px", textAlign: "left",
                   fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.4px",
-                  borderRight: `2px solid ${T.lineStrong}` }}>
-                  KPI
-                </th>
+                  borderRight: `2px solid ${T.lineStrong}` }}>KPI</th>
                 {months.map((m) => (
                   <th key={m.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
                     fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
-                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>
-                    {m.label}
-                  </th>
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{m.label}</th>
                 ))}
               </tr>
             </thead>
@@ -3470,45 +3995,31 @@ const AddDataWizard = ({
                 const alt = i % 2 ? T.panel : T.bg;
                 return (
                   <React.Fragment key={kpi.id}>
-                    {/* BUDGET ROW */}
                     <tr>
                       <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
                         color: T.ink, borderBottom: `1px solid ${T.lineSoft}`,
-                        borderRight: `2px solid ${T.lineStrong}`,
-                        background: MODE_COLOR.budget.cell }}>
+                        borderRight: `2px solid ${T.lineStrong}`, background: MODE_COLOR.budget.cell }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
-                            background: MODE_COLOR.budget.hdr, color: "#fff", fontWeight: 700,
-                            letterSpacing: "0.3px" }}>BUDGET</span>
+                            background: MODE_COLOR.budget.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>BUDGET</span>
                           <span style={{ fontSize: "12px", color: T.ink }}>{kpi.name}</span>
                         </div>
-                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", paddingLeft: "2px" }}>
-                          {category} · {kpi.units}
-                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", paddingLeft: "2px" }}>{category} · {kpi.units}</div>
                       </td>
                       {months.map((m) => {
                         const tok = MODE_COLOR.budget;
                         const val = hasBudgetField ? getEntry(kpi, m.key, "budget") : "";
                         return (
-                          <td key={m.key} style={{ padding: "4px 5px",
-                            borderBottom: `1px solid ${T.lineSoft}`,
-                            borderRight: `1px solid ${tok.border}`,
-                            background: tok.cell }}>
+                          <td key={m.key} style={{ padding: "4px 5px", borderBottom: `1px solid ${T.lineSoft}`,
+                            borderRight: `1px solid ${tok.border}`, background: tok.cell }}>
                             {hasBudgetField ? (
-                              <input
-                                type="number" step="any" value={val} placeholder="—"
+                              <input type="number" step="any" value={val} placeholder="—"
                                 onChange={(e) => setEntry(kpi, m.key, "budget", e.target.value)}
-                                style={{
-                                  width: "100%", padding: "6px 8px",
-                                  border: `1.5px solid ${tok.border}`, borderRadius: "5px",
-                                  fontSize: "12px", fontFamily: "inherit",
-                                  fontVariantNumeric: "tabular-nums", textAlign: "right",
-                                  background: "#fff", color: tok.input, fontWeight: 600,
-                                  outline: "none", boxSizing: "border-box",
-                                }}
+                                style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
+                                  fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                  background: "#fff", color: tok.input, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
                                 onFocus={(e) => { e.target.style.borderColor = tok.hdr; e.target.style.boxShadow = `0 0 0 3px ${tok.hdr}22`; }}
-                                onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }}
-                              />
+                                onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }} />
                             ) : (
                               <div style={{ textAlign: "center", color: T.faint, fontSize: "12px", padding: "6px 2px" }}>—</div>
                             )}
@@ -3516,43 +4027,30 @@ const AddDataWizard = ({
                         );
                       })}
                     </tr>
-                    {/* ACTUAL ROW */}
                     <tr>
                       <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
                         color: T.ink, borderBottom: `2px solid ${T.lineStrong}`,
                         borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
-                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700,
-                            letterSpacing: "0.3px" }}>ACTUAL</span>
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>ACTUAL</span>
                           <span style={{ fontSize: "12px", color: T.ink }}>{kpi.name}</span>
                         </div>
-                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", paddingLeft: "2px" }}>
-                          {category} · {kpi.units}
-                        </div>
+                        <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", paddingLeft: "2px" }}>{category} · {kpi.units}</div>
                       </td>
                       {months.map((m) => {
                         const tok = MODE_COLOR.actual;
                         const val = getEntry(kpi, m.key, "actual");
                         return (
-                          <td key={m.key} style={{ padding: "4px 5px",
-                            borderBottom: `2px solid ${T.lineStrong}`,
-                            borderRight: `1px solid ${tok.border}`,
-                            background: alt }}>
-                            <input
-                              type="number" step="any" value={val} placeholder="—"
+                          <td key={m.key} style={{ padding: "4px 5px", borderBottom: `2px solid ${T.lineStrong}`,
+                            borderRight: `1px solid ${tok.border}`, background: alt }}>
+                            <input type="number" step="any" value={val} placeholder="—"
                               onChange={(e) => setEntry(kpi, m.key, "actual", e.target.value)}
-                              style={{
-                                width: "100%", padding: "6px 8px",
-                                border: `1.5px solid ${tok.border}`, borderRadius: "5px",
-                                fontSize: "12px", fontFamily: "inherit",
-                                fontVariantNumeric: "tabular-nums", textAlign: "right",
-                                background: "#fff", color: tok.input, fontWeight: 600,
-                                outline: "none", boxSizing: "border-box",
-                              }}
+                              style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
+                                fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                background: "#fff", color: tok.input, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
                               onFocus={(e) => { e.target.style.borderColor = tok.hdr; e.target.style.boxShadow = `0 0 0 3px ${tok.hdr}22`; }}
-                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }}
-                            />
+                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }} />
                           </td>
                         );
                       })}
@@ -3567,7 +4065,182 @@ const AddDataWizard = ({
     );
   };
 
-  /* ──────────── WEEKLY GRID ──────────── */
+  // Balance Sheet Grid — BUDGET above, ACTUAL below, WITH CHART BUTTON
+  const renderBsGrid = () => {
+    if (!bsData) return null;
+    const clampedStart = Math.max(0, Math.min(monthStart, 12 - monthCount));
+    const months = allMonths.slice(clampedStart, clampedStart + monthCount);
+    const rowLabelW = 240;
+
+    const bsRows = [];
+    const addSection = (sectionName, pathPrefix, obj) => {
+      if (!obj) return;
+      Object.entries(obj).forEach(([key, arr]) => {
+        if (Array.isArray(arr)) {
+          bsRows.push({ section: sectionName, label: prettify(key), path: [...pathPrefix, key] });
+        }
+      });
+    };
+
+    addSection("Assets · Bank", ["assets", "bank"], bsData.assets?.bank);
+    addSection("Assets · Current", ["assets", "currentAssets"], bsData.assets?.currentAssets);
+    addSection("Assets · Fixed", ["assets", "fixedAssets"], bsData.assets?.fixedAssets);
+    addSection("Assets · Intangible", ["assets", "intangibleAssets"], bsData.assets?.intangibleAssets);
+    addSection("Assets · Non-current", ["assets", "nonCurrentAssets"], bsData.assets?.nonCurrentAssets);
+    addSection("Liabilities · Current", ["liabilities", "currentLiabilities"], bsData.liabilities?.currentLiabilities);
+    addSection("Liabilities · Non-current", ["liabilities", "nonCurrentLiabilities"], bsData.liabilities?.nonCurrentLiabilities);
+    addSection("Equity", ["equity"], bsData.equity);
+
+    (bsData.customCategories || []).forEach((cat, ci) => {
+      addSection(`Custom Assets · ${cat.name || ci+1}`, ["customCategories", ci, "items"], cat.items);
+    });
+    (bsData.customLiabilitiesCategories || []).forEach((cat, ci) => {
+      addSection(`Custom Liabilities · ${cat.name || ci+1}`, ["customLiabilitiesCategories", ci, "items"], cat.items);
+    });
+    (bsData.customEquityCategories || []).forEach((cat, ci) => {
+      addSection(`Custom Equity · ${cat.name || ci+1}`, ["customEquityCategories", ci, "items"], cat.items);
+    });
+
+    let lastSection = "";
+
+    return (
+      <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ background: T.header, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff", letterSpacing: "0.3px" }}>
+            Balance Sheet · {months[0]?.label} → {months[months.length - 1]?.label}
+          </span>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)" }}>From</span>
+              <select value={clampedStart} onChange={(e) => setMonthStart(Number(e.target.value))}
+                style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px", fontFamily: "inherit",
+                  background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
+                {allMonths.map((m, i) => (
+                  <option key={m.key} value={i} disabled={i > 12 - monthCount} style={{ color: "#000" }}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "inline-flex", background: "rgba(255,255,255,0.12)", borderRadius: "8px", padding: "2px" }}>
+              {[3, 6, 12].map((n) => {
+                const on = monthCount === n;
+                return (
+                  <button key={n} onClick={() => { setMonthCount(n); setMonthStart((s) => Math.max(0, Math.min(s, 12 - n))); }}
+                    style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+                      cursor: "pointer", fontFamily: "inherit", border: "none",
+                      background: on ? "#fff" : "transparent", color: on ? T.header : "#fff" }}>
+                    {n}m
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: `${rowLabelW + months.length * 90}px`, tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={{ background: T.header, width: rowLabelW, padding: "8px 12px", textAlign: "left",
+                  fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.4px",
+                  borderRight: `2px solid ${T.lineStrong}` }}>Line Item</th>
+                {months.map((m) => (
+                  <th key={m.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
+                    fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{m.label}</th>
+                ))}
+                <th style={{ background: T.header, width: 44, padding: "8px 4px", textAlign: "center",
+                  fontSize: "10.5px", fontWeight: 700, color: "rgba(255,255,255,0.85)", textTransform: "uppercase" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {bsRows.map((row, i) => {
+                const showSectionHeader = row.section !== lastSection;
+                lastSection = row.section;
+                const alt = i % 2 ? T.panel : T.bg;
+                return (
+                  <React.Fragment key={row.path.join(".")}>
+                    {showSectionHeader && (
+                      <tr>
+                        <td colSpan={months.length + 2} style={{ background: T.accentTint, padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: `1px solid ${T.lineStrong}` }}>
+                          {row.section}
+                        </td>
+                      </tr>
+                    )}
+                    {/* Budget row */}
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `1px solid ${T.lineSoft}`,
+                        borderRight: `2px solid ${T.lineStrong}`,
+                        background: MODE_COLOR.budget.cell }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.budget.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>BUDGET</span>
+                          <span style={{ fontSize: "12px", color: T.ink }}>{row.label}</span>
+                        </div>
+                      </td>
+                      {months.map((m) => {
+                        const val = getBsEntry(row.path, m.month, "budget");
+                        return (
+                          <td key={m.key} style={{ padding: "4px 5px",
+                            borderBottom: `1px solid ${T.lineSoft}`,
+                            borderRight: `1px solid ${MODE_COLOR.budget.border}`,
+                            background: MODE_COLOR.budget.cell }}>
+                            <input type="number" step="any" value={val} placeholder="—"
+                              onChange={(e) => setBsEntry(row.path, m.month, e.target.value, "budget")}
+                              style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${MODE_COLOR.budget.border}`, borderRadius: "5px",
+                                fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                background: "#fff", color: MODE_COLOR.budget.input, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
+                              onFocus={(e) => { e.target.style.borderColor = MODE_COLOR.budget.hdr; e.target.style.boxShadow = `0 0 0 3px ${MODE_COLOR.budget.hdr}22`; }}
+                              onBlur={(e) => { e.target.style.borderColor = MODE_COLOR.budget.border; e.target.style.boxShadow = "none"; }} />
+                          </td>
+                        );
+                      })}
+                      {/* chart button on the budget row so it lines up with the row-label */}
+                      <td rowSpan={2} style={{ padding: "4px", textAlign: "center", background: MODE_COLOR.budget.cell, borderBottom: `2px solid ${T.lineStrong}` }}>
+                        <button onClick={() => setChartLine({ name: row.label, path: row.path })} title="Trend chart"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: T.body, padding: "4px" }}>
+                          <LineChartIcon size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                    {/* Actual row */}
+                    <tr>
+                      <td style={{ padding: "7px 12px", fontSize: "12px", fontWeight: 600,
+                        color: T.ink, borderBottom: `2px solid ${T.lineStrong}`,
+                        borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>ACTUAL</span>
+                          <span style={{ fontSize: "12px", color: T.ink }}>{row.label}</span>
+                        </div>
+                      </td>
+                      {months.map((m) => {
+                        const val = getBsEntry(row.path, m.month, "actual");
+                        return (
+                          <td key={m.key} style={{ padding: "4px 5px",
+                            borderBottom: `2px solid ${T.lineStrong}`,
+                            borderRight: `1px solid ${T.lineSoft}`,
+                            background: alt }}>
+                            <input type="number" step="any" value={val} placeholder="—"
+                              onChange={(e) => setBsEntry(row.path, m.month, e.target.value, "actual")}
+                              style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${T.lineStrong}`, borderRadius: "5px",
+                                fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                background: "#fff", color: T.ink, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
+                              onFocus={(e) => { e.target.style.borderColor = T.accent; e.target.style.boxShadow = `0 0 0 3px ${T.accent}22`; }}
+                              onBlur={(e) => { e.target.style.borderColor = T.lineStrong; e.target.style.boxShadow = "none"; }} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderWeeklyGrid = () => {
     if (!kpiRows.weekly.length) return null;
     const startMonth = weeklyHalf === 0 ? allMonths[0] : allMonths[6];
@@ -3576,10 +4249,7 @@ const AddDataWizard = ({
     let cursor = startOfWeek(new Date(startMonth.year, startMonth.month, 1));
     const endDate = new Date(endMonth.year, endMonth.month + 1, 0);
     while (cursor <= endDate) {
-      weeks.push({
-        key: weekKeyOf(cursor),
-        label: `${String(cursor.getDate()).padStart(2,"0")} ${MONTHS[cursor.getMonth()]}`,
-      });
+      weeks.push({ key: weekKeyOf(cursor), label: `${String(cursor.getDate()).padStart(2,"0")} ${MONTHS[cursor.getMonth()]}` });
       cursor = addDays(cursor, 7);
     }
 
@@ -3590,20 +4260,12 @@ const AddDataWizard = ({
             Weekly · {weeks.length} weeks · {weeklyHalf === 0 ? "first half" : "second half"} of the FY
           </span>
           <div style={{ display: "flex", gap: "6px" }}>
-            <button onClick={() => setWeeklyHalf(0)} style={{
-              padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit",
-              background: weeklyHalf === 0 ? "#fff" : "rgba(255,255,255,0.15)",
-              color: weeklyHalf === 0 ? T.header : "#fff",
-              border: "1px solid rgba(255,255,255,0.25)",
-            }}>{allMonths[0].label} – {allMonths[5].label}</button>
-            <button onClick={() => setWeeklyHalf(1)} style={{
-              padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit",
-              background: weeklyHalf === 1 ? "#fff" : "rgba(255,255,255,0.15)",
-              color: weeklyHalf === 1 ? T.header : "#fff",
-              border: "1px solid rgba(255,255,255,0.25)",
-            }}>{allMonths[6].label} – {allMonths[11].label}</button>
+            <button onClick={() => setWeeklyHalf(0)} style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit", background: weeklyHalf === 0 ? "#fff" : "rgba(255,255,255,0.15)",
+              color: weeklyHalf === 0 ? T.header : "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>{allMonths[0].label} – {allMonths[5].label}</button>
+            <button onClick={() => setWeeklyHalf(1)} style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit", background: weeklyHalf === 1 ? "#fff" : "rgba(255,255,255,0.15)",
+              color: weeklyHalf === 1 ? T.header : "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>{allMonths[6].label} – {allMonths[11].label}</button>
           </div>
         </div>
         <div style={{ overflowX: "auto" }}>
@@ -3612,15 +4274,11 @@ const AddDataWizard = ({
               <tr>
                 <th style={{ background: T.header, width: 210, padding: "8px 12px", textAlign: "left",
                   fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
-                  borderRight: `2px solid ${T.lineStrong}` }}>
-                  KPI
-                </th>
+                  borderRight: `2px solid ${T.lineStrong}` }}>KPI</th>
                 {weeks.map((w) => (
                   <th key={w.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
                     fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
-                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>
-                    {w.label}
-                  </th>
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{w.label}</th>
                 ))}
               </tr>
             </thead>
@@ -3644,24 +4302,15 @@ const AddDataWizard = ({
                         const tok = MODE_COLOR.budget;
                         const val = getEntry(kpi, w.key, "budget");
                         return (
-                          <td key={w.key} style={{ padding: "4px 5px",
-                            borderBottom: `1px solid ${T.lineSoft}`,
-                            borderRight: `1px solid ${tok.border}`,
-                            background: tok.cell }}>
-                            <input
-                              type="number" step="any" value={val} placeholder="—"
+                          <td key={w.key} style={{ padding: "4px 5px", borderBottom: `1px solid ${T.lineSoft}`,
+                            borderRight: `1px solid ${tok.border}`, background: tok.cell }}>
+                            <input type="number" step="any" value={val} placeholder="—"
                               onChange={(e) => setEntry(kpi, w.key, "budget", e.target.value)}
-                              style={{
-                                width: "100%", padding: "6px 8px",
-                                border: `1.5px solid ${tok.border}`, borderRadius: "5px",
-                                fontSize: "12px", fontFamily: "inherit",
-                                fontVariantNumeric: "tabular-nums", textAlign: "right",
-                                background: "#fff", color: tok.input, fontWeight: 600,
-                                outline: "none", boxSizing: "border-box",
-                              }}
+                              style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
+                                fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                background: "#fff", color: tok.input, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
                               onFocus={(e) => { e.target.style.borderColor = tok.hdr; e.target.style.boxShadow = `0 0 0 3px ${tok.hdr}22`; }}
-                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }}
-                            />
+                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }} />
                           </td>
                         );
                       })}
@@ -3681,24 +4330,15 @@ const AddDataWizard = ({
                         const tok = MODE_COLOR.actual;
                         const val = getEntry(kpi, w.key, "actual");
                         return (
-                          <td key={w.key} style={{ padding: "4px 5px",
-                            borderBottom: `2px solid ${T.lineStrong}`,
-                            borderRight: `1px solid ${tok.border}`,
-                            background: alt }}>
-                            <input
-                              type="number" step="any" value={val} placeholder="—"
+                          <td key={w.key} style={{ padding: "4px 5px", borderBottom: `2px solid ${T.lineStrong}`,
+                            borderRight: `1px solid ${tok.border}`, background: alt }}>
+                            <input type="number" step="any" value={val} placeholder="—"
                               onChange={(e) => setEntry(kpi, w.key, "actual", e.target.value)}
-                              style={{
-                                width: "100%", padding: "6px 8px",
-                                border: `1.5px solid ${tok.border}`, borderRadius: "5px",
-                                fontSize: "12px", fontFamily: "inherit",
-                                fontVariantNumeric: "tabular-nums", textAlign: "right",
-                                background: "#fff", color: tok.input, fontWeight: 600,
-                                outline: "none", boxSizing: "border-box",
-                              }}
+                              style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
+                                fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                background: "#fff", color: tok.input, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
                               onFocus={(e) => { e.target.style.borderColor = tok.hdr; e.target.style.boxShadow = `0 0 0 3px ${tok.hdr}22`; }}
-                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }}
-                            />
+                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }} />
                           </td>
                         );
                       })}
@@ -3713,7 +4353,6 @@ const AddDataWizard = ({
     );
   };
 
-  /* ──────────── DAILY GRID ──────────── */
   const renderDailyGrid = () => {
     if (!kpiRows.daily.length) return null;
     const ref = new Date(startYear, dailyMonthOffset, 1);
@@ -3732,24 +4371,12 @@ const AddDataWizard = ({
             Daily · {MONTHS[month]} {year} · {days.length} days
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <button onClick={() => setDailyMonthOffset((m) => m === 0 ? 11 : m - 1)} style={{
-              padding: "4px 10px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit", background: "rgba(255,255,255,0.15)",
-              color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
-              ←
-            </button>
+            <button onClick={() => setDailyMonthOffset((m) => m === 0 ? 11 : m - 1)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>←</button>
             <select value={dailyMonthOffset} onChange={(e) => setDailyMonthOffset(Number(e.target.value))}
-              style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px",
-                fontFamily: "inherit", background: "rgba(255,255,255,0.15)", color: "#fff",
-                border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
+              style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px", fontFamily: "inherit", background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
               {MONTHS.map((mn, i) => <option key={mn} value={i} style={{ color: "#000" }}>{mn}</option>)}
             </select>
-            <button onClick={() => setDailyMonthOffset((m) => m === 11 ? 0 : m + 1)} style={{
-              padding: "4px 10px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit", background: "rgba(255,255,255,0.15)",
-              color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
-              →
-            </button>
+            <button onClick={() => setDailyMonthOffset((m) => m === 11 ? 0 : m + 1)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>→</button>
           </div>
         </div>
         <div style={{ overflowX: "auto" }}>
@@ -3758,9 +4385,7 @@ const AddDataWizard = ({
               <tr>
                 <th style={{ background: T.header, width: 210, padding: "8px 12px", textAlign: "left",
                   fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase",
-                  borderRight: `2px solid ${T.lineStrong}` }}>
-                  KPI
-                </th>
+                  borderRight: `2px solid ${T.lineStrong}` }}>KPI</th>
                 {days.map((d) => (
                   <th key={d.key} style={{ background: T.header, padding: "4px 2px", fontSize: "10px",
                     fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
@@ -3791,24 +4416,15 @@ const AddDataWizard = ({
                         const tok = MODE_COLOR.budget;
                         const val = getEntry(kpi, d.key, "budget");
                         return (
-                          <td key={d.key} style={{ padding: "3px 3px",
-                            borderBottom: `1px solid ${T.lineSoft}`,
-                            borderRight: `1px solid ${tok.border}`,
-                            background: tok.cell }}>
-                            <input
-                              type="number" step="any" value={val} placeholder="—"
+                          <td key={d.key} style={{ padding: "3px 3px", borderBottom: `1px solid ${T.lineSoft}`,
+                            borderRight: `1px solid ${tok.border}`, background: tok.cell }}>
+                            <input type="number" step="any" value={val} placeholder="—"
                               onChange={(e) => setEntry(kpi, d.key, "budget", e.target.value)}
-                              style={{
-                                width: "100%", padding: "6px 4px",
-                                border: `1.5px solid ${tok.border}`, borderRadius: "5px",
-                                fontSize: "11px", fontFamily: "inherit",
-                                fontVariantNumeric: "tabular-nums", textAlign: "right",
-                                background: "#fff", color: tok.input, fontWeight: 600,
-                                outline: "none", boxSizing: "border-box",
-                              }}
+                              style={{ width: "100%", padding: "6px 4px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
+                                fontSize: "11px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                background: "#fff", color: tok.input, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
                               onFocus={(e) => { e.target.style.borderColor = tok.hdr; e.target.style.boxShadow = `0 0 0 3px ${tok.hdr}22`; }}
-                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }}
-                            />
+                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }} />
                           </td>
                         );
                       })}
@@ -3828,24 +4444,15 @@ const AddDataWizard = ({
                         const tok = MODE_COLOR.actual;
                         const val = getEntry(kpi, d.key, "actual");
                         return (
-                          <td key={d.key} style={{ padding: "3px 3px",
-                            borderBottom: `2px solid ${T.lineStrong}`,
-                            borderRight: `1px solid ${tok.border}`,
-                            background: alt }}>
-                            <input
-                              type="number" step="any" value={val} placeholder="—"
+                          <td key={d.key} style={{ padding: "3px 3px", borderBottom: `2px solid ${T.lineStrong}`,
+                            borderRight: `1px solid ${tok.border}`, background: alt }}>
+                            <input type="number" step="any" value={val} placeholder="—"
                               onChange={(e) => setEntry(kpi, d.key, "actual", e.target.value)}
-                              style={{
-                                width: "100%", padding: "6px 4px",
-                                border: `1.5px solid ${tok.border}`, borderRadius: "5px",
-                                fontSize: "11px", fontFamily: "inherit",
-                                fontVariantNumeric: "tabular-nums", textAlign: "right",
-                                background: "#fff", color: tok.input, fontWeight: 600,
-                                outline: "none", boxSizing: "border-box",
-                              }}
+                              style={{ width: "100%", padding: "6px 4px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
+                                fontSize: "11px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
+                                background: "#fff", color: tok.input, fontWeight: 600, outline: "none", boxSizing: "border-box" }}
                               onFocus={(e) => { e.target.style.borderColor = tok.hdr; e.target.style.boxShadow = `0 0 0 3px ${tok.hdr}22`; }}
-                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }}
-                            />
+                              onBlur={(e) => { e.target.style.borderColor = tok.border; e.target.style.boxShadow = "none"; }} />
                           </td>
                         );
                       })}
@@ -3860,15 +4467,10 @@ const AddDataWizard = ({
     );
   };
 
-  /* ──────────── PANELS ──────────── */
   const renderPanels = () => {
     if (!hasPanels) return null;
     return (
       <>
-        {tab.custom === "balanceSheet" && (
-          <BalanceSheetTab fy={fy} docs={docs} readOnly={false}
-            onSaveBsFull={onSaveBsFull} onDeleteLine={onDeleteLine} onDeleteSection={onDeleteSection} />
-        )}
         {tab.custom === "equity" && (
           <>
             <DividendHistory dividends={dividends} readOnly={false} onSave={onSaveDividends} />
@@ -3876,13 +4478,15 @@ const AddDataWizard = ({
           </>
         )}
         {tab.categories.some((c) => c.custom === "loans") && (
-          <LoanRepaymentsPanel loans={meta.loans || []} readOnly={false} onSave={onSaveLoans} />
+          <LoanRepaymentsPanel loans={meta.loans || []} readOnly={false} onSave={onSaveLoans} fy={fy}
+            chartPrefs={chartPrefs} onSaveChartPrefs={onSaveChartPrefs} />
         )}
       </>
     );
   };
 
   const renderActive = () => {
+    if (tab?.custom === "balanceSheet") return renderBsGrid();
     if (activeSection === "monthly") return renderMonthlyGrid();
     if (activeSection === "weekly") return renderWeeklyGrid();
     if (activeSection === "daily") return renderDailyGrid();
@@ -3923,35 +4527,20 @@ const AddDataWizard = ({
       </div>
 
       {sections.length > 0 && (
-        <div style={{
-          display: "flex", gap: "4px", padding: "4px", borderRadius: "10px",
-          background: T.raised, marginBottom: "14px", flexWrap: "wrap",
-        }}>
+        <div style={{ display: "flex", gap: "4px", padding: "4px", borderRadius: "10px",
+          background: T.raised, marginBottom: "14px", flexWrap: "wrap" }}>
           {sections.map((s) => {
             const on = activeSection === s.key;
             return (
-              <button
-                key={s.key}
-                onClick={() => setFreqTab(s.key)}
-                style={{
-                  padding: "8px 16px", borderRadius: "8px",
-                  fontSize: "13.5px", fontWeight: 600,
+              <button key={s.key} onClick={() => setFreqTab(s.key)}
+                style={{ padding: "8px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 600,
                   cursor: "pointer", fontFamily: "inherit", border: "none",
                   display: "inline-flex", alignItems: "center", gap: "8px",
-                  background: on ? T.bg : "transparent",
-                  color: on ? T.accent : T.body,
-                  boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none",
-                }}
-              >
+                  background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
+                  boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
                 {s.label}
-                <span style={{
-                  fontSize: "11px", padding: "1px 8px", borderRadius: "999px",
-                  background: on ? T.accentTint : T.bg,
-                  color: on ? T.accent : T.muted,
-                  fontWeight: 700,
-                }}>
-                  {s.count}
-                </span>
+                <span style={{ fontSize: "11px", padding: "1px 8px", borderRadius: "999px",
+                  background: on ? T.accentTint : T.bg, color: on ? T.accent : T.muted, fontWeight: 700 }}>{s.count}</span>
               </button>
             );
           })}
@@ -3961,25 +4550,62 @@ const AddDataWizard = ({
       {renderActive()}
 
       {(kpiRows.monthly.length > 0 || kpiRows.weekly.length > 0 || kpiRows.daily.length > 0) && (
-        <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "12px",
-          display: "flex", alignItems: "center", gap: "6px" }}>
+        <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
           <Info size={12} />
           Every KPI shows two rows — Budget above, Actual below — across the entire period. Use the tabs above to switch between capture frequencies.
         </div>
       )}
+      {tab.custom === "balanceSheet" && (
+        <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+          <Info size={12} />
+          Every balance sheet line shows two rows — Budget above, Actual below — across the entire period. Click the chart icon to open the trend.
+        </div>
+      )}
 
-      {sections.length === 0 && (
+      {sections.length === 0 && tab.custom !== "balanceSheet" && (
         <div style={{ textAlign: "center", padding: "30px", color: T.muted, fontSize: "13.5px" }}>
           Nothing on this section takes direct input.
         </div>
       )}
+
+      {chartLine && (() => {
+        const labels = allMonths.map(m => m.label);
+        const actualSeries = allMonths.map(m => {
+          const raw = pathArr(chartLine.path).reduce((o, k) => (o == null ? undefined : o[k]), bsData);
+          const v = Array.isArray(raw) ? raw[m.month] : null;
+          return v === "" || v === null || v === undefined ? null : Number(v);
+        });
+        const budgetSeries = allMonths.map(m => {
+          const raw = pathArr(chartLine.path).reduce((o, k) => (o == null ? undefined : o[k]), bsBudget);
+          const v = Array.isArray(raw) ? raw[m.month] : null;
+          return v === "" || v === null || v === undefined ? null : Number(v);
+        });
+        const storageKey = `bs:${chartLine.path.join(".")}`;
+        return (
+          <SimpleTrendChartModal
+            title={`${chartLine.name} — Balance Sheet trend`}
+            subtitle={`FY ${fyLabel(fy.startYear, fy.startMonth)} · Actual vs Budget`}
+            labels={labels}
+            actual={actualSeries}
+            budget={budgetSeries}
+            actualLabel="Actual"
+            budgetLabel="Budget"
+            storageKey={storageKey}
+            savedPrefs={chartPrefs?.[storageKey]}
+            onSavePrefs={onSaveChartPrefs}
+            onClose={() => setChartLine(null)}
+          />
+        );
+      })()}
     </Modal>
   );
 };
+
 /* ════════════════════════════════════════════════════════════════════════════
    Main
    ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "finPerf.addData.prefs.v2";
+const CHART_PREFS_KEY = "finPerf.chart.prefs.v1";
 const META_DOC = "financialKpiMeta";
 
 const FinancialPerformance = () => {
@@ -3991,6 +4617,7 @@ const FinancialPerformance = () => {
   const [notification, setNotification] = useState(null);
   const [showAbout, setShowAbout] = useState(false);
   const [dataPrefs, setDataPrefs] = useState(null);
+  const [chartPrefs, setChartPrefs] = useState({});
 
   const [dividends, setDividends] = useState([]);
   const [investors, setInvestors] = useState([]);
@@ -4034,6 +4661,17 @@ const FinancialPerformance = () => {
   };
   useEffect(() => {
     try { const raw = window.localStorage.getItem(PREFS_KEY); if (raw) setDataPrefs(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+
+  const saveChartPrefs = (key, prefs) => {
+    setChartPrefs((prev) => {
+      const next = { ...prev, [key]: prefs };
+      try { window.localStorage.setItem(CHART_PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+  useEffect(() => {
+    try { const raw = window.localStorage.getItem(CHART_PREFS_KEY); if (raw) setChartPrefs(JSON.parse(raw)); } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -4096,7 +4734,9 @@ const FinancialPerformance = () => {
       } catch (err) {
         console.error(err);
         notify("error", `Could not load your financial data: ${errText(err)}`);
-      } finally { setLoading(false); }
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [user, loadDocs, loadEquityData]);
 
@@ -4153,12 +4793,16 @@ const FinancialPerformance = () => {
     await writeArrayCell({ docKey: `${DOC[kpi.field.src]}_${year}`, field, monthIndex: month - 1, raw });
   };
 
-  const saveBsFullDoc = async (docKey, nextBsData) => {
+  const saveBsFullDoc = async (docKey, nextBsDataOrDoc, isFullDoc = false) => {
     if (!user?.uid || isInvestorView) return;
     const year = Number(docKey.split("_").pop());
     let nextToPersist = null;
     setDocs((prev) => {
-      nextToPersist = { ...(prev[docKey] || {}), balanceSheetData: nextBsData, year, updatedAt: new Date().toISOString() };
+      if (isFullDoc) {
+        nextToPersist = { ...nextBsDataOrDoc, year, updatedAt: new Date().toISOString() };
+      } else {
+        nextToPersist = { ...(prev[docKey] || {}), balanceSheetData: nextBsDataOrDoc, year, updatedAt: new Date().toISOString() };
+      }
       return { ...prev, [docKey]: nextToPersist };
     });
     if (nextToPersist) {
@@ -4173,21 +4817,28 @@ const FinancialPerformance = () => {
     const months = fyMonths(fy.startYear, fy.startMonth);
     const cm = months.find(m => m.key === currentMonthKey()) || months[0];
     const docKey = `${DOC.bs}_${cm.year}`;
-    const existing = docs[docKey]?.balanceSheetData || BLANK_BS;
+    const doc = docs[docKey] || {};
+    const existing = doc.balanceSheetData || BLANK_BS;
+    const existingBudget = doc.balanceSheetBudget || {};
     const next = JSON.parse(JSON.stringify(existing));
-    if (path === "__custom__") {
-      const field = sectionType === "assets" ? "customCategories"
-        : sectionType === "liabilities" ? "customLiabilitiesCategories"
-        : "customEquityCategories";
-      if (!Array.isArray(next[field]) || !next[field][customIndex]) return;
-      delete next[field][customIndex].items[key];
-    } else {
-      let node = next;
-      for (const seg of path.split(".")) node = node[seg];
-      if (!node) return;
-      delete node[key];
-    }
-    await saveBsFullDoc(docKey, next);
+    const nextBudget = JSON.parse(JSON.stringify(existingBudget));
+    const delIn = (root) => {
+      if (path === "__custom__") {
+        const field = sectionType === "assets" ? "customCategories"
+          : sectionType === "liabilities" ? "customLiabilitiesCategories"
+          : "customEquityCategories";
+        if (!Array.isArray(root[field]) || !root[field][customIndex]) return;
+        delete root[field][customIndex].items[key];
+      } else {
+        let node = root;
+        for (const seg of path.split(".")) { if (!node) return; node = node[seg]; }
+        if (!node) return;
+        delete node[key];
+      }
+    };
+    delIn(next);
+    delIn(nextBudget);
+    await saveBsFullDoc(docKey, { ...doc, balanceSheetData: next, balanceSheetBudget: nextBudget, year: cm.year }, true);
     notify("success", `Removed "${key}".`);
   };
 
@@ -4196,14 +4847,17 @@ const FinancialPerformance = () => {
     const months = fyMonths(fy.startYear, fy.startMonth);
     const cm = months.find(m => m.key === currentMonthKey()) || months[0];
     const docKey = `${DOC.bs}_${cm.year}`;
-    const existing = docs[docKey]?.balanceSheetData || BLANK_BS;
+    const doc = docs[docKey] || {};
+    const existing = doc.balanceSheetData || BLANK_BS;
+    const existingBudget = doc.balanceSheetBudget || {};
     const next = JSON.parse(JSON.stringify(existing));
+    const nextBudget = JSON.parse(JSON.stringify(existingBudget));
     const field = sectionType === "assets" ? "customCategories"
       : sectionType === "liabilities" ? "customLiabilitiesCategories"
       : "customEquityCategories";
-    if (!Array.isArray(next[field])) return;
-    next[field].splice(index, 1);
-    await saveBsFullDoc(docKey, next);
+    if (Array.isArray(next[field])) next[field].splice(index, 1);
+    if (Array.isArray(nextBudget[field])) nextBudget[field].splice(index, 1);
+    await saveBsFullDoc(docKey, { ...doc, balanceSheetData: next, balanceSheetBudget: nextBudget, year: cm.year }, true);
     notify("success", "Section deleted.");
   };
 
@@ -4279,7 +4933,7 @@ const FinancialPerformance = () => {
   }, [visibleTabs, activeTabId]);
 
   const activeTab = visibleTabs.find((t) => t.id === activeTabId) || visibleTabs[0];
-  const isKpiTableTab = activeTab?.id === "summary";
+  const isKpiTableTab = activeTab?.id !== "balance-sheet" && activeTab?.custom !== "balanceSheet" && activeTab?.custom !== "equity" && !activeTab?.categories.some(c => c.custom === "loans");
 
   const updateKpiMeta = (kpiId, patch) =>
     persistMeta({ ...meta, kpis: { ...meta.kpis, [kpiId]: { ...(meta.kpis[kpiId] || {}), ...patch } } });
@@ -4593,7 +5247,8 @@ const FinancialPerformance = () => {
         <BalanceSheetTab fy={fy} docs={docs} readOnly={isInvestorView}
           onSaveBsFull={saveBsFullDoc}
           onDeleteLine={bsDeleteLine}
-          onDeleteSection={bsDeleteSection} />
+          onDeleteSection={bsDeleteSection}
+          chartPrefs={chartPrefs} onSaveChartPrefs={saveChartPrefs} />
       ) : activeTab?.custom === "equity" ? (
         <div style={{ marginBottom: "20px" }}>
           <DividendHistory dividends={dividends} readOnly={isInvestorView} onSave={saveDividends} />
@@ -4743,7 +5398,8 @@ const FinancialPerformance = () => {
           )}
           {activeTab?.categories.some((c) => c.custom === "loans") && (
             <div style={{ marginBottom: "20px" }}>
-              <LoanRepaymentsPanel loans={meta.loans || []} readOnly={isInvestorView} onSave={saveLoans} />
+              <LoanRepaymentsPanel loans={meta.loans || []} readOnly={isInvestorView} onSave={saveLoans} fy={fy}
+                chartPrefs={chartPrefs} onSaveChartPrefs={saveChartPrefs} />
             </div>
           )}
         </>
@@ -4809,6 +5465,8 @@ const FinancialPerformance = () => {
           onSaveBsFull={saveBsFullDoc}
           onDeleteLine={bsDeleteLine}
           onDeleteSection={bsDeleteSection}
+          chartPrefs={chartPrefs}
+          onSaveChartPrefs={saveChartPrefs}
         />
       )}
 
