@@ -175,10 +175,6 @@ const DEFAULT_EXECUTIVE = {
   doa: "", activeInterestsCount: 0, previousInterestsCount: 0,
 };
 
-const DEFAULT_EMPLOYEE = {
-  name: "", qualification: "", role: "", customRole: "", isCertificationCompulsory: "no",
-};
-
 const DEFAULT_BUSINESS_LEADERSHIP = {
   ownerLed: "",
   primaryMotivation: "",
@@ -394,100 +390,12 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
   );
 };
 
-// Interests Management Component (dropdown for person assignment)
-const InterestsManager = ({ title, people, interests = [], onChange }) => {
-  const personNames = people.map(p => p.name).filter(Boolean);
-
-  const addInterest = () => {
-    onChange([...interests, { ...DEFAULT_INTEREST }]);
-  };
-
-  const updateInterest = (index, field, value) => {
-    const newInterests = [...interests];
-    newInterests[index] = { ...newInterests[index], [field]: value };
-    onChange(newInterests);
-  };
-
-  const removeInterest = (index) => {
-    onChange(interests.filter((_, i) => i !== index));
-  };
-
-  return (
-    <div style={{ padding: '16px', backgroundColor: '#fdfaf5', borderRadius: '8px', border: '1px solid #d6c4a8' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h5 style={{ color: '#8B4513', fontSize: '14px', fontWeight: '700', margin: 0 }}>{title}</h5>
-        <button type="button" onClick={addInterest} style={{ display: 'flex', alignItems: 'center', padding: '6px 14px', backgroundColor: '#8B4513', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}>
-          <Plus className="w-3 h-3 mr-1" /> Add Interest
-        </button>
-      </div>
-      {interests.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', backgroundColor: 'white' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#5c3a1e' }}>
-                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#ffffff', fontWeight: '600', fontSize: '11px', borderBottom: '2px solid #3d2b1f' }}>Assigned Person</th>
-                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#ffffff', fontWeight: '600', fontSize: '11px', borderBottom: '2px solid #3d2b1f' }}>Company Name</th>
-                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#ffffff', fontWeight: '600', fontSize: '11px', borderBottom: '2px solid #3d2b1f' }}>Registration No.</th>
-                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#ffffff', fontWeight: '600', fontSize: '11px', borderBottom: '2px solid #3d2b1f' }}>Business Status</th>
-                <th style={{ padding: '8px 10px', width: '40px', borderBottom: '2px solid #3d2b1f' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {interests.map((interest, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid #e0d5c0' }}>
-                  <td style={{ padding: '6px 10px' }}>
-                    <select
-                      value={interest.assignedTo || ""}
-                      onChange={(e) => updateInterest(idx, "assignedTo", e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', border: '1px solid #d6c4a8', borderRadius: '3px', fontSize: '12px' }}
-                    >
-                      <option value="">Unassigned</option>
-                      {personNames.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <input type="text" value={interest.companyName || ""} onChange={(e) => updateInterest(idx, "companyName", e.target.value)} style={{ width: '100%', padding: '6px 8px', border: '1px solid #d6c4a8', borderRadius: '3px', fontSize: '12px' }} placeholder="Company name" />
-                  </td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <input type="text" value={interest.registrationNo || ""} onChange={(e) => updateInterest(idx, "registrationNo", e.target.value)} style={{ width: '100%', padding: '6px 8px', border: '1px solid #d6c4a8', borderRadius: '3px', fontSize: '12px' }} placeholder="Reg No." />
-                  </td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <select value={interest.businessStatus || ""} onChange={(e) => updateInterest(idx, "businessStatus", e.target.value)} style={{ width: '100%', padding: '6px 8px', border: '1px solid #d6c4a8', borderRadius: '3px', fontSize: '12px' }}>
-                      <option value="">Select</option>
-                      <option value="Active">Active</option>
-                      <option value="Dormant">Dormant</option>
-                      <option value="Closed">Closed</option>
-                      <option value="In Liquidation">In Liquidation</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                    <button type="button" onClick={() => removeInterest(idx)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 className="w-3 h-3" /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {interests.length === 0 && (
-        <p style={{ color: '#999', fontSize: '12px', textAlign: 'center', padding: '16px' }}>No interests added yet. Click "Add Interest" to begin.</p>
-      )}
-    </div>
-  );
-};
-
 export default function OwnershipManagement({ data = { shareholders: [], directors: [], executives: [] }, updateData }) {
   const [formData, setFormData] = useState({
     shareholders: [],
     directors: [],
     executives: [],
-    employees: [],
     businessLeadership: DEFAULT_BUSINESS_LEADERSHIP,
-    totalEmployees: "",
-    activeInterests: [],
-    previousInterests: [],
   });
   const [uploadingCVs, setUploadingCVs] = useState({ director: {}, executive: {} });
   const [isUploadOverlayVisible, setIsUploadOverlayVisible] = useState(false);
@@ -535,11 +443,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
             shareholders: data.shareholders || [],
             directors: data.directors || [],
             executives: data.executives || [],
-            employees: data.employees || [],
             businessLeadership: data.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
-            totalEmployees: data.totalEmployees || "",
-            activeInterests: data.activeInterests || [],
-            previousInterests: data.previousInterests || [],
           });
           setIsLoading(false);
           return;
@@ -555,19 +459,11 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
             updateFormData({
               ...profileData.ownershipManagement,
               businessLeadership: profileData.ownershipManagement.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
-              employees: profileData.ownershipManagement.employees || [],
-              totalEmployees: profileData.ownershipManagement.totalEmployees || "",
-              activeInterests: profileData.ownershipManagement.activeInterests || [],
-              previousInterests: profileData.ownershipManagement.previousInterests || [],
             });
           } else {
             const initData = {
               ...data,
               businessLeadership: data.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
-              employees: data.employees || [],
-              totalEmployees: data.totalEmployees || "",
-              activeInterests: data.activeInterests || [],
-              previousInterests: data.previousInterests || [],
             };
             if (!initData.shareholders?.length) initData.shareholders = [DEFAULT_SHAREHOLDER];
             if (!initData.directors?.length) initData.directors = [DEFAULT_DIRECTOR];
@@ -579,11 +475,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
             shareholders: [DEFAULT_SHAREHOLDER],
             directors: [DEFAULT_DIRECTOR],
             executives: [DEFAULT_EXECUTIVE],
-            employees: [],
             businessLeadership: DEFAULT_BUSINESS_LEADERSHIP,
-            totalEmployees: "",
-            activeInterests: [],
-            previousInterests: [],
           };
           updateFormData(initData);
         }
@@ -593,11 +485,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
           shareholders: [DEFAULT_SHAREHOLDER],
           directors: [DEFAULT_DIRECTOR],
           executives: [DEFAULT_EXECUTIVE],
-          employees: [],
           businessLeadership: DEFAULT_BUSINESS_LEADERSHIP,
-          totalEmployees: "",
-          activeInterests: [],
-          previousInterests: [],
         };
         updateFormData(fallbackData);
       } finally {
@@ -784,29 +672,6 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     updateFormData({ ...formData, executives: (formData.executives || []).filter((_, i) => i !== index) });
   };
 
-  const addEmployee = () => updateFormData({ ...formData, employees: [...(formData.employees || []), DEFAULT_EMPLOYEE] });
-
-  const updateEmployee = (index, field, value) => {
-    const newEmployees = [...(formData.employees || [])];
-    newEmployees[index] = { ...newEmployees[index], [field]: value };
-    if (field === "qualification") {
-      newEmployees[index].role = "";
-      newEmployees[index].customRole = "";
-    }
-    if (field === "isCertificationCompulsory" && value === "no") {
-      newEmployees[index].qualification = "";
-    }
-    updateFormData({ ...formData, employees: newEmployees });
-  };
-
-  const removeEmployee = (index) => {
-    updateFormData({ ...formData, employees: (formData.employees || []).filter((_, i) => i !== index) });
-  };
-
-  const getRolesForQualification = (qualification) => {
-    return qualificationRoleMap[qualification] || [];
-  };
-
   const updateBusinessLeadership = (field, value) => {
     const updated = { ...formData, businessLeadership: { ...(formData.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP), [field]: value } };
     updateFormData(updated);
@@ -822,13 +687,6 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     { field: "opennessToAdvice", question: "Q5 – Openness to advice", options: leadershipOptions.opennessToAdvice },
     { field: "decisionGovernance", question: "Q6 – Decision governance", options: leadershipOptions.decisionGovernance },
   ];
-
-  // Collect all people for interests assignment
-  const allPeople = [
-    ...(formData.shareholders || []).map(s => ({ name: s.name, type: 'Shareholder' })),
-    ...(formData.directors || []).map(d => ({ name: d.name, type: 'Director' })),
-    ...(formData.executives || []).map(e => ({ name: e.name, type: 'Executive' })),
-  ].filter(p => p.name);
 
   // Styles
   const thStyle = {
@@ -1018,111 +876,6 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Active & Previous Interests - Unified Tables with dropdown assignment */}
-      <div className="mb-8">
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-brown-700">Interests Declaration</h3>
-          <p className="text-xs text-brown-500 mt-1">Add active and previous business interests and assign them to relevant people</p>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <InterestsManager
-            title="Active Interests"
-            people={allPeople}
-            interests={formData.activeInterests || []}
-            onChange={(val) => updateFormData({ ...formData, activeInterests: val })}
-          />
-          <InterestsManager
-            title="Previous Interests"
-            people={allPeople}
-            interests={formData.previousInterests || []}
-            onChange={(val) => updateFormData({ ...formData, previousInterests: val })}
-          />
-        </div>
-      </div>
-
-      {/* Employee Qualification and Clearance */}
-      <div className="mb-8">
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-brown-700">Employee Qualification & Clearance</h3>
-          <p className="text-xs text-brown-500 mt-1">Record employee details, qualifications, and roles</p>
-        </div>
-       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-  <FormField label="Permanent Employees" required>
-    <input 
-      type="number" 
-      value={formData.permanentEmployees || ""} 
-      onChange={(e) => updateFormData({ ...formData, permanentEmployees: e.target.value })} 
-      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
-      placeholder="0" 
-      min="0"
-    />
-  </FormField>
-  
-  <FormField label="Contract Employees">
-    <input 
-      type="number" 
-      value={formData.contractEmployees || ""} 
-      onChange={(e) => updateFormData({ ...formData, contractEmployees: e.target.value })} 
-      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
-      placeholder="0" 
-      min="0"
-    />
-  </FormField>
-  
-  <FormField label="Internship Employees">
-    <input 
-      type="number" 
-      value={formData.internshipEmployees || ""} 
-      onChange={(e) => updateFormData({ ...formData, internshipEmployees: e.target.value })} 
-      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
-      placeholder="0" 
-      min="0"
-    />
-  </FormField>
-  
-  <FormField label="Temporary Employees">
-    <input 
-      type="number" 
-      value={formData.temporaryEmployees || ""} 
-      onChange={(e) => updateFormData({ ...formData, temporaryEmployees: e.target.value })} 
-      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
-      placeholder="0" 
-      min="0"
-    />
-  </FormField>
-</div>
-        <div className="flex justify-between items-center mt-6 mb-4">
-          <h4 className="text-md font-semibold text-brown-600">Employee List</h4>
-          <button type="button" onClick={addEmployee} className="flex items-center px-3 py-1 bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"><Plus className="w-4 h-4 mr-1" /> Add Employee</button>
-        </div>
-        {(formData.employees || []).length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-brown-200 rounded-lg">
-              <thead>
-                <tr>
-                  <th style={thStyle}>Employee Name</th>
-                  <th style={thStyle}>Certification Compulsory?</th>
-                  <th style={thStyle}>Qualification</th>
-                  <th style={thStyle}>Role</th>
-                  <th style={thStyle}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(formData.employees || []).map((employee, index) => (
-                  <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
-                    <td className="px-3 py-2 border-b"><input type="text" value={employee.name || ""} onChange={(e) => updateEmployee(index, "name", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brown-500" placeholder="Employee name" /></td>
-                    <td className="px-3 py-2 border-b"><select value={employee.isCertificationCompulsory || "no"} onChange={(e) => updateEmployee(index, "isCertificationCompulsory", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brown-500"><option value="yes">Yes</option><option value="no">No</option></select></td>
-                    <td className="px-3 py-2 border-b">{employee.isCertificationCompulsory === "yes" ? (<select value={employee.qualification || ""} onChange={(e) => updateEmployee(index, "qualification", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brown-500"><option value="">Select Qualification</option>{qualificationOptions.map((qual) => <option key={qual} value={qual}>{qual}</option>)}</select>) : (<span className="text-xs text-gray-400">N/A</span>)}</td>
-                    <td className="px-3 py-2 border-b">{employee.qualification && employee.isCertificationCompulsory === "yes" ? (<div className="space-y-1"><select value={employee.role || ""} onChange={(e) => updateEmployee(index, "role", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brown-500"><option value="">Select Role</option>{getRolesForQualification(employee.qualification).map((role) => <option key={role} value={role}>{role}</option>)}<option value="Other">Other</option></select>{employee.role === "Other" && <input type="text" placeholder="Specify role" value={employee.customRole || ""} onChange={(e) => updateEmployee(index, "customRole", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brown-500" />}</div>) : (<input type="text" value={employee.role || ""} onChange={(e) => updateEmployee(index, "role", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brown-500" placeholder="Enter role" />)}</td>
-                    <td className="px-3 py-2 border-b"><button type="button" onClick={() => removeEmployee(index)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
 
       {/* Upload overlay */}

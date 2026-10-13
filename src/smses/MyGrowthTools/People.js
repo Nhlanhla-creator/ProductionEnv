@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Chart, Pie, Bar } from "react-chartjs-2";
+import { Chart, Pie } from "react-chartjs-2";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db, auth } from "../../firebaseConfig";
@@ -49,7 +49,6 @@ const RAPS_CATEGORIES = [
 const ACTION_STATUSES = ["Not Done", "In Progress", "Done"];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-/* ─── Expanded period set (mirrors Financial/Operational) ─────────────── */
 const PERIODS = [
   { key: "last_week",    label: "Last week" },
   { key: "this_week",    label: "This week" },
@@ -68,7 +67,6 @@ const PERIOD_PREFIX = {
   last_year: "Last year", this_year: "This year",
 };
 
-/* ─── Date helpers ────────────────────────────────────────────────────── */
 const startOfWeek = (d) => {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const day = x.getDay();
@@ -216,9 +214,28 @@ const FOCUS_OPTIONS = [
 
 const TAB_DEFS = [
   {
-    id: "summary", name: "People Performance Summary",
+    id: "summary", name: "People Overview",
     categories: [
-      { name: "Productivity", kpis: [
+      { name: "Execution Capacity", kpis: [
+        K({ id: "headCount", name: "Head Count", units: "#", direction: "match", aggregate: "avg",
+          field: { src: "comp", scalar: true, a: ["employeeData","headCount"], b: ["employeeData","targetHeadCount"] },
+          meaning: "How many people are on the books, against the target you set. The gap is your open vacancies.",
+          measured: "=COUNTA(EmployeeRegister)\n\nTarget head count is the planned establishment. Vacancies = Target − Actual.",
+          actual: (c) => c.headCount, budget: (c) => c.targetHeadCount }),
+        K({ id: "criticalFunctionsSinglePoint", name: "% Critical Functions Dependent on 1 Person", units: "%", direction: "lower", aggregate: "avg",
+          benchmark: 20,
+          field: { src: "exec", a: ["executionData","criticalFunctionsSinglePoint"] },
+          meaning: "How much of the business would stop if one particular person didn't come in. This is key-person risk in a single number.",
+          measured: "=COUNTIF(SinglePointFlag, \"Yes\") / COUNTA(CriticalFunctions) * 100\n\nUnder 20% is where you want to be.",
+          actual: (c) => c.criticalFunctionsSinglePoint }),
+        K({ id: "criticalRolesWith2IC", name: "% Critical Roles with 2IC", units: "%", direction: "higher", aggregate: "avg",
+          benchmark: 80,
+          field: { src: "exec", a: ["executionData","criticalRolesWith2IC"] },
+          meaning: "The share of critical roles with a named, capable second-in-command. Your succession cover, measured.",
+          measured: "=COUNTIF(HasSecond, \"Yes\") / COUNTA(CriticalRoles) * 100\n\nAbove 80% is a resilient organisation.",
+          actual: (c) => c.criticalRolesWith2IC }),
+      ]},
+      { name: "Productivity & Efficiency", kpis: [
         K({ id: "revenuePerEmployee", name: "Revenue per Employee", units: "R", direction: "higher", aggregate: "avg",
           benchmark: 500000,
           field: { src: "prod", a: ["productivityData","revenuePerEmployee","actual"], b: ["productivityData","revenuePerEmployee","budget"] },
@@ -264,28 +281,7 @@ const TAB_DEFS = [
           measured: "Captured as a category rather than calculated.\n\n=INDEX({\"Technical\";\"Leadership\";\"Compliance\"}, FocusCode)\n\nRotate the focus so no one area is neglected across a year.",
           actual: (c) => c.trainingFocus, budget: (c) => c.trainingFocusB }),
       ]},
-      { name: "Employee Composition", kpis: [
-        K({ id: "headCount", name: "Head Count", units: "#", direction: "match", aggregate: "avg",
-          field: { src: "comp", scalar: true, a: ["employeeData","headCount"], b: ["employeeData","targetHeadCount"] },
-          meaning: "How many people are on the books, against the target you set. The gap is your open vacancies.",
-          measured: "=COUNTA(EmployeeRegister)\n\nTarget head count is the planned establishment. Vacancies = Target − Actual.",
-          actual: (c) => c.headCount, budget: (c) => c.targetHeadCount }),
-      ]},
-      { name: "Execution Capacity", kpis: [
-        K({ id: "criticalFunctionsSinglePoint", name: "% Critical Functions Dependent on 1 Person", units: "%", direction: "lower", aggregate: "avg",
-          benchmark: 20,
-          field: { src: "exec", a: ["executionData","criticalFunctionsSinglePoint"] },
-          meaning: "How much of the business would stop if one particular person didn't come in. This is key-person risk in a single number.",
-          measured: "=COUNTIF(SinglePointFlag, \"Yes\") / COUNTA(CriticalFunctions) * 100\n\nUnder 20% is where you want to be.",
-          actual: (c) => c.criticalFunctionsSinglePoint }),
-        K({ id: "criticalRolesWith2IC", name: "% Critical Roles with 2IC", units: "%", direction: "higher", aggregate: "avg",
-          benchmark: 80,
-          field: { src: "exec", a: ["executionData","criticalRolesWith2IC"] },
-          meaning: "The share of critical roles with a named, capable second-in-command. Your succession cover, measured.",
-          measured: "=COUNTIF(HasSecond, \"Yes\") / COUNTA(CriticalRoles) * 100\n\nAbove 80% is a resilient organisation.",
-          actual: (c) => c.criticalRolesWith2IC }),
-      ]},
-      { name: "Stability", kpis: [
+      { name: "Stability & Continuity", kpis: [
         K({ id: "overallTurnover", name: "Overall Turnover (% Annually)", units: "%", direction: "lower", aggregate: "avg",
           benchmark: 15,
           field: { src: "stab", a: ["stabilityData","overallTurnover"] },
@@ -316,6 +312,7 @@ const TAB_DEFS = [
     id: "capability", name: "Capability",
     categories: [
       { name: "Employee Development Tracking", panel: "tracking", kpis: [] },
+      { name: "Employee Qualification & Clearance", panel: "qualification", kpis: [] },
     ],
   },
   {
@@ -323,6 +320,7 @@ const TAB_DEFS = [
     categories: [
       { name: "Founder Operational Load", panel: "capacityLoad", kpis: [] },
       { name: "Average Span of Control", panel: "capacitySpan", kpis: [] },
+      { name: "Workforce Register", panel: "workforceRegister", kpis: [] },
     ],
   },
   {
@@ -368,7 +366,6 @@ const StatusIcon = ({ status, size = 22 }) => {
   return <Info {...p} />;
 };
 
-/* ─── Period resolution — mirrors Financial/Operational ─────────────── */
 const monthEntry = (kpi, year, mi) =>
   kpi.entries?.[`M:${year}-${String(mi + 1).padStart(2, "0")}`] || { actual: null, budget: null };
 
@@ -440,15 +437,11 @@ const periodWindow = (period, fy) => {
   }
 };
 
-/* Weekly bucket rollup — People KPIs are entered monthly, so for weekly
-   windows we use the containing month's value (People capture is monthly) */
 const periodValues = (kpi, period, fy) => {
   const [from, to] = periodWindow(period, fy);
-  // Single calendar month shortcut
   if (from.getDate() === 1 && from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear() && to.getDate() >= 28) {
     return resolveMonth(kpi, from.getFullYear(), from.getMonth());
   }
-  // For weekly windows on monthly KPIs, use the containing month (People data is monthly-granular)
   if (period === "this_week" || period === "last_week") {
     return resolveMonth(kpi, from.getFullYear(), from.getMonth());
   }
@@ -738,7 +731,6 @@ const AnalysisModal = ({ kpi, period, fy, onClose }) => (
   </Modal>
 );
 
-/* ─── Trend chart — dynamic base type + focus-safe ──────────────────── */
 const CHART_VERSION = 3;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
@@ -766,7 +758,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
 
   const { labels, actual, budget, noteKey, caption } = useMemo(() => {
     const { startYear, startMonth } = fy;
-    const freq = "Monthly"; // People KPIs captured monthly
+    const freq = "Monthly";
 
     if (period === "this_week" || period === "last_week") {
       const [from] = periodWindow(period, fy);
@@ -1492,6 +1484,295 @@ const TrackingPanel = ({ docs, readOnly, onUpdate }) => {
 };
 
 /* ────────────────────────────────────────────────────────────────────────────
+   QualificationPanel
+   ──────────────────────────────────────────────────────────────────────── */
+const QualificationPanel = ({ docs, readOnly, onUpdate }) => {
+  const employees = docs.qualification?.employees || [];
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
+
+  const qualificationOptions = [
+    "BCom Accounting", "CA(SA)", "MBA", "BSc Engineering", "LLB", "BCom Marketing",
+    "BSc Computer Science", "Human Resources", "Supply Chain Management", "Project Management", "Other"
+  ];
+
+  const cols = [
+    { key: "name", label: "Employee Name", tip: "Name of the employee.", width: 200 },
+    { key: "qualification", label: "Qualification", tip: "Highest qualification.", width: 180 },
+    { key: "isCertificationCompulsory", label: "Certification Compulsory?", tip: "Is certification required for this role?", width: 160 },
+    { key: "role", label: "Role", tip: "Job role or title.", width: 180 },
+  ];
+
+  const rows = employees.map(e => ({
+    __id: e.id,
+    __raw: e,
+    name: e.name || "—",
+    qualification: e.qualification || "—",
+    isCertificationCompulsory: e.isCertificationCompulsory === "yes" ? "Yes" : "No",
+    role: e.role || "—",
+  }));
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  const startEdit = (row) => {
+    setEditingId(row.__id);
+    setEditDraft({ ...row.__raw });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
+  const saveEdit = () => {
+    if (!onUpdate) { cancelEdit(); return; }
+    const next = employees.map(e => e.id === editingId ? { ...e, ...editDraft } : e);
+    onUpdate("qualification", { employees: next });
+    cancelEdit();
+  };
+  const deleteRow = (row) => {
+    if (!window.confirm("Remove this employee record?")) return;
+    if (!onUpdate) return;
+    const next = employees.filter(e => e.id !== row.__id);
+    onUpdate("qualification", { employees: next });
+  };
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Employee Qualification & Clearance</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>Record employee details, qualifications, and roles</div>
+        </div>
+        {!readOnly && (
+          <button onClick={() => {
+            const newEmployee = { id: uid(), name: "New Employee", qualification: "", isCertificationCompulsory: "no", role: "" };
+            onUpdate("qualification", { employees: [...employees, newEmployee] });
+          }} style={{ ...btnGhost, padding: "5px 10px", fontSize: "12px" }}>
+            <Plus size={12} /> Add Employee
+          </button>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+          <p style={{ margin: 0, fontSize: "0.9rem" }}>No employee records yet. Click <strong>Add Employee</strong> to start.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ background: T.header, color: "#fff" }}>
+                {colOrder.map((key) => {
+                  const col = cols.find(c => c.key === key);
+                  if (!col) return null;
+                  const currentFilter = filters[key] || "All";
+                  const filterOpts = getFilterOptions(key);
+                  return (
+                    <th key={key} draggable onDragStart={(e) => handleDragStart(e, key)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, key)}
+                      style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}>
+                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                          <InfoTip text={col.tip} light />
+                          <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })} style={iconBtn("rgba(255,255,255,0.6)")}>
+                            {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                          </button>
+                          <FilterDropdown options={filterOpts} value={currentFilter}
+                            onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))} onClose={() => {}} />
+                        </div>
+                      </div>
+                      <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                    </th>
+                  );
+                })}
+                {!readOnly && (
+                  <th style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", width: 110, borderLeft: "1px solid rgba(255,255,255,0.14)" }}>Actions</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedData.map((row, i) => {
+                const editing = editingId === row.__id;
+                return (
+                  <tr key={row.__id || i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                    {colOrder.map((key) => (
+                      <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {editing ? (
+                          key === "qualification" ? (
+                            <select value={editDraft.qualification} onChange={(e) => setEditDraft(d => ({ ...d, qualification: e.target.value }))} style={{ ...selectS, padding: "3px 20px 3px 5px", fontSize: "12px" }}>
+                              <option value="">Select</option>
+                              {qualificationOptions.map(q => <option key={q} value={q}>{q}</option>)}
+                            </select>
+                          ) : key === "isCertificationCompulsory" ? (
+                            <select value={editDraft.isCertificationCompulsory} onChange={(e) => setEditDraft(d => ({ ...d, isCertificationCompulsory: e.target.value }))} style={{ ...selectS, padding: "3px 20px 3px 5px", fontSize: "12px" }}>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          ) : (
+                            <input value={editDraft[key] || ""} onChange={(e) => setEditDraft(d => ({ ...d, [key]: e.target.value }))} style={{ ...inputS, padding: "3px 5px", fontSize: "12.5px" }} />
+                          )
+                        ) : row[key]}
+                      </td>
+                    ))}
+                    {!readOnly && (
+                      <td style={{ padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                        {editing ? (
+                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                            <button onClick={saveEdit} style={{ ...btnPrimary, padding: "3px 7px" }} title="Save"><Check size={13} /></button>
+                            <button onClick={cancelEdit} style={{ ...btnGhost, padding: "3px 7px" }} title="Cancel"><X size={13} /></button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                            <button onClick={() => startEdit(row)} style={{ ...btnGhost, padding: "3px 7px" }} title="Edit"><Pencil size={13} /></button>
+                            <button onClick={() => deleteRow(row)} style={{ ...btnGhost, padding: "3px 7px", color: T.red }} title="Delete"><Trash2 size={13} /></button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ────────────────────────────────────────────────────────────────────────────
+   WorkforceRegisterPanel (Renamed from Employee List)
+   ──────────────────────────────────────────────────────────────────────── */
+const WorkforceRegisterPanel = ({ docs, readOnly, onUpdate }) => {
+  const employees = docs.workforceRegister?.employees || [];
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
+
+  const cols = [
+    { key: "name", label: "Employee Name", tip: "Name of the employee.", width: 200 },
+    { key: "role", label: "Role", tip: "Job role or title.", width: 200 },
+    { key: "department", label: "Department", tip: "Department.", width: 180 },
+  ];
+
+  const rows = employees.map(e => ({
+    __id: e.id,
+    __raw: e,
+    name: e.name || "—",
+    role: e.role || "—",
+    department: e.department || "—",
+  }));
+
+  const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
+  const { colOrder, widths, filters, setFilters, sortConfig, setSortConfig, startResize, handleDragStart, handleDragOver, handleDrop, getFilterOptions, sortedData } = useEnhancedTable(cols, rows);
+
+  const startEdit = (row) => {
+    setEditingId(row.__id);
+    setEditDraft({ ...row.__raw });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
+  const saveEdit = () => {
+    if (!onUpdate) { cancelEdit(); return; }
+    const next = employees.map(e => e.id === editingId ? { ...e, ...editDraft } : e);
+    onUpdate("workforceRegister", { employees: next });
+    cancelEdit();
+  };
+  const deleteRow = (row) => {
+    if (!window.confirm("Remove this employee record?")) return;
+    if (!onUpdate) return;
+    const next = employees.filter(e => e.id !== row.__id);
+    onUpdate("workforceRegister", { employees: next });
+  };
+
+  return (
+    <div style={cardS}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent }}>Workforce Register</div>
+          <div style={{ fontSize: "12.5px", color: T.muted }}>Complete list of all employees</div>
+        </div>
+        {!readOnly && (
+          <button onClick={() => {
+            const newEmployee = { id: uid(), name: "New Employee", role: "", department: "" };
+            onUpdate("workforceRegister", { employees: [...employees, newEmployee] });
+          }} style={{ ...btnGhost, padding: "5px 10px", fontSize: "12px" }}>
+            <Plus size={12} /> Add Employee
+          </button>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "30px", color: T.accent, backgroundColor: T.panel, borderRadius: "8px" }}>
+          <p style={{ margin: 0, fontSize: "0.9rem" }}>No employee records yet. Click <strong>Add Employee</strong> to start.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", border: `1px solid ${T.lineStrong}`, borderRadius: "10px" }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ background: T.header, color: "#fff" }}>
+                {colOrder.map((key) => {
+                  const col = cols.find(c => c.key === key);
+                  if (!col) return null;
+                  const currentFilter = filters[key] || "All";
+                  const filterOpts = getFilterOptions(key);
+                  return (
+                    <th key={key} draggable onDragStart={(e) => handleDragStart(e, key)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, key)}
+                      style={{ padding: 0, borderRight: "1px solid rgba(255,255,255,0.14)", position: "relative", verticalAlign: "top", width: widths[key], userSelect: "none" }}>
+                      <div style={{ padding: "10px 12px 8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", cursor: "grab" }}>{col.label}</span>
+                          <InfoTip text={col.tip} light />
+                          <button onClick={() => setSortConfig({ key, dir: sortConfig.key === key && sortConfig.dir === "asc" ? "desc" : "asc" })} style={iconBtn("rgba(255,255,255,0.6)")}>
+                            {sortConfig.key === key ? (sortConfig.dir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowUpDown size={13} />}
+                          </button>
+                          <FilterDropdown options={filterOpts} value={currentFilter}
+                            onChange={(val) => setFilters(p => ({ ...p, [key]: val === "All" ? "" : val }))} onClose={() => {}} />
+                        </div>
+                      </div>
+                      <div onMouseDown={(e) => startResize(e, key)} style={{ position: "absolute", top: 0, right: 0, width: "6px", height: "100%", cursor: "col-resize", zIndex: 5 }} />
+                    </th>
+                  );
+                })}
+                {!readOnly && (
+                  <th style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#fff", textAlign: "center", width: 110, borderLeft: "1px solid rgba(255,255,255,0.14)" }}>Actions</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedData.map((row, i) => {
+                const editing = editingId === row.__id;
+                return (
+                  <tr key={row.__id || i} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
+                    {colOrder.map((key) => (
+                      <td key={key} style={{ padding: "10px 12px", fontSize: "13.5px", color: T.body, borderRight: `1px solid ${T.lineSoft}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {editing ? (
+                          <input value={editDraft[key] || ""} onChange={(e) => setEditDraft(d => ({ ...d, [key]: e.target.value }))} style={{ ...inputS, padding: "3px 5px", fontSize: "12.5px" }} />
+                        ) : row[key]}
+                      </td>
+                    ))}
+                    {!readOnly && (
+                      <td style={{ padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                        {editing ? (
+                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                            <button onClick={saveEdit} style={{ ...btnPrimary, padding: "3px 7px" }} title="Save"><Check size={13} /></button>
+                            <button onClick={cancelEdit} style={{ ...btnGhost, padding: "3px 7px" }} title="Cancel"><X size={13} /></button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+                            <button onClick={() => startEdit(row)} style={{ ...btnGhost, padding: "3px 7px" }} title="Edit"><Pencil size={13} /></button>
+                            <button onClick={() => deleteRow(row)} style={{ ...btnGhost, padding: "3px 7px", color: T.red }} title="Delete"><Trash2 size={13} /></button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ────────────────────────────────────────────────────────────────────────────
    CapacityLoadPanel
    ──────────────────────────────────────────────────────────────────────── */
 const CapacityLoadPanel = ({ docs, fy, readOnly, onUpdate }) => {
@@ -2079,6 +2360,8 @@ const CONTRACT_TYPES = ["Permanent","Contract","Internship"];
 
 const RecordsModal = ({ mode, docs, onClose, onSave }) => {
   const [employees, setEmployees] = useState(() => [...(docs.track?.employees || [])]);
+  const [qualifications, setQualifications] = useState(() => [...(docs.qualification?.employees || [])]);
+  const [workforce, setWorkforce] = useState(() => [...(docs.workforceRegister?.employees || [])]);
   const [terms, setTerms] = useState(() => [...(docs.term?.entries || [])]);
   const [hires, setHires] = useState(() => [...(docs.hire?.entries || [])]);
   const [saving, setSaving] = useState(false);
@@ -2087,6 +2370,8 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
   const [exec, setExec] = useState(() => ({ ...(docs.exec?.executionData || {}) }));
 
   const title = mode === "tracking" ? "Employee development tracking"
+    : mode === "qualification" ? "Employee Qualification & Clearance"
+    : mode === "workforceRegister" ? "Workforce Register"
     : mode === "capacityLoad" ? "Founder Operational Load"
     : mode === "capacitySpan" ? "Average Span of Control"
     : mode === "recordsTerm" ? "Termination Records"
@@ -2096,6 +2381,8 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
   const commit = async () => {
     setSaving(true);
     if (mode === "tracking") await onSave("track", { employees });
+    if (mode === "qualification") await onSave("qualification", { employees: qualifications });
+    if (mode === "workforceRegister") await onSave("workforceRegister", { employees: workforce });
     if (mode === "capacityLoad") await onSave("exec", { executionData: { ...docs.exec?.executionData, founderLoad: exec.founderLoad } });
     if (mode === "capacitySpan") await onSave("exec", { executionData: { ...docs.exec?.executionData, spanOfControl: exec.spanOfControl } });
     if (mode === "recordsTerm") await onSave("term", { entries: terms });
@@ -2152,6 +2439,39 @@ const RecordsModal = ({ mode, docs, onClose, onSave }) => {
                   </div>
                 ))}
               </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {mode === "qualification" && (
+        <>
+          <button onClick={() => setQualifications([...qualifications, { id: uid(), name: "", qualification: "", isCertificationCompulsory: "no", role: "" }])}
+            style={{ ...btnGhost, marginBottom: "14px" }}><Plus size={13} /> Add Employee</button>
+          {qualifications.length === 0 && <div style={{ textAlign: "center", padding: "24px", color: T.muted, fontSize: "13.5px" }}>No employees yet.</div>}
+          {qualifications.map((emp, i) => (
+            <div key={emp.id || i} style={{ ...cardS, marginBottom: "12px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: "10px", alignItems: "end" }}>
+              <div><label style={labelS}>Name</label><input value={emp.name || ""} onChange={(e) => { const n = [...qualifications]; n[i].name = e.target.value; setQualifications(n); }} style={inputS} /></div>
+              <div><label style={labelS}>Qualification</label><select value={emp.qualification || ""} onChange={(e) => { const n = [...qualifications]; n[i].qualification = e.target.value; setQualifications(n); }} style={selectS}><option value="">Select</option>{["BCom Accounting", "CA(SA)", "MBA", "BSc Engineering", "LLB", "BCom Marketing", "BSc Computer Science", "Human Resources", "Supply Chain Management", "Project Management", "Other"].map(q => <option key={q} value={q}>{q}</option>)}</select></div>
+              <div><label style={labelS}>Cert Compulsory?</label><select value={emp.isCertificationCompulsory || "no"} onChange={(e) => { const n = [...qualifications]; n[i].isCertificationCompulsory = e.target.value; setQualifications(n); }} style={selectS}><option value="yes">Yes</option><option value="no">No</option></select></div>
+              <div><label style={labelS}>Role</label><input value={emp.role || ""} onChange={(e) => { const n = [...qualifications]; n[i].role = e.target.value; setQualifications(n); }} style={inputS} /></div>
+              <button onClick={() => setQualifications(qualifications.filter((_, x) => x !== i))} style={{ ...btnGhost, padding: "9px 11px", color: T.red, borderColor: `${T.red}55` }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </>
+      )}
+
+      {mode === "workforceRegister" && (
+        <>
+          <button onClick={() => setWorkforce([...workforce, { id: uid(), name: "", role: "", department: "" }])}
+            style={{ ...btnGhost, marginBottom: "14px" }}><Plus size={13} /> Add Employee</button>
+          {workforce.length === 0 && <div style={{ textAlign: "center", padding: "24px", color: T.muted, fontSize: "13.5px" }}>No employees yet.</div>}
+          {workforce.map((emp, i) => (
+            <div key={emp.id || i} style={{ ...cardS, marginBottom: "12px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "10px", alignItems: "end" }}>
+              <div><label style={labelS}>Name</label><input value={emp.name || ""} onChange={(e) => { const n = [...workforce]; n[i].name = e.target.value; setWorkforce(n); }} style={inputS} /></div>
+              <div><label style={labelS}>Role</label><input value={emp.role || ""} onChange={(e) => { const n = [...workforce]; n[i].role = e.target.value; setWorkforce(n); }} style={inputS} /></div>
+              <div><label style={labelS}>Department</label><input value={emp.department || ""} onChange={(e) => { const n = [...workforce]; n[i].department = e.target.value; setWorkforce(n); }} style={inputS} /></div>
+              <button onClick={() => setWorkforce(workforce.filter((_, x) => x !== i))} style={{ ...btnGhost, padding: "9px 11px", color: T.red, borderColor: `${T.red}55` }}><Trash2 size={13} /></button>
             </div>
           ))}
         </>
@@ -2267,7 +2587,7 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   const editableTabs = tabs.filter((t) => {
     const hasEditableKpis = t.categories.some((c) => (c.kpis || []).some((k) => k.field));
     const hasPanel = t.categories.some((c) =>
-      c.panel === "tracking" || c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
+      c.panel === "tracking" || c.panel === "qualification" || c.panel === "workforceRegister" || c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
       c.panel === "recordsTerm" || c.panel === "recordsHire");
     return hasEditableKpis || hasPanel;
   });
@@ -2295,9 +2615,9 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     if (!tab) return [];
     const out = [];
     tab.categories.forEach((cat) => {
-      const hasPanel = cat.panel === "tracking" || cat.panel === "capacityLoad" ||
-                       cat.panel === "capacitySpan" || cat.panel === "recordsTerm" ||
-                       cat.panel === "recordsHire";
+      const hasPanel = cat.panel === "tracking" || cat.panel === "qualification" || cat.panel === "workforceRegister" ||
+                       cat.panel === "capacityLoad" || cat.panel === "capacitySpan" ||
+                       cat.panel === "recordsTerm" || cat.panel === "recordsHire";
       if (hasPanel) {
         out.push({ kpi: { id: `panel_${cat.panel}`, name: cat.name, units: "", field: null,
           panel: cat.panel, isPanel: true }, category: cat.name, isPanel: true });
@@ -2311,11 +2631,13 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   }, [tab]);
 
   const hasPanelData = tab?.categories.some((c) =>
-    c.panel === "tracking" || c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
+    c.panel === "tracking" || c.panel === "qualification" || c.panel === "workforceRegister" ||
+    c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
     c.panel === "recordsTerm" || c.panel === "recordsHire");
 
   const panelToOpen = tab?.categories.find((c) =>
-    c.panel === "tracking" || c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
+    c.panel === "tracking" || c.panel === "qualification" || c.panel === "workforceRegister" ||
+    c.panel === "capacityLoad" || c.panel === "capacitySpan" ||
     c.panel === "recordsTerm" || c.panel === "recordsHire")?.panel;
 
   const draftKey = (kpiId, monthIdx, which) => `${monthIdx}|${kpiId}|${which}`;
@@ -2368,13 +2690,11 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
 
   const kpiRowsOnly = kpiRows.filter((r) => !r.isPanel);
 
-  /* Colour tokens — same as Financial/Operational for consistency */
   const MODE_COLOR = {
     budget: { hdr: "#1e3a8a", hdrText: "#dbeafe", cell: "#eff6ff", border: "#bfdbfe", input: "#1e3a8a" },
     actual: { hdr: "#166534", hdrText: "#dcfce7", cell: "#f0fdf4", border: "#bbf7d0", input: "#166534" },
   };
 
-  /* Clamp month range */
   const clampedStart = Math.max(0, Math.min(monthStart, 12 - monthCount));
   const visibleMonths = allMonths.slice(clampedStart, clampedStart + monthCount);
 
@@ -2463,7 +2783,7 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
           alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <Info size={16} color={T.accentSoft} />
           <span style={{ flex: 1, minWidth: "220px", fontSize: "12.5px", color: T.body }}>
-            This section contains records data (Employee Development, Terminations, Hires, Founder Load, Span of Control).
+            This section contains records data (Employee Development, Qualifications, Workforce Register, Terminations, Hires, Founder Load, Span of Control).
             Click the button below to edit these records.
           </span>
           <button
@@ -2792,7 +3112,7 @@ const AddChooser = ({ onPick, onClose }) => (
   <Modal title="What would you like to do?" icon={<Plus size={17} />} onClose={onClose} width={580}>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
       {[
-        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and target figures against the KPIs you already track, or manage Employee Development, Termination Records, and New Hire Records." },
+        { key: "data", icon: <Database size={22} />, title: "Add Data", body: "Capture actual and target figures against the KPIs you already track, or manage Employee Development, Qualification, Workforce Register, Termination Records, and New Hire Records." },
         { key: "kpi", icon: <Sparkles size={22} />, title: "Add KPI", body: "Create a custom people metric under any section or category." },
       ].map((o) => (
         <button key={o.key} onClick={() => onPick(o.key)}
@@ -2920,6 +3240,27 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
               annualReview: employees.filter(e => e.annualReview?.status === "Done").length,
               total: employees.length,
             },
+          };
+        } else if (cat.panel === "qualification") {
+          const employees = docs.qualification?.employees || [];
+          catData.panelData = {
+            type: "qualification",
+            employees: employees.map(e => ({
+              name: e.name || "—",
+              qualification: e.qualification || "—",
+              isCertificationCompulsory: e.isCertificationCompulsory === "yes" ? "Yes" : "No",
+              role: e.role || "—",
+            })),
+          };
+        } else if (cat.panel === "workforceRegister") {
+          const employees = docs.workforceRegister?.employees || [];
+          catData.panelData = {
+            type: "workforceRegister",
+            employees: employees.map(e => ({
+              name: e.name || "—",
+              role: e.role || "—",
+              department: e.department || "—",
+            })),
           };
         } else if (cat.panel === "capacityLoad") {
           const exec = docs.exec?.executionData || {};
@@ -3070,7 +3411,6 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       return html;
     };
 
-    /* Split table — native-frequency with running totals */
     const splitTable = (kpi) => {
       if (!kpi.splitRows || !kpi.splitRows.length) return "";
       let html = `<h4 style="color:#4a352f; font-size:10pt; margin:14px 0 4px;">${kpi.name} — ${kpi.splitTitle}</h4>`;
@@ -3146,6 +3486,52 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
                 <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">IDP</th>
                 <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Mid-term Review</th>
                 <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Annual Review</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+      if (panelData.type === "qualification") {
+        let rows = "";
+        panelData.employees.forEach(e => {
+          rows += `
+            <tr>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.name}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.qualification}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${e.isCertificationCompulsory}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.role}</td>
+            </tr>`;
+        });
+        return `
+          <div style="margin:10px 0; font-size:10pt;">
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Employee Name</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Qualification</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:center;">Certification Compulsory?</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Role</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+      if (panelData.type === "workforceRegister") {
+        let rows = "";
+        panelData.employees.forEach(e => {
+          rows += `
+            <tr>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.name}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.role}</td>
+              <td style="padding:4px 8px; border:1px solid #ddd;">${e.department}</td>
+            </tr>`;
+        });
+        return `
+          <div style="margin:10px 0; font-size:10pt;">
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+              <thead><tr style="background:#33231e; color:#fff;">
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Employee Name</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Role</th>
+                <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Department</th>
               </tr></thead>
               <tbody>${rows}</tbody>
             </table>
@@ -3438,7 +3824,7 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
             <input type="checkbox" checked={includeRecords} onChange={() => setIncludeRecords(!includeRecords)} />
-            Records (development, terminations, hires)
+            Records (development, qualifications, register, terminations, hires)
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer", padding: "4px 0" }}>
             <input type="checkbox" checked={includeActions} onChange={() => setIncludeActions(!includeActions)} />
@@ -3450,7 +3836,7 @@ const ReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userNa
       <div style={{ ...cardS, background: T.panel, fontSize: "12.5px", color: T.body }}>
         <Info size={14} color={T.accentSoft} style={{ marginRight: "8px" }} />
         The report includes a month-by-month split table under each KPI with running totals.
-        {includeRecords && " Records sections include the development, terminations and hires registers."}
+        {includeRecords && " Records sections include the development, qualifications, register, terminations and hires."}
       </div>
     </Modal>
   );
@@ -3536,7 +3922,7 @@ const PeoplePerformance = () => {
 
   const loadAll = useCallback(async (uid_) => {
     const out = {};
-    const peopleKeys = ["prod","cap","exec","stab","comp","track","term","hire"];
+    const peopleKeys = ["prod","cap","exec","stab","comp","track","term","hire","qualification","workforceRegister"];
     await Promise.all(peopleKeys.map(async (k) => {
       try {
         const snap = await getDoc(doc(db, "peopleData", `${uid_}${DOC[k]}`));
@@ -3798,7 +4184,6 @@ const PeoplePerformance = () => {
   const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
   const clearFilters = () => { setFilters({ category: "all", kpi: "all", units: "all", status: "all" }); setSortConfig({ key: null, direction: "asc" }); };
 
-  /* ── CSV: proper quoting + BOM + split rows ── */
   const downloadCSV = () => {
     const escape = (v) => {
       if (v === null || v === undefined) return "";
@@ -3883,7 +4268,7 @@ const PeoplePerformance = () => {
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "12px" }}>
-        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>People Performance Summary</h1>
+        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>People Overview</h1>
         <button onClick={() => setShowAbout((v) => !v)} style={btnQuiet}>
           {showAbout ? "See less" : "See more"} {showAbout ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
@@ -3900,7 +4285,7 @@ const PeoplePerformance = () => {
             <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
               <li>Tracks Target, Actual and Variance for every people KPI</li>
               <li>Falls back to published benchmarks where you haven't set a target</li>
-              <li>Keeps the registers — development, terminations, hires — alongside</li>
+              <li>Keeps the registers — development, qualifications, workforce register, terminations, hires — alongside</li>
               <li>Raises actions straight into your governance meetings</li>
             </ul>
           </div>
@@ -4175,6 +4560,18 @@ const PeoplePerformance = () => {
       {!isKpiTableTab && panels.includes("tracking") && (
         <div style={{ marginBottom: "20px" }}>
           <TrackingPanel docs={docs} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
+        </div>
+      )}
+
+      {!isKpiTableTab && panels.includes("qualification") && (
+        <div style={{ marginBottom: "20px" }}>
+          <QualificationPanel docs={docs} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
+        </div>
+      )}
+
+      {!isKpiTableTab && panels.includes("workforceRegister") && (
+        <div style={{ marginBottom: "20px" }}>
+          <WorkforceRegisterPanel docs={docs} readOnly={isInvestorView} onUpdate={handlePanelRowUpdate} />
         </div>
       )}
 
