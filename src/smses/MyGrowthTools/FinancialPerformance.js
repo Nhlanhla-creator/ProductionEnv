@@ -3074,7 +3074,7 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
             )}
           </div>
           <Section title="Current liabilities" path="liabilities.currentLiabilities" obj={bs.liabilities?.currentLiabilities} total={sumObj(bs.liabilities?.currentLiabilities, calIndex)} sectionType="liabilities" />
-          <Section title="Non-current liabilities" path={["liabilities","nonCurrentLiabilities"]} obj={bs.liabilities?.nonCurrentLiabilities} total={sumObj(bs.liabilities?.nonCurrentLiabilities, calIndex)} sectionType="liabilities" />
+         <Section title="Non-current liabilities" path="liabilities.nonCurrentLiabilities" obj={bs.liabilities?.nonCurrentLiabilities} total={sumObj(bs.liabilities?.nonCurrentLiabilities, calIndex)} sectionType="liabilities" />
           <CustomSections list={bs.customLiabilitiesCategories} sectionType="liabilities" />
           <Section title="Equity" path="equity" obj={bs.equity} total={sumObj(bs.equity, calIndex) - 2 * (parseFloat(bs.equity?.treasuryShares?.[calIndex]) || 0)} sectionType="equity" />
           <CustomSections list={bs.customEquityCategories} sectionType="equity" />
