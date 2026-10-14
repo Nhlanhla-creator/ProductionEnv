@@ -12,6 +12,7 @@ function CMFHeader() {
       userNameField="contactDetails.contactName"
       logoField="formData.entityOverview.companyLogo"
       portalName="CMF Dashboard"
+      selectedRole="CapitalMarketFacilitators"
       roleOptions={profileRoleOptions.capitalMarketFacilitator}
       enableAdvancedMessages={true}
       messagesRoute="/cmf-messages"

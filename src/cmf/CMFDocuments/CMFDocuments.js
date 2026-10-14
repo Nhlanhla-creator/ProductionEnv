@@ -33,24 +33,32 @@ const MULTI_UPLOAD_DOCUMENTS = [
 ]
 
 const CMF_DOCUMENT_CONFIGS = [
-  // Compliance Documents
-  { id: "cipcRegistration", label: "CIPC Registration Document", category: "Compliance", required: true, description: "Certificate of Incorporation or equivalent", multiple: false },
-  { id: "taxCompliancePin", label: "Tax Compliance PIN", category: "Compliance", required: true, description: "SARS Tax Compliance Certificate or PIN", multiple: false },
-  { id: "proofOfAddress", label: "Proof of Address", category: "Compliance", required: true, description: "Not older than 3 months", multiple: false },
-  { id: "vatCertificate", label: "VAT Certificate", category: "Compliance", required: false, description: "If VAT registered", multiple: false },
-  { id: "bbbeeCertificate", label: "B-BBEE Certificate", category: "Compliance", required: false, description: "Current B-BBEE verification certificate", multiple: false },
-  { id: "fspLicence", label: "FSP Licence / Partner Details", category: "Compliance", required: false, description: "Financial Services Provider licence or agreement", multiple: false },
-  { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", category: "Compliance", required: false, description: "Current PI insurance schedule", multiple: false },
-  { id: "isoCertifications", label: "ISO Certifications", category: "Compliance", required: false, description: "Relevant ISO certification documents", multiple: true },
-  { id: "industryAccreditations", label: "Industry Accreditations", category: "Compliance", required: false, description: "SAVCA / GIIN or professional accreditations", multiple: true },
-  // Marketing & Capability Documents
-  { id: "companyProfile", label: "Company Profile (PDF)", category: "Marketing", required: true, description: "Formal company overview document", multiple: false },
-  { id: "logo", label: "Company Logo", category: "Marketing", required: true, description: "High-resolution logo file (PNG, SVG or vector)", multiple: false },
-  { id: "capabilityStatement", label: "Capability Statement", category: "Marketing", required: false, description: "Track record and capability overview", multiple: false },
-  { id: "caseStudies", label: "Case Studies", category: "Marketing", required: false, description: "Examples of past transactions or engagements", multiple: false },
-  { id: "clientReferences", label: "Client References", category: "Marketing", required: false, description: "Reference letters or client contacts", multiple: true },
-  { id: "brochure", label: "Brochure", category: "Marketing", required: false, description: "Marketing or product brochure", multiple: false },
-  { id: "serviceCatalogue", label: "Service Catalogue", category: "Marketing", required: false, description: "Listing of de-risking & facilitation services", multiple: false },
+  // 1. Entity registration document
+  { id: "cipcRegistration", label: "Entity Registration Document", category: "Legal & Entity", required: true, recommendedStatus: "Compulsory for registered organisations", whenRequired: "Registration certificate or equivalent in the entity's country", visibleToSMEs: "Verification status only", description: "Certificate of Incorporation or equivalent", multiple: false },
+  // 2. Identity verification of account holder
+  { id: "idVerification", label: "Identity Verification of Account Holder", category: "Identity", required: true, recommendedStatus: "Compulsory", whenRequired: "Person administering the account; individual practitioners verify their own identity", visibleToSMEs: "No", description: "Government ID / Passport of administrator", multiple: false },
+  // 3. Authority to represent the organisation
+  { id: "authorityToRepresent", label: "Authority to Represent the Organisation", category: "Legal & Entity", required: false, recommendedStatus: "Conditional compulsory", whenRequired: "Where authority cannot otherwise be established; authorisation letter", visibleToSMEs: "No", description: "Letter of authority or resolution", multiple: false },
+  // 4. Relevant licence or regulatory authorisation evidence
+  { id: "fspLicence", label: "Licence / Regulatory Authorisation Evidence", category: "Credentials & Authorisation", required: false, recommendedStatus: "Conditional compulsory", whenRequired: "Where required for specific services offered; capture licence number & scope", visibleToSMEs: "Verified details/status", description: "FSP licence, NCR registration or equivalent", multiple: true },
+  // 5. Formal funder, buyer or programme mandate
+  { id: "formalMandate", label: "Formal Funder, Buyer or Programme Mandate", category: "Mandates & Partnerships", required: false, recommendedStatus: "Conditional compulsory", whenRequired: "If CMF claims to be an appointed representative or mandated partner", visibleToSMEs: "Relationship status; document private", description: "Signed partnership agreement or mandate letter", multiple: true },
+  // 6. Qualification, accreditation or professional membership evidence
+  { id: "industryAccreditations", label: "Qualification, Accreditation or Membership", category: "Credentials & Authorisation", required: false, recommendedStatus: "Conditional compulsory", whenRequired: "If CMF wants BIG to mark claimed credential as verified", visibleToSMEs: "Credential and verification status", description: "SAVCA / GIIN / Professional body membership", multiple: true },
+  // 7. Tax compliance evidence
+  { id: "taxCompliancePin", label: "Tax Compliance Evidence", category: "Tax & Compliance", required: false, recommendedStatus: "Optional by default", whenRequired: "Can become compulsory for specific appointments / corporate programmes", visibleToSMEs: "Status only, if relevant", description: "SARS Tax Compliance PIN / Certificate", multiple: false },
+  // 8. B-BBEE certificate or affidavit
+  { id: "bbbeeCertificate", label: "B-BBEE Certificate or Affidavit", category: "Tax & Compliance", required: false, recommendedStatus: "Optional by default", whenRequired: "Can become compulsory where SA programme requires it", visibleToSMEs: "Level/status, with permission", description: "B-BBEE scorecard certificate or affidavit", multiple: false },
+  // 9. Professional indemnity insurance
+  { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", category: "Insurance & Risk", required: false, recommendedStatus: "Optional by default", whenRequired: "Can become compulsory for specific engagement or programme", visibleToSMEs: "Cover status, where relevant", description: "PI insurance schedule / certificate of cover", multiple: false },
+  // 10. Proof of business address
+  { id: "proofOfAddress", label: "Proof of Business Address", category: "Identity", required: false, recommendedStatus: "Optional / verification exception", whenRequired: "Request where needed to resolve address discrepancy", visibleToSMEs: "No", description: "Utility bill or bank statement not older than 3 months", multiple: false },
+  // 11. Bank account confirmation
+  { id: "bankAccountConfirmation", label: "Bank Account Confirmation", category: "Financial", required: false, recommendedStatus: "Outside initial profile onboarding", whenRequired: "Required before payments are made through BIG, if applicable", visibleToSMEs: "No", description: "Official bank confirmation letter with stamped details", multiple: false },
+  // 12. Service agreement or standard engagement terms
+  { id: "serviceAgreementTerms", label: "Service Agreement / Standard Engagement Terms", category: "Commercial & Engagement", required: false, recommendedStatus: "Optional at profile stage", whenRequired: "Agreed terms should be captured before paid engagement begins", visibleToSMEs: "Shareable with engaging SME", description: "Standard facilitation agreement terms", multiple: true },
+  // 13. Company brochure, case studies and references
+  { id: "companyProfile", label: "Company Brochure, Case Studies & References", category: "Commercial & Engagement", required: false, recommendedStatus: "Optional", whenRequired: "Supports public profile and track record", visibleToSMEs: "Yes, with permission", description: "Corporate brochure, case study overviews and reference letters", multiple: true },
 ]
 
 export default function CMFDocuments({onClose}) {

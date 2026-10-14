@@ -1,5 +1,6 @@
 "use client"
-import { useState } from "react"
+
+import React, { useState } from "react"
 import {
   ChevronDown,
   ChevronUp,
@@ -11,1205 +12,466 @@ import {
   UploadCloud,
   Users,
   Scale,
+  Shield,
+  Eye,
+  CheckCircle2,
+  DollarSign,
+  Globe,
+  Award,
+  Layers,
+  FileText,
+  Mail,
+  MapPin,
+  Lock
 } from "lucide-react"
 import CMFVerificationScoreCard, {
   calculateVerificationScore,
-  getTierInfo,
+  getTierInfo
 } from "./CMFVerificationScoreCard"
+import CMFSMEPreviewModal from "./sections/CMFSMEPreviewModal"
 
-const documentUploadList = [
-  // Compliance
-  { id: "cipcRegistration", label: "CIPC Registration Document", category: "Compliance", required: true },
-  { id: "taxCompliancePin", label: "Tax Compliance PIN", category: "Compliance", required: true },
-  { id: "proofOfAddress", label: "Proof of Address", category: "Compliance", required: true },
-  { id: "vatCertificate", label: "VAT Certificate", category: "Compliance", required: false },
-  { id: "bbbeeCertificate", label: "B-BBEE Certificate", category: "Compliance", required: false },
-  { id: "fspLicence", label: "FSP Licence / Partner Details", category: "Compliance", required: false },
-  { id: "professionalIndemnityInsurance", label: "Professional Indemnity Insurance", category: "Compliance", required: false },
-  { id: "isoCertifications", label: "ISO Certifications", category: "Compliance", required: false },
-  { id: "industryAccreditations", label: "Industry Accreditations", category: "Compliance", required: false },
-  // Marketing
-  { id: "companyProfile", label: "Company Profile (PDF)", category: "Marketing", required: true },
-  { id: "logo", label: "Company Logo", category: "Marketing", required: true },
-  { id: "capabilityStatement", label: "Capability Statement", category: "Marketing", required: false },
-  { id: "caseStudies", label: "Case Studies", category: "Marketing", required: false },
-  { id: "clientReferences", label: "Client References", category: "Marketing", required: false },
-  { id: "brochure", label: "Brochure", category: "Marketing", required: false },
-  { id: "serviceCatalogue", label: "Service Catalogue", category: "Marketing", required: false },
-]
-
-export default function CMFProfileSummary({ data, formData, onEdit }) {
+export default function CMFProfileSummary({ data, formData, onEdit, onSelectSection }) {
   const profile = data || formData || {}
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
 
   const [expandedSections, setExpandedSections] = useState({
     verificationAudit: true,
     entityOverview: true,
+    servicesSupport: true,
+    smeFocusMatching: false,
+    experienceNetworks: false,
+    feesEngagement: false,
+    legalVerification: false,
     contactDetails: false,
-    ownershipManagement: false,
-    legalCompliance: false,
-    facilitationOffering: false,
-    investmentPreference: false,
-    documentsStatus: false,
+    declarationConsent: false
   })
 
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
       ...prev,
-      [section]: !prev[section],
+      [section]: !prev[section]
     }))
   }
 
-  const formatArray = (arr) => {
+  const formatList = (arr) => {
     if (!arr || !arr.length) return "None specified"
     if (Array.isArray(arr)) {
-      return arr.filter((item) => item && String(item).trim()).join(" • ")
+      return arr.filter(Boolean).join(" • ")
     }
     return String(arr)
   }
 
-  const handleEdit = () => {
-    if (onEdit) onEdit()
+  const handleEditSection = (sectionId) => {
+    if (onSelectSection) {
+      onSelectSection(sectionId)
+    } else if (onEdit) {
+      onEdit()
+    }
   }
 
   const entity = profile.entityOverview || {}
+  const services = profile.servicesSupport || {}
+  const matching = profile.smeFocusMatching || {}
+  const experience = profile.experienceNetworks || {}
+  const fees = profile.feesEngagement || {}
+  const legal = profile.legalVerification || {}
   const contact = profile.contactDetails || {}
-  const ownership = profile.ownershipManagement || profile.ownership || {}
-  const legal = profile.legalCompliance || profile.legal || {}
-  const products = profile.productsServices || {}
-  const fundDetails = profile.fundDetails || {}
-  const investmentPrefs = profile.generalInvestmentPreference || {}
-  const documents = profile.documents || profile.documentUpload || {}
+  const declaration = profile.declarationConsent || {}
 
-  // Verification calculations
   const verificationResult = calculateVerificationScore(profile)
   const verificationScore = verificationResult.score
-  const scoreBreakdown = verificationResult.breakdown
-  const verificationChecklist = verificationResult.checklist
   const tierInfo = getTierInfo(verificationScore)
 
-  const renderDocumentStatus = (docArray) => {
-    const hasFiles = docArray && docArray.length > 0
-    if (!hasFiles) {
-      return <span style={{ color: "#ef4444", fontWeight: "600" }}>Not uploaded</span>
-    }
-    return (
-      <span style={{ color: "#22c55e", fontWeight: "600" }}>
-        Uploaded ({docArray.length} file{docArray.length > 1 ? "s" : ""})
-      </span>
-    )
-  }
-
   return (
-    <>
-      <style jsx global>{`
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-15px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @media (max-width: 1024px) {
-          .cmf-summary-container {
-            padding: 16px !important;
-          }
-          .cmf-header-grid {
-            grid-template-columns: 1fr !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 24px !important;
-          }
-        }
-      `}</style>
+    <div style={{ width: "100%", maxWidth: "1100px", margin: "0 auto", padding: "1.5rem", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      {/* Top Banner */}
+      <div style={{
+        background: "linear-gradient(135deg, #4a352f 0%, #3e2723 100%)",
+        color: "#ffffff",
+        padding: "2rem",
+        borderRadius: "16px",
+        marginBottom: "2rem",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "1.5rem",
+        boxShadow: "0 8px 24px rgba(62, 39, 35, 0.2)"
+      }}>
+        <div>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.12)", padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600", color: "#d9b98a", marginBottom: "0.75rem" }}>
+            <Shield size={14} /> Profile Summary
+          </div>
+          <h1 style={{ fontSize: "1.85rem", fontWeight: "800", margin: "0 0 0.5rem 0" }}>
+            {entity.organisationName || "Facilitator Profile"}
+          </h1>
+          <p style={{ margin: 0, fontSize: "1rem", color: "#e8d8cf" }}>
+            {entity.headline || "Capital & Market Facilitator on BIG Marketplace"}
+          </p>
+        </div>
 
-      <div
-        className="cmf-summary-container"
-        style={{
-          minHeight: "100vh",
-          padding: "24px",
-          width: "100%",
-          boxSizing: "border-box",
-          overflowX: "hidden",
-          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        }}
-      >
-        <div style={{ width: "100%", maxWidth: "1200px", margin: "0 auto" }}>
-          {/* Header */}
-          <div
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setShowPreviewModal(true)}
             style={{
-              background: "linear-gradient(135deg, rgba(250, 247, 242, 0.95), rgba(245, 240, 225, 0.95))",
-              backdropFilter: "blur(20px)",
-              borderRadius: "24px",
-              padding: "32px",
-              marginBottom: "32px",
-              boxShadow: "0 20px 40px rgba(74, 53, 47, 0.1)",
-              border: "1px solid rgba(200, 182, 166, 0.3)",
-              position: "relative",
-              overflow: "hidden",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "rgba(255,255,255,0.15)",
+              color: "#ffffff",
+              border: "1px solid rgba(255,255,255,0.3)",
+              padding: "10px 18px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer"
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: "-50%",
-                right: "-20%",
-                width: "400px",
-                height: "400px",
-                background: "radial-gradient(circle, rgba(166, 124, 82, 0.12) 0%, transparent 70%)",
-                borderRadius: "50%",
-              }}
-            />
-            <div
-              className="cmf-header-grid"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "auto 1fr auto",
-                gap: "28px",
-                alignItems: "center",
-                position: "relative",
-                zIndex: 2,
-              }}
-            >
-              {/* Verification Score Card */}
-              <CMFVerificationScoreCard profileData={profile} />
+            <Eye size={16} /> Preview SME View
+          </button>
 
-              {/* Title & Metadata */}
-              <div>
-                <h1
-                  style={{
-                    background: "linear-gradient(135deg, #4a352f, #7d5a50)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    fontSize: "clamp(24px, 3.5vw, 36px)",
-                    fontWeight: "800",
-                    margin: "0 0 8px 0",
-                    letterSpacing: "-0.02em",
-                    textDecoration: "none",
-                    borderBottom: "none",
-                  }}
-                >
-                  {"Capital & Market Facilitator Profile"}
-                </h1>
-
-                <p style={{
-                  color: '#7d5a50',
-                  fontSize: '18px',
-                  margin: 0,
-                  fontWeight: '500',
-                  textAlign: 'center',
-                }}>
-                  Professional Summary
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <button
-                onClick={handleEdit}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "12px 22px",
-                  background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                  color: "#faf7f2",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  boxShadow: "0 4px 16px rgba(166, 124, 82, 0.3)",
-                  minWidth: "140px",
-                  justifyContent: "center",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-2px)"
-                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(166, 124, 82, 0.4)"
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)"
-                  e.currentTarget.style.boxShadow = "0 4px 16px rgba(166, 124, 82, 0.3)"
-                }}
-              >
-                <Edit size={16} /> Edit Profile
-              </button>
-            </div>
-          </div>
-
-          {/* Profile Sections Grid */}
-          <div style={{ display: "grid", gap: "24px" }}>
-            {/* 1. Entity Overview */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("entityOverview")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.entityOverview
-                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Building size={24} color={expandedSections.entityOverview ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.entityOverview ? "#faf7f2" : "#4a352f",
-                      textDecoration: "none",
-                      borderBottom: "none",
-                    }}
-                  >
-                    Entity Overview
-                  </h2>
-                </div>
-                {expandedSections.entityOverview ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.entityOverview && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                      gap: "20px",
-                    }}
-                  >
-                    {[
-                      { label: "Registered Name", value: entity.registeredName },
-                      { label: "Trading Name", value: entity.tradingName },
-                      { label: "Registration Number", value: entity.registrationNumber },
-                      { label: "Entity Type", value: entity.entityType },
-                      { label: "Legal Structure", value: entity.legalStructure },
-                      { label: "Entity Size", value: entity.entitySize },
-                      { label: "Years in Operation", value: entity.yearsInOperation ? `${entity.yearsInOperation} Years` : null },
-                      { label: "Operation Stage", value: entity.operationStage },
-                      { label: "Economic Sectors", value: formatArray(entity.economicSectors) },
-                      { label: "Operating Countries", value: formatArray(entity.operatingCountries) },
-                      { label: "Operating Provinces", value: formatArray(entity.operatingProvinces) },
-                      { label: "Industry Associations", value: formatArray(entity.industryAssociations) },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "#7d5a50",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {entity.businessDescription && (
-                    <div
-                      style={{
-                        marginTop: "20px",
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "20px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "13px",
-                          color: "#7d5a50",
-                          marginBottom: "8px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Business Description
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "15px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                          lineHeight: "1.6",
-                        }}
-                      >
-                        {entity.businessDescription}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* 2. Contact Details */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("contactDetails")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.contactDetails
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Phone size={24} color={expandedSections.contactDetails ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.contactDetails ? "#faf7f2" : "#4a352f",
-                      textDecoration: "none",
-                      borderBottom: "none",
-                    }}
-                  >
-                    Contact Details
-                  </h2>
-                </div>
-                {expandedSections.contactDetails ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.contactDetails && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                      gap: "20px",
-                    }}
-                  >
-                    {[
-                      { label: "Primary Contact", value: `${contact.contactTitle || ""} ${contact.contactName || ""}`.trim() },
-                      { label: "Position", value: contact.position },
-                      { label: "Business Phone", value: contact.businessPhone },
-                      { label: "Mobile", value: contact.mobile },
-                      { label: "Email", value: contact.email },
-                      { label: "Physical Address", value: contact.physicalAddress },
-                      { label: "Postal Address", value: contact.postalAddress },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "#7d5a50",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 3. Ownership & Management */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("ownershipManagement")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.ownershipManagement
-                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Users size={24} color={expandedSections.ownershipManagement ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.ownershipManagement ? "#faf7f2" : "#4a352f",
-                      textDecoration: "none",
-                      borderBottom: "none",
-                    }}
-                  >
-                    Ownership & Management
-                  </h2>
-                </div>
-                {expandedSections.ownershipManagement ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.ownershipManagement && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  {/* Ownership Demographics */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                      gap: "16px",
-                      marginBottom: "24px",
-                    }}
-                  >
-                    {[
-                      { label: "Black Ownership", value: ownership.blackOwnership ? `${ownership.blackOwnership}%` : null },
-                      { label: "Black Women Ownership", value: (ownership.femaleOwnership || ownership.blackWomenOwnership) ? `${ownership.femaleOwnership || ownership.blackWomenOwnership}%` : null },
-                      { label: "Youth Ownership", value: ownership.youthOwnership ? `${ownership.youthOwnership}%` : null },
-                      { label: "Disabled Ownership", value: ownership.disabledOwnership ? `${ownership.disabledOwnership}%` : null },
-                    ].map((dem, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.85)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.25)",
-                        }}
-                      >
-                        <span style={{ display: "block", fontSize: "12px", color: "#7d5a50", fontWeight: "600", textTransform: "uppercase" }}>
-                          {dem.label}
-                        </span>
-                        <span style={{ fontSize: "18px", color: "#4a352f", fontWeight: "700" }}>
-                          {dem.value || "Not specified"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Directors & Principals */}
-                  {ownership.directors && ownership.directors.length > 0 && (
-                    <div style={{ marginBottom: "24px" }}>
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", marginBottom: "12px", letterSpacing: "0.5px" }}>
-                        Directors & Principals ({ownership.directors.length})
-                      </h4>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        {ownership.directors.map((dir, idx) => (
-                          <div key={idx} style={{ background: "rgba(250, 247, 242, 0.9)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(200, 182, 166, 0.3)" }}>
-                            <div style={{ fontWeight: "700", color: "#4a352f", fontSize: "15px" }}>
-                              {dir.fullName || dir.name || "Director"}
-                            </div>
-                            <div style={{ fontSize: "13px", color: "#7d5a50", marginTop: "4px" }}>
-                              Role: <strong>{dir.directorRole || dir.role || "Director"}</strong> {dir.execNonExec ? `(${dir.execNonExec})` : ""}
-                            </div>
-                            {dir.email && <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "2px" }}>{dir.email}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Shareholders */}
-                  {ownership.shareholders && ownership.shareholders.length > 0 && (
-                    <div style={{ marginBottom: "24px" }}>
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", marginBottom: "12px", letterSpacing: "0.5px" }}>
-                        Shareholders & Partners ({ownership.shareholders.length})
-                      </h4>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        {ownership.shareholders.map((sh, idx) => (
-                          <div key={idx} style={{ background: "rgba(250, 247, 242, 0.9)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(200, 182, 166, 0.3)" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ fontWeight: "700", color: "#4a352f", fontSize: "15px" }}>
-                                {sh.fullName || sh.name || "Shareholder"}
-                              </span>
-                              <span style={{ fontSize: "12px", fontWeight: "700", color: "#2e7d32", backgroundColor: "#e8f5e9", padding: "2px 8px", borderRadius: "8px" }}>
-                                {sh.shareholdingPercentage || sh.percentage || sh.sharePercentage || "0"}%
-                              </span>
-                            </div>
-                            {sh.nationality && (
-                              <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "4px" }}>
-                                Nationality: {sh.nationality}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Key Management */}
-                  {(ownership.executives || ownership.management) && (ownership.executives || ownership.management).length > 0 && (
-                    <div>
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", marginBottom: "12px", letterSpacing: "0.5px" }}>
-                        Key Executive Team
-                      </h4>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        {(ownership.executives || ownership.management).map((exec, idx) => (
-                          <div key={idx} style={{ background: "rgba(250, 247, 242, 0.9)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(200, 182, 166, 0.3)" }}>
-                            <div style={{ fontWeight: "700", color: "#4a352f", fontSize: "15px" }}>
-                              {exec.fullName || exec.name || "Executive"}
-                            </div>
-                            <div style={{ fontSize: "13px", color: "#7d5a50", marginTop: "2px" }}>
-                              {exec.position || exec.role || "Executive"}
-                            </div>
-                            {exec.email && <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "2px" }}>{exec.email}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* 4. Legal & Compliance */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("legalCompliance")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.legalCompliance
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Scale size={24} color={expandedSections.legalCompliance ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.legalCompliance ? "#faf7f2" : "#4a352f",
-                      textDecoration: "none",
-                      borderBottom: "none",
-                    }}
-                  >
-                    Legal & Compliance
-                  </h2>
-                </div>
-                {expandedSections.legalCompliance ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.legalCompliance && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                      gap: "20px",
-                    }}
-                  >
-                    {[
-                      { label: "Tax Clearance Status", value: legal.taxComplianceStatus || (legal.taxPin ? "PIN Provided" : null) },
-                      { label: "Tax PIN Number", value: legal.taxPin },
-                      { label: "Income Tax Number", value: legal.taxNumber },
-                      { label: "B-BBEE Level", value: legal.bbbeeLevel ? `Level ${legal.bbbeeLevel}` : null },
-                      { label: "VAT Registered", value: legal.vatRegistered || (legal.vatNumber ? "Registered" : null) },
-                      { label: "VAT Number", value: legal.vatNumber },
-                      { label: "UIF Status", value: legal.uifStatus || legal.uifNumber },
-                      { label: "COIDA / Compensation Fund", value: legal.coidaStatus || legal.coidaNumber },
-                      { label: "FSP Licence Number", value: legal.fspLicenceNumber || legal.fspPartner },
-                      { label: "Professional Indemnity Insurer", value: legal.professionalIndemnityInsurer },
-                      { label: "Indemnity Cover Amount", value: legal.indemnityCoverAmount },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "#7d5a50",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 5. Facilitation Offering & Services */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("facilitationOffering")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.facilitationOffering
-                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Briefcase size={24} color={expandedSections.facilitationOffering ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.facilitationOffering ? "#faf7f2" : "#4a352f",
-                      textDecoration: "none",
-                      borderBottom: "none",
-                    }}
-                  >
-                    Facilitation Offering & Services
-                  </h2>
-                </div>
-                {expandedSections.facilitationOffering ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.facilitationOffering && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                      gap: "20px",
-                    }}
-                  >
-                    {[
-                      { label: "Offering Type", value: products.offeringType },
-                      { label: "Product Categories", value: formatArray(products.productCategories) },
-                      { label: "Service Categories", value: formatArray(products.serviceCategories) },
-                      { label: "Delivery Modes", value: formatArray(products.deliveryModes) },
-                      {
-                        label: "Lead Time Range",
-                        value:
-                          products.minLeadTime && products.maxLeadTime
-                            ? `${products.minLeadTime} ${products.minLeadTimeUnit || "days"} - ${products.maxLeadTime} ${products.maxLeadTimeUnit || "days"}`
-                            : null,
-                      },
-                      { label: "Target Market", value: products.targetMarket },
-                      { label: "Key Institutional Clients", value: formatArray(products.keyClients) },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "#7d5a50",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {products.offerings && products.offerings.length > 0 && (
-                    <div style={{ marginTop: "24px" }}>
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", marginBottom: "12px", letterSpacing: "0.5px" }}>
-                        Detailed Offerings ({products.offerings.length})
-                      </h4>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        {products.offerings.map((offering, idx) => (
-                          <div key={offering.id || idx} style={{ background: "rgba(250, 247, 242, 0.9)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(200, 182, 166, 0.3)" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                              <span style={{ fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>{offering.name || "Untitled Offering"}</span>
-                              <span style={{ fontSize: "11px", fontWeight: "600", padding: "2px 8px", borderRadius: "10px", backgroundColor: "#e6d7c3", color: "#4a352f" }}>{offering.offeringType || "Service"}</span>
-                            </div>
-                            {offering.breadcrumb && <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "6px" }}>{offering.breadcrumb}</div>}
-                            {offering.description && <div style={{ fontSize: "13px", color: "#5d4037", lineHeight: "1.4" }}>{offering.description}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* 4. Fund & Investment Preferences */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("investmentPreference")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.investmentPreference
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <TrendingUp size={24} color={expandedSections.investmentPreference ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.investmentPreference ? "#faf7f2" : "#4a352f",
-                      textDecoration: "none",
-                      borderBottom: "none",
-                    }}
-                  >
-                    Fund & Investment Preferences
-                  </h2>
-                </div>
-                {expandedSections.investmentPreference ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.investmentPreference && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  {/* Fund Details */}
-                  {fundDetails.funds && fundDetails.funds.length > 0 && (
-                    <div style={{ marginBottom: "24px" }}>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#7d5a50", marginBottom: "12px", textDecoration: "none", borderBottom: "none" }}>
-                        Active & Deployed Facilities
-                      </h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        {fundDetails.funds.map((fund, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              background: "rgba(250, 247, 242, 0.85)",
-                              borderRadius: "12px",
-                              padding: "16px",
-                              border: "1px solid rgba(200, 182, 166, 0.3)",
-                            }}
-                          >
-                            <div style={{ fontWeight: "700", color: "#4a352f", fontSize: "15px", marginBottom: "4px" }}>
-                              {fund.fundName}
-                            </div>
-                            <div style={{ fontSize: "13px", color: "#7d5a50" }}>
-                              Size: <strong>{fund.fundSize}</strong> • Vintage: <strong>{fund.vintage}</strong>
-                            </div>
-                            <div style={{ marginTop: "6px", display: "inline-block", fontSize: "12px", backgroundColor: "#e6d7c3", color: "#4a352f", padding: "2px 8px", borderRadius: "4px", fontWeight: "600" }}>
-                              {fund.status}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                      gap: "20px",
-                    }}
-                  >
-                    {[
-                      { label: "Fund Structure", value: investmentPrefs.fundStructure },
-                      { label: "Legal Entity Fit", value: investmentPrefs.legalEntityFit },
-                      { label: "Investment Stage Focus", value: formatArray(investmentPrefs.investmentStage) },
-                      { label: "Primary Instruments", value: formatArray(investmentPrefs.investmentFocus) },
-                      { label: "Subtype Instruments", value: formatArray(investmentPrefs.investmentFocusSubtype) },
-                      { label: "Sector Focus", value: formatArray(investmentPrefs.sectorFocus) },
-                      { label: "Geographic Target", value: formatArray(investmentPrefs.geographicFocus) },
-                      { label: "Target IRR / Return", value: investmentPrefs.targetIRR || investmentPrefs.expectedReturnMultiple },
-                      { label: "Risk Appetite", value: investmentPrefs.riskAppetite },
-                      { label: "Exit Strategy", value: formatArray(investmentPrefs.preferredExitStrategy) },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "#7d5a50",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 5. Document Upload & Verification Status */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("documentsStatus")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.documentsStatus
-                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <UploadCloud size={24} color={expandedSections.documentsStatus ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.documentsStatus ? "#faf7f2" : "#4a352f",
-                      textDecoration: "none",
-                      borderBottom: "none",
-                    }}
-                  >
-                    Document & Credential Status
-                  </h2>
-                </div>
-                {expandedSections.documentsStatus ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.documentsStatus && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "20px",
-                    }}
-                  >
-                    {documentUploadList.map((docItem) => (
-                      <div
-                        key={docItem.id}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <div
-                              style={{
-                                width: "20px",
-                                height: "20px",
-                                borderRadius: "4px",
-                                background:
-                                  documents[docItem.id] && documents[docItem.id].length > 0
-                                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                                    : "#e5e5e5",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#fff",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              {documents[docItem.id] && documents[docItem.id].length > 0 ? "✓" : ""}
-                            </div>
-                            <span
-                              style={{
-                                fontSize: "13px",
-                                color: "#7d5a50",
-                                fontWeight: "600",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                              }}
-                            >
-                              {docItem.label}
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", gap: "4px" }}>
-                            <span
-                              style={{
-                                fontSize: "10px",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontWeight: "600",
-                                backgroundColor: docItem.category === "Compliance" ? "#fef3c7" : "#dbeafe",
-                                color: docItem.category === "Compliance" ? "#92400e" : "#1e40af",
-                              }}
-                            >
-                              {docItem.category}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "10px",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontWeight: "600",
-                                backgroundColor: docItem.required ? "#fee2e2" : "#f3f4f6",
-                                color: docItem.required ? "#dc2626" : "#6b7280",
-                              }}
-                            >
-                              {docItem.required ? "Required" : "Optional"}
-                            </span>
-                          </div>
-                        </div>
-                        {renderDocumentStatus(documents[docItem.id])}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleEditSection("entityOverview")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "#d9b98a",
+              color: "#3e2723",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: "700",
+              cursor: "pointer"
+            }}
+          >
+            <Edit size={16} /> Edit Profile
+          </button>
         </div>
       </div>
-    </>
+
+      {/* Verification Audit Scorecard */}
+      <div style={{ marginBottom: "2rem" }}>
+        <CMFVerificationScoreCard profileData={profile} />
+      </div>
+
+      {/* 8 Profile Section Review Cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* 1. Entity Overview */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("entityOverview")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <Building size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                1. Entity Overview
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("entityOverview"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.entityOverview ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.entityOverview && (
+            <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", fontSize: "13px" }}>
+              <div><strong>Profile Type:</strong> {entity.profileType || "Not specified"}</div>
+              <div><strong>Name:</strong> {entity.organisationName || "Not specified"}</div>
+              <div><strong>Facilitation Focus:</strong> {entity.facilitationFocus || "Both"}</div>
+              <div><strong>Location:</strong> {entity.baseCity ? `${entity.baseCity}, ${entity.baseCountry}` : "Not specified"}</div>
+              <div style={{ gridColumn: "1 / -1" }}><strong>Headline:</strong> {entity.headline || "Not specified"}</div>
+              <div style={{ gridColumn: "1 / -1" }}><strong>About:</strong> {entity.about || "Not specified"}</div>
+              {entity.website && <div><strong>Website:</strong> <a href={entity.website} target="_blank" rel="noopener noreferrer" style={{ color: "#8d6e63" }}>{entity.website}</a></div>}
+              {entity.linkedin && <div><strong>LinkedIn:</strong> <a href={entity.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "#8d6e63" }}>{entity.linkedin}</a></div>}
+            </div>
+          )}
+        </div>
+
+        {/* 2. Services & Support */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("servicesSupport")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <Layers size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                2. Services & Support
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("servicesSupport"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.servicesSupport ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.servicesSupport && (
+            <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", fontSize: "13px" }}>
+              <div style={{ gridColumn: "1 / -1" }}><strong>Services Offered:</strong> {formatList(services.servicesOffered)}</div>
+              <div style={{ gridColumn: "1 / -1" }}><strong>What SMEs Receive:</strong> {services.whatSmesReceive || "Not specified"}</div>
+              <div><strong>Delivery Method:</strong> {services.deliveryMethod || "Not specified"}</div>
+              <div><strong>Support Format:</strong> {services.supportFormat || "Not specified"}</div>
+              <div><strong>Engagement Type:</strong> {services.engagementType || "Not specified"}</div>
+              <div><strong>Typical Duration:</strong> {services.typicalDuration || "Not specified"}</div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. SME Focus & Matching */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("smeFocusMatching")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <TrendingUp size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                3. SME Focus & Matching
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("smeFocusMatching"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.smeFocusMatching ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.smeFocusMatching && (
+            <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", fontSize: "13px" }}>
+              <div style={{ gridColumn: "1 / -1" }}><strong>Sectors Supported:</strong> {formatList(matching.sectorsSupported)}</div>
+              <div><strong>Geographic Areas:</strong> {formatList(matching.geographicAreas)}</div>
+              <div><strong>Business Stages:</strong> {formatList(matching.businessStages)}</div>
+              <div><strong>Turnover Range:</strong> {matching.allowNoTurnoverRestriction ? "No restriction" : (matching.turnoverRange || "Not specified")}</div>
+              <div><strong>Accepting New SMEs:</strong> {matching.acceptingNewSmes || "Yes"}</div>
+              <div style={{ gridColumn: "1 / -1" }}><strong>Eligibility Requirements:</strong> {formatList(matching.eligibilityCriteria)} — {matching.eligibilityExplanation}</div>
+              {matching.fundingInstruments && matching.fundingInstruments.length > 0 && (
+                <div style={{ gridColumn: "1 / -1" }}><strong>Funding Instruments:</strong> {formatList(matching.fundingInstruments)}</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 4. Experience & Networks */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("experienceNetworks")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <Users size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                4. Experience & Networks
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("experienceNetworks"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.experienceNetworks ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.experienceNetworks && (
+            <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", fontSize: "13px" }}>
+              <div><strong>Lead Facilitator:</strong> {experience.leadFacilitatorName} ({experience.leadFacilitatorRole})</div>
+              <div><strong>Years of Experience:</strong> {experience.yearsExperience ? `${experience.yearsExperience} years` : "Not specified"}</div>
+              <div style={{ gridColumn: "1 / -1" }}><strong>Lead Biography:</strong> {experience.leadExperienceBio}</div>
+              {experience.relationships && experience.relationships.length > 0 && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <strong>Key Relationships: </strong>
+                  {experience.relationships.map((r, i) => `${r.entityName} (${r.relationshipType})`).join(" • ")}
+                </div>
+              )}
+              {experience.caseStudies && experience.caseStudies.length > 0 && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <strong>Case Studies: </strong>
+                  {experience.caseStudies.map((c, i) => c.title).join(" • ")}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 5. Fees & Engagement */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("feesEngagement")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <DollarSign size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                5. Fees & Engagement
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("feesEngagement"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.feesEngagement ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.feesEngagement && (
+            <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", fontSize: "13px" }}>
+              <div><strong>Payer:</strong> {fees.payer || "SME"}</div>
+              <div><strong>Fee Model:</strong> {fees.feeModel || "Fixed fee"}</div>
+              {fees.indicativeFees && <div><strong>Indicative Fees:</strong> {fees.indicativeFees}</div>}
+              {fees.paymentTiming && <div><strong>Payment Timing:</strong> {fees.paymentTiming}</div>}
+              <div><strong>Response Time:</strong> {fees.typicalResponseTime || "1 - 2 business days"}</div>
+              <div><strong>How Engagement Starts:</strong> {fees.howEngagementStarts || "Initial assessment"}</div>
+              <div style={{ gridColumn: "1 / -1" }}><strong>Initial Info Checklist:</strong> {formatList(fees.initialAssessmentInfo)}</div>
+            </div>
+          )}
+        </div>
+
+        {/* 6. Legal & Verification */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("legalVerification")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <Scale size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                6. Legal & Verification
+              </h3>
+              <span style={{ fontSize: "11px", background: "#fef3c7", color: "#92400e", padding: "2px 6px", borderRadius: "8px", fontWeight: "600" }}>
+                🔒 Private
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("legalVerification"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.legalVerification ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.legalVerification && (
+            <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", fontSize: "13px" }}>
+              <div><strong>Capacity in which CMF Acts:</strong> {legal.capacityInWhichActs || "Independent facilitator"}</div>
+              {legal.legalEntityName && <div><strong>Legal Registered Name:</strong> {legal.legalEntityName}</div>}
+              {legal.registrationNumber && <div><strong>Registration Number:</strong> {legal.registrationNumber}</div>}
+              {legal.professionalAuthorisationDetails && (
+                <div style={{ gridColumn: "1 / -1" }}><strong>Regulatory Authorisation:</strong> {legal.professionalAuthorisationDetails}</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 7. Contact Details */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("contactDetails")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <Phone size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                7. Contact Details
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("contactDetails"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.contactDetails ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.contactDetails && (
+            <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", fontSize: "13px" }}>
+              <div><strong>SME-Facing Contact:</strong> {contact.smeContactName} ({contact.smeContactRole})</div>
+              <div><strong>Preferred Contact Route:</strong> {contact.preferredContactRoute}</div>
+              {contact.publicEmail && <div><strong>Public Email:</strong> {contact.publicEmail}</div>}
+              {contact.publicTelephone && <div><strong>Public Phone:</strong> {contact.publicTelephone}</div>}
+              {contact.bookingLink && <div><strong>Booking Link:</strong> <a href={contact.bookingLink} target="_blank" rel="noopener noreferrer" style={{ color: "#8d6e63" }}>{contact.bookingLink}</a></div>}
+              <div><strong>Account Administrator (Private):</strong> {contact.accountAdminName} ({contact.accountAdminEmail}, {contact.accountAdminPhone})</div>
+            </div>
+          )}
+        </div>
+
+        {/* 8. Declaration & Consent */}
+        <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div
+            onClick={() => toggleSection("declarationConsent")}
+            style={{ padding: "16px 20px", background: "#faf7f2", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <CheckCircle2 size={18} color="#8d6e63" />
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#4a352f" }}>
+                8. Declaration & Consent
+              </h3>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleEditSection("declarationConsent"); }}
+                style={{ background: "transparent", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <Edit size={13} /> Edit
+              </button>
+              {expandedSections.declarationConsent ? <ChevronUp size={18} color="#8d6e63" /> : <ChevronDown size={18} color="#8d6e63" />}
+            </div>
+          </div>
+
+          {expandedSections.declarationConsent && (
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: "#4a352f" }}>
+              <div>✓ Accuracy Confirmed: {declaration.accuracy ? "Yes" : "Pending"}</div>
+              <div>✓ Publishing Permissions Confirmed: {declaration.permissionRelationships ? "Yes" : "Pending"}</div>
+              <div>✓ SME Profile Sharing Approved: {declaration.approvePublicProfile ? "Yes" : "Pending"}</div>
+              <div>✓ Platform Terms Accepted: {declaration.acceptTermsPrivacy ? "Yes" : "Pending"}</div>
+              <div>• Opportunity Alerts Consent: {declaration.marketingConsent ? "Opted In" : "Not opted in"}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SME Preview Modal */}
+      <CMFSMEPreviewModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        formData={profile}
+      />
+    </div>
   )
 }
