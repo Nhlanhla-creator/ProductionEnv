@@ -14,8 +14,10 @@ import {
   CheckCircle2, AlertTriangle, XCircle, ClipboardList, Download, RefreshCw, Columns3,
   ExternalLink, Square, CheckSquare, ArrowLeft, Calendar, SlidersHorizontal,
   Database, Sparkles, Sigma, Settings2, EyeOff, Palette, Check, Trash2,
-  FileText, Printer, FileSpreadsheet,
+  FileText, Printer, FileSpreadsheet, Upload,
 } from "lucide-react";
+import { isTestEnvironment, generateKpiCsvTemplate, parseKpiCsv, downloadBlob } from "./shared/csvUploadUtils";
+import CsvUploadModal from "./shared/CsvUploadModal";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -3718,7 +3720,7 @@ const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
    Add Data Wizard — unified grid layout for all tabs
    ════════════════════════════════════════════════════════════════════════ */
 const AddDataWizard = ({
-  tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, currentTabId,
+  tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, onBatchSaveFields, currentTabId,
   meta, dividends, investors, irrInvestments,
   onSaveDividends, onSaveCapTable, onSaveLoans,
   onSaveBsFull, onDeleteLine, onDeleteSection,
@@ -3751,6 +3753,13 @@ const AddDataWizard = ({
 
   const draftRef = useRef(draft);
   useEffect(() => { draftRef.current = draft; }, [draft]);
+
+  // CSV Import state & environment detection
+  const fileInputRef = useRef(null);
+  const [csvParseResult, setCsvParseResult] = useState(null);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [isApplyingCsv, setIsApplyingCsv] = useState(false);
+  const isTestEnv = useMemo(() => isTestEnvironment(), []);
 
   // Refs for accumulating pending writes
   const pendingKpiRef = useRef({});
@@ -3921,6 +3930,122 @@ const AddDataWizard = ({
     onSavePrefs({ tabId, startYear, dailyMonthOffset, weeklyHalf, freqTab, monthCount, monthStart });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, startYear, dailyMonthOffset, weeklyHalf, freqTab, monthCount, monthStart]);
+
+  const activeColumns = useMemo(() => {
+    if (activeSection === "monthly") {
+      return allMonths;
+    }
+    if (activeSection === "weekly") {
+      const startMonth = allMonths[0];
+      const endMonth = allMonths[11];
+      const weeks = [];
+      let cursor = startOfWeek(new Date(startMonth.year, startMonth.month, 1));
+      const endDate = new Date(endMonth.year, endMonth.month + 1, 0);
+      while (cursor <= endDate) {
+        weeks.push({
+          key: weekKeyOf(cursor),
+          label: `${String(cursor.getDate()).padStart(2, "0")} ${MONTHS[cursor.getMonth()]}`,
+          long: `${String(cursor.getDate()).padStart(2, "0")} ${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`,
+        });
+        cursor = addDays(cursor, 7);
+      }
+      return weeks;
+    }
+    if (activeSection === "daily") {
+      const ref = new Date(startYear, dailyMonthOffset, 1);
+      const year = ref.getFullYear(), month = ref.getMonth();
+      const dim = new Date(year, month + 1, 0).getDate();
+      const days = [];
+      for (let d = 1; d <= dim; d++) {
+        const day = new Date(year, month, d);
+        days.push({
+          key: dayKeyOf(day),
+          label: `${String(d).padStart(2, "0")} ${MONTHS[month]}`,
+          long: `${String(d).padStart(2, "0")} ${MONTHS[month]} ${year}`,
+        });
+      }
+      return days;
+    }
+    return [];
+  }, [activeSection, allMonths, startYear, dailyMonthOffset]);
+
+  const activeEditableKpis = useMemo(() => {
+    if (activeSection === "monthly") return kpiRows.monthly.map((r) => r.kpi);
+    if (activeSection === "weekly") return kpiRows.weekly.map((r) => r.kpi);
+    if (activeSection === "daily") return kpiRows.daily.map((r) => r.kpi);
+    return [];
+  }, [activeSection, kpiRows]);
+
+  const activeKpiRows = useMemo(() => {
+    if (activeSection === "monthly") return kpiRows.monthly;
+    if (activeSection === "weekly") return kpiRows.weekly;
+    if (activeSection === "daily") return kpiRows.daily;
+    return [];
+  }, [activeSection, kpiRows]);
+
+  const allSectionKpis = useMemo(() => {
+    if (!tab) return [];
+    return tab.categories.flatMap((c) => c.kpis || []);
+  }, [tab]);
+
+  const handleDownloadTemplate = () => {
+    const csvContent = generateKpiCsvTemplate({
+      tabName: tab?.name || "Section",
+      yearLabel: fyLabel(startYear, fy.startMonth),
+      frequency: activeSection === "weekly" ? "Weekly" : activeSection === "daily" ? "Daily" : "Monthly",
+      columns: activeColumns,
+      kpiRows: activeKpiRows,
+    });
+    const filename = `${(tab?.name || "KPI").replace(/\s+/g, "_")}_${activeSection}_template.csv`;
+    downloadBlob(csvContent, filename);
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result;
+      const res = parseKpiCsv(text, {
+        columns: activeColumns,
+        editableKpis: activeEditableKpis,
+        allKpis: allSectionKpis,
+        currentTabName: tab?.name || "",
+        currentYear: fyLabel(startYear, fy.startMonth),
+      });
+      setCsvParseResult(res);
+      setIsCsvModalOpen(true);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleApplyCsvOverride = async (updates) => {
+    setIsApplyingCsv(true);
+    try {
+      const nextDraft = { ...draftRef.current };
+      updates.forEach((u) => {
+        nextDraft[draftKey(u.kpi.id, u.periodKey, u.which)] = u.raw;
+      });
+      setDraft(nextDraft);
+
+      if (onBatchSaveFields) {
+        await onBatchSaveFields(updates);
+      } else {
+        for (const u of updates) {
+          await onSaveField({ kpi: u.kpi, which: u.which, raw: u.raw, periodKey: u.periodKey });
+        }
+      }
+
+      setIsCsvModalOpen(false);
+      setCsvParseResult(null);
+    } catch (err) {
+      console.error("CSV apply failed", err);
+    } finally {
+      setIsApplyingCsv(false);
+    }
+  };
 
   const yearOptions = [
     { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
@@ -4526,26 +4651,95 @@ const AddDataWizard = ({
         </div>
       </div>
 
-      {sections.length > 0 && (
-        <div style={{ display: "flex", gap: "4px", padding: "4px", borderRadius: "10px",
-          background: T.raised, marginBottom: "14px", flexWrap: "wrap" }}>
-          {sections.map((s) => {
-            const on = activeSection === s.key;
-            return (
-              <button key={s.key} onClick={() => setFreqTab(s.key)}
-                style={{ padding: "8px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 600,
-                  cursor: "pointer", fontFamily: "inherit", border: "none",
-                  display: "inline-flex", alignItems: "center", gap: "8px",
-                  background: on ? T.bg : "transparent", color: on ? T.accent : T.body,
-                  boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
-                {s.label}
-                <span style={{ fontSize: "11px", padding: "1px 8px", borderRadius: "999px",
-                  background: on ? T.accentTint : T.bg, color: on ? T.accent : T.muted, fontWeight: 700 }}>{s.count}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        marginBottom: "14px", flexWrap: "wrap", gap: "10px",
+      }}>
+        {sections.length > 0 && (
+          <div style={{
+            display: "flex", gap: "4px", padding: "4px", borderRadius: "10px",
+            background: T.raised, flexWrap: "wrap",
+          }}>
+            {sections.map((s) => {
+              const on = activeSection === s.key;
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => setFreqTab(s.key)}
+                  style={{
+                    padding: "8px 16px", borderRadius: "8px",
+                    fontSize: "13.5px", fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit", border: "none",
+                    display: "inline-flex", alignItems: "center", gap: "8px",
+                    background: on ? T.bg : "transparent",
+                    color: on ? T.accent : T.body,
+                    boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none",
+                  }}
+                >
+                  {s.label}
+                  <span style={{
+                    fontSize: "11px", padding: "1px 8px", borderRadius: "999px",
+                    background: on ? T.accentTint : T.bg,
+                    color: on ? T.accent : T.muted,
+                    fontWeight: 700,
+                  }}>
+                    {s.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {isTestEnv && activeSection !== "panels" && activeKpiRows.length > 0 && (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{
+              fontSize: "11px", color: T.muted, background: T.amberBg,
+              border: "1px solid #fde68a", padding: "3px 8px", borderRadius: "6px", fontWeight: 600,
+            }}>
+              Test / Demo Env
+            </span>
+            <button
+              onClick={handleDownloadTemplate}
+              title="Download pre-formatted CSV template for this section and frequency"
+              style={{
+                ...btnGhost,
+                fontSize: "12px",
+                padding: "6px 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Download size={13} /> Template CSV
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload CSV to override numeric figures"
+              style={{
+                ...btnGhost,
+                fontSize: "12px",
+                padding: "6px 12px",
+                color: T.green,
+                borderColor: T.green,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                fontWeight: 700,
+              }}
+            >
+              <Upload size={13} /> Upload CSV
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".csv,text/csv"
+              onChange={handleFileUpload}
+              style={{ display: "none" }}
+            />
+          </div>
+        )}
+      </div>
 
       {renderActive()}
 
@@ -4567,6 +4761,17 @@ const AddDataWizard = ({
           Nothing on this section takes direct input.
         </div>
       )}
+
+      <CsvUploadModal
+        isOpen={isCsvModalOpen}
+        onClose={() => {
+          setIsCsvModalOpen(false);
+          setCsvParseResult(null);
+        }}
+        parseResult={csvParseResult}
+        onConfirm={handleApplyCsvOverride}
+        isApplying={isApplyingCsv}
+      />
 
       {chartLine && (() => {
         const labels = allMonths.map(m => m.label);
@@ -4793,7 +4998,81 @@ const FinancialPerformance = () => {
     await writeArrayCell({ docKey: `${DOC[kpi.field.src]}_${year}`, field, monthIndex: month - 1, raw });
   };
 
-  const saveBsFullDoc = async (docKey, nextBsDataOrDoc, isFullDoc = false) => {
+  const batchSaveKpiFields = async (updates) => {
+    if (!user?.uid || isInvestorView || !updates?.length) return;
+    try {
+      const docUpdates = {};
+      const metaEntriesUpdates = {};
+
+      updates.forEach(({ kpi, which, raw, periodKey }) => {
+        const freq = kpi.frequency || "Monthly";
+        if (freq === "Daily" || freq === "Weekly" || kpi.custom) {
+          if (!periodKey) return;
+          if (!metaEntriesUpdates[kpi.id]) metaEntriesUpdates[kpi.id] = {};
+          if (!metaEntriesUpdates[kpi.id][periodKey]) metaEntriesUpdates[kpi.id][periodKey] = {};
+          metaEntriesUpdates[kpi.id][periodKey][which] = parseNum(raw);
+          return;
+        }
+
+        if (!kpi.field) return;
+        const field = which === "actual" ? kpi.field.a : kpi.field.b;
+        if (!field || Array.isArray(field)) return;
+        if (!periodKey || !periodKey.startsWith("M:")) return;
+        const [yearStr, monthStr] = periodKey.slice(2).split("-");
+        const year = Number(yearStr), month = Number(monthStr);
+        if (!Number.isFinite(year) || !Number.isFinite(month)) return;
+        const docKey = `${DOC[kpi.field.src]}_${year}`;
+        if (!docUpdates[docKey]) docUpdates[docKey] = {};
+        if (!docUpdates[docKey][field]) docUpdates[docKey][field] = {};
+        docUpdates[docKey][field][month - 1] = raw;
+      });
+
+      const docPromises = Object.entries(docUpdates).map(async ([docKey, fieldPatches]) => {
+        let nextToPersist = null;
+        setDocs((prev) => {
+          const existing = prev[docKey] || {};
+          const updatedDoc = { ...existing };
+          Object.entries(fieldPatches).forEach(([field, monthPatches]) => {
+            const arr = Array.isArray(existing[field]) ? [...existing[field]] : Array(12).fill("");
+            while (arr.length < 12) arr.push("");
+            Object.entries(monthPatches).forEach(([mIdx, val]) => {
+              arr[Number(mIdx)] = val;
+            });
+            updatedDoc[field] = arr;
+          });
+          nextToPersist = { ...updatedDoc, updatedAt: new Date().toISOString() };
+          return { ...prev, [docKey]: nextToPersist };
+        });
+
+        if (nextToPersist) {
+          await setDoc(doc(db, "users", user.uid, "financialData", docKey), nextToPersist, { merge: true });
+        }
+      });
+
+      let metaPromise = Promise.resolve();
+      if (Object.keys(metaEntriesUpdates).length > 0) {
+        const nextMetaKpis = { ...(meta.kpis || {}) };
+        Object.entries(metaEntriesUpdates).forEach(([kpiId, periodPatches]) => {
+          const existingKpiMeta = nextMetaKpis[kpiId] || {};
+          const existingEntries = { ...(existingKpiMeta.entries || {}) };
+          Object.entries(periodPatches).forEach(([periodKey, whichVals]) => {
+            existingEntries[periodKey] = { ...(existingEntries[periodKey] || {}), ...whichVals };
+          });
+          nextMetaKpis[kpiId] = { ...existingKpiMeta, entries: existingEntries };
+        });
+        metaPromise = persistMeta({ ...meta, kpis: nextMetaKpis });
+      }
+
+      await Promise.all([...docPromises, metaPromise]);
+      notify("success", `Successfully overridden and saved ${updates.length} KPI entries.`);
+    } catch (err) {
+      console.error(err);
+      notify("error", `Could not complete CSV import: ${errText(err)}`);
+      throw err;
+    }
+  };
+
+  const saveBsFullDoc = async (docKey, nextBsData) => {
     if (!user?.uid || isInvestorView) return;
     const year = Number(docKey.split("_").pop());
     let nextToPersist = null;
@@ -5457,6 +5736,7 @@ const FinancialPerformance = () => {
           prefs={dataPrefs} onSavePrefs={savePrefs}
           onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
           onSaveField={saveKpiField}
+          onBatchSaveFields={batchSaveKpiFields}
           meta={meta}
           dividends={dividends} investors={investors} irrInvestments={irrInvestments}
           onSaveDividends={saveDividends}

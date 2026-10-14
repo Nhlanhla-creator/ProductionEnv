@@ -117,6 +117,9 @@ function mapRoleName(role) {
   if (/intern/i.test(normalized)) return 'Interns'
   if (/sme/i.test(normalized) || /small and medium/i.test(normalized) || /sme\/business/i.test(normalized)) return 'SMSEs'
   if (/procurement/i.test(normalized) || /buyer/i.test(normalized)) return 'Procurement'
+  if (/capital.*facilitator|cmf/i.test(normalized)) return 'CapitalMarketFacilitators'
+  if (/program.*sponsor/i.test(normalized)) return 'Program Sponsor'
+  if (/associat/i.test(normalized)) return 'Associator'
   // Return capitalized as default
   return normalized[0].toUpperCase() + normalized.slice(1)
 }

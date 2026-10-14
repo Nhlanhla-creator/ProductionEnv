@@ -104,6 +104,25 @@ service firebase.storage {
     }
 
     // ────────────────────────────────────────────────────────────────
+    // CMF ONBOARDING & DRAFT FILES
+    // ────────────────────────────────────────────────────────────────
+
+    match /cmfDraftFiles/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId) && isUnder10MB();
+    }
+
+    match /cmfOnboardedFiles/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId) && isUnder10MB();
+    }
+
+    match /onboardedFiles/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isUnder10MB();
+    }
+
+    // ────────────────────────────────────────────────────────────────
     // FALLBACK — deny everything else
     // ────────────────────────────────────────────────────────────────
 

@@ -310,11 +310,11 @@ const COLUMN_DEFS = {
 }
 
 const DEFAULT_COLUMN_ORDER = [
-  "supportValue", "bigScore", "startDate", "sector", "location", "teamSize",
-  "applications", "applicationStatus", "status", "dealType", "supportProvided"
+  "supportValue", "bigScore", "sector", "location", "teamSize",
+  "applications", "applicationStatus", "status", "startDate", "dealType", "supportProvided"
 ]
 const DEFAULT_COLUMN_VISIBILITY = {
-  supportValue: false, bigScore: false, startDate: true, status: true, dealType: true,
+  supportValue: false, bigScore: false, startDate: true, status: true, dealType: false,
   sector: true, location: false, teamSize: false, supportProvided: false, applications: true, applicationStatus: true,
 }
 const DEFAULT_DENSITY = "comfortable"
@@ -333,20 +333,31 @@ const EMPTY_FILTERS = {
 // object, with exactly one active at a time. Editing the table edits the
 // active view and auto-saves immediately.
 const BUILTIN_VIEW_ID = "__default__"
-const VIEWS_STORAGE_KEY = "cmf-cohorts-views-v2"
+const VIEWS_STORAGE_KEY = "cmf-cohorts-views-v5"
 const ACTIVE_FILTER_STORAGE_KEY = "cmf-cohorts-active-filter-v1"
 
 const sanitizeColumnOrder = (order) => {
   if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
   const known = new Set(DEFAULT_COLUMN_ORDER)
-  const deduped = order.filter((key) => known.has(key))
-  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key))
-  return [...deduped, ...missing]
+  let list = order.filter((key) => known.has(key))
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !list.includes(key))
+  list = [...list, ...missing]
+
+  // Enforce that startDate is ALWAYS positioned immediately after status (not applicationStatus)
+  const statusIdx = list.indexOf("status")
+  const startDateIdx = list.indexOf("startDate")
+  if (statusIdx !== -1 && startDateIdx !== -1) {
+    list.splice(startDateIdx, 1)
+    const newStatusIdx = list.indexOf("status")
+    list.splice(newStatusIdx + 1, 0, "startDate")
+  }
+
+  return list
 }
 
 const createDefaultViewLayout = () => ({
-  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
-  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, dealType: false },
+  columnOrder: sanitizeColumnOrder([...DEFAULT_COLUMN_ORDER]),
   density: DEFAULT_DENSITY,
   columnWidths: {},
 })
@@ -355,28 +366,41 @@ const createBuiltinDefaultView = () => ({
   id: BUILTIN_VIEW_ID, name: "Default", description: "", builtin: true, ...createDefaultViewLayout(),
 })
 
-const sanitizeView = (view, fallbackId) => ({
-  id: view?.id || fallbackId,
-  name: (view?.name || "Untitled view").toString(),
-  description: (view?.description || "").toString(),
-  builtin: !!view?.builtin,
-  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
-  columnOrder: sanitizeColumnOrder(view?.columnOrder),
-  density: view?.density || DEFAULT_DENSITY,
-  columnWidths: view?.columnWidths || {},
-})
+const sanitizeView = (view, fallbackId) => {
+  const isDefault = !view || view.id === BUILTIN_VIEW_ID || view.builtin
+  const baseVisibility = isDefault
+    ? { ...DEFAULT_COLUMN_VISIBILITY }
+    : { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) }
+  baseVisibility.dealType = false // Always hide dealType by default
+
+  const baseOrder = isDefault ? [...DEFAULT_COLUMN_ORDER] : sanitizeColumnOrder(view?.columnOrder)
+
+  return {
+    id: view?.id || fallbackId,
+    name: (view?.name || "Untitled view").toString(),
+    description: (view?.description || "").toString(),
+    builtin: !!view?.builtin,
+    columnVisibility: baseVisibility,
+    columnOrder: sanitizeColumnOrder(baseOrder),
+    density: view?.density || DEFAULT_DENSITY,
+    columnWidths: view?.columnWidths || {},
+  }
+}
 
 const loadViewsState = () => {
   const freshDefault = () => ({ activeViewId: BUILTIN_VIEW_ID, views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() } })
   if (typeof window === "undefined") return freshDefault()
   try {
+    // Clear out stale cache keys
+    ["cmf-cohorts-views-v1", "cmf-cohorts-views-v2", "cmf-cohorts-views-v3", "cmf-cohorts-views-v4"].forEach((k) => {
+      try { window.localStorage.removeItem(k) } catch {}
+    })
+
     const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null")
     const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {}
     const views = {}
     Object.entries(rawViews).forEach(([id, v]) => { views[id] = sanitizeView(v, id) })
-    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
-      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
-      : createBuiltinDefaultView()
+    views[BUILTIN_VIEW_ID] = createBuiltinDefaultView()
     const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID
     return { activeViewId, views }
   } catch {
@@ -907,8 +931,13 @@ export default function CMFCohorts() {
   // ─── Views (column visibility / order / width / density) ─────────────────
   const [viewsState, setViewsState] = useState(() => loadViewsState())
   const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
-  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
-  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [columnVisibility, setColumnVisibility] = useState(() => {
+    const v = initialActiveView?.columnVisibility || DEFAULT_COLUMN_VISIBILITY
+    return { ...v, dealType: false }
+  })
+  const [columnOrder, setColumnOrder] = useState(() => {
+    return sanitizeColumnOrder(initialActiveView?.columnOrder || DEFAULT_COLUMN_ORDER)
+  })
   const [density, setDensity] = useState(() => initialActiveView.density)
   const [columnWidths, setColumnWidths] = useState(() => initialActiveView.columnWidths || {})
 
@@ -964,6 +993,44 @@ export default function CMFCohorts() {
           (typeof sme.currentStatus === "string" && sme.currentStatus.toLowerCase().includes("active support")) ||
           (typeof sme.pipelineStage === "string" && sme.pipelineStage.toLowerCase().includes("active support"))
         )
+        const resolvedStatus = (isDirectOnboarded && (!sme.currentStatus || sme.currentStatus === "Matched"))
+          ? "Active Support"
+          : (sme.currentStatus || sme.pipelineStage || (isDirectOnboarded ? "Active Support" : "Matched"))
+
+        const statusMeta = getStatusMeta(resolvedStatus)
+        const isActiveSupport = statusMeta.group === "active" || (typeof resolvedStatus === "string" && resolvedStatus.toLowerCase().includes("active support"))
+
+        let startDateVal = null
+        if (isDirectOnboarded) {
+          // Date the cohort was onboarded
+          startDateVal = sme.onboardedAt ||
+            sme.createdAt ||
+            sme.raw?.onboardedAt ||
+            sme.raw?.createdAt ||
+            sme.raw?.registeredAt ||
+            sme.raw?.entityOverview?.createdAt ||
+            sme.applicationDate ||
+            sme.lastActivity ||
+            null
+        } else if (isActiveSupport) {
+          // If "matched" and on active support: date it entered active support
+          const activeHistoryEntry = (sme.statusHistory || sme.raw?.statusHistory || []).find(
+            (h) => (h.newStatus || "").toLowerCase().includes("active")
+          )
+          startDateVal = activeHistoryEntry?.changedAt ||
+            sme.activeSupportDate ||
+            sme.raw?.activeSupportDate ||
+            sme.lastUpdated ||
+            sme.lastActivity ||
+            sme.raw?.updatedAt ||
+            sme.applicationDate ||
+            sme.createdAt ||
+            null
+        } else {
+          // Matched, but not on active support -> Pending
+          startDateVal = "Pending"
+        }
+
         return {
           id: sme.id,
           docId: sme.id,
@@ -972,14 +1039,12 @@ export default function CMFCohorts() {
           dealAmount: sme.fundingRequired || "Not specified",
           dealAmountRaw: sme.fundingAmount || toAmount(sme.fundingRequired),
           dealType: sme.equityOffered ? `Equity (${sme.equityOffered})` : "Not specified",
-          completionDate: sme.applicationDate || null,
+          completionDate: startDateVal,
           sector: formatLabel(sme.sector) || "Not specified",
           location: formatLabel(sme.location) || "Not specified",
           teamSize: sme.teamSize || "Not specified",
           description: sme.supportRequired || sme.reason || "No description available",
-          currentStatus: (isDirectOnboarded && (!sme.currentStatus || sme.currentStatus === "Matched"))
-            ? "Active Support"
-            : (sme.currentStatus || sme.pipelineStage || (isDirectOnboarded ? "Active Support" : "Matched")),
+          currentStatus: resolvedStatus,
           lastUpdated: sme.lastActivity || null,
           dealStructure: "Support Program",
           dealDuration: "Ongoing",
@@ -1574,7 +1639,8 @@ export default function CMFCohorts() {
       const selected = rows.filter((r) => selectedRows.has(r.id))
       const headers = ["Company Name", "Support Value", "Start Date", "Status", "Sector", "Location", "Deal Type"]
       const dataRows = selected.map((c) => [
-        c.smeName, formatCurrency(c.dealAmount), formatDate(c.completionDate),
+        c.smeName, formatCurrency(c.dealAmount),
+        c.completionDate === "Pending" || !c.completionDate ? "Pending" : formatDate(c.completionDate, { fallback: "Pending" }),
         getStatusMeta(c.currentStatus).label, c.sector, c.location, c.dealType,
       ].map((v) => `"${String(v || "").replace(/"/g, '""')}"`).join(","))
       const csv = [headers.join(","), ...dataRows].join("\n")
@@ -2095,8 +2161,20 @@ export default function CMFCohorts() {
     switch (key) {
       case "supportValue":
         return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}><span className="text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span></td>
-      case "startDate":
-        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}><span className="text-[#4a352f]">{formatDate(cohort.completionDate)}</span></td>
+      case "startDate": {
+        const isPending = !cohort.completionDate || cohort.completionDate === "Pending"
+        return (
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}>
+            {isPending ? (
+              <span className="text-[#a89482] italic text-xs font-medium">Pending</span>
+            ) : (
+              <span className="text-[#4a352f] text-xs font-medium">
+                {formatDate(cohort.completionDate, { fallback: "Pending" })}
+              </span>
+            )}
+          </td>
+        )
+      }
       case "sector":
         return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}><span className="text-[#4a352f]">{cohort.sector}</span></td>
       case "location":
@@ -2326,8 +2404,9 @@ export default function CMFCohorts() {
 
   const emptyState = getEmptyStateContent();
 
-  const visibleColumnKeys = columnOrder
+  const visibleColumnKeys = sanitizeColumnOrder(columnOrder)
     .filter((key) => columnVisibility[key])
+    .filter((key) => activeCohortTab === "businesses" ? key !== "dealType" : true)
     .filter((key) => activeCohortTab === "businesses" || key !== "teamSize")
   const allVisibleSelected = filteredCohorts.length > 0 && filteredCohorts.every((c) => selectedRows.has(c.id))
 
@@ -2496,7 +2575,7 @@ export default function CMFCohorts() {
                         </label>
                         <div className="border-t border-[#e6d7c3] my-2" />
                         {DEFAULT_COLUMN_ORDER
-                          .filter((key) => activeCohortTab === "businesses" || key !== "teamSize")
+                          .filter((key) => activeCohortTab === "businesses" ? (key !== "teamSize" && key !== "dealType") : key !== "teamSize")
                           .map((key) => (
                             <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
                               <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
@@ -3050,11 +3129,14 @@ export default function CMFCohorts() {
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
               <button onClick={() => setRowMenu(null)} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
             </div>
-            <button onClick={() => { handleViewGrowthSuite(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
-              <TrendingUp size={12} /> Open Growth Suite
+            <button onClick={() => { handleManagePartnerProfile(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
+              <Settings size={12} /> Manage Profile
             </button>
             <button onClick={() => { handleViewDocuments(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               <FileText size={12} /> View Documents
+            </button>
+            <button onClick={() => { handleViewGrowthSuite(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
+              <TrendingUp size={12} /> Open Growth Suite
             </button>
             <button onClick={() => handleGenerateVoucher(rowMenu.cohort, "premium")} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               <Ticket size={12} /> Generate Voucher
@@ -3068,18 +3150,24 @@ export default function CMFCohorts() {
             <button onClick={() => handleViewDetails(rowMenu.cohort)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               <Eye size={12} /> View Details
             </button>
-            <button onClick={() => { handleManagePartnerProfile(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
-              <Settings size={12} /> Manage Profile
-            </button>
             <button onClick={() => { toggleExpandRow(rowMenu.cohort); setRowMenu(null) }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left">
               {expandedRows.has(rowMenu.cohort.id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               {expandedRows.has(rowMenu.cohort.id) ? "Collapse Row" : "Expand Row"}
             </button>
             <div className="border-t border-[#e6d7c3] my-1" />
-            {activeCohortTab === "businesses" && getStatusMeta(rowMenu.cohort.currentStatus).group !== "declined" && (
+            {activeCohortTab === "businesses" &&
+              getStatusMeta(rowMenu.cohort.currentStatus).group !== "declined" &&
+              getStatusMeta(rowMenu.cohort.currentStatus).group !== "active" &&
+              !String(rowMenu.cohort.currentStatus || "").toLowerCase().includes("active") &&
+              rowMenu.cohort.source !== "onboarded" &&
+              !rowMenu.cohort.isOnboarded &&
+              !rowMenu.cohort.onboardedBy &&
+              !(onboardedUserIds && onboardedUserIds.has(rowMenu.cohort.id)) &&
+              !(typeof rowMenu.cohort.reason === "string" && rowMenu.cohort.reason.toLowerCase().includes("onboarded")) && (
               <button
                 onClick={() => {
-                  if (window.confirm(`Decline ${rowMenu.cohort.smeName}?`)) {
+                  const partnerName = rowMenu.cohort.smeName || rowMenu.cohort.name || "partner";
+                  if (window.confirm(`Decline ${partnerName}?`)) {
                     handleUpdateStatus(rowMenu.cohort.id, "Decline");
                   }
                   setRowMenu(null);

@@ -22,7 +22,23 @@ export const roleRoutes = {
   associators:"/associator-profile",
   associator: "/associator-profile",
   "Capital and Market Facilitator": "/cmf-profile",
+  "Capital and Market Facilitators": "/cmf-profile",
+  "Capital Market Facilitator": "/cmf-profile",
+  "Capital Market Facilitators": "/cmf-profile",
+  "CapitalMarketFacilitator": "/cmf-profile",
+  "CapitalMarketFacilitators": "/cmf-profile",
   CMF: "/cmf-profile",
+  cmf: "/cmf-profile",
+  "CMF Dashboard": "/cmf-profile",
+  Facilitator: "/cmf-profile",
+  Facilitators: "/cmf-profile",
+  "Investor Portal": "/investor-profile",
+  "Intern Dashboard": "/intern-profile",
+  "Advisor Portal": "/advisor-profile",
+  "Catalyst Dashboard": "/support-profile",
+  "SMSE Dashboard": "/profile",
+  "Associator Portal": "/associator-profile",
+  "Procurement Portal": "/procurement/profile",
   Procurement: "/procurement/profile",
   "Procurement Manager": "/procurement/profile",
   Buyer: "/procurement/profile",
@@ -116,11 +132,32 @@ const routeByNormKey = Object.fromEntries(
 export const getRoleRoute = (role) =>
   roleRoutes[role] || routeByNormKey[normKey(role)] || null
 
+const CANONICAL_ALIASES = {
+  admin: "admin", administrator: "admin", superadmin: "admin",
+  sme: "sme", smes: "sme", smse: "sme", smses: "sme", business: "sme", businesses: "sme", npo: "sme", npos: "sme", corporate: "sme", corporates: "sme", smsedashboard: "sme",
+  investor: "investor", investors: "investor", funder: "investor", funders: "investor", investorportal: "investor",
+  catalyst: "catalyst", catalysts: "catalyst", support: "catalyst", supportprogram: "catalyst", accelerator: "catalyst", accelerators: "catalyst", incubator: "catalyst", catalystdashboard: "catalyst",
+  advisor: "advisor", advisors: "advisor", adviser: "advisor", advisers: "advisor", mentor: "advisor", mentors: "advisor", advisorportal: "advisor",
+  intern: "intern", interns: "intern", graduate: "intern", interndashboard: "intern",
+  programsponsor: "programsponsor", programsponsors: "programsponsor", sponsor: "programsponsor",
+  associator: "associator", associators: "associator", association: "associator", associatorportal: "associator",
+  cmf: "cmf", cmfs: "cmf", capitalmarketfacilitator: "cmf", capitalmarketfacilitators: "cmf", capitalandmarketfacilitator: "cmf", capitalandmarketfacilitators: "cmf", capitalmarketsfacilitator: "cmf", marketfacilitator: "cmf", facilitator: "cmf", facilitators: "cmf", cmfdashboard: "cmf",
+  procurement: "procurement", buyer: "procurement", procurementportal: "procurement",
+}
+
 export const isSameRole = (a, b) => {
   if (!a || !b) return false
+  if (a === b) return true
   const ra = getRoleRoute(a)
   const rb = getRoleRoute(b)
-  return ra && rb ? ra === rb : normKey(a) === normKey(b)
+  if (ra && rb && ra === rb) return true
+  const na = normKey(a)
+  const nb = normKey(b)
+  if (na === nb) return true
+  const ca = CANONICAL_ALIASES[na]
+  const cb = CANONICAL_ALIASES[nb]
+  if (ca && cb && ca === cb) return true
+  return false
 }
 
 export const hasRole = (list, role) => (list || []).some((r) => isSameRole(r, role))

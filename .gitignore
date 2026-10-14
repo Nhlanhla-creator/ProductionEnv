@@ -64,4 +64,9 @@ analyzeFundingMatches.js
 fundingMatches.js
 simple-bulk-update.js
 backend/debug-environment.js
-backend/debug-token.js
+backend/debug-token.js
+
+# Docs
+*.docx
+*.pdf
+*.md

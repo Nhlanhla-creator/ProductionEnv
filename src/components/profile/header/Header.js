@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { Mail, Calendar, Settings, LogOut, User, Upload, X, ChevronRight } from "lucide-react"
 import styles from "./Header.module.css"
@@ -36,6 +36,7 @@ function Header({
   portalName = "Portal",
   NotificationComponent,
   roleOptions = [],
+  selectedRole: propSelectedRole = null,
   onRoleSwitch,
   enableAdvancedMessages = true,
   messagesRoute = "/support-messages",
@@ -61,6 +62,41 @@ function Header({
   const roleFromLocalStorage = localStorage.getItem("selectedRole") || null
   const { availableRoles, selectedRole, addRole, switchRole } = useRoles()
   const [newRoleInput, setNewRoleInput] = useState("")
+
+  // Determine active role based on portalName, pathname, or explicit selectedRole
+  const activeRole = useMemo(() => {
+    // 1. Explicit prop passed to Header that matches user's available roles
+    if (propSelectedRole && hasRole(availableRoles, propSelectedRole)) {
+      return availableRoles.find((r) => isSameRole(r, propSelectedRole)) || propSelectedRole
+    }
+    // 2. Portal name passed to Header (e.g. "CMF Dashboard", "Investor Portal", etc.)
+    if (portalName && portalName !== "Portal") {
+      const matchByPortal = availableRoles.find((r) => isSameRole(r, portalName))
+      if (matchByPortal) return matchByPortal
+    }
+    // 3. Current URL route pathname
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
+    if (currentPath && currentPath !== "/") {
+      const matchByPath = availableRoles.find((r) => {
+        const route = getRoleRoute(r)
+        if (!route) return false
+        const segment = route.split("/")[1]
+        return segment && currentPath.includes(segment)
+      })
+      if (matchByPath) return matchByPath
+    }
+    // 4. Fallback to hook's selectedRole or localStorage
+    return selectedRole || roleFromLocalStorage || ""
+  }, [propSelectedRole, portalName, availableRoles, selectedRole, roleFromLocalStorage])
+
+  // Keep localStorage selectedRole aligned with active portal role
+  useEffect(() => {
+    if (activeRole && activeRole !== roleFromLocalStorage) {
+      try {
+        localStorage.setItem("selectedRole", activeRole)
+      } catch (e) {}
+    }
+  }, [activeRole, roleFromLocalStorage])
 
   
   const profileRef = useRef(null)
@@ -622,7 +658,7 @@ const getAvailableRoleOptions = () =>
                   {/* Scrollable roles list */}
                   <div className={styles.rolesList}>
                     {availableRoles.map((role, idx) => {
-  const isCurrent = isSameRole(selectedRole, role)
+  const isCurrent = isSameRole(activeRole, role)
   return (
     <button
       key={idx}

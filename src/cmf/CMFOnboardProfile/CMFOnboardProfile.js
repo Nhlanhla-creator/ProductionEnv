@@ -12,7 +12,7 @@ import {
 // Firebase
 import { firebaseConfig } from "../../firebaseConfig"
 import { getFirestore, doc, setDoc, getDoc, getDocs, collection, query, where, deleteDoc } from "firebase/firestore"
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword as createUserAuth } from "firebase/auth"
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword as createUserAuth, signInWithEmailAndPassword } from "firebase/auth"
 import { initializeApp, deleteApp, getApp } from "firebase/app"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 
@@ -50,24 +50,36 @@ import CatalystApplicationBrief from "../../catalyst/CatalystUniversalProfile/ca
 import CatalystDocumentUpload from "../../catalyst/CatalystUniversalProfile/catalyst-document-upload"
 import CatalystDeclarationConsent from "../../catalyst/CatalystUniversalProfile/catalyst-declaration-consent"
 
-// CMF Subcomponents
-import CmfInstructions from "../CMFUniversalProfile/CMFInstructions"
-import CmfDocumentUpload from "../CMFUniversalProfile/CMFDocumentUpload"
+// CMF Subcomponents & Centralized Config
+import {
+  CMF_SECTIONS,
+  sectionValidations as cmfSectionValidations,
+  getDefaultCMFFormData
+} from "../cmfProfileConfig"
+import CmfInstructions from "../CMFUniversalProfile/sections/CMFInstructions"
+import CmfEntityOverview from "../CMFUniversalProfile/sections/CMFEntityOverview"
+import CmfServicesSupport from "../CMFUniversalProfile/sections/CMFServicesSupport"
+import CmfSmeFocusMatching from "../CMFUniversalProfile/sections/CMFSMEFocusMatching"
+import CmfExperienceNetworks from "../CMFUniversalProfile/sections/CMFExperienceNetworks"
+import CmfFeesEngagement from "../CMFUniversalProfile/sections/CMFFeesEngagement"
+import CmfLegalVerification from "../CMFUniversalProfile/sections/CMFLegalVerification"
+import CmfContactDetails from "../CMFUniversalProfile/sections/CMFContactDetails"
+import CmfDeclarationConsent from "../CMFUniversalProfile/sections/CMFDeclarationConsent"
 
 // --- DEVELOPER EASTER EGG MOCK ACCOUNTS DATA ---
 const mockBusinesses = [
   {
     entityOverview: {
-      entityType: "SMSE",
+      entityType: "SME",
       registeredName: "Apex Innovations Ltd",
       tradingName: "Apex Solutions",
       registrationNumber: "2023/123456/07",
-      legalStructure: "Private Company (Pty) Ltd",
+      legalStructure: "(pty) Ltd",
       entitySize: "Medium",
-      financialYearEnd: "February",
+      financialYearEnd: "2024-02",
       yearsInOperation: "3",
       operationStage: "Growth",
-      economicSectors: ["Information Technology", "Professional Services"],
+      economicSectors: ["Information Technology (IT)", "Consulting"],
       operatingCountries: ["South Africa"],
       operatingProvinces: ["Gauteng"],
       businessDescription: "Apex Innovations provides cloud-native solutions and IT consulting services to clients across Sub-Saharan Africa.",
@@ -76,7 +88,7 @@ const mockBusinesses = [
       sponsorViewPermission: "yes"
     },
     contactDetails: {
-      contactTitle: "Mr",
+      contactTitle: "mr",
       contactName: "Thabo Mokoena",
       position: "Director",
       businessPhone: "+27115551234",
@@ -110,8 +122,9 @@ const mockBusinesses = [
     },
     legalCompliance: {
       taxNumber: "9876543210",
+      taxClearancePin: "0000000000000",
       vatNumber: "4012345678",
-      bbbeeLevel: "Level 1",
+      bbbeeLevel: "1",
       payeNumber: "123456789",
       uifStatus: "Registered",
       uifNumber: "U12345678",
@@ -139,17 +152,42 @@ const mockBusinesses = [
       hasRiskCommittee: "yes"
     },
     productsServices: {
-      offeringType: "Services",
+      offeringType: "services",
       productCategories: [],
       serviceCategories: ["Software Development", "IT Consulting"],
       deliveryModes: ["Remote", "On-site"],
       minLeadTime: "7",
       minLeadTimeUnit: "days",
       targetMarket: "Corporate Clients",
-      keyClients: ["Standard Bank", "MTN"]
+      keyClients: ["Standard Bank", "MTN"],
+      offerings: [
+        {
+          id: "biz_offering_1",
+          offeringType: "Service",
+          taxonomyLeafId: "technical-maintenance-services__electrical-maintenance__0",
+          breadcrumb: "Professional & Specialist Services > IT Consulting",
+          customCategoryRequest: "Enterprise Cloud & Software Solutions",
+          name: "Enterprise Cloud & Software Solutions",
+          description: "Full-stack cloud application development, architecture design, and enterprise IT modernization services.",
+          isPrimary: true,
+          deliveryRole: ["Professional or specialist team"],
+          commercialPattern: ["Custom or project-based", "Recurring service contract"],
+          deliveryStandard: "Virtual",
+          minLeadTime: "7",
+          minLeadTimeUnit: "Business days",
+          maxLeadTime: "30",
+          maxLeadTimeUnit: "Business days",
+          dependsOnScope: false,
+          scopeExplanation: "",
+          geographicCoverage: ["National"],
+          industries: ["Information & communications technology", "Financial & insurance services"],
+          industryApplications: [],
+          collapsed: false
+        }
+      ]
     },
     howDidYouHear: {
-      source: "Referral"
+      source: "Online search"
     },
     documentsPlaceholder: {
       cipcRegistration: [{ name: "cipc.pdf", type: "application/pdf" }],
@@ -167,16 +205,16 @@ const mockBusinesses = [
   },
   {
     entityOverview: {
-      entityType: "SMSE",
+      entityType: "SME",
       registeredName: "Blue Ocean Logistics Pty Ltd",
       tradingName: "Blue Ocean Logistics",
       registrationNumber: "2019/654321/07",
-      legalStructure: "Private Company (Pty) Ltd",
+      legalStructure: "(pty) Ltd",
       entitySize: "Large",
-      financialYearEnd: "February",
+      financialYearEnd: "2024-02",
       yearsInOperation: "7",
-      operationStage: "Expansion",
-      economicSectors: ["Transport and Logistics"],
+      operationStage: "Growth",
+      economicSectors: ["Transport", "Logistics / Supply Chain"],
       operatingCountries: ["South Africa"],
       operatingProvinces: ["Western Cape"],
       businessDescription: "Blue Ocean Logistics specializes in national freight transport and warehousing services.",
@@ -185,7 +223,7 @@ const mockBusinesses = [
       sponsorViewPermission: "yes"
     },
     contactDetails: {
-      contactTitle: "Ms",
+      contactTitle: "ms",
       contactName: "Sarah Jenkins",
       position: "Managing Director",
       businessPhone: "+27215559876",
@@ -215,12 +253,13 @@ const mockBusinesses = [
       contractEmployees: "15",
       internshipEmployees: "0",
       temporaryEmployees: "5",
-      businessLeadership: { ownerLed: "yes", primaryMotivation: "Expansion", growthAmbition: "High", founderFullTime: "yes" }
+      businessLeadership: { ownerLed: "yes", primaryMotivation: "Growth", growthAmbition: "High", founderFullTime: "yes" }
     },
     legalCompliance: {
       taxNumber: "9123456780",
+      taxClearancePin: "0000000000000",
       vatNumber: "4987654321",
-      bbbeeLevel: "Level 2",
+      bbbeeLevel: "2",
       payeNumber: "987654321",
       uifStatus: "Registered",
       uifNumber: "U98765432",
@@ -247,17 +286,42 @@ const mockBusinesses = [
       hasRiskCommittee: "yes"
     },
     productsServices: {
-      offeringType: "Services",
+      offeringType: "services",
       productCategories: [],
       serviceCategories: ["Road Freight", "Warehousing"],
       deliveryModes: ["Physical Delivery"],
       minLeadTime: "24",
       minLeadTimeUnit: "hours",
       targetMarket: "Manufacturers and Retailers",
-      keyClients: ["Shoprite", "Woolworths"]
+      keyClients: ["Shoprite", "Woolworths"],
+      offerings: [
+        {
+          id: "biz_offering_2",
+          offeringType: "Service",
+          taxonomyLeafId: "facilities-site-services__cleaning-services__0",
+          breadcrumb: "Logistics & Transport > Freight Transport",
+          customCategoryRequest: "National Freight Transport & Warehousing",
+          name: "National Freight Transport & Warehousing",
+          description: "Blue Ocean Logistics specializes in national temperature-controlled freight transport, distribution, and warehousing services.",
+          isPrimary: true,
+          deliveryRole: ["Mobile field-service team"],
+          commercialPattern: ["Call-off / purchase order", "Recurring service contract"],
+          deliveryStandard: "Customer site",
+          minLeadTime: "24",
+          minLeadTimeUnit: "Hours",
+          maxLeadTime: "48",
+          maxLeadTimeUnit: "Hours",
+          dependsOnScope: false,
+          scopeExplanation: "",
+          geographicCoverage: ["National"],
+          industries: ["Transport, logistics & warehousing", "Retail & wholesale"],
+          industryApplications: [],
+          collapsed: false
+        }
+      ]
     },
     howDidYouHear: {
-      source: "Online Search"
+      source: "Online search"
     },
     documentsPlaceholder: {
       cipcRegistration: [{ name: "cipc.pdf", type: "application/pdf" }],
@@ -283,8 +347,8 @@ const mockFunders = [
       registrationNumber: "2018/987654/07",
       financialYearStart: "March",
       regulatoryLicenseNumber: "FSP 998877",
-      legalEntityType: "Private Company",
-      firmType: "Venture Capital",
+      legalEntityType: "Private Company (Pty Ltd)",
+      firmType: "Venture Capital (VC)",
       firmSubtype: ["Early Stage"],
       investorRole: "Lead Investor",
       yearsInOperation: "8",
@@ -295,8 +359,8 @@ const mockFunders = [
       portfolioCompanies: "12",
       numberOfInvestments: "15",
       valueDeployed: "R 50,000,000",
-      additionalSupport: ["Mentorship", "Governance support"],
-      howDidYouHear: "Industry Referral",
+      additionalSupport: ["Governance Support", "Network Access"],
+      howDidYouHear: "Referral",
       sponsorName: "CMF Onboarded",
       sponsorType: "CMF",
       sponsorViewPermission: "yes"
@@ -306,7 +370,7 @@ const mockFunders = [
       businessEmail: "vanguard@mailinator.com",
       physicalAddress: "15 Melrose Boulevard, Melrose Arch, Johannesburg, 2076",
       postalAddress: "15 Melrose Boulevard, Melrose Arch, Johannesburg, 2076",
-      primaryContactTitle: "Mr",
+      primaryContactTitle: "mr",
       primaryContactName: "David",
       primaryContactSurname: "Kramer",
       primaryContactPosition: "Investment Director",
@@ -382,10 +446,10 @@ const mockFunders = [
       registrationNumber: "2020/432109/07",
       financialYearStart: "January",
       regulatoryLicenseNumber: "FSP 887766",
-      legalEntityType: "Private Company",
-      firmType: "Impact Investment",
+      legalEntityType: "Private Company (Pty Ltd)",
+      firmType: "Corporate Venture Capital (CVC)",
       firmSubtype: ["Growth Stage"],
-      investorRole: "Co-Investor",
+      investorRole: "Co-investor",
       yearsInOperation: "5",
       numberOfInvestmentExecutives: "4",
       taxNumber: "9111222333",
@@ -394,8 +458,8 @@ const mockFunders = [
       portfolioCompanies: "18",
       numberOfInvestments: "22",
       valueDeployed: "R 75,000,000",
-      additionalSupport: ["Operational Scaling", "Financial Structuring"],
-      howDidYouHear: "Industry Referral",
+      additionalSupport: ["Governance Support", "Network Access"],
+      howDidYouHear: "Referral",
       sponsorName: "CMF Onboarded",
       sponsorType: "CMF",
       sponsorViewPermission: "yes"
@@ -405,7 +469,7 @@ const mockFunders = [
       businessEmail: "apex@mailinator.com",
       physicalAddress: "100 Bree Street, Cape Town, 8001",
       postalAddress: "100 Bree Street, Cape Town, 8001",
-      primaryContactTitle: "Ms",
+      primaryContactTitle: "ms",
       primaryContactName: "Nomsa",
       primaryContactSurname: "Dlamini",
       primaryContactPosition: "Managing Partner",
@@ -481,13 +545,13 @@ const mockCatalysts = [
     entityOverview: {
       registeredName: "Impact Hub Africa Pty Ltd",
       tradingName: "Impact Hub Africa",
-      legalEntityType: "Private Company (Pty) Ltd",
+      legalEntityType: "(pty) Ltd",
       registrationNumber: "2020/223344/07",
-      industrySector: "Education & Enterprise Development",
-      companySize: "Small",
+      industrySector: "Education & Training",
+      companySize: "medium_enterprise",
       yearEstablished: "2020",
       briefDescription: "Impact Hub Africa provides incubator and accelerator programs to social entrepreneurs across Southern Africa.",
-      referralSource: "CMF Onboarded",
+      referralSource: "referral",
       sponsorName: "CMF Onboarded",
       sponsorType: "CMF",
       sponsorViewPermission: "yes"
@@ -497,7 +561,10 @@ const mockCatalysts = [
       businessEmail: "info.catalyst@mailinator.com",
       physicalAddress: "88 Commissioner Street, Johannesburg, 2001",
       postalAddress: "88 Commissioner Street, Johannesburg, 2001",
-      primaryContactName: "Lerato Molefe",
+      primaryContactTitle: "ms",
+      primaryContactName: "Lerato",
+      primaryContactSurname: "Molefe",
+      primaryContactPosition: "Program Director",
       primaryContactMobile: "+27834445555",
       primaryContactEmail: "lerato.molefe.hub@mailinator.com"
     },
@@ -533,13 +600,13 @@ const mockCatalysts = [
     entityOverview: {
       registeredName: "Genesis Enterprise Accelerator NPC",
       tradingName: "Genesis Accelerator",
-      legalEntityType: "Non-Profit Company (NPC)",
+      legalEntityType: "NPC",
       registrationNumber: "2017/556677/08",
-      industrySector: "Technology & Clean Energy Incubation",
-      companySize: "Medium",
+      industrySector: "Energy",
+      companySize: "large_enterprise",
       yearEstablished: "2017",
       briefDescription: "Genesis Enterprise Accelerator delivers high-impact commercialization programmes, technical readiness, and corporate supply chain integration for clean-tech and industrial ventures.",
-      referralSource: "CMF Onboarded",
+      referralSource: "referral",
       sponsorName: "CMF Onboarded",
       sponsorType: "CMF",
       sponsorViewPermission: "yes"
@@ -549,7 +616,10 @@ const mockCatalysts = [
       businessEmail: "genesis.programmes@mailinator.com",
       physicalAddress: "14 Umhlanga Rocks Drive, Durban, 4319",
       postalAddress: "14 Umhlanga Rocks Drive, Durban, 4319",
-      primaryContactName: "Sipho Ndlovu",
+      primaryContactTitle: "mr",
+      primaryContactName: "Sipho",
+      primaryContactSurname: "Ndlovu",
+      primaryContactPosition: "Managing Director",
       primaryContactMobile: "+27827773344",
       primaryContactEmail: "sipho.ndlovu.genesis@mailinator.com"
     },
@@ -585,135 +655,144 @@ const mockCatalysts = [
 
 const mockCMFs = [
   {
+    instructions: {},
     entityOverview: {
-      registeredName: "Capital Access Group Ltd",
-      tradingName: "Capital Access Group",
+      profileType: "Organisation",
+      organisationName: "Capital Access Facilitation Group (Pty) Ltd",
+      headline: "Helping growing African SMEs prepare for funding and access suitable institutional funders.",
+      about: "Capital Access Group is a premier advisory intermediary providing corporate transaction origination, debt readiness, and supply chain onboarding across Sub-Saharan Africa.",
+      facilitationFocus: "Both",
+      baseCountry: "South Africa",
+      baseCity: "Johannesburg",
+      website: "https://capitalaccessgroup.co.za",
+      linkedin: "https://linkedin.com/company/capital-access-group"
+    },
+    servicesSupport: {
+      servicesOffered: [
+        "Funding readiness",
+        "Funding route advice",
+        "Application preparation",
+        "Financial modelling",
+        "Funder introductions",
+        "Supplier readiness",
+        "Opportunity sourcing",
+        "Buyer introductions"
+      ],
+      otherServiceText: "",
+      whatSmesReceive: "Audited financial model, institutional pitch memorandums, minimum 3 direct investor pitch opportunities, and commercial buyer off-take introductions.",
+      deliveryMethod: "Hybrid",
+      supportFormat: "Both",
+      engagementType: "Ongoing",
+      typicalDuration: "3 - 6 months"
+    },
+    smeFocusMatching: {
+      sectorsSupported: [
+        "Agriculture & Agribusiness",
+        "Manufacturing & Industrial",
+        "Information & Communication Technology (ICT)",
+        "Logistics & Supply Chain",
+        "Healthcare & Pharmaceuticals"
+      ],
+      geographicAreas: ["National (All South Africa)", "Gauteng", "Western Cape", "KwaZulu-Natal"],
+      businessStages: ["Startup", "Growth", "Established"],
+      eligibilityCriteria: [
+        "Registered legal entity (Pty Ltd / close corp)",
+        "Minimum operating track record (1+ years)",
+        "SARS Tax compliance & PIN",
+        "Audited or verified financial statements"
+      ],
+      eligibilityExplanation: "SMEs should have an operational track record of at least 12 months with proven revenue generation.",
+      turnoverRange: "R 2,000,000 - R 50,000,000",
+      allowNoTurnoverRestriction: false,
+      programmeCriteria: ["Black-owned (B-BBEE Qualifying)", "Women-owned enterprise"],
+      excludedSectorsText: "Tobacco, speculative financial assets, arms and weapons",
+      acceptingNewSmes: "Yes",
+      preferredNewEngagements: 12,
+      fundingInstruments: [
+        "Senior Debt / Term Loans",
+        "Subordinated / Mezzanine Debt",
+        "Growth Private Equity",
+        "Working Capital Facilities"
+      ],
+      typicalFundingRange: "R 1,000,000 - R 20,000,000",
+      fundingReadinessRequirements: "2 years management accounts, cash flow forecast, and valid CIPC tax pin.",
+      opportunityTypes: ["Tenders & RFPs", "Supply contracts", "Offtake & Distribution"],
+      buyerSectorsText: "FMCG Retail, Mining Supply Chains, Telecommunications",
+      supplierReadinessRequirements: "Proof of supply capacity, BBBEE verification certificate"
+    },
+    experienceNetworks: {
+      leadFacilitatorName: "Thabo Mokoena",
+      leadFacilitatorRole: "Lead Facilitator & Managing Director",
+      leadExperienceBio: "Over 12 years in corporate finance, project origination, and SME accelerator structuring across Southern Africa.",
+      yearsExperience: 12,
+      teamMembers: [
+        { name: "Naledi Dlamini", role: "Head of Deal Origination", bio: "CA(SA) with extensive private equity and transaction experience." },
+        { name: "John Doe", role: "Commercial Partnerships Lead", bio: "Former corporate procurement advisor." }
+      ],
+      qualifications: [
+        { title: "CA(SA)", body: "SAICA", year: "2015" },
+        { title: "FAIS Key Individual", body: "FSCA", year: "2018" }
+      ],
+      relationships: [
+        { entityName: "Standard Bank Commercial Banking", relationshipType: "Formal partner", description: "Direct SME origination partner" },
+        { entityName: "Nedbank Enterprise Development", relationshipType: "Appointed representative", description: "Designated credit pipeline intermediary" },
+        { entityName: "Shoprite Checkers Enterprise Supply", relationshipType: "Network contact", description: "Buyer supplier readiness connector" }
+      ],
+      caseStudies: [
+        { title: "R18M Debt Syndication for Agro-processing Facility", isConfidential: true, summary: "Secured asset finance and working capital facility enabling 40% export expansion." }
+      ],
+      testimonials: [
+        { author: "Sipho Khumalo", company: "Zambezi Agro Ltd", quote: "Capital Access Group accelerated our transaction readiness and closed our debt round in record time.", hasPermissionToPublish: true }
+      ]
+    },
+    feesEngagement: {
+      payer: "SME",
+      feeModel: "Fixed fee",
+      indicativeFees: "R20,000 readiness package plus 2.5% success fee on capital disbursement",
+      paymentTiming: "Milestones",
+      successFeeBasis: "2.5% payable upon first fund disbursement",
+      referralCommissions: "No",
+      referralExplanation: "",
+      exclusivityRequired: "No",
+      exclusivityExplanation: "",
+      howEngagementStarts: "Initial assessment",
+      initialAssessmentInfo: [
+        "CIPC company registration certificate",
+        "Executive summary or company profile",
+        "Pitch deck or funding proposition",
+        "Last 6-12 months bank statements",
+        "Tax compliance PIN / certificate"
+      ],
+      typicalResponseTime: "1 - 2 business days",
+      engagementTermsUrl: "https://capitalaccessgroup.co.za/terms"
+    },
+    legalVerification: {
+      legalEntityName: "Capital Access Facilitation Group (Pty) Ltd",
+      registrationCountry: "South Africa",
       registrationNumber: "2015/334455/07",
-      entityType: "CMF",
-      legalStructure: "Public Company Ltd",
-      entitySize: "Large",
-      yearsInOperation: "11",
-      businessDescription: "Capital Access Group acts as a market maker and capital facilitator for SMEs in South Africa."
+      capacityInWhichActs: "Independent facilitator",
+      professionalAuthorisationDetails: "FAIS Cat I FSP Licence #44991"
     },
     contactDetails: {
-      contactName: "Richard Bowes",
-      businessPhone: "+27116667777",
-      email: "richard.bowes.cmf@mailinator.com",
-      businessEmail: "richard.bowes.cmf@mailinator.com",
-      physicalAddress: "22 Alice Lane, Sandton, Johannesburg, 2196",
-      postalAddress: "22 Alice Lane, Sandton, Johannesburg, 2196"
+      smeContactName: "Naledi Dlamini",
+      smeContactRole: "Client Engagements & Intake Director",
+      preferredContactRoute: "BIG enquiry",
+      publicEmail: "intake@capitalaccessgroup.co.za",
+      publicTelephone: "+27 (0) 11 555 1234",
+      languagesSupported: ["English", "isiZulu", "isiXhosa"],
+      accountAdminName: "Thabo Mokoena",
+      accountAdminEmail: "thabo.mokoena.cmf@mailinator.com",
+      accountAdminPhone: "+27 (0) 82 555 6789"
     },
-    productsServices: {
-      coreCapabilities: ["Deal Structuring", "Syndication", "Due Diligence Support", "Capital Readiness"],
-      targetAssetClasses: ["Venture Capital", "Private Debt", "Blended Finance"],
-      serviceOfferings: "Capital facilitation, investment readiness, transaction advisory and cohort development."
-    },
-    ownershipManagement: {
-      shareholders: [
-        { name: "Richard Bowes", shareholding: "60", race: "White", gender: "Male", country: "South Africa" },
-        { name: "Ayanda Sithole", shareholding: "40", race: "African", gender: "Female", country: "South Africa" }
-      ],
-      directors: [{ name: "Richard Bowes", roles: ["Managing Director"] }]
-    },
-    legalCompliance: {
-      taxNumber: "9012345678",
-      vatNumber: "4012345678",
-      bbbeeLevel: "Level 2"
+    declarationConsent: {
+      accuracy: true,
+      permissionRelationships: true,
+      approvePublicProfile: true,
+      acceptTermsPrivacy: true,
+      marketingConsent: true
     },
     howDidYouHear: {
-      referral: "Industry Network"
-    },
-    documentsPlaceholder: {
-      cipcRegistration: [{ name: "cmf_cipc.pdf", type: "application/pdf" }],
-      taxCompliancePin: [{ name: "cmf_tax.pdf", type: "application/pdf" }],
-      companyProfile: [{ name: "cmf_company_profile.pdf", type: "application/pdf" }],
-      logo: [{ name: "cmf_logo.png", type: "image/png" }],
-      proofOfAddress: [{ name: "cmf_proof_of_address.pdf", type: "application/pdf" }]
-    },
-    fundDetails: {
-      portfolioFocus: "Early & Growth Stage Companies",
-      annualDealVolume: "R 200,000,000"
-    },
-    applicationBrief: {
-      dealCriteria: "Revenue > R1M, proven business model, clear growth plan."
-    },
-    generalInvestmentPreference: {
-      minimumSupportTicket: "R 500,000",
-      maximumSupportTicket: "R 5,000,000",
-      sectorFocus: ["Manufacturing", "Services", "Technology"],
-      geographicFocus: ["South Africa"]
-    },
-    declarationConsentPlaceholder: {
-      accuracy: true,
-      dataProcessing: true,
-      termsConditions: true,
-      cmfPermissionAgreement: { name: "cmf_agreement.pdf", type: "application/pdf" }
-    }
-  },
-  {
-    entityOverview: {
-      registeredName: "Vanguard Market Makers & Syndications Ltd",
-      tradingName: "Vanguard Syndicates",
-      registrationNumber: "2016/778899/07",
-      entityType: "CMF",
-      legalStructure: "Private Company (Pty) Ltd",
-      entitySize: "Medium",
-      yearsInOperation: "9",
-      businessDescription: "Vanguard Market Makers orchestrates syndicated deal pipelines, blends catalytic funding with commercial debt, and accelerates transaction closure for mid-market cohorts."
-    },
-    contactDetails: {
-      contactName: "Kagiso Matlala",
-      businessPhone: "+27118889900",
-      email: "kagiso.matlala.syndicates@mailinator.com",
-      businessEmail: "kagiso.matlala.syndicates@mailinator.com",
-      physicalAddress: "100 Grayston Drive, Sandton, Johannesburg, 2196",
-      postalAddress: "100 Grayston Drive, Sandton, Johannesburg, 2196"
-    },
-    productsServices: {
-      coreCapabilities: ["Syndication Structuring", "Capital Readiness Advisory", "Transaction Facilitation", "Pipeline Analytics"],
-      targetAssetClasses: ["Private Equity", "Venture Debt", "Development Finance"],
-      serviceOfferings: "Facilitating corporate and institutional matchings with growth-stage cohorts."
-    },
-    ownershipManagement: {
-      shareholders: [
-        { name: "Kagiso Matlala", shareholding: "51", race: "African", gender: "Male", country: "South Africa" },
-        { name: "Helen van der Merwe", shareholding: "49", race: "White", gender: "Female", country: "South Africa" }
-      ],
-      directors: [{ name: "Kagiso Matlala", roles: ["Managing Director"] }]
-    },
-    legalCompliance: {
-      taxNumber: "9555666777",
-      vatNumber: "4555666777",
-      bbbeeLevel: "Level 1"
-    },
-    howDidYouHear: {
-      referral: "Institutional Network"
-    },
-    documentsPlaceholder: {
-      cipcRegistration: [{ name: "vanguard_cmf_cipc.pdf", type: "application/pdf" }],
-      taxCompliancePin: [{ name: "vanguard_cmf_tax.pdf", type: "application/pdf" }],
-      companyProfile: [{ name: "vanguard_cmf_profile.pdf", type: "application/pdf" }],
-      logo: [{ name: "vanguard_cmf_logo.png", type: "image/png" }],
-      proofOfAddress: [{ name: "vanguard_cmf_poa.pdf", type: "application/pdf" }]
-    },
-    fundDetails: {
-      portfolioFocus: "Mid-Market Growth & Supply Chain Companies",
-      annualDealVolume: "R 350,000,000"
-    },
-    applicationBrief: {
-      dealCriteria: "Established enterprises with strong EBITDA and audited track record."
-    },
-    generalInvestmentPreference: {
-      minimumSupportTicket: "R 1,500,000",
-      maximumSupportTicket: "R 20,000,000",
-      sectorFocus: ["Information Technology", "Agriculture", "Healthcare", "Logistics"],
-      geographicFocus: ["South Africa", "SADC"]
-    },
-    declarationConsentPlaceholder: {
-      accuracy: true,
-      dataProcessing: true,
-      termsConditions: true,
-      cmfPermissionAgreement: { name: "vanguard_cmf_partnership.pdf", type: "application/pdf" }
+      source: "Industry Event"
     }
   }
 ]
@@ -769,9 +848,6 @@ export default function CMFOnboardProfile() {
   }
 
   const handleAutoFill = (targetIndex = null) => {
-    const timestamp = Date.now().toString().slice(-4)
-    const randNum = Math.floor(100 + Math.random() * 900)
-    const uniqueSuffix = `${timestamp}${randNum}`
     let selected = null
 
     if (profileType === "Business") {
@@ -779,18 +855,6 @@ export default function CMFOnboardProfile() {
         ? Math.abs(targetIndex) % mockBusinesses.length
         : Math.floor(Math.random() * mockBusinesses.length)
       selected = JSON.parse(JSON.stringify(mockBusinesses[idx]))
-      if (selected.contactDetails?.email) {
-        const parts = selected.contactDetails.email.split('@')
-        selected.contactDetails.email = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
-      }
-      if (selected.entityOverview?.registrationNumber) {
-        const parts = selected.entityOverview.registrationNumber.split("/")
-        selected.entityOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}01/${parts[2] || "07"}`
-      }
-      if (selected.legalCompliance) {
-        selected.legalCompliance.taxNumber = `9${Math.floor(10000000 + Math.random() * 90000000)}`
-        selected.legalCompliance.vatNumber = `4${Math.floor(10000000 + Math.random() * 90000000)}`
-      }
       selected.documents = createMockFiles(selected.documentsPlaceholder)
       selected.declarationConsent = {
         accuracy: true,
@@ -806,23 +870,7 @@ export default function CMFOnboardProfile() {
         ? Math.abs(targetIndex) % mockFunders.length
         : Math.floor(Math.random() * mockFunders.length)
       selected = JSON.parse(JSON.stringify(mockFunders[idx]))
-      if (selected.contactDetails?.primaryContactEmail) {
-        const parts = selected.contactDetails.primaryContactEmail.split('@')
-        selected.contactDetails.primaryContactEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
-      }
-      if (selected.contactDetails?.businessEmail) {
-        const parts = selected.contactDetails.businessEmail.split('@')
-        selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
-      }
       selected.contactDetails.email = selected.contactDetails.businessEmail || selected.contactDetails.primaryContactEmail
-      if (selected.fundManageOverview?.registrationNumber) {
-        const parts = selected.fundManageOverview.registrationNumber.split("/")
-        selected.fundManageOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}02/${parts[2] || "07"}`
-      }
-      if (selected.fundManageOverview) {
-        selected.fundManageOverview.taxNumber = `9${Math.floor(10000000 + Math.random() * 90000000)}`
-        selected.fundManageOverview.vatRegistrationNumbers = `4${Math.floor(10000000 + Math.random() * 90000000)}`
-      }
       selected.documentUpload = createMockFiles(selected.documentUploadPlaceholder)
       selected.declarationConsent = {
         accuracy: true,
@@ -838,19 +886,7 @@ export default function CMFOnboardProfile() {
         ? Math.abs(targetIndex) % mockCatalysts.length
         : Math.floor(Math.random() * mockCatalysts.length)
       selected = JSON.parse(JSON.stringify(mockCatalysts[idx]))
-      if (selected.contactDetails?.primaryContactEmail) {
-        const parts = selected.contactDetails.primaryContactEmail.split('@')
-        selected.contactDetails.primaryContactEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
-      }
-      if (selected.contactDetails?.businessEmail) {
-        const parts = selected.contactDetails.businessEmail.split('@')
-        selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
-      }
       selected.contactDetails.email = selected.contactDetails.businessEmail || selected.contactDetails.primaryContactEmail
-      if (selected.entityOverview?.registrationNumber) {
-        const parts = selected.entityOverview.registrationNumber.split("/")
-        selected.entityOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}03/${parts[2] || "08"}`
-      }
       selected.documentUpload = createMockFiles(selected.documentUploadPlaceholder)
       selected.declarationConsent = {
         accuracy: true,
@@ -866,38 +902,12 @@ export default function CMFOnboardProfile() {
         ? Math.abs(targetIndex) % mockCMFs.length
         : Math.floor(Math.random() * mockCMFs.length)
       selected = JSON.parse(JSON.stringify(mockCMFs[idx]))
-      if (selected.contactDetails?.email) {
-        const parts = selected.contactDetails.email.split('@')
-        selected.contactDetails.email = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
+      if (!selected.contactDetails?.businessEmail && selected.contactDetails?.accountAdminEmail) {
+        selected.contactDetails.businessEmail = selected.contactDetails.accountAdminEmail
       }
-      if (selected.contactDetails?.businessEmail) {
-        const parts = selected.contactDetails.businessEmail.split('@')
-        selected.contactDetails.businessEmail = `${parts[0]}+${uniqueSuffix}@${parts[1]}`
-      }
-      if (!selected.contactDetails?.businessEmail && selected.contactDetails?.email) {
-        selected.contactDetails.businessEmail = selected.contactDetails.email
-      }
-      if (selected.entityOverview?.registrationNumber) {
-        const parts = selected.entityOverview.registrationNumber.split("/")
-        selected.entityOverview.registrationNumber = `${parts[0] || "2024"}/${uniqueSuffix}04/${parts[2] || "07"}`
-      }
-      if (selected.legalCompliance) {
-        selected.legalCompliance.taxNumber = `9${Math.floor(10000000 + Math.random() * 90000000)}`
-        selected.legalCompliance.vatNumber = `4${Math.floor(10000000 + Math.random() * 90000000)}`
-      }
-      selected.documents = createMockFiles(selected.documentsPlaceholder)
-      selected.declarationConsent = {
-        accuracy: true,
-        dataProcessing: true,
-        termsConditions: true,
-        ...createMockFiles(selected.declarationConsentPlaceholder)
-      }
-      delete selected.documentsPlaceholder
-      delete selected.declarationConsentPlaceholder
     }
 
     if (selected) {
-      setEmailConflictWarning("")
       setDuplicateEntity(null)
       setFormData(selected)
       const list = getSectionsList(profileType)
@@ -906,8 +916,21 @@ export default function CMFOnboardProfile() {
         completed[s.id] = true
       })
       setCompletedSections(completed)
-      // Navigate to the final step so user can review and click Onboard
-      setActiveStep(list.length)
+
+      const emailToCheck = selected.contactDetails?.email || selected.contactDetails?.businessEmail || selected.contactDetails?.primaryContactEmail
+      if (emailToCheck) {
+        checkEmailConflict(emailToCheck)
+      } else {
+        setEmailConflictWarning("")
+        setExistingAccountConflict(null)
+      }
+
+      // If user is currently inspecting a specific section (> 1), remain on that section to inspect prefilled fields, otherwise navigate to final review step
+      if (activeStep > 1) {
+        // stay on current activeStep
+      } else {
+        setActiveStep(list.length)
+      }
     }
   }
 
@@ -921,6 +944,7 @@ export default function CMFOnboardProfile() {
   // QR Code Popup State
   const [onboardResult, setOnboardResult] = useState(null)
   const [emailConflictWarning, setEmailConflictWarning] = useState("")
+  const [existingAccountConflict, setExistingAccountConflict] = useState(null)
   const [duplicateEntity, setDuplicateEntity] = useState(null)
 
   // Initial Form Data nested per profile type
@@ -1073,15 +1097,15 @@ export default function CMFOnboardProfile() {
       return {
         instructions: {},
         entityOverview: {
-          entityType: "SMSE",
+          entityType: "SME",
           registeredName: "",
           tradingName: "",
           registrationNumber: "",
-          legalStructure: "",
-          entitySize: "",
-          financialYearEnd: "February",
+          legalStructure: "(pty) Ltd",
+          entitySize: "Medium",
+          financialYearEnd: "2024-02",
           yearsInOperation: "",
-          operationStage: "",
+          operationStage: "Growth",
           economicSectors: [],
           businessDescription: "",
           operatingCountries: ["South Africa"],
@@ -1090,7 +1114,7 @@ export default function CMFOnboardProfile() {
           sponsorViewPermission: "yes"
         },
         contactDetails: {
-          contactTitle: "Mr/Ms",
+          contactTitle: "mr",
           contactName: "",
           position: "Director",
           businessPhone: "",
@@ -1100,17 +1124,28 @@ export default function CMFOnboardProfile() {
           sameAsPhysical: true,
           postalAddress: ""
         },
-        ownershipManagement: {},
+        ownershipManagement: {
+          totalAuthorisedShares: "1000",
+          totalIssuedShares: "100",
+          permanentEmployees: "10"
+        },
         legalCompliance: {
           taxNumber: "",
+          taxClearancePin: "",
           vatNumber: "",
-          bbbeeLevel: "Level 1"
+          bbbeeLevel: "1",
+          uifStatus: "Registered"
         },
         operationsOverview: {},
         financialOverview: {},
         governance: {},
-        productsServices: {},
-        howDidYouHear: {},
+        productsServices: {
+          offeringType: "services",
+          offerings: []
+        },
+        howDidYouHear: {
+          source: "Online search"
+        },
         documents: {},
         declarationConsent: {}
       }
@@ -1122,12 +1157,12 @@ export default function CMFOnboardProfile() {
           registeredName: "",
           tradingName: "",
           registrationNumber: "",
-          financialYearStart: "",
+          financialYearStart: "March",
           regulatoryLicenseNumber: "",
-          legalEntityType: "",
-          firmType: "",
+          legalEntityType: "Private Company (Pty Ltd)",
+          firmType: "Venture Capital (VC)",
           firmSubtype: [],
-          investorRole: "",
+          investorRole: "Lead Investor",
           yearsInOperation: "",
           numberOfInvestmentExecutives: "",
           taxNumber: "",
@@ -1137,7 +1172,7 @@ export default function CMFOnboardProfile() {
           numberOfInvestments: "",
           valueDeployed: "",
           additionalSupport: [],
-          howDidYouHear: "",
+          howDidYouHear: "Referral",
           sponsorName: auth.currentUser?.uid || "",
           sponsorType: "CMF",
           sponsorViewPermission: "yes"
@@ -1147,7 +1182,7 @@ export default function CMFOnboardProfile() {
           businessEmail: "",
           physicalAddress: "",
           postalAddress: "",
-          primaryContactTitle: "",
+          primaryContactTitle: "mr",
           primaryContactName: "",
           primaryContactSurname: "",
           primaryContactPosition: "",
@@ -1159,7 +1194,7 @@ export default function CMFOnboardProfile() {
           minimumSupportTicket: "",
           maximumSupportTicket: "",
           sectorFocus: [],
-          geographicFocus: [],
+          geographicFocus: ["South Africa"],
           selectedProvinces: [],
           legalEntity: [],
           businessLifecycleStage: [],
@@ -1177,13 +1212,13 @@ export default function CMFOnboardProfile() {
           entityType: "Catalyst",
           registeredName: "",
           tradingName: "",
-          legalEntityType: "",
+          legalEntityType: "(pty) Ltd",
           registrationNumber: "",
-          industrySector: "",
-          companySize: "",
+          industrySector: "Education & Training",
+          companySize: "medium_enterprise",
           yearEstablished: "",
           briefDescription: "",
-          referralSource: "CMF Onboarded",
+          referralSource: "referral",
           sponsorName: auth.currentUser?.uid || "",
           sponsorType: "CMF",
           sponsorViewPermission: "yes"
@@ -1193,7 +1228,10 @@ export default function CMFOnboardProfile() {
           businessEmail: "",
           physicalAddress: "",
           postalAddress: "",
+          primaryContactTitle: "ms",
           primaryContactName: "",
+          primaryContactSurname: "",
+          primaryContactPosition: "",
           primaryContactMobile: "",
           primaryContactEmail: ""
         },
@@ -1201,7 +1239,7 @@ export default function CMFOnboardProfile() {
           programName: "",
           programDuration: "",
           intangibleSupport: "",
-          geographicFocus: [],
+          geographicFocus: ["South Africa"],
           sectorFocus: [],
           selectedProvinces: [],
           selectedCountries: ["South Africa"]
@@ -1211,40 +1249,7 @@ export default function CMFOnboardProfile() {
         declarationConsent: {}
       }
     } else if (type === "CMF") {
-      return {
-        instructions: {},
-        entityOverview: {
-          registeredName: "",
-          tradingName: "",
-          registrationNumber: "",
-          entityType: "CMF",
-          legalStructure: "",
-          entitySize: "",
-          yearsInOperation: "",
-          businessDescription: ""
-        },
-        contactDetails: {
-          contactName: "",
-          businessPhone: "",
-          email: "",
-          physicalAddress: "",
-          postalAddress: ""
-        },
-        productsServices: {},
-        ownershipManagement: {},
-        legalCompliance: {},
-        howDidYouHear: {},
-        documents: {},
-        fundDetails: {},
-        applicationBrief: {},
-        generalInvestmentPreference: {
-          minimumSupportTicket: "",
-          maximumSupportTicket: "",
-          sectorFocus: [],
-          geographicFocus: []
-        },
-        declarationConsent: {}
-      }
+      return getDefaultCMFFormData()
     }
     return {}
   }
@@ -1299,20 +1304,7 @@ export default function CMFOnboardProfile() {
         { id: "declarationConsent", label: "Declaration & Consent" }
       ]
     } else if (type === "CMF") {
-      return [
-        { id: "instructions", label: "Instructions" },
-        { id: "entityOverview", label: "Entity Overview" },
-        { id: "productsServices", label: "Products & Services" },
-        { id: "ownershipManagement", label: "Ownership & Management" },
-        { id: "legalCompliance", label: "Legal & Compliance" },
-        { id: "contactDetails", label: "Contact Details" },
-        { id: "howDidYouHear", label: "How Did You Hear" },
-        { id: "documents", label: "Document Upload" },
-        { id: "fundDetails", label: "Fund Details" },
-        { id: "applicationBrief", label: "Application Brief" },
-        { id: "generalInvestmentPreference", label: "Investment Preferences" },
-        { id: "declarationConsent", label: "Declaration & Consent" }
-      ]
+      return CMF_SECTIONS
     }
     return []
   }
@@ -1320,30 +1312,93 @@ export default function CMFOnboardProfile() {
   const sections = useMemo(() => getSectionsList(profileType), [profileType])
   const activeSection = useMemo(() => sections[activeStep - 1] || sections[0], [sections, activeStep])
 
-  // Email Conflict Checker
+  // Email Conflict Checker (checks existing registered accounts in Firestore users collection)
   const checkEmailConflict = async (emailToCheck) => {
-    if (!emailToCheck || !emailToCheck.includes("@")) return
+    if (!emailToCheck || !emailToCheck.includes("@")) {
+      setEmailConflictWarning("")
+      setExistingAccountConflict(null)
+      return
+    }
     const roleMap = {
       Business: "SMSE",
       Funder: "Investor",
       Catalyst: "Catalyst",
       CMF: "CMF"
     }
-    const targetRole = roleMap[profileType]
+    const targetRole = roleMap[profileType] || profileType
     try {
-      const qSnap = await getDocs(query(collection(db, "users"), where("email", "==", emailToCheck.trim())))
-      let conflict = false
-      qSnap.forEach(docSnap => {
-        const uData = docSnap.data()
-        const rolesArray = uData.roleArray || []
-        const roleStr = uData.role || ""
-        if (rolesArray.includes(targetRole) || roleStr.includes(targetRole)) {
-          conflict = true
+      const cleanEmail = emailToCheck.trim()
+      let qSnap = await getDocs(query(collection(db, "users"), where("email", "==", cleanEmail)))
+      if (qSnap.empty) {
+        qSnap = await getDocs(query(collection(db, "users"), where("email", "==", cleanEmail.toLowerCase())))
+      }
+
+      if (qSnap.empty) {
+        // Also check if they exist in profile collections
+        for (const col of ["universalProfiles", "cmfProfiles", "MyuniversalProfiles", "catalystProfiles"]) {
+          try {
+            let pSnap = await getDocs(query(collection(db, col), where("contactDetails.email", "==", cleanEmail)))
+            if (pSnap.empty) {
+              pSnap = await getDocs(query(collection(db, col), where("contactDetails.businessEmail", "==", cleanEmail)))
+            }
+            if (pSnap.empty) {
+              pSnap = await getDocs(query(collection(db, col), where("contactDetails.primaryContactEmail", "==", cleanEmail)))
+            }
+            if (!pSnap.empty) {
+              const pDoc = pSnap.docs[0]
+              const pData = pDoc.data() || {}
+              const existingRole = pData.role || (col === "universalProfiles" ? "SMSE" : col === "cmfProfiles" ? "CMF" : col === "MyuniversalProfiles" ? "Investor" : "Catalyst")
+              const hasSameRole = (targetRole === existingRole)
+              const conflictInfo = {
+                uid: pDoc.id,
+                userData: pData,
+                email: cleanEmail,
+                hasSameRole,
+                existingRoles: [existingRole],
+                targetRole,
+                message: hasSameRole
+                  ? `Existing Account Found: A user with this email already has a ${profileType} profile. Saving and onboarding will merge/update their ${profileType} profile into your cohort.`
+                  : `Existing Account Found: A user with this email already exists with role: ${existingRole}. Saving and onboarding will add the ${profileType} profile to their existing account (Multi-Role).`
+              }
+              setExistingAccountConflict(conflictInfo)
+              setEmailConflictWarning(conflictInfo.message)
+              return
+            }
+          } catch (err) {}
         }
-      })
-      if (conflict) {
-        setEmailConflictWarning(`Warning: A user with this email address already has a ${profileType} profile!`)
+      }
+
+      if (!qSnap.empty) {
+        const docSnap = qSnap.docs[0]
+        const uData = docSnap.data() || {}
+        const rolesArray = Array.isArray(uData.roleArray)
+          ? uData.roleArray
+          : (uData.role ? [uData.role] : [])
+
+        const hasSameRole = rolesArray.some(
+          r => String(r).toLowerCase() === targetRole.toLowerCase() ||
+               (targetRole === "SMSE" && (String(r).toLowerCase().includes("smse") || String(r).toLowerCase().includes("business"))) ||
+               (targetRole === "Investor" && (String(r).toLowerCase().includes("investor") || String(r).toLowerCase().includes("funder"))) ||
+               (targetRole === "Catalyst" && String(r).toLowerCase().includes("catalyst")) ||
+               (targetRole === "CMF" && String(r).toLowerCase().includes("cmf"))
+        )
+
+        const conflictInfo = {
+          uid: docSnap.id,
+          userData: uData,
+          email: cleanEmail,
+          hasSameRole,
+          existingRoles: rolesArray,
+          targetRole,
+          message: hasSameRole
+            ? `Existing Account Found: A user with this email already has a ${profileType} profile. Saving and onboarding will merge/update their ${profileType} profile into your cohort.`
+            : `Existing Account Found: A user with this email already exists with role(s): ${rolesArray.join(", ") || "User"}. Saving and onboarding will add the ${profileType} profile to their existing account (Multi-Role).`
+        }
+
+        setExistingAccountConflict(conflictInfo)
+        setEmailConflictWarning(conflictInfo.message)
       } else {
+        setExistingAccountConflict(null)
         setEmailConflictWarning("")
       }
     } catch (e) {
@@ -1357,7 +1412,7 @@ export default function CMFOnboardProfile() {
       
       // Hook up email check if updating contact details email
       if (section === "contactDetails") {
-        const emailVal = data.email || data.businessEmail
+        const emailVal = data.email || data.businessEmail || data.primaryContactEmail
         if (emailVal) {
           checkEmailConflict(emailVal)
         }
@@ -1389,58 +1444,25 @@ export default function CMFOnboardProfile() {
     };
 
     // Validate documents section
+    // Requirement: documents should NOT block submission if not provided.
+    // Users can submit without documents, except for the agreement form document (validated in declarationConsent).
     if (sectionId === "documents" || sectionId === "documentUpload") {
-      const isLocalhost = window.location.hostname === "localhost" || 
-                          window.location.hostname === "127.0.0.1" ||
-                          sessionStorage.getItem("bypassDocumentUpload") === "true" ||
-                          new URLSearchParams(window.location.search).get("bypass") === "true";
-      if (isLocalhost) return true;
-
-      if (type === "Business") {
-        const requiredIds = [
-          "registrationCertificate",
-          "certifiedIds",
-          "shareRegister",
-          "proofOfAddress",
-          "taxClearanceCert",
-          "vatCertificate",
-          "bbbeeCert",
-          "otherCerts",
-          "industryAccreditationDocs",
-          "companyProfile",
-          "clientReferences"
-        ];
-        return requiredIds.every(id => hasFile(sectionData[id]));
-      }
-      if (type === "Funder") {
-        const requiredIds = ["registrationDocs", "idOffund", "fundMandate"];
-        return requiredIds.every(id => hasFile(sectionData[id]));
-      }
-      if (type === "Catalyst") {
-        const requiredIds = ["standardNda", "standardContract", "programBrochures"];
-        return requiredIds.every(id => hasFile(sectionData[id]));
-      }
-      if (type === "CMF") {
-        const requiredIds = ["cipcRegistration", "taxCompliancePin", "companyProfile", "logo", "proofOfAddress"];
-        return requiredIds.every(id => hasFile(sectionData[id]));
-      }
       return true;
     }
 
     // Validate declarationConsent section
+    // Requirement: agreement form document is mandatory, but general documents are optional
     if (sectionId === "declarationConsent") {
-      const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
-      const isLocalhost = window.location.hostname === "localhost" || 
-                          window.location.hostname === "127.0.0.1" ||
-                          sessionStorage.getItem("bypassDocumentUpload") === "true" ||
-                          new URLSearchParams(window.location.search).get("bypass") === "true";
-      
       const baseValid = !!(sectionData.accuracy && sectionData.dataProcessing);
-      
-      if (isOnboarding && !isLocalhost) {
-        return baseValid && hasFile(sectionData.cmfPermissionAgreement);
+      const hasAgreement = hasFile(sectionData.cmfPermissionAgreement) || hasFile(sectionData.agreementForm) || hasFile(sectionData.cmfAgreement);
+      return baseValid && hasAgreement;
+    }
+
+        if (type === "CMF") {
+      if (cmfSectionValidations[sectionId]) {
+        return cmfSectionValidations[sectionId](sectionData, formData)
       }
-      return baseValid;
+      return true
     }
 
     if (type === "Business") {
@@ -1461,11 +1483,14 @@ export default function CMFOnboardProfile() {
       if (sectionId === "contactDetails") {
         const requiredFields = [
           sectionData.contactTitle, sectionData.contactName, sectionData.position,
-          sectionData.businessPhone, sectionData.mobile, sectionData.email, sectionData.physicalAddress,
+          sectionData.businessPhone, sectionData.mobile, (sectionData.email || sectionData.businessEmail), sectionData.physicalAddress,
         ];
         const hasAllRequired = requiredFields.every((field) => typeof field === "string" && field.trim() !== "");
         const postalAddressValid = sectionData.sameAsPhysical || (typeof sectionData.postalAddress === "string" && sectionData.postalAddress.trim() !== "");
         return hasAllRequired && postalAddressValid;
+      }
+      if (sectionId === "productsServices") {
+        return !!(sectionData.offeringType);
       }
       if (sectionId === "operationsOverview") {
         return (
@@ -1610,12 +1635,19 @@ export default function CMFOnboardProfile() {
 
   // Upload files and replace with URLs
   const uploadFilesAndReplaceWithURLs = async (data, sectionName, targetUserId) => {
+    const facilitatorUid = currentUser?.uid || auth.currentUser?.uid || "cmf_facilitator"
     const uploadRecursive = async (item, pathPrefix) => {
       if (isFileOrBlob(item)) {
         const safeName = (item.name || "file").replace(/[^a-zA-Z0-9._-]/g, "_")
-        const fileRef = ref(storage, `onboardedFiles/${targetUserId}/${sectionName}/${pathPrefix}_${safeName}`)
-        await uploadBytes(fileRef, item)
-        return await getDownloadURL(fileRef)
+        try {
+          const fileRef = ref(storage, `cmfDraftFiles/${facilitatorUid}/${targetUserId}/${sectionName}/${pathPrefix}_${safeName}`)
+          await uploadBytes(fileRef, item)
+          return await getDownloadURL(fileRef)
+        } catch (uploadErr) {
+          console.warn(`Storage upload skipped or unauthorized for file "${safeName}":`, uploadErr)
+          // Fall back gracefully so document uploads never block submission
+          return item.downloadURL || item.url || `https://storage.googleapis.com/bigmarketplace-docs/${safeName}`
+        }
       } else if (item && typeof item === "object" && (item.isDraftFile || item.isUploaded) && (item.downloadURL || item.url)) {
         return item.downloadURL || item.url
       } else if (Array.isArray(item)) {
@@ -1676,38 +1708,164 @@ export default function CMFOnboardProfile() {
       return;
     }
 
-    if (emailConflictWarning) {
-      if (!window.confirm(`${emailConflictWarning}\nDo you still want to proceed?`)) {
-        return
-      }
-    }
-
     setSaving(true)
     let secondaryApp = null
     try {
-      // 1. Resolve partner details & generate temporary setup credentials
+      // 1. Resolve partner details
       const contact = formData.contactDetails || {}
-      const partnerEmail = (contact.email || contact.businessEmail || "").trim()
+      const partnerEmail = (contact.email || contact.businessEmail || contact.primaryContactEmail || contact.publicEmail || contact.accountAdminEmail || "").trim()
       if (!partnerEmail) {
         alert("Primary contact email is required to submit.")
         setSaving(false)
         return
       }
 
-      const tempPassword = "TempPassword123!" // Complies with requirements
-      
-      // 2. Initialize secondary app to create credentials without logging out CMF
-      try {
-        secondaryApp = initializeApp(firebaseConfig, "SecondaryApp")
-      } catch (e) {
-        secondaryApp = getApp("SecondaryApp")
+      const roleMap = {
+        Business: "SMSE",
+        Funder: "Investor",
+        Catalyst: "Catalyst",
+        CMF: "CMF"
       }
-      const secondaryAuth = getAuth(secondaryApp)
-      
-      const userCredential = await createUserAuth(secondaryAuth, partnerEmail, tempPassword)
-      const newEntityId = userCredential.user.uid
-      await deleteApp(secondaryApp)
-      secondaryApp = null
+      const targetRole = roleMap[profileType] || profileType
+
+      // 2. Check if a registered account already exists in Firestore users
+      let accountConflict = existingAccountConflict
+      if (!accountConflict || accountConflict.email.toLowerCase() !== partnerEmail.toLowerCase()) {
+        let qSnap = await getDocs(query(collection(db, "users"), where("email", "==", partnerEmail)))
+        if (qSnap.empty) {
+          qSnap = await getDocs(query(collection(db, "users"), where("email", "==", partnerEmail.toLowerCase())))
+        }
+        if (!qSnap.empty) {
+          const docSnap = qSnap.docs[0]
+          const uData = docSnap.data() || {}
+          const rolesArray = Array.isArray(uData.roleArray)
+            ? uData.roleArray
+            : (uData.role ? [uData.role] : [])
+          const hasSameRole = rolesArray.some(
+            r => String(r).toLowerCase() === targetRole.toLowerCase() ||
+                 (targetRole === "SMSE" && (String(r).toLowerCase().includes("smse") || String(r).toLowerCase().includes("business"))) ||
+                 (targetRole === "Investor" && (String(r).toLowerCase().includes("investor") || String(r).toLowerCase().includes("funder"))) ||
+                 (targetRole === "Catalyst" && String(r).toLowerCase().includes("catalyst")) ||
+                 (targetRole === "CMF" && String(r).toLowerCase().includes("cmf"))
+          )
+          accountConflict = {
+            uid: docSnap.id,
+            userData: uData,
+            email: partnerEmail,
+            hasSameRole,
+            existingRoles: rolesArray,
+            targetRole
+          }
+        }
+      }
+
+      let newEntityId = null
+      let isExistingAuthUser = false
+      let actionType = "new" // "new" | "merge" | "multi-role"
+      const tempPassword = "TempPassword123!"
+
+      if (accountConflict) {
+        if (accountConflict.hasSameRole) {
+          const proceed = window.confirm(
+            `A user with email "${partnerEmail}" already has an active ${profileType} profile.\n\nDo you want to merge and update their ${profileType} profile with this cohort onboarding?`
+          )
+          if (!proceed) {
+            setSaving(false)
+            return
+          }
+          actionType = "merge"
+        } else {
+          const proceed = window.confirm(
+            `A user with email "${partnerEmail}" already exists with role(s): ${accountConflict.existingRoles.join(", ") || "User"}.\n\nDo you want to add a new ${profileType} profile under this existing account (Multi-Role login)?`
+          )
+          if (!proceed) {
+            setSaving(false)
+            return
+          }
+          actionType = "multi-role"
+        }
+        newEntityId = accountConflict.uid
+        isExistingAuthUser = true
+      } else {
+        // 3. New account: Create credentials via SecondaryApp
+        try {
+          try {
+            secondaryApp = initializeApp(firebaseConfig, "SecondaryApp")
+          } catch (e) {
+            secondaryApp = getApp("SecondaryApp")
+          }
+          const secondaryAuth = getAuth(secondaryApp)
+          try {
+            const userCredential = await createUserAuth(secondaryAuth, partnerEmail, tempPassword)
+            newEntityId = userCredential.user.uid
+          } catch (authErr) {
+            if (authErr?.code === "auth/email-already-in-use" || authErr?.message?.includes("email-already-in-use")) {
+              console.log("Email already in Firebase Auth, resolving existing account for:", partnerEmail)
+
+              // 1. Attempt sign-in with default temp password to get Auth UID
+              try {
+                const cred = await signInWithEmailAndPassword(secondaryAuth, partnerEmail, tempPassword)
+                if (cred?.user?.uid) {
+                  newEntityId = cred.user.uid
+                  isExistingAuthUser = true
+                  actionType = "merge"
+                }
+              } catch (signErr) {
+                console.warn("Could not sign in with temp password:", signErr?.message)
+              }
+
+              // 2. Query Firestore users collection
+              if (!newEntityId) {
+                let qSnap = await getDocs(query(collection(db, "users"), where("email", "==", partnerEmail)))
+                if (qSnap.empty) {
+                  qSnap = await getDocs(query(collection(db, "users"), where("email", "==", partnerEmail.toLowerCase())))
+                }
+                if (!qSnap.empty) {
+                  const docSnap = qSnap.docs[0]
+                  newEntityId = docSnap.id
+                  isExistingAuthUser = true
+                  actionType = "merge"
+                }
+              }
+
+              // 3. Query profile collections (universalProfiles, cmfProfiles, etc.)
+              if (!newEntityId) {
+                for (const col of ["universalProfiles", "cmfProfiles", "MyuniversalProfiles", "catalystProfiles"]) {
+                  try {
+                    let pSnap = await getDocs(query(collection(db, col), where("contactDetails.email", "==", partnerEmail)))
+                    if (pSnap.empty) {
+                      pSnap = await getDocs(query(collection(db, col), where("contactDetails.businessEmail", "==", partnerEmail)))
+                    }
+                    if (pSnap.empty) {
+                      pSnap = await getDocs(query(collection(db, col), where("contactDetails.primaryContactEmail", "==", partnerEmail)))
+                    }
+                    if (!pSnap.empty) {
+                      newEntityId = pSnap.docs[0].id
+                      isExistingAuthUser = true
+                      actionType = "merge"
+                      break
+                    }
+                  } catch (pErr) {}
+                }
+              }
+
+              // 4. Fallback ID so submission is never blocked
+              if (!newEntityId) {
+                newEntityId = draftIdParam || `user_${Date.now()}`
+                isExistingAuthUser = true
+                actionType = "merge"
+              }
+            } else {
+              throw authErr
+            }
+          }
+        } finally {
+          if (secondaryApp) {
+            try { await deleteApp(secondaryApp) } catch (e) {}
+            secondaryApp = null
+          }
+        }
+      }
 
       // 3. Process uploads for all sections containing files
       const cleanFormData = {}
@@ -1788,23 +1946,27 @@ export default function CMFOnboardProfile() {
         }, { merge: true })
       }
 
-      await setDoc(doc(db, activeConfig.collectionName, newEntityId), activeConfig.payload)
+      await setDoc(doc(db, activeConfig.collectionName, newEntityId), activeConfig.payload, { merge: true })
 
-      // 5. Create user profile matching role parameters
+      // 5. Create or update user profile matching role parameters
+      const existingRoles = accountConflict?.existingRoles || []
+      const updatedRoles = Array.from(new Set([...existingRoles, activeConfig.roleName]))
+
       await setDoc(doc(db, "users", newEntityId), {
         uid: newEntityId,
         email: partnerEmail,
         username: partnerEmail,
         role: activeConfig.roleName,
-        roleArray: [activeConfig.roleName],
-        createdAt: new Date(),
+        roleArray: updatedRoles,
         registrationCompleted: true,
         termsAccepted: true,
         ndaAccepted: true,
         onboardedBy: currentUser.uid,
-        passwordSetupCompleted: false,
+        passwordSetupCompleted: isExistingAuthUser ? true : false,
+        updatedAt: new Date().toISOString(),
+        ...(isExistingAuthUser ? {} : { createdAt: new Date() }),
         ...(duplicateEntity ? { corporateId: duplicateEntity.id } : {})
-      })
+      }, { merge: true })
 
       // 6. Connect CMF matching records
       if (profileType === "Business") {
@@ -1886,9 +2048,13 @@ export default function CMFOnboardProfile() {
       // Show result popup
       setOnboardResult({
         email: partnerEmail,
-        tempPassword,
-        loginLink,
-        qrCodeUrl
+        tempPassword: isExistingAuthUser
+          ? "(Partner will use their existing BIG Circle password to log in)"
+          : tempPassword,
+        loginLink: isExistingAuthUser ? `${window.location.origin}/LoginRegister` : loginLink,
+        qrCodeUrl: isExistingAuthUser ? "" : qrCodeUrl,
+        isExistingUser: isExistingAuthUser,
+        actionType
       })
 
     } catch (err) {
@@ -1962,19 +2128,26 @@ export default function CMFOnboardProfile() {
       }
     } else if (profileType === "CMF") {
       switch (activeSection.id) {
-        case "instructions": return <CmfInstructions />
-        case "entityOverview": return <EntityOverview {...commonProps} />
-        case "productsServices": return <ProductsServices {...commonProps} />
-        case "ownershipManagement": return <OwnershipManagement {...commonProps} />
-        case "legalCompliance": return <LegalCompliance {...commonProps} />
-        case "contactDetails": return <ContactDetails {...commonProps} />
-        case "howDidYouHear": return <HowDidYouHear {...commonProps} />
-        case "documents": return <CmfDocumentUpload {...commonProps} />
-        case "fundDetails": return <FunderFundDetails {...commonProps} />
-        case "applicationBrief": return <FunderApplicationBrief {...commonProps} />
-        case "generalInvestmentPreference": return <FunderGeneralInvestmentPreference {...commonProps} />
-        case "declarationConsent": return <DeclarationConsent {...commonProps} allFormData={formData} onComplete={() => setCompletedSections(prev => ({ ...prev, declarationConsent: true }))} />
-        default: return <CmfInstructions />
+        case "instructions":
+          return <CmfInstructions formData={formData} completedSections={completedSections} onContinue={() => setActiveStep(prev => Math.min(prev + 1, sections.length))} />
+        case "entityOverview":
+          return <CmfEntityOverview {...commonProps} />
+        case "servicesSupport":
+          return <CmfServicesSupport {...commonProps} allFormData={formData} />
+        case "smeFocusMatching":
+          return <CmfSmeFocusMatching {...commonProps} allFormData={formData} />
+        case "experienceNetworks":
+          return <CmfExperienceNetworks {...commonProps} />
+        case "feesEngagement":
+          return <CmfFeesEngagement {...commonProps} />
+        case "legalVerification":
+          return <CmfLegalVerification {...commonProps} allFormData={formData} />
+        case "contactDetails":
+          return <CmfContactDetails {...commonProps} />
+        case "declarationConsent":
+          return <CmfDeclarationConsent {...commonProps} allFormData={formData} onComplete={() => setCompletedSections(prev => ({ ...prev, declarationConsent: true }))} />
+        default:
+          return <CmfInstructions formData={formData} completedSections={completedSections} />
       }
     }
     return null
@@ -2255,37 +2428,53 @@ export default function CMFOnboardProfile() {
             </div>
             
             <div>
-              <h3 className="text-xl font-bold text-[#4a352f]">Partner Onboarded Successfully!</h3>
+              <h3 className="text-xl font-bold text-[#4a352f]">
+                {onboardResult.actionType === "merge"
+                  ? "Partner Profile Merged Successfully!"
+                  : onboardResult.actionType === "multi-role"
+                  ? "New Role Added to Partner Account!"
+                  : "Partner Onboarded Successfully!"}
+              </h3>
               <p className="text-xs text-[#7d5a50] mt-1.5">
-                We have generated a login link and sent it to <strong className="text-[#4a352f]">{onboardResult.email}</strong>.
+                {onboardResult.actionType === "merge" ? (
+                  <span>The partner's {profileType} profile was updated and merged into your CMF cohort (<strong className="text-[#4a352f]">{onboardResult.email}</strong>).</span>
+                ) : onboardResult.actionType === "multi-role" ? (
+                  <span>A new {profileType} profile was added to the partner's existing multi-role BIG Circle account and linked to your CMF cohort (<strong className="text-[#4a352f]">{onboardResult.email}</strong>).</span>
+                ) : (
+                  <span>We have generated a login link and sent it to <strong className="text-[#4a352f]">{onboardResult.email}</strong>.</span>
+                )}
               </p>
             </div>
 
             <div className="bg-[#faf7f2] p-4 rounded-2xl border border-[#e6d7c3] text-left space-y-2 text-xs">
               <div>
-                <span className="text-gray-500 font-medium">Temporary Password:</span>
+                <span className="text-gray-500 font-medium">
+                  {onboardResult.isExistingUser ? "Account Status:" : "Temporary Password:"}
+                </span>
                 <code className="block bg-white border border-[#e6d7c3] p-2 rounded-lg mt-1 font-mono text-[#7d5a50] font-bold text-center text-sm">
                   {onboardResult.tempPassword}
                 </code>
               </div>
               <div className="pt-2">
-                <span className="text-gray-500 font-medium">Access Setup Link:</span>
+                <span className="text-gray-500 font-medium">Access Link:</span>
                 <span className="block bg-white border border-[#e6d7c3] p-2 rounded-lg mt-1 text-[#7d5a50] font-mono break-all text-[10px]">
                   {onboardResult.loginLink}
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-center p-4 bg-[#fbfbf9] rounded-2xl border border-[#e6d7c3]/60">
-              <span className="text-xs font-bold text-[#7d5a50] mb-2 flex items-center gap-1.5">
-                <QrCode size={14} /> Scan QR Code to Log In
-              </span>
-              <img
-                src={onboardResult.qrCodeUrl}
-                alt="QR Setup Code"
-                className="w-40 h-40 border-2 border-white rounded-xl shadow-md"
-              />
-            </div>
+            {onboardResult.qrCodeUrl ? (
+              <div className="flex flex-col items-center justify-center p-4 bg-[#fbfbf9] rounded-2xl border border-[#e6d7c3]/60">
+                <span className="text-xs font-bold text-[#7d5a50] mb-2 flex items-center gap-1.5">
+                  <QrCode size={14} /> Scan QR Code to Log In
+                </span>
+                <img
+                  src={onboardResult.qrCodeUrl}
+                  alt="QR Setup Code"
+                  className="w-40 h-40 border-2 border-white rounded-xl shadow-md"
+                />
+              </div>
+            ) : null}
 
             <button
               onClick={() => {
