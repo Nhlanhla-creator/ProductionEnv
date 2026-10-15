@@ -3,18 +3,19 @@
 /**
  * digitalTwin/components/DigitalTwinDashboard.jsx
  *
- * Top-level shell for the dashboard layer. Allows switching between the
- * Asset Performance command centre and the Capacity & Readiness panel, and
- * exposes the drill-down and lineage flows.
+ * Top-level shell for the dashboard layer. Three tabs:
+ *   - Setup       — guided first-run wizard / resume / completed quick-actions
+ *   - Command     — Asset Performance command centre
+ *   - Capacity    — Capacity & Readiness panel
  *
- * Add this to your router as `/digital-twin/dashboard` — the module is now
- * feature-complete from Phases 1 to 5.
+ * Add this to your router as `/digital-twin/dashboard`.
  */
 
 import { useEffect, useState } from "react"
-import { BarChart3, Boxes } from "lucide-react"
+import { BarChart3, Boxes, Sparkles } from "lucide-react"
 import AssetPerformanceCommandCentre from "./AssetPerformanceCommandCentre"
 import CapacityReadinessPanel from "./CapacityReadinessPanel"
+import OperationsSetupCard from "./OperationsSetupCard"
 import { getTenant } from "../services/hierarchyService"
 import { auth } from "../../firebaseConfig"
 
@@ -30,12 +31,13 @@ const btnBase = { padding: "8px 14px", borderRadius: "8px", fontSize: "13px", fo
   cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", fontFamily: "inherit" }
 
 const TABS = [
-  { id: "command", label: "Command centre", icon: BarChart3 },
+  { id: "setup",    label: "Setup",               icon: Sparkles },
+  { id: "command",  label: "Command centre",      icon: BarChart3 },
   { id: "capacity", label: "Capacity & readiness", icon: Boxes },
 ]
 
 export default function DigitalTwinDashboard() {
-  const [tab, setTab] = useState("command")
+  const [tab, setTab] = useState("setup")
   const [tenant, setTenant] = useState(null)
   const [loadingTenant, setLoadingTenant] = useState(true)
 
@@ -92,7 +94,38 @@ export default function DigitalTwinDashboard() {
           </button>
         </div>
 
+        {/* ── Setup tab ── */}
+        {tab === "setup" && (
+          <div>
+            <div style={{ marginBottom: "18px" }}>
+              <h2 style={{ margin: "0 0 6px", fontSize: "22px", fontWeight: 700, color: T.accent, letterSpacing: "-0.3px" }}>
+                Set up your operating structure
+              </h2>
+              <p style={{ margin: 0, fontSize: "13.5px", color: T.muted }}>
+                Build the sites, contracts, services and equipment groups that make up your twin.
+                You can pause at any time and pick up where you left off.
+              </p>
+            </div>
+
+            <OperationsSetupCard
+              variant="full"
+              onNavigate={(target) => {
+                if (target === "setup") {
+                  window.location.href = "/digital-twin?setup=true"
+                } else if (target === "dashboard") {
+                  setTab("command")
+                } else if (target === "assets") {
+                  window.location.href = "/digital-twin?view=assets"
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {/* ── Command centre tab ── */}
         {tab === "command" && <AssetPerformanceCommandCentre tenantId={user.uid} />}
+
+        {/* ── Capacity & readiness tab ── */}
         {tab === "capacity" && <CapacityReadinessPanel tenantId={user.uid} />}
       </div>
     </div>

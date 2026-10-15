@@ -5,18 +5,6 @@
  *
  * Guided first-run setup. Turns the blank tile grid into a walk-through
  * that builds the user's operating structure step by step.
- *
- * Steps:
- *   1. Objective             — what do you want to improve?
- *   2. Context               — sector pack + environment
- *   3. Delivery              — site + contract (separately)
- *   4. Service               — service + first activity
- *   5. Resources             — equipment group suggestion (asset-based only)
- *   6. Period & target       — reporting month + optional KPI target
- *   7. Preview & create      — confirm before writing anything
- *
- * Nothing is committed to Firestore until step 7. Pause and resume are
- * supported via onboardingState.
  */
 
 import { useEffect, useMemo, useState } from "react"
@@ -31,6 +19,7 @@ import { createGroup } from "../services/resourceService"
 import { getOnboardingState, saveOnboardingState, completeOnboarding } from "../services/onboardingState"
 import { listPacks, optionsFor } from "../services/taxonomyService"
 import { NODE_TYPES, RELATION_TYPES } from "../models/enums"
+import TwinFlowDiagram from "./TwinFlowDiagram"
 
 const T = {
   ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", faint: "#8a7a74",
@@ -101,11 +90,11 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
     targetKpiId: "kpi.physical_availability",
     targetValue: "90",
   })
+  const [diagramData, setDiagramData] = useState(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
   const [resumeChecked, setResumeChecked] = useState(false)
 
-  // Load any previously-saved wizard state
   useEffect(() => {
     (async () => {
       const saved = await getOnboardingState(tenantId)
@@ -115,12 +104,19 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
     })()
   }, [tenantId])
 
-  // Persist on every change (debounced by React batching)
   useEffect(() => {
     if (!resumeChecked) return
     saveOnboardingState(tenantId, { ...state, currentStep: step })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, state, resumeChecked])
+
+  // Build the flow diagram when entering the preview step
+  useEffect(() => {
+    if (step === 6 && !diagramData) {
+      setDiagramData(buildDiagramFromState(state))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
 
   const canAdvance = useMemo(() => {
     switch (STEPS[step].id) {
@@ -128,7 +124,7 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
       case "context":   return !!state.sectorPack && !!state.environment
       case "delivery":  return state.siteName.trim().length > 1 || state.contractName.trim().length > 1
       case "service":   return !!state.serviceId && state.activityName.trim().length > 1
-      case "resources": return true // optional
+      case "resources": return true
       case "period":    return !!state.reportingPeriod
       case "preview":   return true
       default: return false
@@ -141,7 +137,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
   const handleCreate = async () => {
     setCreating(true); setError(null)
     try {
-      // 1. Ensure tenant exists
       const user = auth.currentUser
       const profileSnap = await getDoc(doc(db, "universalProfiles", user.uid))
       const companyName = profileSnap.exists()
@@ -149,7 +144,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         : user.email
       await ensureTenant({ tenantId, displayName: companyName })
 
-      // 2. Company node
       const existingTenant = await getTenant(tenantId)
       let companyNodeId = existingTenant?.companyNodeId
       if (!companyNodeId) {
@@ -163,13 +157,11 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
             attributes: { objective: state.objective },
           })
           companyNodeId = c.id
-          // Persist pointer on tenant root
           const { setDoc } = await import("firebase/firestore")
           await setDoc(doc(db, "digitalTwinTenants", tenantId), { companyNodeId }, { merge: true })
         }
       }
 
-      // 3. Site
       let siteNodeId = null
       if (state.siteName.trim()) {
         const s = await createNode(tenantId, {
@@ -184,7 +176,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         })
       }
 
-      // 4. Contract
       let contractNodeId = null
       if (state.contractName.trim()) {
         const c = await createNode(tenantId, {
@@ -205,7 +196,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         }
       }
 
-      // 5. Service
       const serviceNode = await createNode(tenantId, {
         nodeType: NODE_TYPES.SERVICE,
         name: labelOfService(state.serviceId),
@@ -219,7 +209,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         })
       }
 
-      // 6. Activity
       const activityNode = await createNode(tenantId, {
         nodeType: NODE_TYPES.ACTIVITY,
         name: state.activityName.trim(),
@@ -229,7 +218,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         relationType: RELATION_TYPES.REALIZED_BY, isPrimary: true,
       })
 
-      // 7. Equipment group (only if user supplied one)
       let groupId = null
       if (state.equipmentGroupName.trim()) {
         const g = await createGroup(tenantId, {
@@ -245,7 +233,18 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         })
       }
 
-      // 8. Reporting period (light touch — a target row)
+      // Persist any extra nodes/relations the user added in the diagram
+      if (diagramData) {
+        await createNodesFromDiagram(tenantId, diagramData, {
+          companyNodeId,
+          siteNodeId,
+          contractNodeId,
+          serviceNodeId: serviceNode.id,
+          activityNodeId: activityNode.id,
+          groupId,
+        })
+      }
+
       const { setDoc: fsSetDoc, doc: fsDoc } = await import("firebase/firestore")
       await fsSetDoc(
         fsDoc(db, "digitalTwinTenants", tenantId, "reportingPeriods", state.reportingPeriod),
@@ -296,7 +295,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
 
   return (
     <div style={{ maxWidth: "760px", margin: "0 auto" }}>
-      {/* Header */}
       <div style={{ marginBottom: "22px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
           <div style={{
@@ -306,7 +304,10 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
           }}>
             <ActiveIcon size={18} color={T.accent} />
           </div>
-          <div style={{ fontSize: "12.5px", color: T.muted, fontWeight: 600, letterSpacing: "0.4px", textTransform: "uppercase" }}>
+          <div style={{
+            fontSize: "12.5px", color: T.muted, fontWeight: 600,
+            letterSpacing: "0.4px", textTransform: "uppercase",
+          }}>
             Step {step + 1} of {STEPS.length}
           </div>
         </div>
@@ -321,7 +322,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         </p>
       </div>
 
-      {/* Progress dots */}
       <div style={{ display: "flex", gap: "6px", marginBottom: "22px" }}>
         {STEPS.map((s, i) => (
           <div key={s.id} style={{
@@ -332,7 +332,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         ))}
       </div>
 
-      {/* Step content */}
       <div style={cardS}>
         {STEPS[step].id === "objective" && (
           <StepObjective value={state.objective} onChange={(objective) => setState({ ...state, objective })} />
@@ -346,10 +345,7 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
           />
         )}
         {STEPS[step].id === "delivery" && (
-          <StepDelivery
-            value={state}
-            onChange={(patch) => setState({ ...state, ...patch })}
-          />
+          <StepDelivery value={state} onChange={(patch) => setState({ ...state, ...patch })} />
         )}
         {STEPS[step].id === "service" && (
           <StepService
@@ -377,12 +373,17 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
             onChange={(patch) => setState({ ...state, ...patch })}
           />
         )}
-        {STEPS[step].id === "preview" && <StepPreview state={state} />}
+        {STEPS[step].id === "preview" && (
+          <StepPreviewWithDiagram
+            state={state}
+            diagramData={diagramData}
+            onDiagramChange={(newData) => setDiagramData(newData)}
+          />
+        )}
 
         {error && (
           <div style={{
-            marginTop: "16px",
-            padding: "12px 14px", borderRadius: "10px",
+            marginTop: "16px", padding: "12px 14px", borderRadius: "10px",
             background: T.redBg, border: `1px solid ${T.red}33`,
             color: T.red, fontSize: "13px",
             display: "flex", alignItems: "flex-start", gap: "8px",
@@ -393,7 +394,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         )}
       </div>
 
-      {/* Footer */}
       <div style={{
         display: "flex", justifyContent: "space-between",
         alignItems: "center", marginTop: "18px",
@@ -479,9 +479,189 @@ function stepCopy(stepId) {
     service: "Tell us what work is performed here. We'll pull the canonical taxonomy so your data lines up with the rest of the platform.",
     resources: "If this service uses physical equipment, name the fleet. Skip if it's people, teams or consumables only.",
     period: "We'll open a reporting period for you. This drives monthly KPI calculation.",
-    preview: "Nothing has been saved yet. Review everything before we create your operating structure.",
+    preview: "Nothing has been saved yet. Edit the flow diagram to add nodes or connections, then create your twin.",
   }
   return map[stepId] || ""
+}
+
+/**
+ * Build the initial flow diagram data from the wizard state.
+ */
+function buildDiagramFromState(state) {
+  const nodes = []
+  const relations = []
+  let idCounter = 0
+  const nextId = (prefix) => `${prefix}_${++idCounter}`
+
+  const companyId = nextId("company")
+  nodes.push({
+    id: companyId,
+    nodeType: "company",
+    name: "Your organisation",
+    _root: true,
+  })
+
+  let siteId = null
+  if (state.siteName?.trim()) {
+    siteId = nextId("site")
+    nodes.push({
+      id: siteId,
+      nodeType: "site",
+      name: state.siteName.trim(),
+      attributes: { environment: state.environment, sectorPack: state.sectorPack },
+    })
+    relations.push({
+      id: nextId("rel"),
+      fromId: companyId,
+      toId: siteId,
+      relationType: "contains",
+      isPrimary: true,
+    })
+  }
+
+  let contractId = null
+  if (state.contractName?.trim()) {
+    contractId = nextId("contract")
+    nodes.push({
+      id: contractId,
+      nodeType: "contract",
+      name: state.contractName.trim(),
+      attributes: { client: state.clientName || null },
+    })
+    relations.push({
+      id: nextId("rel"),
+      fromId: companyId,
+      toId: contractId,
+      relationType: "scopes",
+      isPrimary: false,
+    })
+    if (siteId) {
+      relations.push({
+        id: nextId("rel"),
+        fromId: contractId,
+        toId: siteId,
+        relationType: "delivered_at",
+        isPrimary: true,
+      })
+    }
+  }
+
+  let serviceId = null
+  if (state.serviceId) {
+    serviceId = nextId("service")
+    nodes.push({
+      id: serviceId,
+      nodeType: "service",
+      name: labelOfService(state.serviceId),
+      attributes: { taxonomyId: state.serviceId },
+    })
+    const serviceParent = contractId || siteId || companyId
+    relations.push({
+      id: nextId("rel"),
+      fromId: serviceParent,
+      toId: serviceId,
+      relationType: "scopes",
+      isPrimary: true,
+    })
+  }
+
+  let activityId = null
+  if (state.activityName?.trim() && serviceId) {
+    activityId = nextId("activity")
+    nodes.push({
+      id: activityId,
+      nodeType: "activity",
+      name: state.activityName.trim(),
+    })
+    relations.push({
+      id: nextId("rel"),
+      fromId: serviceId,
+      toId: activityId,
+      relationType: "realized_by",
+      isPrimary: true,
+    })
+  }
+
+  if (state.equipmentGroupName?.trim()) {
+    const groupId = nextId("group")
+    nodes.push({
+      id: groupId,
+      nodeType: "equipment_group",
+      name: state.equipmentGroupName.trim(),
+      attributes: {
+        nominalCapacity: state.equipmentGroupCapacity ? Number(state.equipmentGroupCapacity) : null,
+        capacityUnit: "tonnes",
+      },
+    })
+    const groupParent = activityId || serviceId || siteId || companyId
+    relations.push({
+      id: nextId("rel"),
+      fromId: groupId,
+      toId: groupParent,
+      relationType: "supports",
+      isPrimary: true,
+    })
+  }
+
+  return { nodes, relations }
+}
+
+/**
+ * Persist any additional nodes and relations the user created in the
+ * flow diagram. Maps temporary IDs to real Firestore IDs.
+ */
+async function createNodesFromDiagram(tenantId, diagramData, existingIds) {
+  const { nodes, relations } = diagramData
+  const idMap = { ...existingIds }
+
+  for (const node of nodes) {
+    if (node._root || idMap[node.id]) continue
+
+    // Map known base nodes to their real IDs
+    if (node.id.startsWith("company_")) { idMap[node.id] = existingIds.companyNodeId; continue }
+    if (node.id.startsWith("site_") && existingIds.siteNodeId) { idMap[node.id] = existingIds.siteNodeId; continue }
+    if (node.id.startsWith("contract_") && existingIds.contractNodeId) { idMap[node.id] = existingIds.contractNodeId; continue }
+    if (node.id.startsWith("service_") && existingIds.serviceNodeId) { idMap[node.id] = existingIds.serviceNodeId; continue }
+    if (node.id.startsWith("activity_") && existingIds.activityNodeId) { idMap[node.id] = existingIds.activityNodeId; continue }
+
+    // Create genuinely new nodes
+    try {
+      const created = await createNode(tenantId, {
+        nodeType: node.nodeType,
+        name: node.name,
+        attributes: node.attributes || {},
+      })
+      idMap[node.id] = created.id
+    } catch (err) {
+      console.warn("Node creation skipped:", err.message)
+    }
+  }
+
+  for (const rel of relations) {
+    const fromId = idMap[rel.fromId]
+    const toId = idMap[rel.toId]
+    if (!fromId || !toId) continue
+
+    const isBaseRelation =
+      (rel.fromId.startsWith("company_") && rel.toId.startsWith("site_")) ||
+      (rel.fromId.startsWith("company_") && rel.toId.startsWith("contract_")) ||
+      (rel.fromId.startsWith("contract_") && rel.toId.startsWith("site_")) ||
+      (rel.fromId.startsWith("contract_") && rel.toId.startsWith("service_")) ||
+      (rel.fromId.startsWith("service_") && rel.toId.startsWith("activity_"))
+
+    if (isBaseRelation) continue
+
+    try {
+      await createRelation(tenantId, {
+        fromId,
+        toId,
+        relationType: rel.relationType,
+        isPrimary: rel.isPrimary || false,
+      })
+    } catch (err) {
+      console.warn("Relation creation skipped:", err.message)
+    }
+  }
 }
 
 // ── Step components ─────────────────────────────────────────────────────────
@@ -597,12 +777,8 @@ function StepDelivery({ value, onChange }) {
     <div style={{ display: "grid", gap: "14px" }}>
       <div>
         <label style={labelS}>Site name</label>
-        <input
-          value={value.siteName}
-          onChange={(e) => onChange({ siteName: e.target.value })}
-          placeholder="e.g. Northern Pit"
-          style={inputS}
-        />
+        <input value={value.siteName} onChange={(e) => onChange({ siteName: e.target.value })}
+          placeholder="e.g. Northern Pit" style={inputS} />
         <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
           A physical location. Skip if the work isn't tied to one place.
         </p>
@@ -610,12 +786,8 @@ function StepDelivery({ value, onChange }) {
 
       <div>
         <label style={labelS}>Contract name (optional)</label>
-        <input
-          value={value.contractName}
-          onChange={(e) => onChange({ contractName: e.target.value })}
-          placeholder="e.g. Northern Pit Load and Haul Contract"
-          style={inputS}
-        />
+        <input value={value.contractName} onChange={(e) => onChange({ contractName: e.target.value })}
+          placeholder="e.g. Northern Pit Load and Haul Contract" style={inputS} />
         <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
           Commercial scope. A contract can span multiple sites — they are separate in the twin.
         </p>
@@ -623,12 +795,8 @@ function StepDelivery({ value, onChange }) {
 
       <div>
         <label style={labelS}>Client (optional)</label>
-        <input
-          value={value.clientName}
-          onChange={(e) => onChange({ clientName: e.target.value })}
-          placeholder="e.g. Northern Pit Mine"
-          style={inputS}
-        />
+        <input value={value.clientName} onChange={(e) => onChange({ clientName: e.target.value })}
+          placeholder="e.g. Northern Pit Mine" style={inputS} />
       </div>
     </div>
   )
@@ -668,12 +836,8 @@ function StepService({ sectorPack, valueChainId, serviceId, activityName, onChan
 
       <div>
         <label style={labelS}>First activity</label>
-        <input
-          value={activityName}
-          onChange={(e) => onChange({ activityName: e.target.value })}
-          placeholder="e.g. Haul ore from loading area to primary crusher"
-          style={inputS}
-        />
+        <input value={activityName} onChange={(e) => onChange({ activityName: e.target.value })}
+          placeholder="e.g. Haul ore from loading area to primary crusher" style={inputS} />
         <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
           The operational work that produces the service output. You can add more later.
         </p>
@@ -708,24 +872,16 @@ function StepResources({ objective, serviceId, equipmentGroupName, equipmentGrou
     <div style={{ display: "grid", gap: "14px" }}>
       <div>
         <label style={labelS}>Equipment group name</label>
-        <input
-          value={equipmentGroupName}
-          onChange={(e) => onChange({ equipmentGroupName: e.target.value })}
-          placeholder="e.g. 100 tonne haul fleet"
-          style={inputS}
-        />
+        <input value={equipmentGroupName} onChange={(e) => onChange({ equipmentGroupName: e.target.value })}
+          placeholder="e.g. 100 tonne haul fleet" style={inputS} />
       </div>
 
       <div>
         <label style={labelS}>Nominal capacity (optional)</label>
         <div style={{ display: "flex", gap: "8px" }}>
-          <input
-            type="number"
-            value={equipmentGroupCapacity}
+          <input type="number" value={equipmentGroupCapacity}
             onChange={(e) => onChange({ equipmentGroupCapacity: e.target.value })}
-            placeholder="e.g. 200"
-            style={{ ...inputS, flex: 1 }}
-          />
+            placeholder="e.g. 200" style={{ ...inputS, flex: 1 }} />
           <div style={{
             padding: "10px 14px", borderRadius: "9px",
             background: T.panel, border: `1px solid ${T.lineSoft}`,
@@ -747,20 +903,14 @@ function StepPeriod({ reportingPeriod, targetKpiId, targetValue, onChange }) {
     <div style={{ display: "grid", gap: "14px" }}>
       <div>
         <label style={labelS}>First reporting period</label>
-        <input
-          type="month"
-          value={reportingPeriod}
-          onChange={(e) => onChange({ reportingPeriod: e.target.value })}
-          style={inputS}
-        />
+        <input type="month" value={reportingPeriod}
+          onChange={(e) => onChange({ reportingPeriod: e.target.value })} style={inputS} />
       </div>
 
       <div>
         <label style={labelS}>Primary target KPI</label>
-        <select
-          value={targetKpiId || ""}
-          onChange={(e) => onChange({ targetKpiId: e.target.value })}
-          style={inputS}>
+        <select value={targetKpiId || ""}
+          onChange={(e) => onChange({ targetKpiId: e.target.value })} style={inputS}>
           <option value="kpi.physical_availability">Physical availability</option>
           <option value="kpi.utilisation">Utilisation of available time</option>
           <option value="kpi.productivity">Productivity</option>
@@ -771,13 +921,9 @@ function StepPeriod({ reportingPeriod, targetKpiId, targetValue, onChange }) {
 
       <div>
         <label style={labelS}>Target value</label>
-        <input
-          type="number"
-          value={targetValue}
+        <input type="number" value={targetValue}
           onChange={(e) => onChange({ targetValue: e.target.value })}
-          placeholder="e.g. 90"
-          style={inputS}
-        />
+          placeholder="e.g. 90" style={inputS} />
         <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
           We'll compare everything you capture against this target and flag when you drift.
         </p>
@@ -786,59 +932,45 @@ function StepPeriod({ reportingPeriod, targetKpiId, targetValue, onChange }) {
   )
 }
 
-function StepPreview({ state }) {
-  const serviceLabel = state.serviceId
-    ? labelOfService(state.serviceId)
-    : null
-
+function StepPreviewWithDiagram({ state, diagramData, onDiagramChange }) {
   return (
     <div>
-      <div style={{ fontSize: "13px", color: T.body, lineHeight: 1.6, marginBottom: "16px" }}>
-        Nothing has been saved yet. When you click <strong>Create my twin</strong>,
-        we'll write these records under your organisation.
+      <div style={{
+        fontSize: "13px", color: T.body, lineHeight: 1.6,
+        marginBottom: "16px",
+      }}>
+        Nothing has been saved yet. This is the structure we'll create.
+        <strong> Click any node to rename it, add children, or create connections between any two nodes.</strong>
       </div>
 
-      <TreeRow label="Organisation" value="Your registered company name" depth={0} />
-      {state.siteName && <TreeRow label="Site" value={state.siteName} depth={1} />}
-      {state.contractName && <TreeRow label="Contract" value={state.contractName} depth={1} />}
-      {serviceLabel && <TreeRow label="Service" value={serviceLabel} depth={2} />}
-      {state.activityName && <TreeRow label="Activity" value={state.activityName} depth={3} />}
-      {state.equipmentGroupName && <TreeRow label="Equipment group" value={state.equipmentGroupName} depth={3} />}
+      <TwinFlowDiagram
+        nodes={diagramData?.nodes || []}
+        relations={diagramData?.relations || []}
+        onChange={onDiagramChange}
+      />
+
       {state.reportingPeriod && (
-        <TreeRow label="Reporting period" value={`${state.reportingPeriod} — ${state.targetValue}% on ${state.targetKpiId?.split(".").pop()}`} depth={1} />
+        <div style={{
+          marginTop: "16px", padding: "12px 14px",
+          background: T.panel, borderRadius: "8px",
+          border: `1px solid ${T.lineSoft}`,
+          fontSize: "13px", color: T.body,
+        }}>
+          <strong style={{ color: T.accent }}>Reporting period:</strong>{" "}
+          {state.reportingPeriod} — {state.targetValue}% on {state.targetKpiId?.split(".").pop()}
+        </div>
       )}
 
       <div style={{
-        marginTop: "20px", padding: "14px 16px",
+        marginTop: "16px", padding: "14px 16px",
         background: T.panel, borderRadius: "10px",
         border: `1px solid ${T.lineSoft}`,
         fontSize: "12.5px", color: T.body, lineHeight: 1.6,
       }}>
-        <strong style={{ color: T.accent }}>A note on what happens next:</strong> after
-        creation, you'll see the Operations Command Centre. It'll be empty until you
-        add assets and capture shift data. We'll walk you through that from the
-        command centre itself.
+        <strong style={{ color: T.accent }}>What happens next:</strong> after
+        creation, you'll see the Operations Command Centre. Add assets and
+        capture shift data to start generating KPIs.
       </div>
-    </div>
-  )
-}
-
-function TreeRow({ label, value, depth }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: "10px",
-      paddingLeft: `${depth * 20 + 4}px`,
-      paddingTop: "6px", paddingBottom: "6px",
-      fontSize: "13.5px",
-    }}>
-      <span style={{
-        width: 8, height: 8, borderRadius: "50%",
-        background: T.accent, flexShrink: 0,
-      }} />
-      <span style={{ fontSize: "11px", color: T.muted, textTransform: "uppercase", letterSpacing: "0.4px", fontWeight: 600, minWidth: "96px" }}>
-        {label}
-      </span>
-      <span style={{ color: T.ink, fontWeight: 500 }}>{value}</span>
     </div>
   )
 }
