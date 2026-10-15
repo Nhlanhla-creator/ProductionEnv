@@ -10,6 +10,8 @@
  *
  * Every number is a real KPI calculation — click any tile to open its
  * lineage.
+ *
+ * Setup guide is shown FIRST, before the header and hero tiles.
  */
 
 import { useEffect, useState } from "react"
@@ -21,6 +23,7 @@ import { getAncestryPath, listNodes } from "../services/hierarchyService"
 import { NODE_TYPES } from "../models/enums"
 import KpiLineageModal from "./KpiLineageModal"
 import DrillDownView from "./DrillDownView"
+import OperationsSetupCard from "./OperationsSetupCard"
 import { auth } from "../../firebaseConfig"
 
 const T = {
@@ -80,7 +83,9 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
         if (companies.length > 0) { setAnchor(companies[0]); return }
         const sites = await listNodes(tenantId, { nodeType: NODE_TYPES.SITE })
         if (sites.length > 0) setAnchor(sites[0])
-      } finally { setLoading(false) }
+      } finally {
+        setLoading(false)
+      }
     })()
   }, [tenantId])
 
@@ -120,12 +125,28 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
   if (!anchor) {
     return (
       <div style={{ padding: "24px", maxWidth: "820px", margin: "0 auto" }}>
+        {/* Setup guide still shown so the user can start the wizard */}
+        <OperationsSetupCard
+          variant="compact"
+          onNavigate={(target) => {
+            if (target === "setup") {
+              window.location.href = "/digital-twin?setup=true"
+            } else if (target === "dashboard") {
+              window.location.href = "/digital-twin/dashboard"
+            } else if (target === "assets") {
+              window.location.href = "/digital-twin?view=assets"
+            }
+          }}
+        />
+
         <div style={{ ...cardS, background: T.amberBg, borderColor: `${T.amber}33` }}>
           <div style={{ display: "flex", gap: "10px", alignItems: "flex-start", color: T.amber }}>
             <AlertTriangle size={18} style={{ marginTop: "2px", flexShrink: 0 }} />
             <div>
               <div style={{ fontWeight: 600, marginBottom: "4px" }}>No operating structure yet</div>
-              <div style={{ fontSize: "13.5px" }}>Create a company and at least one site or contract first, then come back to the command centre.</div>
+              <div style={{ fontSize: "13.5px" }}>
+                Create a company and at least one site or contract first, then come back to the command centre.
+              </div>
             </div>
           </div>
         </div>
@@ -155,6 +176,20 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
   return (
     <div>
       {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back</button>}
+
+      {/* ── SETUP GUIDE — SHOWN FIRST ── */}
+      <OperationsSetupCard
+        variant="compact"
+        onNavigate={(target) => {
+          if (target === "setup") {
+            window.location.href = "/digital-twin?setup=true"
+          } else if (target === "dashboard") {
+            window.location.href = "/digital-twin/dashboard"
+          } else if (target === "assets") {
+            window.location.href = "/digital-twin?view=assets"
+          }
+        }}
+      />
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "14px", marginBottom: "18px", flexWrap: "wrap" }}>
