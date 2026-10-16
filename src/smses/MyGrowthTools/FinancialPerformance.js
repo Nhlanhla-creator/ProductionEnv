@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { isTestEnvironment, generateKpiCsvTemplate, parseKpiCsv, downloadBlob } from "./shared/csvUploadUtils";
 import CsvUploadModal from "./shared/CsvUploadModal";
+import AiDataGenModal from "./shared/AiDataGenModal";
+import { getProfileOwnerId } from "../../utils/profile-context";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -3724,7 +3726,7 @@ const AddDataWizard = ({
   meta, dividends, investors, irrInvestments,
   onSaveDividends, onSaveCapTable, onSaveLoans,
   onSaveBsFull, onDeleteLine, onDeleteSection,
-  chartPrefs, onSaveChartPrefs,
+  chartPrefs, onSaveChartPrefs, profileData,
 }) => {
   const editableTabs = tabs.filter((t) => {
     const hasEditableKpis = t.categories.some((c) => (c.kpis || []).some((k) => k.field || k.custom || (k.frequency && k.frequency !== "Monthly")));
@@ -3759,6 +3761,8 @@ const AddDataWizard = ({
   const [csvParseResult, setCsvParseResult] = useState(null);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [isApplyingCsv, setIsApplyingCsv] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isApplyingAi, setIsApplyingAi] = useState(false);
   const isTestEnv = useMemo(() => isTestEnvironment(), []);
 
   // Refs for accumulating pending writes
@@ -4044,6 +4048,31 @@ const AddDataWizard = ({
       console.error("CSV apply failed", err);
     } finally {
       setIsApplyingCsv(false);
+    }
+  };
+
+  const handleApplyAiGeneratedData = async (updates) => {
+    setIsApplyingAi(true);
+    try {
+      const nextDraft = { ...draftRef.current };
+      updates.forEach((u) => {
+        nextDraft[draftKey(u.kpi.id, u.periodKey, u.which)] = u.raw;
+      });
+      setDraft(nextDraft);
+
+      if (onBatchSaveFields) {
+        await onBatchSaveFields(updates);
+      } else {
+        for (const u of updates) {
+          await onSaveField({ kpi: u.kpi, which: u.which, raw: u.raw, periodKey: u.periodKey });
+        }
+      }
+
+      setIsAiModalOpen(false);
+    } catch (err) {
+      console.error("AI data apply failed", err);
+    } finally {
+      setIsApplyingAi(false);
     }
   };
 
@@ -4730,6 +4759,24 @@ const AddDataWizard = ({
             >
               <Upload size={13} /> Upload CSV
             </button>
+            <button
+              onClick={() => setIsAiModalOpen(true)}
+              title="Generate realistic test data using AI conditioned on SME profile"
+              style={{
+                ...btnGhost,
+                fontSize: "12px",
+                padding: "6px 12px",
+                color: T.accent,
+                borderColor: T.accent,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                fontWeight: 700,
+                background: T.accentTint,
+              }}
+            >
+              <Sparkles size={13} /> AI Generate
+            </button>
             <input
               type="file"
               ref={fileInputRef}
@@ -4771,6 +4818,19 @@ const AddDataWizard = ({
         parseResult={csvParseResult}
         onConfirm={handleApplyCsvOverride}
         isApplying={isApplyingCsv}
+      />
+
+      <AiDataGenModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        profileData={profileData}
+        tabName={tab?.name}
+        tabs={editableTabs}
+        activeSection={activeSection}
+        activeKpiRows={activeKpiRows}
+        periods={activeColumns}
+        onApplyData={handleApplyAiGeneratedData}
+        isApplying={isApplyingAi}
       />
 
       {chartLine && (() => {
@@ -4815,6 +4875,7 @@ const META_DOC = "financialKpiMeta";
 
 const FinancialPerformance = () => {
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [fyStartMonth, setFyStartMonth] = useState(0);
   const [docs, setDocs] = useState({});
   const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], loans: [] });
@@ -4926,7 +4987,23 @@ const FinancialPerformance = () => {
     (async () => {
       if (!user?.uid) { setLoading(false); return; }
       try {
-        const profile = await getDoc(doc(db, "universalProfiles", user.uid));
+        let profileUid = user.uid;
+        try {
+          const ownerId = await getProfileOwnerId();
+          if (ownerId) profileUid = ownerId;
+        } catch (e) { /* ignore */ }
+        let profile = await getDoc(doc(db, "universalProfiles", profileUid));
+        if (!profile.exists() && profileUid !== user.uid) {
+          profile = await getDoc(doc(db, "universalProfiles", user.uid));
+        }
+        if (profile.exists()) {
+          setUserProfile(profile.data());
+        } else {
+          try {
+            const raw = localStorage.getItem(`universalProfileData_${user.uid}`) || localStorage.getItem("universalProfileData");
+            if (raw) setUserProfile(JSON.parse(raw));
+          } catch (e) { /* ignore */ }
+        }
         const start = fyStartMonthFromEnd(profile.exists() ? profile.data()?.entityOverview?.financialYearEnd : null);
         setFyStartMonth(start);
         const [loaded, metaSnap] = await Promise.all([
@@ -5072,7 +5149,7 @@ const FinancialPerformance = () => {
     }
   };
 
-  const saveBsFullDoc = async (docKey, nextBsData) => {
+  const saveBsFullDoc = async (docKey, nextBsDataOrDoc, isFullDoc = false) => {
     if (!user?.uid || isInvestorView) return;
     const year = Number(docKey.split("_").pop());
     let nextToPersist = null;
@@ -5737,6 +5814,7 @@ const FinancialPerformance = () => {
           onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
           onSaveField={saveKpiField}
           onBatchSaveFields={batchSaveKpiFields}
+          profileData={userProfile}
           meta={meta}
           dividends={dividends} investors={investors} irrInvestments={irrInvestments}
           onSaveDividends={saveDividends}

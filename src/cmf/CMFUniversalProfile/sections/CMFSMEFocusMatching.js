@@ -8,6 +8,7 @@ import {
   FUNDING_INSTRUMENTS,
   OPPORTUNITY_TYPES
 } from "../../cmfProfileConfig"
+import CMFSelectDropdown from "../../components/CMFSelectDropdown"
 
 const PROVINCES_SA = [
   "Gauteng",
@@ -60,15 +61,6 @@ export default function CMFSMEFocusMatching({ data = {}, allFormData = {}, updat
     }
   }
 
-  const handleSelectAllSectors = () => {
-    const current = Array.isArray(data.sectorsSupported) ? data.sectorsSupported : []
-    if (current.length === SECTOR_OPTIONS.length) {
-      handleChange("sectorsSupported", [])
-    } else {
-      handleChange("sectorsSupported", [...SECTOR_OPTIONS])
-    }
-  }
-
   const currentSectors = Array.isArray(data.sectorsSupported) ? data.sectorsSupported : []
   const currentGeos = Array.isArray(data.geographicAreas) ? data.geographicAreas : []
   const currentStages = Array.isArray(data.businessStages) ? data.businessStages : []
@@ -77,6 +69,8 @@ export default function CMFSMEFocusMatching({ data = {}, allFormData = {}, updat
   const currentFundingInstruments = Array.isArray(data.fundingInstruments) ? data.fundingInstruments : []
   const currentBuyerSectors = Array.isArray(data.buyerSectors) ? data.buyerSectors : []
   const currentOppTypes = Array.isArray(data.opportunityTypes) ? data.opportunityTypes : []
+
+  const geoOptions = ["National (All South Africa)", ...PROVINCES_SA, "SADC Region", "Rest of Africa", "International"]
 
   return (
     <div style={{ width: "100%", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -91,199 +85,82 @@ export default function CMFSMEFocusMatching({ data = {}, allFormData = {}, updat
 
       <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "14px", padding: "1.75rem", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
         {/* Sectors Supported */}
-        <div style={{ marginBottom: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-            <label style={{ fontSize: "14px", fontWeight: "700", color: "#4a352f" }}>
-              Sectors Supported <span style={{ color: "#e53e3e" }}>*</span>
-            </label>
-            <button
-              type="button"
-              onClick={handleSelectAllSectors}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#8d6e63",
-                fontSize: "12px",
-                fontWeight: "700",
-                cursor: "pointer",
-                textDecoration: "underline"
-              }}
-            >
-              {currentSectors.length === SECTOR_OPTIONS.length ? "Deselect All" : "Select All Sectors"}
-            </button>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px" }}>
-            {SECTOR_OPTIONS.map(sec => {
-              const isChecked = currentSectors.includes(sec)
-              return (
-                <label
-                  key={sec}
-                  onClick={() => toggleArrayItem("sectorsSupported", sec)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    background: isChecked ? "#f3e5dc" : "#faf7f2",
-                    border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    color: "#4a352f",
-                    fontWeight: isChecked ? "600" : "normal"
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {}}
-                    style={{ accentColor: "#8d6e63" }}
-                  />
-                  <span>{sec}</span>
-                </label>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Geographic Areas Served */}
-        <div style={{ marginBottom: "2rem" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem" }}>
-            Geographic Areas Served <span style={{ color: "#e53e3e" }}>*</span>
+        <div style={{ marginBottom: "1.75rem" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
+            Sectors Supported <span style={{ color: "#e53e3e" }}>*</span>
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "10px" }}>
-            {["National (All South Africa)", ...PROVINCES_SA, "SADC Region", "Rest of Africa", "International"].map(geo => {
-              const isChecked = currentGeos.includes(geo)
-              return (
-                <label
-                  key={geo}
-                  onClick={() => toggleArrayItem("geographicAreas", geo)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    background: isChecked ? "#f3e5dc" : "#faf7f2",
-                    border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    color: "#4a352f",
-                    fontWeight: isChecked ? "600" : "normal"
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {}}
-                    style={{ accentColor: "#8d6e63" }}
-                  />
-                  <span>{geo}</span>
-                </label>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Business Stages Supported */}
-        <div style={{ marginBottom: "2rem" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem" }}>
-            Business Stages Supported <span style={{ color: "#e53e3e" }}>*</span>
-          </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "10px" }}>
-            {BUSINESS_STAGES.map(stage => {
-              const isChecked = currentStages.includes(stage)
-              return (
-                <label
-                  key={stage}
-                  onClick={() => toggleArrayItem("businessStages", stage)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "9px 12px",
-                    borderRadius: "8px",
-                    background: isChecked ? "#f3e5dc" : "#faf7f2",
-                    border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    color: "#4a352f",
-                    fontWeight: isChecked ? "600" : "normal"
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {}}
-                    style={{ accentColor: "#8d6e63" }}
-                  />
-                  <span>{stage}</span>
-                </label>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Eligibility Requirements */}
-        <div style={{ marginBottom: "2rem" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem" }}>
-            Eligibility Requirements <span style={{ color: "#e53e3e" }}>*</span>
-          </label>
-          <p style={{ fontSize: "13px", color: "#7d5a50", margin: "0 0 0.75rem 0" }}>
-            Select structured criteria and provide a short explanation (allow no minimum if applicable).
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px", marginBottom: "1rem" }}>
-            {ELIGIBILITY_OPTIONS.map(opt => {
-              const isChecked = currentCriteria.includes(opt)
-              return (
-                <label
-                  key={opt}
-                  onClick={() => toggleArrayItem("eligibilityCriteria", opt)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    background: isChecked ? "#f3e5dc" : "#faf7f2",
-                    border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                    cursor: "pointer",
-                    fontSize: "12px",
-                    color: "#4a352f",
-                    fontWeight: isChecked ? "600" : "normal"
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {}}
-                    style={{ accentColor: "#8d6e63" }}
-                  />
-                  <span>{opt}</span>
-                </label>
-              )
-            })}
-          </div>
-          <textarea
-            rows={2}
-            value={data.eligibilityExplanation || ""}
-            onChange={(e) => handleChange("eligibilityExplanation", e.target.value)}
-            placeholder="Short explanation of minimum eligibility or criteria for admission into your facilitation pipeline..."
-            style={{
-              width: "100%",
-              padding: "9px 12px",
-              border: "1px solid #d7ccc8",
-              borderRadius: "8px",
-              fontSize: "13px",
-              boxSizing: "border-box",
-              background: "#faf7f2",
-              color: "#4a352f"
-            }}
+          <CMFSelectDropdown
+            options={SECTOR_OPTIONS}
+            value={currentSectors}
+            onChange={(val) => handleChange("sectorsSupported", val)}
+            placeholder="Select supported SME economic sectors..."
+            multiple={true}
           />
         </div>
 
-        {/* Turnover Range & Programme Criteria */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
+        {/* Geographic Areas Served */}
+        <div style={{ marginBottom: "1.75rem" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
+            Geographic Areas Served <span style={{ color: "#e53e3e" }}>*</span>
+          </label>
+          <CMFSelectDropdown
+            options={geoOptions}
+            value={currentGeos}
+            onChange={(val) => handleChange("geographicAreas", val)}
+            placeholder="Select geographic operating focus..."
+            multiple={true}
+          />
+        </div>
+
+        {/* Business Stages Supported */}
+        <div style={{ marginBottom: "1.75rem" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
+            Business Stages Supported <span style={{ color: "#e53e3e" }}>*</span>
+          </label>
+          <CMFSelectDropdown
+            options={BUSINESS_STAGES}
+            value={currentStages}
+            onChange={(val) => handleChange("businessStages", val)}
+            placeholder="Select SME business stages supported..."
+            multiple={true}
+          />
+        </div>
+
+        {/* Eligibility Requirements */}
+        {/* Eligibility Requirements */}
+        <div style={{ marginBottom: "1.75rem" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
+            Eligibility Requirements <span style={{ color: "#e53e3e" }}>*</span>
+          </label>
+          <CMFSelectDropdown
+            options={ELIGIBILITY_OPTIONS}
+            value={currentCriteria}
+            onChange={(val) => handleChange("eligibilityCriteria", val)}
+            placeholder="Select baseline eligibility requirements..."
+            multiple={true}
+          />
+          <div style={{ marginTop: "8px" }}>
+            <textarea
+              rows={2}
+              value={data.eligibilityExplanation || ""}
+              onChange={(e) => handleChange("eligibilityExplanation", e.target.value)}
+              placeholder="Short explanation of minimum eligibility or criteria for admission into your facilitation pipeline..."
+              style={{
+                width: "100%",
+                padding: "9px 12px",
+                border: "1px solid #d7ccc8",
+                borderRadius: "8px",
+                fontSize: "13px",
+                boxSizing: "border-box",
+                background: "#faf7f2",
+                color: "#4a352f"
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Turnover Range & Excluded Sectors */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem", marginBottom: "1.75rem" }}>
           <div>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
               Turnover Range Supported <span style={{ fontSize: "11px", color: "#8d6e63", fontWeight: "normal" }}>(Optional)</span>
@@ -341,41 +218,17 @@ export default function CMFSMEFocusMatching({ data = {}, allFormData = {}, updat
         </div>
 
         {/* Ownership / Programme Criteria */}
-        <div style={{ marginBottom: "2rem" }}>
+        <div style={{ marginBottom: "1.75rem" }}>
           <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
             Ownership or Programme Criteria <span style={{ fontSize: "11px", color: "#8d6e63", fontWeight: "normal" }}>(Conditional / Optional)</span>
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "10px" }}>
-            {PROGRAMME_CRITERIA_OPTIONS.map(crit => {
-              const isChecked = currentProgCriteria.includes(crit)
-              return (
-                <label
-                  key={crit}
-                  onClick={() => toggleArrayItem("programmeCriteria", crit)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    background: isChecked ? "#f3e5dc" : "#faf7f2",
-                    border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                    cursor: "pointer",
-                    fontSize: "12px",
-                    color: "#4a352f"
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {}}
-                    style={{ accentColor: "#8d6e63" }}
-                  />
-                  <span>{crit}</span>
-                </label>
-              )
-            })}
-          </div>
+          <CMFSelectDropdown
+            options={PROGRAMME_CRITERIA_OPTIONS}
+            value={currentProgCriteria}
+            onChange={(val) => handleChange("programmeCriteria", val)}
+            placeholder="Select target demographic & programme criteria..."
+            multiple={true}
+          />
         </div>
 
         {/* Pipeline Capacity & Engagement Intake */}
@@ -471,38 +324,13 @@ export default function CMFSMEFocusMatching({ data = {}, allFormData = {}, updat
               <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
                 Funding Instruments Supported
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "8px" }}>
-                {FUNDING_INSTRUMENTS.map(inst => {
-                  const isChecked = currentFundingInstruments.includes(inst)
-                  return (
-                    <label
-                      key={inst}
-                      onClick={() => toggleArrayItem("fundingInstruments", inst)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "7px 10px",
-                        borderRadius: "6px",
-                        background: isChecked ? "#fef3c7" : "#ffffff",
-                        border: `1px solid ${isChecked ? "#d97706" : "#e2e8f0"}`,
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        color: "#4a352f",
-                        fontWeight: isChecked ? "600" : "normal"
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {}}
-                        style={{ accentColor: "#d97706" }}
-                      />
-                      <span>{inst}</span>
-                    </label>
-                  )
-                })}
-              </div>
+              <CMFSelectDropdown
+                options={FUNDING_INSTRUMENTS}
+                value={currentFundingInstruments}
+                onChange={(val) => handleChange("fundingInstruments", val)}
+                placeholder="Select funding instruments supported..."
+                multiple={true}
+              />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>
@@ -570,38 +398,13 @@ export default function CMFSMEFocusMatching({ data = {}, allFormData = {}, updat
               <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
                 Opportunity Types Facilitated
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "8px" }}>
-                {OPPORTUNITY_TYPES.map(opp => {
-                  const isChecked = currentOppTypes.includes(opp)
-                  return (
-                    <label
-                      key={opp}
-                      onClick={() => toggleArrayItem("opportunityTypes", opp)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "7px 10px",
-                        borderRadius: "6px",
-                        background: isChecked ? "#dcfce7" : "#ffffff",
-                        border: `1px solid ${isChecked ? "#16a34a" : "#e2e8f0"}`,
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        color: "#4a352f",
-                        fontWeight: isChecked ? "600" : "normal"
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {}}
-                        style={{ accentColor: "#16a34a" }}
-                      />
-                      <span>{opp}</span>
-                    </label>
-                  )
-                })}
-              </div>
+              <CMFSelectDropdown
+                options={OPPORTUNITY_TYPES}
+                value={currentOppTypes}
+                onChange={(val) => handleChange("opportunityTypes", val)}
+                placeholder="Select opportunity types facilitated..."
+                multiple={true}
+              />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>

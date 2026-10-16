@@ -2,6 +2,7 @@
 
 import React, { useRef } from "react"
 import { ShieldCheck, Lock, Upload, CheckCircle2, FileText, AlertCircle, Building, UserCheck } from "lucide-react"
+import CMFSelectDropdown from "../../components/CMFSelectDropdown"
 
 export default function CMFLegalVerification({ data = {}, allFormData = {}, updateData = () => {} }) {
   const isOrg = (allFormData?.entityOverview?.profileType || data?.profileType) !== "Individual practitioner"
@@ -89,40 +90,21 @@ export default function CMFLegalVerification({ data = {}, allFormData = {}, upda
 
       <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "14px", padding: "1.75rem", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
         {/* Capacity in which the CMF acts */}
-        <div style={{ marginBottom: "2rem" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem" }}>
+        <div style={{ marginBottom: "1.75rem" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
             Capacity in which the CMF Acts <span style={{ color: "#e53e3e" }}>*</span>
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-            {[
-              { id: "Independent facilitator", label: "Independent Facilitator", desc: "Operates as an autonomous advisory intermediary" },
-              { id: "Appointed representative", label: "Appointed Representative", desc: "Formally mandated by institutional funders or buyers" },
-              { id: "Programme partner", label: "Programme Partner", desc: "Designated delivery partner for an enterprise / incubator programme" }
-            ].map(cap => {
-              const selected = (data.capacityInWhichActs || "Independent facilitator") === cap.id
-              return (
-                <div
-                  key={cap.id}
-                  onClick={() => handleChange("capacityInWhichActs", cap.id)}
-                  style={{
-                    padding: "12px 14px",
-                    borderRadius: "10px",
-                    border: `2px solid ${selected ? "#8d6e63" : "#e6d7c3"}`,
-                    background: selected ? "rgba(141, 110, 99, 0.08)" : "#faf7f2",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease"
-                  }}
-                >
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "4px" }}>
-                    {cap.label}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-                    {cap.desc}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <CMFSelectDropdown
+            options={[
+              { value: "Independent facilitator", label: "Independent Facilitator", desc: "Operates as an autonomous advisory intermediary" },
+              { value: "Appointed representative", label: "Appointed Representative", desc: "Formally mandated by institutional funders or buyers" },
+              { value: "Programme partner", label: "Programme Partner", desc: "Designated delivery partner for an enterprise / incubator programme" }
+            ]}
+            value={data.capacityInWhichActs || "Independent facilitator"}
+            onChange={(val) => handleChange("capacityInWhichActs", val)}
+            placeholder="Select capacity..."
+            multiple={false}
+          />
         </div>
 
         {/* Organisation Entity Registration (Conditional on Organisation Profile) */}

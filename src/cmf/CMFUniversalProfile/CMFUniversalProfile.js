@@ -321,7 +321,7 @@ export default function CMFUniversalProfile() {
     )
   }
 
-  if (showSummary && !isEditing) {
+  if (showSummary) {
     return (
       <div className="universal-profile-container">
         <CMFProfileSummary
@@ -371,15 +371,6 @@ export default function CMFUniversalProfile() {
         gap: "1rem",
         marginBottom: "1.5rem"
       }}>
-        <div>
-          <h1 style={{ fontSize: "1.6rem", fontWeight: "800", color: "#3e2723", margin: "0 0 4px 0" }}>
-            Capital & Market Facilitator Profile
-          </h1>
-          <p style={{ margin: 0, fontSize: "13px", color: "#8d6e63" }}>
-            Build and manage your facilitator profile for BIG Marketplace matchmaking.
-          </p>
-        </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <button
             type="button"
@@ -404,12 +395,8 @@ export default function CMFUniversalProfile() {
           <button
             type="button"
             onClick={() => {
-              if (profileSubmitted) {
-                setShowSummary(true)
-                setIsEditing(false)
-              } else {
-                setShowSummary(true)
-              }
+              setShowSummary(true)
+              setIsEditing(false)
             }}
             style={{
               display: "inline-flex",
@@ -429,7 +416,21 @@ export default function CMFUniversalProfile() {
           </button>
         </div>
       </div>
-
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: "1rem",
+        marginBottom: "1.5rem",
+      }}>
+        <h1 style={{ fontSize: "1.6rem", fontWeight: "800", color: "#3e2723", margin: "0 0 4px 0" }}>
+          Capital & Market Facilitator Profile
+        </h1>
+        <p style={{ margin: 0, fontSize: "13px", color: "#8d6e63" }}>
+          Build and manage your facilitator profile for BIG Marketplace matchmaking.
+        </p>
+      </div>
       {/* Tracker Bar Navigation (9 Sections) */}
       <div className="profile-tracker">
         <div className="profile-tracker-inner">

@@ -2,6 +2,7 @@
 
 import React from "react"
 import { DollarSign, Clock, CheckCircle2, ShieldCheck, Link2, Upload, FileText } from "lucide-react"
+import CMFSelectDropdown from "../../components/CMFSelectDropdown"
 
 const PAYER_OPTIONS = [
   "SME",
@@ -79,30 +80,13 @@ export default function CMFFeesEngagement({ data = {}, updateData = () => {} }) 
             <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
               Who Pays for the Service? <span style={{ color: "#e53e3e" }}>*</span>
             </label>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {PAYER_OPTIONS.map(opt => {
-                const selected = (data.payer || "SME") === opt
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => handleChange("payer", opt)}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: "8px",
-                      border: `2px solid ${selected ? "#8d6e63" : "#d7ccc8"}`,
-                      background: selected ? "#f3e5dc" : "#faf7f2",
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      fontWeight: selected ? "700" : "500",
-                      cursor: "pointer"
-                    }}
-                  >
-                    {opt}
-                  </button>
-                )
-              })}
-            </div>
+            <CMFSelectDropdown
+              options={PAYER_OPTIONS}
+              value={data.payer || "SME"}
+              onChange={(val) => handleChange("payer", val)}
+              placeholder="Select payer..."
+              multiple={false}
+            />
             <span style={{ fontSize: "12px", color: "#8d6e63", display: "block", marginTop: "4px" }}>
               Identifies whether the SME pays directly, or if fees are subsidized by funder, corporate buyer or sponsor.
             </span>
@@ -112,30 +96,13 @@ export default function CMFFeesEngagement({ data = {}, updateData = () => {} }) 
             <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
               Fee Model <span style={{ color: "#e53e3e" }}>*</span>
             </label>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {FEE_MODELS.map(opt => {
-                const selected = (data.feeModel || "Fixed fee") === opt
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => handleChange("feeModel", opt)}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: "8px",
-                      border: `2px solid ${selected ? "#8d6e63" : "#d7ccc8"}`,
-                      background: selected ? "#f3e5dc" : "#faf7f2",
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      fontWeight: selected ? "700" : "500",
-                      cursor: "pointer"
-                    }}
-                  >
-                    {opt}
-                  </button>
-                )
-              })}
-            </div>
+            <CMFSelectDropdown
+              options={FEE_MODELS}
+              value={data.feeModel || "Fixed fee"}
+              onChange={(val) => handleChange("feeModel", val)}
+              placeholder="Select fee model..."
+              multiple={false}
+            />
           </div>
         </div>
 
@@ -370,38 +337,13 @@ export default function CMFFeesEngagement({ data = {}, updateData = () => {} }) 
           <p style={{ margin: "0 0 0.75rem 0", fontSize: "12px", color: "#7d5a50" }}>
             Keep the initial checklist short. Detailed SME documents should be requested through the support workflow when needed.
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "8px" }}>
-            {INITIAL_CHECKLIST_DEFAULT_ITEMS.map(item => {
-              const isChecked = currentChecklist.includes(item)
-              return (
-                <label
-                  key={item}
-                  onClick={() => toggleChecklistItem(item)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "8px 10px",
-                    borderRadius: "6px",
-                    background: isChecked ? "#f3e5dc" : "#faf7f2",
-                    border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                    cursor: "pointer",
-                    fontSize: "12px",
-                    color: "#4a352f",
-                    fontWeight: isChecked ? "600" : "normal"
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {}}
-                    style={{ accentColor: "#8d6e63" }}
-                  />
-                  <span>{item}</span>
-                </label>
-              )
-            })}
-          </div>
+          <CMFSelectDropdown
+            options={INITIAL_CHECKLIST_DEFAULT_ITEMS}
+            value={currentChecklist}
+            onChange={(val) => handleChange("initialAssessmentChecklist", val)}
+            placeholder="Select initial assessment checklist items..."
+            multiple={true}
+          />
         </div>
 
         {/* Engagement Terms Link or URL */}
