@@ -3,6 +3,7 @@
 import React from "react"
 import { Check, Plus, HelpCircle, Layers, Monitor, Users, Calendar } from "lucide-react"
 import { CAPITAL_SERVICES, MARKET_SERVICES } from "../../cmfProfileConfig"
+import CMFSelectDropdown from "../../components/CMFSelectDropdown"
 
 export default function CMFServicesSupport({ data = {}, allFormData = {}, updateData = () => {} }) {
   // Facilitation focus determines which services catalogue to render
@@ -22,6 +23,19 @@ export default function CMFServicesSupport({ data = {}, allFormData = {}, update
     } else {
       handleChange("servicesOffered", [...currentServices, srv])
     }
+  }
+
+  const capitalSelected = currentServices.filter(s => CAPITAL_SERVICES.includes(s))
+  const marketSelected = currentServices.filter(s => MARKET_SERVICES.includes(s))
+
+  const handleCapitalChange = (newSelected) => {
+    const nonCapital = currentServices.filter(s => !CAPITAL_SERVICES.includes(s))
+    handleChange("servicesOffered", [...nonCapital, ...newSelected])
+  }
+
+  const handleMarketChange = (newSelected) => {
+    const nonMarket = currentServices.filter(s => !MARKET_SERVICES.includes(s))
+    handleChange("servicesOffered", [...nonMarket, ...newSelected])
   }
 
   return (
@@ -53,84 +67,32 @@ export default function CMFServicesSupport({ data = {}, allFormData = {}, update
           {/* Capital Facilitation Services */}
           {showCapital && (
             <div style={{ marginBottom: "1.25rem", padding: "1rem", borderRadius: "10px", background: "#faf7f2", border: "1px solid #e6d7c3" }}>
-              <div style={{ fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "6px" }}>
-                <span>💰</span> Capital Facilitation Services
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>💰</span> Capital Facilitation Services ({capitalSelected.length} selected)
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px" }}>
-                {CAPITAL_SERVICES.map(srv => {
-                  const isChecked = currentServices.includes(srv)
-                  return (
-                    <label
-                      key={srv}
-                      onClick={() => toggleService(srv)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        padding: "9px 12px",
-                        borderRadius: "8px",
-                        background: isChecked ? "#f3e5dc" : "#ffffff",
-                        border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                        cursor: "pointer",
-                        fontSize: "13px",
-                        color: "#4a352f",
-                        fontWeight: isChecked ? "600" : "normal",
-                        transition: "all 0.15s ease"
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {}}
-                        style={{ accentColor: "#8d6e63" }}
-                      />
-                      <span>{srv}</span>
-                    </label>
-                  )
-                })}
-              </div>
+              <CMFSelectDropdown
+                options={CAPITAL_SERVICES}
+                value={capitalSelected}
+                onChange={handleCapitalChange}
+                placeholder="Select capital facilitation services..."
+                multiple={true}
+              />
             </div>
           )}
 
           {/* Market Facilitation Services */}
           {showMarket && (
             <div style={{ marginBottom: "1.25rem", padding: "1rem", borderRadius: "10px", background: "#faf7f2", border: "1px solid #e6d7c3" }}>
-              <div style={{ fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "6px" }}>
-                <span>🤝</span> Market Access & Procurement Services
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>🤝</span> Market Access & Procurement Services ({marketSelected.length} selected)
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px" }}>
-                {MARKET_SERVICES.map(srv => {
-                  const isChecked = currentServices.includes(srv)
-                  return (
-                    <label
-                      key={srv}
-                      onClick={() => toggleService(srv)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        padding: "9px 12px",
-                        borderRadius: "8px",
-                        background: isChecked ? "#f3e5dc" : "#ffffff",
-                        border: `1px solid ${isChecked ? "#8d6e63" : "#d7ccc8"}`,
-                        cursor: "pointer",
-                        fontSize: "13px",
-                        color: "#4a352f",
-                        fontWeight: isChecked ? "600" : "normal",
-                        transition: "all 0.15s ease"
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {}}
-                        style={{ accentColor: "#8d6e63" }}
-                      />
-                      <span>{srv}</span>
-                    </label>
-                  )
-                })}
-              </div>
+              <CMFSelectDropdown
+                options={MARKET_SERVICES}
+                value={marketSelected}
+                onChange={handleMarketChange}
+                placeholder="Select market access services..."
+                multiple={true}
+              />
             </div>
           )}
 

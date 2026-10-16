@@ -1,14 +1,15 @@
 "use client"
 
 import React from "react"
-import { Mail, Phone, Calendar, Globe, User, Lock, MessageSquare } from "lucide-react"
+import { Mail, Phone, Calendar, Globe, User, Lock, MessageSquare, Info } from "lucide-react"
 import { LANGUAGES_LIST } from "../../cmfProfileConfig"
+import CMFSelectDropdown from "../../components/CMFSelectDropdown"
 
 const CONTACT_ROUTES = [
-  { id: "BIG enquiry", label: "BIG Marketplace Enquiry", desc: "In-platform messaging via 'Request Support' button" },
-  { id: "Email", label: "Direct Public Email", desc: "SMEs can email your published enquiries inbox" },
-  { id: "Telephone", label: "Telephone Contact", desc: "SMEs can call your direct line" },
-  { id: "Booking link", label: "Online Booking Link", desc: "Calendly, Google Meet, or scheduled booking URL" }
+  { value: "BIG enquiry", label: "BIG Marketplace Enquiry", desc: "In-platform messaging via 'Request Support' button" },
+  { value: "Email", label: "Direct Public Email", desc: "SMEs can email your published enquiries inbox" },
+  { value: "Telephone", label: "Telephone Contact", desc: "SMEs can call your direct line" },
+  { value: "Booking link", label: "Online Booking Link", desc: "Calendly, Google Meet, or scheduled booking URL" }
 ]
 
 export default function CMFContactDetails({ data = {}, updateData = () => {} }) {
@@ -17,14 +18,6 @@ export default function CMFContactDetails({ data = {}, updateData = () => {} }) 
   }
 
   const currentLanguages = Array.isArray(data.languagesSupported) ? data.languagesSupported : ["English"]
-
-  const toggleLanguage = (lang) => {
-    if (currentLanguages.includes(lang)) {
-      handleChange("languagesSupported", currentLanguages.filter(l => l !== lang))
-    } else {
-      handleChange("languagesSupported", [...currentLanguages, lang])
-    }
-  }
 
   return (
     <div style={{ width: "100%", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -100,31 +93,13 @@ export default function CMFContactDetails({ data = {}, updateData = () => {} }) 
             <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem" }}>
               Preferred Contact Route <span style={{ color: "#e53e3e" }}>*</span>
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
-              {CONTACT_ROUTES.map(route => {
-                const selected = (data.preferredContactRoute || "BIG enquiry") === route.id
-                return (
-                  <div
-                    key={route.id}
-                    onClick={() => handleChange("preferredContactRoute", route.id)}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: "8px",
-                      border: `2px solid ${selected ? "#8d6e63" : "#e6d7c3"}`,
-                      background: selected ? "rgba(141, 110, 99, 0.08)" : "#faf7f2",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <div style={{ fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "2px" }}>
-                      {route.label}
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#7d5a50" }}>
-                      {route.desc}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <CMFSelectDropdown
+              options={CONTACT_ROUTES}
+              value={data.preferredContactRoute || "BIG enquiry"}
+              onChange={(val) => handleChange("preferredContactRoute", val)}
+              placeholder="Select preferred contact route..."
+              multiple={false}
+            />
           </div>
 
           {/* Contact details conditional on contact route */}
@@ -210,29 +185,31 @@ export default function CMFContactDetails({ data = {}, updateData = () => {} }) 
             <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
               Languages Supported <span style={{ fontSize: "11px", color: "#8d6e63", fontWeight: "normal" }}>(Optional)</span>
             </label>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {LANGUAGES_LIST.map(lang => {
-                const isSelected = currentLanguages.includes(lang)
-                return (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => toggleLanguage(lang)}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "16px",
-                      border: `1px solid ${isSelected ? "#8d6e63" : "#d7ccc8"}`,
-                      background: isSelected ? "#f3e5dc" : "#ffffff",
-                      color: "#4a352f",
-                      fontSize: "12px",
-                      fontWeight: isSelected ? "700" : "normal",
-                      cursor: "pointer"
-                    }}
-                  >
-                    {lang}
-                  </button>
-                )
-              })}
+            <CMFSelectDropdown
+              options={LANGUAGES_LIST}
+              value={currentLanguages}
+              onChange={(val) => handleChange("languagesSupported", val)}
+              placeholder="Select languages your team supports..."
+              multiple={true}
+            />
+            {/* Platform Language Notice */}
+            <div style={{
+              marginTop: "8px",
+              padding: "8px 12px",
+              borderRadius: "6px",
+              backgroundColor: "#fdf8f0",
+              border: "1px solid #fae2c8",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "8px",
+              fontSize: "12px",
+              color: "#8a581e",
+              lineHeight: "1.4"
+            }}>
+              <Info size={15} style={{ flexShrink: 0, marginTop: "2px", color: "#b45309" }} />
+              <span>
+                <strong>Platform Language Notice:</strong> The BIG Platform interface and system notifications operate in English only. Languages selected here indicate which languages your team is able to conduct SME consultations, advisory, and offline engagements in.
+              </span>
             </div>
           </div>
 

@@ -13,42 +13,70 @@ export default function CMFInstructions({ formData, completedSections, onPreview
       <div style={{
         background: "linear-gradient(135deg, #4a352f 0%, #3e2723 100%)",
         color: "#f8f5f2",
-        padding: "2rem",
-        borderRadius: "16px",
-        marginBottom: "2rem",
-        boxShadow: "0 8px 24px rgba(62, 39, 35, 0.15)",
+        padding: "1.25rem 1.5rem",
+        borderRadius: "14px",
+        marginBottom: "1.5rem",
+        boxShadow: "0 6px 20px rgba(62, 39, 35, 0.15)",
         position: "relative",
-        overflow: "hidden"
+        overflow: "hidden",
+        textAlign: "center"
       }}>
-        <div style={{ maxWidth: "800px", position: "relative", zIndex: 1 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.12)", padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1rem", color: "#d9b98a" }}>
-            <Shield size={14} /> Capital & Market Facilitator Setup
+        <div style={{ maxWidth: "780px", margin: "0 auto", position: "relative", zIndex: 1 }}>
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+            background: "rgba(255,255,255,0.12)",
+            padding: "4px 12px",
+            borderRadius: "20px",
+            fontSize: "11px",
+            fontWeight: "600",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+            marginBottom: "0.6rem",
+            color: "#d9b98a"
+          }}>
+            <Shield size={13} /> Capital & Market Facilitator Setup
           </div>
-          <h1 style={{ fontSize: "1.85rem", fontWeight: "700", margin: "0 0 0.75rem 0", lineHeight: "1.3" }}>
+          <h1 style={{
+            fontSize: "1.6rem",
+            fontWeight: "700",
+            color: "#ffffff",
+            margin: "0 0 0.5rem 0",
+            lineHeight: "1.25",
+            letterSpacing: "-0.01em"
+          }}>
             Facilitator Profile Setup
           </h1>
-          <p style={{ fontSize: "1.05rem", lineHeight: "1.65", color: "#e8d8cf", margin: 0 }}>
+          <p style={{
+            fontSize: "0.95rem",
+            lineHeight: "1.55",
+            color: "#f5ede8",
+            margin: "0 auto",
+            maxWidth: "720px"
+          }}>
             Complete your facilitator profile so SMEs can understand your services, suitability and engagement terms. Your public profile will be shared with SMEs on BIG Marketplace. Fields marked <strong>“Private—BIG verification only”</strong> will not appear on your public profile.
           </p>
         </div>
 
         {/* Progress & Quick Actions */}
         <div style={{
-          marginTop: "1.75rem",
-          paddingTop: "1.5rem",
+          marginTop: "1.25rem",
+          paddingTop: "1rem",
           borderTop: "1px solid rgba(255,255,255,0.15)",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "center",
           flexWrap: "wrap",
-          gap: "1rem"
+          gap: "1.5rem"
         }}>
-          <div style={{ minWidth: "260px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "600", marginBottom: "6px", color: "#d7ccc8" }}>
+          <div style={{ minWidth: "240px", maxWidth: "340px", flex: "1 1 240px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "600", marginBottom: "5px", color: "#d7ccc8" }}>
               <span>Profile Completion</span>
               <span>{completionPercentage}%</span>
             </div>
-            <div style={{ width: "100%", height: "8px", background: "rgba(255,255,255,0.15)", borderRadius: "4px", overflow: "hidden" }}>
+            <div style={{ width: "100%", height: "7px", background: "rgba(255,255,255,0.15)", borderRadius: "4px", overflow: "hidden" }}>
               <div style={{
                 width: `${completionPercentage}%`,
                 height: "100%",
@@ -58,7 +86,7 @@ export default function CMFInstructions({ formData, completedSections, onPreview
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
             {onPreviewSMEView && (
               <button
                 type="button"
@@ -66,19 +94,19 @@ export default function CMFInstructions({ formData, completedSections, onPreview
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "6px",
                   background: "rgba(255,255,255,0.12)",
                   color: "#ffffff",
                   border: "1px solid rgba(255,255,255,0.25)",
-                  padding: "9px 18px",
+                  padding: "7px 16px",
                   borderRadius: "8px",
-                  fontSize: "13px",
+                  fontSize: "12px",
                   fontWeight: "600",
                   cursor: "pointer",
                   transition: "all 0.2s ease"
                 }}
               >
-                <Eye size={16} /> Preview SME View
+                <Eye size={15} /> Preview SME View
               </button>
             )}
             {onContinue && (
@@ -88,19 +116,19 @@ export default function CMFInstructions({ formData, completedSections, onPreview
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "6px",
                   background: "#d9b98a",
                   color: "#3e2723",
                   border: "none",
-                  padding: "9px 20px",
+                  padding: "7px 18px",
                   borderRadius: "8px",
-                  fontSize: "13px",
+                  fontSize: "12px",
                   fontWeight: "700",
                   cursor: "pointer",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.2)"
                 }}
               >
-                Start Profile <ArrowRight size={16} />
+                Start Profile <ArrowRight size={15} />
               </button>
             )}
           </div>

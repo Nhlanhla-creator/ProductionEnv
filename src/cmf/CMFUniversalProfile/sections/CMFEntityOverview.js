@@ -2,6 +2,7 @@
 
 import React, { useRef } from "react"
 import { Building2, User, Globe, Linkedin, MapPin, Upload, Image as ImageIcon, Sparkles } from "lucide-react"
+import CMFSelectDropdown from "../../components/CMFSelectDropdown"
 
 export default function CMFEntityOverview({ data = {}, updateData = () => {} }) {
   const fileInputRef = useRef(null)
@@ -22,6 +23,11 @@ export default function CMFEntityOverview({ data = {}, updateData = () => {} }) 
     }
   }
 
+  const PROFILE_TYPES = [
+    { value: "Organisation", label: "Organisation / Advisory Firm", desc: "Corporate entity, consultancy, accelerator or syndicate" },
+    { value: "Individual practitioner", label: "Individual Practitioner", desc: "Independent facilitator, advisor or consultant" }
+  ]
+
   return (
     <div style={{ width: "100%", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div style={{ marginBottom: "1.5rem" }}>
@@ -36,38 +42,16 @@ export default function CMFEntityOverview({ data = {}, updateData = () => {} }) 
       <div style={{ background: "#ffffff", border: "1px solid #e6d7c3", borderRadius: "14px", padding: "1.75rem", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
         {/* Profile Type Selection */}
         <div style={{ marginBottom: "1.75rem" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
             Profile Type <span style={{ color: "#e53e3e" }}>*</span>
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-            {[
-              { id: "Organisation", label: "Organisation / Advisory Firm", desc: "Corporate entity, consultancy, accelerator or syndicate", icon: Building2 },
-              { id: "Individual practitioner", label: "Individual Practitioner", desc: "Independent facilitator, advisor or consultant", icon: User }
-            ].map(type => {
-              const selected = (data.profileType || "Organisation") === type.id
-              const Icon = type.icon
-              return (
-                <div
-                  key={type.id}
-                  onClick={() => handleChange("profileType", type.id)}
-                  style={{
-                    padding: "14px 16px",
-                    borderRadius: "10px",
-                    border: `2px solid ${selected ? "#8d6e63" : "#e6d7c3"}`,
-                    background: selected ? "rgba(141, 110, 99, 0.08)" : "#faf7f2",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                    <Icon size={18} color={selected ? "#4a352f" : "#8d6e63"} />
-                    <span style={{ fontSize: "14px", fontWeight: "700", color: "#4a352f" }}>{type.label}</span>
-                  </div>
-                  <p style={{ margin: 0, fontSize: "12px", color: "#7d5a50" }}>{type.desc}</p>
-                </div>
-              )
-            })}
-          </div>
+          <CMFSelectDropdown
+            options={PROFILE_TYPES}
+            value={data.profileType || "Organisation"}
+            onChange={(val) => handleChange("profileType", val)}
+            placeholder="Select profile type..."
+            multiple={false}
+          />
         </div>
 
         {/* Name and Logo Grid */}
@@ -218,39 +202,20 @@ export default function CMFEntityOverview({ data = {}, updateData = () => {} }) 
 
         {/* Facilitation Focus (Crucial for downstream conditionals!) */}
         <div style={{ marginBottom: "1.75rem" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.5rem" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "0.4rem" }}>
             Facilitation Focus <span style={{ color: "#e53e3e" }}>*</span>
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-            {[
-              { id: "Capital", label: "Capital Facilitation", desc: "Funding readiness, debt/equity origination & syndication" },
-              { id: "Market access", label: "Market Access Facilitation", desc: "Buyer links, corporate supply chain readiness & tender tenders" },
-              { id: "Both", label: "Both Capital & Market", desc: "Full spectrum facilitation covering finance and market commercialization" }
-            ].map(focus => {
-              const selected = (data.facilitationFocus || "Both") === focus.id
-              return (
-                <div
-                  key={focus.id}
-                  onClick={() => handleChange("facilitationFocus", focus.id)}
-                  style={{
-                    padding: "12px 14px",
-                    borderRadius: "10px",
-                    border: `2px solid ${selected ? "#8d6e63" : "#e6d7c3"}`,
-                    background: selected ? "rgba(141, 110, 99, 0.08)" : "#faf7f2",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease"
-                  }}
-                >
-                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "4px" }}>
-                    {focus.label}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#7d5a50", lineHeight: "1.4" }}>
-                    {focus.desc}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <CMFSelectDropdown
+            options={[
+              { value: "Capital", label: "Capital Facilitation", desc: "Funding readiness, debt/equity origination & syndication" },
+              { value: "Market access", label: "Market Access Facilitation", desc: "Buyer links, corporate supply chain readiness & tender support" },
+              { value: "Both", label: "Both Capital & Market", desc: "Full spectrum facilitation covering finance and market commercialization" }
+            ]}
+            value={data.facilitationFocus || "Both"}
+            onChange={(val) => handleChange("facilitationFocus", val)}
+            placeholder="Select facilitation focus..."
+            multiple={false}
+          />
         </div>
 
         {/* Location & Online Links */}
