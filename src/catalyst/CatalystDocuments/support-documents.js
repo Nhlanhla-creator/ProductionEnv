@@ -54,6 +54,18 @@ const getAllDocuments = (label, data) => {
   const files = data?.formData?.documentUpload?.[field] || [];
   return files;
 };
+
+const getCatalystRegisteredName = (data) =>
+  data?.formData?.entityOverview?.registeredName ||
+  data?.formData?.entityOverview?.tradingName ||
+  data?.entityOverview?.registeredName ||
+  data?.entityOverview?.tradingName ||
+  data?.formData?.business?.registeredName ||
+  data?.formData?.applicant?.fullName ||
+  data?.formData?.companyName ||
+  data?.registeredName ||
+  null;
+
 const getUpdatedAt = (label, data) => {
   const fieldMap = {
     "Standard NDA": "standardNda",
@@ -140,11 +152,7 @@ const CatalystDocuments = () => {
               const data = docSnap.data();
               setProfileData(data);
               
-              const name = data?.formData?.business?.registeredName || 
-                          data?.formData?.applicant?.fullName ||
-                          data?.formData?.companyName ||
-                          "Unknown";
-              setRegisteredName(name);
+              setRegisteredName(getCatalystRegisteredName(data) || "Unknown");
               
               const submitted = DOCUMENTS.filter(label => {
                 const url = getDocumentURL(label, data);
@@ -188,21 +196,21 @@ const CatalystDocuments = () => {
       const profileRef = doc(db, "catalystProfiles", user.uid);
       const profileSnap = await getDoc(profileRef);
       if (profileSnap.exists()) {
-        const data = profileSnap.data();
-        return data?.formData?.business?.registeredName || 
-               data?.formData?.applicant?.fullName ||
-               data?.formData?.companyName ||
-               null;
+        return getCatalystRegisteredName(profileSnap.data());
       }
       return null;
     } catch (error) {
       console.error("Error fetching registeredName:", error);
-      return null;
+      throw error;
     }
   };
 
   const validateDocumentWithAI = async (docLabel, file, registeredName) => {
     try {
+      if (!registeredName?.trim()) {
+        throw new Error("Please add a registered or trading name to your Catalyst profile before uploading documents.");
+      }
+
       const base64Data = await new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -221,7 +229,7 @@ const CatalystDocuments = () => {
       return result.data.validationResult;
     } catch (error) {
       console.error("AI validation failed:", error);
-      throw new Error("Network error - please check your connection and try again");
+      throw error;
     }
   };
 

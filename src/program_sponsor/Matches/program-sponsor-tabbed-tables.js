@@ -290,7 +290,10 @@ const SuccessfulPlacementsTable = ({ onCountChange }) => {
       const doneIds = new Set(["completed", "rated"]);
       stages.filter((s) => s.terminal && s.group === "success").forEach((s) => doneIds.add(s.id));
 
-      const snapshot = await getDocs(collection(db, "internshipApplications"));
+      const snapshot = await getDocs(query(
+        collection(db, "internshipApplications"),
+        where("sponsorId", "==", user.uid),
+      ));
 
       const rows = await Promise.all(
         snapshot.docs.map(async (applicationDoc) => {

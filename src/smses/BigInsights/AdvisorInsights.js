@@ -15,7 +15,8 @@ import {
   UserCheck,
   Settings
 } from "lucide-react";
-import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import { db } from '../../firebaseConfig';
 import "../MyFunderMatches/funding-insights.css";
 import "../../styles/insights-grid.css";
@@ -95,10 +96,23 @@ export function AdvisorInsights() {
     const fetchData = async () => {
       try {
         setLoading(true);
+        const userId = getAuth().currentUser?.uid;
+        if (!userId) {
+          setAdvisorApplicationsData([]);
+          setAdvisorProfilesData([]);
+          setAdvisoryMatchesData([]);
+          setUniversalProfilesData([]);
+          setSmeAdvisorApplicationsData([]);
+          setLoading(false);
+          return;
+        }
         // console.log("Starting data fetch from Firebase...");
         
         // Fetch advisor applications
-        const advisorApplicationsQuery = query(collection(db, "AdvisorApplications"));
+        const advisorApplicationsQuery = query(
+          collection(db, "AdvisorApplications"),
+          where("smeId", "==", userId)
+        );
         const advisorApplicationsSnapshot = await getDocs(advisorApplicationsQuery);
         const applications = [];
         advisorApplicationsSnapshot.forEach((doc) => {
@@ -124,7 +138,10 @@ export function AdvisorInsights() {
         // console.log("Fetched", profiles.length, "advisor profiles");
 
         // Fetch advisory matches
-        const advisoryMatchesQuery = query(collection(db, "AdvisoryMatches"));
+        const advisoryMatchesQuery = query(
+          collection(db, "AdvisoryMatches"),
+          where("smeId", "==", userId)
+        );
         const advisoryMatchesSnapshot = await getDocs(advisoryMatchesQuery);
         const matches = [];
         advisoryMatchesSnapshot.forEach((doc) => {
@@ -137,20 +154,20 @@ export function AdvisorInsights() {
         // console.log("Fetched", matches.length, "advisory matches");
 
         // Fetch universal profiles for hasAdvisoryStructure data
-        const universalProfilesQuery = query(collection(db, "universalProfiles"));
-        const universalProfilesSnapshot = await getDocs(universalProfilesQuery);
-        const universalProfiles = [];
-        universalProfilesSnapshot.forEach((doc) => {
-          universalProfiles.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
+        const universalProfileSnapshot = await getDoc(
+          doc(db, "universalProfiles", userId)
+        );
+        const universalProfiles = universalProfileSnapshot.exists()
+          ? [{ id: universalProfileSnapshot.id, ...universalProfileSnapshot.data() }]
+          : [];
         setUniversalProfilesData(universalProfiles);
         // console.log("Fetched", universalProfiles.length, "universal profiles");
         
         // Fetch SME Advisor Applications for most requested skills
-        const smeAdvisorApplicationsQuery = query(collection(db, "SmeAdvisorApplications"));
+        const smeAdvisorApplicationsQuery = query(
+          collection(db, "SmeAdvisorApplications"),
+          where("smeId", "==", userId)
+        );
         const smeAdvisorApplicationsSnapshot = await getDocs(smeAdvisorApplicationsQuery);
         const smeApplications = [];
         smeAdvisorApplicationsSnapshot.forEach((doc) => {

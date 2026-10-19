@@ -120,46 +120,21 @@ function Header({
     return () => observer.disconnect()
   }, [])
 
-  // Look up a display name for `uid` — messageSenderCollection first
-  // (entity/fund-style profiles), then the `users` collection (name
-  // fields, then email), so a sender who never filled in
-  // MyuniversalProfiles still gets a real name instead of "Unnamed Funder".
-  const resolveSenderName = async (uid) => {
-    if (!uid) return "Unknown Funder"
-
+  // Message display names are labels, never proof of sender identity.
+  const resolveSenderName = async (uid, message = {}) => {
+    if (uid === "system") return "BIG Marketplace Africa"
+    if (message.fromName || message.sender) return message.fromName || message.sender
+    if (!uid) return "Unknown sender"
     try {
-      const senderDoc = await getDoc(doc(db, messageSenderCollection, uid))
-      if (senderDoc.exists()) {
-        const data = senderDoc.data()
-        const fundName = data?.formData?.productsServices?.funds?.[0]?.name
-        const contactName = data?.formData?.contactDetails?.primaryContactName
-        const registeredName = data?.formData?.entityOverview?.registeredName
-        const companyName = data?.company
-
-        const resolved = fundName || contactName || registeredName || companyName
-        if (resolved) return resolved
+      const publicDoc = await getDoc(doc(db, "publicProfiles", uid))
+      if (publicDoc.exists()) {
+        const data = publicDoc.data()
+        return data.displayName || data.registeredName || data.name || "Marketplace member"
       }
-    } catch (err) {
-      console.error("Error fetching sender name:", err)
+    } catch (error) {
+      console.warn("Sender display name unavailable:", error.code)
     }
-
-    // Fall back to the users collection before giving up
-    try {
-      const userDoc = await getDoc(doc(db, "users", uid))
-      if (userDoc.exists()) {
-        const data = userDoc.data()
-        const resolved =
-          data?.displayName ||
-          data?.name ||
-          data?.username ||
-          data?.email
-        if (resolved) return resolved
-      }
-    } catch (err) {
-      console.error("Error fetching sender from users collection:", err)
-    }
-
-    return "BIG System"
+    return "Marketplace member"
   }
 
   // Profile & roles managed by hooks (useHeaderProfile, useRoles)
@@ -202,7 +177,7 @@ function Header({
         const messagesWithSenders = await Promise.all(
           activeDocs.map(async (docSnap) => {
             const msg = docSnap.data()
-            const senderName = await resolveSenderName(msg.from)
+            const senderName = await resolveSenderName(msg.from, msg)
 
             return {
               ...msg,
