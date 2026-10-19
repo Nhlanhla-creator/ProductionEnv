@@ -548,14 +548,14 @@ export const usePortfolioData = (options = {}) => {
         getDocs(query(collection(db, "cmfApplications"), where("cmfId", "==", uid))).catch(() => ({ docs: [] })),
         getDocs(query(collection(db, "users"), where("onboardedBy", "==", uid))).catch(() => ({ docs: [] })),
         getDocs(query(collection(db, "cmfActivities"), where("facilitatorId", "==", uid))).catch(() => ({ docs: [] })),
-        getDocs(collection(db, "bigEvaluations")).catch(() => ({ docs: [] })),
-        getDocs(collection(db, "catalystApplications")).catch(() => ({ docs: [] })),
-        getDocs(collection(db, "smeApplications")).catch(() => ({ docs: [] })),
+        Promise.resolve({ docs: [] }),
+        Promise.resolve({ docs: [] }),
+        Promise.resolve({ docs: [] }),
       ]);
 
       // 3. Build scores lookup
       const scoresById = {};
-      bigSnap.forEach((d) => {
+      bigSnap.docs.forEach((d) => {
         const { scores } = d.data();
         if (scores) scoresById[d.id] = scores;
       });
@@ -709,60 +709,23 @@ export const usePortfolioData = (options = {}) => {
         }
       });
 
-      // Fallback: If in CMF context and no matches/applications recorded yet,
-      // load eligible SME profiles from universalProfiles so the dashboard is immediately populated
-      if (rawAppsMap.size === 0 && isCMFContext) {
-        try {
-          const uniProfilesSnap = await getDocs(collection(db, "universalProfiles"));
-          uniProfilesSnap.docs.forEach((d) => {
-            const profileData = d.data();
-            const entityType1 = (
-              profileData?.entityOverview?.entityType ||
-              profileData?.fundManageOverview?.entityType ||
-              ""
-            ).toUpperCase();
-            const entityType2 = (profileData?.productsServices?.entityType || "").toUpperCase();
-            const isSME =
-              entityType1 === "SME" || entityType1 === "SMSE" || entityType1 === "BUSINESS" ||
-              entityType2 === "SME" || entityType2 === "SMSE" || entityType2 === "BUSINESS";
-
-            if (isSME) {
-              addRawApp({
-                docId: d.id,
-                smeId: d.id,
-                smeName: profileData?.entityOverview?.registeredName || profileData?.entityOverview?.tradingName || "Business",
-                pipelineStage: "Matched",
-                currentStatus: "Matched",
-                matchPercentage: 80,
-                applicationDate: profileData?.bigScoreUpdatedAt || new Date().toISOString(),
-                sector: Array.isArray(profileData?.entityOverview?.economicSectors)
-                  ? profileData.entityOverview.economicSectors[0]
-                  : (profileData?.entityOverview?.economicSectors || "Services"),
-                location: profileData?.entityOverview?.province || profileData?.entityOverview?.location || "South Africa",
-              }, "universalProfiles");
-            }
-          });
-        } catch (e) {
-          console.warn("[usePortfolioData] fallback universalProfiles query failed:", e);
-        }
-      }
-
+      // A missing cohort is empty. Private profiles are not a discovery source.
       const rawApps = Array.from(rawAppsMap.values());
 
-      // Parse universal batch across the ecosystem
-      const parseAppDocs = (snap) =>
-        snap.docs.map((d) => {
-          const parts = d.id.split("_");
-          return { docId: d.id, smeId: parts[1] || d.data().smeId || "", programIndex: parts[2] || "0", ...d.data() };
-        });
-
-      const rawAllApps = [
-        ...parseAppDocs(allCatAppSnap),
-        ...parseAppDocs(allSmeAppSnap),
-      ];
-
-      // 5. Collect all unique smeIds
-      const allSmeIds = new Set([...rawApps.map((a) => a.smeId), ...rawAllApps.map((a) => a.smeId)].filter(Boolean));
+      // Insights use only this user's cohort. Cross-platform insights require
+      // backend-published aggregates, not unrestricted application reads.
+      const rawAllApps = rawApps;
+      const allSmeIds = new Set(rawApps.map((a) => a.smeId).filter(Boolean));
+      await Promise.all([...allSmeIds].map(async (id) => {
+        try {
+          const scoreDoc = await getDoc(doc(db, "bigEvaluations", id));
+          if (scoreDoc.exists() && scoreDoc.data().scores) {
+            scoresById[id] = scoreDoc.data().scores;
+          }
+        } catch (error) {
+          console.warn(`[usePortfolioData] score unavailable for ${id}:`, error.code);
+        }
+      }));
 
       // 6. Fetch universalProfiles and users in parallel
       const [profiles, userDocs] = await Promise.all([
@@ -824,13 +787,13 @@ export const usePortfolioData = (options = {}) => {
             location: resolvedLocation,
             fundingRequired: resolvedFunding,
             profile,
-            bigScore: evalScores.bigScore ?? a.bigScore ?? (profile.bigScore || 50),
-            compliance: evalScores.compliance ?? a.compliance ?? (profile.compliance || 60),
-            fundability: evalScores.fundability ?? a.fundability ?? (profile.fundability || 55),
-            legitimacy: evalScores.legitimacy ?? a.legitimacy ?? (profile.legitimacy || 60),
-            leadership: evalScores.leadership ?? a.leadership ?? (profile.leadership || 65),
-            pis: evalScores.pis ?? a.pis ?? (profile.pis || 60),
-            matchPercentage: a.matchPercentage || 75,
+            bigScore: evalScores.bigScore ?? a.bigScore ?? (profile.bigScore ?? null),
+            compliance: evalScores.compliance ?? a.compliance ?? (profile.compliance ?? null),
+            fundability: evalScores.fundability ?? a.fundability ?? (profile.fundability ?? null),
+            legitimacy: evalScores.legitimacy ?? a.legitimacy ?? (profile.legitimacy ?? null),
+            leadership: evalScores.leadership ?? a.leadership ?? (profile.leadership ?? null),
+            pis: evalScores.pis ?? a.pis ?? (profile.pis ?? null),
+            matchPercentage: a.matchPercentage ?? null,
             lastActiveDate: user.lastActiveDate || a.lastActiveDate || null,
             lastActiveAt: user.lastActiveAt || a.lastActiveAt || null,
           };
@@ -839,33 +802,7 @@ export const usePortfolioData = (options = {}) => {
       const enrichedApps = enrichApps(rawApps, profiles, scoresById, userDocs);
       const enrichedAllApps = enrichApps(rawAllApps, profiles, scoresById, userDocs);
 
-      // ── 7. Write scores back to source collections (fire-and-forget) ────
-      const writebacks = enrichedApps
-        .filter((a) => a.docId && scoresById[a.smeId])
-        .map((a) => {
-          const targetCol = a.sourceCollection === "cmfBusinessMatches"
-            ? "cmfBusinessMatches"
-            : a.sourceCollection === "smeApplications"
-            ? "smeApplications"
-            : "catalystApplications";
-
-          return setDoc(
-            doc(db, targetCol, a.docId),
-            {
-              bigScore: a.bigScore,
-              compliance: a.compliance,
-              fundability: a.fundability,
-              legitimacy: a.legitimacy,
-              leadership: a.leadership,
-              pis: a.pis,
-              scoresLastSyncedAt: new Date().toISOString(),
-            },
-            { merge: true },
-          ).catch((err) =>
-            console.warn(`[usePortfolioData] writeback failed for ${a.docId}:`, err)
-          );
-        });
-      Promise.all(writebacks);
+      // Evaluation display does not mutate application or match records.
 
       // ── 8. Compute metrics for user's apps (used by CohortSelection) ──────
       const computed = computeMetrics(enrichedApps);

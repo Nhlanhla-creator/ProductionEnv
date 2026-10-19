@@ -838,7 +838,11 @@ const MyToolsPage = () => {
           
           // Get full voucher details
           const voucherRef = collection(db, "vouchers")
-          const voucherQuery = query(voucherRef, where("transactionRef", "==", data.transactionRef))
+          const voucherQuery = query(
+            voucherRef,
+            where("transactionRef", "==", data.transactionRef),
+            where("userId", "==", user.uid)
+          )
           const voucherDoc = await getDocs(voucherQuery)
           
           let voucherData = data

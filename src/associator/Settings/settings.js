@@ -614,8 +614,11 @@ const AssociateSettings = () => {
       
       const companyData = companySnap.data()
 
-      const invitationToken = Math.random().toString(36).substring(2, 15) + 
-                             Math.random().toString(36).substring(2, 15)
+      const tokenBytes = new Uint8Array(24)
+      crypto.getRandomValues(tokenBytes)
+      const invitationToken = Array.from(tokenBytes, (byte) =>
+        byte.toString(16).padStart(2, "0")
+      ).join("")
 
       const invitationData = {
         email: inviteEmail,
@@ -633,7 +636,7 @@ const AssociateSettings = () => {
         emailSentAt: null
       }
 
-      await addDoc(collection(db, "invitations"), invitationData)
+      await setDoc(doc(db, "invitations", invitationToken), invitationData)
 
       setInviteSuccess(`Invitation sent to ${inviteEmail}!`)
       setInviteEmail("")

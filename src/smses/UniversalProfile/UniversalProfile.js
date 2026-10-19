@@ -379,18 +379,17 @@ export default function UniversalProfile() {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
   }
 
-  const markSectionAsCompleted = async (section) => {
+  const markSectionAsCompleted = (section) => {
     const updated = { ...completedSections, [section]: true }
     setCompletedSections(updated)
     const userId = effectiveUserId || auth.currentUser?.uid
     if (userId) {
-      const docRef = doc(db, "universalProfiles", userId)
-      await setDoc(docRef, { completedSections: updated }, { merge: true })
       const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
       if (!isCmfView) {
         localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(updated))
       }
     }
+    return updated
   }
 
   const navigateToNextSection = () => {
@@ -419,7 +418,7 @@ export default function UniversalProfile() {
     return await uploadRecursive(data, section)
   }
 
-  const saveDataToFirebase = async (section = null, isFinalSubmit = false) => {
+  const saveDataToFirebase = async (section = null, isFinalSubmit = false, completedSectionsToSave = completedSections) => {
     setLoading(true)
     const userId = effectiveUserId || auth.currentUser?.uid
     const currentUser = auth.currentUser
@@ -446,14 +445,14 @@ export default function UniversalProfile() {
     const existingHistory = profileSnap.exists() ? profileSnap.data().editHistory || [] : []
     const dataToSave = {
       ...uploaded,
-      completedSections: isFinalSubmit ? { ...completedSections, declarationConsent: true } : completedSections,
+      completedSections: isFinalSubmit ? { ...completedSectionsToSave, declarationConsent: true } : completedSectionsToSave,
       lastEditedBy: currentUser.uid, lastEditedByName: userName,
       lastEditedAt: new Date().toISOString(), lastEditedByRole: userRole,
       editHistory: [...existingHistory, editLogEntry],
     }
 
+    const triggerPayload = {}
     if (section) {
-      const triggerPayload = {}
       const legitimacySections = ["contactDetails", "entityOverview", "productsServices"]
       if (legitimacySections.includes(section)) {
         triggerPayload.triggerLegitimacyEvaluation = true
@@ -486,11 +485,8 @@ if (operationalSections.includes(section)) {
         triggerPayload.triggerLegitimacyEvaluation = true
         triggerPayload.triggerGovernanceEvaluation = true
       }
-      if (Object.keys(triggerPayload).length > 0) {
-        await setDoc(docRef, triggerPayload, { merge: true })
-      }
     }
-    await setDoc(docRef, dataToSave, { merge: true })
+    await setDoc(docRef, { ...triggerPayload, ...dataToSave }, { merge: true })
     setEditHistory([...existingHistory, editLogEntry])
     setLoading(false)
   }
@@ -527,8 +523,8 @@ if (operationalSections.includes(section)) {
       if (activeSection !== "instructions") setValidationModal({ open: true, title: "Please review the following issues:", messages: errors })
       return
     }
-    markSectionAsCompleted(activeSection)
-    await saveDataToFirebase(activeSection)
+    const updatedCompletedSections = markSectionAsCompleted(activeSection)
+    await saveDataToFirebase(activeSection, false, updatedCompletedSections)
     navigateToNextSection()
   }
 
@@ -573,8 +569,8 @@ if (operationalSections.includes(section)) {
       //   }
       // }
       
-      await markSectionAsCompleted("declarationConsent")
-      await saveDataToFirebase(null, true)
+      const updatedCompletedSections = markSectionAsCompleted("declarationConsent")
+      await saveDataToFirebase(null, true, updatedCompletedSections)
       const userEmail = formData.contactDetails?.email;
       const smeName = formData.entityOverview?.registeredName || "there";
 

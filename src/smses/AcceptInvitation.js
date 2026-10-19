@@ -3,9 +3,8 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { auth, db } from "../firebaseConfig";
 import { 
-  doc, getDoc, updateDoc, query, 
-  where, getDocs, collection, setDoc,
-  arrayUnion, limit 
+  doc, getDoc, updateDoc, setDoc,
+  arrayUnion, writeBatch
 } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { 
@@ -53,22 +52,15 @@ export default function AcceptInvitation() {
         
         console.log("Loading invitation with token:", token);
         
-        // Find invitation by token
-        const q = query(
-          collection(db, "invitations"),
-          where("token", "==", token),
-          limit(1)
-        );
+        // The token is the document ID, allowing a private point lookup rather than a collection scan.
+        const invitationDoc = await getDoc(doc(db, "invitations", token));
         
-        const querySnapshot = await getDocs(q);
-        
-        if (querySnapshot.empty) {
+        if (!invitationDoc.exists() || invitationDoc.data().token !== token) {
           setError("Invalid or expired invitation link.");
           setLoading(false);
           return;
         }
         
-        const invitationDoc = querySnapshot.docs[0];
         const invitationData = invitationDoc.data();
         
         // Check if expired
@@ -191,6 +183,7 @@ export default function AcceptInvitation() {
         username: username || user.email.split("@")[0],
         companyId: invitation.companyId,
         userRole: invitation.role,
+        membershipInvitationId: invitation.id,
         createdAt: now,
         joinedAt: now,
         profileComplete: false,
@@ -200,31 +193,33 @@ export default function AcceptInvitation() {
       await updateDoc(userRef, {
         companyId: invitation.companyId,
         userRole: invitation.role,
+        membershipInvitationId: invitation.id,
         ...(!userSnap.data().email && { email: invitation.email }),
         joinedAt: now,
         ...(username && { username }),
       });
     }
 
-    // Company members list (unchanged)
     const companyRef = doc(db, "companies", invitation.companyId);
     const companySnap = await getDoc(companyRef);
-    if (companySnap.exists()) {
-      const members = companySnap.data().members || [];
-      if (!members.includes(user.uid)) {
-        await updateDoc(companyRef, {
-          members: arrayUnion(user.uid),
-          updatedAt: now,
-        });
-      }
+    if (!companySnap.exists()) {
+      throw new Error("The invited company no longer exists.");
     }
 
-    // Mark invitation as accepted (unchanged)
-    await updateDoc(doc(db, "invitations", invitation.id), {
+    const batch = writeBatch(db);
+    const members = companySnap.data().members || [];
+    if (!members.includes(user.uid)) {
+      batch.update(companyRef, {
+        members: arrayUnion(user.uid),
+        updatedAt: now,
+      });
+    }
+    batch.update(doc(db, "invitations", invitation.id), {
       status: "accepted",
       acceptedAt: now,
       acceptedBy: user.uid,
     });
+    await batch.commit();
 
     setSuccess(`Successfully joined ${invitation.companyName} as ${invitation.role}!`);
     setTimeout(() => navigate("/profile"), 2000);

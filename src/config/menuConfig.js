@@ -577,6 +577,12 @@ export const smeMenuItems = [
     route: "/profile",
   },
   {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/my-documents",
+  },
+  {
     id: "dashboard",
     label: "My BIG Score",
     icon: <BarChart size={18} />,
@@ -737,12 +743,6 @@ export const smeMenuItems = [
     label: "BIG Insights",
     icon: <Lightbulb size={18} />,
     route: "/insights",
-  },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/my-documents",
   },
   {
     id: "messages",

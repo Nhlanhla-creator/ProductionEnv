@@ -508,7 +508,10 @@ export function ProgramSponsorInternTable({ filters = {}, stageFilter, onCountCh
         const sponsorData = sponsorProfileSnap.data();
         const sponsorOrgName = sponsorData.formData?.entityOverview?.organizationName || "";
 
-        const applicationsSnapshot = await getDocs(collection(db, "internshipApplications"));
+        const applicationsSnapshot = await getDocs(query(
+          collection(db, "internshipApplications"),
+          where("sponsorId", "==", user.uid),
+        ));
 
         const rows = await Promise.all(
           applicationsSnapshot.docs.map(async (applicationDoc) => {

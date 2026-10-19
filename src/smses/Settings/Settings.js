@@ -5,7 +5,7 @@ import { auth, db } from '../../firebaseConfig';
 import { 
   doc, getDoc, updateDoc, deleteDoc, 
   collection, addDoc, query, where, 
-  getDocs, arrayUnion, arrayRemove, writeBatch 
+  getDocs, arrayUnion, arrayRemove, writeBatch, setDoc
 } from "firebase/firestore"
 import TwoFactorSetup from '../../TwoFactorSetup';
 
@@ -560,18 +560,14 @@ const handleInviteMember = async () => {
     // Check if user already exists with this email
     const usersQuery = query(
       collection(db, "users"),
-      where("email", "==", email)
+      where("companyId", "==", companyId)
     );
     const userSnapshot = await getDocs(usersQuery);
 
-    if (!userSnapshot.empty) {
-      // User exists, check if already in company
-      const existingUser = userSnapshot.docs[0].data();
-      if (existingUser.companyId === companyId) {
-        setInviteError("This user is already a member of your company.");
-        setInviteLoading(false);
-        return;
-      }
+    if (userSnapshot.docs.some((userDoc) => userDoc.data().email === email)) {
+    setInviteError("This user is already a member of your company.");
+    setInviteLoading(false);
+    return;
     }
 
     // Block duplicate pending invitations
@@ -607,8 +603,8 @@ const handleInviteMember = async () => {
       emailSentAt: null
     };
 
-    // Add invitation document - this triggers the Firebase Function
-    await addDoc(collection(db, "invitations"), invitationData);
+    // Use the random token as the ID so invitees can load one document without listing invitations.
+    await setDoc(doc(db, "invitations", invitationToken), invitationData);
 
     // Success message
     setInviteSuccess(`Invitation sent to ${email}! The email should arrive shortly.`);

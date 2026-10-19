@@ -167,21 +167,10 @@ export const CMFMatchesProvider = ({ children }) => {
     return `${pct}% match fit based on aligning with your focus in ${sectors} and operational presence in ${formatCustomTerm(location)}.`
   }
 
-  const mapSMEProfileToMatch = (smeId, smeData, matchRecord, cmfPref) => {
+  const mapSMEProfileToMatch = (smeId, smeData, matchRecord, cmfPref, isDirectOnboarded) => {
     const sector = getNestedField(smeData, "entityOverview.economicSectors")?.[0] || "Services"
     const score = smeData.bigScore || 45
     const name = getNestedField(smeData, "entityOverview.registeredName") || getNestedField(smeData, "entityOverview.tradingName") || "Unnamed Business"
-
-    const isDirectOnboarded = Boolean(
-      (matchRecord?.reason && matchRecord.reason.toLowerCase().includes("onboarded")) ||
-      matchRecord?.pipelineStage === "Active Support" ||
-      matchRecord?.currentStatus === "Active Support" ||
-      smeData.onboardedBy ||
-      smeData.sponsorType === "CMF" ||
-      smeData.entityOverview?.sponsorType === "CMF" ||
-      smeData.entityOverview?.sponsorName?.toLowerCase?.().includes("cmf") ||
-      smeData.corporateId
-    )
 
     return {
       id: smeId,
@@ -211,7 +200,10 @@ export const CMFMatchesProvider = ({ children }) => {
       reason: matchRecord?.reason || (isDirectOnboarded ? "Directly onboarded by Capital and Market Facilitator." : getMatchReason(smeData, 75)),
       source: isDirectOnboarded ? "onboarded" : "matched",
       isOnboarded: isDirectOnboarded,
-      onboardedBy: smeData.onboardedBy || null
+      isSponsored: !isDirectOnboarded && smeData.entityOverview?.sponsorType === "CMF" &&
+        smeData.entityOverview?.sponsorViewPermission === "yes",
+      onboardedBy: smeData.onboardedBy || null,
+      onboardedByName: isDirectOnboarded ? smeData.onboardedByName || null : null
     }
   }
 
@@ -314,7 +306,8 @@ export const CMFMatchesProvider = ({ children }) => {
       pis: data.pis || 0,
       source: isDirectOnboarded ? "onboarded" : "matched",
       isOnboarded: isDirectOnboarded,
-      onboardedBy: data.onboardedBy || null
+      onboardedBy: data.onboardedBy || null,
+      onboardedByName: data.onboardedByName || null
     }
   }
 
@@ -397,7 +390,8 @@ export const CMFMatchesProvider = ({ children }) => {
       pis: data.pis || 0,
       source: isDirectOnboarded ? "onboarded" : "matched",
       isOnboarded: isDirectOnboarded,
-      onboardedBy: data.onboardedBy || null
+      onboardedBy: data.onboardedBy || null,
+      onboardedByName: data.onboardedByName || null
     }
   }
 
@@ -414,6 +408,7 @@ export const CMFMatchesProvider = ({ children }) => {
     try {
       setLoading(true)
       let currentEffectiveId = `${user.uid}_cmf`
+      let currentUserData = null
 
       // 1. Resolve effective CMF user ID
       try {
@@ -421,6 +416,7 @@ export const CMFMatchesProvider = ({ children }) => {
         const userDocSnap = await getDoc(userDocRef)
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data()
+          currentUserData = userData
           const companyId = userData.companyId
           if (companyId) {
             const companyDocRef = doc(db, "companies", companyId)
@@ -441,15 +437,30 @@ export const CMFMatchesProvider = ({ children }) => {
 
       // 2. Fetch CMF profile preferences
       let cmfPref = null
+      let cmfOnboarderName = ""
       try {
         const cmfDocRef = doc(db, "cmfProfiles", currentEffectiveId)
         const cmfDocSnap = await getDoc(cmfDocRef)
         if (cmfDocSnap.exists()) {
-          cmfPref = cmfDocSnap.data()?.generalInvestmentPreference
+          const cmfProfile = cmfDocSnap.data()
+          cmfPref = cmfProfile?.generalInvestmentPreference
+          cmfOnboarderName =
+            cmfProfile?.entityOverview?.organisationName ||
+            cmfProfile?.entityOverview?.registeredName ||
+            cmfProfile?.contactDetails?.accountAdminName ||
+            cmfProfile?.contactDetails?.smeContactName ||
+            ""
         }
       } catch (err) {
         console.warn("Error fetching CMF profile:", err)
       }
+      cmfOnboarderName ||= currentUserData?.displayName ||
+        currentUserData?.fullName ||
+        currentUserData?.name ||
+        currentUserData?.username ||
+        user.displayName ||
+        user.email ||
+        "CMF"
 
       // 3. Fetch existing facilitator matches maps
       const existingSmeMatchesMap = {}
@@ -478,8 +489,65 @@ export const CMFMatchesProvider = ({ children }) => {
         console.warn("Error fetching existing match records:", err)
       }
 
-      // 4. Fetch profiles
-      const universalProfilesSnap = await getDocs(collection(db, "universalProfiles"))
+      // A business enters this CMF's cohort only through onboarding or explicit
+      // sponsor permission on its own profile.
+      const onboardedUsersSnap = await getDocs(query(
+        collection(db, "users"),
+        where("onboardedBy", "==", user.uid)
+      ))
+      const onboardedSmeIds = new Set(
+        onboardedUsersSnap.docs
+          .filter((userDoc) => {
+            const data = userDoc.data()
+            const roles = [
+              data.role,
+              ...(Array.isArray(data.roleArray) ? data.roleArray : []),
+              ...(data.roles && typeof data.roles === "object" ? Object.keys(data.roles) : [])
+            ].map((role) => String(role || "").toLowerCase())
+            return roles.some((role) =>
+              ["sme", "smse", "business", "smes", "smses"].includes(role)
+            )
+          })
+          .map((userDoc) => userDoc.id)
+      )
+      const sponsorIds = [...new Set([user.uid, currentEffectiveId])]
+      const sponsoredSmeProfilesSnap = await getDocs(query(
+        collection(db, "universalProfiles"),
+        where("entityOverview.sponsorType", "==", "CMF"),
+        where("entityOverview.sponsorName", "in", sponsorIds),
+        where("entityOverview.sponsorViewPermission", "==", "yes")
+      ))
+
+      const authorizedSmeProfiles = new Map()
+      const onboardedProfiles = await Promise.all(
+        [...onboardedSmeIds].map((profileId) =>
+          getDoc(doc(db, "universalProfiles", profileId))
+        )
+      )
+      onboardedProfiles.forEach((profileSnap) => {
+        if (profileSnap.exists()) {
+          authorizedSmeProfiles.set(profileSnap.id, {
+            data: profileSnap.data(),
+            isOnboarded: true
+          })
+        }
+      })
+      sponsoredSmeProfilesSnap.forEach((profileSnap) => {
+        const profileData = profileSnap.data()
+        const entityOverview = profileData.entityOverview || {}
+        if (
+          entityOverview.sponsorType === "CMF" &&
+          sponsorIds.includes(entityOverview.sponsorName) &&
+          entityOverview.sponsorViewPermission === "yes" &&
+          !authorizedSmeProfiles.has(profileSnap.id)
+        ) {
+          authorizedSmeProfiles.set(profileSnap.id, {
+            data: profileData,
+            isOnboarded: false
+          })
+        }
+      })
+
       const funderProfilesSnap = await getDocs(collection(db, "MyuniversalProfiles"))
       const catalystProfilesSnap = await getDocs(collection(db, "catalystProfiles"))
 
@@ -489,10 +557,9 @@ export const CMFMatchesProvider = ({ children }) => {
 
       const catalystIds = new Set()
 
-      // Process universalProfiles
-      for (const docSnap of universalProfilesSnap.docs) {
-        const profileId = docSnap.id
-        const profileData = docSnap.data()
+      // Process only the SMEs authorized above, never the global SME directory.
+      for (const [profileId, candidate] of authorizedSmeProfiles) {
+        const profileData = candidate.data
 
         // Detect type using getNestedField
         const entityType1 = (getNestedField(profileData, "entityOverview.entityType") ||
@@ -502,120 +569,62 @@ export const CMFMatchesProvider = ({ children }) => {
         const isSME = entityType1 === "SME" || entityType1 === "SMSE" || entityType1 === "BUSINESS" ||
           entityType2 === "SME" || entityType2 === "SMSE" || entityType2 === "BUSINESS"
 
-        const isFunder = entityType1 === "INVESTOR" || entityType1 === "FUNDER" || entityType1 === "SPONSOR" ||
-          entityType2 === "INVESTOR" || entityType2 === "FUNDER" || entityType2 === "SPONSOR"
+        if (!isSME) continue
 
-        const isCatalyst = entityType1 === "CATALYST" || entityType2 === "CATALYST"
+        const sponsorType = getNestedField(profileData, "entityOverview.sponsorType") ||
+          profileData.sponsorType || ""
+        const sponsorName = getNestedField(profileData, "entityOverview.sponsorName") ||
+          profileData.sponsorName || ""
+        const sponsorPermission = getNestedField(profileData, "entityOverview.sponsorViewPermission") ||
+          profileData.sponsorViewPermission || ""
+        const hasSponsorConsent = sponsorType === "CMF" &&
+          sponsorIds.includes(sponsorName) &&
+          sponsorPermission === "yes"
+        if (!candidate.isOnboarded && !hasSponsorConsent) continue
 
-        // Completeness check
-        const completeness = calculateCompleteness(profileData)
+        const matchDocId = `${user.uid}_${profileId}`
+        const matchDocRef = doc(db, "cmfBusinessMatches", matchDocId)
+        const isDirectOnboarded = candidate.isOnboarded
+        const matchPercentage = isDirectOnboarded
+          ? 100
+          : calculateMatchPercentage(profileData, cmfPref)
+        let matchRecord = existingSmeMatchesMap[profileId]
 
-        if (isSME) {
-          let matchRecord = existingSmeMatchesMap[profileId]
-          const isDirectOnboarded = profileData.onboardedBy === user.uid ||
-            profileData.onboardedBy === currentEffectiveId ||
-            profileData.sponsorType === "CMF" ||
-            !!profileData.corporateId
-
-          if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
-
-          if (!matchRecord) {
-            const matchPct = calculateMatchPercentage(profileData, cmfPref)
-            if (matchPct >= 50 || isDirectOnboarded) {
-              const reason = getMatchReason(profileData, matchPct)
-              const matchDocId = `${user.uid}_${profileId}`
-              const matchDocRef = doc(db, "cmfBusinessMatches", matchDocId)
-              matchRecord = {
-                id: matchDocId,
-                facilitatorId: user.uid,
-                smeId: profileId,
-                pipelineStage: isDirectOnboarded ? "Active Support" : "Matched",
-                currentStatus: isDirectOnboarded ? "Active Support" : "Matched",
-                matchPercentage: isDirectOnboarded ? 100 : matchPct,
-                reason: reason,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-              }
-              await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set matchDoc:", e))
-            }
+        if (!matchRecord) {
+          matchRecord = {
+            id: matchDocId,
+            facilitatorId: user.uid,
+            smeId: profileId,
+            pipelineStage: isDirectOnboarded ? "Active Support" : "Matched",
+            currentStatus: isDirectOnboarded ? "Active Support" : "Matched",
+            matchPercentage,
+            reason: isDirectOnboarded
+              ? "Directly onboarded by this Capital and Market Facilitator."
+              : "SME selected this CMF as sponsor and granted profile access.",
+            createdAt: Date.now(),
+            updatedAt: Date.now()
           }
-          if (matchRecord) {
-            finalSmeMatches.push(mapSMEProfileToMatch(profileId, profileData, matchRecord, cmfPref))
-          }
-        }
-        else if (isFunder) {
-          const sponsorType = profileData.sponsorType || profileData.entityOverview?.sponsorType || ""
-          const onboardedBy = profileData.onboardedBy || profileData.sponsorName || profileData.entityOverview?.sponsorName || ""
-          const isCmfOnboarded = sponsorType === "CMF" || !!profileData.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
-          if (isCmfOnboarded && onboardedBy !== user.uid && onboardedBy !== currentEffectiveId) {
-            continue
-          }
-
-          let matchRecord = existingFunderMatchesMap[profileId]
-          const isDirectOnboarded = isCmfOnboarded || onboardedBy === user.uid || onboardedBy === currentEffectiveId
-          if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
-
-          if (!matchRecord) {
-            const matchPct = calculateMatchPercentage(profileData, cmfPref)
-            if (matchPct >= 50 || isDirectOnboarded) {
-              const reason = getMatchReason(profileData, matchPct)
-              const matchDocId = `${user.uid}_${profileId}`
-              const matchDocRef = doc(db, "cmfFunderMatches", matchDocId)
-              matchRecord = {
-                id: matchDocId,
-                facilitatorId: user.uid,
-                funderId: profileId,
-                pipelineStage: "Matched",
-                currentStatus: "Matched",
-                matchPercentage: isDirectOnboarded ? 100 : matchPct,
-                reason: reason,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-              }
-              await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set funder matchDoc:", e))
-            }
-          }
-          if (matchRecord) {
-            finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileData, matchRecord, cmfPref))
+          try {
+            await setDoc(matchDocRef, matchRecord)
+          } catch (error) {
+            console.warn(`Could not create CMF cohort record for SME ${profileId}:`, error)
           }
         }
-        else if (isCatalyst) {
-          const sponsorType = profileData.sponsorType || profileData.entityOverview?.sponsorType || ""
-          const onboardedBy = profileData.onboardedBy || profileData.sponsorName || profileData.entityOverview?.sponsorName || ""
-          const isCmfOnboarded = sponsorType === "CMF" || !!profileData.corporateId || (onboardedBy && onboardedBy.includes("_cmf"))
-          if (isCmfOnboarded && onboardedBy !== user.uid && onboardedBy !== currentEffectiveId) {
-            continue
-          }
 
-          let matchRecord = existingCatalystMatchesMap[profileId]
-          const isDirectOnboarded = isCmfOnboarded || onboardedBy === user.uid || onboardedBy === currentEffectiveId
-          if (!isDirectOnboarded && !matchRecord && completeness < 40) continue
-
-          if (!matchRecord) {
-            const matchPct = calculateMatchPercentage(profileData, cmfPref)
-            if (matchPct >= 50 || isDirectOnboarded) {
-              const reason = getMatchReason(profileData, matchPct)
-              const matchDocId = `${user.uid}_${profileId}`
-              const matchDocRef = doc(db, "cmfCatalystMatches", matchDocId)
-              matchRecord = {
-                id: matchDocId,
-                facilitatorId: user.uid,
-                catalystId: profileId,
-                pipelineStage: "Matched",
-                currentStatus: "Matched",
-                matchPercentage: isDirectOnboarded ? 100 : matchPct,
-                reason: reason,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-              }
-              await setDoc(matchDocRef, matchRecord).catch((e) => console.warn("Failed to set catalyst matchDoc:", e))
+        const profileWithOnboarder = isDirectOnboarded
+          ? {
+              ...profileData,
+              onboardedBy: user.uid,
+              onboardedByName: cmfOnboarderName
             }
-          }
-          if (matchRecord) {
-            finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileData, matchRecord, cmfPref))
-            catalystIds.add(profileId)
-          }
-        }
+          : profileData
+        finalSmeMatches.push(mapSMEProfileToMatch(
+          profileId,
+          profileWithOnboarder,
+          matchRecord,
+          cmfPref,
+          isDirectOnboarded
+        ))
       }
 
       // Process funderProfiles from MyuniversalProfiles
@@ -658,7 +667,10 @@ export const CMFMatchesProvider = ({ children }) => {
           }
         }
         if (matchRecord) {
-          finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileData, matchRecord, cmfPref))
+          const profileForMatch = isDirectOnboarded
+            ? { ...profileData, onboardedByName: cmfOnboarderName }
+            : profileData
+          finalFunderMatches.push(mapFunderProfileToMatch(profileId, profileForMatch, matchRecord, cmfPref))
         }
       }
 
@@ -702,7 +714,10 @@ export const CMFMatchesProvider = ({ children }) => {
           }
         }
         if (matchRecord) {
-          finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileData, matchRecord, cmfPref))
+          const profileForMatch = isDirectOnboarded
+            ? { ...profileData, onboardedByName: cmfOnboarderName }
+            : profileData
+          finalCatalystMatches.push(mapCatalystProfileToMatch(profileId, profileForMatch, matchRecord, cmfPref))
           catalystIds.add(profileId)
         }
       }

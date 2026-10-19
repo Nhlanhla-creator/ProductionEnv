@@ -293,12 +293,12 @@ const CMFStagePipeline = ({ counts, activeFilter, setActiveFilter, activeTab = "
 }
 
 // ─── Column definitions ────────────────────────────────────────────────────
-// filterType drives which popover opens from that column's header. Every
-// column has one — there's no separate filters panel.
+// filterType drives which popover opens from that column's header.
 const COLUMN_DEFS = {
   supportValue: { label: "Support Value", minWidth: "112px", filterType: "supportValue" },
   bigScore: { label: "BIG Score", minWidth: "112px", filterType: "bigScore" },
   startDate: { label: "Start Date", minWidth: "96px", filterType: "startDate" },
+  onboardedBy: { label: "Onboarded By", minWidth: "150px" },
   sector: { label: "Sector", minWidth: "100px", filterType: "sector" },
   location: { label: "Location", minWidth: "92px", filterType: "location" },
   teamSize: { label: "Team Size", minWidth: "80px", filterType: "teamSize" },
@@ -310,11 +310,11 @@ const COLUMN_DEFS = {
 }
 
 const DEFAULT_COLUMN_ORDER = [
-  "supportValue", "bigScore", "sector", "location", "teamSize",
+  "supportValue", "bigScore", "onboardedBy", "sector", "location", "teamSize",
   "applications", "applicationStatus", "status", "startDate", "dealType", "supportProvided"
 ]
 const DEFAULT_COLUMN_VISIBILITY = {
-  supportValue: false, bigScore: false, startDate: true, status: true, dealType: false,
+  supportValue: false, bigScore: false, onboardedBy: true, startDate: true, status: true, dealType: false,
   sector: true, location: false, teamSize: false, supportProvided: false, applications: true, applicationStatus: true,
 }
 const DEFAULT_DENSITY = "comfortable"
@@ -651,6 +651,7 @@ export default function CMFCohorts() {
   const [activeCohortTab, setActiveCohortTab] = useState("businesses")
   const [cmfCohorts, setCmfCohorts] = useState([])
   const [onboardedUserIds, setOnboardedUserIds] = useState(new Set())
+  const [onboardedByNameByUserId, setOnboardedByNameByUserId] = useState({})
   const [applyModal, setApplyModal] = useState(null)
   const [cohortApps, setCohortApps] = useState({})
   const [cmfSentAppsBySme, setCmfSentAppsBySme] = useState({})
@@ -855,7 +856,11 @@ export default function CMFCohorts() {
 
   const fetchOnboardedUserIds = async () => {
     const user = auth.currentUser
-    if (!user) return
+    if (!user) {
+      setOnboardedUserIds(new Set())
+      setOnboardedByNameByUserId({})
+      return
+    }
     try {
       const q = query(
         collection(db, "users"),
@@ -863,21 +868,75 @@ export default function CMFCohorts() {
       )
       const snap = await getDocs(q)
       const ids = new Set()
+      const onboarderIds = new Set()
       const cmfIds = []
       snap.forEach((docSnap) => {
         const data = docSnap.data()
         ids.add(docSnap.id)
-        if (data.role === "CMF") {
-          cmfIds.push(docSnap.id)
+        if (data.uid) ids.add(data.uid)
+        if (data.role === "CMF") cmfIds.push(docSnap.id)
+        if (typeof data.onboardedBy === "string" && data.onboardedBy.trim()) {
+          onboarderIds.add(data.onboardedBy.trim())
         }
       })
+      
       setOnboardedUserIds(ids)
+
+      const getCmfName = (data) => {
+        const profile = data || {}
+        return profile.entityOverview?.organisationName ||
+          profile.entityOverview?.registeredName ||
+          profile.entityOverview?.tradingName ||
+          profile.contactDetails?.accountAdminName ||
+          profile.contactDetails?.smeContactName ||
+          profile.displayName ||
+          profile.fullName ||
+          profile.name ||
+          profile.username ||
+          ""
+      }
+      const onboarderNames = {}
+      for (const onboarderId of onboarderIds) {
+        let name = ""
+        for (const profileId of [`${onboarderId}_cmf`, onboarderId]) {
+          try {
+            const profileDoc = await getDoc(doc(db, "cmfProfiles", profileId))
+            if (profileDoc.exists()) {
+              name = getCmfName(profileDoc.data())
+              if (name) break
+            }
+          } catch (error) {
+            console.warn(`Could not load CMF profile for onboarder ${onboarderId}:`, error)
+          }
+        }
+        if (!name) {
+          try {
+            const onboarderUserDoc = await getDoc(doc(db, "users", onboarderId))
+            if (onboarderUserDoc.exists()) name = getCmfName(onboarderUserDoc.data())
+          } catch (error) {
+            console.warn(`Could not load user profile for onboarder ${onboarderId}:`, error)
+          }
+        }
+        onboarderNames[onboarderId] = name || "CMF"
+      }
+
+      const namesByUserId = {}
+      snap.forEach((docSnap) => {
+        const onboarderId = docSnap.data().onboardedBy
+        if (onboarderId) {
+          namesByUserId[docSnap.id] = onboarderNames[onboarderId] || "CMF"
+          if (docSnap.data().uid) namesByUserId[docSnap.data().uid] = onboarderNames[onboarderId] || "CMF"
+        }
+      })
+      setOnboardedByNameByUserId(namesByUserId)
 
       const loadedCmfs = []
       for (const cmfId of cmfIds) {
-        const profileDoc = await getDoc(doc(db, "cmfProfiles", cmfId))
-        if (profileDoc.exists()) {
-          loadedCmfs.push({ id: cmfId, ...profileDoc.data() })
+        try {
+          const profileDoc = await getDoc(doc(db, "cmfProfiles", cmfId))
+          if (profileDoc.exists()) loadedCmfs.push({ id: cmfId, ...profileDoc.data() })
+        } catch (error) {
+          console.warn(`Could not load CMF cohort profile ${cmfId}:`, error)
         }
       }
       setCmfCohorts(loadedCmfs)
@@ -981,17 +1040,7 @@ export default function CMFCohorts() {
         const isDirectOnboarded = Boolean(
           (onboardedUserIds && onboardedUserIds.has(sme.id)) ||
           sme.source === "onboarded" ||
-          sme.isOnboarded ||
-          sme.onboardedBy ||
-          (typeof sme.reason === "string" && sme.reason.toLowerCase().includes("onboarded")) ||
-          (typeof sme.raw?.reason === "string" && sme.raw.reason.toLowerCase().includes("onboarded")) ||
-          sme.sponsorType === "CMF" ||
-          sme.raw?.sponsorType === "CMF" ||
-          sme.raw?.entityOverview?.sponsorType === "CMF" ||
-          sme.raw?.entityOverview?.sponsorName?.toLowerCase?.().includes("cmf") ||
-          sme.corporateId ||
-          (typeof sme.currentStatus === "string" && sme.currentStatus.toLowerCase().includes("active support")) ||
-          (typeof sme.pipelineStage === "string" && sme.pipelineStage.toLowerCase().includes("active support"))
+          sme.isOnboarded
         )
         const resolvedStatus = (isDirectOnboarded && (!sme.currentStatus || sme.currentStatus === "Matched"))
           ? "Active Support"
@@ -1060,6 +1109,9 @@ export default function CMFCohorts() {
           statusHistory: sme.statusHistory || [],
           source: isDirectOnboarded ? "onboarded" : "matched",
           isOnboarded: isDirectOnboarded,
+          onboardedByName: isDirectOnboarded
+            ? onboardedByNameByUserId[sme.id] || sme.onboardedByName || "CMF"
+            : null,
           bigScore: sme.bigScore || 0,
           compliance: sme.compliance || 0,
           legitimacy: sme.legitimacy || 0,
@@ -1069,7 +1121,7 @@ export default function CMFCohorts() {
           raw: sme
         }
       })
-  }, [smeMatches, onboardedUserIds])
+  }, [smeMatches, onboardedUserIds, onboardedByNameByUserId])
 
   const fetchCohortApplications = async (smeIds) => {
     if (!smeIds || smeIds.length === 0) return
@@ -1205,6 +1257,7 @@ export default function CMFCohorts() {
           archived: funder.archived || false,
           source: isDirectOnboarded ? "onboarded" : "matched",
           isOnboarded: isDirectOnboarded,
+          onboardedByName: isDirectOnboarded ? funder.onboardedByName || "CMF" : null,
           bigScore: funder.bigScore || 0,
           raw: funder
         }
@@ -1254,6 +1307,7 @@ export default function CMFCohorts() {
           archived: cat.archived || false,
           source: isDirectOnboarded ? "onboarded" : "matched",
           isOnboarded: isDirectOnboarded,
+          onboardedByName: isDirectOnboarded ? cat.onboardedByName || "CMF" : null,
           bigScore: cat.bigScore || 0,
           raw: cat
         }
@@ -2175,6 +2229,12 @@ export default function CMFCohorts() {
           </td>
         )
       }
+      case "onboardedBy":
+        return (
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}>
+            <span className="text-[#4a352f]">{cohort.onboardedByName || "—"}</span>
+          </td>
+        )
       case "sector":
         return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={style}><span className="text-[#4a352f]">{cohort.sector}</span></td>
       case "location":
@@ -2729,7 +2789,7 @@ export default function CMFCohorts() {
                           <div className="flex items-start gap-1 min-w-0">
                             <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
                             <span className="cmc-th-label">{getColumnLabel(key)}</span>
-                            <FilterTrigger type={col.filterType} active={filterActiveFor(col.filterType)} />
+                            {col.filterType && <FilterTrigger type={col.filterType} active={filterActiveFor(col.filterType)} />}
                           </div>
                           <ColumnResizer colKey={key} />
                         </th>

@@ -7,7 +7,7 @@ import { AcceleratorFlowPipeline } from "./accelerator-flow-pipeline"
 import AcceleratorTabbedTables from "./accelerator-tabbed-tables"
 import styles from "./accelerator.module.css"
 import { X, ArrowRight } from 'lucide-react'
-import { collection, getDocs } from "firebase/firestore"
+import { collection, getDocs, query, where } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 
 const onboardingSteps = [
@@ -98,10 +98,11 @@ export default function SupportProgramsPage() {
     const fetchApplications = async () => {
       if (user) {
         try {
-          const snapshot = await getDocs(collection(db, "smeCatalystApplications"));
-          const apps = snapshot.docs
-            .filter(doc => doc.data().smeId === user.uid)
-            .map(doc => ({ id: doc.id, ...doc.data() }));
+          const snapshot = await getDocs(query(
+            collection(db, "smeCatalystApplications"),
+            where("smeId", "==", user.uid),
+          ));
+          const apps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setApplications(apps);
         } catch (error) {
           console.error("Error fetching applications:", error);
@@ -147,10 +148,11 @@ export default function SupportProgramsPage() {
     if (user) {
       const fetchApplications = async () => {
         try {
-          const snapshot = await getDocs(collection(db, "smeCatalystApplications"));
-          const apps = snapshot.docs
-            .filter(doc => doc.data().smeId === user.uid)
-            .map(doc => ({ id: doc.id, ...doc.data() }));
+          const snapshot = await getDocs(query(
+            collection(db, "smeCatalystApplications"),
+            where("smeId", "==", user.uid),
+          ));
+          const apps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setApplications(apps);
         } catch (error) {
           console.error("Error fetching applications:", error);
