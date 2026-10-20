@@ -1,256 +1,899 @@
 "use client"
-import { useState, useEffect } from "react"
-import { CheckCircle, XCircle, Upload, FileText, Loader2 } from "lucide-react"
-import { auth, db, storage } from "../../firebaseConfig"
-import { doc, getDoc } from "firebase/firestore"
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
 
-export const documentsList = [
-  {
-    id: "standardNda",
-    label: "Standard NDA",
-    accept: ".pdf,.doc,.docx",
-    required: true,
-    multiple: false,
-    description: "Signed Non-Disclosure Agreement",
-  },
-  {
-    id: "standardContract",
-    label: "Standard Contract / Term Sheet",
-    accept: ".pdf,.doc,.docx",
-    required: true,
-    multiple: false,
-    description: "Standard contract or term sheet used for program participants",
-  },
-  {
-    id: "programBrochures",
-    label: "Program Brochures",
-    accept: ".pdf,.doc,.docx,.jpg,.jpeg,.png",
-    required: true,
-    multiple: true,
-    description: "Program overview brochure or investment mandate document",
-  },
-]
+import React, { useState } from "react"
+import {
+  Upload,
+  FileText,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  XCircle,
+  X,
+  Plus,
+  Trash2,
+  ShieldCheck,
+  Building,
+  Award,
+  HelpCircle,
+  FileCheck,
+  RefreshCw,
+} from "lucide-react"
+import FormField from "./FormField"
+import styles from "./catalyst-universal-profile.module.css"
+import {
+  ORGANISATION_DOCUMENT_TYPES,
+  DOCUMENT_REVIEW_STATES,
+  AUTHORITY_DOCUMENT_TYPES,
+  BBBEE_AFFIDAVIT_TYPES,
+} from "./catalystTaxonomy"
 
-export default function CatalystDocumentUpload({ data = {}, updateData }) {
-  const [formData, setFormData] = useState(data)
-  const [isLoading, setIsLoading] = useState(true)
-  const [uploadingFiles, setUploadingFiles] = useState({})
+export { ORGANISATION_DOCUMENT_TYPES as documentsList } from "./catalystTaxonomy"
 
-  useEffect(() => {
-    const loadDocuments = async () => {
-      try {
-        setIsLoading(true)
-        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
-        if (isOnboarding) {
-          setFormData(data || {});
-          setIsLoading(false);
-          return;
-        }
+export default function CatalystDocumentUpload({
+  data = {},
+  updateData,
+  formData = {},
+  isLocked = false,
+}) {
+  const docsData = data || {}
+  const entityOverview = formData.entityOverview || {}
+  const isHosted = entityOverview.organisationalArrangement === "hosted"
+  const isNPO =
+    entityOverview.legalEntityType === "non_profit" ||
+    entityOverview.organisationType === "nonprofit"
 
-        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
-        if (!userId) { setIsLoading(false); return }
-        const docRef = doc(db, "catalystProfiles", userId)
-        const docSnap = await getDoc(docRef)
-        if (docSnap.exists()) {
-          const profileData = docSnap.data()
-          const documentsData = {}
-          documentsList.forEach((docItem) => {
-            if (profileData.formData?.documentUpload?.[docItem.id]) {
-              documentsData[docItem.id] = profileData.formData.documentUpload[docItem.id]
-            }
-          })
-          setFormData(documentsData)
-          updateData(documentsData)
-        } else {
-          setFormData(data)
-        }
-      } catch (error) {
-        console.error("Error loading documents:", error)
-        setFormData(data)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    loadDocuments()
-  }, [])
-
-  useEffect(() => {
-    if (data && Object.keys(data).length > 0) setFormData(data)
-  }, [data])
-
-  const handleFileChange = async (documentId, files) => {
-    setUploadingFiles((prev) => ({ ...prev, [documentId]: true }))
-    try {
-      const userId = auth.currentUser?.uid
-      if (!userId) { alert("You must be logged in to upload files."); setUploadingFiles((prev) => ({ ...prev, [documentId]: false })); return }
-      const uploadedFileUrls = []
-      for (const file of files) {
-        const filePath = `catalystProfiles/${userId}/documents/${documentId}/${file.name}`
-        const fileRef = ref(storage, filePath)
-        await uploadBytes(fileRef, file)
-        const url = await getDownloadURL(fileRef)
-        uploadedFileUrls.push({ name: file.name, url, path: filePath })
-      }
-      const updatedData = { ...formData, [documentId]: uploadedFileUrls }
-      setFormData(updatedData)
-      await updateData(updatedData)
-    } catch (error) {
-      console.error("Error uploading file:", error)
-      alert("Failed to upload file.")
-    } finally {
-      setUploadingFiles((prev) => ({ ...prev, [documentId]: false }))
-    }
+  const updateDoc = (docId, patch) => {
+    const current = docsData[docId] || {}
+    updateData({
+      ...docsData,
+      [docId]: {
+        ...current,
+        ...patch,
+      },
+    })
   }
 
-  const handleDeleteFile = async (documentId, fileIndex) => {
-    const currentFiles = formData[documentId] || []
-    const fileToDelete = currentFiles[fileIndex]
-    if (fileToDelete?.path) {
-      try {
-        await deleteObject(ref(storage, fileToDelete.path))
-        const updatedFiles = currentFiles.filter((_, i) => i !== fileIndex)
-        const updatedData = { ...formData, [documentId]: updatedFiles }
-        setFormData(updatedData)
-        await updateData(updatedData)
-      } catch (error) {
-        console.error("Error deleting file:", error)
-        alert("Failed to delete file.")
-      }
+  const handleFileUpload = (docId, e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // 10MB file limit check
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size exceeds the 10 MB limit. Please select a smaller file.")
+      return
     }
+
+    const current = docsData[docId] || {}
+    updateDoc(docId, {
+      file,
+      fileName: file.name,
+      fileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+      uploadedAt: new Date().toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+      status: current.status === "accepted" ? "accepted" : "uploaded",
+    })
   }
 
-  const getStatusBadge = (documentId, document) => {
-    const isUploading = uploadingFiles[documentId]
-    const files = formData[documentId] || []
-    if (isUploading) return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 8px", borderRadius: "16px", fontSize: "11px", fontWeight: "600", backgroundColor: "#e3f2fd", color: "#1976d2" }}>
-        <Loader2 style={{ width: "12px", height: "12px" }} className="animate-spin" /> Uploading
-      </span>
+  const handleRemoveFile = (docId) => {
+    updateDoc(docId, {
+      file: null,
+      fileName: "",
+      fileSize: "",
+      uploadedAt: "",
+      status: "missing",
+    })
+  }
+
+  // Repeatable Accreditations State
+  const accreditations = Array.isArray(docsData.accreditations)
+    ? docsData.accreditations
+    : []
+
+  const updateAccreditationsList = (newList) => {
+    updateData({
+      ...docsData,
+      accreditations: newList,
+    })
+  }
+
+  const handleAddAccreditation = () => {
+    const newItem = {
+      id: `acc_${Date.now()}`,
+      issuer: "",
+      credentialName: "",
+      credentialId: "",
+      issueDate: "",
+      expiryDate: "",
+      fileName: "",
+      fileSize: "",
+      status: "missing",
+    }
+    updateAccreditationsList([...accreditations, newItem])
+  }
+
+  const handleAccreditationChange = (id, field, value) => {
+    const updated = accreditations.map((item) =>
+      item.id === id ? { ...item, [field]: value } : item
     )
-    if (files.length > 0) return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 8px", borderRadius: "16px", fontSize: "11px", fontWeight: "600", backgroundColor: "#e8f5e8", color: "#2e7d32" }}>
-        <CheckCircle style={{ width: "12px", height: "12px" }} /> Uploaded
-      </span>
+    updateAccreditationsList(updated)
+  }
+
+  const handleAccreditationFileUpload = (id, e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File exceeds 10 MB limit.")
+      return
+    }
+    const updated = accreditations.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            file,
+            fileName: file.name,
+            fileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+            status: "uploaded",
+            uploadedAt: new Date().toLocaleDateString("en-ZA"),
+          }
+        : item
     )
+    updateAccreditationsList(updated)
+  }
+
+  const handleRemoveAccreditation = (id) => {
+    updateAccreditationsList(accreditations.filter((item) => item.id !== id))
+  }
+
+  // Repeatable Supplementary Documents State
+  const supplementaryDocs = Array.isArray(docsData.supplementaryDocs)
+    ? docsData.supplementaryDocs
+    : []
+
+  const updateSupplementaryList = (newList) => {
+    updateData({
+      ...docsData,
+      supplementaryDocs: newList,
+    })
+  }
+
+  const handleAddSupplementary = () => {
+    const newItem = {
+      id: `supp_${Date.now()}`,
+      title: "",
+      description: "",
+      fileName: "",
+      fileSize: "",
+      status: "missing",
+    }
+    updateSupplementaryList([...supplementaryDocs, newItem])
+  }
+
+  const handleSupplementaryChange = (id, field, value) => {
+    const updated = supplementaryDocs.map((item) =>
+      item.id === id ? { ...item, [field]: value } : item
+    )
+    updateSupplementaryList(updated)
+  }
+
+  const handleSupplementaryFileUpload = (id, e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File exceeds 10 MB limit.")
+      return
+    }
+    const updated = supplementaryDocs.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            file,
+            fileName: file.name,
+            fileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+            status: "uploaded",
+            uploadedAt: new Date().toLocaleDateString("en-ZA"),
+          }
+        : item
+    )
+    updateSupplementaryList(updated)
+  }
+
+  const handleRemoveSupplementary = (id) => {
+    updateSupplementaryList(supplementaryDocs.filter((item) => item.id !== id))
+  }
+
+  const renderStatusPill = (statusId = "missing") => {
+    const meta = DOCUMENT_REVIEW_STATES[statusId] || DOCUMENT_REVIEW_STATES.missing
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 8px", borderRadius: "16px", fontSize: "11px", fontWeight: "600", backgroundColor: document.required ? "#ffebee" : "#e3f2fd", color: document.required ? "#c62828" : "#1976d2" }}>
-        <XCircle style={{ width: "12px", height: "12px" }} /> {document.required ? "Required" : "Optional"}
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "3px 10px",
+          borderRadius: "14px",
+          fontSize: "12px",
+          fontWeight: 600,
+          backgroundColor: meta.bg,
+          color: meta.color,
+          border: `1px solid ${meta.border}`,
+        }}
+      >
+        {statusId === "accepted" && <CheckCircle2 size={13} />}
+        {statusId === "uploaded" && <Clock size={13} />}
+        {statusId === "under_review" && <RefreshCw size={13} />}
+        {statusId === "clarification_required" && <AlertTriangle size={13} />}
+        {statusId === "rejected" && <XCircle size={13} />}
+        {statusId === "missing" && <Clock size={13} />}
+        {meta.label}
       </span>
     )
   }
 
-  const getProgressStats = () => {
-    const required = documentsList.filter((d) => d.required)
-    const optional = documentsList.filter((d) => !d.required)
-    return {
-      required: { uploaded: required.filter((d) => (formData[d.id] || []).length > 0).length, total: required.length },
-      optional: { uploaded: optional.filter((d) => (formData[d.id] || []).length > 0).length, total: optional.length },
-    }
+  const sectionHeadingStyle = {
+    borderBottom: "2px solid #795548",
+    marginBottom: "1.25rem",
+    marginTop: "2rem",
+    paddingBottom: "6px",
   }
 
-  const stats = getProgressStats()
-
-  if (isLoading) return (
-    <div style={{ padding: "20px", backgroundColor: "#faf8f6", borderRadius: "12px" }}>
-      <h2 style={{ fontSize: "24px", fontWeight: "bold", color: "#8b4513", marginBottom: "24px" }}>Document Upload</h2>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <Loader2 style={{ width: "24px", height: "24px", color: "#8d6e63" }} className="animate-spin" />
-        <p style={{ color: "#6d4c41" }}>Loading your documents...</p>
-      </div>
-    </div>
-  )
+  const sectionHeadingTextStyle = {
+    color: "#4e342e",
+    fontSize: "16px",
+    fontWeight: "700",
+    margin: 0,
+  }
 
   return (
-    <div style={{ padding: "20px", backgroundColor: "#faf8f6", borderRadius: "12px" }}>
-      <h2 style={{ fontSize: "28px", fontWeight: "bold", color: "#5d4037", marginBottom: "16px", textAlign: "center" }}>
-        Document Upload
-      </h2>
+    <div className={styles.productApplicationContainer}>
+      <h2 className={styles.productApplicationHeading}>Organisation Document Vault</h2>
 
-      {/* Guidelines */}
-      <div style={{ backgroundColor: "#f5f2f0", border: "2px solid #d7ccc8", borderRadius: "12px", padding: "24px", marginBottom: "30px" }}>
-        <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#5d4037", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-          🏆 Document Verification Score
-        </h3>
-        <p style={{ color: "#6d4c41", lineHeight: "1.6", marginBottom: "20px" }}>
-          Uploading all required documents helps us verify your profile and expedite the matching process.
-        </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {[
-            { color: "#4caf50", titleColor: "#2e7d32", title: "✅ Accepted File Formats", items: ["PDF (.pdf) – Preferred format for all official documents", "Word Documents (.doc, .docx) – For editable text documents", "Image Files (.jpg, .jpeg, .png) – For scanned certificates or documents"] },
-            { color: "#ff9800", titleColor: "#f57c00", title: "⚠️ File Size Limit", items: ["Maximum upload size: 10 MB per file"] },
-            { color: "#f44336", titleColor: "#c62828", title: "🚫 Unsupported Formats", items: ["No ZIP/RAR folders, executable files (.exe), or Google Docs/Drive links", "Please download and upload original files directly (no screenshots or photos of screens)"] },
-          ].map(({ color, titleColor, title, items }) => (
-            <div key={title} style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: `4px solid ${color}` }}>
-              <h4 style={{ fontSize: "14px", fontWeight: "600", color: titleColor, marginBottom: "12px" }}>{title}</h4>
-              <ul style={{ margin: 0, paddingLeft: "20px", color: "#5d4037", fontSize: "14px", lineHeight: "1.5" }}>
-                {items.map((item, i) => <li key={i} style={{ marginBottom: "4px" }} dangerouslySetInnerHTML={{ __html: item }} />)}
-              </ul>
+      <div
+        style={{
+          backgroundColor: "#f8f5f2",
+          borderLeft: "4px solid #795548",
+          padding: "12px 16px",
+          borderRadius: "4px",
+          marginBottom: "1.5rem",
+          color: "#5d4037",
+          fontSize: "14px",
+          lineHeight: "1.5",
+        }}
+      >
+        <strong>Document Vault Guidance:</strong> Provide institutional records verifying your organisation&apos;s legal identity, representative authority, and statutory compliance. Uploading a document submits it for administrator verification. Programme-specific brochures and participant contracts are managed within each programme setup workspace.
+      </div>
+
+      {/* ─── Core Institutional Documents Grid ──────────────────────────────── */}
+      <div style={sectionHeadingStyle}>
+        <h3 style={sectionHeadingTextStyle}>Core Legal & Statutory Records</h3>
+      </div>
+
+      <div style={{ display: "grid", gap: "1.25rem" }}>
+        {ORGANISATION_DOCUMENT_TYPES.map((docDef) => {
+          const docState = docsData[docDef.id] || {}
+          const hasFile = !!docState.fileName
+          const currentStatus = docState.status || (hasFile ? "uploaded" : "missing")
+
+          // Determine dynamic requirement badge
+          let isRequired = docDef.required
+          let reqLabel = "Required"
+          let reqColor = "#c62828"
+
+          if (docDef.isConditionalHosted) {
+            isRequired = isHosted
+            reqLabel = isHosted ? "Required for Hosted Unit" : "Conditional (Hosted Units)"
+            reqColor = isHosted ? "#c62828" : "#8d6e63"
+          } else if (docDef.isConditionalNPO) {
+            isRequired = isNPO
+            reqLabel = isNPO ? "Required for Nonprofits" : "Conditional (NPOs / NPCs)"
+            reqColor = isNPO ? "#c62828" : "#8d6e63"
+          } else if (!docDef.required) {
+            reqLabel = "Optional Supporting Document"
+            reqColor = "#8d6e63"
+          }
+
+          return (
+            <div
+              key={docDef.id}
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #d7ccc8",
+                borderRadius: "8px",
+                padding: "1.25rem",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+              }}
+            >
+              {/* Header row */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        backgroundColor: "#f3ebe0",
+                        color: "#5d4037",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {docDef.category}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: reqColor,
+                      }}
+                    >
+                      {reqLabel}
+                    </span>
+                  </div>
+
+                  <h4
+                    style={{
+                      margin: "6px 0 2px 0",
+                      fontSize: "15px",
+                      color: "#4e342e",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {docDef.label} {isRequired && <span style={{ color: "#c62828" }}>*</span>}
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "13px", color: "#6d4c41" }}>
+                    {docDef.tooltip}
+                  </p>
+                </div>
+
+                <div>{renderStatusPill(currentStatus)}</div>
+              </div>
+
+              {/* Conditional metadata inputs for specific doc types */}
+              {docDef.id === "authority_representation" && (
+                <div style={{ maxWidth: "380px", marginBottom: "0.75rem" }}>
+                  <FormField
+                    label="Authority Document Type"
+                    tooltip="Format of official legal appointment or power of attorney."
+                  >
+                    <select
+                      value={docState.authorityType || "authorisation_letter"}
+                      onChange={(e) => updateDoc(docDef.id, { authorityType: e.target.value })}
+                      className={styles.formSelect}
+                    >
+                      {AUTHORITY_DOCUMENT_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                </div>
+              )}
+
+              {docDef.id === "tax_clearance" && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                    gap: "1rem",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <FormField
+                    label="SARS Tax Compliance Status PIN"
+                    tooltip="Security PIN issued by SARS for digital third-party compliance verification."
+                  >
+                    <input
+                      type="text"
+                      value={docState.taxPin || ""}
+                      onChange={(e) => updateDoc(docDef.id, { taxPin: e.target.value })}
+                      placeholder="e.g. 1234567890"
+                      className={styles.formInput}
+                    />
+                  </FormField>
+                  <FormField
+                    label="PIN / Certificate Expiry Date"
+                    tooltip="Date until which the tax PIN remains active for verification."
+                  >
+                    <input
+                      type="date"
+                      value={docState.taxExpiry || ""}
+                      onChange={(e) => updateDoc(docDef.id, { taxExpiry: e.target.value })}
+                      className={styles.formInput}
+                    />
+                  </FormField>
+                </div>
+              )}
+
+              {docDef.id === "bbbee_evidence" && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "1rem",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <FormField
+                    label="B-BBEE Evidence Type"
+                    tooltip="Form of B-BBEE verification supplied."
+                  >
+                    <select
+                      value={docState.bbbeeType || "sworn_affidavit_eme"}
+                      onChange={(e) => updateDoc(docDef.id, { bbbeeType: e.target.value })}
+                      className={styles.formSelect}
+                    >
+                      {BBBEE_AFFIDAVIT_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                  <FormField
+                    label="B-BBEE Recognition Level"
+                    tooltip="Current contributor level."
+                  >
+                    <select
+                      value={docState.bbbeeLevel || "level_1"}
+                      onChange={(e) => updateDoc(docDef.id, { bbbeeLevel: e.target.value })}
+                      className={styles.formSelect}
+                    >
+                      <option value="level_1">Level 1 Contributor (135% Recognition)</option>
+                      <option value="level_2">Level 2 Contributor (125% Recognition)</option>
+                      <option value="level_3">Level 3 Contributor (110% Recognition)</option>
+                      <option value="level_4">Level 4 Contributor (100% Recognition)</option>
+                      <option value="level_5">Level 5 Contributor (80% Recognition)</option>
+                      <option value="level_6">Level 6 Contributor (60% Recognition)</option>
+                      <option value="level_7">Level 7 Contributor (50% Recognition)</option>
+                      <option value="level_8">Level 8 Contributor (10% Recognition)</option>
+                      <option value="non_compliant">Non-Compliant Contributor</option>
+                    </select>
+                  </FormField>
+                  <FormField
+                    label="Certificate Expiry Date"
+                    tooltip="Annual expiry date of the certificate or affidavit."
+                  >
+                    <input
+                      type="date"
+                      value={docState.bbbeeExpiry || ""}
+                      onChange={(e) => updateDoc(docDef.id, { bbbeeExpiry: e.target.value })}
+                      className={styles.formInput}
+                    />
+                  </FormField>
+                </div>
+              )}
+
+              {/* Upload area or File display */}
+              {!hasFile ? (
+                <div
+                  style={{
+                    border: "1.5px dashed #bcaaa4",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    backgroundColor: "#faf8f6",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: "13px", color: "#5d4037", fontWeight: 600 }}>
+                      No file uploaded yet
+                    </span>
+                    <span style={{ display: "block", fontSize: "12px", color: "#8d6e63" }}>
+                      Accepted formats: PDF, DOC, DOCX, JPG, PNG (Max 10 MB)
+                    </span>
+                  </div>
+
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 14px",
+                      backgroundColor: "#795548",
+                      color: "#ffffff",
+                      borderRadius: "4px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: isLocked ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <Upload size={14} /> Upload File
+                    <input
+                      type="file"
+                      accept={docDef.formats}
+                      onChange={(e) => handleFileUpload(docDef.id, e)}
+                      disabled={isLocked}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: "1px solid #c8e6c9",
+                    backgroundColor: "#f1f8e9",
+                    borderRadius: "6px",
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <FileText size={20} color="#2e7d32" />
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: "13px", color: "#1b5e20", display: "block" }}>
+                        {docState.fileName}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#558b2f" }}>
+                        Size: {docState.fileSize} • Uploaded: {docState.uploadedAt}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <label
+                      title="Replace file"
+                      style={{
+                        padding: "4px 10px",
+                        backgroundColor: "#ffffff",
+                        border: "1px solid #ccc",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        color: "#5d4037",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <RefreshCw size={12} /> Replace
+                      <input
+                        type="file"
+                        accept={docDef.formats}
+                        onChange={(e) => handleFileUpload(docDef.id, e)}
+                        disabled={isLocked}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(docDef.id)}
+                      disabled={isLocked}
+                      title="Remove file"
+                      style={{
+                        padding: "4px 8px",
+                        backgroundColor: "#ffebee",
+                        border: "1px solid #ffcdd2",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        color: "#c62828",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
+          )
+        })}
+      </div>
+
+      {/* ─── Accreditations & Memberships ───────────────────────────────────── */}
+      <div style={sectionHeadingStyle}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={sectionHeadingTextStyle}>Accreditations & Professional Memberships</h3>
+          <button
+            type="button"
+            onClick={handleAddAccreditation}
+            disabled={isLocked}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 12px",
+              backgroundColor: "#f3ebe0",
+              border: "1px solid #d7ccc8",
+              borderRadius: "4px",
+              color: "#4e342e",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <Plus size={14} /> Add Accreditation
+          </button>
         </div>
       </div>
 
-      {/* Documents Table */}
-      <div style={{ backgroundColor: "white", borderRadius: "12px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ backgroundColor: "#8d6e63", color: "white", height: "40px" }}>
-              {["STATUS", "DOCUMENT NAME", "DESCRIPTION", "UPLOAD & MANAGE"].map((h, i) => (
-                <th key={h} style={{ padding: "8px", textAlign: i === 0 || i === 3 ? "center" : "left", fontWeight: "600", fontSize: "11px", borderBottom: "2px solid #6d4c41", width: ["15%", "25%", "40%", "20%"][i] }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {documentsList.map((document, index) => (
-              <tr key={document.id} style={{ backgroundColor: index % 2 === 0 ? "#faf8f6" : "#f5f2f0", borderBottom: "1px solid #e8d8cf", height: "50px" }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#efebe9"}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? "#faf8f6" : "#f5f2f0"}
+      <p style={{ margin: "0 0 1rem 0", fontSize: "13px", color: "#6d4c41" }}>
+        Optional verification credentials (e.g. SETA accreditation, professional body registration, or incubator alliance memberships).
+      </p>
+
+      {accreditations.length === 0 ? (
+        <div
+          style={{
+            padding: "1.25rem",
+            backgroundColor: "#fff",
+            border: "1px dashed #d7ccc8",
+            borderRadius: "6px",
+            textAlign: "center",
+            color: "#8d6e63",
+            fontSize: "13px",
+            marginBottom: "1.5rem",
+          }}
+        >
+          No accreditations added yet. Click &quot;Add Accreditation&quot; above if your organisation holds industry or educational credentials.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: "10px", marginBottom: "1.5rem" }}>
+          {accreditations.map((acc, idx) => (
+            <div
+              key={acc.id}
+              style={{
+                backgroundColor: "#fff",
+                border: "1px solid #d7ccc8",
+                borderRadius: "6px",
+                padding: "1rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ fontWeight: 700, fontSize: "14px", color: "#4e342e" }}>
+                  Credential #{idx + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAccreditation(acc.id)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#c62828",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "10px",
+                  marginBottom: "8px",
+                }}
               >
-                <td style={{ padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }}>{getStatusBadge(document.id, document)}</td>
-                <td style={{ padding: "6px 8px", verticalAlign: "middle" }}>
-                  <div style={{ fontWeight: "500", color: "#5d4037", fontSize: "12px" }}>{document.label}</div>
-                </td>
-                <td style={{ padding: "6px 8px", verticalAlign: "middle" }}>
-                  <div style={{ color: "#6d4c41", fontSize: "11px" }}>{document.description}</div>
-                </td>
-                <td style={{ padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "#8d6e63", color: "white", borderRadius: "6px", fontSize: "10px", fontWeight: "500", cursor: "pointer" }}>
-                      <Upload style={{ width: "12px", height: "12px" }} />
-                      Upload
-                      <input type="file" accept={document.accept} multiple={document.multiple} onChange={(e) => handleFileChange(document.id, Array.from(e.target.files || []))} style={{ display: "none" }} />
-                    </label>
-                    {(formData[document.id] || []).length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "4px" }}>
-                        {(formData[document.id] || []).map((file, fileIndex) => (
-                          <div key={fileIndex} style={{ display: "flex", alignItems: "center", gap: "4px", padding: "2px 4px", backgroundColor: "#efebe9", borderRadius: "4px", fontSize: "9px", color: "#5d4037" }}>
-                            <FileText style={{ width: "10px", height: "10px" }} />
-                            <span style={{ maxWidth: "80px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name || `File ${fileIndex + 1}`}</span>
-                            <button onClick={() => handleDeleteFile(document.id, fileIndex)} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>&times;</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                <FormField label="Issuing Body / Institution" required>
+                  <input
+                    type="text"
+                    value={acc.issuer || ""}
+                    onChange={(e) => handleAccreditationChange(acc.id, "issuer", e.target.value)}
+                    placeholder="e.g. Services SETA / SABEN"
+                    className={styles.formInput}
+                  />
+                </FormField>
+                <FormField label="Credential / Programme Name" required>
+                  <input
+                    type="text"
+                    value={acc.credentialName || ""}
+                    onChange={(e) => handleAccreditationChange(acc.id, "credentialName", e.target.value)}
+                    placeholder="e.g. Accredited Training Provider"
+                    className={styles.formInput}
+                  />
+                </FormField>
+                <FormField label="Accreditation Number / ID">
+                  <input
+                    type="text"
+                    value={acc.credentialId || ""}
+                    onChange={(e) => handleAccreditationChange(acc.id, "credentialId", e.target.value)}
+                    placeholder="e.g. ACC/2022/9871"
+                    className={styles.formInput}
+                  />
+                </FormField>
+                <FormField label="Expiry Date (if applicable)">
+                  <input
+                    type="date"
+                    value={acc.expiryDate || ""}
+                    onChange={(e) => handleAccreditationChange(acc.id, "expiryDate", e.target.value)}
+                    className={styles.formInput}
+                  />
+                </FormField>
+              </div>
+
+              {/* File upload for credential */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "6px" }}>
+                {!acc.fileName ? (
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 10px",
+                      backgroundColor: "#795548",
+                      color: "#fff",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Upload size={12} /> Upload Certificate
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => handleAccreditationFileUpload(acc.id, e)}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#2e7d32" }}>
+                    <FileCheck size={14} /> {acc.fileName} ({acc.fileSize})
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ─── Supplementary Organisation Documents ──────────────────────────── */}
+      <div style={sectionHeadingStyle}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={sectionHeadingTextStyle}>Supplementary Organisation Documents</h3>
+          <button
+            type="button"
+            onClick={handleAddSupplementary}
+            disabled={isLocked}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 12px",
+              backgroundColor: "#f3ebe0",
+              border: "1px solid #d7ccc8",
+              borderRadius: "4px",
+              color: "#4e342e",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <Plus size={14} /> Add Document
+          </button>
+        </div>
       </div>
 
-      {/* Summary Footer */}
-      <div style={{ marginTop: "30px", padding: "20px", backgroundColor: "#efebe9", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
-        <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>Upload Summary</h4>
-        <p style={{ color: "#6d4c41", fontSize: "14px", lineHeight: "1.5", margin: 0 }}>
-          You have uploaded <strong>{stats.required.uploaded} out of {stats.required.total}</strong> required documents.{" "}
-          {stats.required.uploaded === stats.required.total
-            ? "✅ All required documents are complete!"
-            : `Please upload the remaining ${stats.required.total - stats.required.uploaded} required document(s).`}
-        </p>
-      </div>
+      <p style={{ margin: "0 0 1rem 0", fontSize: "13px", color: "#6d4c41" }}>
+        Optional additional evidence (e.g. audited annual financial statements, facility lease agreements, or ecosystem partnership letters).
+      </p>
+
+      {supplementaryDocs.length === 0 ? (
+        <div
+          style={{
+            padding: "1.25rem",
+            backgroundColor: "#fff",
+            border: "1px dashed #d7ccc8",
+            borderRadius: "6px",
+            textAlign: "center",
+            color: "#8d6e63",
+            fontSize: "13px",
+            marginBottom: "1.5rem",
+          }}
+        >
+          No supplementary documents added. Click &quot;Add Document&quot; if needed.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: "10px", marginBottom: "1.5rem" }}>
+          {supplementaryDocs.map((supp) => (
+            <div
+              key={supp.id}
+              style={{
+                backgroundColor: "#fff",
+                border: "1px solid #d7ccc8",
+                borderRadius: "6px",
+                padding: "1rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ fontWeight: 700, fontSize: "14px", color: "#4e342e" }}>
+                  Supplementary Document
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSupplementary(supp.id)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#c62828",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: "10px",
+                  marginBottom: "8px",
+                }}
+              >
+                <FormField label="Document Title" required>
+                  <input
+                    type="text"
+                    value={supp.title || ""}
+                    onChange={(e) => handleSupplementaryChange(supp.id, "title", e.target.value)}
+                    placeholder="e.g. Audited Annual Financial Statements 2026"
+                    className={styles.formInput}
+                  />
+                </FormField>
+                <FormField label="Brief Description / Purpose">
+                  <input
+                    type="text"
+                    value={supp.description || ""}
+                    onChange={(e) => handleSupplementaryChange(supp.id, "description", e.target.value)}
+                    placeholder="e.g. Full institutional audit by KPMG"
+                    className={styles.formInput}
+                  />
+                </FormField>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "6px" }}>
+                {!supp.fileName ? (
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 10px",
+                      backgroundColor: "#795548",
+                      color: "#fff",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Upload size={12} /> Upload File
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      onChange={(e) => handleSupplementaryFileUpload(supp.id, e)}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#2e7d32" }}>
+                    <FileCheck size={14} /> {supp.fileName} ({supp.fileSize})
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
