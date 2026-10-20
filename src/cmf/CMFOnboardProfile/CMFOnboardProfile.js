@@ -42,11 +42,11 @@ import FunderDocumentUpload from "../../Investor/InvestorUniversalProfile/Docume
 import FunderDeclarationConsent from "../../Investor/InvestorUniversalProfile/DeclarationConsent"
 
 // Catalyst Subcomponents
+import CatalystObjectives from "../../catalyst/CatalystUniversalProfile/catalyst-objectives"
 import CatalystInstructions from "../../catalyst/CatalystUniversalProfile/catalyst-instructions"
 import CatalystEntityOverview from "../../catalyst/CatalystUniversalProfile/catalyst-entity-overview"
 import CatalystContactDetails from "../../catalyst/CatalystUniversalProfile/catalyst-contact-details"
-import CatalystProgramBriefMatchingPreference from "../../catalyst/CatalystUniversalProfile/CatalystProgramBriefMatchingPreference"
-import CatalystApplicationBrief from "../../catalyst/CatalystUniversalProfile/catalyst-application-brief"
+import CatalystProgrammeSetup from "../../catalyst/CatalystUniversalProfile/catalyst-programme-setup"
 import CatalystDocumentUpload from "../../catalyst/CatalystUniversalProfile/catalyst-document-upload"
 import CatalystDeclarationConsent from "../../catalyst/CatalystUniversalProfile/catalyst-declaration-consent"
 
@@ -542,113 +542,239 @@ const mockFunders = [
 
 const mockCatalysts = [
   {
+    objectives: {
+      catalystActivities: ["incubation", "accelerator", "esd"],
+      platformObjectives: ["find_businesses", "track_outcomes", "ecosystem_visibility"]
+    },
     entityOverview: {
-      registeredName: "Impact Hub Africa Pty Ltd",
+      organisationType: "independent_provider",
+      organisationalArrangement: "standalone",
+      parentOrganisation: "",
+      parentOrganisationNotListed: "",
+      unitOrDepartmentName: "",
+      registeredName: "Impact Hub Africa (Pty) Ltd",
       tradingName: "Impact Hub Africa",
-      legalEntityType: "(pty) Ltd",
+      legalEntityType: "pty_ltd",
+      legalEntityTypeOther: "",
+      countryOfRegistration: "South Africa",
+      registrationIdentifierType: "company_cc",
       registrationNumber: "2020/223344/07",
-      industrySector: "Education & Training",
-      companySize: "medium_enterprise",
       yearEstablished: "2020",
-      briefDescription: "Impact Hub Africa provides incubator and accelerator programs to social entrepreneurs across Southern Africa.",
-      referralSource: "referral",
+      briefDescription: "Impact Hub Africa delivers structured incubation, enterprise & supplier development (ESD), and high-impact accelerator programmes for high-growth ventures across Southern Africa.",
+      industrySector: "enterprise_support",
+      companySize: "11-50",
+      website: "https://impacthub.africa",
+      logo: null,
+      catalystActivities: ["incubation", "esd"],
+      referralSource: "partner",
+      referralSourceOther: "",
+      memberOfAssociation: "no",
+      industryAssociations: [],
       sponsorName: "CMF Onboarded",
       sponsorType: "CMF",
       sponsorViewPermission: "yes"
     },
     contactDetails: {
-      businessTel: "+27113334444",
       businessEmail: "info.catalyst@mailinator.com",
-      physicalAddress: "88 Commissioner Street, Johannesburg, 2001",
-      postalAddress: "88 Commissioner Street, Johannesburg, 2001",
-      primaryContactTitle: "ms",
-      primaryContactName: "Lerato",
-      primaryContactSurname: "Molefe",
-      primaryContactPosition: "Program Director",
-      primaryContactMobile: "+27834445555",
-      primaryContactEmail: "lerato.molefe.hub@mailinator.com"
+      usePrimaryEmail: false,
+      businessTelCountryCode: "+27",
+      businessTel: "11 333 4444",
+      locationSource: "different",
+      country: "South Africa",
+      province: "Gauteng",
+      city: "Johannesburg",
+      physicalAddress: "88 Commissioner Street, Marshalltown, Johannesburg",
+      postalAddressChoice: "same_as_physical",
+      postalAddress: "",
+      primaryTitle: "Ms",
+      primaryName: "Lerato",
+      primarySurname: "Molefe",
+      primaryPosition: "Head of Programmes",
+      primaryResponsibilities: ["leadership", "programme_coord", "dealflow"],
+      primaryMobileCountryCode: "+27",
+      primaryMobile: "83 444 5555",
+      primaryEmail: "lerato.molefe.hub@mailinator.com"
     },
-    programBriefMatchingPreference: {
-      programName: "African Social Innovators Accelerator",
-      programDuration: "6 Months",
-      intangibleSupport: "Mentorship & Networking",
-      geographicFocus: ["South Africa"],
-      sectorFocus: ["Agriculture", "Education", "Digital Enterprise"],
-      selectedProvinces: ["Gauteng", "Western Cape"],
-      selectedCountries: ["South Africa"]
-    },
-    applicationBrief: {
-      overviewObjectives: "Incubating early-stage social impact ventures to achieve investment readiness.",
-      cohortCapacity: "12",
-      targetLifecycle: "Early Stage"
+    programmeSetup: {
+      programmes: [
+        {
+          id: "prog_asi_2026",
+          name: "African Social Innovators Accelerator",
+          programmeBrief: {
+            programmeName: "African Social Innovators Accelerator",
+            cohortCapacity: "15",
+            targetLifecycle: "early_trading",
+            programmeDuration: "6 Months",
+            intangibleSupport: "Mentorship, Technical Validation & Market Access",
+            overviewObjectives: "Incubating early-stage social impact ventures to achieve operational sustainability and investment readiness.",
+            catalystActivities: ["incubation", "esd"]
+          },
+          matchingPreferences: {
+            geographicFocus: ["South Africa"],
+            selectedProvinces: ["Gauteng", "Western Cape", "KwaZulu-Natal"],
+            selectedCountries: ["South Africa"],
+            sectorFocus: ["agriculture", "information_tech", "education_research"],
+            turnoverMin: "R 500,000",
+            turnoverMax: "R 10,000,000"
+          },
+          bigScoreCustomisation: {
+            stagePreset: "early_stage",
+            minimumBigScore: 50,
+            pillarWeights: {
+              compliance: 20,
+              legitimacy: 25,
+              governanceLeadership: 20,
+              operational: 20,
+              valueCreation: 15
+            }
+          },
+          applicationBrief: {
+            overviewObjectives: "Incubating early-stage social impact ventures to achieve operational sustainability and investment readiness.",
+            cohortCapacity: "15",
+            targetLifecycle: "early_trading",
+            eligibilityCriteria: "Registered South African venture with at least 12 months commercial operations.",
+            requiredDocuments: ["registration_cipc", "tax_clearance", "financial_statements"]
+          }
+        }
+      ]
     },
     documentUploadPlaceholder: {
-      standardNda: [{ name: "hub_standard_nda.pdf", type: "application/pdf" }],
-      standardContract: [{ name: "hub_catalyst_contract.pdf", type: "application/pdf" }],
-      programBrochures: [{ name: "hub_program_brochure.pdf", type: "application/pdf" }],
-      cipcRegistration: [{ name: "catalyst_cipc.pdf", type: "application/pdf" }],
-      taxCompliancePin: [{ name: "catalyst_tax.pdf", type: "application/pdf" }]
+      identity_evidence: [{ name: "impact_hub_cipc_cert.pdf", type: "application/pdf" }],
+      tax_clearance: [{ name: "impact_hub_sars_pin.pdf", type: "application/pdf" }],
+      bbbee_evidence: [{ name: "impact_hub_bbbee_affidavit.pdf", type: "application/pdf" }],
+      capability_statement: [{ name: "impact_hub_capability_profile.pdf", type: "application/pdf" }]
     },
     declarationConsentPlaceholder: {
+      onboardingRelationship: "cmf",
+      representativeName: "CMF Facilitator Lead",
+      representativeRole: "Capital Market Facilitator",
+      authorisedRepresentativeConsent: true,
       accuracy: true,
       dataProcessing: true,
       termsConditions: true,
-      cmfPermissionAgreement: { name: "catalyst_agreement.pdf", type: "application/pdf" }
+      popiaCompliance: true,
+      thirdPartyVerificationConsent: true,
+      listingVisibility: "directory_searchable",
+      thirdPartyScopes: ["programme_administration", "dealflow_sharing", "compliance_reporting"],
+      representativeAgreementFile: { name: "cmf_mandate_hub.pdf", type: "application/pdf" }
     }
   },
   {
+    objectives: {
+      catalystActivities: ["accelerator", "corporate_innovation", "esd"],
+      platformObjectives: ["find_businesses", "deploy_capital", "track_outcomes"]
+    },
     entityOverview: {
+      organisationType: "independent_provider",
+      organisationalArrangement: "standalone",
+      parentOrganisation: "",
+      parentOrganisationNotListed: "",
+      unitOrDepartmentName: "",
       registeredName: "Genesis Enterprise Accelerator NPC",
       tradingName: "Genesis Accelerator",
-      legalEntityType: "NPC",
+      legalEntityType: "non_profit",
+      legalEntityTypeOther: "",
+      countryOfRegistration: "South Africa",
+      registrationIdentifierType: "company_cc",
       registrationNumber: "2017/556677/08",
-      industrySector: "Energy",
-      companySize: "large_enterprise",
       yearEstablished: "2017",
       briefDescription: "Genesis Enterprise Accelerator delivers high-impact commercialization programmes, technical readiness, and corporate supply chain integration for clean-tech and industrial ventures.",
-      referralSource: "referral",
+      industrySector: "energy",
+      companySize: "11-50",
+      website: "https://genesisaccelerator.co.za",
+      logo: null,
+      catalystActivities: ["accelerator", "esd"],
+      referralSource: "partner",
+      referralSourceOther: "",
+      memberOfAssociation: "no",
+      industryAssociations: [],
       sponsorName: "CMF Onboarded",
       sponsorType: "CMF",
       sponsorViewPermission: "yes"
     },
     contactDetails: {
-      businessTel: "+27315559988",
       businessEmail: "genesis.programmes@mailinator.com",
+      usePrimaryEmail: false,
+      businessTelCountryCode: "+27",
+      businessTel: "31 555 9988",
+      locationSource: "different",
+      country: "South Africa",
+      province: "KwaZulu-Natal",
+      city: "Durban",
       physicalAddress: "14 Umhlanga Rocks Drive, Durban, 4319",
-      postalAddress: "14 Umhlanga Rocks Drive, Durban, 4319",
-      primaryContactTitle: "mr",
-      primaryContactName: "Sipho",
-      primaryContactSurname: "Ndlovu",
-      primaryContactPosition: "Managing Director",
-      primaryContactMobile: "+27827773344",
-      primaryContactEmail: "sipho.ndlovu.genesis@mailinator.com"
+      postalAddressChoice: "same_as_physical",
+      postalAddress: "",
+      primaryTitle: "Mr",
+      primaryName: "Sipho",
+      primarySurname: "Ndlovu",
+      primaryPosition: "Managing Director",
+      primaryResponsibilities: ["leadership", "partnerships", "funding_coordination"],
+      primaryMobileCountryCode: "+27",
+      primaryMobile: "82 777 3344",
+      primaryEmail: "sipho.ndlovu.genesis@mailinator.com"
     },
-    programBriefMatchingPreference: {
-      programName: "CleanTech Scale & Industrial Acceleration 2026",
-      programDuration: "12 Months",
-      intangibleSupport: "Export Readiness, Technical Standards & Corporate Procurement Access",
-      geographicFocus: ["South Africa"],
-      sectorFocus: ["Manufacturing", "Renewable Energy", "Agri-Processing"],
-      selectedProvinces: ["KwaZulu-Natal", "Gauteng", "Eastern Cape"],
-      selectedCountries: ["South Africa"]
-    },
-    applicationBrief: {
-      overviewObjectives: "Accelerating commercially viable energy and industrial technology enterprises to corporate supply chains.",
-      cohortCapacity: "15",
-      targetLifecycle: "Growth Stage"
+    programmeSetup: {
+      programmes: [
+        {
+          id: "prog_cleantech_2026",
+          name: "CleanTech Scale & Industrial Acceleration 2026",
+          programmeBrief: {
+            programmeName: "CleanTech Scale & Industrial Acceleration 2026",
+            cohortCapacity: "15",
+            targetLifecycle: "established",
+            programmeDuration: "12 Months",
+            intangibleSupport: "Export Readiness, Technical Standards & Corporate Procurement Access",
+            overviewObjectives: "Accelerating commercially viable energy and industrial technology enterprises to corporate supply chains.",
+            catalystActivities: ["accelerator", "corporate_innovation"]
+          },
+          matchingPreferences: {
+            geographicFocus: ["South Africa"],
+            selectedProvinces: ["KwaZulu-Natal", "Gauteng", "Eastern Cape"],
+            selectedCountries: ["South Africa"],
+            sectorFocus: ["energy", "manufacturing", "agriculture"],
+            turnoverMin: "R 2,000,000",
+            turnoverMax: "R 50,000,000"
+          },
+          bigScoreCustomisation: {
+            stagePreset: "growth_stage",
+            minimumBigScore: 60,
+            pillarWeights: {
+              compliance: 20,
+              legitimacy: 20,
+              governanceLeadership: 20,
+              operational: 25,
+              valueCreation: 15
+            }
+          },
+          applicationBrief: {
+            overviewObjectives: "Accelerating commercially viable energy and industrial technology enterprises to corporate supply chains.",
+            cohortCapacity: "15",
+            targetLifecycle: "established",
+            eligibilityCriteria: "Mature clean-tech enterprise with existing client contracts and certified technical compliance.",
+            requiredDocuments: ["registration_cipc", "tax_clearance", "financial_statements", "technical_permits"]
+          }
+        }
+      ]
     },
     documentUploadPlaceholder: {
-      standardNda: [{ name: "genesis_standard_nda.pdf", type: "application/pdf" }],
-      standardContract: [{ name: "genesis_programme_contract.pdf", type: "application/pdf" }],
-      programBrochures: [{ name: "genesis_cohort_brochure.pdf", type: "application/pdf" }],
-      cipcRegistration: [{ name: "genesis_npc_cert.pdf", type: "application/pdf" }],
-      taxCompliancePin: [{ name: "genesis_tax_pin.pdf", type: "application/pdf" }]
+      identity_evidence: [{ name: "genesis_npc_cert.pdf", type: "application/pdf" }],
+      tax_clearance: [{ name: "genesis_tax_pin.pdf", type: "application/pdf" }],
+      nonprofit_evidence: [{ name: "genesis_npo_cert.pdf", type: "application/pdf" }],
+      capability_statement: [{ name: "genesis_capability_deck.pdf", type: "application/pdf" }]
     },
     declarationConsentPlaceholder: {
+      onboardingRelationship: "cmf",
+      representativeName: "CMF Facilitator Lead",
+      representativeRole: "Capital Market Facilitator",
+      authorisedRepresentativeConsent: true,
       accuracy: true,
       dataProcessing: true,
       termsConditions: true,
-      cmfPermissionAgreement: { name: "genesis_cmf_mandate.pdf", type: "application/pdf" }
+      popiaCompliance: true,
+      thirdPartyVerificationConsent: true,
+      listingVisibility: "directory_searchable",
+      thirdPartyScopes: ["programme_administration", "dealflow_sharing", "compliance_reporting"],
+      representativeAgreementFile: { name: "genesis_cmf_mandate.pdf", type: "application/pdf" }
     }
   }
 ]
@@ -886,12 +1012,17 @@ export default function CMFOnboardProfile() {
         ? Math.abs(targetIndex) % mockCatalysts.length
         : Math.floor(Math.random() * mockCatalysts.length)
       selected = JSON.parse(JSON.stringify(mockCatalysts[idx]))
-      selected.contactDetails.email = selected.contactDetails.businessEmail || selected.contactDetails.primaryContactEmail
+      selected.contactDetails.email = selected.contactDetails.businessEmail || selected.contactDetails.primaryEmail || selected.contactDetails.primaryContactEmail
       selected.documentUpload = createMockFiles(selected.documentUploadPlaceholder)
       selected.declarationConsent = {
         accuracy: true,
         dataProcessing: true,
         termsConditions: true,
+        popiaCompliance: true,
+        authorisedRepresentativeConsent: true,
+        thirdPartyVerificationConsent: true,
+        onboardingRelationship: "cmf",
+        ...selected.declarationConsentPlaceholder,
         ...createMockFiles(selected.declarationConsentPlaceholder)
       }
       delete selected.documentUploadPlaceholder
@@ -1207,44 +1338,63 @@ export default function CMFOnboardProfile() {
       }
     } else if (type === "Catalyst") {
       return {
+        objectives: {
+          catalystActivities: ["incubation", "esd"],
+          platformObjectives: ["find_businesses", "track_outcomes"]
+        },
         instructions: {},
         entityOverview: {
-          entityType: "Catalyst",
+          organisationType: "independent_provider",
+          organisationalArrangement: "standalone",
+          parentOrganisation: "",
+          parentOrganisationNotListed: "",
+          unitOrDepartmentName: "",
           registeredName: "",
           tradingName: "",
-          legalEntityType: "(pty) Ltd",
+          legalEntityType: "pty_ltd",
+          legalEntityTypeOther: "",
+          countryOfRegistration: "South Africa",
+          registrationIdentifierType: "company_cc",
           registrationNumber: "",
-          industrySector: "Education & Training",
-          companySize: "medium_enterprise",
           yearEstablished: "",
           briefDescription: "",
+          industrySector: "enterprise_support",
+          companySize: "11-50",
+          website: "",
+          logo: null,
+          catalystActivities: ["incubation", "esd"],
           referralSource: "referral",
+          referralSourceOther: "",
+          memberOfAssociation: "no",
+          industryAssociations: [],
           sponsorName: auth.currentUser?.uid || "",
           sponsorType: "CMF",
           sponsorViewPermission: "yes"
         },
         contactDetails: {
-          businessTel: "",
           businessEmail: "",
+          usePrimaryEmail: false,
+          businessTelCountryCode: "+27",
+          businessTel: "",
+          locationSource: "different",
+          country: "South Africa",
+          province: "",
+          city: "",
           physicalAddress: "",
+          postalAddressChoice: "same_as_physical",
           postalAddress: "",
-          primaryContactTitle: "ms",
-          primaryContactName: "",
-          primaryContactSurname: "",
-          primaryContactPosition: "",
-          primaryContactMobile: "",
-          primaryContactEmail: ""
+          primaryTitle: "Ms",
+          primaryName: "",
+          primarySurname: "",
+          primaryPosition: "",
+          primaryResponsibilities: [],
+          primaryMobileCountryCode: "+27",
+          primaryMobile: "",
+          primaryEmail: ""
         },
-        programBriefMatchingPreference: {
-          programName: "",
-          programDuration: "",
-          intangibleSupport: "",
-          geographicFocus: ["South Africa"],
-          sectorFocus: [],
-          selectedProvinces: [],
-          selectedCountries: ["South Africa"]
+        programmeSetup: {
+          programmes: []
         },
-        applicationBrief: {},
         documentUpload: {},
         declarationConsent: {}
       }
@@ -1295,11 +1445,11 @@ export default function CMFOnboardProfile() {
       ]
     } else if (type === "Catalyst") {
       return [
+        { id: "objectives", label: "Objectives & Context" },
         { id: "instructions", label: "Instructions" },
         { id: "entityOverview", label: "Entity Overview" },
         { id: "contactDetails", label: "Contact Details" },
-        { id: "programBriefMatchingPreference", label: "Program & Matching Preferences" },
-        { id: "applicationBrief", label: "Application Brief" },
+        { id: "programmeSetup", label: "Programme Setup" },
         { id: "documentUpload", label: "Document Upload" },
         { id: "declarationConsent", label: "Declaration & Consent" }
       ]
@@ -1932,7 +2082,8 @@ export default function CMFOnboardProfile() {
         const programPayload = {
           cmfId: currentUser.uid,
           contactDetails: cleanFormData.contactDetails || {},
-          programDetails: cleanFormData.fundDetails || cleanFormData.programBriefMatchingPreference || {},
+          programDetails: cleanFormData.fundDetails || cleanFormData.programmeSetup || cleanFormData.programBriefMatchingPreference || {},
+          programmes: cleanFormData.programmeSetup?.programmes || [],
           applicationBrief: cleanFormData.applicationBrief || {},
           generalInvestmentPreference: cleanFormData.generalInvestmentPreference || {},
           onboardedAt: new Date().toISOString(),
@@ -2117,13 +2268,25 @@ export default function CMFOnboardProfile() {
       }
     } else if (profileType === "Catalyst") {
       switch (activeSection.id) {
+        case "objectives":
+          return (
+            <CatalystObjectives
+              {...commonProps}
+              onContinue={() => setActiveStep((prev) => Math.min(prev + 1, sections.length))}
+            />
+          )
         case "instructions": return <CatalystInstructions />
         case "entityOverview": return <CatalystEntityOverview {...commonProps} isLocked={!!duplicateEntity} />
         case "contactDetails": return <CatalystContactDetails {...commonProps} />
-        case "programBriefMatchingPreference": return <CatalystProgramBriefMatchingPreference {...commonProps} />
-        case "applicationBrief": return <CatalystApplicationBrief {...commonProps} />
+        case "programmeSetup":
+          return (
+            <CatalystProgrammeSetup
+              data={formData.programmeSetup || {}}
+              updateData={(data) => updateFormData("programmeSetup", data)}
+            />
+          )
         case "documentUpload": return <CatalystDocumentUpload {...commonProps} />
-        case "declarationConsent": return <CatalystDeclarationConsent {...commonProps} />
+        case "declarationConsent": return <CatalystDeclarationConsent {...commonProps} allFormData={formData} />
         default: return <CatalystInstructions />
       }
     } else if (profileType === "CMF") {

@@ -548,10 +548,21 @@
   background-color: var(--up-brown-900);
   color: var(--up-white);
   font-size: 0.75rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--up-border-radius);
-  white-space: nowrap;
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  line-height: 1.35;
   z-index: 100;
-  pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  pointer-events: auto;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 600px) {
+  .tooltipBox {
+    left: 0;
+    transform: none;
+    max-width: 220px;
+  }
 }
