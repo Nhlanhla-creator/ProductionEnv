@@ -1,3 +1,4 @@
+// File: src/config/menuConfig.js
 import {
   Home,
   User,
@@ -31,7 +32,14 @@ import {
   LayoutDashboard,
   ListChecks,
   Handshake,
+  // ─── Digital Twin / Operations icons ─────────────────────────────────────
+  Boxes,
+  Rocket,
+  BarChart3,
+  Truck,
+  Upload,
 } from "lucide-react";
+
 export const advisorMenuItems = [
   {
     id: "home",
@@ -44,15 +52,12 @@ export const advisorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/advisor-profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/advisor-documents",
-      },
-    ],
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/advisor-documents",
   },
   {
     id: "matches",
@@ -104,15 +109,12 @@ export const catalystMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/support-profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/support-documents",
-      },
-    ],
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/support-documents",
   },
   {
     id: "matches",
@@ -203,15 +205,12 @@ export const internMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/intern-profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/intern-documents",
-      },
-    ],
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/intern-documents",
   },
   {
     id: "insights",
@@ -257,15 +256,12 @@ export const investorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/investor-profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/investor-documents",
-      },
-    ],
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/investor-documents",
   },
   {
     id: "matches",
@@ -350,15 +346,12 @@ export const programSponsorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/program-sponsor-profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/program-sponsor-documents",
-      },
-    ],
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/program-sponsor-documents",
   },
   {
     id: "insights",
@@ -432,21 +425,18 @@ export const associatorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/associator-profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/associator-documents",
-      },
-      {
-        id: "governance-templates",
-        label: "Governance Templates",
-        icon: <FileText size={16} />,
-        route: "/associator-documents",
-      },
-    ],
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/associator-documents",
+  },
+  {
+    id: "governance-templates",
+    label: "Governance Templates",
+    icon: <FileText size={16} />,
+    route: "/associator-documents",
   },
   {
     id: "dashboard",
@@ -470,7 +460,6 @@ export const associatorMenuItems = [
         route: "/associator-dashboard/subscriptions",
         description: "Manage member subscriptions",
       },
-
       {
         id: "dashboard-pilot",
         label: "Pilot & Case Studies",
@@ -487,12 +476,6 @@ export const associatorMenuItems = [
       },
     ],
   },
-  // {
-  //   id: "matches",
-  //   label: "My Matches",
-  //   icon: <HeartHandshake size={18} />,
-  //   route: "/associator-matches",
-  // },
   {
     id: "ecosystem",
     label: "Member Ecosystem",
@@ -536,12 +519,6 @@ export const associatorMenuItems = [
     icon: <Briefcase size={18} />,
     route: "/associator-portfolio",
   },
-  // {
-  //   id: "insights",
-  //   label: "BIG Insights",
-  //   icon: <Lightbulb size={18} />,
-  //   route: "/associator-insights",
-  // },
   {
     id: "messages",
     label: "Messages",
@@ -597,15 +574,12 @@ export const smeMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/my-documents",
-      },
-    ],
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/my-documents",
   },
   {
     id: "dashboard",
@@ -698,6 +672,47 @@ export const smeMenuItems = [
     route: "/growth",
     hasSubmenu: true,
     subItems: [
+      // ─── Operations (Digital Twin) nested under Growth Suite ─────────────
+      {
+        id: "operations",
+        label: "Operations",
+        icon: <Boxes size={16} />,
+        route: "/digital-twin/dashboard",
+        hasSubmenu: true,
+        subItems: [
+          {
+            id: "operations-setup",
+            label: "Setup Guide",
+            icon: <Rocket size={16} />,
+            route: "/digital-twin/setup",
+          },
+          {
+            id: "operations-overview",
+            label: "Command Centre",
+            icon: <BarChart3 size={16} />,
+            route: "/digital-twin/dashboard",
+          },
+          {
+            id: "operations-assets",
+            label: "My Assets",
+            icon: <Truck size={16} />,
+            route: "/digital-twin/assets",
+          },
+          {
+            id: "operations-downtime",
+            label: "Downtime",
+            icon: <Wrench size={16} />,
+            route: "/digital-twin/downtime",
+          },
+          {
+            id: "operations-imports",
+            label: "Data Imports",
+            icon: <Upload size={16} />,
+            route: "/digital-twin/imports",
+          },
+        ],
+      },
+      // ─── RAPs ────────────────────────────────────────────────────────────
       {
         id: "raps",
         label: "RAPs",
@@ -829,22 +844,13 @@ export const capitalMarketFacilitatorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/cmf-profile",
-    hasSubmenu: true,
-    subItems: [
-      {
-        id: "documents",
-        label: "My Documents",
-        icon: <FileText size={18} />,
-        route: "/cmf-documents",
-      },
-    ],
   },
-  // {
-  //   id: "matches",
-  //   label: "My Matches",
-  //   icon: <Handshake size={18} />,
-  //   route: "/cmf-matches",
-  // },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/cmf-documents",
+  },
   {
     id: "cohorts",
     label: "My Cohorts",
@@ -857,12 +863,6 @@ export const capitalMarketFacilitatorMenuItems = [
     icon: <PieChart size={18} />,
     route: "/cmf/investments",
   },
-  // {
-  //   id: "insights",
-  //   label: "BIG Insights",
-  //   icon: <Lightbulb size={18} />,
-  //   route: "/cmf-insights",
-  // },
   {
     id: "messages",
     label: "My Messages",

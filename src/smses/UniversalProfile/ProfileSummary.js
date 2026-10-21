@@ -18,7 +18,6 @@ const ProfileSummary = ({ data, onEdit }) => {
     operationsOverview: false,
     financialOverview: false,
     governance: false,
-    howDidYouHear: false,
     declarationConsent: false,
   })
 
@@ -79,6 +78,7 @@ const ProfileSummary = ({ data, onEdit }) => {
 
   const handleEdit = () => { if (onEdit) onEdit() }
 
+  // ── Shared styles ─────────────────────────────────────────────────────────
   const sectionCardStyle = {
     background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
     backdropFilter: "blur(20px)", borderRadius: "16px", overflow: "hidden",
@@ -117,66 +117,103 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  // ── Brand Assets Section ─────────────────────────────────────────────────
+  // ── Brand Assets Section (NEW - renders all new fields) ───────────────────
   const renderBrandAssets = () => {
     const ba = data?.brandAssets || {}
-    const hasAny =
-      ba.brandsOwned || ba.brandsRepresented || ba.holdsFranchises || ba.holdsAgencies ||
-      ba.companyLogo || ba.companyLetterhead || ba.orgStructure
-    if (!hasAny) return null
+    // Legacy fallback: if brandAssets hasn't been populated yet, read from entityOverview
+    const legacy = data?.entityOverview || {}
+    const brandsOwned = ba.brandsOwned || legacy.brandsOwned
+    const brandsRepresented = ba.brandsRepresented || legacy.brandsRepresented
+    const holdsFranchises = ba.holdsFranchises || legacy.holdsFranchises
+    const holdsAgencies = ba.holdsAgencies || legacy.holdsAgencies
+    const companyLogo = ba.companyLogo || legacy.companyLogo
+    const companyLetterhead = ba.companyLetterhead || legacy.companyLetterhead
+    const orgStructure = ba.orgStructure || legacy.orgStructure
+
+    const hasAny = brandsOwned || brandsRepresented || holdsFranchises || holdsAgencies ||
+      companyLogo || companyLetterhead || orgStructure
 
     return (
       <div style={sectionCardStyle}>
         {renderSectionHeader("brandAssets", ImageIcon, "Brand Assets")}
         {expandedSections.brandAssets && (
           <div style={sectionContentStyle}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-              {ba.brandsOwned && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Brands Owned</span>
-                  <span style={fieldValueStyle}>{ba.brandsOwned}</span>
+            {!hasAny ? (
+              <div style={{ textAlign: "center", color: "#7d5a50", padding: "16px", fontSize: "13px" }}>
+                No brand asset information provided.
+              </div>
+            ) : (
+              <>
+                {/* Brands & Representation */}
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "4px" }}>
+                  Brands &amp; Representation
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+                  <div style={fieldCardStyle}>
+                    <span style={fieldLabelStyle}>Brands Owned</span>
+                    <span style={fieldValueStyle}>{brandsOwned || "Not provided"}</span>
+                  </div>
+                  <div style={fieldCardStyle}>
+                    <span style={fieldLabelStyle}>Brands Represented</span>
+                    <span style={fieldValueStyle}>{brandsRepresented || "Not provided"}</span>
+                  </div>
+                  <div style={fieldCardStyle}>
+                    <span style={fieldLabelStyle}>Holds Franchises</span>
+                    <span style={fieldValueStyle}>
+                      {holdsFranchises === "yes" ? "✅ Yes" : holdsFranchises === "no" ? "❌ No" : "Not provided"}
+                    </span>
+                  </div>
+                  <div style={fieldCardStyle}>
+                    <span style={fieldLabelStyle}>Holds Agencies</span>
+                    <span style={fieldValueStyle}>
+                      {holdsAgencies === "yes" ? "✅ Yes" : holdsAgencies === "no" ? "❌ No" : "Not provided"}
+                    </span>
+                  </div>
                 </div>
-              )}
-              {ba.brandsRepresented && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Brands Represented</span>
-                  <span style={fieldValueStyle}>{ba.brandsRepresented}</span>
-                </div>
-              )}
-              {ba.holdsFranchises && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Holds Franchises</span>
-                  <span style={fieldValueStyle}>{formatLabel(ba.holdsFranchises)}</span>
-                </div>
-              )}
-              {ba.holdsAgencies && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Holds Agencies</span>
-                  <span style={fieldValueStyle}>{formatLabel(ba.holdsAgencies)}</span>
-                </div>
-              )}
-            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-              {ba.companyLogo && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Company Logo</span>
-                  <img src={ba.companyLogo} alt="Company Logo" style={{ maxWidth: "120px", maxHeight: "120px", objectFit: "contain", borderRadius: "8px", border: "1px solid #e6d7c3", backgroundColor: "white" }} />
+                {/* Brand Documents */}
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+                  Brand Documents &amp; Logos
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+                  {companyLogo && (
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Company Logo</span>
+                      <img
+                        src={companyLogo}
+                        alt="Company Logo"
+                        style={{
+                          maxWidth: "140px",
+                          maxHeight: "140px",
+                          objectFit: "contain",
+                          borderRadius: "8px",
+                          border: "1px solid #e6d7c3",
+                          backgroundColor: "white",
+                          padding: "6px",
+                        }}
+                      />
+                    </div>
+                  )}
+                  {companyLetterhead && (
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Company Letterhead</span>
+                      {renderDocumentLink(companyLetterhead, "View Letterhead")}
+                    </div>
+                  )}
+                  {orgStructure && (
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Organisational Structure</span>
+                      {renderDocumentLink(orgStructure, "View Org Structure")}
+                    </div>
+                  )}
+                  {!companyLogo && !companyLetterhead && !orgStructure && (
+                    <div style={{ ...fieldCardStyle, gridColumn: "1 / -1" }}>
+                      <span style={fieldValueStyle}>No brand documents uploaded.</span>
+                    </div>
+                  )}
                 </div>
-              )}
-              {ba.companyLetterhead && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Company Letterhead</span>
-                  {renderDocumentLink(ba.companyLetterhead, "View Letterhead")}
-                </div>
-              )}
-              {ba.orgStructure && (
-                <div style={fieldCardStyle}>
-                  <span style={fieldLabelStyle}>Organisational Structure</span>
-                  {renderDocumentLink(ba.orgStructure, "View Org Structure")}
-                </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -208,7 +245,7 @@ const ProfileSummary = ({ data, onEdit }) => {
             )}
             {!offering.breadcrumb && (offering.customCategoryRequest || offering.customCategory) && (
               <div style={{ fontSize: "12px", color: "#92400e", marginTop: "3px", fontStyle: "italic" }}>
-                Category pending review: "{offering.customCategoryRequest || offering.customCategory}"
+                Custom category (pending review): "{offering.customCategoryRequest || offering.customCategory}"
               </div>
             )}
           </div>
@@ -233,6 +270,12 @@ const ProfileSummary = ({ data, onEdit }) => {
             <div>
               <div style={{ fontSize: "10px", fontWeight: "600", color: "#7d5a50", textTransform: "uppercase", marginBottom: "2px" }}>Geographic Coverage</div>
               <div style={{ color: "#4a352f" }}>{offering.geographicCoverage.join(" • ")}</div>
+            </div>
+          )}
+          {offering.deliveryStandard && (
+            <div>
+              <div style={{ fontSize: "10px", fontWeight: "600", color: "#7d5a50", textTransform: "uppercase", marginBottom: "2px" }}>Delivery Standard</div>
+              <div style={{ color: "#4a352f" }}>{offering.deliveryStandard}</div>
             </div>
           )}
         </div>
@@ -268,6 +311,7 @@ const ProfileSummary = ({ data, onEdit }) => {
       )
     }
 
+    // Legacy product/service categories
     const renderProductCategories = () => {
       const categories = ps.productCategories || []
       if (categories.length === 0) return null
@@ -836,36 +880,84 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  const renderHowDidYouHear = () => {
-    const how = data?.howDidYouHear || {}
-    const hasData = how.source || how.referralSource || how.otherSource || how.additionalComments
-    if (!hasData) return null
+  // ── Operations Overview Section ───────────────────────────────────────────
+  const renderOperationsOverview = () => {
+    const ops = data?.operationsOverview || {}
     return (
       <div style={sectionCardStyle}>
-        {renderSectionHeader("howDidYouHear", MessageCircle, "How Did You Hear About Us?")}
-        {expandedSections.howDidYouHear && (
+        {renderSectionHeader("operationsOverview", FileCheck, "Operations Overview")}
+        {expandedSections.operationsOverview && (
           <div style={sectionContentStyle}>
-            <div style={fieldCardStyle}>
-              <span style={fieldLabelStyle}>Referral Source</span>
-              <span style={fieldValueStyle}>{formatLabel(how.source || how.referralSource) || "Not provided"}</span>
+            <p style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "20px", fontWeight: "500", fontStyle: "italic" }}>BIG Score – Operational Strength (Risk-Based Yes/No Model)</p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+              {[
+                { q: "Q1. Multiple Key Suppliers", key: "multipleSuppliers" },
+                { q: "Q2. Documented Contingency Plan", key: "contingencyPlan" },
+                { q: "Q3. Track Performance Metrics", key: "trackPerformanceMetrics" },
+                { q: "Q4. 3+ Successful Deliveries", key: "threeSuccessfulDeliveries" },
+                { q: "Q5. Capacity to Increase Output", key: "hasCapacityToIncrease" },
+                { q: "Q6. Formal Safety/Compliance", key: "hasFormalProcedures" },
+                { q: "Q7. Major Incidents (24 months)", key: "hasMajorIncidents" },
+              ].map(({ q, key }) => {
+                const v = ops[key]
+                return (
+                  <div key={key} style={fieldCardStyle}>
+                    <span style={fieldLabelStyle}>{q}</span>
+                    <span style={fieldValueStyle}>{v === "yes" ? "✅ Yes" : v === "no" ? "❌ No" : "Not answered"}</span>
+                  </div>
+                )
+              })}
             </div>
-            {how.otherSource && (
-              <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
-                <span style={fieldLabelStyle}>Other Source Details</span>
-                <span style={fieldValueStyle}>{how.otherSource}</span>
-              </div>
+
+            {/* Suppliers */}
+            {ops.suppliers?.length > 0 && (
+              <>
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Suppliers</h3>
+                <div style={{ ...fieldCardStyle, overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid #c8b6a6", backgroundColor: "#5c3a1e" }}>
+                        <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>#</th>
+                        <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Company Name</th>
+                        <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Contact</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ops.suppliers.map((s, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                          <td style={{ padding: "6px 10px", color: "#4a352f" }}>{i + 1}</td>
+                          <td style={{ padding: "6px 10px", color: "#4a352f" }}>{s.name || "Not provided"}</td>
+                          <td style={{ padding: "6px 10px", color: "#4a352f" }}>{s.contact || "Not provided"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
-            {how.referralName && (
-              <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
-                <span style={fieldLabelStyle}>Referred By</span>
-                <span style={fieldValueStyle}>{how.referralName}</span>
-              </div>
+
+            {/* Premises */}
+            {ops.premisesStatus && (
+              <>
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Premises &amp; Facilities</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+                  <div style={fieldCardStyle}><span style={fieldLabelStyle}>Premises Status</span><span style={fieldValueStyle}>{formatLabel(ops.premisesStatus)}</span></div>
+                  {ops.premisesType && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Premises Type</span><span style={fieldValueStyle}>{formatLabel(ops.premisesType)}</span></div>}
+                  {ops.premisesSize && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Size (sqm)</span><span style={fieldValueStyle}>{ops.premisesSize}</span></div>}
+                  {ops.leaseExpiryDate && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Lease Expiry</span><span style={fieldValueStyle}>{formatDate(ops.leaseExpiryDate)}</span></div>}
+                </div>
+              </>
             )}
-            {how.additionalComments && (
-              <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
-                <span style={fieldLabelStyle}>Additional Comments</span>
-                <span style={fieldValueStyle}>{how.additionalComments}</span>
-              </div>
+
+            {/* Operational Challenges */}
+            {ops.operationalChallenges && (
+              <>
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Operational Challenges</h3>
+                <div style={{ background: "rgba(166,124,82,0.1)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(166,124,82,0.2)" }}>
+                  <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{ops.operationalChallenges}</p>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -946,7 +1038,7 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
 
-            {/* Brand Assets - NEW SEPARATE SECTION */}
+            {/* Brand Assets — NEW SECTION */}
             {renderBrandAssets()}
 
             {/* Products & Services */}
@@ -1032,11 +1124,17 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </table>
                   </div>
 
-                  <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>B. Financial Management & Systems</h3>
+                  <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>B. Financial Management &amp; Systems</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Books Up to Date</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.booksUpToDate)}</span></div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Management Accounts</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasManagementAccounts)}</span></div>
-                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Accounting Software</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasAccountingSoftware)}{data?.financialOverview?.accountingSoftwareName ? ` (${data.financialOverview.accountingSoftwareName})` : ""}</span></div>
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Accounting Software</span>
+                      <span style={fieldValueStyle}>
+                        {formatLabel(data?.financialOverview?.hasAccountingSoftware)}
+                        {data?.financialOverview?.accountingSoftwareName ? ` (${data.financialOverview.accountingSoftwareName})` : ""}
+                      </span>
+                    </div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Insured</span><span style={fieldValueStyle}>{data?.financialOverview?.isInsured === "yes" ? "✅ Yes" : data?.financialOverview?.isInsured === "no" ? "❌ No" : "Not provided"}</span></div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Financial Statements</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasFinancialStatements)}</span></div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Financials Audited</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.financialsAudited)}</span></div>
@@ -1059,83 +1157,7 @@ const ProfileSummary = ({ data, onEdit }) => {
             </div>
 
             {/* Operations Overview */}
-            <div style={sectionCardStyle}>
-              {renderSectionHeader("operationsOverview", FileCheck, "Operations Overview")}
-              {expandedSections.operationsOverview && (
-                <div style={sectionContentStyle}>
-                  <p style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "20px", fontWeight: "500", fontStyle: "italic" }}>BIG Score – Operational Strength (Risk-Based Yes/No Model)</p>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-                    {[
-                      { q: "Q1. Multiple Key Suppliers", key: "multipleSuppliers" },
-                      { q: "Q2. Documented Contingency Plan", key: "contingencyPlan" },
-                      { q: "Q3. Track Performance Metrics", key: "trackPerformanceMetrics" },
-                      { q: "Q4. 3+ Successful Deliveries", key: "threeSuccessfulDeliveries" },
-                      { q: "Q5. Capacity to Increase Output", key: "hasCapacityToIncrease" },
-                      { q: "Q6. Formal Safety/Compliance", key: "hasFormalProcedures" },
-                      { q: "Q7. Major Incidents (24 months)", key: "hasMajorIncidents" },
-                    ].map(({ q, key }) => {
-                      const v = data?.operationsOverview?.[key]
-                      return (
-                        <div key={key} style={fieldCardStyle}>
-                          <span style={fieldLabelStyle}>{q}</span>
-                          <span style={fieldValueStyle}>{v === "yes" ? "✅ Yes" : v === "no" ? "❌ No" : "Not answered"}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Suppliers list */}
-                  {data?.operationsOverview?.suppliers?.length > 0 && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Suppliers</h3>
-                      <div style={{ ...fieldCardStyle, overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                          <thead>
-                            <tr style={{ borderBottom: "2px solid #c8b6a6", backgroundColor: "#5c3a1e" }}>
-                              <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>#</th>
-                              <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Company Name</th>
-                              <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Contact</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {data.operationsOverview.suppliers.map((s, i) => (
-                              <tr key={i} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                                <td style={{ padding: "6px 10px", color: "#4a352f" }}>{i + 1}</td>
-                                <td style={{ padding: "6px 10px", color: "#4a352f" }}>{s.name || "Not provided"}</td>
-                                <td style={{ padding: "6px 10px", color: "#4a352f" }}>{s.contact || "Not provided"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Premises */}
-                  {data?.operationsOverview?.premisesStatus && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Premises & Facilities</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-                        <div style={fieldCardStyle}><span style={fieldLabelStyle}>Premises Status</span><span style={fieldValueStyle}>{formatLabel(data.operationsOverview.premisesStatus)}</span></div>
-                        {data.operationsOverview.premisesType && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Premises Type</span><span style={fieldValueStyle}>{formatLabel(data.operationsOverview.premisesType)}</span></div>}
-                        {data.operationsOverview.premisesSize && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Size (sqm)</span><span style={fieldValueStyle}>{data.operationsOverview.premisesSize}</span></div>}
-                        {data.operationsOverview.leaseExpiryDate && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Lease Expiry</span><span style={fieldValueStyle}>{formatDate(data.operationsOverview.leaseExpiryDate)}</span></div>}
-                      </div>
-                    </>
-                  )}
-
-                  {data?.operationsOverview?.operationalChallenges && (
-                    <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Operational Challenges</h3>
-                      <div style={{ background: "rgba(166,124,82,0.1)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(166,124,82,0.2)" }}>
-                        <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{data.operationsOverview.operationalChallenges}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            {renderOperationsOverview()}
 
             {/* Governance */}
             <div style={sectionCardStyle}>
@@ -1190,13 +1212,12 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
 
-            {renderHowDidYouHear()}
-
+            {/* Declaration & Consent — includes How Did You Hear sub-block */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("declarationConsent", CheckSquare, "Declaration & Consent")}
               {expandedSections.declarationConsent && (
                 <div style={sectionContentStyle}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Declaration of Accuracy</span>
                       <span style={fieldValueStyle}>{data?.declarationConsent?.accuracy ? "✅ Yes" : "❌ No"}</span>
@@ -1210,6 +1231,45 @@ const ProfileSummary = ({ data, onEdit }) => {
                       <span style={fieldValueStyle}>{data?.declarationConsent?.termsConditions ? "✅ Yes" : "❌ No"}</span>
                     </div>
                   </div>
+
+                  {/* How Did You Hear — now part of Declaration & Consent */}
+                  {(data?.howDidYouHear?.source || data?.declarationConsent?.howDidYouHear?.source) && (
+                    <>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "12px" }}>How Did You Hear About Us?</h3>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+                        <div style={fieldCardStyle}>
+                          <span style={fieldLabelStyle}>Source</span>
+                          <span style={fieldValueStyle}>
+                            {formatLabel(data?.howDidYouHear?.source || data?.declarationConsent?.howDidYouHear?.source) || "Not provided"}
+                          </span>
+                        </div>
+                        {(data?.howDidYouHear?.otherSource || data?.declarationConsent?.howDidYouHear?.otherSource) && (
+                          <div style={fieldCardStyle}>
+                            <span style={fieldLabelStyle}>Other Source</span>
+                            <span style={fieldValueStyle}>
+                              {data.howDidYouHear?.otherSource || data.declarationConsent?.howDidYouHear?.otherSource}
+                            </span>
+                          </div>
+                        )}
+                        {(data?.howDidYouHear?.referralName || data?.declarationConsent?.howDidYouHear?.referralName) && (
+                          <div style={fieldCardStyle}>
+                            <span style={fieldLabelStyle}>Referred By</span>
+                            <span style={fieldValueStyle}>
+                              {data.howDidYouHear?.referralName || data.declarationConsent?.howDidYouHear?.referralName}
+                            </span>
+                          </div>
+                        )}
+                        {(data?.howDidYouHear?.additionalComments || data?.declarationConsent?.howDidYouHear?.additionalComments) && (
+                          <div style={{ ...fieldCardStyle, gridColumn: "1 / -1" }}>
+                            <span style={fieldLabelStyle}>Additional Comments</span>
+                            <span style={fieldValueStyle}>
+                              {data.howDidYouHear?.additionalComments || data.declarationConsent?.howDidYouHear?.additionalComments}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
