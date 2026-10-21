@@ -7,6 +7,7 @@ import { auth, db, storage } from "../../firebaseConfig"
 import "./UniversalProfile.css"
 import Instructions from "./instructions"
 import EntityOverview from "./entity-overview"
+import BrandAssets from "./brand-assets"
 import OwnershipManagement from "./ownership-management"
 import ContactDetails from "./contact-details"
 import LegalCompliance from "./legal-compliance"
@@ -28,6 +29,7 @@ import ProfileScopeSwitcher from "../../utils/ProfileScopeSwitcher";
 const sections = [
   { id: "instructions", label: "Instructions" },
   { id: "entityOverview", label: "Entity\nOverview" },
+  { id: "brandAssets", label: "Brand\nAssets" },
   { id: "productsServices", label: "Products &\nServices" },
   { id: "ownershipManagement", label: "Ownership &\nManagement" },
   { id: "legalCompliance", label: "Legal &\nCompliance" },
@@ -35,7 +37,6 @@ const sections = [
   { id: "financialOverview", label: "Financial\nOverview" },
   { id: "governance", label: "Governance" },
   { id: "contactDetails", label: "Contact\nDetails" },
-  { id: "howDidYouHear", label: "How Did\nYou Hear" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
 ]
@@ -59,6 +60,7 @@ const sectionValidations = {
     )
   },
 
+  brandAssets: () => true,
   ownershipManagement: () => true,
 
   contactDetails: (data) => {
@@ -88,7 +90,6 @@ const sectionValidations = {
   financialOverview: () => true,
   governance: () => true,
   productsServices: () => true,
-  howDidYouHear: () => true,
   documents: () => true,
   declarationConsent: (data) => Boolean(data?.accuracy && data?.dataProcessing && data?.termsConditions),
 }
@@ -105,13 +106,10 @@ const validateAllSections = (formData, completedSections) => {
   return { allValid, sectionStatus }
 }
 
-// ── Role helpers ─────────────────────────────────────────────────────────────
-// The role coming back from profile-context (or stored on the user doc) is normalised here,
-// so an unexpected value ("admin", "Owner", "facilitator", undefined) can never lock a user out.
 const ALL_SECTION_IDS = sections.map((s) => s.id)
 const FALLBACK_ROLE_PERMISSIONS = {
   owner: { canEditAll: true, sections: ALL_SECTION_IDS },
-  companyadmin: { canEditAll: false, sections: ["entityOverview", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "documents"] },
+  companyadmin: { canEditAll: false, sections: ["entityOverview", "brandAssets", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "documents"] },
   manager: { canEditAll: false, sections: ["contactDetails", "productsServices", "operationsOverview", "documents"] },
   employee: { canEditAll: false, sections: ["contactDetails", "documents"] },
   viewer: { canEditAll: false, sections: [] },
@@ -150,7 +148,6 @@ export default function UniversalProfile() {
   const navigate = useNavigate()
 
   const [profileSubmitted, setProfileSubmitted] = useState(false)
-
   const [profileData, setProfileData] = useState(null)
 
   const [companyOwnerId, setCompanyOwnerId] = useState(null)
@@ -186,9 +183,9 @@ export default function UniversalProfile() {
   }
 
   const [completedSections, setCompletedSections] = useState({
-    instructions: true, entityOverview: false, ownershipManagement: false,
+    instructions: true, entityOverview: false, brandAssets: false, ownershipManagement: false,
     contactDetails: false, legalCompliance: false, operationsOverview: false,
-    financialOverview: false, governance: false, productsServices: false, howDidYouHear: false,
+    financialOverview: false, governance: false, productsServices: false,
     documents: false, declarationConsent: false,
   })
 
@@ -200,9 +197,12 @@ export default function UniversalProfile() {
     entityOverview: {
       registeredName: "", tradingName: "", registrationNumber: "", entityType: "",
       legalStructure: "", entitySize: "", financialYearEnd: "",
-      yearsInOperation: "", operationStage: "", economicSectors: [], 
+      yearsInOperation: "", operationStage: "", economicSectors: [],
       businessDescription: "", operatingCountries: [], operatingProvinces: [],
       memberOfAssociation: "", industryAssociations: [], industryAssociationsOther: "",
+    },
+
+    brandAssets: {
       brandsOwned: "", brandsRepresented: "", holdsFranchises: "", holdsAgencies: "",
       companyLogo: "", companyLetterhead: "", orgStructure: "",
     },
@@ -223,10 +223,10 @@ export default function UniversalProfile() {
       businessLeadership: { ownerLed: "", primaryMotivation: "", growthAmbition: "", founderFullTime: "", opennessToAdvice: "", decisionGovernance: "" },
     },
 
-    contactDetails: { 
-      contactTitle: "", contactName: "", position: "", 
-      businessPhone: "", mobile: "", email: "", 
-      physicalAddress: "", sameAsPhysical: false, postalAddress: "" 
+    contactDetails: {
+      contactTitle: "", contactName: "", position: "",
+      businessPhone: "", mobile: "", email: "",
+      physicalAddress: "", sameAsPhysical: false, postalAddress: ""
     },
 
     legalCompliance: {
@@ -239,10 +239,8 @@ export default function UniversalProfile() {
       outsourcesValueChain: "", outsourcedServices: "", outsourcedValue: "", outsourcedCurrency: "ZAR",
       importExport: "none", importExportValue: "", importExportCurrency: "ZAR",
       operatesOnContract: "", totalContractValue: "", contractCurrency: "ZAR",
-      multipleSuppliers: "", contingencyPlan: "", 
-      supplier1Name: "", supplier1Contact: "",
-      supplier2Name: "", supplier2Contact: "",
-      supplier3Name: "", supplier3Contact: "",
+      multipleSuppliers: "", contingencyPlan: "",
+      suppliers: [],
       premisesStatus: "", leaseExpiryDate: "", premisesType: "", premisesSize: "",
       hasBranches: "", numberOfBranches: "", branchLocations: "", branchStaff: "",
       industryAccreditations: [], industryAccreditationsOther: "",
@@ -291,9 +289,8 @@ export default function UniversalProfile() {
     },
 
     productsServices: {
-      offeringType: "", productCategories: [], serviceCategories: [],
-      deliveryModes: [], minLeadTime: "", minLeadTimeUnit: "days",
-      maxLeadTime: "", maxLeadTimeUnit: "days", targetMarket: "", keyClients: [],
+      offeringType: "", offerings: [], targetMarket: "", keyClients: [],
+      customerTypes: [],
     },
 
     howDidYouHear: {},
@@ -305,17 +302,14 @@ export default function UniversalProfile() {
       companyProfile: [], clientReferences: [],
     },
 
-    declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false },
+    declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false, howDidYouHear: {} },
   })
 
-  // ── Auth + company membership ──────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // Resolve whose profile this is: own / company owner's (for members) / facilitator-viewed SME
           const ctx = await resolveProfileContext({ force: true })
-          // Never leave the role empty/unknown: members default to viewer, everyone else (own profile / CMF) to owner
           const resolvedRole = normalizeRole(ctx.role) || (ctx.isMember && !ctx.isCmf ? "viewer" : "owner")
           setUserRole(resolvedRole)
           setIsCompanyMember(ctx.isMember)
@@ -323,7 +317,6 @@ export default function UniversalProfile() {
           setEffectiveUserId(ctx.profileId)
           setCompanyName(ctx.companyName || "")
           setEditPermissions(getRolePermissions(resolvedRole) || FALLBACK_ROLE_PERMISSIONS.viewer)
-          // Never restore the member's personal local cache over the company's profile
           if (!ctx.isCmf && !ctx.isMember) {
             const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"))
             const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"))
@@ -340,10 +333,10 @@ export default function UniversalProfile() {
               })
             }
             if (savedCompletedSections) setCompletedSections((prev) => ({ ...prev, ...JSON.parse(savedCompletedSections), instructions: true }))
-           if (savedSubmissionStatus === "true") {
-            setProfileSubmitted(true)
-            if (!deepLinkSection) setShowSummary(true)
-          }
+            if (savedSubmissionStatus === "true") {
+              setProfileSubmitted(true)
+              if (!deepLinkSection) setShowSummary(true)
+            }
             if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true") }
           }
         } catch (error) {
@@ -356,19 +349,18 @@ export default function UniversalProfile() {
     return () => unsubscribe()
   }, [])
 
-    useEffect(() => {
+  useEffect(() => {
     if (!deepLinkSection) return
     window.scrollTo(0, 0)
     window.history.replaceState({}, "", window.location.pathname)
   }, [deepLinkSection])
 
-
   const getUserSpecificKey = (baseKey) => { const userId = effectiveUserId || auth.currentUser?.uid; return userId ? `${baseKey}_${userId}` : baseKey }
 
   useEffect(() => {
     const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-    if (isCmfView) return // skip local storage auto-save during CMF view mode
-    if (isCompanyMember) return // members work on the company's live profile, never a local copy
+    if (isCmfView) return
+    if (isCompanyMember) return
     const userId = auth.currentUser?.uid; if (!userId) return
     localStorage.setItem(getUserSpecificKey("universalProfileData"), JSON.stringify(formData))
     localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(completedSections))
@@ -458,17 +450,13 @@ export default function UniversalProfile() {
         triggerPayload.triggerLegitimacyEvaluation = true
       }
       const fundabilitySections = ["financialOverview"]
-if (fundabilitySections.includes(section)) {
-  triggerPayload.triggerFundabilityEvaluation = true
-}
-
-// Operational Strength is scored entirely from Operations Overview, plus
-// entityOverview.economicSectors — used only to sanity-check whether the
-// declared premises type fits the declared business. Nothing else feeds it.
-const operationalSections = ["operationsOverview", "entityOverview"]
-if (operationalSections.includes(section)) {
-  triggerPayload.triggerOperationalEvaluation = true
-}
+      if (fundabilitySections.includes(section)) {
+        triggerPayload.triggerFundabilityEvaluation = true
+      }
+      const operationalSections = ["operationsOverview", "entityOverview"]
+      if (operationalSections.includes(section)) {
+        triggerPayload.triggerOperationalEvaluation = true
+      }
       const leadershipSections = ["ownershipManagement"]
       if (leadershipSections.includes(section)) {
         triggerPayload.triggerLeadershipEvaluation = true
@@ -493,7 +481,6 @@ if (operationalSections.includes(section)) {
 
   const handleSaveSection = async () => {
     await saveDataToFirebase(activeSection);
-    // Dispatch Application Draft Saved nudge (SP8.20)
     try {
       const totalSecs = sections.length;
       const completedCount = Object.values(completedSections).filter(Boolean).length;
@@ -553,22 +540,8 @@ if (operationalSections.includes(section)) {
       alert("Profile submission blocked:\n\n" + issues.join("\n"))
       return
     }
-    
+
     try {
-      // const user = auth.currentUser;
-      // if (user) {
-      //   const smeName = formData.entityOverview?.registeredName || "there";
-      //   const userEmail = formData.contactDetails?.email;
-      //   if (userEmail) {
-      //     const sendConsentConfirmation = getFunctions().httpsCallable('sendConsentConfirmation');
-      //     await sendConsentConfirmation({
-      //       userId: user.uid,
-      //       email: userEmail,
-      //       name: smeName
-      //     }).catch(err => console.error("Consent email failed:", err));
-      //   }
-      // }
-      
       const updatedCompletedSections = markSectionAsCompleted("declarationConsent")
       await saveDataToFirebase(null, true, updatedCompletedSections)
       const userEmail = formData.contactDetails?.email;
@@ -578,7 +551,6 @@ if (operationalSections.includes(section)) {
         await sendConsentConfirmationEmail(userEmail, smeName);
       }
 
-      // Dispatch Vetting Status Queued notification (SP8.24)
       notifyVettingStatusUpdate({
         companyName: smeName,
         vettingStage: "queued",
@@ -588,7 +560,7 @@ if (operationalSections.includes(section)) {
 
       setProfileSubmitted(true)
       const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
-      if (!hasSeenCongratulationsPopup) { 
+      if (!hasSeenCongratulationsPopup) {
         setShowCongratulationsPopup(true)
         localStorage.setItem(getUserSpecificKey("hasSeenCongratulationsPopup"), "true")
       } else {
@@ -609,17 +581,13 @@ if (operationalSections.includes(section)) {
   const handleCloseCongratulationsPopup = () => { setShowCongratulationsPopup(false); setShowSummary(true); window.scrollTo(0, 0) }
   const handleNavigateToFunding = () => navigate("/applications/funding")
 
-  const isDocumentsSectionComplete = () => {
- 
-    return true
-  }
-
   const renderActiveSection = () => {
     const sectionData = formData[activeSection] || {}
     const commonProps = { data: sectionData, updateData: (data) => updateFormData(activeSection, data) }
     switch (activeSection) {
       case "instructions": return <Instructions />
       case "entityOverview": return <EntityOverview {...commonProps} />
+      case "brandAssets": return <BrandAssets {...commonProps} />
       case "ownershipManagement": return <OwnershipManagement {...commonProps} />
       case "contactDetails": return <ContactDetails {...commonProps} />
       case "legalCompliance": return <LegalCompliance {...commonProps} />
@@ -634,14 +602,19 @@ if (operationalSections.includes(section)) {
       case "governance":
         return <Governance data={formData.governance || {}} updateData={(section, data) => updateFormData(section, data)} />
       case "productsServices": return <ProductsServices {...commonProps} />
-      case "howDidYouHear": return <HowDidYouHear {...commonProps} />
       case "documents": return <Documents {...commonProps} />
-      case "declarationConsent": return <DeclarationConsent {...commonProps} allFormData={formData} onComplete={handleRegistrationComplete} />
+      case "declarationConsent":
+        return <DeclarationConsent
+          {...commonProps}
+          allFormData={formData}
+          howDidYouHearData={formData.howDidYouHear || {}}
+          onHowDidYouHearUpdate={(data) => updateFormData("howDidYouHear", data)}
+          onComplete={handleRegistrationComplete}
+        />
       default: return <Instructions />
     }
   }
 
-  // ── Fetch profile from Firebase ────────────────────────────────────────────
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
@@ -649,13 +622,12 @@ if (operationalSections.includes(section)) {
         const docRef = doc(db, "universalProfiles", effectiveUserId)
         const docSnap = await getDoc(docRef)
         if (docSnap.exists()) {
-          const data = docSnap.data(); 
+          const data = docSnap.data();
           setProfileData(data)
           if (data.completedSections) {
             setCompletedSections((prev) => ({ ...prev, instructions: true, ...data.completedSections }))
             localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(data.completedSections))
           }
-          // Merge saved data with default formData to ensure all fields exist
           setFormData((prev) => {
             const merged = { ...prev }
             Object.keys(data).forEach(key => {
@@ -665,6 +637,22 @@ if (operationalSections.includes(section)) {
                 merged[key] = data[key]
               }
             })
+            // Handle migration: move brand asset fields from entityOverview to brandAssets
+            if (data.entityOverview) {
+              const { brandsOwned, brandsRepresented, holdsFranchises, holdsAgencies, companyLogo, companyLetterhead, orgStructure } = data.entityOverview
+              if (brandsOwned || brandsRepresented || holdsFranchises || holdsAgencies || companyLogo || companyLetterhead || orgStructure) {
+                merged.brandAssets = {
+                  ...merged.brandAssets,
+                  brandsOwned: brandsOwned || merged.brandAssets?.brandsOwned || "",
+                  brandsRepresented: brandsRepresented || merged.brandAssets?.brandsRepresented || "",
+                  holdsFranchises: holdsFranchises || merged.brandAssets?.holdsFranchises || "",
+                  holdsAgencies: holdsAgencies || merged.brandAssets?.holdsAgencies || "",
+                  companyLogo: companyLogo || merged.brandAssets?.companyLogo || "",
+                  companyLetterhead: companyLetterhead || merged.brandAssets?.companyLetterhead || "",
+                  orgStructure: orgStructure || merged.brandAssets?.orgStructure || "",
+                }
+              }
+            }
             return merged
           })
           const isComplete = data?.declarationConsent?.accuracy && data?.declarationConsent?.dataProcessing && data?.declarationConsent?.termsConditions
@@ -680,7 +668,7 @@ if (operationalSections.includes(section)) {
   }, [isEditing, effectiveUserId])
 
   useEffect(() => {
-   if (!completedSections.documents) setCompletedSections((prev) => ({ ...prev, documents: true }))
+    if (!completedSections.documents) setCompletedSections((prev) => ({ ...prev, documents: true }))
   }, [formData.documents])
 
   if (loading) {
@@ -745,7 +733,6 @@ if (operationalSections.includes(section)) {
     <div className="universal-profile-container">
       {renderCmfBanner()}
 
-      {/* Dynamic Vetting & Verification Status Banner (SP8.17, SP8.18, SP8.24, SP8.25) */}
       {profileData?.status === "approved" && (
         <div style={{
           background: "#ecfdf5",

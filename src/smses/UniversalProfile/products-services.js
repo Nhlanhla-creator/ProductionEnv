@@ -24,19 +24,6 @@ import {
 } from './applicationOptions'
 import { taxonomyLeaves, searchTaxonomy, getLeafById, capabilityProfiles } from './taxonomyData'
 
-// ============================================================================
-// Developer Brief v1 (29 July 2026) — Products & Services Taxonomy
-//
-// Core product decision this file implements: Sector describes where an SME
-// can operate. Offering category describes what the SME actually provides.
-// The offering category controls the taxonomy trigger; industry/sector ranks
-// suggestions and adds context but never defines the offering itself.
-//
-// Each saved product/service is now a self-contained "offering" (Section 4.2)
-// with its own taxonomy category, delivery model and industries, rather than
-// a flat table grouped under a re-used industry-style Category field.
-// ============================================================================
-
 const industryOptions = industriesServedOptions.map((v) => ({ value: v, label: v }))
 
 let _offeringSeq = 0
@@ -47,13 +34,15 @@ const emptyOffering = (offeringType) => ({
   offeringType, // 'Product' | 'Service'
   taxonomyLeafId: null,
   breadcrumb: '',
+  categoryValue: '',
+  customCategory: '',
   customCategoryRequest: '',
   name: '',
   description: '',
   isPrimary: false,
   deliveryRole: [],
   commercialPattern: [],
-  deliveryStandard: '', // value from the dynamic deliveryPatternConfig options
+  deliveryStandard: '',
   minLeadTime: '',
   minLeadTimeUnit: 'Calendar days',
   maxLeadTime: '',
@@ -66,9 +55,6 @@ const emptyOffering = (offeringType) => ({
   collapsed: false,
 })
 
-// ---------------------------------------------------------------------------
-// Shared style tokens (kept identical to the original file's palette)
-// ---------------------------------------------------------------------------
 const inputStyle = {
   width: '100%',
   padding: '10px 14px',
@@ -85,21 +71,7 @@ const focusHandlers = {
   onBlur: (e) => { e.currentTarget.style.borderColor = '#d6c4a8'; e.currentTarget.style.boxShadow = 'none' },
 }
 
-const pillStyle = (active) => ({
-  padding: '4px 10px',
-  borderRadius: '999px',
-  fontSize: '11px',
-  fontWeight: '600',
-  border: `1px solid ${active ? '#8B4513' : '#d6c4a8'}`,
-  backgroundColor: active ? '#8B4513' : 'white',
-  color: active ? 'white' : '#5c3a1e',
-  cursor: 'pointer',
-  userSelect: 'none',
-  whiteSpace: 'nowrap',
-})
-
-// MultiSelect component for dropdown-style multi-select
-function MultiSelect({ options, selected = [], onChange, label, placeholder, isTagMode = false }) {
+function MultiSelect({ options, selected = [], onChange, label, placeholder }) {
   const [isOpen, setIsOpen] = useState(false)
   const triggerRef = useRef(null)
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
@@ -231,23 +203,20 @@ function MultiSelect({ options, selected = [], onChange, label, placeholder, isT
   )
 }
 
-// ---------------------------------------------------------------------------
-// TaxonomySearch — Section 4.3 / 5.1
-// Searchable, search-first Offering Category selector. Begins suggesting after
-// two characters, shows breadcrumb + definition + examples, never restricts by
-// profile industry (industries only re-rank), and offers "Suggest a category"
-// without blocking completion when nothing matches.
-// ---------------------------------------------------------------------------
-function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCustomCategory, industryHints }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// CategoryInput — type-ahead search + free text. Supports BOTH predefined and
+// custom category values. Displays the current selection with a Change action.
+// ─────────────────────────────────────────────────────────────────────────────
+function CategoryInput({ offeringType, value, breadcrumb, customValue, onSelect, onCustomChange, industryHints }) {
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
-  const [showCustomForm, setShowCustomForm] = useState(false)
-  const [customText, setCustomText] = useState('')
   const triggerRef = useRef(null)
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
 
+  const categoryLabel = offeringType === 'Product' ? 'Product Category' : 'Service Category'
+
   const results = useMemo(
-    () => searchTaxonomy(query, { offeringType, industryHints }),
+    () => searchTaxonomy(query, { offeringType: offeringType === 'Product' ? 'products' : 'services', industryHints }),
     [query, offeringType, industryHints]
   )
 
@@ -261,7 +230,7 @@ function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (isOpen && triggerRef.current && !triggerRef.current.contains(event.target)) {
-        if (event.target.closest('[data-taxonomy-portal="true"]')) return
+        if (event.target.closest('[data-category-portal="true"]')) return
         setIsOpen(false)
       }
     }
@@ -269,32 +238,21 @@ function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCu
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [isOpen])
 
-  const selectLeaf = (leaf) => {
-    onSelect(leaf)
-    setQuery('')
-    setIsOpen(false)
-    setShowCustomForm(false)
-  }
-
-  const submitCustomCategory = () => {
-    if (!customText.trim()) return
-    onRequestCustomCategory(customText.trim())
-    setCustomText('')
-    setShowCustomForm(false)
-    setIsOpen(false)
-  }
-
-  // Selected state (Section 5.1): show full breadcrumb, definition and a Change action.
-  if (value && !isOpen) {
-    const leaf = getLeafById(value)
+  // Selected state — show either custom or taxonomy category
+  if ((value || customValue) && !isOpen) {
+    const leaf = value ? getLeafById(value) : null
+    const displayLabel = customValue ? `Custom: ${customValue}` : breadcrumb
+    const subLabel = customValue
+      ? `${categoryLabel.toLowerCase()} (pending review)`
+      : (leaf?.definition || '')
     return (
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
         padding: '12px 14px', border: '1px solid #d6c4a8', borderRadius: '6px', backgroundColor: '#fdf6ed'
       }}>
-        <div>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#5c3a1e' }}>{breadcrumb}</div>
-          {leaf?.definition && <div style={{ fontSize: '11px', color: '#8B6F47', marginTop: '2px' }}>{leaf.definition}</div>}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: '13px', fontWeight: '700', color: '#5c3a1e', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayLabel}</div>
+          {subLabel && <div style={{ fontSize: '11px', color: '#8B6F47', marginTop: '2px' }}>{subLabel}</div>}
         </div>
         <button type="button" onClick={() => setIsOpen(true)} style={{
           padding: '6px 14px', fontSize: '12px', fontWeight: '600', color: '#5c3a1e',
@@ -306,6 +264,19 @@ function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCu
     )
   }
 
+  const selectLeaf = (leaf) => {
+    onSelect(leaf)
+    setQuery('')
+    setIsOpen(false)
+  }
+
+  const selectCustom = () => {
+    if (!query.trim()) return
+    onCustomChange(query.trim())
+    setQuery('')
+    setIsOpen(false)
+  }
+
   return (
     <div ref={triggerRef} style={{ position: 'relative', width: '100%' }}>
       <div style={{ position: 'relative' }}>
@@ -315,7 +286,7 @@ function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCu
           value={query}
           onChange={(e) => { setQuery(e.target.value); setIsOpen(true) }}
           onFocus={() => setIsOpen(true)}
-          placeholder="Start typing what your business provides..."
+          placeholder={`Search or type a new ${categoryLabel.toLowerCase()}...`}
           style={{ ...inputStyle, paddingLeft: '36px' }}
           {...focusHandlers}
         />
@@ -323,95 +294,47 @@ function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCu
 
       {isOpen && createPortal(
         <div
-          data-taxonomy-portal="true"
+          data-category-portal="true"
           style={{
             position: 'absolute', top: `${coords.top + 4}px`, left: `${coords.left}px`, width: `${Math.max(coords.width, 320)}px`,
             backgroundColor: 'white', border: '1px solid #d6c4a8', borderRadius: '6px', zIndex: 99999,
             maxHeight: '360px', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
           }}
         >
-          {query.trim().length < 2 ? (
-            <div style={{ padding: '16px', fontSize: '12px', color: '#8B6F47' }}>
-              Keep typing (e.g. "aircon", "cleaning", "PPE", "irrigation") — suggestions appear after 2 characters.
+          {query.trim().length > 0 && (
+            <div
+              onClick={selectCustom}
+              style={{ padding: '12px 14px', cursor: 'pointer', borderBottom: '2px solid #d6c4a8', backgroundColor: '#fef9e7' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fdf3c9'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fef9e7'}
+            >
+              <div style={{ fontSize: '13px', fontWeight: '700', color: '#5c3a1e' }}>+ Use "{query.trim()}" as custom category</div>
+              <div style={{ fontSize: '11px', color: '#8B6F47', marginTop: '2px' }}>Your custom category will be reviewed by our team</div>
             </div>
-          ) : results.length === 0 ? (
-            <div style={{ padding: '14px' }}>
-              <div style={{ fontSize: '12px', color: '#8B6F47', marginBottom: '10px' }}>
-                No close match found for "{query}".
-              </div>
-              {!showCustomForm ? (
-                <button type="button" onClick={() => setShowCustomForm(true)} style={{
-                  fontSize: '12px', fontWeight: '600', color: '#8B4513', background: 'none', border: 'none', cursor: 'pointer', padding: 0
-                }}>
-                  Can't find it? Suggest a category
-                </button>
-              ) : (
-                <div>
-                  <textarea
-                    value={customText}
-                    onChange={(e) => setCustomText(e.target.value)}
-                    rows={2}
-                    placeholder="Describe what your business provides (5-160 characters)"
-                    maxLength={160}
-                    style={{ ...inputStyle, fontSize: '12px', resize: 'vertical', fontFamily: 'inherit' }}
-                  />
-                  <button type="button" onClick={submitCustomCategory} disabled={customText.trim().length < 5} style={{
-                    marginTop: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', color: 'white',
-                    backgroundColor: customText.trim().length < 5 ? '#d6c4a8' : '#8B4513', border: 'none', borderRadius: '4px',
-                    cursor: customText.trim().length < 5 ? 'not-allowed' : 'pointer'
-                  }}>
-                    Submit for review
-                  </button>
+          )}
+
+          {query.trim().length < 2 && results.length === 0 && (
+            <div style={{ padding: '16px', fontSize: '12px', color: '#8B6F47' }}>
+              Type at least 2 characters to see suggestions. You can also type your own custom category and press Enter or click the option above.
+            </div>
+          )}
+
+          {results.map((leaf) => (
+            <div
+              key={leaf.id}
+              onClick={() => selectLeaf(leaf)}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#faf5ef'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            >
+              <div style={{ fontSize: '13px', fontWeight: '600', color: '#5c3a1e' }}>{leaf.breadcrumb}</div>
+              {leaf.leafOptions.length > 0 && (
+                <div style={{ fontSize: '11px', color: '#8B6F47', marginTop: '2px' }}>
+                  e.g. {leaf.leafOptions.slice(0, 3).join(', ')}
                 </div>
               )}
             </div>
-          ) : (
-            <div>
-              {results.map((leaf) => (
-                <div
-                  key={leaf.id}
-                  onClick={() => selectLeaf(leaf)}
-                  style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8' }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#faf5ef'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                >
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#5c3a1e' }}>{leaf.breadcrumb}</div>
-                  {leaf.leafOptions.length > 0 && (
-                    <div style={{ fontSize: '11px', color: '#8B6F47', marginTop: '2px' }}>
-                      e.g. {leaf.leafOptions.slice(0, 3).join(', ')}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div style={{ padding: '10px 14px', borderTop: '1px solid #d6c4a8', backgroundColor: '#fdfaf5' }}>
-                {!showCustomForm ? (
-                  <button type="button" onClick={() => setShowCustomForm(true)} style={{
-                    fontSize: '12px', fontWeight: '600', color: '#8B4513', background: 'none', border: 'none', cursor: 'pointer', padding: 0
-                  }}>
-                    Can't find it? Suggest a category
-                  </button>
-                ) : (
-                  <div>
-                    <textarea
-                      value={customText}
-                      onChange={(e) => setCustomText(e.target.value)}
-                      rows={2}
-                      placeholder="Describe what your business provides (5-160 characters)"
-                      maxLength={160}
-                      style={{ ...inputStyle, fontSize: '12px', resize: 'vertical', fontFamily: 'inherit' }}
-                    />
-                    <button type="button" onClick={submitCustomCategory} disabled={customText.trim().length < 5} style={{
-                      marginTop: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', color: 'white',
-                      backgroundColor: customText.trim().length < 5 ? '#d6c4a8' : '#8B4513', border: 'none', borderRadius: '4px',
-                      cursor: customText.trim().length < 5 ? 'not-allowed' : 'pointer'
-                    }}>
-                      Submit for review
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          ))}
         </div>,
         document.body
       )}
@@ -419,21 +342,6 @@ function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCu
   )
 }
 
-// Yes/No dropdown — still used for a couple of simple boolean-style fields.
-const YesNoDropdown = ({ value, onChange }) => (
-  <select
-    value={value || ""}
-    onChange={(e) => onChange(e.target.value)}
-    style={{ ...inputStyle, minHeight: '44px', cursor: 'pointer' }}
-    {...focusHandlers}
-  >
-    <option value="">Select...</option>
-    <option value="Yes">Yes</option>
-    <option value="No">No</option>
-  </select>
-)
-
-// Section wrapper component
 const Section = ({ title, description, children }) => (
   <div style={{
     marginBottom: '24px', padding: '24px', backgroundColor: '#fdfaf5', borderRadius: '8px',
@@ -449,7 +357,6 @@ const Section = ({ title, description, children }) => (
   </div>
 )
 
-// Section header with add button
 const SectionHeader = ({ title, onAdd, addLabel }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
     <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#5c3a1e', margin: 0 }}>{title}</h4>
@@ -476,12 +383,6 @@ const thStyle = {
   borderBottom: '2px solid #3d2b1f', backgroundColor: '#5c3a1e', whiteSpace: 'nowrap'
 }
 
-// ---------------------------------------------------------------------------
-// Capability status (Section 4.2 / 18) — computed client-side from what has
-// been captured so far. "Verified" is intentionally never auto-assigned here;
-// it is set once BIG (or an automated check) has confirmed the evidence, which
-// happens outside this form.
-// ---------------------------------------------------------------------------
 function computeCapabilityStatus(offering) {
   const hasCategory = !!offering.taxonomyLeafId || !!offering.customCategoryRequest
   const hasBasics = offering.name.trim().length >= 2 && offering.description.trim().length >= 20
@@ -502,13 +403,12 @@ const statusStyle = {
   'Verified': { bg: '#dbeafe', fg: '#1e40af' },
 }
 
-// Section 6.1 depth rules -> which application groups (Section 11.3) are relevant.
 function applicationGroupsForDepth(depth) {
   if (depth <= 0) return []
   if (depth === 1) return applicationGroups.filter((g) => ['People and facilities', 'General'].includes(g.group))
   if (depth === 2) return applicationGroups.filter((g) => ['Plant and technical support', 'People and facilities', 'Infrastructure and utilities', 'General'].includes(g.group))
   if (depth === 3) return applicationGroups.filter((g) => g.group !== 'Production value chain')
-  return applicationGroups // depth 4 - Full
+  return applicationGroups
 }
 
 const depthHint = {
@@ -519,36 +419,13 @@ const depthHint = {
   4: 'Commodity, method, process route and production area',
 }
 
-// ---------------------------------------------------------------------------
-// Completion Checklist Component
-// ---------------------------------------------------------------------------
 function CompletionChecklist({ offering }) {
   const items = [
-    {
-      id: 'category',
-      label: 'Offering category selected',
-      done: !!offering.taxonomyLeafId || !!offering.customCategoryRequest
-    },
-    {
-      id: 'name',
-      label: 'Name provided (min 2 chars)',
-      done: offering.name.trim().length >= 2
-    },
-    {
-      id: 'description',
-      label: 'Description provided (min 20 chars)',
-      done: offering.description.trim().length >= 20
-    },
-    {
-      id: 'deliveryRole',
-      label: 'Delivery role/model selected',
-      done: offering.deliveryRole.length > 0
-    },
-    {
-      id: 'industries',
-      label: 'Industries served selected',
-      done: offering.industries.length > 0
-    }
+    { id: 'category', label: 'Category selected', done: !!offering.taxonomyLeafId || !!offering.customCategoryRequest },
+    { id: 'name', label: 'Name provided (min 2 chars)', done: offering.name.trim().length >= 2 },
+    { id: 'description', label: 'Description (min 20 chars)', done: offering.description.trim().length >= 20 },
+    { id: 'deliveryRole', label: 'Delivery model selected', done: offering.deliveryRole.length > 0 },
+    { id: 'industries', label: 'Industries served', done: offering.industries.length > 0 }
   ]
 
   const completed = items.filter(i => i.done).length
@@ -562,22 +439,13 @@ function CompletionChecklist({ offering }) {
       border: '1px solid #e8ddd0',
       marginBottom: '14px'
     }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '6px'
-      }}>
-        <span style={{ fontSize: '11px', fontWeight: '600', color: '#5c3a1e' }}>
-          Completion Progress
-        </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        <span style={{ fontSize: '11px', fontWeight: '600', color: '#5c3a1e' }}>Completion Progress</span>
         <span style={{
-          fontSize: '11px',
-          fontWeight: '700',
+          fontSize: '11px', fontWeight: '700',
           color: completed === total ? '#166534' : '#92400e',
           backgroundColor: completed === total ? '#dcfce7' : '#fef3c7',
-          padding: '2px 10px',
-          borderRadius: '999px'
+          padding: '2px 10px', borderRadius: '999px'
         }}>
           {completed}/{total}
         </span>
@@ -585,17 +453,10 @@ function CompletionChecklist({ offering }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '4px 12px' }}>
         {items.map((item) => (
           <div key={item.id} style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            fontSize: '11px',
+            display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px',
             color: item.done ? '#166534' : '#6b7280'
           }}>
-            {item.done ? (
-              <CheckCircle size={12} color="#166534" />
-            ) : (
-              <Circle size={12} color="#6b7280" />
-            )}
+            {item.done ? <CheckCircle size={12} color="#166534" /> : <Circle size={12} color="#6b7280" />}
             <span>{item.label}</span>
           </div>
         ))}
@@ -604,10 +465,6 @@ function CompletionChecklist({ offering }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// OfferingCard — Section 4.2. A collapsible card per saved offering, driven end
-// to end by the selected taxonomy leaf (Section 6, "trigger engine").
-// ---------------------------------------------------------------------------
 function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate, onMoveUp, onMoveDown, onSetPrimary, onToggleCollapse, duplicateWarning }) {
   const leaf = offering.taxonomyLeafId ? getLeafById(offering.taxonomyLeafId) : null
   const depth = leaf ? leaf.depthLevel : 0
@@ -634,12 +491,17 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
 
   return (
     <div style={{ border: '1px solid #d6c4a8', borderRadius: '8px', marginBottom: '14px', backgroundColor: 'white', overflow: 'hidden' }}>
-      {/* Card header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
-        padding: '12px 16px', backgroundColor: '#fdf6ed', cursor: 'pointer'
-      }} onClick={() => onToggleCollapse()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+      {/* Card header — only header click toggles collapse; buttons stopPropagation */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+          padding: '12px 16px', backgroundColor: '#fdf6ed'
+        }}
+      >
+        <div
+          onClick={() => onToggleCollapse()}
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1, cursor: 'pointer' }}
+        >
           <span style={{
             padding: '3px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: '700', whiteSpace: 'nowrap',
             backgroundColor: offering.offeringType === 'Product' ? '#e0e7ff' : '#fce7f3',
@@ -681,14 +543,16 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}>
             <Trash2 size={16} />
           </button>
-          {offering.collapsed ? <ChevronDown size={18} color="#5c3a1e" /> : <ChevronUp size={18} color="#5c3a1e" />}
+          <button type="button" onClick={(e) => { e.stopPropagation(); onToggleCollapse() }} title={offering.collapsed ? 'Expand' : 'Collapse'}
+            style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#5c3a1e' }}>
+            {offering.collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+          </button>
         </div>
       </div>
 
       {!offering.collapsed && (
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-          {/* Completion Checklist */}
           <CompletionChecklist offering={offering} />
 
           {duplicateWarning && (
@@ -700,26 +564,29 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             </div>
           )}
 
-          {/* Offering Category — Section 5.1 - Full width */}
-          <FormField label="Offering category" required>
-            <TaxonomySearch
-              offeringType={offering.offeringType === 'Product' ? 'products' : 'services'}
+          {/* CATEGORY - full width, uses new CategoryInput with free text + dropdown */}
+          <FormField label={offering.offeringType === 'Product' ? 'Product Category' : 'Service Category'} required>
+            <CategoryInput
+              offeringType={offering.offeringType}
               value={offering.taxonomyLeafId}
               breadcrumb={offering.breadcrumb}
+              customValue={offering.customCategory || ''}
               industryHints={offering.industries}
               onSelect={(leafNode) => onUpdate({
                 taxonomyLeafId: leafNode.id,
                 breadcrumb: leafNode.breadcrumb,
+                customCategory: '',
                 customCategoryRequest: '',
               })}
-              onRequestCustomCategory={(text) => onUpdate({
+              onCustomChange={(text) => onUpdate({
                 taxonomyLeafId: null,
                 breadcrumb: '',
+                customCategory: text,
                 customCategoryRequest: text,
               })}
             />
             <p style={{ fontSize: '10px', color: '#8B6F47', marginTop: '4px', marginBottom: 0 }}>
-              Choose the closest category. You can still use your own product or service name below.
+              Type to search existing categories, or enter your own custom category.
             </p>
             {offering.customCategoryRequest && (
               <div style={{ marginTop: '6px', padding: '6px 10px', backgroundColor: '#fdf6ed', border: '1px dashed #d6c4a8', borderRadius: '4px', fontSize: '11px', color: '#5c3a1e' }}>
@@ -728,8 +595,8 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             )}
           </FormField>
 
-          {/* Name & description & primary - Side by side in 2 columns */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          {/* NAME + PRIMARY — 2 columns */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
             <FormField label="Name of your product or service" required>
               <input
                 type="text"
@@ -745,17 +612,17 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             <FormField label="Primary offering">
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#3d2b1f', minHeight: '44px' }}>
                 <input type="radio" name="isPrimaryOffering" checked={offering.isPrimary} onChange={() => onSetPrimary()} style={{ width: '18px', height: '18px', accentColor: '#8B4513', cursor: 'pointer' }} />
-                Set as this business's primary offering
+                Set as primary
               </label>
             </FormField>
           </div>
 
-          {/* Description - Full width */}
+          {/* DESCRIPTION - full width */}
           <FormField label="Description" required>
             <textarea
               value={offering.description}
               onChange={(e) => onUpdate({ description: e.target.value })}
-              rows={2}
+              rows={3}
               placeholder="What is provided, for whom, and what problem it solves"
               maxLength={1000}
               style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
@@ -764,45 +631,56 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             <p style={{ fontSize: '10px', color: '#a08a6d', margin: '4px 0 0 0', textAlign: 'right' }}>{offering.description.length}/1000 (min 20)</p>
           </FormField>
 
-          {/* Delivery role & Commercial pattern - Side by side */}
+          {/* DELIVERY ROLE + COMMERCIAL PATTERN — 2 columns */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <FormField label={roleFieldLabel} required>
-              <MultiSelect 
-                options={roleOptions.map((o) => ({ value: o.value, label: o.label }))} 
-                selected={offering.deliveryRole} 
-                onChange={(v) => onUpdate({ deliveryRole: v })} 
+              <MultiSelect
+                options={roleOptions.map((o) => ({ value: o.value, label: o.label }))}
+                selected={offering.deliveryRole}
+                onChange={(v) => onUpdate({ deliveryRole: v })}
                 placeholder={`Select ${roleFieldLabel.toLowerCase()}...`}
               />
             </FormField>
             <FormField label="Contract / commercial delivery pattern">
-              <MultiSelect 
-                options={commercialDeliveryPatternOptions} 
-                selected={offering.commercialPattern} 
-                onChange={(v) => onUpdate({ commercialPattern: v })} 
+              <MultiSelect
+                options={commercialDeliveryPatternOptions}
+                selected={offering.commercialPattern}
+                onChange={(v) => onUpdate({ commercialPattern: v })}
                 placeholder="Select commercial delivery patterns..."
               />
             </FormField>
           </div>
 
-          {/* Delivery Standards — Section 10 */}
-          <div style={{ padding: '12px 14px', backgroundColor: '#fdfaf5', borderRadius: '6px', border: '1px solid #eee0cc' }}>
-            <h5 style={{ fontSize: '11px', fontWeight: '700', color: '#5c3a1e', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              Delivery standards
-            </h5>
+          {/* DELIVERY STANDARDS — proper section heading */}
+          <div style={{
+            marginTop: '8px',
+            paddingTop: '16px',
+            borderTop: '2px solid #d6c4a8',
+          }}>
+            <h4 style={{
+              fontSize: '14px',
+              fontWeight: '700',
+              color: '#5c3a1e',
+              margin: '0 0 16px 0',
+              paddingBottom: '8px',
+              borderBottom: '1px solid #e8ddd0',
+            }}>
+              📦 Delivery Standards
+            </h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <FormField label={pattern.fieldLabel} required>
-                <MultiSelect 
-                  options={pattern.options} 
-                  selected={offering.deliveryStandard ? [offering.deliveryStandard] : []} 
-                  onChange={(v) => onUpdate({ deliveryStandard: v[v.length - 1] || '' })} 
+                <MultiSelect
+                  options={pattern.options}
+                  selected={offering.deliveryStandard ? [offering.deliveryStandard] : []}
+                  onChange={(v) => onUpdate({ deliveryStandard: v[v.length - 1] || '' })}
                   placeholder={`Select ${pattern.fieldLabel.toLowerCase()}...`}
                 />
               </FormField>
               <FormField label="Geographic delivery coverage">
-                <MultiSelect 
-                  options={geographicCoverageOptions} 
-                  selected={offering.geographicCoverage} 
-                  onChange={(v) => onUpdate({ geographicCoverage: v })} 
+                <MultiSelect
+                  options={geographicCoverageOptions}
+                  selected={offering.geographicCoverage}
+                  onChange={(v) => onUpdate({ geographicCoverage: v })}
                   placeholder="Select geographic coverage..."
                 />
               </FormField>
@@ -858,15 +736,20 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             </div>
           </div>
 
-          {/* Industries served — Full width */}
-          <FormField label="Industries served" required>
-            <MultiSelect options={industryOptions} selected={offering.industries} onChange={(v) => onUpdate({ industries: v })} label="industries" placeholder="Select the industries this offering serves..." />
+          {/* INDUSTRIES SERVED — proper section heading */}
+          <div style={{ marginTop: '8px', paddingTop: '16px', borderTop: '2px solid #d6c4a8' }}>
+            <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#5c3a1e', margin: '0 0 16px 0', paddingBottom: '8px', borderBottom: '1px solid #e8ddd0' }}>
+              🏭 Industries Served
+            </h4>
+            <FormField label="Industries served" required>
+              <MultiSelect options={industryOptions} selected={offering.industries} onChange={(v) => onUpdate({ industries: v })} label="industries" placeholder="Select the industries this offering serves..." />
+            </FormField>
             <p style={{ fontSize: '10px', color: '#8B6F47', marginTop: '4px', marginBottom: 0 }}>
               Selecting Mining, for example, ranks mining-relevant categories higher elsewhere in this form — it never hides other categories.
             </p>
-          </FormField>
+          </div>
 
-          {/* Industry application — Section 6.1/11.3 */}
+          {/* INDUSTRY APPLICATION */}
           {relevantGroups.length > 0 && (
             <FormField label="In which industries can this offering be used?">
               {depthHint[depth] && (
@@ -891,7 +774,6 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             </FormField>
           )}
 
-          {/* Capability preview — Section 12, informational only */}
           {capabilityProfile && (
             <div style={{ padding: '8px 12px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px' }}>
               <div style={{ fontSize: '10px', fontWeight: '700', color: '#1e40af', marginBottom: '2px' }}>
@@ -912,11 +794,9 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
   )
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 export default function ProductsServices({ data = {}, updateData }) {
   const [showExplanation, setShowExplanation] = useState(false)
+  const [expandedContacts, setExpandedContacts] = useState({})
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -931,7 +811,6 @@ export default function ProductsServices({ data = {}, updateData }) {
   const showProducts = data.offeringType === 'products' || data.offeringType === 'both'
   const showServices = data.offeringType === 'services' || data.offeringType === 'both'
 
-  // ---- Offerings CRUD -------------------------------------------------
   const addOffering = (offeringType) => {
     updateData({ offerings: [...offerings, emptyOffering(offeringType)] })
   }
@@ -955,7 +834,7 @@ export default function ProductsServices({ data = {}, updateData }) {
     const swapWith = idx + direction
     if (swapWith < 0 || swapWith >= offerings.length) return
     const next = [...offerings]
-    ;[next[idx], next[swapWith]] = [next[swapWith], next[idx]]
+      ;[next[idx], next[swapWith]] = [next[swapWith], next[idx]]
     updateData({ offerings: next })
   }
   const setPrimaryOffering = (id) => {
@@ -965,7 +844,6 @@ export default function ProductsServices({ data = {}, updateData }) {
     updateData({ offerings: offerings.map((o) => (o.id === id ? { ...o, collapsed: !o.collapsed } : o)) })
   }
 
-  // Section 14: duplicate warning when category, name and industries materially overlap.
   const duplicateIds = useMemo(() => {
     const flagged = new Set()
     for (let i = 0; i < offerings.length; i++) {
@@ -983,7 +861,6 @@ export default function ProductsServices({ data = {}, updateData }) {
   const productOfferings = offerings.filter((o) => o.offeringType === 'Product')
   const serviceOfferings = offerings.filter((o) => o.offeringType === 'Service')
 
-  // ---- Section 2: Target Market summary (Section 13.1) ----------------
   const allIndustries = [...new Set(offerings.flatMap((o) => o.industries))]
   const allGeography = [...new Set(offerings.flatMap((o) => o.geographicCoverage))]
   const allApplications = [...new Set(offerings.flatMap((o) => o.industryApplications))]
@@ -991,7 +868,6 @@ export default function ProductsServices({ data = {}, updateData }) {
   const customerTypes = data.customerTypes || []
   const hasAnySummaryData = Boolean(customerTypes.length || allIndustries.length || allGeography.length || allApplications.length || offeringSummaries.length)
 
-  // ---- Section 4: Key Clients ------------------------------------------
   const addClient = () => {
     const keyClients = data.keyClients || []
     updateData({
@@ -1020,7 +896,6 @@ export default function ProductsServices({ data = {}, updateData }) {
 
   return (
     <div>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
         <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#5c3a1e', margin: 0 }}>Products & Services</h2>
         <button
@@ -1047,15 +922,12 @@ export default function ProductsServices({ data = {}, updateData }) {
           <ul style={{ color: '#1e40af', margin: 0, paddingLeft: '20px', fontSize: '12px', lineHeight: '1.8' }}>
             <li>One offering can serve several industries — you don't need to duplicate it per sector.</li>
             <li>Keep your own commercial name and description; the category is only used for matching.</li>
-            <li>Can't find your category? Suggest one — it won't block the rest of your profile.</li>
+            <li>Can't find your category? Type your own — it won't block the rest of your profile.</li>
             <li>Mark one offering as your primary offering.</li>
           </ul>
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* SECTION 1: Offerings */}
-      {/* ============================================================ */}
       <Section title="Section 1: Add Product or Service">
         <FormField label="What does your business offer?" required>
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
@@ -1130,15 +1002,12 @@ export default function ProductsServices({ data = {}, updateData }) {
         )}
       </Section>
 
-      {/* ============================================================ */}
-      {/* SECTION 2: Target Market */}
-      {/* ============================================================ */}
       <Section title="Section 2: Target Market">
         <FormField label="Customer types">
-          <MultiSelect 
-            options={customerTypeOptions} 
-            selected={customerTypes} 
-            onChange={(v) => updateData({ customerTypes: v })} 
+          <MultiSelect
+            options={customerTypeOptions}
+            selected={customerTypes}
+            onChange={(v) => updateData({ customerTypes: v })}
             placeholder="Select customer types..."
           />
         </FormField>
@@ -1172,9 +1041,6 @@ export default function ProductsServices({ data = {}, updateData }) {
         </FormField>
       </Section>
 
-      {/* ============================================================ */}
-      {/* SECTION 3: Key Clients - Table format */}
-      {/* ============================================================ */}
       <Section title="Section 3: Key Clients / Customers" description="Optional — evidence of relevant delivery history, linked to the offerings above.">
         {(data.keyClients || []).length > 0 && (
           <div style={{
@@ -1187,7 +1053,7 @@ export default function ProductsServices({ data = {}, updateData }) {
             <span>
               {revenueOver100 ? `⚠️ Total revenue exceeds 100% (${totalRevenuePercent}%)`
                 : totalRevenuePercent === 100 ? `✅ Total revenue allocation: ${totalRevenuePercent}%`
-                : `Revenue allocated: ${totalRevenuePercent}% of 100%`}
+                  : `Revenue allocated: ${totalRevenuePercent}% of 100%`}
             </span>
           </div>
         )}
@@ -1207,7 +1073,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <th style={thStyle}>Delivery Period</th>
                 <th style={thStyle}>Reference</th>
                 <th style={thStyle}>Growth Potential</th>
-                <th style={thStyle} style={{ width: '50px' }}>Actions</th>
+                <th style={{ ...thStyle, width: '50px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1224,24 +1090,46 @@ export default function ProductsServices({ data = {}, updateData }) {
                       {clientTypeOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </td>
+                  {/* COMPACT CONTACT with expandable details */}
                   <td className="px-3 py-2 border-b" style={{ minWidth: '180px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <input type="text" value={client.contactName || ""} onChange={(e) => updateClient(index, "contactName", e.target.value)} placeholder="Contact name"
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
-                      <input type="text" value={client.contactRole || ""} onChange={(e) => updateClient(index, "contactRole", e.target.value)} placeholder="Role"
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
-                      <input type="email" value={client.contactEmail || ""} onChange={(e) => updateClient(index, "contactEmail", e.target.value)} placeholder="Email"
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
-                      <input type="text" value={client.contactNumber || ""} onChange={(e) => updateClient(index, "contactNumber", e.target.value)} placeholder="Phone"
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '12px', color: '#3d2b1f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {client.contactName || 'No contact'}
+                          {client.contactRole && ` (${client.contactRole})`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedContacts(prev => ({ ...prev, [index]: !prev[index] }))}
+                          style={{
+                            padding: '2px 8px', fontSize: '10px', fontWeight: '600',
+                            backgroundColor: '#f0e8d8', color: '#5c3a1e',
+                            border: 'none', borderRadius: '4px', cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {expandedContacts[index] ? '▲ Contact' : '▼ Contact'}
+                        </button>
+                      </div>
+                      {expandedContacts[index] && (
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', gap: '4px',
+                          padding: '8px', backgroundColor: '#f9f7f3', borderRadius: '4px'
+                        }}>
+                          <input type="text" value={client.contactName || ""} onChange={(e) => updateClient(index, "contactName", e.target.value)} placeholder="Contact name" style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
+                          <input type="text" value={client.contactRole || ""} onChange={(e) => updateClient(index, "contactRole", e.target.value)} placeholder="Role" style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
+                          <input type="email" value={client.contactEmail || ""} onChange={(e) => updateClient(index, "contactEmail", e.target.value)} placeholder="Email" style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
+                          <input type="text" value={client.contactNumber || ""} onChange={(e) => updateClient(index, "contactNumber", e.target.value)} placeholder="Phone" style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }} {...focusHandlers} />
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2 border-b">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <input type="number" min="0" max="100" value={client.revenuePercentage || ""} onChange={(e) => {
-                          const val = Math.min(100, Math.max(0, Number(e.target.value)))
-                          updateClient(index, "revenuePercentage", val === 0 ? "" : String(val))
-                        }} placeholder="%" style={{ ...inputStyle, width: '64px', padding: '8px 10px', fontSize: '12px' }} {...focusHandlers} />
+                        const val = Math.min(100, Math.max(0, Number(e.target.value)))
+                        updateClient(index, "revenuePercentage", val === 0 ? "" : String(val))
+                      }} placeholder="%" style={{ ...inputStyle, width: '64px', padding: '8px 10px', fontSize: '12px' }} {...focusHandlers} />
                       <span style={{ fontSize: '12px', color: '#5c3a1e', fontWeight: '600' }}>%</span>
                     </div>
                   </td>

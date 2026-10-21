@@ -4,12 +4,13 @@ import {
   ChevronDown, ChevronUp, Edit, FileText, ExternalLink, Building, Users, Mail,
   Shield, Package, MessageCircle, CheckSquare, Linkedin, DollarSign, FileCheck,
   Target, AlertTriangle, Phone, MapPin, Award, Clock, Layers, Truck, Briefcase,
-  TrendingUp, Star,
+  TrendingUp, Star, Image as ImageIcon,
 } from "lucide-react"
 
 const ProfileSummary = ({ data, onEdit }) => {
   const [expandedSections, setExpandedSections] = useState({
     entityOverview: false,
+    brandAssets: false,
     productsServices: false,
     ownershipManagement: false,
     contactDetails: false,
@@ -78,7 +79,6 @@ const ProfileSummary = ({ data, onEdit }) => {
 
   const handleEdit = () => { if (onEdit) onEdit() }
 
-  // ── Shared styles ──────────────────────────────────────────────────────────
   const sectionCardStyle = {
     background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
     backdropFilter: "blur(20px)", borderRadius: "16px", overflow: "hidden",
@@ -117,9 +117,73 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
+  // ── Brand Assets Section ─────────────────────────────────────────────────
+  const renderBrandAssets = () => {
+    const ba = data?.brandAssets || {}
+    const hasAny =
+      ba.brandsOwned || ba.brandsRepresented || ba.holdsFranchises || ba.holdsAgencies ||
+      ba.companyLogo || ba.companyLetterhead || ba.orgStructure
+    if (!hasAny) return null
+
+    return (
+      <div style={sectionCardStyle}>
+        {renderSectionHeader("brandAssets", ImageIcon, "Brand Assets")}
+        {expandedSections.brandAssets && (
+          <div style={sectionContentStyle}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+              {ba.brandsOwned && (
+                <div style={fieldCardStyle}>
+                  <span style={fieldLabelStyle}>Brands Owned</span>
+                  <span style={fieldValueStyle}>{ba.brandsOwned}</span>
+                </div>
+              )}
+              {ba.brandsRepresented && (
+                <div style={fieldCardStyle}>
+                  <span style={fieldLabelStyle}>Brands Represented</span>
+                  <span style={fieldValueStyle}>{ba.brandsRepresented}</span>
+                </div>
+              )}
+              {ba.holdsFranchises && (
+                <div style={fieldCardStyle}>
+                  <span style={fieldLabelStyle}>Holds Franchises</span>
+                  <span style={fieldValueStyle}>{formatLabel(ba.holdsFranchises)}</span>
+                </div>
+              )}
+              {ba.holdsAgencies && (
+                <div style={fieldCardStyle}>
+                  <span style={fieldLabelStyle}>Holds Agencies</span>
+                  <span style={fieldValueStyle}>{formatLabel(ba.holdsAgencies)}</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+              {ba.companyLogo && (
+                <div style={fieldCardStyle}>
+                  <span style={fieldLabelStyle}>Company Logo</span>
+                  <img src={ba.companyLogo} alt="Company Logo" style={{ maxWidth: "120px", maxHeight: "120px", objectFit: "contain", borderRadius: "8px", border: "1px solid #e6d7c3", backgroundColor: "white" }} />
+                </div>
+              )}
+              {ba.companyLetterhead && (
+                <div style={fieldCardStyle}>
+                  <span style={fieldLabelStyle}>Company Letterhead</span>
+                  {renderDocumentLink(ba.companyLetterhead, "View Letterhead")}
+                </div>
+              )}
+              {ba.orgStructure && (
+                <div style={fieldCardStyle}>
+                  <span style={fieldLabelStyle}>Organisational Structure</span>
+                  {renderDocumentLink(ba.orgStructure, "View Org Structure")}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // ── Products & Services Section ──────────────────────────────────────────
-  // Renders BOTH the modern `offerings` array (from products-services.js v1)
-  // AND the legacy productCategories/serviceCategories shape for compat.
   const renderProductsServices = () => {
     const ps = data?.productsServices || {}
 
@@ -131,7 +195,6 @@ const ProfileSummary = ({ data, onEdit }) => {
       return "Not specified"
     }
 
-    // ── NEW: render modern offerings array ──
     const renderOfferingCard = (offering, idx) => (
       <div key={offering.id || idx} style={{ ...fieldCardStyle, marginBottom: "12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "8px" }}>
@@ -143,9 +206,9 @@ const ProfileSummary = ({ data, onEdit }) => {
             {offering.breadcrumb && (
               <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "3px" }}>{offering.breadcrumb}</div>
             )}
-            {!offering.breadcrumb && offering.customCategoryRequest && (
+            {!offering.breadcrumb && (offering.customCategoryRequest || offering.customCategory) && (
               <div style={{ fontSize: "12px", color: "#92400e", marginTop: "3px", fontStyle: "italic" }}>
-                Category pending review: "{offering.customCategoryRequest}"
+                Category pending review: "{offering.customCategoryRequest || offering.customCategory}"
               </div>
             )}
           </div>
@@ -205,7 +268,6 @@ const ProfileSummary = ({ data, onEdit }) => {
       )
     }
 
-    // ── LEGACY: still render old structure if present ──
     const renderProductCategories = () => {
       const categories = ps.productCategories || []
       if (categories.length === 0) return null
@@ -272,44 +334,6 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
           ))}
-        </div>
-      )
-    }
-
-    const renderDeliveryStandards = () => {
-      const deliveryModes = ps.deliveryModes || []
-      const minLeadTime = ps.minLeadTime
-      const maxLeadTime = ps.maxLeadTime
-      const minUnit = ps.minLeadTimeUnit || "days"
-      const maxUnit = ps.maxLeadTimeUnit || "days"
-
-      if (deliveryModes.length === 0 && !minLeadTime && !maxLeadTime) return null
-
-      return (
-        <div style={{ marginBottom: "24px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-            <Truck size={16} style={{ display: "inline", marginRight: "8px" }} /> Delivery Standards
-          </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-            {deliveryModes.length > 0 && (
-              <div style={fieldCardStyle}>
-                <span style={fieldLabelStyle}>Delivery Modes</span>
-                <span style={fieldValueStyle}>{deliveryModes.map((m) => formatLabel(m)).join(" • ")}</span>
-              </div>
-            )}
-            {(minLeadTime || maxLeadTime) && (
-              <div style={fieldCardStyle}>
-                <span style={fieldLabelStyle}>Lead Time</span>
-                <span style={fieldValueStyle}>
-                  {minLeadTime && maxLeadTime
-                    ? `${minLeadTime} ${minUnit} - ${maxLeadTime} ${maxUnit}`
-                    : minLeadTime
-                      ? `Minimum ${minLeadTime} ${minUnit}`
-                      : `Maximum ${maxLeadTime} ${maxUnit}`}
-                </span>
-              </div>
-            )}
-          </div>
         </div>
       )
     }
@@ -412,7 +436,6 @@ const ProfileSummary = ({ data, onEdit }) => {
               {renderOfferings()}
               {renderProductCategories()}
               {renderServiceCategories()}
-              {renderDeliveryStandards()}
               {renderTargetMarket()}
               {renderKeyClients()}
             </div>
@@ -422,7 +445,6 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  // ── Contact Details Section ──────────────────────────────────────────────
   const renderContactDetails = () => {
     const contact = data?.contactDetails || {}
     return (
@@ -469,7 +491,6 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  // ── Legal & Compliance Section ───────────────────────────────────────────
   const renderLegalCompliance = () => {
     const legal = data?.legalCompliance || {}
     return (
@@ -530,7 +551,6 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  // ── Ownership & Management Section ───────────────────────────────────────
   const renderOwnershipManagement = () => {
     const om = data?.ownershipManagement || {}
 
@@ -816,9 +836,10 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  // ── How Did You Hear Section ─────────────────────────────────────────────
   const renderHowDidYouHear = () => {
     const how = data?.howDidYouHear || {}
+    const hasData = how.source || how.referralSource || how.otherSource || how.additionalComments
+    if (!hasData) return null
     return (
       <div style={sectionCardStyle}>
         {renderSectionHeader("howDidYouHear", MessageCircle, "How Did You Hear About Us?")}
@@ -826,18 +847,24 @@ const ProfileSummary = ({ data, onEdit }) => {
           <div style={sectionContentStyle}>
             <div style={fieldCardStyle}>
               <span style={fieldLabelStyle}>Referral Source</span>
-              <span style={fieldValueStyle}>{formatLabel(how.referralSource) || "Not provided"}</span>
+              <span style={fieldValueStyle}>{formatLabel(how.source || how.referralSource) || "Not provided"}</span>
             </div>
-            {how.referralSource === "other" && how.otherSource && (
-              <div style={fieldCardStyle}>
+            {how.otherSource && (
+              <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
                 <span style={fieldLabelStyle}>Other Source Details</span>
                 <span style={fieldValueStyle}>{how.otherSource}</span>
               </div>
             )}
-            {how.referredByName && (
-              <div style={fieldCardStyle}>
+            {how.referralName && (
+              <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
                 <span style={fieldLabelStyle}>Referred By</span>
-                <span style={fieldValueStyle}>{how.referredByName}</span>
+                <span style={fieldValueStyle}>{how.referralName}</span>
+              </div>
+            )}
+            {how.additionalComments && (
+              <div style={{ ...fieldCardStyle, marginTop: "12px" }}>
+                <span style={fieldLabelStyle}>Additional Comments</span>
+                <span style={fieldValueStyle}>{how.additionalComments}</span>
               </div>
             )}
           </div>
@@ -918,6 +945,9 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
+
+            {/* Brand Assets - NEW SEPARATE SECTION */}
+            {renderBrandAssets()}
 
             {/* Products & Services */}
             {renderProductsServices()}
@@ -1006,7 +1036,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Books Up to Date</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.booksUpToDate)}</span></div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Management Accounts</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasManagementAccounts)}</span></div>
-                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Accounting Software</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasAccountingSoftware)}</span></div>
+                    <div style={fieldCardStyle}><span style={fieldLabelStyle}>Accounting Software</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasAccountingSoftware)}{data?.financialOverview?.accountingSoftwareName ? ` (${data.financialOverview.accountingSoftwareName})` : ""}</span></div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Insured</span><span style={fieldValueStyle}>{data?.financialOverview?.isInsured === "yes" ? "✅ Yes" : data?.financialOverview?.isInsured === "no" ? "❌ No" : "Not provided"}</span></div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Financial Statements</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasFinancialStatements)}</span></div>
                     <div style={fieldCardStyle}><span style={fieldLabelStyle}>Financials Audited</span><span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.financialsAudited)}</span></div>
@@ -1054,6 +1084,46 @@ const ProfileSummary = ({ data, onEdit }) => {
                       )
                     })}
                   </div>
+
+                  {/* Suppliers list */}
+                  {data?.operationsOverview?.suppliers?.length > 0 && (
+                    <>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Suppliers</h3>
+                      <div style={{ ...fieldCardStyle, overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                          <thead>
+                            <tr style={{ borderBottom: "2px solid #c8b6a6", backgroundColor: "#5c3a1e" }}>
+                              <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>#</th>
+                              <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Company Name</th>
+                              <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Contact</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {data.operationsOverview.suppliers.map((s, i) => (
+                              <tr key={i} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                                <td style={{ padding: "6px 10px", color: "#4a352f" }}>{i + 1}</td>
+                                <td style={{ padding: "6px 10px", color: "#4a352f" }}>{s.name || "Not provided"}</td>
+                                <td style={{ padding: "6px 10px", color: "#4a352f" }}>{s.contact || "Not provided"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Premises */}
+                  {data?.operationsOverview?.premisesStatus && (
+                    <>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Premises & Facilities</h3>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+                        <div style={fieldCardStyle}><span style={fieldLabelStyle}>Premises Status</span><span style={fieldValueStyle}>{formatLabel(data.operationsOverview.premisesStatus)}</span></div>
+                        {data.operationsOverview.premisesType && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Premises Type</span><span style={fieldValueStyle}>{formatLabel(data.operationsOverview.premisesType)}</span></div>}
+                        {data.operationsOverview.premisesSize && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Size (sqm)</span><span style={fieldValueStyle}>{data.operationsOverview.premisesSize}</span></div>}
+                        {data.operationsOverview.leaseExpiryDate && <div style={fieldCardStyle}><span style={fieldLabelStyle}>Lease Expiry</span><span style={fieldValueStyle}>{formatDate(data.operationsOverview.leaseExpiryDate)}</span></div>}
+                      </div>
+                    </>
+                  )}
 
                   {data?.operationsOverview?.operationalChallenges && (
                     <>

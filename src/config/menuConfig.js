@@ -32,7 +32,6 @@ import {
   ListChecks,
   Handshake,
 } from "lucide-react";
-
 export const advisorMenuItems = [
   {
     id: "home",
@@ -45,15 +44,23 @@ export const advisorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/advisor-profile",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/advisor-documents",
+      },
+    ],
   },
- 
   {
     id: "matches",
     label: "My Matches",
     icon: <HeartHandshake size={18} />,
     route: "/advisor-dashboard",
   },
-   {
+  {
     id: "cohorts",
     label: "My Cohorts",
     icon: <Users size={18} />,
@@ -64,12 +71,6 @@ export const advisorMenuItems = [
     label: "BIG Insights",
     icon: <Lightbulb size={18} />,
     route: "/advisor-insights",
-  },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/advisor-documents",
   },
   {
     id: "messages",
@@ -103,6 +104,15 @@ export const catalystMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/support-profile",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/support-documents",
+      },
+    ],
   },
   {
     id: "matches",
@@ -127,12 +137,6 @@ export const catalystMenuItems = [
     label: "BIG Insights",
     icon: <Lightbulb size={18} />,
     route: "/support-insights",
-  },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/support-documents",
   },
   {
     id: "messages",
@@ -199,6 +203,15 @@ export const internMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/intern-profile",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/intern-documents",
+      },
+    ],
   },
   {
     id: "insights",
@@ -211,12 +224,6 @@ export const internMenuItems = [
     label: "My Matches",
     icon: <HeartHandshake size={18} />,
     route: "/intern-matches",
-  },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/intern-documents",
   },
   {
     id: "messages",
@@ -250,6 +257,15 @@ export const investorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/investor-profile",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/investor-documents",
+      },
+    ],
   },
   {
     id: "matches",
@@ -274,12 +290,6 @@ export const investorMenuItems = [
     label: "BIG Insights",
     icon: <Lightbulb size={18} />,
     route: "/investor-insights",
-  },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/investor-documents",
   },
   {
     id: "messages",
@@ -340,6 +350,15 @@ export const programSponsorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/program-sponsor-profile",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/program-sponsor-documents",
+      },
+    ],
   },
   {
     id: "insights",
@@ -352,12 +371,6 @@ export const programSponsorMenuItems = [
     label: "My Matches",
     icon: <HeartHandshake size={18} />,
     route: "/program-sponsor-matches",
-  },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/program-sponsor-documents",
   },
   {
     id: "messages",
@@ -419,6 +432,21 @@ export const associatorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/associator-profile",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/associator-documents",
+      },
+      {
+        id: "governance-templates",
+        label: "Governance Templates",
+        icon: <FileText size={16} />,
+        route: "/associator-documents",
+      },
+    ],
   },
   {
     id: "dashboard",
@@ -442,7 +470,7 @@ export const associatorMenuItems = [
         route: "/associator-dashboard/subscriptions",
         description: "Manage member subscriptions",
       },
-    
+
       {
         id: "dashboard-pilot",
         label: "Pilot & Case Studies",
@@ -515,12 +543,6 @@ export const associatorMenuItems = [
   //   route: "/associator-insights",
   // },
   {
-    id: "documents",
-    label: "Governance Templates",
-    icon: <FileText size={18} />,
-    route: "/associator-documents",
-  },
-  {
     id: "messages",
     label: "Messages",
     icon: <MessageSquare size={18} />,
@@ -575,12 +597,15 @@ export const smeMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/profile",
-  },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/my-documents",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/my-documents",
+      },
+    ],
   },
   {
     id: "dashboard",
@@ -666,7 +691,7 @@ export const smeMenuItems = [
       },
     ],
   },
-   {
+  {
     id: "growth-tools",
     label: "My Growth Suite",
     icon: <Wrench size={18} />,
@@ -698,6 +723,12 @@ export const smeMenuItems = [
             icon: <ListChecks size={16} />,
             route: "/raps-actions",
           },
+          {
+            id: "operational-strength",
+            label: "Operational Performance",
+            icon: <Activity size={16} />,
+            route: "/OperationalStrength",
+          },
         ],
       },
       {
@@ -711,12 +742,6 @@ export const smeMenuItems = [
         label: "Financial Performance",
         icon: <PieChart size={16} />,
         route: "/FinancialPerformance",
-      },
-      {
-        id: "operational-strength",
-        label: "Operational Performance",
-        icon: <Activity size={16} />,
-        route: "/OperationalStrength",
       },
       {
         id: "people",
@@ -804,6 +829,15 @@ export const capitalMarketFacilitatorMenuItems = [
     label: "My Profile",
     icon: <User size={18} />,
     route: "/cmf-profile",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "documents",
+        label: "My Documents",
+        icon: <FileText size={18} />,
+        route: "/cmf-documents",
+      },
+    ],
   },
   // {
   //   id: "matches",
@@ -829,12 +863,6 @@ export const capitalMarketFacilitatorMenuItems = [
   //   icon: <Lightbulb size={18} />,
   //   route: "/cmf-insights",
   // },
-  {
-    id: "documents",
-    label: "My Documents",
-    icon: <FileText size={18} />,
-    route: "/cmf-documents",
-  },
   {
     id: "messages",
     label: "My Messages",

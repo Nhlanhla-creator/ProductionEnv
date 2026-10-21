@@ -123,7 +123,7 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "
                 <input
                   type="checkbox"
                   checked={isSelected}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   style={{ cursor: "pointer" }}
                 />
                 <span>{option.label}</span>
@@ -270,22 +270,8 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
               </thead>
               <tbody>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Currency
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Currency</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <select
                       value={data.incomeCurrency || "ZAR"}
                       onChange={(e) => handleInputChange("incomeCurrency", e.target.value)}
@@ -303,43 +289,17 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       <option value="GBP">GBP (£)</option>
                     </select>
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  ></td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}></td>
                 </tr>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Turnover / Revenue
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Turnover / Revenue</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeTurnoverCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeTurnoverCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeTurnoverCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeTurnoverCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeTurnoverCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeTurnoverCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeTurnoverCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -351,25 +311,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeTurnoverPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeTurnoverPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeTurnoverPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeTurnoverPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeTurnoverPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeTurnoverPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeTurnoverPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -383,34 +331,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Cost of Goods Sold
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Cost of Goods Sold</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeCOGSCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeCOGSCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeCOGSCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeCOGSCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeCOGSCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeCOGSCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeCOGSCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -422,25 +350,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeCOGSPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeCOGSPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeCOGSPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeCOGSPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeCOGSPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeCOGSPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeCOGSPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -454,34 +370,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr style={{ backgroundColor: "#f9f7f3" }}>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Gross Profit
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "600" }}>Gross Profit</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeGrossProfitCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeGrossProfitCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeGrossProfitCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeGrossProfitCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeGrossProfitCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeGrossProfitCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeGrossProfitCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -493,25 +389,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeGrossProfitPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeGrossProfitPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeGrossProfitPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeGrossProfitPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeGrossProfitPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeGrossProfitPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeGrossProfitPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -525,34 +409,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Operating Profit
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Operating Profit</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeOperatingProfitCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeOperatingProfitCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeOperatingProfitCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeOperatingProfitCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeOperatingProfitCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeOperatingProfitCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeOperatingProfitCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -564,25 +428,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeOperatingProfitPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeOperatingProfitPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeOperatingProfitPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeOperatingProfitPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeOperatingProfitPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeOperatingProfitPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeOperatingProfitPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -596,34 +448,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr style={{ backgroundColor: "#f9f7f3" }}>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "2px solid #5c3a1e",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Net Profit
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "2px solid #5c3a1e",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "2px solid #5c3a1e", fontWeight: "600" }}>Net Profit</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "2px solid #5c3a1e", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeNetProfitCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeNetProfitCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeNetProfitCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeNetProfitCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeNetProfitCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeNetProfitCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeNetProfitCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -635,25 +467,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "2px solid #5c3a1e",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "2px solid #5c3a1e", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.incomeNetProfitPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("incomeNetProfitPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("incomeNetProfitPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("incomeNetProfitPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("incomeNetProfitPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("incomeNetProfitPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("incomeNetProfitPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -692,34 +512,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
               </thead>
               <tbody>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Current Assets
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Current Assets</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceCurrentAssetsCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceCurrentAssetsCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceCurrentAssetsCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceCurrentAssetsCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceCurrentAssetsCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceCurrentAssetsCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceCurrentAssetsCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -731,25 +531,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceCurrentAssetsPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceCurrentAssetsPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceCurrentAssetsPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceCurrentAssetsPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceCurrentAssetsPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceCurrentAssetsPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceCurrentAssetsPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -763,34 +551,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr style={{ backgroundColor: "#f9f7f3" }}>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Total Assets
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "600" }}>Total Assets</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceTotalAssetsCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceTotalAssetsCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceTotalAssetsCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceTotalAssetsCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceTotalAssetsCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceTotalAssetsCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceTotalAssetsCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -802,25 +570,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceTotalAssetsPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceTotalAssetsPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceTotalAssetsPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceTotalAssetsPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceTotalAssetsPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceTotalAssetsPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceTotalAssetsPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -834,37 +590,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Current Liabilities
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Current Liabilities</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceCurrentLiabilitiesCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange(
-                          "balanceCurrentLiabilitiesCurrent",
-                          e.target.value
-                        )
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceCurrentLiabilitiesCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceCurrentLiabilitiesCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceCurrentLiabilitiesCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceCurrentLiabilitiesCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceCurrentLiabilitiesCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -876,28 +609,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceCurrentLiabilitiesPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange(
-                          "balanceCurrentLiabilitiesPrevious",
-                          e.target.value
-                        )
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceCurrentLiabilitiesPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceCurrentLiabilitiesPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceCurrentLiabilitiesPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceCurrentLiabilitiesPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceCurrentLiabilitiesPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -911,37 +629,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Long Term Liabilities
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Long Term Liabilities</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceLongTermLiabilitiesCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange(
-                          "balanceLongTermLiabilitiesCurrent",
-                          e.target.value
-                        )
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceLongTermLiabilitiesCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceLongTermLiabilitiesCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceLongTermLiabilitiesCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceLongTermLiabilitiesCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceLongTermLiabilitiesCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -953,28 +648,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceLongTermLiabilitiesPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange(
-                          "balanceLongTermLiabilitiesPrevious",
-                          e.target.value
-                        )
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceLongTermLiabilitiesPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceLongTermLiabilitiesPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceLongTermLiabilitiesPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceLongTermLiabilitiesPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceLongTermLiabilitiesPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -988,34 +668,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Equity
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500" }}>Equity</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceEquityCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceEquityCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceEquityCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceEquityCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceEquityCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceEquityCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceEquityCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -1027,25 +687,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid #d6c4a8",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceEquityPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceEquityPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceEquityPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceEquityPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceEquityPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceEquityPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceEquityPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -1059,34 +707,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   </td>
                 </tr>
                 <tr style={{ backgroundColor: "#f9f7f3" }}>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "2px solid #5c3a1e",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Total Liabilities
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "2px solid #5c3a1e",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "2px solid #5c3a1e", fontWeight: "600" }}>Total Liabilities</td>
+                  <td style={{ padding: "8px 12px", borderBottom: "2px solid #5c3a1e", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceTotalLiabilitiesCurrent}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceTotalLiabilitiesCurrent", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceTotalLiabilitiesCurrent", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceTotalLiabilitiesCurrent", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceTotalLiabilitiesCurrent", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceTotalLiabilitiesCurrent", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceTotalLiabilitiesCurrent", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -1098,25 +726,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       placeholder="R 0"
                     />
                   </td>
-                  <td
-                    style={{
-                      padding: "8px 12px",
-                      borderBottom: "2px solid #5c3a1e",
-                      textAlign: "right",
-                    }}
-                  >
+                  <td style={{ padding: "8px 12px", borderBottom: "2px solid #5c3a1e", textAlign: "right" }}>
                     <input
                       type="text"
                       value={currencyValues.balanceTotalLiabilitiesPrevious}
-                      onChange={(e) =>
-                        handleCurrencyChange("balanceTotalLiabilitiesPrevious", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleCurrencyBlur("balanceTotalLiabilitiesPrevious", e.target.value)
-                      }
-                      onFocus={(e) =>
-                        handleCurrencyFocus("balanceTotalLiabilitiesPrevious", e.target.value)
-                      }
+                      onChange={(e) => handleCurrencyChange("balanceTotalLiabilitiesPrevious", e.target.value)}
+                      onBlur={(e) => handleCurrencyBlur("balanceTotalLiabilitiesPrevious", e.target.value)}
+                      onFocus={(e) => handleCurrencyFocus("balanceTotalLiabilitiesPrevious", e.target.value)}
                       style={{
                         width: "100%",
                         maxWidth: "160px",
@@ -1139,7 +755,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
       {/* B. Financial Management & Systems */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <div className="section-divider">
-        <h3>B. Financial Management & Systems</h3>
+        <h3>B. Financial Management &amp; Systems</h3>
       </div>
 
       <div className="grid-container">
@@ -1165,14 +781,46 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
               <textarea
                 name="booksUpToDateDetails"
                 value={data.booksUpToDateDetails || ""}
-                onChange={(e) =>
-                  handleInputChange("booksUpToDateDetails", e.target.value)
-                }
+                onChange={(e) => handleInputChange("booksUpToDateDetails", e.target.value)}
                 className="form-textarea"
                 placeholder="Please explain why your books aren't up to date"
                 rows={3}
               ></textarea>
             </div>
+          )}
+
+          {/* MOVED HERE: Accounting Software */}
+          <FormField label="Do you use accounting software?" required>
+            <select
+              name="hasAccountingSoftware"
+              value={data.hasAccountingSoftware || ""}
+              onChange={(e) => {
+                handleInputChange("hasAccountingSoftware", e.target.value);
+                if (e.target.value === "no")
+                  handleInputChange("accountingSoftwareName", "");
+              }}
+              className="form-select"
+              required
+            >
+              <option value="">Select</option>
+              <option value="yes">Yes (e.g. Xero, Sage)</option>
+              <option value="basic_tools">Basic tools (Excel/manual)</option>
+              <option value="no">No</option>
+            </select>
+          </FormField>
+
+          {data.hasAccountingSoftware === "yes" && (
+            <FormField label="Which accounting software do you use?" required>
+              <input
+                type="text"
+                name="accountingSoftwareName"
+                value={data.accountingSoftwareName || ""}
+                onChange={(e) => handleInputChange("accountingSoftwareName", e.target.value)}
+                className="form-input"
+                placeholder="e.g., QuickBooks, Xero, Sage, Pastel"
+                required={data.hasAccountingSoftware === "yes"}
+              />
+            </FormField>
           )}
         </div>
 
@@ -1202,32 +850,28 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
           {(data.hasManagementAccounts === "monthly" ||
             data.hasManagementAccounts === "occasionally" ||
             data.hasManagementAccounts === "yes") && (
-            <>
-              <FormField label="What are the latest management accounts available?">
-                <input
-                  type="text"
-                  name="latestManagementAccounts"
-                  value={data.latestManagementAccounts || ""}
-                  onChange={(e) =>
-                    handleInputChange("latestManagementAccounts", e.target.value)
-                  }
-                  className="form-input"
-                  placeholder="e.g. March 2025, Q1 2025"
-                />
-              </FormField>
-              <div style={{ marginTop: "1rem" }}>
-                <FileUpload
-                  label="Upload Management Accounts"
-                  accept=".pdf,.xlsx,.xls"
-                  onChange={(files) =>
-                    handleFileChange("managementAccountsDocs", files)
-                  }
-                  value={data.managementAccountsDocs || []}
-                  tooltip="Upload your most recent management accounts"
-                />
-              </div>
-            </>
-          )}
+              <>
+                <FormField label="What are the latest management accounts available?">
+                  <input
+                    type="text"
+                    name="latestManagementAccounts"
+                    value={data.latestManagementAccounts || ""}
+                    onChange={(e) => handleInputChange("latestManagementAccounts", e.target.value)}
+                    className="form-input"
+                    placeholder="e.g. March 2025, Q1 2025"
+                  />
+                </FormField>
+                <div style={{ marginTop: "1rem" }}>
+                  <FileUpload
+                    label="Upload Management Accounts"
+                    accept=".pdf,.xlsx,.xls"
+                    onChange={(files) => handleFileChange("managementAccountsDocs", files)}
+                    value={data.managementAccountsDocs || []}
+                    tooltip="Upload your most recent management accounts"
+                  />
+                </div>
+              </>
+            )}
         </div>
       </div>
 
@@ -1240,42 +884,6 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
 
       <div className="grid-container">
         <div>
-          {/* Accounting software - MOVED HERE */}
-          <FormField label="Do you use accounting software?" required>
-            <select
-              name="hasAccountingSoftware"
-              value={data.hasAccountingSoftware || ""}
-              onChange={(e) => {
-                handleInputChange("hasAccountingSoftware", e.target.value);
-                if (e.target.value === "no")
-                  handleInputChange("accountingSoftwareName", "");
-              }}
-              className="form-select"
-              required
-            >
-              <option value="">Select</option>
-              <option value="yes">Yes (e.g. Xero, Sage)</option>
-              <option value="basic_tools">Basic tools (Excel/manual)</option>
-              <option value="no">No</option>
-            </select>
-          </FormField>
-
-          {data.hasAccountingSoftware === "yes" && (
-            <FormField label="Which accounting software do you use?" required>
-              <input
-                type="text"
-                name="accountingSoftwareName"
-                value={data.accountingSoftwareName || ""}
-                onChange={(e) =>
-                  handleInputChange("accountingSoftwareName", e.target.value)
-                }
-                className="form-input"
-                placeholder="e.g., QuickBooks, Xero, Sage, Pastel"
-                required={data.hasAccountingSoftware === "yes"}
-              />
-            </FormField>
-          )}
-
           {/* Insured */}
           <FormField label="Are you insured?" required>
             <select
@@ -1308,17 +916,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                 border: "1px solid #d6c4a8",
               }}
             >
-              <h5 style={{ color: "#3d2b1f", marginBottom: "0.75rem" }}>
-                Insurance Broker Information
-              </h5>
+              <h5 style={{ color: "#3d2b1f", marginBottom: "0.75rem" }}>Insurance Broker Information</h5>
               <FormField label="Company name">
                 <input
                   type="text"
                   name="insuranceBrokerName"
                   value={data.insuranceBrokerName || ""}
-                  onChange={(e) =>
-                    handleInputChange("insuranceBrokerName", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("insuranceBrokerName", e.target.value)}
                   className="form-input"
                   placeholder="Insurance broker company name"
                 />
@@ -1328,9 +932,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   type="text"
                   name="insuranceBrokerContact"
                   value={data.insuranceBrokerContact || ""}
-                  onChange={(e) =>
-                    handleInputChange("insuranceBrokerContact", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("insuranceBrokerContact", e.target.value)}
                   className="form-input"
                   placeholder="Contact number"
                 />
@@ -1340,9 +942,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   type="text"
                   name="insuranceContactPerson"
                   value={data.insuranceContactPerson || ""}
-                  onChange={(e) =>
-                    handleInputChange("insuranceContactPerson", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("insuranceContactPerson", e.target.value)}
                   className="form-input"
                   placeholder="Contact person name"
                 />
@@ -1377,34 +977,27 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
           {(data.hasFinancialStatements === "yes_3_plus" ||
             data.hasFinancialStatements === "yes_1_2" ||
             data.hasFinancialStatements === "yes") && (
-            <>
-              <FormField label="Which years are available?">
-                <YearMultiSelectDropdown
-                  selected={data.financialStatementsYears || []}
-                  onChange={(years) =>
-                    handleInputChange("financialStatementsYears", years)
-                  }
-                />
-              </FormField>
-              <div style={{ marginTop: "1rem" }}>
-                <FileUpload
-                  label="Upload Financial Statements"
-                  accept=".pdf,.xlsx,.xls"
-                  onChange={(files) =>
-                    handleFileChange("financialStatementsDocs", files)
-                  }
-                  value={data.financialStatementsDocs || []}
-                  tooltip="Upload your available financial statements"
-                />
-              </div>
-            </>
-          )}
+              <>
+                <FormField label="Which years are available?">
+                  <YearMultiSelectDropdown
+                    selected={data.financialStatementsYears || []}
+                    onChange={(years) => handleInputChange("financialStatementsYears", years)}
+                  />
+                </FormField>
+                <div style={{ marginTop: "1rem" }}>
+                  <FileUpload
+                    label="Upload Financial Statements"
+                    accept=".pdf,.xlsx,.xls"
+                    onChange={(files) => handleFileChange("financialStatementsDocs", files)}
+                    value={data.financialStatementsDocs || []}
+                    tooltip="Upload your available financial statements"
+                  />
+                </div>
+              </>
+            )}
 
           {/* Audited financials */}
-          <FormField
-            label="Are your financials audited or independently reviewed?"
-            required
-          >
+          <FormField label="Are your financials audited or independently reviewed?" required>
             <select
               name="financialsAudited"
               value={data.financialsAudited || ""}
@@ -1433,16 +1026,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
             </select>
           </FormField>
 
-          {(data.financialsAudited === "audited_reviewed" ||
-            data.financialsAudited === "yes") && (
+          {(data.financialsAudited === "audited_reviewed" || data.financialsAudited === "yes") && (
             <>
               <div style={{ marginTop: "1rem" }}>
                 <FileUpload
                   label="Upload Audited Financials"
                   accept=".pdf,.xlsx,.xls"
-                  onChange={(files) =>
-                    handleFileChange("auditedFinancialsDocs", files)
-                  }
+                  onChange={(files) => handleFileChange("auditedFinancialsDocs", files)}
                   value={data.auditedFinancialsDocs || []}
                   tooltip="Upload your audited financial statements for the past 2-3 years"
                   required={data.financialsAudited === "audited_reviewed"}
@@ -1457,17 +1047,13 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   border: "1px solid #d6c4a8",
                 }}
               >
-                <h5 style={{ color: "#3d2b1f", marginBottom: "0.75rem" }}>
-                  Auditors Information
-                </h5>
+                <h5 style={{ color: "#3d2b1f", marginBottom: "0.75rem" }}>Auditors Information</h5>
                 <FormField label="Company name">
                   <input
                     type="text"
                     name="auditorCompanyName"
                     value={data.auditorCompanyName || ""}
-                    onChange={(e) =>
-                      handleInputChange("auditorCompanyName", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("auditorCompanyName", e.target.value)}
                     className="form-input"
                     placeholder="Auditor company name"
                   />
@@ -1477,9 +1063,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                     type="text"
                     name="auditorContactNumber"
                     value={data.auditorContactNumber || ""}
-                    onChange={(e) =>
-                      handleInputChange("auditorContactNumber", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("auditorContactNumber", e.target.value)}
                     className="form-input"
                     placeholder="Contact number"
                   />
@@ -1489,9 +1073,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                     type="text"
                     name="auditorContactPerson"
                     value={data.auditorContactPerson || ""}
-                    onChange={(e) =>
-                      handleInputChange("auditorContactPerson", e.target.value)
-                    }
+                    onChange={(e) => handleInputChange("auditorContactPerson", e.target.value)}
                     className="form-input"
                     placeholder="Contact person name"
                   />
@@ -1512,9 +1094,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
       <div className="grid-container">
         <div>
           <FormField label="Financial Information">
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <div>
                 <label
                   style={{
@@ -1576,18 +1156,14 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                       type="text"
                       name="overdraftValue"
                       value={data.overdraftValue || ""}
-                      onChange={(e) =>
-                        handleInputChange("overdraftValue", e.target.value)
-                      }
+                      onChange={(e) => handleInputChange("overdraftValue", e.target.value)}
                       className="form-input"
                       placeholder="Overdraft value"
                     />
                     <select
                       name="overdraftUtilised"
                       value={data.overdraftUtilised || ""}
-                      onChange={(e) =>
-                        handleInputChange("overdraftUtilised", e.target.value)
-                      }
+                      onChange={(e) => handleInputChange("overdraftUtilised", e.target.value)}
                       className="form-select"
                     >
                       <option value="">Is it regularly utilised?</option>
@@ -1609,15 +1185,12 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                     display: "block",
                   }}
                 >
-                  Have the directors signed personal Surety to the bank or any
-                  creditors?
+                  Have the directors signed personal Surety to the bank or any creditors?
                 </label>
                 <select
                   name="directorsSurety"
                   value={data.directorsSurety || ""}
-                  onChange={(e) =>
-                    handleInputChange("directorsSurety", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("directorsSurety", e.target.value)}
                   className="form-select"
                 >
                   <option value="">Select</option>
@@ -1631,9 +1204,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
 
         <div>
           <FormField label="&nbsp;">
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <div>
                 <label
                   style={{
@@ -1648,9 +1219,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                 <select
                   name="debtorsCeded"
                   value={data.debtorsCeded || ""}
-                  onChange={(e) =>
-                    handleInputChange("debtorsCeded", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("debtorsCeded", e.target.value)}
                   className="form-select"
                 >
                   <option value="">Select</option>
@@ -1674,9 +1243,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   type="text"
                   name="financialYearEnd"
                   value={data.financialYearEnd || ""}
-                  onChange={(e) =>
-                    handleInputChange("financialYearEnd", e.target.value)
-                  }
+                  onChange={(e) => handleInputChange("financialYearEnd", e.target.value)}
                   className="form-input"
                   placeholder="e.g., 28 February, 31 March"
                 />
@@ -1730,9 +1297,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
               <textarea
                 name="financialChallengesElaboration"
                 value={data.financialChallengesElaboration || ""}
-                onChange={(e) =>
-                  handleInputChange("financialChallengesElaboration", e.target.value)
-                }
+                onChange={(e) => handleInputChange("financialChallengesElaboration", e.target.value)}
                 className="form-textarea"
                 placeholder="Provide more details about the financial challenges your business is currently facing"
                 rows={4}
@@ -1770,9 +1335,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
               <textarea
                 name="fundraisingHistory"
                 value={data.fundraisingHistory || ""}
-                onChange={(e) =>
-                  handleInputChange("fundraisingHistory", e.target.value)
-                }
+                onChange={(e) => handleInputChange("fundraisingHistory", e.target.value)}
                 className="form-textarea"
                 placeholder="List funders and funded amounts"
                 rows={3}
@@ -1791,7 +1354,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
           </FormField>
         </div>
       </div>
-      
+
       {/* AI Financial Health Analysis */}
       <FinancialsGPT
         financialStatementsDocs={data.financialStatementsDocs || []}
