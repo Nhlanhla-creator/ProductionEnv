@@ -1,12 +1,18 @@
-
-
 "use client"
-import {auth} from "../../firebaseConfig"
+import { auth } from "../../firebaseConfig"
 import { useState } from "react"
 import RegistrationSummary from "./registration-summary"
+import HowDidYouHear from "./how-did-you-hear"
 import "./UniversalProfile.css"
 
-export default function DeclarationConsent({ data = {}, updateData, allFormData, onComplete }) {
+export default function DeclarationConsent({
+  data = {},
+  updateData,
+  allFormData,
+  howDidYouHearData = {},
+  onHowDidYouHearUpdate,
+  onComplete,
+}) {
   const [showSummary, setShowSummary] = useState(false)
 
   const handleChange = (e) => {
@@ -19,14 +25,34 @@ export default function DeclarationConsent({ data = {}, updateData, allFormData,
   }
 
   const handleSubmit = () => {
-    // Show the summary when the form is submitted
     setShowSummary(true)
   }
   const user = auth.currentUser
 
+  // Fallback: if parent didn't provide the howDidYouHear props, we can still
+  // read/write the value nested inside declarationConsent (legacy shape).
+  const fallbackHowData = data?.howDidYouHear || {}
+  const effectiveHowData = onHowDidYouHearUpdate ? howDidYouHearData : fallbackHowData
+  const effectiveHowUpdate = onHowDidYouHearUpdate
+    ? onHowDidYouHearUpdate
+    : (patch) => updateData({ howDidYouHear: { ...fallbackHowData, ...patch } })
+
   return (
     <div>
-      <h2 className="text-2xl font-bold text-brown-800 mb-6">Declaration & Consent</h2>
+      <h2 className="text-2xl font-bold text-brown-800 mb-6">Declaration &amp; Consent</h2>
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* How Did You Hear About Us — MOVED HERE from Entity Overview             */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <div
+        className="bg-brown-50 p-6 rounded-lg mb-8"
+        style={{ backgroundColor: "#efebe9", border: "1px solid #d7ccc8" }}
+      >
+        <HowDidYouHear
+          data={effectiveHowData}
+          updateData={effectiveHowUpdate}
+        />
+      </div>
 
       <div className="max-w-5xl mx-left">
         <div className="bg-brown-50 p-6 rounded-lg mb-8">
@@ -110,11 +136,9 @@ export default function DeclarationConsent({ data = {}, updateData, allFormData,
         )}
 
         <div className="bg-brown-50 p-6 rounded-lg mb-8">
-          <h3 className="text-lg font-semibold text-brown-700 mb-4">Opt-in for Promotional Visibility(optional)</h3>
+          <h3 className="text-lg font-semibold text-brown-700 mb-4">Opt-in for Promotional Visibility (optional)</h3>
           <p className="text-brown-700 mb-4">
-           By opting in, you agree to allow us to highlight your profile, project, or contribution across our promotional channels, including newsletters, social media, and featured listings. This is a great opportunity to increase your visibility within the community and attract more engagement or collaboration. Participation is entirely optional and can be withdrawn at any time.{" "}
-           
-
+            By opting in, you agree to allow us to highlight your profile, project, or contribution across our promotional channels, including newsletters, social media, and featured listings. This is a great opportunity to increase your visibility within the community and attract more engagement or collaboration. Participation is entirely optional and can be withdrawn at any time.{" "}
           </p>
           <div className="mt-4">
             <label className="flex items-center">
@@ -126,12 +150,10 @@ export default function DeclarationConsent({ data = {}, updateData, allFormData,
                 className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded"
                 required
               />
-              <span className="ml-2 text-brown-700">  We consent to our program being listed publicity</span>
+              <span className="ml-2 text-brown-700">We consent to our program being listed publicly</span>
             </label>
           </div>
-
         </div>
-
       </div>
 
       {/* Registration Summary Modal */}

@@ -153,7 +153,6 @@ const southAfricanProvinces = [
   { value: "Western Cape", label: "Western Cape" },
 ]
 
-// ── Industry Associations ──
 const industryAssociations = [
   { value: "SA Township Traders Association", label: "SA Township Traders Association" },
   { value: "Minerals Council South Africa", label: "Minerals Council South Africa" },
@@ -179,7 +178,6 @@ const industryAssociations = [
   { value: "Other", label: "Other" },
 ]
 
-// ── Sponsor types ──
 const sponsorTypes = [
   { value: "CMF", label: "CMF" },
   { value: "Investor", label: "Investor" },
@@ -187,11 +185,6 @@ const sponsorTypes = [
   { value: "Advisor", label: "Advisor" },
 ]
 
-// ⚠️ PLACEHOLDER DATA — TO BE REPLACED WITH A FIRESTORE QUERY.
-// Load registered sponsors from the database (e.g. a `sponsors` collection
-// filtered by `type`) and keep the { value, label } shape so the <select>
-// below continues to work without changes. `value` should be the sponsor's
-// document ID, `label` their display name.
 const sponsorDirectory = {
   CMF: [
     { value: "cmf_001", label: "Ubuntu Capital Markets Fund" },
@@ -211,24 +204,6 @@ const sponsorDirectory = {
   ],
 }
 
-// ── Currencies ──
-const currencies = [
-  { value: "ZAR", label: "ZAR - South African Rand" },
-  { value: "USD", label: "USD - US Dollar" },
-  { value: "EUR", label: "EUR - Euro" },
-  { value: "GBP", label: "GBP - British Pound" },
-  { value: "NGN", label: "NGN - Nigerian Naira" },
-]
-
-// ── Import/Export options ──
-const importExportOptions = [
-  { value: "import", label: "Import" },
-  { value: "export", label: "Export" },
-  { value: "both", label: "Both" },
-  { value: "none", label: "None" },
-]
-
-// FormField component
 function FormField({ label, required, tooltip, children }) {
   return (
     <div style={{ marginBottom: '1rem' }}>
@@ -241,7 +216,6 @@ function FormField({ label, required, tooltip, children }) {
   )
 }
 
-// Section heading component
 function SectionHeading({ title }) {
   return (
     <div style={{
@@ -257,7 +231,6 @@ function SectionHeading({ title }) {
   )
 }
 
-// Radio Group component
 function RadioGroup({ name, value, onChange }) {
   return (
     <div style={{ display: 'flex', gap: '24px', marginTop: '6px' }}>
@@ -320,7 +293,6 @@ function RadioGroup({ name, value, onChange }) {
   )
 }
 
-// Reusable MultiSelect Dropdown
 function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "Select options..." }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -461,7 +433,6 @@ function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "
   )
 }
 
-// Main component
 export default function EntityOverview({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
   const [dynamicSponsors, setDynamicSponsors] = useState(null)
@@ -483,23 +454,23 @@ export default function EntityOverview({ data = {}, updateData }) {
             const docData = docSnap.data()
             let label = ""
             if (type === "CMF" || type === "Investor" || type === "Catalyst") {
-              label = docData?.entityOverview?.tradingName || 
-                      docData?.entityOverview?.registeredName || 
-                      docData?.formData?.entityOverview?.tradingName || 
-                      docData?.formData?.entityOverview?.registeredName ||
-                      docData?.contactDetails?.contactName ||
-                      docData?.contactDetails?.primaryContactName ||
-                      docData?.formData?.contactDetails?.contactName ||
-                      docData?.formData?.contactDetails?.primaryContactName ||
-                      docData?.registeredName ||
-                      docSnap.id
+              label = docData?.entityOverview?.tradingName ||
+                docData?.entityOverview?.registeredName ||
+                docData?.formData?.entityOverview?.tradingName ||
+                docData?.formData?.entityOverview?.registeredName ||
+                docData?.contactDetails?.contactName ||
+                docData?.contactDetails?.primaryContactName ||
+                docData?.formData?.contactDetails?.contactName ||
+                docData?.formData?.contactDetails?.primaryContactName ||
+                docData?.registeredName ||
+                docSnap.id
             } else if (type === "Advisor") {
               label = docData?.personalProfessionalOverview?.fullName ||
-                      docData?.formData?.personalProfessionalOverview?.fullName ||
-                      docData?.contactDetails?.contactName ||
-                      docData?.formData?.contactDetails?.contactName ||
-                      docData?.name ||
-                      docSnap.id
+                docData?.formData?.personalProfessionalOverview?.fullName ||
+                docData?.contactDetails?.contactName ||
+                docData?.formData?.contactDetails?.contactName ||
+                docData?.name ||
+                docSnap.id
             }
             const isVerified = type === "CMF" && (docData?.verificationStatus === "Verified" || docData?.isVerified === true || docData?.status === "Verified")
             list.push({ value: docSnap.id, label: label, isVerified: !!isVerified })
@@ -515,117 +486,6 @@ export default function EntityOverview({ data = {}, updateData }) {
   }, [])
 
   const [isLoading, setIsLoading] = useState(true)
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [logoPreview, setLogoPreview] = useState("");
-  const [letterheadUploading, setLetterheadUploading] = useState(false);
-  const [letterheadFile, setLetterheadFile] = useState(null);
-  const [orgStructureUploading, setOrgStructureUploading] = useState(false);
-
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
-      return;
-    }
-
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      alert('Image size must be less than 5MB');
-      return;
-    }
-
-    try {
-      setLogoUploading(true);
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('User not authenticated');
-
-      const previewURL = URL.createObjectURL(file);
-      setLogoPreview(previewURL);
-
-      const timestamp = Date.now();
-      const fileName = `company_logos/${currentUser.uid}/${timestamp}_${file.name}`;
-      const storageRef = ref(storage, fileName);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-
-      try {
-        const validationResult = await validateDocument('Company Logo', file, "");
-        if (validationResult.isValid) {
-          await uploadDocumentWithSync('Company Logo', downloadURL, validationResult);
-        } else {
-          await uploadDocumentWithSync('Company Logo', downloadURL, { status: 'warning', message: 'Logo uploaded without AI validation' });
-        }
-      } catch (validationError) {
-        console.warn('Logo validation failed, proceeding with upload:', validationError);
-        await uploadDocumentWithSync('Company Logo', downloadURL, { status: 'warning', message: 'Logo uploaded without AI validation' });
-      }
-
-      const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId());
-      const currentProfileDoc = await getDoc(userDocRef);
-      const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
-
-      await updateDoc(userDocRef, {
-        ...currentData,
-        entityOverview: { ...currentData.entityOverview, companyLogo: downloadURL },
-        updatedAt: new Date().toISOString()
-      });
-
-      const newFormData = { ...formData, companyLogo: downloadURL };
-      updateFormData(newFormData);
-
-      if (currentData.entityOverview?.companyLogo &&
-          currentData.entityOverview.companyLogo !== downloadURL &&
-          currentData.entityOverview.companyLogo.includes('firebase')) {
-        try {
-          const oldImageRef = ref(storage, currentData.entityOverview.companyLogo);
-          await deleteObject(oldImageRef);
-        } catch (deleteError) {
-          console.warn('Could not delete old logo:', deleteError);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error uploading logo:', error);
-      alert('Failed to upload logo. Please try again.');
-      setLogoPreview("");
-    } finally {
-      setLogoUploading(false);
-    }
-  };
-
-  const handleRemoveLogo = async () => {
-    try {
-      const confirmDelete = window.confirm('Are you sure you want to delete the Company Logo?');
-      if (!confirmDelete) return;
-
-      await deleteDocumentWithSync('Company Logo');
-
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
-
-      const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId());
-      const currentProfileDoc = await getDoc(userDocRef);
-      const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
-
-      await updateDoc(userDocRef, {
-        ...currentData,
-        entityOverview: { ...currentData.entityOverview, companyLogo: "" },
-        updatedAt: new Date().toISOString()
-      });
-
-      const newFormData = { ...formData };
-      delete newFormData.companyLogo;
-      updateFormData(newFormData);
-      setLogoPreview("");
-      alert('Company Logo deleted successfully!');
-    } catch (error) {
-      console.error('Error removing logo:', error);
-      alert('Failed to remove logo. Please try again.');
-    }
-  };
 
   const updateFormData = (newData) => {
     setFormData(newData)
@@ -653,19 +513,11 @@ export default function EntityOverview({ data = {}, updateData }) {
           const profileData = docSnap.data();
           let entityData = profileData.entityOverview || {};
 
-          const companyLetterhead = getDocumentUrlFromAnyLocation('Company Letterhead', profileData);
-          const companyLogo = getDocumentUrlFromAnyLocation('Company Logo', profileData);
-          const orgStructure = getDocumentUrlFromAnyLocation('Org Structure', profileData);
-
           // Initialize fields if they don't exist
           const defaultFields = {
             memberOfAssociation: "",
             industryAssociations: [],
             industryAssociationsOther: "",
-            brandsOwned: "",
-            brandsRepresented: "",
-            holdsFranchises: "",
-            holdsAgencies: "",
             sponsorType: "",
             sponsorName: "",
             sponsorViewPermission: "",
@@ -677,28 +529,16 @@ export default function EntityOverview({ data = {}, updateData }) {
             }
           });
 
-          updateFormData({
-            ...entityData,
-            companyLetterhead,
-            companyLetterheadUpdatedAt: companyLetterhead
-              ? profileData.documents?.companyLetterheadUpdatedAt || profileData.entityOverview?.companyLetterheadUpdatedAt || new Date().toISOString()
-              : null,
-            companyLogo,
-            companyLogoUpdatedAt: companyLogo
-              ? profileData.documents?.companyLogoUpdatedAt || profileData.entityOverview?.companyLogoUpdatedAt || new Date().toISOString()
-              : null,
-            orgStructure,
-          });
+          // Note: brand assets fields (brandsOwned, brandsRepresented, holdsFranchises,
+          // holdsAgencies, companyLogo, companyLetterhead, orgStructure) now live in
+          // the separate `brandAssets` section and are loaded/saved there.
+          updateFormData({ ...entityData });
         } else {
           updateFormData({
             ...data,
             memberOfAssociation: "",
             industryAssociations: [],
             industryAssociationsOther: "",
-            brandsOwned: "",
-            brandsRepresented: "",
-            holdsFranchises: "",
-            holdsAgencies: "",
             sponsorType: "",
             sponsorName: "",
             sponsorViewPermission: "",
@@ -730,8 +570,6 @@ export default function EntityOverview({ data = {}, updateData }) {
     updateFormData({ ...formData, [field]: value })
   }
 
-  // Changing the sponsor type clears the previously selected sponsor and
-  // permission answer, so a stale sponsor ID can never be saved.
   const handleSponsorTypeChange = (e) => {
     updateFormData({
       ...formData,
@@ -741,7 +579,6 @@ export default function EntityOverview({ data = {}, updateData }) {
     })
   }
 
-  // Changing the sponsor resets the permission answer — consent is per sponsor.
   const handleSponsorNameChange = (e) => {
     updateFormData({
       ...formData,
@@ -750,140 +587,12 @@ export default function EntityOverview({ data = {}, updateData }) {
     })
   }
 
-  const handleLetterheadUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
-    const fileExtension = file.name.toLowerCase().split('.').pop();
-    if (!allowedTypes.includes(`.${fileExtension}`)) {
-      alert(`Please upload only PDF, Word, or Image files.`);
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size exceeds 10MB limit.');
-      return;
-    }
-
-    try {
-      setLetterheadUploading(true);
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('User not authenticated');
-
-      const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId());
-      const userDoc = await getDoc(userDocRef);
-      const registeredName = userDoc.exists() ? userDoc.data()?.entityOverview?.registeredName || "" : "";
-
-      const validationResult = await validateCompanyDocument('Company Letterhead', file, registeredName);
-      if (!validationResult.isValid) {
-        alert(`Validation failed: ${validationResult.message}`);
-        setLetterheadUploading(false);
-        return;
-      }
-
-      const timestamp = Date.now();
-      const storageRef = ref(storage, `company_letterhead/${currentUser.uid}/${timestamp}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-
-      await uploadDocumentWithSync('Company Letterhead', downloadURL, validationResult);
-
-      updateFormData({ ...formData, companyLetterhead: downloadURL, companyLetterheadUpdatedAt: new Date().toISOString() });
-      setLetterheadFile(file);
-      alert('Company Letterhead uploaded and validated successfully!');
-    } catch (error) {
-      console.error('Error uploading letterhead:', error);
-      alert('Failed to upload letterhead. Please try again.');
-    } finally {
-      setLetterheadUploading(false);
-    }
-  };
-
-  const handleDeleteLetterhead = async () => {
-    try {
-      const confirmDelete = window.confirm('Are you sure you want to delete the Company Letterhead?');
-      if (!confirmDelete) return;
-      await deleteDocumentWithSync('Company Letterhead');
-      const newFormData = { ...formData };
-      delete newFormData.companyLetterhead;
-      delete newFormData.companyLetterheadUpdatedAt;
-      updateFormData(newFormData);
-      setLetterheadFile(null);
-      alert('Company Letterhead deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting letterhead:', error);
-      alert('Failed to delete letterhead. Please try again.');
-    }
-  };
-
-  const handleOrgStructureUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.xlsx', '.xls'];
-    const fileExtension = file.name.toLowerCase().split('.').pop();
-    if (!allowedTypes.includes(`.${fileExtension}`)) {
-      alert('Please upload a PDF, Word, Excel, or Image file.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size exceeds 10MB limit.');
-      return;
-    }
-
-    try {
-      setOrgStructureUploading(true);
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('User not authenticated');
-
-      const timestamp = Date.now();
-      const storageRef = ref(storage, `org_structure/${currentUser.uid}/${timestamp}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-
-      await uploadDocumentWithSync('Org Structure', downloadURL, { status: 'ok', message: 'Org structure uploaded' });
-
-      updateFormData({ ...formData, orgStructure: downloadURL, orgStructureFileName: file.name, orgStructureUpdatedAt: new Date().toISOString() });
-      alert('Org structure uploaded successfully!');
-    } catch (error) {
-      console.error('Error uploading org structure:', error);
-      alert('Failed to upload org structure. Please try again.');
-    } finally {
-      setOrgStructureUploading(false);
-    }
-  };
-
-  const handleDeleteOrgStructure = async () => {
-    try {
-      const confirmDelete = window.confirm('Are you sure you want to delete the Org Structure?');
-      if (!confirmDelete) return;
-      await deleteDocumentWithSync('Org Structure');
-      const newFormData = { ...formData };
-      delete newFormData.orgStructure;
-      delete newFormData.orgStructureFileName;
-      delete newFormData.orgStructureUpdatedAt;
-      updateFormData(newFormData);
-      alert('Org structure deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting org structure:', error);
-      alert('Failed to delete org structure. Please try again.');
-    }
-  };
-
   const inputStyle = {
     width: '100%',
     padding: '8px 12px',
     border: '1px solid #ccc',
     borderRadius: '4px',
     fontSize: '14px',
-  }
-
-  const spinnerStyle = {
-    width: '16px', height: '16px',
-    border: '2px solid transparent',
-    borderTop: '2px solid white',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
   }
 
   if (isLoading) {
@@ -958,7 +667,7 @@ export default function EntityOverview({ data = {}, updateData }) {
       </div>
 
       {/* ============================================================ */}
-      {/* SECTION 2: Business Details - 3 per row */}
+      {/* SECTION 2: Business Classification - 3 per row */}
       {/* ============================================================ */}
       <SectionHeading title="Business Classification" />
 
@@ -999,7 +708,6 @@ export default function EntityOverview({ data = {}, updateData }) {
           </FormField>
         )}
 
-        {/* Industry Association moved here - next to provinces */}
         <FormField label="Are you a member of any industry association?">
           <div style={{ display: 'flex', gap: '16px' }}>
             {["yes", "no"].map((opt) => (
@@ -1083,7 +791,6 @@ export default function EntityOverview({ data = {}, updateData }) {
           </div>
         )}
 
-        {/* ── Sponsor ── */}
         {!isOnboarding && (
           <>
             <FormField label="Are you working with a specific sponsor?">
@@ -1197,285 +904,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             textAlign: 'right'
           }}>
             {(formData.businessDescription || "").length}/1500 characters
-          </div>
-        </FormField>
-      </div>
-
-      {/* ============================================================ */}
-      {/* SECTION 3: Brand Assets - Includes Brands, Franchises & Agencies */}
-      {/* ============================================================ */}
-      <SectionHeading title="Brand Assets" />
-
-      {/* Brands, Franchises & Agencies - 3 per row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '1.5rem' }}>
-        <FormField label="Brands Owned">
-          <input
-            type="text"
-            name="brandsOwned"
-            value={formData.brandsOwned || ""}
-            onChange={handleChange}
-            style={inputStyle}
-            placeholder="e.g., Brand A, Brand B"
-          />
-        </FormField>
-
-        <FormField label="Brands Represented">
-          <input
-            type="text"
-            name="brandsRepresented"
-            value={formData.brandsRepresented || ""}
-            onChange={handleChange}
-            style={inputStyle}
-            placeholder="e.g., Brand X, Brand Y"
-          />
-        </FormField>
-
-        <FormField label="Do you hold any Franchises?">
-          <RadioGroup 
-            name="holdsFranchises" 
-            value={formData.holdsFranchises} 
-            onChange={(value) => handleRadioChange("holdsFranchises", value)}
-          />
-        </FormField>
-
-        <FormField label="Do you hold any Agencies?">
-          <RadioGroup 
-            name="holdsAgencies" 
-            value={formData.holdsAgencies} 
-            onChange={(value) => handleRadioChange("holdsAgencies", value)}
-          />
-        </FormField>
-      </div>
-
-      {/* Company Logo, Org Structure, Letterhead - 3 in one row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
-        {/* Company Logo */}
-        <FormField label="Company Logo">
-          <div style={{
-            border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
-            backgroundColor: '#FAF8F5',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden',
-                border: '3px solid #8B6F47', backgroundColor: 'white',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
-              }}>
-                {formData.companyLogo || logoPreview ? (
-                  <img src={logoPreview || formData.companyLogo} alt="Company Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
-                    <div style={{ fontSize: '28px', lineHeight: '1' }}>🏢</div>
-                    <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Logo</div>
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <label htmlFor="logo-upload" style={{
-                    padding: '10px 16px',
-                    background: logoUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
-                    color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
-                    cursor: logoUploading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    opacity: logoUploading ? 0.7 : 1,
-                  }}>
-                    {logoUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLogo ? 'Replace' : 'Upload'}</>}
-                    <input id="logo-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" onChange={handleLogoUpload} disabled={logoUploading} style={{ display: 'none' }} />
-                  </label>
-                  {(formData.companyLogo || logoPreview) && (
-                    <button type="button" onClick={handleRemoveLogo} style={{
-                      padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
-                      border: 'none', borderRadius: '5px', cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    }}>
-                      <X size={16} />Delete
-                    </button>
-                  )}
-                </div>
-                <div style={{
-                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
-                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
-                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
-                }}>
-                  <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
-                  <div>JPG, PNG, GIF, WebP • Max 5MB</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </FormField>
-
-        {/* Organisational Structure */}
-        <FormField label="Organisational Structure (optional)">
-          <div style={{
-            border: '2px dashed #C19A6B',
-            borderRadius: '8px',
-            padding: '16px',
-            backgroundColor: '#FAF8F5',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '72px', height: '72px', borderRadius: '8px',
-                border: '3px solid #8B6F47', backgroundColor: 'white',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
-              }}>
-                {formData.orgStructure ? (
-                  <div style={{ textAlign: 'center', padding: '6px' }}>
-                    <div style={{ fontSize: '28px', lineHeight: '1' }}>🗂️</div>
-                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>Uploaded</div>
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '6px' }}>
-                    <div style={{ fontSize: '28px', lineHeight: '1' }}>📊</div>
-                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>No File</div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <label
-                    htmlFor="org-structure-upload"
-                    style={{
-                      padding: '10px 16px',
-                      background: orgStructureUploading
-                        ? 'linear-gradient(135deg, #A0826D 0%, #8B6F47 100%)'
-                        : 'linear-gradient(135deg, #8B4513 0%, #6B3410 100%)',
-                      color: 'white', border: 'none', borderRadius: '5px',
-                      fontSize: '13px', fontWeight: '600',
-                      cursor: orgStructureUploading ? 'not-allowed' : 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: '8px',
-                      transition: 'all 0.3s ease',
-                      opacity: orgStructureUploading ? 0.7 : 1,
-                    }}
-                  >
-                    {orgStructureUploading ? (
-                      <><div style={spinnerStyle}></div> Uploading...</>
-                    ) : (
-                      <><Upload size={16} />{formData.orgStructure ? 'Replace' : 'Upload'}</>
-                    )}
-                    <input
-                      id="org-structure-upload"
-                      type="file"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
-                      onChange={handleOrgStructureUpload}
-                      disabled={orgStructureUploading}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-
-                  {formData.orgStructure && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteOrgStructure}
-                      style={{
-                        padding: '10px 16px',
-                        background: 'linear-gradient(135deg, #B8860B 0%, #996515 100%)',
-                        color: 'white', border: 'none', borderRadius: '5px',
-                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px',
-                      }}
-                    >
-                      <X size={16} />Delete
-                    </button>
-                  )}
-                </div>
-
-                <div style={{
-                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
-                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
-                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
-                }}>
-                  {formData.orgStructure ? (
-                    <>
-                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Org Structure Uploaded</div>
-                      <a href={formData.orgStructure} target="_blank" rel="noopener noreferrer"
-                        style={{ color: '#8B4513', textDecoration: 'underline' }}>
-                        View Document ↗
-                      </a>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Accepted formats</div>
-                      <div>PDF, Word, Excel, Image • Max 10MB</div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </FormField>
-
-        {/* Company Letterhead */}
-        <FormField label="Company Letterhead">
-          <div style={{
-            border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
-            backgroundColor: '#FAF8F5',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden',
-                border: '3px solid #8B6F47', backgroundColor: 'white',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
-              }}>
-                {formData.companyLetterhead ? (
-                  <div style={{ padding: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '32px', lineHeight: '1', marginBottom: '4px' }}>📄</div>
-                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47' }}>Letterhead</div>
-                  </div>
-                ) : (
-                  <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
-                    <div style={{ fontSize: '28px', lineHeight: '1', marginBottom: '2px' }}>📋</div>
-                    <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Letterhead</div>
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <label htmlFor="letterhead-upload" style={{
-                    padding: '10px 16px',
-                    background: letterheadUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
-                    color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
-                    cursor: letterheadUploading ? 'not-allowed' : 'pointer',
-                    display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    opacity: letterheadUploading ? 0.7 : 1,
-                  }}>
-                    {letterheadUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLetterhead ? 'Replace' : 'Upload'}</>}
-                    <input id="letterhead-upload" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleLetterheadUpload} disabled={letterheadUploading} style={{ display: 'none' }} />
-                  </label>
-                  {formData.companyLetterhead && (
-                    <button type="button" onClick={handleDeleteLetterhead} style={{
-                      padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
-                      border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    }}>
-                      <X size={16} />Delete
-                    </button>
-                  )}
-                </div>
-                <div style={{
-                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
-                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
-                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
-                }}>
-                  {formData.companyLetterhead ? (
-                    <>
-                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Letterhead Uploaded</div>
-                      <a href={formData.companyLetterhead} target="_blank" rel="noopener noreferrer"
-                        style={{ color: '#8B4513', textDecoration: 'underline' }}>View Document ↗</a>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
-                      <div>PDF, JPG, PNG • Max 10MB</div>
-                      <div style={{ marginTop: '2px' }}>Company name, logo, address, contact info required</div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
         </FormField>
       </div>
