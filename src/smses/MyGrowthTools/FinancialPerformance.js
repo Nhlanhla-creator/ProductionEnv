@@ -2290,9 +2290,15 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
             <input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
               style={{ ...inputS, background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)", fontWeight: 600, fontSize: "14px", flex: 1, minWidth: "200px" }} />
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>{loan.name || "Unnamed Loan"}</span>
-              <label style={{color:"white"}}>Financial-year start <input aria-label={`Financial year for ${loan.name}`} type="number" min="1900" max="9998" disabled={readOnly} value={loan.startYear ?? ""} placeholder="Required" onChange={e=>{const y=Number(e.target.value); if(y>=1900&&y<=9998) onSave(loans.map((l,i)=>i===idx?{...l,startYear:y,startMonth:l.startMonth ?? fy.startMonth}:l));}}/></label>
+              <label style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: "8px", color: "#fff", fontSize: "12px", fontWeight: 500 }}>
+                Financial-year start
+                <input aria-label={`Financial year for ${loan.name}`} type="number" min="1900" max="9998" disabled={readOnly}
+                  value={loan.startYear ?? ""} placeholder="Required"
+                  style={{ ...inputS, width: "112px", minWidth: "112px", height: "38px", padding: "7px 10px", color: T.ink, WebkitTextFillColor: T.ink, background: T.bg, colorScheme: "light", opacity: 1, fontWeight: 600 }}
+                  onChange={e=>{const y=Number(e.target.value); if(y>=1900&&y<=9998) onSave(loans.map((l,i)=>i===idx?{...l,startYear:y,startMonth:l.startMonth ?? fy.startMonth}:l));}}/>
+              </label>
               <span title={`Based on the selected period · Scheduled ${fyScheduled.toLocaleString()} / Paid ${fyPaid.toLocaleString()}`}
                 style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "999px", background: fyVar >= 0 ? T.greenBg : T.redBg, color: fyVar >= 0 ? T.green : T.red, fontWeight: 700 }}>
                 {!Number.isInteger(loan.startYear) ? "Assign year" : !months.length || (totalScheduled === null && totalPaid === null) ? "No data in range" : fyVar >= 0 ? "On Track" : "Behind"} · selected period
