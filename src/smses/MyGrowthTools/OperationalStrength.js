@@ -17,11 +17,11 @@ import {
 } from "lucide-react";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, Title, Tooltip, Legend, Filler,
+  PointElement, Title, Tooltip, Legend, Filler, BarController, LineController, ScatterController,
 } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler, BarController, LineController, ScatterController);
 
 const functions = getFunctions();
 
@@ -53,6 +53,7 @@ const CAPTURE_FREQUENCIES = ["Daily", "Weekly", "Monthly"];
 
 /* ─── Expanded period set (mirrors Financial Performance) ───────────────── */
 const PERIODS = [
+  {key:"custom", label:"Selected dates"},
   { key: "last_week",    label: "Last week" },
   { key: "this_week",    label: "This week" },
   { key: "last_month",   label: "Last month" },
@@ -63,7 +64,7 @@ const PERIODS = [
   { key: "this_year",    label: "This year" },
 ];
 const PERIOD_LABEL = Object.fromEntries(PERIODS.map((p) => [p.key, p.label]));
-const PERIOD_PREFIX = {
+const PERIOD_PREFIX = { custom:"Selected dates",
   last_week: "Last week", this_week: "This week",
   last_month: "Last month", this_month: "This month",
   last_quarter: "Last quarter", this_quarter: "This quarter",
@@ -170,7 +171,7 @@ const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
   return `${sign}${trimNum(n)}${suffix}`;
 };
 
-const parseNum = (v) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isNaN(n) ? null : n; };
+const parseNum = (v) => { if (v === null || v === undefined || (typeof v === "string" && !v.trim())) return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
 const errText = (e) => String(e?.message ?? e ?? "Unknown error");
 const fmtDMY = (d) => { if (!d) return ""; const x = new Date(d); return Number.isNaN(x.getTime()) ? "" : `${String(x.getDate()).padStart(2,"0")}/${String(x.getMonth()+1).padStart(2,"0")}/${x.getFullYear()}`; };
@@ -183,10 +184,10 @@ const rollUp = (values, mode) => {
 const mean = (arr) => { const n = arr.filter((v) => Number.isFinite(v)); return n.length ? n.reduce((a,b)=>a+b,0) / n.length : null; };
 
 /* ─── KPI model ─────────────────────────────────────────────────────────── */
-const CHART_VERSION = 3;
+const CHART_VERSION = 4;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
-  actualType: "bar", budgetType: "line", varianceType: "bar",
+  actualType: "bar", budgetType: "line", varianceType: "scatter",
   actualColor: "#1e40af", budgetColor: "#4a352f", axisMode: "both",
 };
 
@@ -198,18 +199,7 @@ const mkKpi = (o) => ({
   notes: "", periodNotes: {}, chart: { ...DEFAULT_CHART }, entries: o.entries || {},
 });
 
-const seedEntries = (sy, sm, budget, base, swing, aggregate) => {
-  const out = {};
-  fyMonths(sy, sm).forEach((m, i) => {
-    out[m.key] = { budget, actual: Math.round((base + Math.sin(i * 0.9) * swing + (i / 11) * swing * 0.4) * 100) / 100 };
-  });
-  const wDiv = aggregate === "sum" ? 4.33 : 1;
-  fyWeeks(sy, sm).forEach((w, i) => {
-    const drift = base + Math.sin(i * 0.42) * swing + (i / 51) * swing * 0.4;
-    out[w.key] = { budget: Math.round((budget / wDiv) * 100) / 100, actual: Math.round((drift / wDiv) * 100) / 100 };
-  });
-  return out;
-};
+const seedEntries = () => ({});
 
 const buildDefaultStructure = (sy, sm) => [
   { id: "supply-chain", name: "Supply Chain", notes: "", hidden: false, subCategories: [
@@ -309,51 +299,29 @@ const buildDefaultStructure = (sy, sm) => [
 ];
 
 /* ─── Period resolution ─────────────────────────────────────────────────── */
-const resolveMonth = (kpi, year, month) => {
-  const mk = `M:${year}-${String(month + 1).padStart(2, "0")}`;
-  const direct = kpi.entries?.[mk];
-  if (direct && (Number.isFinite(direct.actual) || Number.isFinite(direct.budget))) return direct;
-  const rows = Object.entries(kpi.entries || {}).filter(([k]) => {
-    if (!k.startsWith("W:") && !k.startsWith("D:")) return false;
-    const d = new Date(k.slice(2));
-    return d.getFullYear() === year && d.getMonth() === month;
-  }).map(([, v]) => v);
-  if (!rows.length) return { actual: null, budget: null };
-  return { actual: rollUp(rows.map((r) => Number(r.actual)), kpi.aggregate),
-           budget: rollUp(rows.map((r) => Number(r.budget)), kpi.aggregate) };
-};
-
-/* Range-based rollup — mirrors Financial Performance */
-const rollupRange = (kpi, from, to) => {
-  const freq = kpi.frequency || "Monthly";
-  if (freq === "Quarterly" || freq === "Monthly") {
-    const vals = [];
-    const cur = new Date(from.getFullYear(), from.getMonth(), 1);
-    const end = new Date(to.getFullYear(), to.getMonth(), 1);
-    while (cur <= end) {
-      vals.push(resolveMonth(kpi, cur.getFullYear(), cur.getMonth()));
-      cur.setMonth(cur.getMonth() + 1);
+const localDate = value => { const [y,m,d=1] = String(value).split("-").map(Number); return new Date(y,m-1,d); };
+const rangeKeys = (frequency, from, to) => {
+  if (frequency === "Quarterly") {
+    const keys = [];
+    for (let d = new Date(from.getFullYear(), Math.floor(from.getMonth()/3)*3, 1); d <= to; d = new Date(d.getFullYear(), d.getMonth()+3, 1)) {
+      if (d >= startOfDay(from) && startOfDay(monthEnd(d.getFullYear(), d.getMonth()+2)) <= startOfDay(to)) keys.push(`Q:${isoDate(d).slice(0,7)}`);
     }
-    return {
-      actual: rollUp(vals.map((r) => Number(r.actual)), kpi.aggregate),
-      budget: rollUp(vals.map((r) => Number(r.budget)), kpi.aggregate),
-    };
+    return keys;
   }
-  const prefix = freq === "Daily" ? "D:" : "W:";
-  const lo = startOfDay(from).getTime();
-  const hi = startOfDay(to).getTime();
-  const vals = Object.entries(kpi.entries || {})
-    .filter(([k]) => k.startsWith(prefix))
-    .filter(([k]) => {
-      const d = startOfDay(new Date(k.slice(2))).getTime();
-      return d >= lo && d <= hi;
-    })
-    .map(([, v]) => v);
-  return {
-    actual: rollUp(vals.map((r) => Number(r.actual)), kpi.aggregate),
-    budget: rollUp(vals.map((r) => Number(r.budget)), kpi.aggregate),
-  };
+  const monthly = !["Daily","Weekly"].includes(frequency), weekly = frequency === "Weekly";
+  const keys=[];
+  for(let d=monthly?monthStart(from.getFullYear(),from.getMonth()):weekly?startOfWeek(from):startOfDay(from); d<=to; d=monthly?new Date(d.getFullYear(),d.getMonth()+1,1):addDays(d,weekly?7:1)) {
+    const end=monthly?monthEnd(d.getFullYear(),d.getMonth()):weekly?addDays(d,6):d;
+    if(d>=startOfDay(from) && startOfDay(end)<=startOfDay(to)) keys.push(monthly?`M:${isoDate(d).slice(0,7)}`:weekly?weekKeyOf(d):dayKeyOf(d));
+  }
+  return keys;
 };
+const rangeRows = (kpi,from,to) => rangeKeys(kpi.frequency,from,to).map(key=>({key,label:key.slice(2),actual:parseNum(kpi.entries?.[key]?.actual),budget:parseNum(kpi.entries?.[key]?.budget)}));
+const rollupRange = (kpi,from,to) => {
+  const rows=rangeRows(kpi,from,to);
+  return {actual:rollUp(rows.map(r=>r.actual),kpi.aggregate),budget:rollUp(rows.map(r=>r.budget),kpi.aggregate)};
+};
+const resolveMonth = (kpi,year,month) => rollupRange(kpi,monthStart(year,month),monthEnd(year,month));
 
 /* Period → [from, to] window */
 const periodWindow = (period, fy) => {
@@ -361,6 +329,7 @@ const periodWindow = (period, fy) => {
   const today = startOfDay(now);
 
   switch (period) {
+    case "custom": return fy.range ? [localDate(fy.range.from),localDate(fy.range.to)] : [new Date(fy.startYear,fy.startMonth,1),monthEnd(fy.startYear,fy.startMonth+11)];
     case "this_week": {
       const s = startOfWeek(now);
       return [s, addDays(s, 6)];
@@ -372,7 +341,7 @@ const periodWindow = (period, fy) => {
     case "this_month":
       return [monthStart(now.getFullYear(), now.getMonth()), monthEnd(now.getFullYear(), now.getMonth())];
     case "last_month": {
-      const d = addMonths(now, -1);
+      const d = addMonths(monthStart(now.getFullYear(),now.getMonth()), -1);
       return [monthStart(d.getFullYear(), d.getMonth()), monthEnd(d.getFullYear(), d.getMonth())];
     }
     case "this_quarter": {
@@ -393,14 +362,14 @@ const periodWindow = (period, fy) => {
       const sy = fy.startYear;
       const sm = fy.startMonth;
       const s = new Date(sy, sm, 1);
-      const e = monthEnd(sy + 1, sm === 0 ? 11 : sm - 1);
+      const e = monthEnd(sy, sm + 11);
       return [s, e];
     }
     case "last_year": {
       const sy = fy.startYear - 1;
       const sm = fy.startMonth;
       const s = new Date(sy, sm, 1);
-      const e = monthEnd(sy + 1, sm === 0 ? 11 : sm - 1);
+      const e = monthEnd(sy, sm + 11);
       return [s, e];
     }
     default:
@@ -408,14 +377,7 @@ const periodWindow = (period, fy) => {
   }
 };
 
-const periodValues = (kpi, period, fy) => {
-  const [from, to] = periodWindow(period, fy);
-  // Single calendar month shortcut
-  if (from.getDate() === 1 && from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear() && to.getDate() >= 28) {
-    return resolveMonth(kpi, from.getFullYear(), from.getMonth());
-  }
-  return rollupRange(kpi, from, to);
-};
+const periodValues = (kpi,period,fy) => rollupRange(kpi,...periodWindow(period,fy));
 
 /* ─── Status ────────────────────────────────────────────────────────────── */
 const S = {
@@ -425,7 +387,7 @@ const S = {
   none: { key: "none", label: "No data", color: T.faint, bg: T.raised },
 };
 const statusFromPair = (kpi, budget, actual) => {
-  const b = Number(budget), a = Number(actual);
+  const b = parseNum(budget), a = parseNum(actual);
   if (!Number.isFinite(b) || !Number.isFinite(a)) return S.none;
   if (kpi.direction === "match") {
     if (b === 0) return Math.abs(a) < 0.001 ? S.green : Math.abs(a) <= 1 ? S.amber : S.red;
@@ -436,7 +398,7 @@ const statusFromPair = (kpi, budget, actual) => {
     if (kpi.direction === "higher") return S.none;
     return a <= 0 ? S.green : a <= 1 ? S.amber : S.red;
   }
-  const ratio = kpi.direction === "higher" ? a / b : b / (a || 0.0001);
+  const ratio = 1 + (kpi.direction === "higher" ? a-b : b-a) / Math.abs(b);
   return ratio >= 0.98 ? S.green : ratio >= 0.85 ? S.amber : S.red;
 };
 const getStatus = (kpi, period, fy) => {
@@ -445,7 +407,7 @@ const getStatus = (kpi, period, fy) => {
 };
 const getVariance = (kpi, period, fy) => {
   const { budget, actual } = periodValues(kpi, period, fy);
-  const b = Number(budget), a = Number(actual);
+  const b = parseNum(budget), a = parseNum(actual);
   return Number.isFinite(b) && Number.isFinite(a) ? a - b : null;
 };
 const varianceFavourable = (kpi, v) => {
@@ -497,14 +459,14 @@ const InfoTip = ({ text, light = false }) => {
   );
 };
 
-const btnBase = { padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 500,
+const btnBase = { minHeight: "40px", boxSizing: "border-box", justifyContent: "center", whiteSpace: "nowrap", lineHeight: 1.2, padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 500,
   cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "7px", fontFamily: "inherit" };
 const btnPrimary = { ...btnBase, background: T.accent, color: "#fff", border: `1px solid ${T.accent}`, fontWeight: 600 };
 const btnGhost = { ...btnBase, background: T.bg, color: T.body, border: `1px solid ${T.lineStrong}` };
 const btnQuiet = { ...btnBase, background: "transparent", color: T.accent, border: "1px solid transparent" };
 const inputS = { width: "100%", padding: "9px 11px", border: `1px solid ${T.lineStrong}`, borderRadius: "8px",
   fontSize: "13.5px", fontFamily: "inherit", boxSizing: "border-box", color: T.ink, background: T.bg, outline: "none" };
-const selectS = { ...inputS, cursor: "pointer" };
+const selectS = { ...inputS, cursor: "pointer", appearance: "auto", WebkitAppearance: "auto" };
 const labelS = { display: "block", fontSize: "12.5px", fontWeight: 600, color: T.accent, marginBottom: "5px" };
 const cardS = { background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "14px 16px" };
 
@@ -534,6 +496,94 @@ const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }
   </div>
 );
 
+const moveCategory = (names, from, to) => {
+  const next = [...names];
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= next.length || to >= next.length) return next;
+  const [name] = next.splice(from, 1);
+  next.splice(to, 0, name);
+  return next;
+};
+const CategoryOrderModal = ({ tab, onClose, onSave }) => {
+  const [order, setOrder] = useState(() => tab.categories.map(category => category.name));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setSaving(true); setError("");
+    try { await onSave(order); onClose(); }
+    catch (err) { setError(`Could not save category order: ${errText(err)}`); }
+    finally { setSaving(false); }
+  };
+  const move = (from, to) => setOrder(previous => moveCategory(previous, from, to));
+  return <Modal title="Order categories" subtitle={`${tab.name} · choose the order that works for you`} icon={<ArrowUpDown size={17} />}
+    width={600} onClose={() => { if (!saving) onClose(); }}
+    footer={<><button onClick={onClose} disabled={saving} style={btnGhost}>Cancel</button>
+      <button onClick={save} disabled={saving} style={btnPrimary}><Save size={14} /> {saving ? "Saving…" : "Save order"}</button></>}>
+    <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted, lineHeight: 1.6 }}>
+      Move a category with the arrows, or choose its position directly. Your order is saved for this tab and used in the table, data entry screens and spreadsheets.
+    </p>
+    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+      {order.map((name, index) => <li key={name} style={{ ...cardS, padding: "12px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", background: T.raised, color: T.muted, borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{index + 1}</span>
+        <span style={{ flex: "1 1 150px", minWidth: 0, fontSize: 13.5, fontWeight: 600, color: T.accent }}>{name}</span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <select aria-label={`Position of ${name}`} value={index} disabled={saving} onChange={event => move(index, Number(event.target.value))}
+            style={{ ...selectS, width: 72, height: 36, padding: "6px 10px" }}>
+            {order.map((_, position) => <option key={position} value={position}>{position + 1}</option>)}
+          </select>
+          {[{ to: index - 1, label: "up", Icon: ArrowUp }, { to: index + 1, label: "down", Icon: ArrowDown }].map(({ to, label, Icon }) => {
+            const disabled = saving || to < 0 || to >= order.length;
+            return <button key={label} type="button" aria-label={`Move ${name} ${label}`} disabled={disabled} onClick={() => move(index, to)}
+              style={{ ...btnGhost, minHeight: 36, width: 36, padding: 0, opacity: disabled ? 0.35 : 1, cursor: disabled ? "default" : "pointer" }}><Icon size={14} /></button>;
+          })}
+        </div>
+      </li>)}
+    </ol>
+    {error && <p role="alert" style={{ fontSize: 12, color: T.red, marginBottom: 0 }}>{error}</p>}
+  </Modal>;
+};
+
+const DateRangeControls = ({ fy, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("financial");
+  const [year, setYear] = useState(fy.startYear);
+  const [month, setMonth] = useState(dayKeyOf(new Date()).slice(2, 9));
+  const [from, setFrom] = useState(fy.range?.from || dayKeyOf(new Date(fy.startYear, fy.startMonth, 1)).slice(2));
+  const [to, setTo] = useState(fy.range?.to || dayKeyOf(monthEnd(fy.startYear, fy.startMonth + 11)).slice(2));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setYear(fy.startYear); }, [fy.startYear]);
+  const apply = async () => {
+    let a, b;
+    if (mode === "custom") { a = localDate(from); b = localDate(to); }
+    else if (mode === "month") { a = localDate(month); b = monthEnd(a.getFullYear(), a.getMonth()); }
+    else { a = new Date(Number(year), mode === "financial" ? fy.startMonth : 0, 1); b = monthEnd(a.getFullYear(), a.getMonth() + 11); }
+    if (!Number.isFinite(+a) || !Number.isFinite(+b) || a > b || a.getFullYear() < 1900 || b.getFullYear() > 9999 || b.getFullYear() - a.getFullYear() > 100) { setError("Choose a valid date range."); return; }
+    setBusy(true); setError("");
+    try { await onChange({ from: dayKeyOf(a).slice(2), to: dayKeyOf(b).slice(2) }); setOpen(false); }
+    catch { setError("Could not apply these dates. Please try again."); }
+    finally { setBusy(false); }
+  };
+  const field = { display: "flex", flexDirection: "column", gap: 6, flex: "1 1 150px", minWidth: 140, maxWidth: 230 };
+  const control = { ...inputS, height: 40, boxSizing: "border-box", margin: 0 };
+  const caption = fy.period === "custom" && fy.range ? `${fmtDMY(localDate(fy.range.from))} – ${fmtDMY(localDate(fy.range.to))}` : PERIOD_LABEL[fy.period] || `FY ${fyLabel(fy.startYear, fy.startMonth)}`;
+  return <div style={{ marginBottom: 12 }}>
+    <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} style={{ ...btnGhost, padding: "8px 12px", gap: 9, height: 38 }}>
+      <Calendar size={15} /><span style={{ color: T.muted }}>Dates</span><strong style={{ fontWeight: 600 }}>{caption}</strong><ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : undefined }} />
+    </button>
+    {open && <div style={{ marginTop: 8, padding: 16, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+        <label style={field}><span style={{ ...labelS, margin: 0 }}>View by</span><select aria-label="Date mode" style={{ ...selectS, ...control }} value={mode} onChange={e => setMode(e.target.value)}><option value="financial">Financial year</option><option value="calendar">Calendar year</option><option value="month">Month</option><option value="custom">Custom range</option></select></label>
+        {(mode === "financial" || mode === "calendar") && <label style={field}><span style={{ ...labelS, margin: 0 }}>{mode === "financial" ? "Starting year" : "Year"}</span><input aria-label="Year" type="number" min="1900" max="9998" style={control} value={year} onChange={e => setYear(e.target.value)} /></label>}
+        {mode === "month" && <label style={field}><span style={{ ...labelS, margin: 0 }}>Month</span><input aria-label="Month" type="month" style={control} value={month} onChange={e => setMonth(e.target.value)} /></label>}
+        {mode === "custom" && <><label style={field}><span style={{ ...labelS, margin: 0 }}>From</span><input aria-label="From date" type="date" style={control} value={from} onChange={e => setFrom(e.target.value)} /></label><label style={field}><span style={{ ...labelS, margin: 0 }}>To</span><input aria-label="To date" type="date" min={from} style={control} value={to} onChange={e => setTo(e.target.value)} /></label></>}
+        <button type="button" disabled={busy} style={{ ...btnPrimary, height: 40, boxSizing: "border-box", whiteSpace: "nowrap", margin: 0 }} onClick={apply}>{busy ? "Applying…" : "Apply dates"}</button>
+        <span title="Monthly and weekly totals require complete periods. Use daily data for partial periods." style={{ display: "inline-flex", alignItems: "center", height: 40, color: T.muted }}><Info size={15} /></span>
+      </div>
+      {error && <p role="alert" style={{ color: T.red, margin: "10px 0 0", fontSize: 12 }}>{error}</p>}
+    </div>}
+  </div>;
+};
+
 const DIRECTIONS = [
   { value: "higher", label: "Higher is better" },
   { value: "lower", label: "Lower is better" },
@@ -545,52 +595,101 @@ const DIRECTIONS = [
    ════════════════════════════════════════════════════════════════════════ */
 
 /* Build split rows for a KPI at its native frequency */
-const buildSplitRows = (kpi, fy) => {
-  const freq = kpi.frequency || "Monthly";
+const buildSplitRows = (kpi,fy,period=fy.period || "this_year") => ({title:`${kpi.frequency || "Monthly"} split`,rows:rangeRows(kpi,...periodWindow(period,fy))});
 
-  if (freq === "Daily") {
-    const keys = Object.keys(kpi.entries || {}).filter((k) => k.startsWith("D:")).sort();
-    if (!keys.length) return { title: "Daily split (no entries captured)", rows: [] };
-    return {
-      title: "Daily split",
-      rows: keys.map((k) => {
-        const d = new Date(k.slice(2));
-        return {
-          label: `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
-          budget: kpi.entries[k]?.budget ?? null,
-          actual: kpi.entries[k]?.actual ?? null,
-        };
-      }),
-    };
-  }
-
-  if (freq === "Weekly") {
-    const keys = Object.keys(kpi.entries || {}).filter((k) => k.startsWith("W:")).sort();
-    if (!keys.length) return { title: "Weekly split (no entries captured)", rows: [] };
-    return {
-      title: "Weekly split",
-      rows: keys.map((k) => {
-        const s = new Date(k.slice(2));
-        const e = addDays(s, 6);
-        return {
-          label: `${String(s.getDate()).padStart(2, "0")} ${MONTHS[s.getMonth()]} – ${String(e.getDate()).padStart(2, "0")} ${MONTHS[e.getMonth()]}`,
-          budget: kpi.entries[k]?.budget ?? null,
-          actual: kpi.entries[k]?.actual ?? null,
-        };
-      }),
-    };
-  }
-
-  // Monthly / Quarterly → use resolveMonth so rolled-up data flows through
-  const months = fyMonths(fy.startYear, fy.startMonth);
-  return {
-    title: "Monthly split",
-    rows: months.map((m) => {
-      const r = resolveMonth(kpi, m.year, m.month);
-      return { label: m.long, budget: r.budget ?? null, actual: r.actual ?? null };
-    }),
+const SPREADSHEET_HEADERS=["Category","Subcategory","KPI","Units","Period","Budget","Actual","Frequency","Variance","Variance %"];
+const spreadsheetSheets = ({tabs,selectedTabs,fy,period},blank=false) => tabs.filter(c=>selectedTabs[c.id]).map(c=>({name:c.name,rows:[SPREADSHEET_HEADERS,...c.subCategories.flatMap(sub=>sub.kpis.flatMap(k=>rangeRows(k,...periodWindow(period,fy)).map(r=>[c.name,sub.name,k.name,k.units,r.key,blank?null:r.budget,blank?null:r.actual,k.frequency,blank||!Number.isFinite(r.actual)||!Number.isFinite(r.budget)?null:r.actual-r.budget,blank||!Number.isFinite(r.actual)||!Number.isFinite(r.budget)||r.budget===0?null:(r.actual-r.budget)/Math.abs(r.budget)])))]}));
+const csvEscape = value => {let s=String(value??"");if(typeof value!=="number" && /^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+const spreadsheetCsv = sheets => "\uFEFF"+[SPREADSHEET_HEADERS,...sheets.flatMap(s=>s.rows.slice(1))].map(r=>r.map(csvEscape).join(",")).join("\r\n");
+const downloadBlob = (text,name) => {const url=URL.createObjectURL(new Blob([text],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+const Select = ({children,...props}) => <select {...props} style={{...selectS,...props.style}}>{children}</select>;
+const xmlText = value => String(value ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// Small uncompressed ZIP writer keeps XLSX export self-contained (no runtime CDN/dependency).
+const zipFiles = files => {
+  const encoder = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  const crc32 = bytes => {
+    let crc = 0xffffffff;
+    for (const byte of bytes) { crc ^= byte; for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0); }
+    return (crc ^ 0xffffffff) >>> 0;
   };
+  for (const [filename, content] of files) {
+    const name = encoder.encode(filename), data = encoder.encode(content), crc = crc32(data);
+    const local = new Uint8Array(30 + name.length), l = new DataView(local.buffer);
+    l.setUint32(0, 0x04034b50, true); l.setUint16(4, 20, true); l.setUint16(6, 0x800, true);
+    l.setUint16(12, 33, true); l.setUint32(14, crc, true); l.setUint32(18, data.length, true); l.setUint32(22, data.length, true); l.setUint16(26, name.length, true); local.set(name, 30);
+    const directory = new Uint8Array(46 + name.length), c = new DataView(directory.buffer);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x800, true);
+    c.setUint16(14, 33, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, offset, true); directory.set(name, 46);
+    parts.push(local, data); central.push(directory); offset += local.length + data.length;
+  }
+  const end = new Uint8Array(22), e = new DataView(end.buffer);
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, central.length, true); e.setUint16(10, central.length, true); e.setUint32(12, central.reduce((n, p) => n + p.length, 0), true); e.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 };
+const spreadsheetWorkbook = sheets => {
+  const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main", rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+  const names = new Set();
+  const safeNames = sheets.map((s, i) => {
+    const base = (s.name.replace(/[\\/?*\[\]:]/g, " ").replace(/^'+|'+$/g, "").trim() || `Sheet ${i + 1}`).slice(0, 31);
+    let name = base, n = 1;
+    while (names.has(name.toLowerCase())) { const tail = ` (${++n})`; name = base.slice(0, 31 - tail.length) + tail; }
+    names.add(name.toLowerCase()); return name;
+  });
+  const files = [
+    ["[Content_Types].xml", `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`],
+    ["_rels/.rels", `<Relationships xmlns="${rel}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ["xl/workbook.xml", `<workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${safeNames.map((name, i) => `<sheet name="${xmlText(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`],
+    ["xl/_rels/workbook.xml.rels", `<Relationships xmlns="${rel}">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}<Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ["xl/styles.xml", `<styleSheet xmlns="${ns}"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF4A352F"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF0F6FF"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf><xf numFmtId="4" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+  ];
+  sheets.forEach((sheet, i) => {
+    const rows = sheet.rows.map((row, ri) => `<row r="${ri + 1}"${ri === 0 ? ' ht="28" customHeight="1"' : ""}>${row.map((value, ci) => {
+      const cell = `${String.fromCharCode(65 + ci)}${ri + 1}`, style = ri === 0 ? 1 : ci === 5 || ci === 6 ? 2 : ci === 8 ? 3 : ci === 9 ? 4 : 0;
+      if (ri > 0 && (ci === 8 || ci === 9)) {
+        const row = ri + 1;
+        const formula = ci === 8 ? `IF(COUNT(F${row}:G${row})<2,"",G${row}-F${row})` : `IF(OR(COUNT(F${row}:G${row})<2,F${row}=0),"",(G${row}-F${row})/ABS(F${row}))`;
+        return `<c r="${cell}" s="${style}"><f>${xmlText(formula)}</f></c>`;
+      }
+      if (value === null || value === undefined || value === "") return `<c r="${cell}" s="${style}"/>`;
+      return typeof value === "number" && Number.isFinite(value) ? `<c r="${cell}" s="${style}"><v>${value}</v></c>` : `<c r="${cell}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xmlText(value)}</t></is></c>`;
+    }).join("")}</row>`).join("");
+    files.push([`xl/worksheets/sheet${i + 1}.xml`, `<worksheet xmlns="${ns}"><dimension ref="A1:J${sheet.rows.length}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${[24, 32, 34, 12, 28, 18, 18, 16, 18, 18].map((width, ci) => `<col min="${ci + 1}" max="${ci + 1}" width="${width}" customWidth="1"/>`).join("")}</cols><sheetData>${rows}</sheetData><autoFilter ref="A1:J${sheet.rows.length}"/></worksheet>`]);
+  });
+  return zipFiles(files);
+};
+const SpreadsheetDownloadModal = ({ structure, activeTabId, fy, period, onClose }) => {
+  const [selectedTabs, setSelectedTabs] = useState({ [activeTabId]: true });
+  const [blank, setBlank] = useState(false), [format, setFormat] = useState("xlsx");
+  const [error, setError] = useState("");
+  const tabs=structure.filter(c=>!c.hidden);
+  const options = { tabs, selectedTabs, fy, period };
+  const download = () => {
+    try {
+      const sheets = spreadsheetSheets(options, blank);
+      if (!sheets.some(s => s.rows.length > 1)) { setError("No data-entry rows in this range. Select a complete month or another section."); return; }
+      if (format === "csv") downloadBlob(spreadsheetCsv(sheets), `operational-data-${blank ? "template" : "current"}.csv`);
+      else {
+        const url = URL.createObjectURL(spreadsheetWorkbook(sheets)), link = document.createElement("a");
+        link.href = url; link.download = `operational-data-${blank ? "template" : "current"}.xlsx`;
+        document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+      setError("");
+    } catch (e) { setError(`Could not download the spreadsheet: ${errText(e)}`); }
+  };
+  const [from, to] = periodWindow(period, fy);
+  return <Modal title="Download spreadsheet" subtitle={`${fmtDMY(from)} – ${fmtDMY(to)}`} icon={<FileSpreadsheet size={18}/>} onClose={onClose} width={600}
+    footer={<><button style={btnGhost} onClick={onClose}>Cancel</button><button style={btnPrimary} disabled={!Object.values(selectedTabs).some(Boolean)} onClick={download}><Download size={15}/>Download {format.toUpperCase()}</button></>}>
+    <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+      {[[false, "Existing data", "Review or edit your saved figures."], [true, "Blank template", "Fill in Budget and Actual values."]].map(([value, title, description]) => <button key={title} onClick={() => setBlank(value)} aria-pressed={blank === value} style={{ ...cardS, flex: "1 1 210px", textAlign: "left", cursor: "pointer", borderColor: blank === value ? T.accent : T.line, background: blank === value ? T.accentTint : T.bg, fontFamily: "inherit" }}><strong style={{ color: T.ink, display: "block", marginBottom: 5 }}>{title}</strong><span style={{ color: T.muted, fontSize: 12 }}>{description}</span></button>)}
+    </div>
+    <label style={labelS}>Sections</label><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 8, marginBottom: 20 }}>{tabs.map(tab => <label key={tab.id} style={{ display: "flex", gap: 9, alignItems: "center", fontSize: 13, padding: "8px 0", cursor: "pointer" }}><input type="checkbox" checked={!!selectedTabs[tab.id]} onChange={() => setSelectedTabs(prev => ({ ...prev, [tab.id]: !prev[tab.id] }))}/>{tab.name}</label>)}</div>
+    <label style={labelS}>File type</label><Select value={format} onChange={e => setFormat(e.target.value)}><option value="xlsx">Excel workbook (.xlsx) — one sheet per section</option><option value="csv">CSV (.csv) — one combined data sheet</option></Select>
+    <p style={{ color: T.muted, fontSize: 12, lineHeight: 1.6, marginBottom: 0 }}>Blue Budget and Actual cells are ready to edit. Excel includes filters, a frozen header and automatic Variance formulas. Leave unknown figures blank; zero is a real value. Variance % in CSV is a decimal ratio. This download contains data-entry rows. Changes made in Excel stay in your downloaded file; enter them in Add Data to save them to the application.</p>
+    {error && <p role="alert" style={{ color: T.red, fontSize: 13 }}>{error}</p>}
+  </Modal>;
+};
+
 
 const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, userName }) => {
   const [selectedCategories, setSelectedCategories] = useState(() => 
@@ -685,13 +784,14 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
           const v = periodValues(k, periodForReport, fy);
           const status = getStatus(k, periodForReport, fy);
           const variance = getVariance(k, periodForReport, fy);
-          const split = buildSplitRows(k, fy);
+          const split = buildSplitRows(k, fy, periodForReport);
 
           subData.kpis.push({
             id: k.id,
             name: k.name,
             units: k.units,
             frequency: k.frequency,
+            aggregate: k.aggregate,
             direction: k.direction,
             meaning: k.meaning,
             measured: k.measured,
@@ -832,7 +932,7 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
 
       let totalBudget = 0, totalActual = 0, hasBudget = false, hasActual = false;
       kpi.splitRows.forEach((r) => {
-        const b = Number(r.budget), a = Number(r.actual);
+        const b = parseNum(r.budget), a = parseNum(r.actual);
         const variance = Number.isFinite(a) && Number.isFinite(b) ? a - b : null;
         if (Number.isFinite(b)) { totalBudget += b; hasBudget = true; }
         if (Number.isFinite(a)) { totalActual += a; hasActual = true; }
@@ -844,10 +944,12 @@ const OperationalReportGenerator = ({ structure, fy, period, onClose, userId, us
           <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${vColor};">${variance !== null ? fmtVal(variance, kpi.units) : "—"}</td>
         </tr>`;
       });
+      totalBudget = rollUp(kpi.splitRows.map(r=>parseNum(r.budget)),kpi.aggregate);
+      totalActual = rollUp(kpi.splitRows.map(r=>parseNum(r.actual)),kpi.aggregate);
       const totalVar = hasBudget && hasActual ? totalActual - totalBudget : null;
       const totalVarColor = totalVar !== null && varianceFavourable({ direction: kpi.direction }, totalVar) ? '#166534' : '#991b1b';
       html += `<tr style="background:#f4efec; font-weight:700;">
-        <td style="padding:4px 8px; border:1px solid #ddd;">Total</td>
+        <td style="padding:4px 8px; border:1px solid #ddd;">${kpi.aggregate === "sum" ? "Total" : "Average"}</td>
         <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${hasBudget ? fmtVal(totalBudget, kpi.units) : "—"}</td>
         <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${hasActual ? fmtVal(totalActual, kpi.units) : "—"}</td>
         <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${totalVarColor};">${totalVar !== null ? fmtVal(totalVar, kpi.units) : "—"}</td>
@@ -1128,7 +1230,7 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
 /* ─── Analysis text ────────────────────────────────────────────────────── */
 const localAnalysis = (kpi, period, v, fy) => {
   const status = statusFromPair(kpi, v.budget, v.actual);
-  const variance = Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
+  const variance = Number.isFinite(parseNum(v.budget)) && Number.isFinite(parseNum(v.actual)) ? Number(v.actual) - Number(v.budget) : null;
   const fav = varianceFavourable(kpi, variance);
   return {
     observations: [
@@ -1157,7 +1259,7 @@ const summaryAnalysis = (kpi, fy) => {
   const rows = PERIODS.map((p) => {
     const v = periodValues(kpi, p.key, fy);
     return { key: p.key, label: p.label, v, status: statusFromPair(kpi, v.budget, v.actual),
-      variance: Number.isFinite(Number(v.budget)) && Number.isFinite(Number(v.actual)) ? Number(v.actual) - Number(v.budget) : null };
+      variance: Number.isFinite(parseNum(v.budget)) && Number.isFinite(parseNum(v.actual)) ? Number(v.actual) - Number(v.budget) : null };
   });
   const withData = rows.filter((r) => r.status.key !== "none");
   const reds = withData.filter((r) => r.status.key === "red");
@@ -1292,116 +1394,9 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const prefs = kpi.chart?.v === CHART_VERSION ? { ...DEFAULT_CHART, ...kpi.chart } : { ...DEFAULT_CHART };
 
   const { labels, actual, budget, noteKey, caption } = useMemo(() => {
-    const { startYear, startMonth } = fy;
-    const freq = kpi.frequency || "Monthly";
-
-    if (period === "this_week" || period === "last_week") {
-      const [from] = periodWindow(period, fy);
-      if (freq === "Daily") {
-        const labels = [], actual = [], budget = [];
-        for (let i = 0; i < 7; i++) {
-          const d = addDays(from, i);
-          const key = dayKeyOf(d);
-          labels.push(`${MONTHS[d.getMonth()]} ${d.getDate()}`);
-          actual.push(kpi.entries?.[key]?.actual ?? null);
-          budget.push(kpi.entries?.[key]?.budget ?? null);
-        }
-        return { labels, actual, budget, noteKey: weekKeyOf(from), caption: `Week of ${fmtDMY(from)} · daily` };
-      }
-      if (freq === "Weekly") {
-        const key = weekKeyOf(from);
-        return { labels: [`Week of ${fmtDMY(from)}`],
-          actual: [kpi.entries?.[key]?.actual ?? null], budget: [kpi.entries?.[key]?.budget ?? null],
-          noteKey: key, caption: `Week of ${fmtDMY(from)}` };
-      }
-      // Monthly context view
-      const months = fyMonths(startYear, startMonth);
-      const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
-      return { labels: months.map((m) => m.label),
-        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-        noteKey: weekKeyOf(from), caption: `Week of ${fmtDMY(from)} · monthly context` };
-    }
-
-    if (period === "this_month" || period === "last_month") {
-      const [from] = periodWindow(period, fy);
-      const y = from.getFullYear(), m = from.getMonth();
-      if (freq === "Daily") {
-        const dim = new Date(y, m + 1, 0).getDate();
-        const labels = [], actual = [], budget = [];
-        for (let d = 1; d <= dim; d++) {
-          const day = new Date(y, m, d);
-          const key = dayKeyOf(day);
-          labels.push(`${d} ${MONTHS[m]}`);
-          actual.push(kpi.entries?.[key]?.actual ?? null);
-          budget.push(kpi.entries?.[key]?.budget ?? null);
-        }
-        return { labels, actual, budget, noteKey: `M:${y}-${String(m+1).padStart(2,"0")}`, caption: `${MONTHS[m]} ${y} · daily` };
-      }
-      if (freq === "Weekly") {
-        const start = startOfWeek(new Date(y, m, 1));
-        const end = new Date(y, m + 1, 0);
-        const labels = [], actual = [], budget = [];
-        let cursor = start;
-        while (cursor <= end) {
-          const key = weekKeyOf(cursor);
-          labels.push(`${String(cursor.getDate()).padStart(2,"0")} ${MONTHS[cursor.getMonth()]}`);
-          actual.push(kpi.entries?.[key]?.actual ?? null);
-          budget.push(kpi.entries?.[key]?.budget ?? null);
-          cursor = addDays(cursor, 7);
-        }
-        return { labels, actual, budget, noteKey: `M:${y}-${String(m+1).padStart(2,"0")}`, caption: `${MONTHS[m]} ${y} · weekly` };
-      }
-      // Monthly context
-      const months = fyMonths(startYear, startMonth);
-      const rows = months.map((mm) => resolveMonth(kpi, mm.year, mm.month));
-      return { labels: months.map((mm) => mm.label),
-        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-        noteKey: currentMonthKey(), caption: `FY ${fyLabel(startYear, startMonth)} · monthly context` };
-    }
-
-    if (period === "this_quarter" || period === "last_quarter") {
-      const [from] = periodWindow(period, fy);
-      const months = [0,1,2].map((i) => addMonths(from, i));
-      if (freq === "Daily") {
-        const labels = [], actual = [], budget = [];
-        months.forEach((mo) => {
-          const dim = new Date(mo.getFullYear(), mo.getMonth() + 1, 0).getDate();
-          for (let d = 1; d <= dim; d++) {
-            const day = new Date(mo.getFullYear(), mo.getMonth(), d);
-            const key = dayKeyOf(day);
-            labels.push(`${d} ${MONTHS[mo.getMonth()]}`);
-            actual.push(kpi.entries?.[key]?.actual ?? null);
-            budget.push(kpi.entries?.[key]?.budget ?? null);
-          }
-        });
-        return { labels, actual, budget, noteKey: `Q:${from.getFullYear()}-${from.getMonth()}`, caption: `Quarter · daily` };
-      }
-      if (freq === "Weekly") {
-        const labels = [], actual = [], budget = [];
-        let cursor = startOfWeek(months[0]);
-        const end = months[2];
-        while (cursor <= end) {
-          const key = weekKeyOf(cursor);
-          labels.push(`${String(cursor.getDate()).padStart(2,"0")} ${MONTHS[cursor.getMonth()]}`);
-          actual.push(kpi.entries?.[key]?.actual ?? null);
-          budget.push(kpi.entries?.[key]?.budget ?? null);
-          cursor = addDays(cursor, 7);
-        }
-        return { labels, actual, budget, noteKey: `Q:${from.getFullYear()}-${from.getMonth()}`, caption: `Quarter · weekly` };
-      }
-      const rows = months.map((m) => resolveMonth(kpi, m.getFullYear(), m.getMonth()));
-      return { labels: months.map((m) => `${MONTHS[m.getMonth()]} ${String(m.getFullYear()).slice(2)}`),
-        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-        noteKey: `Q:${from.getFullYear()}-${from.getMonth()}`, caption: `Quarter of FY ${fyLabel(startYear, startMonth)}` };
-    }
-
-    // Yearly / fallback → monthly context
-    const months = fyMonths(startYear, startMonth);
-    const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
-    return { labels: months.map((m) => m.label),
-      actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-      noteKey: `Y:${startYear}`, caption: `FY ${fyLabel(startYear, startMonth)} · monthly` };
-  }, [kpi, period, fy]);
+    const [from,to]=periodWindow(period,fy), rows=rangeRows(kpi,from,to);
+    return {labels:rows.map(r=>r.label),actual:rows.map(r=>r.actual),budget:rows.map(r=>r.budget),noteKey:`${isoDate(from)}:${isoDate(to)}`,caption:`${fmtDMY(from)} – ${fmtDMY(to)} · ${kpi.frequency} · complete periods`};
+  },[kpi,period,fy]);
 
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
 
@@ -1429,18 +1424,18 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
     if (type === "scatter") {
       return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
         showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
-        pointBackgroundColor: isArrayColor ? color.map((c) => `${c}33`) : "#ffffff",
+        pointBackgroundColor: isArrayColor ? color : "#ffffff",
         pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
     }
     if (type === "line" || type === "area") {
       return { type: "line", label, data,
-        borderColor: color, backgroundColor: type === "area" ? `${color}22` : "transparent",
-        borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: true,
+        borderColor: color, backgroundColor: type === "area" ? (isArrayColor ? color : `${color}22`) : "transparent",
+        borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: false,
         pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
         pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
     }
     return { type: "bar", label, data,
-      backgroundColor: isArrayColor ? color.map((c) => `${c}b3`) : `${color}b3`,
+      backgroundColor: isArrayColor ? color : `${color}b3`,
       borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
   };
 
@@ -1448,7 +1443,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const varianceBaseType = baseChartType([prefs.varianceType]);
   const varianceOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 10, bottom: 0 } },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
     plugins: {
       legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
@@ -1458,8 +1453,12 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
             return y === null || y === undefined ? "Variance: no data"
               : `Variance: ${fmtValue(y, kpi, { signed: true })} (${varianceFavourable(kpi, y) ? "favourable" : "unfavourable"})`;
           } } } },
-    scales: { y: { display: false, grid: { display: false } },
-      x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
+    scales: {
+      y: { display: true, afterFit: scale => { scale.width = 88; }, grace: "20%", beginAtZero: true,
+        border: { display: false }, grid: { color: ctx => ctx.tick.value === 0 ? T.lineStrong : T.lineSoft },
+        ticks: { maxTicksLimit: 4, color: T.muted, font: { size: 10 }, callback: value => fmtValue(value, kpi, { bare: true, signed: true }) } },
+      x: { type: "category", labels, offset: true, display: false, grid: { display: false }, border: { display: false } },
+    },
   };
 
   const mainData = { labels, datasets: [
@@ -1469,7 +1468,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
   const mainOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 10 } },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
     plugins: { legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
         callbacks: { label: (c) => {
@@ -1478,11 +1477,11 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
             : `${c.dataset.label}: ${fmtValue(y, kpi)}`;
         } } } },
     scales: {
-      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both",
+      y: { display: true, afterFit: scale => { scale.width = 88; }, border: { display: false },
         grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
-        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
-      x: { display: prefs.axisMode === "x" || prefs.axisMode === "both", grid: { display: false },
-        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+        ticks: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
+      x: { type: "category", labels, offset: true, display: true, grid: { display: false },
+        ticks: { color: prefs.axisMode === "x" || prefs.axisMode === "both" ? T.body : "transparent", font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
     },
   };
 
@@ -1559,20 +1558,24 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
         </div>
       )}
 
-      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "2px" }}>
-          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Budget vs Actual</span>
-          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            {key("Variance", <span style={{ display: "inline-flex", gap: "3px" }}>{dot(T.green)}{dot(T.red)}</span>)}
+      <div style={{ ...cardS, marginBottom: 14, padding: "16px 12px 12px", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "0 6px 14px" }}>
+          <strong style={{ fontSize: 13, color: T.accent }}>Budget vs Actual</strong>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
             {key("Budget", swatchFor(prefs.budgetType, prefs.budgetColor))}
             {key("Actual", swatchFor(prefs.actualType, prefs.actualColor))}
-          </span>
+            <span style={{ width: 1, height: 14, background: T.lineSoft }} aria-hidden="true" />
+            {key("Favourable", dot(T.green, true))}{key("Unfavourable", dot(T.red, true))}
+          </div>
         </div>
-
-        <div style={{ height: "112px", marginBottom: "-16px" }}>
+        <div style={{ paddingLeft: 88, paddingRight: 12, fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 2 }}>
+          Variance · Actual − Budget
+        </div>
+        <div style={{ height: 130 }}>
           <Chart type={varianceBaseType} data={varianceData} options={varianceOptions} />
         </div>
-        <div style={{ height: "320px" }}>
+        <div aria-hidden="true" style={{ borderTop: `1px solid ${T.lineSoft}`, margin: "6px 12px 0 88px" }} />
+        <div style={{ height: 320 }}>
           <Chart type={mainBaseType} data={mainData} options={mainOptions} />
         </div>
       </div>
@@ -1801,7 +1804,14 @@ const NotesModal = ({ kpi, onClose, onSave, readOnly }) => {
 /* ─── Manage Categories ────────────────────────────────────────────────── */
 const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   const [confirmId, setConfirmId] = useState(null);
-  
+  const [moving, setMoving] = useState(false);
+  const moveTab = async (from, to) => {
+    setMoving(true);
+    try { await onSave(moveCategory(structure, from, to)); }
+    catch { /* The parent restores the previous order and reports the error. */ }
+    finally { setMoving(false); }
+  };
+
   const toggleHidden = (id) => onSave(structure.map((c) => (c.id === id ? { ...c, hidden: !c.hidden } : c)));
   
   const remove = (id) => {
@@ -1815,10 +1825,10 @@ const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
   const kpiCount = (c) => c.subCategories.reduce((s, sub) => s + sub.kpis.length, 0);
 
   return (
-    <Modal title="Manage Categories" subtitle="Hide a category to take it off the dashboard, or delete it outright"
+    <Modal title="Manage Categories" subtitle="Order your tabs, manage visibility or remove a category"
       icon={<Settings2 size={17} />} onClose={onClose} width={620}
       footer={<button onClick={onClose} style={btnPrimary}>Done</button>}>
-      {structure.map((c) => (
+      {structure.map((c, index) => (
         <div key={c.id} style={{ ...cardS, marginBottom: "10px", opacity: c.hidden ? 0.6 : 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: "180px" }}>
@@ -1829,6 +1839,13 @@ const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
                 {c.subCategories.length} sub-categor{c.subCategories.length === 1 ? "y" : "ies"} · {kpiCount(c)} KPIs
               </div>
             </div>
+            <select aria-label={`Position of tab ${c.name}`} value={index} disabled={moving} onChange={event => moveTab(index, Number(event.target.value))} style={{ ...selectS, width: 70, height: 40 }}>
+              {structure.map((_, position) => <option key={position} value={position}>{position + 1}</option>)}
+            </select>
+            {[-1, 1].map(delta => <button key={delta} aria-label={`Move ${c.name} ${delta < 0 ? "up" : "down"}`} disabled={moving || index + delta < 0 || index + delta >= structure.length}
+              style={{ ...btnGhost, width: 36, padding: 0, opacity: moving || index + delta < 0 || index + delta >= structure.length ? 0.35 : 1 }} onClick={() => moveTab(index, index + delta)}>
+              {delta < 0 ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+            </button>)}
             <button onClick={() => toggleHidden(c.id)} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}>
               {c.hidden ? <><Eye size={13} /> Show</> : <><EyeOff size={13} /> Hide</>}
             </button>
@@ -1867,10 +1884,11 @@ const ManageCategoriesModal = ({ structure, onClose, onSave, notify }) => {
 /* ════════════════════════════════════════════════════════════════════════════
    Add Data Wizard — frequency tabs + dual Budget/Actual rows + month selector
    ════════════════════════════════════════════════════════════════════════ */
-const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onSave }) => {
+const AddDataWizard = ({ structure, fy, activeCategoryId, prefs, onSavePrefs, onBack, onClose, onSave }) => {
   const visible = structure.filter((c) => !c.hidden);
-  const [catId, setCatId] = useState(prefs?.catId && visible.some((c) => c.id === prefs.catId) ? prefs.catId : visible[0]?.id);
-  const [startYear, setStartYear] = useState(prefs?.startYear ?? fy.startYear);
+  const [catId, setCatId] = useState(visible.some(c=>c.id===activeCategoryId)?activeCategoryId:prefs?.catId && visible.some((c) => c.id === prefs.catId) ? prefs.catId : visible[0]?.id);
+  const [startYear, setStartYear] = useState(fy.startYear);
+  const [entryRange,setEntryRange]=useState(fy.period==="custom"?fy.range:null);
   const category = structure.find((c) => c.id === catId) || visible[0];
 
   // Frequency tab & month pagination
@@ -1881,17 +1899,12 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   const [weeklyHalf, setWeeklyHalf] = useState(prefs?.weeklyHalf ?? 0);
 
   const [draft, setDraft] = useState({});
+  const draftRef=useRef({}), saving=useRef(Promise.resolve());
   const [saveState, setSaveState] = useState("idle");
   const timer = useRef(null);
   const structureRef = useRef(structure);
 
   useEffect(() => { structureRef.current = structure; }, [structure]);
-
-  const yearOptions = [
-    { value: fy.startYear - 1, badge: "FY−", label: fyLabel(fy.startYear - 1, fy.startMonth) },
-    { value: fy.startYear,     badge: "FY",  label: fyLabel(fy.startYear, fy.startMonth) },
-    { value: fy.startYear + 1, badge: "FY+", label: fyLabel(fy.startYear + 1, fy.startMonth) },
-  ];
 
   /* Group KPIs in the current category by their frequency */
   const kpiGroups = useMemo(() => {
@@ -1899,10 +1912,11 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     const monthly = [], weekly = [], daily = [], quarterly = [];
     category.subCategories.forEach((sub) => {
       sub.kpis.forEach((k) => {
-        const freq = k.frequency === "Quarterly" ? "Monthly" : k.frequency;
+        const freq = k.frequency;
         const row = { kpi: k, subCategory: sub.name };
         if (freq === "Daily") daily.push(row);
         else if (freq === "Weekly") weekly.push(row);
+        else if (freq === "Quarterly") quarterly.push(row);
         else monthly.push(row);
       });
     });
@@ -1915,6 +1929,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     if (kpiGroups.monthly.length) list.push({ key: "monthly", label: "Monthly", count: kpiGroups.monthly.length });
     if (kpiGroups.weekly.length)  list.push({ key: "weekly",  label: "Weekly",  count: kpiGroups.weekly.length });
     if (kpiGroups.daily.length)   list.push({ key: "daily",   label: "Daily",   count: kpiGroups.daily.length });
+    if (kpiGroups.quarterly.length) list.push({ key: "quarterly", label: "Quarterly", count: kpiGroups.quarterly.length });
     return list;
   }, [kpiGroups]);
 
@@ -1934,7 +1949,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   };
 
   /* Merge draft into the structure for persistence */
-  const merge = (currentStructure, rows) => currentStructure.map((cat) => cat.id !== category.id ? cat : {
+  const merge = (currentStructure, rows) => currentStructure.map((cat) => ({
     ...cat,
     subCategories: cat.subCategories.map((sub) => ({
       ...sub,
@@ -1951,19 +1966,25 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
         return { ...k, entries };
       }),
     })),
-  });
+  }));
 
-  const setValue = (kpiId, periodKey, field, raw) => {
-    const next = { ...draft, [kpiId]: { ...(draft[kpiId] || {}), [periodKey]: { ...(draft[kpiId]?.[periodKey] || {}), [field]: raw } } };
-    setDraft(next);
-    setSaveState("saving");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      await onSave(merge(structureRef.current, next), { silent: true });
-      onSavePrefs({ catId, startYear, freqTab, monthCount, monthStart, dailyMonthOffset, weeklyHalf });
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1800);
-    }, 800);
+  const flush = async () => {
+    clearTimeout(timer.current);
+    const rows=draftRef.current;
+    const job=saving.current.catch(()=>{}).then(async()=>{
+      if(!Object.keys(rows).length) return;
+      setSaveState("saving");
+      try {const next=merge(structureRef.current,rows);await onSave(next,{silent:true});structureRef.current=next;setSaveState("saved");}
+      catch(e){setSaveState("error");throw e;}
+    });
+    saving.current=job; return job;
+  };
+  const leave = async callback => {try {await flush();callback();} catch {/* Keep the editor and draft open for retry. */}};
+  const setValue = (kpiId,periodKey,field,raw) => {
+    const current=draftRef.current;
+    const next={...current,[kpiId]:{...current[kpiId],[periodKey]:{...current[kpiId]?.[periodKey],[field]:raw}}};
+    draftRef.current=next;setDraft(next);setSaveState("saving");clearTimeout(timer.current);
+    timer.current=setTimeout(()=>{flush().catch(()=>{});},800);
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -2004,7 +2025,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     if (!kpiGroups.monthly.length) return null;
     const allMonths = fyMonths(startYear, fy.startMonth);
     const clampedStart = Math.max(0, Math.min(monthStart, 12 - monthCount));
-    const months = allMonths.slice(clampedStart, clampedStart + monthCount);
+    const months = entryRange ? rangeKeys("Monthly",localDate(entryRange.from),localDate(entryRange.to)).map(key=>{const d=localDate(key.slice(2));return {key,label:key.slice(2),year:d.getFullYear(),month:d.getMonth()};}) : allMonths.slice(clampedStart, clampedStart + monthCount);
     const rowLabelW = 210;
 
     return (
@@ -2152,7 +2173,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     const allMonths = fyMonths(startYear, fy.startMonth);
     const startMonth = weeklyHalf === 0 ? allMonths[0] : allMonths[6];
     const endMonth = weeklyHalf === 0 ? allMonths[5] : allMonths[11];
-    const weeks = allWeeks.filter((w) =>
+    const weeks = entryRange ? rangeKeys("Weekly",localDate(entryRange.from),localDate(entryRange.to)).map(key=>{const start=localDate(key.slice(2)),end=addDays(start,6);return {key,start,end,label:weekRangeLabel(start,end)};}) : allWeeks.filter((w) =>
       w.start >= new Date(startMonth.year, startMonth.month, 1) &&
       w.start <= new Date(endMonth.year, endMonth.month + 1, 0)
     );
@@ -2258,7 +2279,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
     if (!kpiGroups.daily.length) return null;
     const allMonths = fyMonths(startYear, fy.startMonth);
     const refMonth = allMonths.find((m) => m.month === dailyMonthOffset) || allMonths[0];
-    const days = daysInMonth(refMonth.year, refMonth.month);
+    const days = entryRange ? rangeKeys("Daily",localDate(entryRange.from),localDate(entryRange.to)).map(key=>{const date=localDate(key.slice(2));return {key,date,label:fmtDMY(date)};}) : daysInMonth(refMonth.year, refMonth.month);
 
     return (
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
@@ -2304,7 +2325,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
                   <th key={d.key} style={{ background: T.header, padding: "4px 2px", fontSize: "10px",
                     fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
                     borderRight: "1px solid rgba(255,255,255,0.15)" }}>
-                    {d.date.getDate()}
+                    {entryRange ? fmtDMY(d.date) : d.date.getDate()}
                   </th>
                 ))}
               </tr>
@@ -2366,8 +2387,8 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
 
   if (!category) {
     return (
-      <Modal title="Add Data" icon={<Database size={17} />} onClose={onClose} width={520}
-        footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+      <Modal title="Add Data" icon={<Database size={17} />} onClose={()=>leave(onClose)} width={520}
+        footer={<button onClick={()=>leave(onClose)} style={btnPrimary}>Close</button>}>
         <p style={{ fontSize: "14px", color: T.body, margin: 0 }}>Every category is hidden. Unhide one under Categories first.</p>
       </Modal>
     );
@@ -2376,24 +2397,19 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
   return (
     <Modal title="Add Data" subtitle={`Financial year starts in ${MONTHS[fy.startMonth]} · Budget & Actual visible together · Everything saves as you type`}
       icon={<Database size={17} />}
-      onClose={onClose}
+      onClose={()=>leave(onClose)}
       width={Math.min(Math.max(window.innerWidth - 60, 900), 1600)}
       footer={<> 
-        <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
+        <button onClick={()=>leave(onBack)} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
-          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}
+          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed. Press Done to retry; your edits are retained." : "Everything saves automatically"}
         </span>
-        <button onClick={onClose} style={btnPrimary}>Done</button>
+        <button onClick={()=>leave(onClose)} style={btnPrimary}>Done</button>
       </>}>
 
+      <DateRangeControls fy={{...fy,startYear,range:entryRange,period:entryRange?"custom":undefined}} onChange={async range=>{await flush();setEntryRange(range);setStartYear(localDate(range.from).getFullYear());}}/>
       {/* Top controls */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px", alignItems: "end" }}>
-        <div>
-          <label style={labelS}>Financial year</label>
-          <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} style={selectS}>
-            {yearOptions.map((y) => <option key={y.value} value={y.value}>{y.badge} {y.label}</option>)}
-          </select>
-        </div>
+      <div style={{ maxWidth: 360, marginBottom: 14 }}>
         <div>
           <label style={labelS}>Category</label>
           <select value={catId} onChange={(e) => setCatId(e.target.value)} style={selectS}>
@@ -2439,6 +2455,7 @@ const AddDataWizard = ({ structure, fy, prefs, onSavePrefs, onBack, onClose, onS
         </div>
       )}
 
+      {activeSection === "quarterly" && <div style={{overflowX:"auto"}}><p>Calendar quarters · only complete quarters are included in reporting. Older monthly entries for quarterly KPIs remain saved; review and enter the correct quarter totals here.</p><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th>KPI</th>{[0,3,6,9].map(m=><th key={m}>Q{m/3+1} {startYear}</th>)}</tr></thead><tbody>{kpiGroups.quarterly.flatMap(({kpi}) => ["budget","actual"].map(field=><tr key={`${kpi.id}-${field}`}><td>{kpi.name} · {field === "budget" ? "Budget" : "Actual"}</td>{[0,3,6,9].map(m=><td key={m} style={{padding:8}}>{renderInput(kpi, `Q:${startYear}-${String(m+1).padStart(2,"0")}`,field,MODE_COLOR[field])}</td>)}</tr>))}</tbody></table></div>}
       {activeSection === "monthly" && renderMonthlyGrid()}
       {activeSection === "weekly" && renderWeeklyGrid()}
       {activeSection === "daily" && renderDailyGrid()}
@@ -2678,9 +2695,12 @@ const OperationalPerformance = () => {
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
   const [manageCats, setManageCats] = useState(false);
+  const [orderingCategoryId, setOrderingCategoryId] = useState(null);
   const [showReport, setShowReport] = useState(false);
+  const [showSpreadsheet,setShowSpreadsheet]=useState(false);
+  const [dateRange,setDateRange]=useState(null);
 
-  const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
+  const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth),range:dateRange,period }), [fyStartMonth,dateRange,period]);
 
   const notify = (type, message) => {
     setNotification({ type, message: String(message) });
@@ -2738,6 +2758,7 @@ const OperationalPerformance = () => {
     } catch (err) {
       console.error("Error saving operational KPIs:", err);
       if (!silent) notify("error", `Changes could not be saved: ${errText(err)}`);
+      throw err;
     }
   };
 
@@ -2787,7 +2808,7 @@ const OperationalPerformance = () => {
       else if (key === "frequency") set.add(r.kpi.frequency);
       else if (key === "status") set.add(r.status.label);
     });
-    return ["all", ...Array.from(set).sort()];
+    return ["all", ...(key === "category" ? Array.from(set) : Array.from(set).sort())];
   };
 
   const rows = useMemo(() => {
@@ -2807,7 +2828,7 @@ const OperationalPerformance = () => {
     }[sortConfig.key];
 
     return [...list].sort((a, b) => {
-      if (a.subCategoryName !== b.subCategoryName) return a.subCategoryName.localeCompare(b.subCategoryName);
+      if (a.subCategoryName !== b.subCategoryName) return allRows.findIndex(row => row.subCategoryName === a.subCategoryName) - allRows.findIndex(row => row.subCategoryName === b.subCategoryName);
       if (!get) return 0;
       const av = get(a), bv = get(b);
       if (typeof av === "number" && typeof bv === "number") return sortConfig.direction === "asc" ? av - bv : bv - av;
@@ -2848,44 +2869,7 @@ const OperationalPerformance = () => {
   const clearFilters = () => { setFilters({ category: "all", kpi: "all", units: "all", frequency: "all", status: "all" }); setSortConfig({ key: null, direction: "asc" }); };
 
   /* ── CSV export: proper quoting, BOM, split rows ── */
-  const downloadCSV = () => {
-    const escape = (v) => {
-      if (v === null || v === undefined) return "";
-      const s = String(v);
-      if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-      return s;
-    };
-    const lines = [];
-    lines.push(["Category", "Sub-Category", "KPI", "Units", "Frequency", "Period", "Budget", "Actual", "Variance", "Status"].map(escape).join(","));
-
-    const pushKpiRows = (cat, sub, kpi) => {
-      const v = periodValues(kpi, period, fy);
-      const status = getStatus(kpi, period, fy);
-      const variance = getVariance(kpi, period, fy);
-      lines.push([
-        cat.name, sub.name, kpi.name, kpi.units, kpi.frequency,
-        PERIOD_LABEL[period], v.budget ?? "", v.actual ?? "", variance ?? "", status.label,
-      ].map(escape).join(","));
-      const split = buildSplitRows(kpi, fy);
-      split.rows.forEach((r) => {
-        const varRow = Number.isFinite(Number(r.actual)) && Number.isFinite(Number(r.budget))
-          ? Number(r.actual) - Number(r.budget) : "";
-        lines.push([
-          cat.name, sub.name, kpi.name, kpi.units, kpi.frequency,
-          r.label, r.budget ?? "", r.actual ?? "", varRow, "",
-        ].map(escape).join(","));
-      });
-    };
-
-    (structure || []).forEach((cat) => cat.subCategories.forEach((sub) => sub.kpis.forEach((kpi) => pushKpiRows(cat, sub, kpi))));
-
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `operational-performance-${period}-FY${fyLabel(fy.startYear, fy.startMonth).replace("/","-")}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  const downloadCSV = () => setShowSpreadsheet(true);
 
   const exitInvestorView = () => {
     const origin = sessionStorage.getItem("viewOrigin");
@@ -2984,7 +2968,7 @@ const OperationalPerformance = () => {
           );
         })}
         {!isInvestorView && (
-          <button onClick={() => setManageCats(true)} title="Hide or delete a category"
+          <button onClick={() => setManageCats(true)} title="Order tabs, manage visibility or delete a category"
             style={{ ...btnQuiet, marginLeft: "auto", marginBottom: "4px", padding: "6px 12px", fontSize: "12.5px", color: T.muted }}>
             <Settings2 size={13} /> Manage Categories
           </button>
@@ -3037,7 +3021,10 @@ const OperationalPerformance = () => {
               </>
             )}
           </div>
-          <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
+          {!isInvestorView && activeCategory?.subCategories.length > 1 && <button onClick={() => setOrderingCategoryId(activeCategory.id)} style={btnGhost}>
+            <ArrowUpDown size={14} /> Order categories
+          </button>}
+          <button onClick={downloadCSV} style={btnGhost}><FileSpreadsheet size={14} /> Spreadsheet</button>
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
             <ClipboardList size={14} /> Performance Overview <ExternalLink size={11} />
           </button>
@@ -3045,6 +3032,7 @@ const OperationalPerformance = () => {
         </div>
       </div>
 
+      <DateRangeControls fy={fy} onChange={range=>{setDateRange(range);setPeriod("custom");}}/>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
         <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px", flexWrap: "wrap" }}>
           {PERIODS.map((p) => {
@@ -3220,7 +3208,7 @@ const OperationalPerformance = () => {
       {infoKpi && <KpiInfoModal kpi={infoKpi} readOnly={isInvestorView} onClose={() => setInfoKpi(null)}
         onSave={(patch) => { updateKpi(infoKpi.id, patch); setInfoKpi({ ...infoKpi, ...patch }); notify("success", "KPI details updated."); }} />}
 
-      {chartKpi && <TrendChartModal kpi={chartKpi} period={period} fy={fy} readOnly={isInvestorView} onClose={() => setChartKpi(null)}
+      {chartKpi && <TrendChartModal kpi={structure.flatMap(c=>c.subCategories.flatMap(sub=>sub.kpis)).find(k=>k.id===chartKpi.id) || chartKpi} period={period} fy={fy} readOnly={isInvestorView} onClose={() => setChartKpi(null)}
         onSaveNote={(key, text) => {
           const notes = { ...(chartKpi.periodNotes || {}) };
           if (text.trim()) notes[key] = text.trim(); else delete notes[key];
@@ -3239,13 +3227,30 @@ const OperationalPerformance = () => {
       {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)}
         onSave={(notes) => { updateKpi(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
 
+      {!isInvestorView && orderingCategoryId && structure.some(category => category.id === orderingCategoryId) && <CategoryOrderModal
+        key={orderingCategoryId}
+        tab={{ ...structure.find(category => category.id === orderingCategoryId), categories: structure.find(category => category.id === orderingCategoryId).subCategories }}
+        onClose={() => setOrderingCategoryId(null)}
+        onSave={async order => {
+          const previous = structure;
+          const next = structure.map(category => category.id !== orderingCategoryId ? category : {
+            ...category, subCategories: order.map(name => category.subCategories.find(sub => sub.name === name)).filter(Boolean),
+          });
+          try { await persist(next); notify("success", "Category order saved."); }
+          catch (err) { setStructure(previous); throw err; }
+        }} />}
+
       {manageCats && <ManageCategoriesModal structure={structure} notify={notify}
-        onClose={() => setManageCats(false)} onSave={(next) => persist(next)} />}
+        onClose={() => setManageCats(false)} onSave={async next => {
+          const previous = structure;
+          try { await persist(next); }
+          catch (err) { setStructure(previous); throw err; }
+        }} />}
 
       {addFlow === "choose" && <AddChooser onClose={() => setAddFlow(null)} onPick={(k) => setAddFlow(k)}
         prefs={dataPrefs && structure.some((c) => c.id === dataPrefs.catId) ? dataPrefs : null} fy={fy} structure={structure} />}
 
-      {addFlow === "data" && <AddDataWizard structure={structure} fy={fy}
+      {addFlow === "data" && <AddDataWizard structure={structure} fy={fy} activeCategoryId={activeCategoryId}
         prefs={dataPrefs && structure.some((c) => c.id === dataPrefs.catId) ? dataPrefs : null}
         onSavePrefs={savePrefs} onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
         onSave={persist} />}
@@ -3254,6 +3259,7 @@ const OperationalPerformance = () => {
         onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
         onSave={async (next) => { await persist(next); notify("success", "KPI created."); }} />}
 
+      {showSpreadsheet && <SpreadsheetDownloadModal structure={structure} activeTabId={activeCategoryId} fy={fy} period={period} onClose={()=>setShowSpreadsheet(false)}/>}
       {showReport && <OperationalReportGenerator 
         structure={structure} 
         fy={fy} 

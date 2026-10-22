@@ -5,9 +5,6 @@ import { useUserProfile } from "../../hooks/useUserProfile"
 import { smeMenuItems } from "../../config/menuConfig"
 
 // ─── What an outside viewer can reach ───────────────────────────────────────
-// "profile" and "documents" are now standalone top-level items.
-// "growth-tools" carries both RAPs and Operations (digital twin) as nested
-// submenus.
 const VIEWER_MENU_IDS = ["dashboard", "growth-tools", "profile", "documents"]
 
 const CMF_VIEWER_MENU_IDS = [

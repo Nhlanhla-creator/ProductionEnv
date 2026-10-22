@@ -599,7 +599,7 @@ const InfoTip = ({ text, light = false }) => {
   );
 };
 
-const btnBase = { padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 500,
+const btnBase = { minHeight: "40px", boxSizing: "border-box", justifyContent: "center", whiteSpace: "nowrap", lineHeight: 1.2, padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 500,
   cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "7px", fontFamily: "inherit" };
 const btnPrimary = { ...btnBase, background: T.accent, color: "#fff", border: `1px solid ${T.accent}`, fontWeight: 600 };
 const btnGhost = { ...btnBase, background: T.bg, color: T.body, border: `1px solid ${T.lineStrong}` };
@@ -617,35 +617,98 @@ const Select = ({ value, onChange, children, style, disabled }) => (
         cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, ...style }}>
       {children}
     </select>
-    <ChevronDown size={15} color={T.muted}
-      style={{ position: "absolute", right: "11px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+
   </div>
 );
 
-const DateRangeControls = ({fy, onChange}) => {
-  const [mode,setMode] = useState("financial"), [year,setYear] = useState(fy.startYear);
-  const [month,setMonth] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
-  const [from,setFrom] = useState(dayKeyOf(new Date(fy.startYear,fy.startMonth,1)).slice(2));
-  const [to,setTo] = useState(dayKeyOf(monthEnd(fy.startYear,fy.startMonth+11)).slice(2));
-  const apply = () => {
-    let a,b;
-    if (mode === "custom") { a=localDate(from); b=localDate(to); }
-    else if (mode === "month") { a=localDate(month); b=monthEnd(a.getFullYear(),a.getMonth()); }
-    else { a=new Date(Number(year),mode === "financial" ? fy.startMonth : 0,1); b=monthEnd(a.getFullYear(),a.getMonth()+11); }
-    if (!Number.isFinite(+a)||!Number.isFinite(+b)||a>b || a.getFullYear()<1900 || b.getFullYear()>9999 || b.getFullYear()-a.getFullYear()>100) return;
-    onChange({from:dayKeyOf(a).slice(2),to:dayKeyOf(b).slice(2)});
+const moveCategory = (names, from, to) => {
+  const next = [...names];
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= next.length || to >= next.length) return next;
+  const [name] = next.splice(from, 1);
+  next.splice(to, 0, name);
+  return next;
+};
+const CategoryOrderModal = ({ tab, onClose, onSave }) => {
+  const [order, setOrder] = useState(() => tab.categories.map(category => category.name));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setSaving(true); setError("");
+    try { await onSave(order); onClose(); }
+    catch (err) { setError(`Could not save category order: ${errText(err)}`); }
+    finally { setSaving(false); }
   };
-  return <div style={{...cardS,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
-    <label>Reporting dates <select aria-label="Date mode" style={selectS} value={mode} onChange={e=>setMode(e.target.value)}>
-      <option value="financial">Financial year</option><option value="calendar">Calendar year</option><option value="month">Calendar month</option><option value="custom">Custom date range</option>
-    </select></label>
-    {(mode === "financial" || mode === "calendar") && <label>Year <input aria-label="Year" type="number" min="1900" max="9998" style={inputS} value={year} onChange={e=>setYear(e.target.value)}/></label>}
-    {mode === "month" && <input aria-label="Month" type="month" value={month} onChange={e=>setMonth(e.target.value)}/>}
-    {mode === "custom" && <><input aria-label="From date" type="date" value={from} onChange={e=>setFrom(e.target.value)}/><input aria-label="To date" type="date" min={from} value={to} onChange={e=>setTo(e.target.value)}/></>}
-    <button style={btnGhost} onClick={apply}>Apply dates</button>
-    <small>Monthly and weekly totals require complete periods; partial periods are not estimated.</small>
+  const move = (from, to) => setOrder(previous => moveCategory(previous, from, to));
+  return <Modal title="Order categories" subtitle={`${tab.name} · choose the order that works for you`} icon={<ArrowUpDown size={17} />}
+    width={600} onClose={() => { if (!saving) onClose(); }}
+    footer={<><button onClick={onClose} disabled={saving} style={btnGhost}>Cancel</button>
+      <button onClick={save} disabled={saving} style={btnPrimary}><Save size={14} /> {saving ? "Saving…" : "Save order"}</button></>}>
+    <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted, lineHeight: 1.6 }}>
+      Move a category with the arrows, or choose its position directly. Your order is saved for this tab and used in the table and data entry screens.
+    </p>
+    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+      {order.map((name, index) => <li key={name} style={{ ...cardS, padding: "12px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", background: T.raised, color: T.muted, borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{index + 1}</span>
+        <span style={{ flex: "1 1 150px", minWidth: 0, fontSize: 13.5, fontWeight: 600, color: T.accent }}>{name}</span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <select aria-label={`Position of ${name}`} value={index} disabled={saving} onChange={event => move(index, Number(event.target.value))}
+            style={{ ...selectS, width: 72, height: 36, padding: "6px 10px" }}>
+            {order.map((_, position) => <option key={position} value={position}>{position + 1}</option>)}
+          </select>
+          {[{ to: index - 1, label: "up", Icon: ArrowUp }, { to: index + 1, label: "down", Icon: ArrowDown }].map(({ to, label, Icon }) => {
+            const disabled = saving || to < 0 || to >= order.length;
+            return <button key={label} type="button" aria-label={`Move ${name} ${label}`} disabled={disabled} onClick={() => move(index, to)}
+              style={{ ...btnGhost, minHeight: 36, width: 36, padding: 0, opacity: disabled ? 0.35 : 1, cursor: disabled ? "default" : "pointer" }}><Icon size={14} /></button>;
+          })}
+        </div>
+      </li>)}
+    </ol>
+    {error && <p role="alert" style={{ fontSize: 12, color: T.red, marginBottom: 0 }}>{error}</p>}
+  </Modal>;
+};
+
+const DateRangeControls = ({ fy, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("financial");
+  const [year, setYear] = useState(fy.startYear);
+  const [month, setMonth] = useState(dayKeyOf(new Date()).slice(2, 9));
+  const [from, setFrom] = useState(fy.range?.from || dayKeyOf(new Date(fy.startYear, fy.startMonth, 1)).slice(2));
+  const [to, setTo] = useState(fy.range?.to || dayKeyOf(monthEnd(fy.startYear, fy.startMonth + 11)).slice(2));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setYear(fy.startYear); }, [fy.startYear]);
+  const apply = async () => {
+    let a, b;
+    if (mode === "custom") { a = localDate(from); b = localDate(to); }
+    else if (mode === "month") { a = localDate(month); b = monthEnd(a.getFullYear(), a.getMonth()); }
+    else { a = new Date(Number(year), mode === "financial" ? fy.startMonth : 0, 1); b = monthEnd(a.getFullYear(), a.getMonth() + 11); }
+    if (!Number.isFinite(+a) || !Number.isFinite(+b) || a > b || a.getFullYear() < 1900 || b.getFullYear() > 9999 || b.getFullYear() - a.getFullYear() > 100) { setError("Choose a valid date range."); return; }
+    setBusy(true); setError("");
+    try { await onChange({ from: dayKeyOf(a).slice(2), to: dayKeyOf(b).slice(2) }); setOpen(false); }
+    catch { setError("Could not apply these dates. Please try again."); }
+    finally { setBusy(false); }
+  };
+  const field = { display: "flex", flexDirection: "column", gap: 6, flex: "1 1 150px", minWidth: 140, maxWidth: 230 };
+  const control = { ...inputS, height: 40, boxSizing: "border-box", margin: 0 };
+  const caption = fy.period === "custom" && fy.range ? `${fmtDMY(localDate(fy.range.from))} – ${fmtDMY(localDate(fy.range.to))}` : PERIOD_LABEL[fy.period] || `FY ${fyLabel(fy.startYear, fy.startMonth)}`;
+  return <div style={{ marginBottom: 12 }}>
+    <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} style={{ ...btnGhost, padding: "8px 12px", gap: 9, height: 38 }}>
+      <Calendar size={15} /><span style={{ color: T.muted }}>Dates</span><strong style={{ fontWeight: 600 }}>{caption}</strong><ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : undefined }} />
+    </button>
+    {open && <div style={{ marginTop: 8, padding: 16, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+        <label style={field}><span style={{ ...labelS, margin: 0 }}>View by</span><select aria-label="Date mode" style={{ ...selectS, ...control }} value={mode} onChange={e => setMode(e.target.value)}><option value="financial">Financial year</option><option value="calendar">Calendar year</option><option value="month">Month</option><option value="custom">Custom range</option></select></label>
+        {(mode === "financial" || mode === "calendar") && <label style={field}><span style={{ ...labelS, margin: 0 }}>{mode === "financial" ? "Starting year" : "Year"}</span><input aria-label="Year" type="number" min="1900" max="9998" style={control} value={year} onChange={e => setYear(e.target.value)} /></label>}
+        {mode === "month" && <label style={field}><span style={{ ...labelS, margin: 0 }}>Month</span><input aria-label="Month" type="month" style={control} value={month} onChange={e => setMonth(e.target.value)} /></label>}
+        {mode === "custom" && <><label style={field}><span style={{ ...labelS, margin: 0 }}>From</span><input aria-label="From date" type="date" style={control} value={from} onChange={e => setFrom(e.target.value)} /></label><label style={field}><span style={{ ...labelS, margin: 0 }}>To</span><input aria-label="To date" type="date" min={from} style={control} value={to} onChange={e => setTo(e.target.value)} /></label></>}
+        <button type="button" disabled={busy} style={{ ...btnPrimary, height: 40, boxSizing: "border-box", whiteSpace: "nowrap", margin: 0 }} onClick={apply}>{busy ? "Applying…" : "Apply dates"}</button>
+        <span title="Monthly and weekly totals require complete periods. Use daily data for partial periods." style={{ display: "inline-flex", alignItems: "center", height: 40, color: T.muted }}><Info size={15} /></span>
+      </div>
+      {error && <p role="alert" style={{ color: T.red, margin: "10px 0 0", fontSize: 12 }}>{error}</p>}
+    </div>}
   </div>;
 };
+
 const monthsForRange = (from,to) => {
   const result=[];
   for(let d=new Date(from.getFullYear(),from.getMonth(),1); d<=to; d=new Date(d.getFullYear(),d.getMonth()+1,1)) {
@@ -899,6 +962,26 @@ const baseChartType = (types) => {
   return "scatter";
 };
 
+const buildChartSeries = (type, data, color, { label, order } = {}) => {
+  const isArrayColor = Array.isArray(color);
+  if (type === "scatter") {
+    return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
+      showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
+      pointBackgroundColor: isArrayColor ? color : "#ffffff",
+      pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
+  }
+  if (type === "line" || type === "area") {
+    return { type: "line", label, data,
+      borderColor: color, backgroundColor: type === "area" ? (isArrayColor ? color : `${color}22`) : "transparent",
+      borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: false,
+      pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
+      pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
+  }
+  return { type: "bar", label, data,
+    backgroundColor: isArrayColor ? color : `${color}b3`,
+    borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
+};
+
 const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, readOnly }) => {
   const [noteText, setNoteText] = useState("");
   const [noteState, setNoteState] = useState("idle");
@@ -925,31 +1008,13 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const setPref = (patch) => onSaveChart({ ...prefs, ...patch, v: CHART_VERSION });
   const varColors = variance.map((v) => v === null ? "rgba(138,122,116,0.4)" : varianceFavourable(kpi, v) ? T.green : T.red);
 
-  const buildSeries = (type, data, color, { label, order } = {}) => {
-    const isArrayColor = Array.isArray(color);
-    if (type === "scatter") {
-      return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
-        showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
-        pointBackgroundColor: isArrayColor ? color : "#ffffff",
-        pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
-    }
-    if (type === "line" || type === "area") {
-      return { type: "line", label, data,
-        borderColor: color, backgroundColor: type === "area" ? (isArrayColor ? color : `${color}22`) : "transparent",
-        borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: true,
-        pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
-        pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
-    }
-    return { type: "bar", label, data,
-      backgroundColor: isArrayColor ? color : `${color}b3`,
-      borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
-  };
 
-  const varianceData = { labels, datasets: [ buildSeries(prefs.varianceType, variance, varColors, { label: "Variance" }) ] };
+
+  const varianceData = { labels, datasets: [ buildChartSeries(prefs.varianceType, variance, varColors, { label: "Variance" }) ] };
   const varianceBaseType = baseChartType([prefs.varianceType]);
   const varianceOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 10, bottom: 0 } },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
     plugins: {
       legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
@@ -959,18 +1024,22 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
             return y === null || y === undefined ? "Variance: no data"
               : `Variance: ${fmtValue(y, kpi, { signed: true })} (${varianceFavourable(kpi, y) ? "favourable" : "unfavourable"})`;
           } } } },
-    scales: { y: { display: false, grid: { display: false } },
-      x: { type: "category", labels, display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
+    scales: {
+      y: { display: true, afterFit: scale => { scale.width = 88; }, grace: "20%", beginAtZero: true,
+        border: { display: false }, grid: { color: ctx => ctx.tick.value === 0 ? T.lineStrong : T.lineSoft },
+        ticks: { maxTicksLimit: 4, color: T.muted, font: { size: 10 }, callback: value => fmtValue(value, kpi, { bare: true, signed: true }) } },
+      x: { type: "category", labels, offset: true, display: false, grid: { display: false }, border: { display: false } },
+    },
   };
 
   const mainData = { labels, datasets: [
-    buildSeries(prefs.budgetType, budget, prefs.budgetColor, { label: "Budget", order: 1 }),
-    buildSeries(prefs.actualType, actual, prefs.actualColor, { label: "Actual", order: 2 }),
+    buildChartSeries(prefs.budgetType, budget, prefs.budgetColor, { label: "Budget", order: 1 }),
+    buildChartSeries(prefs.actualType, actual, prefs.actualColor, { label: "Actual", order: 2 }),
   ] };
   const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
   const mainOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 10 } },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
     plugins: { legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
         callbacks: { label: (c) => {
@@ -979,11 +1048,11 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
             : `${c.dataset.label}: ${fmtValue(y, kpi)}`;
         } } } },
     scales: {
-      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both",
+      y: { display: true, afterFit: scale => { scale.width = 88; }, border: { display: false },
         grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
-        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
-      x: { type: "category", labels, display: prefs.axisMode === "x" || prefs.axisMode === "both", grid: { display: false },
-        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+        ticks: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
+      x: { type: "category", labels, offset: true, display: true, grid: { display: false },
+        ticks: { color: prefs.axisMode === "x" || prefs.axisMode === "both" ? T.body : "transparent", font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
     },
   };
 
@@ -1004,11 +1073,12 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
 
   return (
     <Modal title={`${kpi.name} — (${kpi.units})`} subtitle={caption} icon={<LineChartIcon size={17} />} onClose={onClose} width={980}
-      footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+      footer={<>
+        <button onClick={() => setShowCustomise(value => !value)} style={btnGhost} aria-expanded={showCustomise}><Palette size={13} /> Customise chart</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onClose} style={btnPrimary}>Close</button>
+      </>}>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
-        <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
-      </div>
 
       {showCustomise && (
         <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
@@ -1050,19 +1120,24 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
         </div>
       )}
 
-      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "2px" }}>
-          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Budget vs Actual</span>
-          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            {key("Variance", <span style={{ display: "inline-flex", gap: "3px" }}>{dot(T.green)}{dot(T.red)}</span>)}
+      <div style={{ ...cardS, marginBottom: 14, padding: "16px 12px 12px", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "0 6px 14px" }}>
+          <strong style={{ fontSize: 13, color: T.accent }}>Budget vs Actual</strong>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
             {key("Budget", swatchFor(prefs.budgetType, prefs.budgetColor))}
             {key("Actual", swatchFor(prefs.actualType, prefs.actualColor))}
-          </span>
+            <span style={{ width: 1, height: 14, background: T.lineSoft }} aria-hidden="true" />
+            {key("Favourable", dot(T.green, true))}{key("Unfavourable", dot(T.red, true))}
+          </div>
         </div>
-        <div style={{ height: "112px", marginBottom: "-16px" }}>
+        <div style={{ paddingLeft: 88, paddingRight: 12, fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 2 }}>
+          Variance · Actual − Budget
+        </div>
+        <div style={{ height: 130 }}>
           <Chart type={varianceBaseType} data={varianceData} options={varianceOptions} />
         </div>
-        <div style={{ height: "320px" }}>
+        <div aria-hidden="true" style={{ borderTop: `1px solid ${T.lineSoft}`, margin: "6px 12px 0 88px" }} />
+        <div style={{ height: 320 }}>
           <Chart type={mainBaseType} data={mainData} options={mainOptions} />
         </div>
       </div>
@@ -1964,31 +2039,13 @@ const SimpleTrendChartModal = ({
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
   const varColors = variance.map((v) => v === null ? "rgba(138,122,116,0.4)" : varianceFavourable({direction},v) ? T.green : T.red);
 
-  const buildSeries = (type, data, color, { label, order } = {}) => {
-    const isArrayColor = Array.isArray(color);
-    if (type === "scatter") {
-      return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
-        showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
-        pointBackgroundColor: isArrayColor ? color : "#ffffff",
-        pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
-    }
-    if (type === "line" || type === "area") {
-      return { type: "line", label, data,
-        borderColor: color, backgroundColor: type === "area" ? (isArrayColor ? color : `${color}22`) : "transparent",
-        borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: true,
-        pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
-        pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
-    }
-    return { type: "bar", label, data,
-      backgroundColor: isArrayColor ? color : `${color}b3`,
-      borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
-  };
 
-  const varianceData = { labels, datasets: [ buildSeries(prefs.varianceType, variance, varColors, { label: "Variance" }) ] };
+
+  const varianceData = { labels, datasets: [ buildChartSeries(prefs.varianceType, variance, varColors, { label: "Variance" }) ] };
   const varianceBaseType = baseChartType([prefs.varianceType]);
   const varianceOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 10, bottom: 0 } },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
     plugins: { legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
         callbacks: { title: (items) => labels[items[0].dataIndex],
@@ -1997,18 +2054,22 @@ const SimpleTrendChartModal = ({
             return y === null || y === undefined ? "Variance: no data"
               : `Variance: ${fmtValue(y, kpiShape, { signed: true })} (${varianceFavourable({direction},y) ? "favourable" : "unfavourable"})`;
           } } } },
-    scales: { y: { display: false, grid: { display: false } },
-      x: { type: "category", labels, display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
+    scales: {
+      y: { display: true, afterFit: scale => { scale.width = 88; }, grace: "20%", beginAtZero: true,
+        border: { display: false }, grid: { color: ctx => ctx.tick.value === 0 ? T.lineStrong : T.lineSoft },
+        ticks: { maxTicksLimit: 4, color: T.muted, font: { size: 10 }, callback: value => fmtValue(value, kpiShape, { bare: true, signed: true }) } },
+      x: { type: "category", labels, offset: true, display: false, grid: { display: false }, border: { display: false } },
+    },
   };
 
   const mainData = { labels, datasets: [
-    buildSeries(prefs.budgetType, budget, prefs.budgetColor, { label: budgetLabel, order: 1 }),
-    buildSeries(prefs.actualType, actual, prefs.actualColor, { label: actualLabel, order: 2 }),
+    buildChartSeries(prefs.budgetType, budget, prefs.budgetColor, { label: budgetLabel, order: 1 }),
+    buildChartSeries(prefs.actualType, actual, prefs.actualColor, { label: actualLabel, order: 2 }),
   ] };
   const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
   const mainOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 10 } },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
     plugins: { legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
         callbacks: { label: (c) => {
@@ -2017,11 +2078,11 @@ const SimpleTrendChartModal = ({
             : `${c.dataset.label}: ${fmtValue(y, kpiShape)}`;
         } } } },
     scales: {
-      y: { display: prefs.axisMode === "y" || prefs.axisMode === "both",
+      y: { display: true, afterFit: scale => { scale.width = 88; }, border: { display: false },
         grid: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.lineSoft },
-        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpiShape, { bare: true }) } },
-      x: { type: "category", labels, display: prefs.axisMode === "x" || prefs.axisMode === "both", grid: { display: false },
-        ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+        ticks: { display: prefs.axisMode === "y" || prefs.axisMode === "both", color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpiShape, { bare: true }) } },
+      x: { type: "category", labels, offset: true, display: true, grid: { display: false },
+        ticks: { color: prefs.axisMode === "x" || prefs.axisMode === "both" ? T.body : "transparent", font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
     },
   };
 
@@ -2042,11 +2103,12 @@ const SimpleTrendChartModal = ({
 
   return (
     <Modal title={title} subtitle={subtitle} icon={<LineChartIcon size={17} />} onClose={onClose} width={980}
-      footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
+      footer={<>
+        <button onClick={() => setShowCustomise(value => !value)} style={btnGhost} aria-expanded={showCustomise}><Palette size={13} /> Customise chart</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onClose} style={btnPrimary}>Close</button>
+      </>}>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
-        <button onClick={() => setShowCustomise((v) => !v)} style={btnGhost}><Palette size={13} /> Customise chart</button>
-      </div>
 
       {showCustomise && (
         <div style={{ ...cardS, marginBottom: "14px", background: T.panel }}>
@@ -2092,19 +2154,24 @@ const SimpleTrendChartModal = ({
         </div>
       )}
 
-      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "2px" }}>
-          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>{budgetLabel} vs {actualLabel}</span>
-          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            {keyRow("Variance", <span style={{ display: "inline-flex", gap: "3px" }}>{dot(T.green)}{dot(T.red)}</span>)}
+      <div style={{ ...cardS, marginBottom: 14, padding: "16px 12px 12px", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "0 6px 14px" }}>
+          <strong style={{ fontSize: 13, color: T.accent }}>{budgetLabel} vs {actualLabel}</strong>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
             {keyRow(budgetLabel, swatchFor(prefs.budgetType, prefs.budgetColor))}
             {keyRow(actualLabel, swatchFor(prefs.actualType, prefs.actualColor))}
-          </span>
+            <span style={{ width: 1, height: 14, background: T.lineSoft }} aria-hidden="true" />
+            {keyRow("Favourable", dot(T.green, true))}{keyRow("Unfavourable", dot(T.red, true))}
+          </div>
         </div>
-        <div style={{ height: "112px", marginBottom: "-16px" }}>
+        <div style={{ paddingLeft: 88, paddingRight: 12, fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 2 }}>
+          Variance · Actual − Budget
+        </div>
+        <div style={{ height: 130 }}>
           <Chart type={varianceBaseType} data={varianceData} options={varianceOptions} />
         </div>
-        <div style={{ height: "320px" }}>
+        <div aria-hidden="true" style={{ borderTop: `1px solid ${T.lineSoft}`, margin: "6px 12px 0 88px" }} />
+        <div style={{ height: 320 }}>
           <Chart type={mainBaseType} data={mainData} options={mainOptions} />
         </div>
       </div>
@@ -2112,7 +2179,7 @@ const SimpleTrendChartModal = ({
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         {stat(`Average ${budgetLabel.toLowerCase()}`, fmtValue(avgBudget, kpiShape))}
         {stat(`Average ${actualLabel.toLowerCase()}`, fmtValue(avgActual, kpiShape))}
-        {stat("Average variance", fmtValue(avgVar, kpiShape, { signed: true }), avgVar === null ? T.ink : avgVar <= 0 ? T.green : T.red)}
+        {stat("Average variance", fmtValue(avgVar, kpiShape, { signed: true }), avgVar === null ? T.ink : varianceFavourable({ direction }, avgVar) ? T.green : T.red)}
         {stat("Periods on budget", counted ? `${onBudget} of ${counted}` : "—")}
       </div>
     </Modal>
@@ -3077,12 +3144,6 @@ const buildSplitRows = (kpi, fy, period = "this_year") => {
   return { title: `${kpi.frequency || "Monthly"} split`, rows: series.labels.map((label,i)=>({label,actual:series.actual[i],budget:series.budget[i]})) };
 };
 
-const escapeCsv = value => {
-  if(value === null || value === undefined) return "";
-  let text=String(value);
-  if(typeof value === "string" && /^[=+@\-\t\r]/.test(text)) text="'"+text;
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g,'""')}"` : text;
-};
 const flattenMonthly = (root,path=[],out={}) => {
   if (Array.isArray(root) && root.every(v=>v===null || typeof v!=="object")) { out[path.join(" / ")]=root; return out; }
   if(root && typeof root === "object") Object.entries(root).forEach(([key,value])=>{if(value && typeof value === "object") flattenMonthly(value,[...path,key],out);});
@@ -3126,7 +3187,165 @@ const reportRows = ({tabs,selectedTabs,period,fy,docs,meta,dividends=[],investor
   }
   return rows;
 };
-const reportCsv = options => "\uFEFF" + [["Section","Category","Record","Units","Period","Row type","Budget","Actual","Variance","Variance %"],...reportRows(options)].map(row=>row.map(escapeCsv).join(",")).join("\r\n");
+/* Small, dependency-free XLSX writer. Values stay numeric; text is never a formula. */
+const workbookXml = value => String(value ?? "").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+const workbookColumn = index => {
+  let result = "";
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) result = String.fromCharCode(65 + (n - 1) % 26) + result;
+  return result;
+};
+const workbookZip = files => {
+  const encoder = new TextEncoder(), chunks = [], directory = [];
+  let offset = 0, directorySize = 0;
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let i = 0; i < 8; i++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const header = size => { const bytes = new Uint8Array(size); return [bytes, new DataView(bytes.buffer)]; };
+  files.forEach(([path, content]) => {
+    const name = encoder.encode(path), data = encoder.encode(content);
+    let crc = 0xffffffff;
+    data.forEach(byte => { crc = crcTable[(crc ^ byte) & 255] ^ (crc >>> 8); });
+    crc = (crc ^ 0xffffffff) >>> 0;
+    const [local, l] = header(30);
+    l.setUint32(0, 0x04034b50, true); l.setUint16(4, 20, true); l.setUint16(6, 0x800, true);
+    l.setUint16(12, 33, true); l.setUint32(14, crc, true); l.setUint32(18, data.length, true);
+    l.setUint32(22, data.length, true); l.setUint16(26, name.length, true);
+    chunks.push(local, name, data);
+    const [central, c] = header(46);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true);
+    c.setUint16(8, 0x800, true); c.setUint16(14, 33, true); c.setUint32(16, crc, true);
+    c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true);
+    c.setUint32(42, offset, true); directory.push(central, name);
+    offset += local.length + name.length + data.length; directorySize += central.length + name.length;
+  });
+  const [end, e] = header(22);
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+  e.setUint32(12, directorySize, true); e.setUint32(16, offset, true);
+  return new Blob([...chunks, ...directory, end], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+};
+const createFinancialWorkbook = sheets => {
+  const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const docXml = xml => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>${xml}`;
+  const files = [];
+  const add = (path, xml) => files.push([path, docXml(xml)]);
+  add("[Content_Types].xml", `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`);
+  add("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  add("xl/workbook.xml", `<workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((sheet, i) => `<sheet name="${workbookXml(sheet.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`);
+  add("xl/_rels/workbook.xml.rels", `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  add("xl/styles.xml", `<styleSheet xmlns="${ns}"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00;[Red](#,##0.00)"/></numFmts><fonts count="2"><font><sz val="11"/><color rgb="FF3B2B26"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF4A352F"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEFF6FF"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
+  sheets.forEach((sheet, i) => {
+    const rows = sheet.rows.map((row, ri) => `<row r="${ri + 1}"${ri === 0 ? ' ht="30" customHeight="1"' : ""}>${row.map((value, ci) => {
+      const ref = `${workbookColumn(ci)}${ri + 1}`;
+      const style = ri === 0 ? 1 : sheet.numeric && (ci === 5 || ci === 6) ? 2 : ci === 8 && sheet.numeric ? 4 : ci === 7 && sheet.numeric ? 3 : 0;
+      if (value && typeof value === "object" && value.formula) return `<c r="${ref}" s="${style}"><f>${workbookXml(value.formula)}</f></c>`;
+      if (value === null || value === undefined || value === "") return `<c r="${ref}" s="${style}"/>`;
+      return Number.isFinite(value) ? `<c r="${ref}" s="${style}"><v>${value}</v></c>` : `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${workbookXml(value)}</t></is></c>`;
+    }).join("")}</row>`).join("");
+    const end = `${workbookColumn(sheet.rows[0].length - 1)}${sheet.rows.length}`;
+    add(`xl/worksheets/sheet${i + 1}.xml`, `<worksheet xmlns="${ns}"><dimension ref="A1:${end}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="22"/><cols>${sheet.widths.map((width, ci) => `<col min="${ci + 1}" max="${ci + 1}" width="${width}" customWidth="1"/>`).join("")}</cols><sheetData>${rows}</sheetData>${sheet.numeric ? `<autoFilter ref="A1:${end}"/>` : ""}</worksheet>`);
+  });
+  return workbookZip(files);
+};
+const spreadsheetPeriodKeys = (frequency, from, to) => {
+  const keys = [];
+  let date = frequency === "Monthly" ? monthStart(from.getFullYear(), from.getMonth()) : frequency === "Weekly" ? startOfWeek(from) : startOfDay(from);
+  while (startOfDay(date) <= startOfDay(to)) {
+    const key = frequency === "Monthly" ? `M:${dayKeyOf(date).slice(2, 9)}` : frequency === "Weekly" ? weekKeyOf(date) : dayKeyOf(date);
+    const [a, b] = bucketWindow(key);
+    if (startOfDay(a) >= startOfDay(from) && startOfDay(b) <= startOfDay(to)) keys.push(key);
+    date = frequency === "Monthly" ? new Date(date.getFullYear(), date.getMonth() + 1, 1) : addDays(date, frequency === "Weekly" ? 7 : 1);
+  }
+  return keys;
+};
+const financialSpreadsheetSheets = ({ tabs, selectedTabs, period, fy, docs, meta, dividends, investors, irrInvestments, blank }) => {
+  const sheets = [{ name: "Start here", widths: [27, 110], rows: [
+    ["Financial spreadsheet", blank ? "Blank entry template" : "Current figures"],
+    ["Dates", periodWindow(period, fy).map(fmtDMY).join(" – ")],
+    ["Getting started", "Each selected section has its own worksheet. Filter by category, record or period."],
+    ["Enter figures", "Fill the blue Budget and Actual cells with raw numbers. Leave unknown values empty; zero is a real value."],
+    ["Calculated columns", "Variance and Variance % recalculate in Excel. Variance = Actual − Budget; percentage uses the absolute Budget."],
+    ["Units", "R values are rand amounts. Percentage metrics use percentage points: enter 25 for 25%."],
+    ["Period keys", "M: = month, W: = week starting Monday, D: = day. Only complete weekly/monthly periods are included."],
+    ["Saving to the dashboard", "This workbook is for offline review and entry. Enter completed figures using Add Data. XLSX upload is not supported."],
+    ["Source calculations", "Calculated KPIs and balance sheet totals are derived in the dashboard; update their source figures using Add Data."],
+    ["Snapshots", "Undated equity values are current snapshots. Loans without a financial year are flagged for review."],
+  ] }];
+  const options = { tabs, selectedTabs, period, fy, docs, meta, dividends, investors, irrInvestments };
+  const [from, to] = periodWindow(period, fy);
+  const source = reportRows(options).filter(row => row[5] !== "Period summary");
+  const names = new Set(["start here"]);
+  tabs.filter(tab => selectedTabs[tab.id]).forEach(tab => {
+    let records = source.filter(row => row[0] === tab.name);
+    if (!tab.custom) {
+      // Include empty periods as well, so the downloaded template can be filled in.
+      const kpiNames = new Set(tab.categories.flatMap(cat => (cat.kpis || []).map(k => `${cat.name}\u0000${k.name}`)));
+      records = records.filter(row => !kpiNames.has(`${row[1]}\u0000${row[2]}`));
+      tab.categories.forEach(cat => (cat.kpis || []).forEach(kpi => {
+        spreadsheetPeriodKeys(kpi.frequency || "Monthly", from, to).forEach(key => {
+          const entry = kpi.entries?.[key] || {};
+          records.push([tab.name, cat.name, kpi.name, kpi.units, key, "Detail", parseNum(entry.budget), parseNum(entry.actual)]);
+        });
+      }));
+    }
+    const base = (tab.name.replace(/[\\/?*\[\]:]/g, " ").replace(/^'+|'+$/g, "").trim() || "Section").slice(0, 27);
+    let name = base, suffix = 2;
+    while (names.has(name.toLowerCase())) name = `${base} ${suffix++}`;
+    names.add(name.toLowerCase());
+    const rows = [["Category", "Record", "Units", "Period", "Row type", "Budget", "Actual", "Variance", "Variance %"]];
+    records.forEach(record => {
+      const row = rows.length + 1;
+      rows.push([...record.slice(1, 6), blank ? null : record[6], blank ? null : record[7],
+        { formula: `IF(COUNT(F${row}:G${row})<2,"",G${row}-F${row})` },
+        { formula: `IF(OR(COUNT(F${row}:G${row})<2,F${row}=0),"",(G${row}-F${row})/ABS(F${row}))` }]);
+    });
+    sheets.push({ name, widths: [26, 42, 12, 32, 22, 19, 19, 19, 18], numeric: true, rows });
+  });
+  return sheets;
+};
+const FinancialSpreadsheetModal = ({ tabs, initialTabId, fy, period, docs, meta, dividends, investors, irrInvestments, onClose }) => {
+  const [selectedTabs, setSelectedTabs] = useState(() => Object.fromEntries(tabs.map(tab => [tab.id, tab.id === initialTabId])));
+  const [blank, setBlank] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const download = async () => {
+    setBusy(true); setError("");
+    try {
+      // Yield a frame so the download state is visible before building large workbooks.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const sheets = financialSpreadsheetSheets({ tabs, selectedTabs, period, fy, docs, meta, dividends, investors, irrInvestments, blank });
+      if (!sheets.slice(1).some(sheet => sheet.rows.length > 1)) { setError("No complete periods or records in this selection. Choose a wider date range or add records first."); return; }
+      const url = URL.createObjectURL(createFinancialWorkbook(sheets));
+      const link = document.createElement("a");
+      link.href = url; link.download = `Financial_${blank ? "Template" : "Figures"}_${dayKeyOf(new Date()).slice(2)}.xlsx`;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) { setError(`Could not create the spreadsheet: ${errText(err)}`); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Download spreadsheet" subtitle="Open, review and fill in your figures in Excel" icon={<FileSpreadsheet size={18} />} onClose={onClose} width={600}
+    footer={<><button style={btnGhost} onClick={onClose}>Cancel</button><button style={btnPrimary} disabled={busy || !Object.values(selectedTabs).some(Boolean)} onClick={download}>{busy ? "Preparing…" : <><Download size={14} /> Download Excel</>}</button></>}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 22 }}>
+      {[{ value: false, title: "Current figures", body: "Review existing numbers and complete any gaps." }, { value: true, title: "Blank template", body: "Keep the records and dates; fill in fresh figures." }].map(option => <button key={String(option.value)} type="button" aria-pressed={blank === option.value} onClick={() => setBlank(option.value)}
+        style={{ ...cardS, textAlign: "left", cursor: "pointer", fontFamily: "inherit", borderColor: blank === option.value ? T.accent : T.line, background: blank === option.value ? T.accentTint : T.bg, padding: 16 }}>
+        <div style={{ fontWeight: 650, fontSize: 14, color: T.accent, marginBottom: 6 }}>{option.title}</div><div style={{ fontSize: 12.5, lineHeight: 1.5, color: T.muted }}>{option.body}</div>
+      </button>)}
+    </div>
+    <div style={{ ...labelS, marginBottom: 10 }}>Worksheets</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, marginBottom: 18 }}>
+      {tabs.map(tab => <label key={tab.id} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, padding: "10px 12px", border: `1px solid ${T.lineSoft}`, borderRadius: 8, cursor: "pointer" }}>
+        <input type="checkbox" checked={selectedTabs[tab.id]} onChange={() => setSelectedTabs(previous => ({ ...previous, [tab.id]: !previous[tab.id] }))} />{tab.name}
+      </label>)}
+    </div>
+    <div style={{ ...cardS, background: T.panel, fontSize: 12, color: T.muted, lineHeight: 1.7 }}>
+      {periodWindow(period, fy).map(fmtDMY).join(" – ")} · Excel (.xlsx)<br />
+      Blue cells are for entry. Variance columns calculate automatically. Use Add Data to save completed figures to the dashboard.
+    </div>
+    {error && <p role="alert" style={{ color: T.red, fontSize: 12 }}>{error}</p>}
+  </Modal>;
+};
 
 const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userId, userName, dividends, investors, irrInvestments }) => {
   const [selectedTabs, setSelectedTabs] = useState(() => Object.fromEntries(tabs.map((t) => [t.id, true])));
@@ -3139,7 +3358,6 @@ const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userI
   const [includeSplit, setIncludeSplit] = useState(true);
   const [periodForReport, setPeriodForReport] = useState(period);
   const [generating, setGenerating] = useState(false);
-  const [format,setFormat] = useState("csv");
   const [reportTitle, setReportTitle] = useState(`Financial Performance Report - ${new Date().toLocaleDateString()}`);
 
   const [actions, setActions] = useState([]);
@@ -3159,10 +3377,6 @@ const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userI
   }, [userId]);
 
   const generateReport = async () => {
-    if(format === "csv") {
-      downloadBlob(reportCsv({tabs,selectedTabs,period:periodForReport,fy,docs,meta,dividends,investors,irrInvestments}),`${reportTitle.replace(/[^a-zA-Z0-9]/g,"_")}.csv`);
-      return;
-    }
     setGenerating(true);
     const reportData = {
       records: reportRows({tabs,selectedTabs,period:periodForReport,fy,docs,meta,dividends,investors,irrInvestments}),
@@ -3510,7 +3724,7 @@ const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userI
   };
 
   return (
-    <Modal title="Generate Financial Report" subtitle="Choose multiple sections and a download format" icon={<FileText size={17} />} onClose={onClose} width={680}
+    <Modal title="Generate Financial Report" subtitle="Choose the sections for your Word document" icon={<FileText size={17} />} onClose={onClose} width={680}
       footer={
         <>
           <button onClick={onClose} style={btnGhost}>Cancel</button>
@@ -3521,7 +3735,7 @@ const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userI
         </>
       }>
       <div style={{ marginBottom: "16px" }}>
-        <label style={labelS}>Download format</label><Select value={format} onChange={e=>setFormat(e.target.value)}><option value="csv">CSV — all selected records</option><option value="word">Word document</option></Select><label style={labelS}>Report Title</label>
+        <label style={labelS}>Report title</label>
         <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} style={inputS} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
@@ -3550,7 +3764,7 @@ const FinancialReportGenerator = ({ tabs, fy, docs, meta, period, onClose, userI
         </div>
       </div>
       <div style={{ marginBottom: "16px" }}>
-        <label style={labelS}>Word document options (CSV always includes all selected records)</label>
+        <label style={labelS}>Document content</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13.5px", color: T.body, cursor: "pointer" }}>
             <input type="checkbox" checked={includeSummary} onChange={() => setIncludeSummary(!includeSummary)} /> Summary header
@@ -4909,7 +5123,9 @@ const FinancialPerformance = () => {
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
   const [manageTabs, setManageTabs] = useState(false);
+  const [orderingTabId, setOrderingTabId] = useState(null);
   const [showReport, setShowReport] = useState(false);
+  const [showSpreadsheet, setShowSpreadsheet] = useState(false);
 
   const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth), range:dateRange, period }), [fyStartMonth,dateRange,period]);
 
@@ -5405,7 +5621,6 @@ const FinancialPerformance = () => {
   const toggleSort = (key) => setSortConfig((p) => ({ key, direction: p.key === key && p.direction === "asc" ? "desc" : "asc" }));
   const clearFilters = () => { setFilters({ category: "all", kpi: "all", units: "all", frequency: "all", status: "all" }); setSortConfig({ key: null, direction: "asc" }); };
 
-  const downloadCSV = () => setShowReport(true);
 
   const exitInvestorView = () => {
     const origin = sessionStorage.getItem("viewOrigin");
@@ -5547,25 +5762,21 @@ const FinancialPerformance = () => {
                         </div>
                       );
                     })}
+
                     <button onClick={() => setVisibility(Object.fromEntries(COLUMN_ORDER.map((k) => [k, true])))} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: "6px", fontSize: "12.5px", padding: "7px" }}>Show all</button>
                   </div>
                 </>
               )}
             </div>
           )}
-          <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
+          {!isInvestorView && activeTab?.categories.length > 1 && <button onClick={() => setOrderingTabId(activeTab.id)} style={btnGhost}>
+            <ArrowUpDown size={14} /> Order categories
+          </button>}
+          <button onClick={() => setShowSpreadsheet(true)} style={btnGhost}><FileSpreadsheet size={14} /> Spreadsheet</button>
           {!isInvestorView && <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add Data</button>}
         </div>
       </div>
 
-      {!isInvestorView && activeTab?.categories.length > 1 && <details style={{...cardS,marginBottom:12}}><summary>Category order</summary>
-        {activeTab.categories.map((cat,i)=><div key={cat.name} style={{display:"flex",gap:8,alignItems:"center",padding:5}}><span style={{flex:1}}>{cat.name}</span>
-          {[-1,1].map(delta=><button key={delta} aria-label={`Move ${cat.name} ${delta<0?"up":"down"}`} disabled={i+delta<0 || i+delta>=activeTab.categories.length} style={btnGhost} onClick={()=>{
-            const order=activeTab.categories.map(c=>c.name); [order[i],order[i+delta]]=[order[i+delta],order[i]];
-            persistMeta({...liveMeta.current,categoryOrder:{...liveMeta.current.categoryOrder,[activeTab.id]:order}}).catch(()=>{});
-          }}>{delta<0?<ArrowUp size={14}/>:<ArrowDown size={14}/>}</button>)}
-        </div>)}
-      </details>}
       <DateRangeControls fy={fy} onChange={applyRange}/>
       {isKpiTableTab && (
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
@@ -5583,7 +5794,7 @@ const FinancialPerformance = () => {
               );
             })}
           </div>
-          <span style={{ fontSize: "12.5px", color: T.muted }}>Showing {PERIOD_PREFIX[period]} budget, actual and variance</span>
+
         </div>
       )}
 
@@ -5770,6 +5981,19 @@ const FinancialPerformance = () => {
       {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)}
         onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
 
+      {!isInvestorView && orderingTabId && tabs.some(tab => tab.id === orderingTabId) && <CategoryOrderModal
+        key={orderingTabId} tab={tabs.find(tab => tab.id === orderingTabId)} onClose={() => setOrderingTabId(null)}
+        onSave={async order => {
+          const previousOrder = liveMeta.current.categoryOrder || {};
+          try {
+            await persistMeta({ ...liveMeta.current, categoryOrder: { ...previousOrder, [orderingTabId]: order } });
+            notify("success", "Category order saved.");
+          } catch (err) {
+            setMeta({ ...liveMeta.current, categoryOrder: previousOrder });
+            throw err;
+          }
+        }} />}
+
       {manageTabs && (
         <Modal title="Manage Tabs & Categories" icon={<Settings2 size={17} />} onClose={() => setManageTabs(false)} width={560}
           footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
@@ -5782,6 +6006,9 @@ const FinancialPerformance = () => {
                   <div style={{ fontSize: "14.5px", fontWeight: 600, color: T.accent }}>{t.name} {hidden && <span style={{ fontSize: "11.5px", color: T.muted }}>· hidden</span>}</div>
                   <div style={{ fontSize: "12.5px", color: T.muted }}>{t.custom === "balanceSheet" ? "Read-only with Add line / Add section" : `${t.categories.length} categories · ${count} KPIs`}</div>
                 </div>
+                {t.categories.length > 1 && <button onClick={() => { setManageTabs(false); setOrderingTabId(t.id); }} style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px" }}>
+                  <ArrowUpDown size={13} /> Order categories
+                </button>}
                 <button onClick={() => persistMeta({ ...meta, hiddenTabs: hidden ? (meta.hiddenTabs || []).filter((x) => x !== t.id) : [...(meta.hiddenTabs || []), t.id] })}
                   disabled={!hidden && visibleTabs.length <= 1}
                   style={{ ...btnGhost, padding: "7px 12px", fontSize: "12.5px", opacity: !hidden && visibleTabs.length <= 1 ? 0.4 : 1 }}>
@@ -5820,6 +6047,11 @@ const FinancialPerformance = () => {
       {addFlow === "kpi" && <AddKpiWizard tabs={tabs} currentTabId={activeTabId}
         onBack={() => setAddFlow("choose")} onClose={() => setAddFlow(null)}
         onSave={async (kpi) => { await persistMeta({ ...meta, custom: [...(meta.custom || []), kpi] }); notify("success", "KPI created."); }} />}
+
+      {showSpreadsheet && <FinancialSpreadsheetModal
+        tabs={visibleTabs} initialTabId={activeTabId} fy={fy} period={period}
+        docs={docs} meta={meta} dividends={dividends} investors={investors} irrInvestments={irrInvestments}
+        onClose={() => setShowSpreadsheet(false)} />}
 
       {showReport && <FinancialReportGenerator
         tabs={visibleTabs} fy={fy} docs={docs} meta={meta} period={period}
