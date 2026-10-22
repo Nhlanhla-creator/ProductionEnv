@@ -19,14 +19,14 @@ import {
 } from "lucide-react";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, ArcElement, Title, Tooltip, Legend, Filler,
+  PointElement, ArcElement, Title, Tooltip, Legend, Filler, BarController, LineController, ScatterController,
 } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, ArcElement, Title, Tooltip, Legend, Filler
+  PointElement, ArcElement, Title, Tooltip, Legend, Filler, BarController, LineController, ScatterController
 );
 
 const functions = getFunctions();
@@ -58,6 +58,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 /* ─── Expanded period set (mirrors Financial/Operational/People) ───────── */
 const PERIODS = [
+  { key: "custom", label: "Selected dates" },
   { key: "last_week",    label: "Last week" },
   { key: "this_week",    label: "This week" },
   { key: "last_month",   label: "Last month" },
@@ -69,6 +70,7 @@ const PERIODS = [
 ];
 const PERIOD_LABEL = Object.fromEntries(PERIODS.map((p) => [p.key, p.label]));
 const PERIOD_PREFIX = {
+  custom: "Selected dates",
   last_week: "Last week", this_week: "This week",
   last_month: "Last month", this_month: "This month",
   last_quarter: "Last quarter", this_quarter: "This quarter",
@@ -147,11 +149,7 @@ const fmtValue = (raw, kpi, { signed = false, bare = false } = {}) => {
   return `${sign}${trimNum(n)}${suffix}`;
 };
 
-const parseNum = (v) => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  return Number.isNaN(n) ? null : n;
-};
+const parseNum = (v) => { if (v === null || v === undefined || (typeof v === "string" && !v.trim())) return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 const uid = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
@@ -183,19 +181,17 @@ const S = {
 };
 
 const statusFromPair = (kpi, budget, actual) => {
-  const b = Number(budget), a = Number(actual);
+  const b = parseNum(budget), a = parseNum(actual);
   if (!Number.isFinite(b) || !Number.isFinite(a)) return S.none;
   if (kpi.direction === "match") {
     if (b === 0) return Math.abs(a) < 0.001 ? S.green : Math.abs(a) <= 1 ? S.amber : S.red;
     const drift = Math.abs(a - b) / Math.abs(b);
     return drift <= 0.05 ? S.green : drift <= 0.20 ? S.amber : S.red;
   }
-  if (b === 0) {
-    if (kpi.direction === "higher") return S.none;
-    return a <= 0 ? S.green : S.amber;
-  }
-  const ratio = kpi.direction === "higher" ? a / b : b / (a || 0.0001);
-  return ratio >= 0.98 ? S.green : ratio >= 0.85 ? S.amber : S.red;
+  const favourable = kpi.direction === "lower" ? b - a : a - b;
+  if (b === 0) return favourable >= 0 ? S.green : S.red;
+  const drift = favourable / Math.abs(b);
+  return drift >= -0.0200000001 ? S.green : drift >= -0.15 ? S.amber : S.red;
 };
 
 const varianceFavourable = (kpi, v) => {
@@ -235,7 +231,7 @@ const InfoTip = ({ text, light = false }) => {
   );
 };
 
-const btnBase = {
+const btnBase = { minHeight: "40px", boxSizing: "border-box", justifyContent: "center", whiteSpace: "nowrap", lineHeight: 1.2,
   padding: "9px 16px", borderRadius: "8px", fontSize: "13.5px", fontWeight: 500,
   cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "7px", fontFamily: "inherit",
 };
@@ -333,6 +329,94 @@ const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }
   </div>
 );
 
+const moveCategory = (names, from, to) => {
+  const next = [...names];
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= next.length || to >= next.length) return next;
+  const [name] = next.splice(from, 1);
+  next.splice(to, 0, name);
+  return next;
+};
+const CategoryOrderModal = ({ tab, onClose, onSave }) => {
+  const [order, setOrder] = useState(() => tab.categories.map(category => category.name));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setSaving(true); setError("");
+    try { await onSave(order); onClose(); }
+    catch (err) { setError(`Could not save category order: ${errText(err)}`); }
+    finally { setSaving(false); }
+  };
+  const move = (from, to) => setOrder(previous => moveCategory(previous, from, to));
+  return <Modal title="Order categories" subtitle={`${tab.name} · choose the order that works for you`} icon={<ArrowUpDown size={17} />}
+    width={600} onClose={() => { if (!saving) onClose(); }}
+    footer={<><button onClick={onClose} disabled={saving} style={btnGhost}>Cancel</button>
+      <button onClick={save} disabled={saving} style={btnPrimary}><Save size={14} /> {saving ? "Saving…" : "Save order"}</button></>}>
+    <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted, lineHeight: 1.6 }}>
+      Move a category with the arrows, or choose its position directly. Your order is saved for this tab and used in the table, data entry screens and spreadsheets.
+    </p>
+    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+      {order.map((name, index) => <li key={name} style={{ ...cardS, padding: "12px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", background: T.raised, color: T.muted, borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{index + 1}</span>
+        <span style={{ flex: "1 1 150px", minWidth: 0, fontSize: 13.5, fontWeight: 600, color: T.accent }}>{name}</span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <select aria-label={`Position of ${name}`} value={index} disabled={saving} onChange={event => move(index, Number(event.target.value))}
+            style={{ ...selectS, width: 72, height: 36, padding: "6px 10px" }}>
+            {order.map((_, position) => <option key={position} value={position}>{position + 1}</option>)}
+          </select>
+          {[{ to: index - 1, label: "up", Icon: ArrowUp }, { to: index + 1, label: "down", Icon: ArrowDown }].map(({ to, label, Icon }) => {
+            const disabled = saving || to < 0 || to >= order.length;
+            return <button key={label} type="button" aria-label={`Move ${name} ${label}`} disabled={disabled} onClick={() => move(index, to)}
+              style={{ ...btnGhost, minHeight: 36, width: 36, padding: 0, opacity: disabled ? 0.35 : 1, cursor: disabled ? "default" : "pointer" }}><Icon size={14} /></button>;
+          })}
+        </div>
+      </li>)}
+    </ol>
+    {error && <p role="alert" style={{ fontSize: 12, color: T.red, marginBottom: 0 }}>{error}</p>}
+  </Modal>;
+};
+
+const DateRangeControls = ({ fy, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("financial");
+  const [year, setYear] = useState(fy.startYear);
+  const [month, setMonth] = useState(dayKeyOf(new Date()).slice(2, 9));
+  const [from, setFrom] = useState(fy.range?.from || dayKeyOf(new Date(fy.startYear, fy.startMonth, 1)).slice(2));
+  const [to, setTo] = useState(fy.range?.to || dayKeyOf(monthEnd(fy.startYear, fy.startMonth + 11)).slice(2));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setYear(fy.startYear); }, [fy.startYear]);
+  const apply = async () => {
+    let a, b;
+    if (mode === "custom") { a = localDate(from); b = localDate(to); }
+    else if (mode === "month") { a = localDate(month); b = monthEnd(a.getFullYear(), a.getMonth()); }
+    else { a = new Date(Number(year), mode === "financial" ? fy.startMonth : 0, 1); b = monthEnd(a.getFullYear(), a.getMonth() + 11); }
+    if (!Number.isFinite(+a) || !Number.isFinite(+b) || a > b || a.getFullYear() < 1900 || b.getFullYear() > 9999 || b.getFullYear() - a.getFullYear() > 100) { setError("Choose a valid date range."); return; }
+    setBusy(true); setError("");
+    try { await onChange({ from: dayKeyOf(a).slice(2), to: dayKeyOf(b).slice(2) }); setOpen(false); }
+    catch { setError("Could not apply these dates. Please try again."); }
+    finally { setBusy(false); }
+  };
+  const field = { display: "flex", flexDirection: "column", gap: 6, flex: "1 1 150px", minWidth: 140, maxWidth: 230 };
+  const control = { ...inputS, height: 40, boxSizing: "border-box", margin: 0 };
+  const caption = fy.period === "custom" && fy.range ? `${fmtDMY(localDate(fy.range.from))} – ${fmtDMY(localDate(fy.range.to))}` : PERIOD_LABEL[fy.period] || `FY ${fyLabel(fy.startYear, fy.startMonth)}`;
+  return <div style={{ marginBottom: 12 }}>
+    <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} style={{ ...btnGhost, padding: "8px 12px", gap: 9, height: 38 }}>
+      <Calendar size={15} /><span style={{ color: T.muted }}>Dates</span><strong style={{ fontWeight: 600 }}>{caption}</strong><ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : undefined }} />
+    </button>
+    {open && <div style={{ marginTop: 8, padding: 16, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+        <label style={field}><span style={{ ...labelS, margin: 0 }}>View by</span><select aria-label="Date mode" style={{ ...selectS, ...control }} value={mode} onChange={e => setMode(e.target.value)}><option value="financial">Financial year</option><option value="calendar">Calendar year</option><option value="month">Month</option><option value="custom">Custom range</option></select></label>
+        {(mode === "financial" || mode === "calendar") && <label style={field}><span style={{ ...labelS, margin: 0 }}>{mode === "financial" ? "Starting year" : "Year"}</span><input aria-label="Year" type="number" min="1900" max="9998" style={control} value={year} onChange={e => setYear(e.target.value)} /></label>}
+        {mode === "month" && <label style={field}><span style={{ ...labelS, margin: 0 }}>Month</span><input aria-label="Month" type="month" style={control} value={month} onChange={e => setMonth(e.target.value)} /></label>}
+        {mode === "custom" && <><label style={field}><span style={{ ...labelS, margin: 0 }}>From</span><input aria-label="From date" type="date" style={control} value={from} onChange={e => setFrom(e.target.value)} /></label><label style={field}><span style={{ ...labelS, margin: 0 }}>To</span><input aria-label="To date" type="date" min={from} style={control} value={to} onChange={e => setTo(e.target.value)} /></label></>}
+        <button type="button" disabled={busy} style={{ ...btnPrimary, height: 40, boxSizing: "border-box", whiteSpace: "nowrap", margin: 0 }} onClick={apply}>{busy ? "Applying…" : "Apply dates"}</button>
+        <span title="Monthly and weekly totals require complete periods. Use daily data for partial periods." style={{ display: "inline-flex", alignItems: "center", height: 40, color: T.muted }}><Info size={15} /></span>
+      </div>
+      {error && <p role="alert" style={{ color: T.red, margin: "10px 0 0", fontSize: 12 }}>{error}</p>}
+    </div>}
+  </div>;
+};
+
 const DIRECTIONS = [
   { value: "higher", label: "Higher is better" },
   { value: "lower", label: "Lower is better" },
@@ -395,6 +479,7 @@ const COLUMN_DEFS = {
   category: { label: "Category", width: 178, tip: "The category this KPI sits under.", filter: true, sort: true, hideable: true },
   kpi: { label: "KPI", width: 288, tip: "The metric being tracked. Click the eye to see what it means and how it is measured.", filter: true, sort: true, hideable: false },
   units: { label: "Units", width: 90, align: "center", tip: "The unit every figure in this row is expressed in.", filter: true, sort: true, hideable: true },
+  frequency: { label: "Frequency", width: 110, align: "center", tip: "Marketing KPI figures are captured monthly.", hideable: true },
   budget: { label: "Target", width: 132, align: "center", tip: "Your captured target, or the recommended benchmark where none is set.", sort: true, hideable: true },
   actual: { label: "Actual", width: 132, align: "center", tip: "What was recorded for the selected period.", sort: true, hideable: true },
   variance: { label: "Variance", width: 132, align: "center", tip: "Actual minus Target. Green means favourable for this KPI's direction.", sort: true, hideable: true },
@@ -581,21 +666,24 @@ const monthEntry = (kpi, year, mi) =>
 /* ─── Period resolution — mirrors the other modules ────────────────────── */
 const resolveMonth = (kpi, year, month) => monthEntry(kpi, year, month);
 
-const rollupRange = (kpi, from, to) => {
-  const vals = [];
-  const cur = new Date(from.getFullYear(), from.getMonth(), 1);
-  const end = new Date(to.getFullYear(), to.getMonth(), 1);
-  while (cur <= end) {
-    vals.push(resolveMonth(kpi, cur.getFullYear(), cur.getMonth()));
-    cur.setMonth(cur.getMonth() + 1);
+const localDate = value => { const [year, month, day = 1] = String(value).split("-").map(Number); return new Date(year, month - 1, day); };
+const dayKeyOf = date => `D:${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const rangeRows = (kpi, from, to) => {
+  const rows = [];
+  for (let date = monthStart(from.getFullYear(), from.getMonth()); date <= to; date = new Date(date.getFullYear(), date.getMonth() + 1, 1)) {
+    if (date < startOfDay(from) || startOfDay(monthEnd(date.getFullYear(), date.getMonth())) > startOfDay(to)) continue;
+    const key = `M:${dayKeyOf(date).slice(2, 9)}`, value = kpi.entries?.[key] || {};
+    rows.push({ key, label: `${MONTHS[date.getMonth()]} ${date.getFullYear()}`, budget: parseNum(value.budget), actual: parseNum(value.actual) });
   }
-  return {
-    actual: rollUp(vals.map((r) => Number(r.actual)), kpi.aggregate),
-    budget: rollUp(vals.map((r) => Number(r.budget)), kpi.aggregate),
-  };
+  return rows;
+};
+const rollupRange = (kpi, from, to) => {
+  const rows = rangeRows(kpi, from, to);
+  return { actual: rollUp(rows.map(row => row.actual), kpi.aggregate), budget: rollUp(rows.map(row => row.budget), kpi.aggregate) };
 };
 
 const periodWindow = (period, fy) => {
+  if (period === "custom" && fy.range) return [localDate(fy.range.from), localDate(fy.range.to)];
   const now = new Date();
   const today = startOfDay(now);
 
@@ -611,7 +699,7 @@ const periodWindow = (period, fy) => {
     case "this_month":
       return [monthStart(now.getFullYear(), now.getMonth()), monthEnd(now.getFullYear(), now.getMonth())];
     case "last_month": {
-      const d = addMonths(now, -1);
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       return [monthStart(d.getFullYear(), d.getMonth()), monthEnd(d.getFullYear(), d.getMonth())];
     }
     case "this_quarter": {
@@ -632,14 +720,14 @@ const periodWindow = (period, fy) => {
       const sy = fy.startYear;
       const sm = fy.startMonth;
       const s = new Date(sy, sm, 1);
-      const e = monthEnd(sy + 1, sm === 0 ? 11 : sm - 1);
+      const e = monthEnd(sy, sm + 11);
       return [s, e];
     }
     case "last_year": {
       const sy = fy.startYear - 1;
       const sm = fy.startMonth;
       const s = new Date(sy, sm, 1);
-      const e = monthEnd(sy + 1, sm === 0 ? 11 : sm - 1);
+      const e = monthEnd(sy, sm + 11);
       return [s, e];
     }
     default:
@@ -647,16 +735,7 @@ const periodWindow = (period, fy) => {
   }
 };
 
-const periodValues = (kpi, period, fy) => {
-  const [from, to] = periodWindow(period, fy);
-  if (from.getDate() === 1 && from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear() && to.getDate() >= 28) {
-    return resolveMonth(kpi, from.getFullYear(), from.getMonth());
-  }
-  if (period === "this_week" || period === "last_week") {
-    return resolveMonth(kpi, from.getFullYear(), from.getMonth());
-  }
-  return rollupRange(kpi, from, to);
-};
+const periodValues = (kpi, period, fy) => rollupRange(kpi, ...periodWindow(period, fy));
 
 const getStatus = (kpi, period, fy) => {
   const v = periodValues(kpi, period, fy);
@@ -664,28 +743,109 @@ const getStatus = (kpi, period, fy) => {
 };
 const getVariance = (kpi, period, fy) => {
   const { budget, actual } = periodValues(kpi, period, fy);
-  const b = Number(budget), a = Number(actual);
+  const b = parseNum(budget), a = parseNum(actual);
   return Number.isFinite(b) && Number.isFinite(a) ? a - b : null;
 };
 
 /* ─── Split rows for report / CSV ─────────────────────────────────────── */
-const buildSplitRows = (kpi, fy) => {
-  const months = fyMonths(fy.startYear, fy.startMonth);
-  return {
-    title: "Monthly split",
-    rows: months.map((m) => {
-      const r = resolveMonth(kpi, m.year, m.month);
-      return { label: m.long, budget: r.budget ?? null, actual: r.actual ?? null };
-    }),
+const buildSplitRows = (kpi, fy) => ({ title: "Monthly split", rows: rangeRows(kpi, ...periodWindow(fy.period || "this_year", fy)) });
+
+const SPREADSHEET_HEADERS=["Section","Category","KPI","Units","Period","Target","Actual","Frequency","Variance","Variance %"];
+const spreadsheetSheets = ({tabs,selectedTabs,fy,period},blank=false) => tabs.filter(c=>selectedTabs[c.id]).map(c=>({name:c.name,rows:[SPREADSHEET_HEADERS,...c.categories.flatMap(sub=>(sub.kpis || []).flatMap(k=>rangeRows(k,...periodWindow(period,fy)).map(r=>[c.name,sub.name,k.name,k.units,r.key,blank?null:r.budget,blank?null:r.actual,(k.frequency || "Monthly"),blank||!Number.isFinite(r.actual)||!Number.isFinite(r.budget)?null:r.actual-r.budget,blank||!Number.isFinite(r.actual)||!Number.isFinite(r.budget)||r.budget===0?null:(r.actual-r.budget)/Math.abs(r.budget)])))]}));
+const csvEscape = value => {let s=String(value??"");if(typeof value!=="number" && /^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+const spreadsheetCsv = sheets => "\uFEFF"+[SPREADSHEET_HEADERS,...sheets.flatMap(s=>s.rows.slice(1))].map(r=>r.map(csvEscape).join(",")).join("\r\n");
+const downloadBlob = (text,name) => {const url=URL.createObjectURL(new Blob([text],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+const xmlText = value => String(value ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// Small uncompressed ZIP writer keeps XLSX export self-contained (no runtime CDN/dependency).
+const zipFiles = files => {
+  const encoder = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  const crc32 = bytes => {
+    let crc = 0xffffffff;
+    for (const byte of bytes) { crc ^= byte; for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0); }
+    return (crc ^ 0xffffffff) >>> 0;
   };
+  for (const [filename, content] of files) {
+    const name = encoder.encode(filename), data = encoder.encode(content), crc = crc32(data);
+    const local = new Uint8Array(30 + name.length), l = new DataView(local.buffer);
+    l.setUint32(0, 0x04034b50, true); l.setUint16(4, 20, true); l.setUint16(6, 0x800, true);
+    l.setUint16(12, 33, true); l.setUint32(14, crc, true); l.setUint32(18, data.length, true); l.setUint32(22, data.length, true); l.setUint16(26, name.length, true); local.set(name, 30);
+    const directory = new Uint8Array(46 + name.length), c = new DataView(directory.buffer);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x800, true);
+    c.setUint16(14, 33, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, offset, true); directory.set(name, 46);
+    parts.push(local, data); central.push(directory); offset += local.length + data.length;
+  }
+  const end = new Uint8Array(22), e = new DataView(end.buffer);
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, central.length, true); e.setUint16(10, central.length, true); e.setUint32(12, central.reduce((n, p) => n + p.length, 0), true); e.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+};
+const spreadsheetWorkbook = sheets => {
+  const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main", rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+  const names = new Set();
+  const safeNames = sheets.map((s, i) => {
+    const base = (s.name.replace(/[\\/?*\[\]:]/g, " ").replace(/^'+|'+$/g, "").trim() || `Sheet ${i + 1}`).slice(0, 31);
+    let name = base, n = 1;
+    while (names.has(name.toLowerCase())) { const tail = ` (${++n})`; name = base.slice(0, 31 - tail.length) + tail; }
+    names.add(name.toLowerCase()); return name;
+  });
+  const files = [
+    ["[Content_Types].xml", `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`],
+    ["_rels/.rels", `<Relationships xmlns="${rel}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ["xl/workbook.xml", `<workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${safeNames.map((name, i) => `<sheet name="${xmlText(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`],
+    ["xl/_rels/workbook.xml.rels", `<Relationships xmlns="${rel}">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}<Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ["xl/styles.xml", `<styleSheet xmlns="${ns}"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF4A352F"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF0F6FF"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf><xf numFmtId="4" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+  ];
+  sheets.forEach((sheet, i) => {
+    const rows = sheet.rows.map((row, ri) => `<row r="${ri + 1}"${ri === 0 ? ' ht="28" customHeight="1"' : ""}>${row.map((value, ci) => {
+      const cell = `${String.fromCharCode(65 + ci)}${ri + 1}`, style = ri === 0 ? 1 : ci === 5 || ci === 6 ? 2 : ci === 8 ? 3 : ci === 9 ? 4 : 0;
+      if (ri > 0 && (ci === 8 || ci === 9)) {
+        const row = ri + 1;
+        const formula = ci === 8 ? `IF(COUNT(F${row}:G${row})<2,"",G${row}-F${row})` : `IF(OR(COUNT(F${row}:G${row})<2,F${row}=0),"",(G${row}-F${row})/ABS(F${row}))`;
+        return `<c r="${cell}" s="${style}"><f>${xmlText(formula)}</f></c>`;
+      }
+      if (value === null || value === undefined || value === "") return `<c r="${cell}" s="${style}"/>`;
+      return typeof value === "number" && Number.isFinite(value) ? `<c r="${cell}" s="${style}"><v>${value}</v></c>` : `<c r="${cell}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xmlText(value)}</t></is></c>`;
+    }).join("")}</row>`).join("");
+    files.push([`xl/worksheets/sheet${i + 1}.xml`, `<worksheet xmlns="${ns}"><dimension ref="A1:J${sheet.rows.length}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${[24, 32, 34, 12, 28, 18, 18, 16, 18, 18].map((width, ci) => `<col min="${ci + 1}" max="${ci + 1}" width="${width}" customWidth="1"/>`).join("")}</cols><sheetData>${rows}</sheetData><autoFilter ref="A1:J${sheet.rows.length}"/></worksheet>`]);
+  });
+  return zipFiles(files);
+};
+const SpreadsheetDownloadModal = ({ structure, activeTabId, fy, period, onClose }) => {
+  const [selectedTabs, setSelectedTabs] = useState({ [activeTabId]: true });
+  const [blank, setBlank] = useState(false), [format, setFormat] = useState("xlsx");
+  const [error, setError] = useState("");
+  const tabs=structure.filter(c=>!c.hidden);
+  const options = { tabs, selectedTabs, fy, period };
+  const download = () => {
+    try {
+      const sheets = spreadsheetSheets(options, blank);
+      if (!sheets.some(s => s.rows.length > 1)) { setError("No data-entry rows in this range. Select a complete month or another section."); return; }
+      if (format === "csv") downloadBlob(spreadsheetCsv(sheets), `marketing-sales-data-${blank ? "template" : "current"}.csv`);
+      else {
+        const url = URL.createObjectURL(spreadsheetWorkbook(sheets)), link = document.createElement("a");
+        link.href = url; link.download = `marketing-sales-data-${blank ? "template" : "current"}.xlsx`;
+        document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+      setError("");
+    } catch (e) { setError(`Could not download the spreadsheet: ${errText(e)}`); }
+  };
+  const [from, to] = periodWindow(period, fy);
+  return <Modal title="Download spreadsheet" subtitle={`${fmtDMY(from)} – ${fmtDMY(to)}`} icon={<FileSpreadsheet size={18}/>} onClose={onClose} width={600}
+    footer={<><button style={btnGhost} onClick={onClose}>Cancel</button><button style={btnPrimary} disabled={!Object.values(selectedTabs).some(Boolean)} onClick={download}><Download size={15}/>Download {format.toUpperCase()}</button></>}>
+    <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+      {[[false, "Existing data", "Review or edit your saved figures."], [true, "Blank template", "Fill in Target and Actual values."]].map(([value, title, description]) => <button key={title} onClick={() => setBlank(value)} aria-pressed={blank === value} style={{ ...cardS, flex: "1 1 210px", textAlign: "left", cursor: "pointer", borderColor: blank === value ? T.accent : T.line, background: blank === value ? T.accentTint : T.bg, fontFamily: "inherit" }}><strong style={{ color: T.ink, display: "block", marginBottom: 5 }}>{title}</strong><span style={{ color: T.muted, fontSize: 12 }}>{description}</span></button>)}
+    </div>
+    <label style={labelS}>Sections</label><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 8, marginBottom: 20 }}>{tabs.map(tab => <label key={tab.id} style={{ display: "flex", gap: 9, alignItems: "center", fontSize: 13, padding: "8px 0", cursor: "pointer" }}><input type="checkbox" checked={!!selectedTabs[tab.id]} onChange={() => setSelectedTabs(prev => ({ ...prev, [tab.id]: !prev[tab.id] }))}/>{tab.name}</label>)}</div>
+    <label style={labelS}>File type</label><Select value={format} onChange={e => setFormat(e.target.value)}><option value="xlsx">Excel workbook (.xlsx) — one sheet per section</option><option value="csv">CSV (.csv) — one combined data sheet</option></Select>
+    <p style={{ color: T.muted, fontSize: 12, lineHeight: 1.6, marginBottom: 0 }}>Blue Target and Actual cells are ready to edit. Excel includes filters, a frozen header and automatic Variance formulas. Leave unknown figures blank; zero is a real value. Variance % in CSV is a decimal ratio. This download contains data-entry rows. Changes made in Excel stay in your downloaded file; enter them in Add Data to save them to the application.</p>
+    {error && <p role="alert" style={{ color: T.red, fontSize: 13 }}>{error}</p>}
+  </Modal>;
 };
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Report Generator — with running totals per KPI
-   ════════════════════════════════════════════════════════════════════════ */
+
 const MarketingReportGenerator = ({
   tabs, fy, period, onClose, userId, userName, pipelineRecords,
-  getStatusFn, periodValuesFn, getVarianceFn, statusFromPairFn,
+  docs = {}, getStatusFn, periodValuesFn, getVarianceFn, statusFromPairFn,
   trimNumFn, fmtValueFn, fyLabelFn,
 }) => {
   const [selectedTabs, setSelectedTabs] = useState(() => Object.fromEntries(tabs.map((t) => [t.id, true])));
@@ -773,9 +933,9 @@ const MarketingReportGenerator = ({
           const v = periodValuesLocal(k, periodForReport, fy);
           const status = getStatusLocal(k, periodForReport, fy);
           const variance = getVarianceLocal(k, periodForReport, fy);
-          const split = buildSplitRows(k, fy);
+          const split = buildSplitRows(k, { ...fy, period: periodForReport });
           catData.kpis.push({
-            id: k.id, name: k.name, units: k.units, direction: k.direction,
+            id: k.id, name: k.name, units: k.units, direction: k.direction, options: k.options, aggregate: k.aggregate,
             meaning: k.meaning, measured: k.measured,
             actual: v.actual, budget: v.budget, variance: variance,
             status: status.label, statusKey: status.key,
@@ -795,33 +955,9 @@ const MarketingReportGenerator = ({
         nextCta: r.nextCta || "", byWhen: r.byWhen || "", keyContact: r.keyContact || "", notes: r.notes || "",
       }));
     }
-    if (includeConcentration) {
-      reportData.concentration = {
-        channels: [
-          { name: "Social Media", revenue: 1200000, percentage: 35.2 },
-          { name: "PPC", revenue: 800000, percentage: 23.5 },
-          { name: "Email", revenue: 500000, percentage: 14.7 },
-        ],
-        customers: [
-          { name: "Acme Corp", revenue: 850000, percentage: 24.9 },
-          { name: "TechGlobal", revenue: 650000, percentage: 19.0 },
-          { name: "EcoSolutions", revenue: 450000, percentage: 13.2 },
-        ],
-        segments: [
-          { name: "Enterprise", revenue: 1500000, percentage: 44.0 },
-          { name: "SMB", revenue: 800000, percentage: 23.5 },
-          { name: "Startup", revenue: 400000, percentage: 11.7 },
-        ],
-      };
-    }
-    if (includeCampaigns) {
-      reportData.campaigns = [
-        { name: "Q1 Campaign", cost: 25000, revenue: 45000 },
-        { name: "Q2 Campaign", cost: 30000, revenue: 55000 },
-        { name: "Summer Sale", cost: 15000, revenue: 35000 },
-        { name: "Holiday Campaign", cost: 40000, revenue: 80000 },
-      ];
-    }
+    // These panels have no dated transaction schema: explicitly report a current snapshot.
+    if (includeConcentration && docs.concentration?.top3) reportData.concentration = docs.concentration.top3;
+    if (includeCampaigns && Array.isArray(docs.sustainability?.campaignPerf)) reportData.campaigns = docs.sustainability.campaignPerf;
     if (includeActions) {
       const marketingActions = actions.filter(a =>
         a.sourceModule === "Marketing & Sales" || a.category === "Marketing & Sales" || a.sourceCategory?.includes("Marketing")
@@ -912,7 +1048,7 @@ const MarketingReportGenerator = ({
       let totalBudget = 0, totalActual = 0, hasBudget = false, hasActual = false;
       kpi.splitRows.forEach((row, ri) => {
         const bg = ri % 2 === 0 ? "#ffffff" : "#faf8f7";
-        const b = Number(row.budget), a = Number(row.actual);
+        const b = parseNum(row.budget), a = parseNum(row.actual);
         const variance = Number.isFinite(a) && Number.isFinite(b) ? a - b : null;
         if (Number.isFinite(b)) { totalBudget += b; hasBudget = true; }
         if (Number.isFinite(a)) { totalActual += a; hasActual = true; }
@@ -924,7 +1060,9 @@ const MarketingReportGenerator = ({
           <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${fav === null ? '#6b5b55' : fav ? '#166534' : '#991b1b'};">${variance !== null ? fmtVal(variance, kpi.units) : "—"}</td>
         </tr>`;
       });
-      const totalVar = hasBudget && hasActual ? totalActual - totalBudget : null;
+      totalBudget = parseNum(kpi.budget); totalActual = parseNum(kpi.actual);
+      hasBudget = Number.isFinite(totalBudget); hasActual = Number.isFinite(totalActual);
+      const totalVar = !kpi.options && hasBudget && hasActual ? totalActual - totalBudget : null;
       const totalFav = isFav(kpi, totalVar);
       html += `<tr style="background:#f4efec; font-weight:700;">
         <td style="padding:4px 8px; border:1px solid #ddd;">Total</td>
@@ -1006,7 +1144,7 @@ const MarketingReportGenerator = ({
           </table>
         </div>`;
       };
-      concentrationHtml = `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Revenue Concentration</h2>
+      concentrationHtml = `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Revenue Concentration — current snapshot (undated)</h2>
         <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;">
           ${buildTable(c.channels, "Channel", "Top 3 Channels")}
           ${buildTable(c.customers, "Customer", "Top 3 Customers")}
@@ -1027,7 +1165,7 @@ const MarketingReportGenerator = ({
           <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${roi >= 0 ? '#166534' : '#991b1b'}; font-weight:600;">${roi.toFixed(1)}%</td>
         </tr>`;
       });
-      campaignsHtml = `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Campaign Performance</h2>
+      campaignsHtml = `<h2 style="color:#4a352f; border-bottom:2px solid #ded8d4; padding-bottom:6px; margin-top:24px;">Campaign Performance — current snapshot (undated)</h2>
         <table style="width:100%; border-collapse:collapse; font-size:9pt; margin:8px 0;">
           <thead><tr style="background:#33231e; color:#fff;">
             <th style="padding:4px 8px; border:1px solid #ddd; text-align:left;">Campaign</th>
@@ -1557,23 +1695,7 @@ const PipelineTable = ({ currentUser, isInvestorView, onDataChange, onEditFromDa
 
 /* ── Top 3 Concentration ─────────────────────────────────────────────── */
 const Top3Concentration = ({ data, isInvestorView, onDataChange, onUpdate, onDeleteItem }) => {
-  const [localData, setLocalData] = useState(data || {
-    channels: [
-      { name: "Social Media", revenue: 1200000, percentage: 35.2 },
-      { name: "PPC", revenue: 800000, percentage: 23.5 },
-      { name: "Email", revenue: 500000, percentage: 14.7 },
-    ],
-    customers: [
-      { name: "Acme Corp", revenue: 850000, percentage: 24.9 },
-      { name: "TechGlobal", revenue: 650000, percentage: 19.0 },
-      { name: "EcoSolutions", revenue: 450000, percentage: 13.2 },
-    ],
-    segments: [
-      { name: "Enterprise", revenue: 1500000, percentage: 44.0 },
-      { name: "SMB", revenue: 800000, percentage: 23.5 },
-      { name: "Startup", revenue: 400000, percentage: 11.7 },
-    ],
-  });
+  const [localData, setLocalData] = useState(data || {channels:[],customers:[],segments:[]});
   const [editingKey, setEditingKey] = useState(null);
   const [editDraft, setEditDraft] = useState({});
 
@@ -1689,14 +1811,7 @@ const Top3Concentration = ({ data, isInvestorView, onDataChange, onUpdate, onDel
 
 /* ── Channel Performance Table ─────────────────────────────────────── */
 const ChannelPerformanceTable = ({ data, isInvestorView, onDataChange, onUpdate, onDeleteItem }) => {
-  const [localData, setLocalData] = useState(data || [
-    { name: "Social Media", revenue: 150000, spend: 45000 },
-    { name: "Email", revenue: 120000, spend: 30000 },
-    { name: "PPC", revenue: 80000, spend: 35000 },
-    { name: "SEO", revenue: 60000, spend: 15000 },
-    { name: "Referral", revenue: 50000, spend: 10000 },
-    { name: "Direct", revenue: 40000, spend: 5000 },
-  ]);
+  const [localData, setLocalData] = useState(data || []);
   const [filters, setFilters] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [filteredData, setFilteredData] = useState(localData);
@@ -1854,12 +1969,7 @@ const ChannelPerformanceTable = ({ data, isInvestorView, onDataChange, onUpdate,
 
 /* ── Campaign Performance Table ───────────────────────────────────── */
 const CampaignPerformanceTable = ({ data, isInvestorView, onDataChange, onUpdate, onDeleteItem }) => {
-  const [localData, setLocalData] = useState(data || [
-    { name: "Q1 Campaign", cost: 25000, revenue: 45000 },
-    { name: "Q2 Campaign", cost: 30000, revenue: 55000 },
-    { name: "Summer Sale", cost: 15000, revenue: 35000 },
-    { name: "Holiday Campaign", cost: 40000, revenue: 80000 },
-  ]);
+  const [localData, setLocalData] = useState(data || []);
   const [filters, setFilters] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [filteredData, setFilteredData] = useState(localData);
@@ -2007,16 +2117,7 @@ const CampaignPerformanceTable = ({ data, isInvestorView, onDataChange, onUpdate
 
 /* ── Concentration Risk Bar Chart ───────────────────────────────────── */
 const ConcentrationRiskBarChart = ({ data, isInvestorView, onDataChange, onUpdate, onDeleteItem }) => {
-  const [localData, setLocalData] = useState(data || {
-    channels: [
-      { name: "Social Media", revenue: 150000, spend: 45000 },
-      { name: "Email", revenue: 120000, spend: 30000 },
-      { name: "PPC", revenue: 80000, spend: 35000 },
-      { name: "SEO", revenue: 60000, spend: 15000 },
-      { name: "Referral", revenue: 50000, spend: 10000 },
-      { name: "Direct", revenue: 40000, spend: 5000 },
-    ],
-  });
+  const [localData, setLocalData] = useState(data || {channels:[]});
   const [editingIdx, setEditingIdx] = useState(null);
   const [editDraft, setEditDraft] = useState({});
 
@@ -2329,7 +2430,7 @@ const AddKpiWizard = ({ tabs, currentTabId, onBack, onClose, onSave }) => {
 /* ════════════════════════════════════════════════════════════════════════════
    Add Data Wizard — Dual rows + month-count selector + focus-safe
    ════════════════════════════════════════════════════════════════════════ */
-const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, onSaveField, onSavePanel, currentTabId }) => {
+const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack: backWizard, onClose: closeWizard, onSaveField, onSavePanel, currentTabId }) => {
   const editableTabs = tabs.filter((t) => {
     const hasEditableKpis = t.categories.some((c) => (c.kpis || []).some((k) => k.field));
     const hasPanel = t.categories.some((c) =>
@@ -2350,6 +2451,29 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
   const [saveState, setSaveState] = useState("idle");
   const timer = useRef(null);
   const docsRef = useRef(docs);
+  const pending = useRef({}), saveQueue = useRef(Promise.resolve()), saveFieldRef = useRef(onSaveField);
+  saveFieldRef.current = onSaveField;
+  const flush = () => {
+    if (timer.current) clearTimeout(timer.current);
+    saveQueue.current = saveQueue.current.catch(() => {}).then(async () => {
+      const batch = Object.entries(pending.current);
+      if (!batch.length) return;
+      setSaveState("saving");
+      try {
+        for (const [key, change] of batch) {
+          await saveFieldRef.current(change);
+          if (pending.current[key] === change) delete pending.current[key];
+        }
+        setSaveState(Object.keys(pending.current).length ? "saving" : "saved");
+      } catch (err) { setSaveState("error"); throw err; }
+    });
+    return saveQueue.current;
+  };
+  const onClose = async () => { try { await flush(); closeWizard(); } catch { /* Keep unsaved cells open for retry. */ } };
+  const onBack = async () => { try { await flush(); backWizard(); } catch { /* Keep unsaved cells open for retry. */ } };
+
+
+
 
   useEffect(() => { docsRef.current = docs; }, [docs]);
 
@@ -2385,18 +2509,14 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     c.panel === "riskAnalysis" || c.panel === "campaignPerf" ||
     c.panel === "pipelineTable")?.panel;
 
-  const draftKey = (kpiId, monthIdx, which) => `${monthIdx}|${kpiId}|${which}`;
+  const draftKey = (kpiId, monthIdx, which) => `${allMonths.find(m => m.month === monthIdx)?.key}|${kpiId}|${which}`;
 
   const value = (kpi, monthIdx, which) => {
     const dk = draftKey(kpi.id, monthIdx, which);
     if (draft[dk] !== undefined) return draft[dk];
-    if (!kpi.field) return "";
-    const path = which === "actual" ? kpi.field.a : kpi.field.b;
-    if (!path) return "";
-    const raw = kpi.field.scalar
-      ? atPath(docs[kpi.field.src], path)
-      : atPath(docs[kpi.field.src], path)?.[monthIdx];
-    return raw === undefined || raw === null ? "" : String(raw);
+    const month = allMonths.find(item => item.month === monthIdx);
+    const raw = kpi.entries?.[month?.key]?.[which];
+    return raw === null || raw === undefined ? "" : String(raw);
   };
 
   const setValue = (kpi, monthIdx, which, raw) => {
@@ -2404,12 +2524,8 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
     setDraft((p) => ({ ...p, [dk]: raw }));
     setSaveState("saving");
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      await onSaveField({ kpi, which, raw, monthIndex: monthIdx });
-      onSavePrefs({ tabId, startYear, monthCount, monthStart });
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1800);
-    }, 800);
+    pending.current[dk] = { kpi, which, raw, monthIndex: monthIdx, periodKey: allMonths.find(m => m.month === monthIdx)?.key };
+    timer.current = setTimeout(() => { flush().catch(() => {}); }, 800);
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -2480,7 +2596,7 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
       footer={<>
         <button onClick={onBack} style={btnGhost}><ArrowLeft size={13} /> Back</button>
         <span style={{ flex: 1, fontSize: "12.5px", color: saveState === "saved" ? T.green : T.muted, textAlign: "left" }}>
-          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Everything saves automatically"}
+          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed — press Done to retry" : "Everything saves automatically"}
         </span>
         <button onClick={onClose} style={btnPrimary}>Done</button>
       </>}>
@@ -2598,7 +2714,7 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
                 <tbody>
                   {kpiRowsOnly.map(({ kpi, category }, i) => {
                     const isScalar = !!kpi.field?.scalar;
-                    const hasTarget = !!kpi.field?.b;
+                    const hasTarget = kpi.custom || !!kpi.field?.b;
                     const alt = i % 2 ? T.panel : T.bg;
                     return (
                       <React.Fragment key={kpi.id}>
@@ -2760,23 +2876,7 @@ const AddDataWizard = ({ tabs, fy, docs, prefs, onSavePrefs, onBack, onClose, on
 
 /* ── Panel editors used inside AddDataWizard ─────────────────────────── */
 const Top3PanelEditor = ({ data, onSave }) => {
-  const [local, setLocal] = useState(data || {
-    channels: [
-      { name: "Social Media", revenue: 1200000, percentage: 35.2 },
-      { name: "PPC", revenue: 800000, percentage: 23.5 },
-      { name: "Email", revenue: 500000, percentage: 14.7 },
-    ],
-    customers: [
-      { name: "Acme Corp", revenue: 850000, percentage: 24.9 },
-      { name: "TechGlobal", revenue: 650000, percentage: 19.0 },
-      { name: "EcoSolutions", revenue: 450000, percentage: 13.2 },
-    ],
-    segments: [
-      { name: "Enterprise", revenue: 1500000, percentage: 44.0 },
-      { name: "SMB", revenue: 800000, percentage: 23.5 },
-      { name: "Startup", revenue: 400000, percentage: 11.7 },
-    ],
-  });
+  const [local, setLocal] = useState(data || {channels:[],customers:[],segments:[]});
   useEffect(() => { if (data) setLocal(data); }, [data]);
 
   const updateItem = (group, idx, field, val) => {
@@ -2830,14 +2930,7 @@ const Top3PanelEditor = ({ data, onSave }) => {
 };
 
 const ChannelPerfPanelEditor = ({ data, onSave }) => {
-  const [local, setLocal] = useState(data || [
-    { name: "Social Media", revenue: 150000, spend: 45000 },
-    { name: "Email", revenue: 120000, spend: 30000 },
-    { name: "PPC", revenue: 80000, spend: 35000 },
-    { name: "SEO", revenue: 60000, spend: 15000 },
-    { name: "Referral", revenue: 50000, spend: 10000 },
-    { name: "Direct", revenue: 40000, spend: 5000 },
-  ]);
+  const [local, setLocal] = useState(data || []);
   useEffect(() => { if (data) setLocal(data); }, [data]);
 
   const updateItem = (idx, field, val) => {
@@ -2941,12 +3034,7 @@ const RiskAnalysisPanelEditor = ({ data, onSave }) => {
 };
 
 const CampaignPanelEditor = ({ data, onSave }) => {
-  const [local, setLocal] = useState(data || [
-    { name: "Q1 Campaign", cost: 25000, revenue: 45000 },
-    { name: "Q2 Campaign", cost: 30000, revenue: 55000 },
-    { name: "Summer Sale", cost: 15000, revenue: 35000 },
-    { name: "Holiday Campaign", cost: 40000, revenue: 80000 },
-  ]);
+  const [local, setLocal] = useState(data || []);
   useEffect(() => { if (data) setLocal(data); }, [data]);
 
   const updateItem = (idx, field, val) => {
@@ -3013,10 +3101,10 @@ const PipelinePanelEditor = ({ data, onSave }) => {
 };
 
 /* ── Trend chart — dynamic base type + focus-safe ──────────────────── */
-const CHART_VERSION = 3;
+const CHART_VERSION = 4;
 const DEFAULT_CHART = {
   v: CHART_VERSION,
-  actualType: "bar", budgetType: "line", varianceType: "bar",
+  actualType: "bar", budgetType: "line", varianceType: "scatter",
   actualColor: "#1e40af", budgetColor: "#4a352f", showValues: false, showAxis: true,
 };
 const CHART_TYPES = [
@@ -3036,47 +3124,12 @@ const TrendChartModal = ({ kpi, period, fy, readOnly, onClose, onSaveNote, onSav
   const [noteState, setNoteState] = useState("idle");
   const [showCustomise, setShowCustomise] = useState(false);
   const noteTimer = useRef(null);
-  const prefs = kpi.chart?.v === CHART_VERSION ? { ...DEFAULT_CHART, ...kpi.chart } : { ...DEFAULT_CHART };
+  const prefs = { ...DEFAULT_CHART, ...(kpi.chart || {}), varianceType: kpi.chart?.v === CHART_VERSION ? (kpi.chart.varianceType || "scatter") : "scatter", v: CHART_VERSION };
 
   const { labels, actual, budget, noteKey, caption } = useMemo(() => {
-    const { startYear, startMonth } = fy;
-
-    if (period === "this_week" || period === "last_week") {
-      const [from] = periodWindow(period, fy);
-      const months = fyMonths(startYear, startMonth);
-      const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
-      return { labels: months.map((m) => m.label),
-        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-        noteKey: `W:${from.getFullYear()}-${from.getMonth()}`, caption: `Week of ${fmtDMY(from)} · monthly context` };
-    }
-
-    if (period === "this_month" || period === "last_month") {
-      const [from] = periodWindow(period, fy);
-      const months = fyMonths(startYear, startMonth);
-      const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
-      return { labels: months.map((m) => m.label),
-        actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-        noteKey: `M:${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,"0")}`,
-        caption: `FY ${fyLabel(startYear, startMonth)} · monthly context` };
-    }
-
-    if (period === "this_quarter" || period === "last_quarter") {
-      const qs = fyQuarters(startYear, startMonth);
-      const rows = qs.map((q) => {
-        const ms = q.months.map((m) => resolveMonth(kpi, m.year, m.month));
-        return { actual: rollUp(ms.map((r) => Number(r.actual)), kpi.aggregate),
-                 budget: rollUp(ms.map((r) => Number(r.budget)), kpi.aggregate) };
-      });
-      return { labels: qs.map((q) => `${q.label} ${fyLabel(startYear, startMonth)}`),
-        actual: rows.map((r) => r.actual), budget: rows.map((r) => r.budget),
-        noteKey: `Q:${startYear}`, caption: `Quarters of FY ${fyLabel(startYear, startMonth)}` };
-    }
-
-    const months = fyMonths(startYear, startMonth);
-    const rows = months.map((m) => resolveMonth(kpi, m.year, m.month));
-    return { labels: months.map((m) => m.label),
-      actual: rows.map((r) => parseNum(r.actual)), budget: rows.map((r) => parseNum(r.budget)),
-      noteKey: currentMonthKey(), caption: `FY ${fyLabel(startYear, startMonth)} · ${months[0].long} → ${months[11].long}` };
+    const [from, to] = periodWindow(period, fy), rows = rangeRows(kpi, from, to);
+    return { labels: rows.map(row => row.label), actual: rows.map(row => row.actual), budget: rows.map(row => row.budget),
+      noteKey: `${dayKeyOf(from)}:${dayKeyOf(to)}`, caption: `${fmtDMY(from)} – ${fmtDMY(to)} · Monthly · complete periods` };
   }, [kpi, period, fy]);
 
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
@@ -3097,30 +3150,30 @@ const TrendChartModal = ({ kpi, period, fy, readOnly, onClose, onSaveNote, onSav
   const varColors = variance.map((v) => v === null ? "rgba(138,122,116,0.4)" : varianceFavourable(kpi, v) ? T.green : T.red);
 
   const buildSeries = (type, data, color, { label, order } = {}) => {
-    const isArrayColor = Array.isArray(color);
-    if (type === "scatter") {
-      return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
-        showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
-        pointBackgroundColor: isArrayColor ? color.map((c) => `${c}33`) : "#ffffff",
-        pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
-    }
-    if (type === "line" || type === "area") {
-      return { type: "line", label, data,
-        borderColor: color, backgroundColor: type === "area" ? `${color}22` : "transparent",
-        borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: true,
-        pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
-        pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
-    }
-    return { type: "bar", label, data,
-      backgroundColor: isArrayColor ? color.map((c) => `${c}b3`) : `${color}b3`,
-      borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
-  };
+  const isArrayColor = Array.isArray(color);
+  if (type === "scatter") {
+    return { type: "scatter", label, data: data.map((v, i) => ({ x: i, y: v })),
+      showLine: false, pointStyle: "circle", pointRadius: 6, pointHoverRadius: 9,
+      pointBackgroundColor: isArrayColor ? color : "#ffffff",
+      pointBorderColor: isArrayColor ? color : color, pointBorderWidth: 2.4, order };
+  }
+  if (type === "line" || type === "area") {
+    return { type: "line", label, data,
+      borderColor: color, backgroundColor: type === "area" ? (isArrayColor ? color : `${color}22`) : "transparent",
+      borderWidth: 2.5, fill: type === "area", tension: 0.25, spanGaps: false,
+      pointRadius: 5, pointHoverRadius: 7, pointStyle: "circle",
+      pointBackgroundColor: "#ffffff", pointBorderColor: color, pointBorderWidth: 2.2, order };
+  }
+  return { type: "bar", label, data,
+    backgroundColor: isArrayColor ? color : `${color}b3`,
+    borderWidth: 0, borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.8, order };
+};
 
   const varianceData = { labels, datasets: [ buildSeries(prefs.varianceType, variance, varColors, { label: "Variance" }) ] };
   const varianceBaseType = baseChartType([prefs.varianceType]);
   const varianceOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: 10, bottom: 0 } },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
     plugins: {
       legend: { display: false }, datalabels: { display: false },
       tooltip: { backgroundColor: T.ink, padding: 10, cornerRadius: 8,
@@ -3130,8 +3183,12 @@ const TrendChartModal = ({ kpi, period, fy, readOnly, onClose, onSaveNote, onSav
             return y === null || y === undefined ? "Variance: no data"
               : `Variance: ${fmtValue(y, kpi, { signed: true })} (${varianceFavourable(kpi, y) ? "favourable" : "unfavourable"})`;
           } } } },
-    scales: { y: { display: false, grid: { display: false } },
-      x: { display: false, grid: { display: false }, offset: prefs.varianceType === "bar" } },
+    scales: {
+      y: { display: true, afterFit: scale => { scale.width = 88; }, grace: "20%", beginAtZero: true,
+        border: { display: false }, grid: { color: ctx => ctx.tick.value === 0 ? T.lineStrong : T.lineSoft },
+        ticks: { maxTicksLimit: 4, color: T.muted, font: { size: 10 }, callback: value => fmtValue(value, kpi, { bare: true, signed: true }) } },
+      x: { type: "category", labels, offset: true, display: false, grid: { display: false }, border: { display: false } },
+    },
   };
 
   const mainData = { labels, datasets: [
@@ -3141,8 +3198,8 @@ const TrendChartModal = ({ kpi, period, fy, readOnly, onClose, onSaveNote, onSav
   const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
   const mainOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    layout: { padding: { top: prefs.showValues ? 20 : 6 } },
-    plugins: { legend: { display: false }, datalabels: { display: false },
+    layout: { padding: { top: 12, right: 12, bottom: 0 } },
+    plugins: { legend: { display: false }, datalabels: { display: ctx => prefs.showValues && Number.isFinite(typeof ctx.dataset.data[ctx.dataIndex] === "object" ? ctx.dataset.data[ctx.dataIndex]?.y : ctx.dataset.data[ctx.dataIndex]), anchor: "end", align: "top", color: T.muted, font: { size: 10 }, formatter: value => fmtValue(typeof value === "object" ? value?.y : value, kpi, { bare: true }) },
       tooltip: { backgroundColor: T.ink, padding: 11, cornerRadius: 8,
         callbacks: { label: (c) => {
           const y = c.parsed.y ?? c.raw?.y;
@@ -3150,9 +3207,10 @@ const TrendChartModal = ({ kpi, period, fy, readOnly, onClose, onSaveNote, onSav
             : `${c.dataset.label}: ${fmtValue(y, kpi)}`;
         } } } },
     scales: {
-      y: { display: prefs.showAxis, grid: { display: prefs.showAxis, color: T.lineSoft },
-        ticks: { color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
-      x: { display: true, grid: { display: false },
+      y: { display: true, afterFit: scale => { scale.width = 88; }, border: { display: false },
+        grid: { display: prefs.showAxis, color: T.lineSoft },
+        ticks: { display: prefs.showAxis, color: T.body, font: { size: 11 }, callback: (v) => fmtValue(v, kpi, { bare: true }) } },
+      x: { type: "category", labels, offset: true, display: true, grid: { display: false },
         ticks: { color: T.body, font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
     },
   };
@@ -3222,21 +3280,25 @@ const TrendChartModal = ({ kpi, period, fy, readOnly, onClose, onSaveNote, onSav
         </div>
       )}
 
-      <div style={{ ...cardS, marginBottom: "14px", paddingTop: "12px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "2px" }}>
-          <span style={{ fontSize: "12.5px", fontWeight: 700, color: T.accent }}>Target vs Actual</span>
-          <span style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            {key("Variance", <span style={{ display: "inline-flex", gap: "3px" }}>{dot(T.green)}{dot(T.red)}</span>)}
+      <div style={{ ...cardS, marginBottom: 14, padding: "16px 12px 12px", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "0 6px 14px" }}>
+          <strong style={{ fontSize: 13, color: T.accent }}>Target vs Actual</strong>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
             {key("Target", swatchFor(prefs.budgetType, prefs.budgetColor))}
             {key("Actual", swatchFor(prefs.actualType, prefs.actualColor))}
-          </span>
+            <span style={{ width: 1, height: 14, background: T.lineSoft }} aria-hidden="true" />
+            {key("Favourable", dot(T.green, true))}{key("Unfavourable", dot(T.red, true))}
+          </div>
         </div>
-
-        <div style={{ height: "112px", marginBottom: "-16px" }}>
+        <div style={{ paddingLeft: 88, paddingRight: 12, fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 2 }}>
+          Variance · Actual − Target
+        </div>
+        <div style={{ height: 130 }}>
           <Chart type={varianceBaseType} data={varianceData} options={varianceOptions} />
         </div>
-        <div style={{ height: "300px" }}>
-          <Chart type={mainBaseType} data={mainData} options={mainOptions} />
+        <div aria-hidden="true" style={{ borderTop: `1px solid ${T.lineSoft}`, margin: "6px 12px 0 88px" }} />
+        <div style={{ height: 320 }}>
+          <Chart type={mainBaseType} data={mainData} options={mainOptions} plugins={[ChartDataLabels]} />
         </div>
       </div>
 
@@ -3420,8 +3482,14 @@ const META_DOC = "marketingSalesKpiMeta";
 const MarketingSales = () => {
   const [user, setUser] = useState(null);
   const [fyStartMonth, setFyStartMonth] = useState(0);
-  const [docs, setDocs] = useState({});
-  const [meta, setMeta] = useState({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [] });
+  const [docs, setDocsState] = useState({});
+  const liveDocs = useRef({});
+  const setDocs = useCallback(next => { liveDocs.current = typeof next === "function" ? next(liveDocs.current) : next; setDocsState(liveDocs.current); }, []);
+
+  const [meta, setMetaState] = useState({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [] });
+  const liveMeta = useRef(meta);
+  const setMeta = useCallback(next => { liveMeta.current = typeof next === "function" ? next(liveMeta.current) : next; setMetaState(liveMeta.current); }, []);
+
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [dataPrefs, setDataPrefs] = useState(null);
@@ -3455,12 +3523,15 @@ const MarketingSales = () => {
   const [notesKpi, setNotesKpi] = useState(null);
   const [addFlow, setAddFlow] = useState(null);
   const [manageTabs, setManageTabs] = useState(false);
+  const [orderingTabId, setOrderingTabId] = useState(null);
+  const [showSpreadsheet, setShowSpreadsheet] = useState(false);
+  const [dateRange, setDateRange] = useState(null);
   const [marketingPanel, setMarketingPanel] = useState(null);
   const [showReport, setShowReport] = useState(false);
 
   const [pipelineRecords, setPipelineRecords] = useState([]);
 
-  const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth) }), [fyStartMonth]);
+  const fy = useMemo(() => ({ startMonth: fyStartMonth, startYear: fyStartYearOf(new Date(), fyStartMonth), range: dateRange, period }), [fyStartMonth, dateRange, period]);
 
   const notify = (type, message) => {
     setNotification({ type, message: String(message) });
@@ -3516,7 +3587,22 @@ const MarketingSales = () => {
         setFyStartMonth(fyStartMonthFromEnd(profile.exists() ? profile.data()?.entityOverview?.financialYearEnd : null));
         const [loaded, metaSnap] = await Promise.all([loadAll(user.uid), getDoc(doc(db, "marketingData", `${user.uid}_${META_DOC}`))]);
         setDocs(loaded);
-        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], ...metaSnap.data() });
+        const loadedMeta = { kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], ...(metaSnap.exists() ? metaSnap.data() : {}) };
+        if (!Number.isInteger(loadedMeta.legacySourceYear)) {
+          // Anchor the old undated twelve-slot format once, rather than relabelling it each year.
+          loadedMeta.legacySourceYear = new Date().getFullYear();
+          loadedMeta.legacyDateNotice = "Undated legacy monthly values were anchored to " + loadedMeta.legacySourceYear + ". Verify their year before using historical reports.";
+          for (const k of Object.values(loadedMeta.kpis)) {
+            const entries = { ...(k.entries || {}) };
+            for (let month = 0; month < 12; month++) {
+              const old = entries[`M:${month}`], dated = `M:${loadedMeta.legacySourceYear}-${String(month+1).padStart(2,"0")}`;
+              if (old && !entries[dated]) entries[dated] = old;
+            }
+            k.entries = entries;
+          }
+          if (!isInvestorView) await setDoc(doc(db,"marketingData",`${user.uid}_${META_DOC}`),loadedMeta,{merge:true});
+        }
+        setMeta(loadedMeta);
       } catch (err) {
         console.error("Error loading marketing data:", err);
         notify("error", `Could not load your marketing data: ${errText(err)}`);
@@ -3533,7 +3619,7 @@ const MarketingSales = () => {
       await setDoc(doc(db, "marketingData", `${user.uid}_${META_DOC}`), { ...next, userId: user.uid, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
       console.error("Error saving KPI meta:", err);
-      notify("error", `Changes could not be saved: ${errText(err)}`);
+      notify("error", `Changes could not be saved: ${errText(err)}`); throw err;
     }
   };
 
@@ -3545,7 +3631,7 @@ const MarketingSales = () => {
 
   const writeDoc = async (src, mutate) => {
     if (!user?.uid || isInvestorView) return;
-    const next = JSON.parse(JSON.stringify(docs[src] || {}));
+    const next = JSON.parse(JSON.stringify(liveDocs.current[src] || {}));
     mutate(next);
     next.userId = user.uid;
     next.lastUpdated = new Date().toISOString();
@@ -3554,7 +3640,7 @@ const MarketingSales = () => {
       await setDoc(doc(db, "marketingData", `${user.uid}${DOC[src]}`), next, { merge: true });
     } catch (err) {
       console.error(`Error saving ${src}:`, err);
-      notify("error", `Could not save: ${errText(err)}`);
+      notify("error", `Could not save: ${errText(err)}`); throw err;
     }
   };
 
@@ -3572,17 +3658,26 @@ const MarketingSales = () => {
     node[leaf] = arr;
   };
 
-  const saveKpiField = async ({ kpi, which, raw, monthIndex }) => {
+  const saveKpiField = async ({ kpi, which, raw, monthIndex, periodKey }) => {
+    if (!/^M:\d{4}-\d{2}$/.test(periodKey || "")) throw new Error("Choose a dated month before saving.");
+    const key = periodKey;
+    const entries = { ...(liveMeta.current.kpis[kpi.id]?.entries || {}) };
+    entries[key] = { ...(entries[key] || {}), [which]: parseNum(raw) };
     if (kpi.custom) {
-      const key = `M:${monthIndex}`;
-      const entries = { ...(meta.kpis[kpi.id]?.entries || {}) };
-      entries[key] = { ...(entries[key] || {}), [which]: parseNum(raw) };
-      await persistMeta({ ...meta, kpis: { ...meta.kpis, [kpi.id]: { ...(meta.kpis[kpi.id] || {}), entries } } });
+      await persistMeta({ ...liveMeta.current, legacySourceYear: liveMeta.current.legacySourceYear ?? new Date().getFullYear(),
+        kpis: { ...liveMeta.current.kpis, [kpi.id]: { ...(liveMeta.current.kpis[kpi.id] || {}), entries } } });
       return;
     }
     const path = which === "actual" ? kpi.field?.a : kpi.field?.b;
     if (!path) return;
-    await writeDoc(kpi.field.src, (d) => setAtPath(d, path, raw, { scalar: !!kpi.field.scalar, monthIndex }));
+    const year = Number(key.slice(2, 6));
+    await writeDoc(kpi.field.src, d => {
+      const legacyYear = liveMeta.current.legacySourceYear;
+      if (!d.annualData) d.annualData = {};
+      if (!d.annualData[year]) d.annualData[year] = year === legacyYear ? JSON.parse(JSON.stringify({ ...d, annualData: undefined })) : {};
+      setAtPath(d.annualData[year], path, raw, { scalar: !!kpi.field.scalar, monthIndex });
+      if (year === legacyYear) setAtPath(d, path, raw, { scalar: !!kpi.field.scalar, monthIndex });
+    });
   };
 
   const saveMarketingPanelData = async (mode, data) => {
@@ -3613,26 +3708,31 @@ const MarketingSales = () => {
         if (found) found.kpis.push(kpi);
         else cats.push({ name: c.category, kpis: [kpi] });
       });
+      const order = meta.categoryOrder?.[tab.id] || [];
+      cats.sort((a, b) => (order.includes(a.name) ? order.indexOf(a.name) : 9999) - (order.includes(b.name) ? order.indexOf(b.name) : 9999));
       return { ...tab, categories: cats };
     });
 
-    const months = fyMonths(fy.startYear, fy.startMonth);
+    const legacyYear = meta.legacySourceYear ?? new Date().getFullYear();
+    const yearDocs = year => Object.fromEntries(Object.entries(docs).map(([key, value]) => [key, year === legacyYear ? value : value?.annualData?.[year] || {}]));
+    const months = [...new Map([...fyMonths(legacyYear, 0), ...fyMonths(fy.startYear - 1, fy.startMonth), ...fyMonths(fy.startYear, fy.startMonth),
+      ...Object.values(meta.kpis || {}).flatMap(k => Object.keys(k.entries || {}).filter(key => /^M:\d{4}-\d{2}$/.test(key)).map(key => ({key, month: Number(key.slice(7)) - 1})))].map(m => [m.key,m])).values()];
     return withCustom.map((tab) => ({
       ...tab,
       categories: tab.categories.map((cat) => ({
         ...cat,
         kpis: (cat.kpis || []).filter((kpi) => !(meta.hiddenKpis || []).includes(kpi.id)).map((kpi) => {
-          const entries = {};
+          const entries = kpi.custom ? { ...(meta.kpis[kpi.id]?.entries || {}) } : {};
           months.forEach((m) => {
             if (kpi.custom) {
-              const saved = meta.kpis[kpi.id]?.entries?.[`M:${m.month}`];
+              const saved = meta.kpis[kpi.id]?.entries?.[m.key] || (Number(m.key.slice(2,6)) === legacyYear ? meta.kpis[kpi.id]?.entries?.[`M:${m.month}`] : null);
               entries[m.key] = { actual: saved?.actual ?? null, budget: saved?.budget ?? null };
             } else if (kpi.field?.src && kpi.field?.a) {
               const src = kpi.field.src;
               const aPath = kpi.field.a;
               const bPath = kpi.field.b;
-              const aRaw = aPath ? atPath(docs[src], aPath)?.[m.month] : null;
-              const bRaw = bPath ? atPath(docs[src], bPath)?.[m.month] : null;
+              const aRaw = aPath ? atPath(yearDocs(Number(m.key.slice(2,6)))[src], aPath)?.[m.month] : null;
+              const bRaw = bPath ? atPath(yearDocs(Number(m.key.slice(2,6)))[src], bPath)?.[m.month] : null;
               const aVal = parseNum(aRaw);
               const bVal = parseNum(bRaw);
               entries[m.key] = {
@@ -3640,13 +3740,15 @@ const MarketingSales = () => {
                 budget: bVal !== null ? bVal : kpi.benchmark,
               };
             } else {
-              const ctx = buildContext(docs, m.month);
+              const ctx = buildContext(yearDocs(Number(m.key.slice(2,6))), m.month);
               const b = kpi.budget ? kpi.budget(ctx) : null;
               entries[m.key] = {
                 actual: kpi.actual ? kpi.actual(ctx) : null,
                 budget: b !== null && b !== undefined ? b : kpi.benchmark,
               };
             }
+            const override = meta.kpis[kpi.id]?.entries?.[m.key];
+            if (kpi.custom && override) entries[m.key] = { ...entries[m.key], ...override };
           });
           const saved = meta.kpis[kpi.id] || {};
           return {
@@ -3700,7 +3802,7 @@ const MarketingSales = () => {
       else if (key === "units") set.add(r.kpi.units);
       else if (key === "status") set.add(r.status.label);
     });
-    return ["all", ...Array.from(set).sort()];
+    return ["all", ...(key === "category" ? Array.from(set) : Array.from(set).sort())];
   };
 
   const rows = useMemo(() => {
@@ -3722,7 +3824,7 @@ const MarketingSales = () => {
     }[sortConfig.key];
 
     return [...list].sort((a, b) => {
-      if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName);
+      if (a.categoryName !== b.categoryName) return allRows.findIndex(row => row.categoryName === a.categoryName) - allRows.findIndex(row => row.categoryName === b.categoryName);
       if (!get) return 0;
       const av = get(a), bv = get(b);
       if (typeof av === "number" && typeof bv === "number") return sortConfig.direction === "asc" ? av - bv : bv - av;
@@ -3781,52 +3883,6 @@ const MarketingSales = () => {
   };
 
   /* ── CSV: proper quoting + BOM + split rows ── */
-  const downloadCSV = () => {
-    const escape = (v) => {
-      if (v === null || v === undefined) return "";
-      const s = String(v);
-      if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-      return s;
-    };
-    const lines = [];
-    lines.push(["Section", "Category", "KPI", "Units", "Period", "Target", "Actual", "Variance", "Status"].map(escape).join(","));
-
-    const pushKpiRows = (tab, cat, kpi) => {
-      const v = periodValues(kpi, period, fy);
-      const status = getStatus(kpi, period, fy);
-      const variance = getVariance(kpi, period, fy);
-      lines.push([
-        tab.name, cat.name, kpi.name, kpi.units,
-        PERIOD_LABEL[period], v.budget ?? "", v.actual ?? "", variance ?? "", status.label,
-      ].map(escape).join(","));
-      const split = buildSplitRows(kpi, fy);
-      split.rows.forEach((r) => {
-        const varRow = Number.isFinite(Number(r.actual)) && Number.isFinite(Number(r.budget))
-          ? Number(r.actual) - Number(r.budget) : "";
-        lines.push([
-          tab.name, cat.name, kpi.name, kpi.units,
-          r.label, r.budget ?? "", r.actual ?? "", varRow, "",
-        ].map(escape).join(","));
-      });
-    };
-
-    tabs.forEach((tab) =>
-      tab.categories.forEach((cat) =>
-        (cat.kpis || []).forEach((kpi) => pushKpiRows(tab, cat, kpi))
-      )
-    );
-
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `marketing-sales-${period}-FY${fyLabel(fy.startYear, fy.startMonth).replace("/", "-")}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const exitInvestorView = () => {
     const origin = sessionStorage.getItem("viewOrigin");
     ["viewingSMEId", "viewingSMEName", "investorViewMode", "viewOrigin"].forEach((k) => sessionStorage.removeItem(k));
@@ -3886,6 +3942,7 @@ const MarketingSales = () => {
             <h3 style={{ color: T.accent, marginTop: 0, marginBottom: "10px", fontSize: "14.5px", fontWeight: 600 }}>What this dashboard does</h3>
             <ul style={{ color: T.body, fontSize: "13.5px", lineHeight: 1.75, margin: 0, paddingLeft: "18px" }}>
               <li>Assesses pipeline visibility, quality, and concentration</li>
+              {meta.legacyDateNotice && <li>{meta.legacyDateNotice}</li>}
               <li>Evaluates demand risk and market exposure</li>
               <li>Monitors lead generation effectiveness and conversion rates</li>
               <li>Measures customer acquisition cost and marketing ROI</li>
@@ -3970,7 +4027,8 @@ const MarketingSales = () => {
               )}
             </div>
           )}
-          <button onClick={downloadCSV} style={btnGhost}><Download size={14} /> CSV</button>
+          {isKpiTableTab && !isInvestorView && activeTab?.categories.length > 1 && <button onClick={() => setOrderingTabId(activeTab.id)} style={btnGhost}><ArrowUpDown size={14} /> Order categories</button>}
+          {isKpiTableTab && <button onClick={() => setShowSpreadsheet(true)} style={btnGhost}><FileSpreadsheet size={14} /> Spreadsheet</button>}
           <button onClick={() => { window.location.href = "/raps-actions"; }} style={btnGhost}>
             <ClipboardList size={14} /> Marketing & Sales Overview <ExternalLink size={11} />
           </button>
@@ -3978,24 +4036,25 @@ const MarketingSales = () => {
             <FileText size={14} /> Report
           </button>
           {!isInvestorView && (
-            <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add KPI/Data</button>
+            <button onClick={() => setAddFlow("choose")} style={btnPrimary}><Plus size={14} /> Add Data</button>
           )}
         </div>
       </div>
 
+      {isKpiTableTab && <DateRangeControls fy={fy} onChange={range => { setDateRange(range); setPeriod("custom"); }} />}
       {isKpiTableTab && (
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
           <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px", flexWrap: "wrap" }}>
             {PERIODS.map((p) => {
               const on = p.key === period;
               return (
-                <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "7px 13px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 600, border: "none", fontFamily: "inherit", background: on ? T.bg : "transparent", color: on ? T.accent : T.body, boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
+                <button key={p.key} disabled={p.key === "custom" && !dateRange} onClick={() => setPeriod(p.key)} style={{ padding: "7px 13px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 600, border: "none", fontFamily: "inherit", background: on ? T.bg : "transparent", color: on ? T.accent : T.body, boxShadow: on ? "0 1px 3px rgba(45,32,28,0.14)" : "none" }}>
                   {p.label}
                 </button>
               );
             })}
           </div>
-          <span style={{ fontSize: "12.5px", color: T.muted }}>Showing {PERIOD_PREFIX[period].toLowerCase()} target, actual and variance</span>
+
         </div>
       )}
 
@@ -4084,7 +4143,8 @@ const MarketingSales = () => {
                             </td>
                           )}
                           {cell("units", <span style={{ color: T.body }}>{kpi.units}</span>)}
-                          {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
+                          {cell("frequency", <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 999, background: T.raised, color: T.body }}>Monthly</span>)}
+                      {cell("budget", <span style={{ color: T.body, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.budget, kpi, { bare: true })}</span>)}
                           {cell("actual", <span style={{ fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{fmtValue(values.actual, kpi, { bare: true })}</span>)}
                           {cell("variance", variance === null || kpi.options ? <span style={{ color: T.faint }}>—</span> : <span style={{ fontWeight: 700, color: fav ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>{fmtValue(variance, kpi, { signed: true, bare: true })}</span>)}
                           {cell("status", <span style={{ display: "inline-flex" }} title={status.label}><StatusIcon status={status} size={22} /></span>)}
@@ -4177,6 +4237,16 @@ const MarketingSales = () => {
       {actionKpi && <AddActionModal kpi={actionKpi.kpi} period={period} fy={fy} categoryName={actionKpi.categoryName} tabName={actionKpi.tabName} userId={user?.uid} onClose={() => setActionKpi(null)} onSaved={(m) => notify("success", `Action added to "${m}" and Integrated Actions.`)} />}
       {notesKpi && <NotesModal kpi={notesKpi} readOnly={isInvestorView} onClose={() => setNotesKpi(null)} onSave={(notes) => { updateKpiMeta(notesKpi.id, { notes }); setNotesKpi({ ...notesKpi, notes }); }} />}
 
+      {isKpiTableTab && !isInvestorView && orderingTabId && <CategoryOrderModal key={orderingTabId}
+        tab={tabs.find(tab => tab.id === orderingTabId)} onClose={() => setOrderingTabId(null)}
+        onSave={async order => {
+          const previous = liveMeta.current;
+          try { await persistMeta({ ...previous, categoryOrder: { ...previous.categoryOrder, [orderingTabId]: order } }); notify("success", "Category order saved."); }
+          catch (err) { setMeta(previous); throw err; }
+        }} />}
+      {showSpreadsheet && <SpreadsheetDownloadModal structure={visibleTabs.filter(tab => tab.id === "summary")} activeTabId={activeTabId}
+        fy={fy} period={period} onClose={() => setShowSpreadsheet(false)} />}
+
       {manageTabs && (
         <Modal title="Manage Dashboard Tabs" subtitle="Show or hide a tab from the dashboard" icon={<Settings2 size={17} />} onClose={() => setManageTabs(false)} width={560} footer={<button onClick={() => setManageTabs(false)} style={btnPrimary}>Done</button>}>
           {tabs.map((t) => {
@@ -4219,7 +4289,7 @@ const MarketingSales = () => {
 
       {showReport && (
         <MarketingReportGenerator
-          tabs={visibleTabs} fy={fy} period={period}
+          tabs={visibleTabs} fy={fy} period={period} docs={docs}
           userId={user?.uid} userName={userName}
           pipelineRecords={pipelineRecords}
           getStatusFn={getStatus}

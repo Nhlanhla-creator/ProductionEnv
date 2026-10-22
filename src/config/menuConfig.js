@@ -712,7 +712,7 @@ export const smeMenuItems = [
           },
         ],
       },
-      // ─── RAPs ────────────────────────────────────────────────────────────
+      // ─── RAPs (Operational Performance removed) ──────────────────────────
       {
         id: "raps",
         label: "RAPs",
@@ -738,12 +738,6 @@ export const smeMenuItems = [
             icon: <ListChecks size={16} />,
             route: "/raps-actions",
           },
-          {
-            id: "operational-strength",
-            label: "Operational Performance",
-            icon: <Activity size={16} />,
-            route: "/OperationalStrength",
-          },
         ],
       },
       {
@@ -757,6 +751,13 @@ export const smeMenuItems = [
         label: "Financial Performance",
         icon: <PieChart size={16} />,
         route: "/FinancialPerformance",
+      },
+      // ─── Operational Performance now lives here (sibling of Financial) ───
+      {
+        id: "operational-performance",
+        label: "Operational Performance",
+        icon: <Activity size={16} />,
+        route: "/OperationalStrength",
       },
       {
         id: "people",
