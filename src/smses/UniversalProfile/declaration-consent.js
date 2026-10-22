@@ -20,17 +20,10 @@ export default function DeclarationConsent({
     updateData({ [name]: checked })
   }
 
-  const handleFileChange = (name, files) => {
-    updateData({ [name]: files })
-  }
-
-  const handleSubmit = () => {
-    setShowSummary(true)
-  }
+  const handleFileChange = (name, files) => updateData({ [name]: files })
+  const handleSubmit = () => setShowSummary(true)
   const user = auth.currentUser
 
-  // Fallback: if parent didn't provide the howDidYouHear props, we can still
-  // read/write the value nested inside declarationConsent (legacy shape).
   const fallbackHowData = data?.howDidYouHear || {}
   const effectiveHowData = onHowDidYouHearUpdate ? howDidYouHearData : fallbackHowData
   const effectiveHowUpdate = onHowDidYouHearUpdate
@@ -40,19 +33,6 @@ export default function DeclarationConsent({
   return (
     <div>
       <h2 className="text-2xl font-bold text-brown-800 mb-6">Declaration &amp; Consent</h2>
-
-      {/* ────────────────────────────────────────────────────────────────────── */}
-      {/* How Did You Hear About Us — MOVED HERE from Entity Overview             */}
-      {/* ────────────────────────────────────────────────────────────────────── */}
-      <div
-        className="bg-brown-50 p-6 rounded-lg mb-8"
-        style={{ backgroundColor: "#efebe9", border: "1px solid #d7ccc8" }}
-      >
-        <HowDidYouHear
-          data={effectiveHowData}
-          updateData={effectiveHowUpdate}
-        />
-      </div>
 
       <div className="max-w-5xl mx-left">
         <div className="bg-brown-50 p-6 rounded-lg mb-8">
@@ -64,17 +44,8 @@ export default function DeclarationConsent({
           </p>
           <div className="mt-4">
             <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="accuracy"
-                checked={data.accuracy || false}
-                onChange={handleChange}
-                className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded"
-                required
-              />
-              <span className="ml-2 text-brown-700">
-                I confirm that all information provided is accurate and complete
-              </span>
+              <input type="checkbox" name="accuracy" checked={data.accuracy || false} onChange={handleChange} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" required />
+              <span className="ml-2 text-brown-700">I confirm that all information provided is accurate and complete</span>
             </label>
           </div>
         </div>
@@ -92,17 +63,8 @@ export default function DeclarationConsent({
           </p>
           <div className="mt-4">
             <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="dataProcessing"
-                checked={data.dataProcessing || false}
-                onChange={handleChange}
-                className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded"
-                required
-              />
-              <span className="ml-2 text-brown-700">
-                I consent to the collection and processing of my data as described
-              </span>
+              <input type="checkbox" name="dataProcessing" checked={data.dataProcessing || false} onChange={handleChange} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" required />
+              <span className="ml-2 text-brown-700">I consent to the collection and processing of my data as described</span>
             </label>
           </div>
         </div>
@@ -114,22 +76,9 @@ export default function DeclarationConsent({
               Please upload the signed permission agreement form confirming that the business/partner has granted permission to be onboarded by the Capital and Market Facilitator (CMF).
             </p>
             <div className="mt-4">
-              <input
-                type="file"
-                name="cmfPermissionAgreement"
-                onChange={(e) => handleFileChange("cmfPermissionAgreement", e.target.files[0])}
-                className="block w-full text-sm text-brown-500
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-full file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-brown-50 file:text-brown-700
-                  hover:file:bg-brown-100"
-                required
-              />
+              <input type="file" name="cmfPermissionAgreement" onChange={(e) => handleFileChange("cmfPermissionAgreement", e.target.files[0])} className="block w-full text-sm text-brown-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brown-50 file:text-brown-700 hover:file:bg-brown-100" required />
               {data.cmfPermissionAgreement && (
-                <p className="text-sm text-green-600 mt-2 font-medium">
-                  ✓ Form attached: {data.cmfPermissionAgreement.name || "Permission Document"}
-                </p>
+                <p className="text-sm text-green-600 mt-2 font-medium">✓ Form attached: {data.cmfPermissionAgreement.name || "Permission Document"}</p>
               )}
             </div>
           </div>
@@ -142,21 +91,18 @@ export default function DeclarationConsent({
           </p>
           <div className="mt-4">
             <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="termsConditions"
-                checked={data.termsConditions || false}
-                onChange={handleChange}
-                className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded"
-                required
-              />
+              <input type="checkbox" name="termsConditions" checked={data.termsConditions || false} onChange={handleChange} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" required />
               <span className="ml-2 text-brown-700">We consent to our program being listed publicly</span>
             </label>
           </div>
         </div>
+
+        {/* How Did You Hear About Us — MOVED TO THE END */}
+        <div className="bg-brown-50 p-6 rounded-lg mb-8" style={{ backgroundColor: "#efebe9", border: "1px solid #d7ccc8" }}>
+          <HowDidYouHear data={effectiveHowData} updateData={effectiveHowUpdate} />
+        </div>
       </div>
 
-      {/* Registration Summary Modal */}
       <RegistrationSummary
         data={allFormData || data}
         open={showSummary}
