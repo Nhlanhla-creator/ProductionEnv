@@ -23,7 +23,7 @@ export default function Settings() {
     paleBrown: "#f0e6d9",
   }
 
-  const TEAM_MEMBERS_ENABLED = true
+  const TEAM_MEMBERS_ENABLED = false
   const INVITE_ACCEPT_PATH = "/accept-invitation" // route that handles ?token=...
   const [accountLoaded, setAccountLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("account")
@@ -991,13 +991,12 @@ const handleUpdateRole = async (memberId, newRole) => {
             { key: "security", label: "Security" },
             { key: "appearance", label: "Appearance", disabled: true },
             { key: "notifications", label: "Notifications" },
-            // Update your tabs array to include "team"
-{ key: "team", label: "Team Members" },
+            { key: "team", label: "Team Members", disabled: !TEAM_MEMBERS_ENABLED },
           ].map((tab) => (
             <button
               key={tab.key}
               disabled={!!tab.disabled}
-              title={tab.disabled ? "Coming soon" : undefined}
+              title={tab.key === "team" && tab.disabled ? "Team Members is currently locked" : tab.disabled ? "Coming soon" : undefined}
               onClick={() => { if (!tab.disabled) setActiveTab(tab.key) }}
               style={{
                 padding: "1.25rem 1.5rem",
@@ -1013,7 +1012,7 @@ const handleUpdateRole = async (memberId, newRole) => {
                 whiteSpace: "nowrap",
               }}
             >
-              {tab.label}{tab.disabled ? " (Coming soon)" : ""}
+              {tab.label}{tab.key === "team" && tab.disabled ? " (Locked)" : tab.disabled ? " (Coming soon)" : ""}
             </button>
           ))}
         </div>
