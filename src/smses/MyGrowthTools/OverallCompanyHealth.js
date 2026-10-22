@@ -5,6 +5,7 @@ import { httpsCallable, getFunctions } from "firebase/functions";
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
+import { Brain, ClipboardList, Info, MessageSquare, Route } from "lucide-react";
 
 // ==================== VIEWER ORIGINS ====================
 // Every cohorts table that can open this page "as" an SME writes viewOrigin
@@ -1561,23 +1562,35 @@ function OverallCompanyHealth() {
 
                   <div style={{ padding: "12px", display: "flex", alignItems: "center", gap: "7px", flexWrap: "wrap" }}>
                     {[
-                      ["sections", "Sections assessed"],
-                      ["analysis", "AI analysis"],
-                      ["more", "More info"],
-                      ["notes", "Notes / comments"],
-                    ].map(([mode, label]) => (
+                      { mode: "sections", label: "Sections assessed", Icon: ClipboardList },
+                      { mode: "analysis", label: "AI analysis", Icon: Brain },
+                      { mode: "more", label: "More information", Icon: Info },
+                      { mode: "notes", label: "Notes / comments", Icon: MessageSquare },
+                      ...(row.key === "strategy"
+                        ? [{ mode: "strategyPlan", label: "Detailed strategy & execution plan", Icon: Route }]
+                        : []),
+                    ].map(({ mode, label, Icon }) => (
                       <button
                         key={mode}
                         type="button"
                         onClick={() => openDetailModal(row, mode)}
+                        title={label}
+                        aria-label={label}
                         style={{
-                          border: "1px solid #d8c8b9", borderRadius: "6px",
-                          padding: "7px 9px", background: mode === "analysis" ? "#7d5a50" : "#fff",
+                          position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: "36px", height: "36px", border: "1px solid #d8c8b9", borderRadius: "6px",
+                          padding: "7px", background: mode === "analysis" ? "#7d5a50" : "#fff",
                           color: mode === "analysis" ? "#fff" : "#5d4037",
-                          fontSize: "11px", fontWeight: 700, cursor: "pointer",
+                          cursor: "pointer",
                         }}
                       >
-                        {label}{mode === "notes" && healthNotes[row.key]?.trim() ? " •" : ""}
+                        <Icon size={17} aria-hidden="true" />
+                        {mode === "notes" && healthNotes[row.key]?.trim() && (
+                          <span aria-hidden="true" style={{
+                            position: "absolute", top: "4px", right: "4px",
+                            width: "6px", height: "6px", borderRadius: "50%", background: "#b91c1c",
+                          }} />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1586,31 +1599,6 @@ function OverallCompanyHealth() {
             );
           })}
         </div>
-
-        {Array.isArray(aiResults?.strategyExecutionPlan) && aiResults.strategyExecutionPlan.length > 0 && (
-          <section style={{ margin: "24px 20px 0", padding: "20px", background: "#fdfcfb", border: "1px solid #e8ddd4", borderRadius: "10px" }}>
-            <h2 style={{ margin: "0 0 6px", color: "#5d4037", fontSize: "20px" }}>Strategy execution plan</h2>
-            <p style={{ margin: "0 0 16px", color: "#7d5a50", fontSize: "13px", lineHeight: 1.5 }}>
-              Evidence-based actions aligned to {companyContext.companyName || "the company"}’s stated mission and recorded milestones.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
-              {aiResults.strategyExecutionPlan.map((item, index) => (
-                <article key={`${item.objective}-${index}`} style={{ padding: "15px", background: "#f7f3f0", border: "1px solid #e8ddd4", borderRadius: "8px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
-                    <strong style={{ color: "#4a352f" }}>{item.objective}</strong>
-                    <span style={{ padding: "3px 8px", borderRadius: "10px", background: item.priority === "high" ? "#fee2e2" : item.priority === "medium" ? "#fef3c7" : "#d1fae5", color: "#5d4037", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>{item.priority}</span>
-                  </div>
-                  <ol style={{ paddingLeft: "20px", margin: "12px 0", color: "#4a352f", fontSize: "12px", lineHeight: 1.6 }}>
-                    {item.actions.map((action, actionIndex) => <li key={actionIndex}>{action}</li>)}
-                  </ol>
-                  <p style={{ margin: "5px 0", color: "#5d4037", fontSize: "12px" }}><strong>Owner:</strong> {item.owner}</p>
-                  <p style={{ margin: "5px 0", color: "#5d4037", fontSize: "12px" }}><strong>Due:</strong> {item.dueDate}</p>
-                  <p style={{ margin: "5px 0 0", color: "#5d4037", fontSize: "12px" }}><strong>Success measure:</strong> {item.successMeasure}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
 
         {detailModal && (() => {
           const row = HEALTH_DATA.find((item) => item.key === detailModal.key);
@@ -1622,6 +1610,7 @@ function OverallCompanyHealth() {
             analysis: "AI analysis",
             more: "More information",
             notes: "Notes / comments",
+            strategyPlan: "Detailed strategy & execution plan",
           };
           return (
             <div
@@ -1646,6 +1635,34 @@ function OverallCompanyHealth() {
                 <div style={{ padding: "20px 22px" }}>
                   {detailModal.mode === "sections" && (
                     <SectionBreakdown metrics={row.metrics} live={live} aiSections={ai?.sections || {}} />
+                  )}
+
+                  {detailModal.mode === "strategyPlan" && (
+                    Array.isArray(aiResults?.strategyExecutionPlan) && aiResults.strategyExecutionPlan.length > 0 ? (
+                      <div>
+                        <p style={{ marginTop: 0, color: "#7d5a50", fontSize: "13px", lineHeight: 1.5 }}>
+                          Evidence-based actions aligned to {companyContext.companyName || "the company"}’s stated mission and recorded milestones.
+                        </p>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
+                          {aiResults.strategyExecutionPlan.map((item, index) => (
+                            <article key={`${item.objective}-${index}`} style={{ padding: "15px", background: "#f7f3f0", border: "1px solid #e8ddd4", borderRadius: "8px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                                <strong style={{ color: "#4a352f" }}>{item.objective}</strong>
+                                <span style={{ padding: "3px 8px", borderRadius: "10px", background: item.priority === "high" ? "#fee2e2" : item.priority === "medium" ? "#fef3c7" : "#d1fae5", color: "#5d4037", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>{item.priority}</span>
+                              </div>
+                              <ol style={{ paddingLeft: "20px", margin: "12px 0", color: "#4a352f", fontSize: "12px", lineHeight: 1.6 }}>
+                                {item.actions.map((action, actionIndex) => <li key={actionIndex}>{action}</li>)}
+                              </ol>
+                              <p style={{ margin: "5px 0", color: "#5d4037", fontSize: "12px" }}><strong>Owner:</strong> {item.owner}</p>
+                              <p style={{ margin: "5px 0", color: "#5d4037", fontSize: "12px" }}><strong>Due:</strong> {item.dueDate}</p>
+                              <p style={{ margin: "5px 0 0", color: "#5d4037", fontSize: "12px" }}><strong>Success measure:</strong> {item.successMeasure}</p>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ color: "#7d5a50" }}>No strategy and execution plan is available yet. Generate or regenerate the health report to create one.</p>
+                    )
                   )}
 
                   {detailModal.mode === "analysis" && (
