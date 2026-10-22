@@ -15,7 +15,6 @@ import Governance from "./governance"
 import FinancialOverview from "./FinancialOverview"
 import OperationsOverview from "./OperationsOverview"
 import ProductsServices from "./products-services"
-import HowDidYouHear from "./how-did-you-hear"
 import Documents from "./Documents"
 import DeclarationConsent from "./declaration-consent"
 import ProfileSummary from "./ProfileSummary"
@@ -35,7 +34,7 @@ const sections = [
   { id: "legalCompliance", label: "Legal &\nCompliance" },
   { id: "operationsOverview", label: "Operations\nOverview" },
   { id: "financialOverview", label: "Financial\nOverview" },
-  { id: "governance", label: "Governance" },
+  { id: "governance", label: "ESG\nOverview" },
   { id: "contactDetails", label: "Contact\nDetails" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
@@ -43,50 +42,30 @@ const sections = [
 
 const sectionValidations = {
   instructions: () => true,
-
-  entityOverview: (data) => {
-    return (
-      data.registeredName &&
-      data.registrationNumber &&
-      data.entityType &&
-      data.legalStructure &&
-      data.entitySize &&
-      data.financialYearEnd &&
-      data.yearsInOperation >= 0 &&
-      data.operationStage &&
-      Array.isArray(data.economicSectors) && data.economicSectors.length > 0 &&
-      Array.isArray(data.operatingCountries) && data.operatingCountries.length > 0 &&
-      data.businessDescription
-    )
-  },
-
+  entityOverview: (data) => (
+    data.registeredName && data.registrationNumber && data.entityType && data.legalStructure &&
+    data.entitySize && data.financialYearEnd && data.yearsInOperation >= 0 &&
+    data.operationStage && Array.isArray(data.economicSectors) && data.economicSectors.length > 0 &&
+    Array.isArray(data.operatingCountries) && data.operatingCountries.length > 0 && data.businessDescription
+  ),
   brandAssets: () => true,
   ownershipManagement: () => true,
-
   contactDetails: (data) => {
-    const requiredFields = [
-      data.contactTitle, data.contactName, data.position,
-      data.businessPhone, data.mobile, data.email, data.physicalAddress,
-    ]
-    const hasAllRequired = requiredFields.every((field) => typeof field === "string" && field.trim() !== "")
+    const requiredFields = [data.contactTitle, data.contactName, data.position, data.businessPhone, data.mobile, data.email, data.physicalAddress]
+    const hasAllRequired = requiredFields.every((f) => typeof f === "string" && f.trim() !== "")
     const postalAddressValid = data.sameAsPhysical || (typeof data.postalAddress === "string" && data.postalAddress.trim() !== "")
     return hasAllRequired && postalAddressValid
   },
-
   legalCompliance: () => true,
-
-  operationsOverview: (data) => {
-    return (
-      data.multipleSuppliers !== undefined && data.multipleSuppliers !== "" &&
-      data.contingencyPlan !== undefined && data.contingencyPlan !== "" &&
-      data.trackPerformanceMetrics !== undefined && data.trackPerformanceMetrics !== "" &&
-      data.threeSuccessfulDeliveries !== undefined && data.threeSuccessfulDeliveries !== "" &&
-      data.hasCapacityToIncrease !== undefined && data.hasCapacityToIncrease !== "" &&
-      data.hasFormalProcedures !== undefined && data.hasFormalProcedures !== "" &&
-      data.hasMajorIncidents !== undefined && data.hasMajorIncidents !== ""
-    )
-  },
-
+  operationsOverview: (data) => (
+    data.multipleSuppliers !== undefined && data.multipleSuppliers !== "" &&
+    data.contingencyPlan !== undefined && data.contingencyPlan !== "" &&
+    data.trackPerformanceMetrics !== undefined && data.trackPerformanceMetrics !== "" &&
+    data.threeSuccessfulDeliveries !== undefined && data.threeSuccessfulDeliveries !== "" &&
+    data.hasCapacityToIncrease !== undefined && data.hasCapacityToIncrease !== "" &&
+    data.hasFormalProcedures !== undefined && data.hasFormalProcedures !== "" &&
+    data.hasMajorIncidents !== undefined && data.hasMajorIncidents !== ""
+  ),
   financialOverview: () => true,
   governance: () => true,
   productsServices: () => true,
@@ -149,8 +128,6 @@ export default function UniversalProfile() {
 
   const [profileSubmitted, setProfileSubmitted] = useState(false)
   const [profileData, setProfileData] = useState(null)
-
-  const [companyOwnerId, setCompanyOwnerId] = useState(null)
   const [isCompanyMember, setIsCompanyMember] = useState(false)
   const [effectiveUserId, setEffectiveUserId] = useState(null)
   const [userRole, setUserRole] = useState(null)
@@ -159,7 +136,6 @@ export default function UniversalProfile() {
   const [editHistory, setEditHistory] = useState([])
   const { notifyVettingStatusUpdate } = useOnboardingVetting(auth.currentUser);
   const { notifyApplicationDraftSaved } = useVerificationNudges(auth.currentUser);
-  const [showEditHistory, setShowEditHistory] = useState(false)
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
@@ -167,19 +143,12 @@ export default function UniversalProfile() {
   const [activeSection, setActiveSection] = useState(deepLinkSection || "instructions")
   const [showSummary, setShowSummary] = useState(false)
   const [isEditing, setIsEditing] = useState(!!deepLinkSection)
+
   const canEditSection = (sectionId) => {
     if (normalizeRole(userRole) === "owner") return true
     const permissions = getRolePermissions(userRole)
     if (!permissions) return false
     return permissions.canEditAll === true || (Array.isArray(permissions.sections) && permissions.sections.includes(sectionId))
-  }
-
-  const isProfileComplete = () => {
-    return Object.entries(sectionValidations).every(([sectionKey, validate]) => {
-      const valid = validate(formData[sectionKey] || {})
-      const completed = completedSections[sectionKey]
-      return valid && completed
-    })
   }
 
   const [completedSections, setCompletedSections] = useState({
@@ -193,64 +162,46 @@ export default function UniversalProfile() {
 
   const [formData, setFormData] = useState({
     instructions: {},
-
     entityOverview: {
       registeredName: "", tradingName: "", registrationNumber: "", entityType: "",
-      legalStructure: "", entitySize: "", financialYearEnd: "",
-      yearsInOperation: "", operationStage: "", economicSectors: [],
-      businessDescription: "", operatingCountries: [], operatingProvinces: [],
+      legalStructure: "", entitySize: "", financialYearEnd: "", yearsInOperation: "",
+      operationStage: "", economicSectors: [], businessDescription: "",
+      operatingCountries: [], operatingProvinces: [],
       memberOfAssociation: "", industryAssociations: [], industryAssociationsOther: "",
     },
-
     brandAssets: {
       brandsOwned: "", brandsRepresented: "", holdsFranchises: "", holdsAgencies: "",
       companyLogo: "", companyLetterhead: "", orgStructure: "",
     },
-
     ownershipManagement: {
       shareholders: [{ name: "", country: "", shareholding: "", issuedShares: "", race: "", gender: "", isYouth: false, isDisabled: false, isAlsoDirector: false, doa: "", linkedin: "" }],
       directors: [{ name: "", roles: [], customRole: "", nationality: "", linkedin: "", execType: "", race: "", gender: "", isYouth: false, isDisabled: false, committeeMembership: [], customCommittee: "", doa: "", cv: null }],
       executives: [{ name: "", position: "", customPosition: "", department: "", nationality: "", linkedin: "", race: "", gender: "", isYouth: false, isDisabled: false, doa: "", cv: null }],
       employees: [{ name: "", qualification: "", role: "", customRole: "", isCertificationCompulsory: "no" }],
-      totalAuthorisedShares: "",
-      totalIssuedShares: "",
-      permanentEmployees: "",
-      contractEmployees: "",
-      internshipEmployees: "",
-      temporaryEmployees: "",
-      activeInterests: [],
-      previousInterests: [],
+      totalAuthorisedShares: "", totalIssuedShares: "",
+      permanentEmployees: "", contractEmployees: "", internshipEmployees: "", temporaryEmployees: "",
+      activeInterests: [], previousInterests: [],
       businessLeadership: { ownerLed: "", primaryMotivation: "", growthAmbition: "", founderFullTime: "", opennessToAdvice: "", decisionGovernance: "" },
     },
-
-    contactDetails: {
-      contactTitle: "", contactName: "", position: "",
-      businessPhone: "", mobile: "", email: "",
-      physicalAddress: "", sameAsPhysical: false, postalAddress: ""
-    },
-
+    contactDetails: { contactTitle: "", contactName: "", position: "", businessPhone: "", mobile: "", email: "", physicalAddress: "", sameAsPhysical: false, postalAddress: "" },
     legalCompliance: {
       taxNumber: "", taxClearancePin: "", payeNumber: "", vatNumber: "",
       uifStatus: "", uifNumber: "", coidaNumber: "", bbbeeLevel: "",
       pendingLegalJudgments: "", pendingLegalJudgmentsDetails: "",
     },
-
     operationsOverview: {
       outsourcesValueChain: "", outsourcedServices: "", outsourcedValue: "", outsourcedCurrency: "ZAR",
       importExport: "none", importExportValue: "", importExportCurrency: "ZAR",
       operatesOnContract: "", totalContractValue: "", contractCurrency: "ZAR",
-      multipleSuppliers: "", contingencyPlan: "",
-      suppliers: [],
+      multipleSuppliers: "", contingencyPlan: "", suppliers: [],
       premisesStatus: "", leaseExpiryDate: "", premisesType: "", premisesSize: "",
       hasBranches: "", numberOfBranches: "", branchLocations: "", branchStaff: "",
       industryAccreditations: [], industryAccreditationsOther: "",
       trackPerformanceMetrics: "", threeSuccessfulDeliveries: "", hasCapacityToIncrease: "",
       hasFormalProcedures: "", hasMajorIncidents: "", operationalChallenges: "",
     },
-
     financialOverview: {
-      annualRevenue: "", currentValuation: "", existingDebt: "",
-      incomeCurrency: "ZAR",
+      annualRevenue: "", currentValuation: "", existingDebt: "", incomeCurrency: "ZAR",
       incomeTurnoverCurrent: "", incomeCOGSCurrent: "", incomeGrossProfitCurrent: "",
       incomeOperatingProfitCurrent: "", incomeNetProfitCurrent: "",
       incomeTurnoverPrevious: "", incomeCOGSPrevious: "", incomeGrossProfitPrevious: "",
@@ -272,37 +223,23 @@ export default function UniversalProfile() {
       financialChallenges: [], financialChallengesElaboration: "",
       seekingFunding: "", fundraisingHistory: "", supportTypeNeeded: [],
     },
-
     governance: {
-      governanceChecklist: {},
-      membersHaveMultipleBusinesses: "",
-      conflictOfInterest: [],
-      ethicsTrainingFrequency: "",
-      lastEthicsTrainingDate: "",
-      strategicClarity: {},
-      riskManagement: {},
-      transparencyReporting: {},
-      adverseListings: "",
-      adverseListingsDetails: "",
-      courtNotices: "",
-      courtNoticesDetails: "",
+      governanceChecklist: {}, membersHaveMultipleBusinesses: "", conflictOfInterest: [],
+      ethicsTrainingFrequency: "", lastEthicsTrainingDate: "",
+      strategicClarity: {}, riskManagement: {}, transparencyReporting: {},
+      adverseListings: "", adverseListingsDetails: "", courtNotices: "", courtNoticesDetails: "",
     },
-
     productsServices: {
-      offeringType: "", offerings: [], targetMarket: "", keyClients: [],
-      customerTypes: [],
+      offeringType: "", offerings: [], targetMarket: "", keyClients: [], customerTypes: [],
     },
-
     howDidYouHear: {},
-
     documents: {
       registrationCertificate: [], certifiedIds: [], shareRegister: [],
       proofOfAddress: [], taxClearanceCert: [], vatCertificate: [],
       bbbeeCert: [], otherCerts: [], industryAccreditationDocs: [],
       companyProfile: [], clientReferences: [],
     },
-
-    declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false, howDidYouHear: {} },
+    declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false },
   })
 
   useEffect(() => {
@@ -313,15 +250,14 @@ export default function UniversalProfile() {
           const resolvedRole = normalizeRole(ctx.role) || (ctx.isMember && !ctx.isCmf ? "viewer" : "owner")
           setUserRole(resolvedRole)
           setIsCompanyMember(ctx.isMember)
-          setCompanyOwnerId(ctx.isMember ? ctx.profileId : null)
           setEffectiveUserId(ctx.profileId)
           setCompanyName(ctx.companyName || "")
           setEditPermissions(getRolePermissions(resolvedRole) || FALLBACK_ROLE_PERMISSIONS.viewer)
           if (!ctx.isCmf && !ctx.isMember) {
             const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"))
-            const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"))
-            const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"))
-            const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true"
+            const savedCompleted = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"))
+            const savedStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"))
+            const hasSeenWelcome = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true"
             if (savedData) {
               const parsed = JSON.parse(savedData)
               setFormData((prev) => {
@@ -332,18 +268,15 @@ export default function UniversalProfile() {
                 return merged
               })
             }
-            if (savedCompletedSections) setCompletedSections((prev) => ({ ...prev, ...JSON.parse(savedCompletedSections), instructions: true }))
-            if (savedSubmissionStatus === "true") {
-              setProfileSubmitted(true)
-              if (!deepLinkSection) setShowSummary(true)
-            }
-            if (!hasSeenWelcomePopup) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true") }
+            if (savedCompleted) setCompletedSections((prev) => ({ ...prev, ...JSON.parse(savedCompleted), instructions: true }))
+            if (savedStatus === "true") { setProfileSubmitted(true); if (!deepLinkSection) setShowSummary(true) }
+            if (!hasSeenWelcome) { setShowWelcomePopup(true); localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true") }
           }
         } catch (error) {
           console.error("Error checking company membership:", error)
           setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(getRolePermissions("owner"))
         }
-      } else { navigate("/login") }
+      } else navigate("/login")
       setLoading(false)
     })
     return () => unsubscribe()
@@ -355,7 +288,10 @@ export default function UniversalProfile() {
     window.history.replaceState({}, "", window.location.pathname)
   }, [deepLinkSection])
 
-  const getUserSpecificKey = (baseKey) => { const userId = effectiveUserId || auth.currentUser?.uid; return userId ? `${baseKey}_${userId}` : baseKey }
+  const getUserSpecificKey = (baseKey) => {
+    const userId = effectiveUserId || auth.currentUser?.uid
+    return userId ? `${baseKey}_${userId}` : baseKey
+  }
 
   useEffect(() => {
     const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
@@ -367,9 +303,7 @@ export default function UniversalProfile() {
     localStorage.setItem(getUserSpecificKey("profileSubmitted"), profileSubmitted.toString())
   }, [formData, completedSections, profileSubmitted, isCompanyMember])
 
-  const updateFormData = (section, data) => {
-    setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
-  }
+  const updateFormData = (section, data) => setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
 
   const markSectionAsCompleted = (section) => {
     const updated = { ...completedSections, [section]: true }
@@ -377,9 +311,7 @@ export default function UniversalProfile() {
     const userId = effectiveUserId || auth.currentUser?.uid
     if (userId) {
       const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-      if (!isCmfView) {
-        localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(updated))
-      }
+      if (!isCmfView) localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(updated))
     }
     return updated
   }
@@ -400,12 +332,16 @@ export default function UniversalProfile() {
     const uploadRecursive = async (item, pathPrefix) => {
       if (item instanceof File) {
         const fileRef = ref(storage, `universalProfile/${auth.currentUser?.uid}/${pathPrefix}`)
-        await uploadBytes(fileRef, item); return await getDownloadURL(fileRef)
+        await uploadBytes(fileRef, item)
+        return await getDownloadURL(fileRef)
       } else if (Array.isArray(item)) {
         return await Promise.all(item.map((entry, idx) => uploadRecursive(entry, `${pathPrefix}/${idx}`)))
       } else if (typeof item === "object" && item !== null) {
-        const updated = {}; for (const key in item) { updated[key] = await uploadRecursive(item[key], `${pathPrefix}/${key}`) }; return updated
-      } else { return item }
+        const updated = {}
+        for (const key in item) updated[key] = await uploadRecursive(item[key], `${pathPrefix}/${key}`)
+        return updated
+      }
+      return item
     }
     return await uploadRecursive(data, section)
   }
@@ -445,34 +381,13 @@ export default function UniversalProfile() {
 
     const triggerPayload = {}
     if (section) {
-      const legitimacySections = ["contactDetails", "entityOverview", "productsServices"]
-      if (legitimacySections.includes(section)) {
-        triggerPayload.triggerLegitimacyEvaluation = true
-      }
-      const fundabilitySections = ["financialOverview"]
-      if (fundabilitySections.includes(section)) {
-        triggerPayload.triggerFundabilityEvaluation = true
-      }
-      const operationalSections = ["operationsOverview", "entityOverview"]
-      if (operationalSections.includes(section)) {
-        triggerPayload.triggerOperationalEvaluation = true
-      }
-      const leadershipSections = ["ownershipManagement"]
-      if (leadershipSections.includes(section)) {
-        triggerPayload.triggerLeadershipEvaluation = true
-      }
-      const governanceSections = ["governance", "ownershipManagement"]
-      if (governanceSections.includes(section)) {
-        triggerPayload.triggerGovernanceEvaluation = true
-      }
-      if (section === "documents") {
-        triggerPayload.triggerLegitimacyEvaluation = true
-        triggerPayload.triggerFundabilityEvaluation = true
-      }
-      if (section === "legalCompliance") {
-        triggerPayload.triggerLegitimacyEvaluation = true
-        triggerPayload.triggerGovernanceEvaluation = true
-      }
+      if (["contactDetails", "entityOverview", "productsServices"].includes(section)) triggerPayload.triggerLegitimacyEvaluation = true
+      if (["financialOverview"].includes(section)) triggerPayload.triggerFundabilityEvaluation = true
+      if (["operationsOverview", "entityOverview"].includes(section)) triggerPayload.triggerOperationalEvaluation = true
+      if (["ownershipManagement"].includes(section)) triggerPayload.triggerLeadershipEvaluation = true
+      if (["governance", "ownershipManagement"].includes(section)) triggerPayload.triggerGovernanceEvaluation = true
+      if (section === "documents") { triggerPayload.triggerLegitimacyEvaluation = true; triggerPayload.triggerFundabilityEvaluation = true }
+      if (section === "legalCompliance") { triggerPayload.triggerLegitimacyEvaluation = true; triggerPayload.triggerGovernanceEvaluation = true }
     }
     await setDoc(docRef, { ...triggerPayload, ...dataToSave }, { merge: true })
     setEditHistory([...existingHistory, editLogEntry])
@@ -482,20 +397,17 @@ export default function UniversalProfile() {
   const handleSaveSection = async () => {
     await saveDataToFirebase(activeSection);
     try {
-      const totalSecs = sections.length;
-      const completedCount = Object.values(completedSections).filter(Boolean).length;
-      const completionPct = Math.round((completedCount / totalSecs) * 100);
-      const companyName = formData.entityOverview?.registeredName || "there";
+      const totalSecs = sections.length
+      const completedCount = Object.values(completedSections).filter(Boolean).length
+      const completionPct = Math.round((completedCount / totalSecs) * 100)
+      const companyName = formData.entityOverview?.registeredName || "there"
       notifyApplicationDraftSaved({
-        companyName,
-        completionPercentage: completionPct,
+        companyName, completionPercentage: completionPct,
         lastEditedSection: sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ") || activeSection,
         resumeUrl: window.location.href,
-      }).catch((err) => console.error("Draft saved notification error:", err));
-    } catch (nudgeErr) {
-      console.warn("Could not dispatch draft saved nudge:", nudgeErr);
-    }
-    alert("Section saved!");
+      }).catch((err) => console.error("Draft saved notification error:", err))
+    } catch (nudgeErr) { console.warn("Could not dispatch draft saved nudge:", nudgeErr) }
+    alert("Section saved!")
   }
 
   const handleSaveAndContinue = async () => {
@@ -503,76 +415,48 @@ export default function UniversalProfile() {
     const isValid = sectionValidations[activeSection]?.(sectionData)
     if (!isValid) {
       const errors = []
-      if (activeSection === "entityOverview") errors.push("Entity Overview section is incomplete. Please fill in all required fields.")
-      else if (activeSection === "contactDetails") errors.push("Contact Details section is incomplete. Please fill in all required fields.")
-      else if (activeSection === "operationsOverview") errors.push("Operations Overview section is incomplete. Please answer all questions.")
-      else errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`)
-      if (activeSection !== "instructions") setValidationModal({ open: true, title: "Please review the following issues:", messages: errors })
+      if (activeSection === "entityOverview") errors.push("Entity Overview is incomplete.")
+      else if (activeSection === "contactDetails") errors.push("Contact Details is incomplete.")
+      else if (activeSection === "operationsOverview") errors.push("Operations Overview is incomplete.")
+      else errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete.`)
+      if (activeSection !== "instructions") setValidationModal({ open: true, title: "Please review:", messages: errors })
       return
     }
-    const updatedCompletedSections = markSectionAsCompleted(activeSection)
-    await saveDataToFirebase(activeSection, false, updatedCompletedSections)
+    const updated = markSectionAsCompleted(activeSection)
+    await saveDataToFirebase(activeSection, false, updated)
     navigateToNextSection()
   }
 
   const sendConsentConfirmationEmail = async (userEmail, smeName) => {
     try {
-      const functions = getFunctions();
-      const sendConsentConfirmation = httpsCallable(functions, 'sendConsentConfirmation');
-      await sendConsentConfirmation({
-        userId: auth.currentUser?.uid,
-        email: userEmail,
-        name: smeName
-      });
-      console.log("Consent confirmation email sent");
-    } catch (error) {
-      console.error("Failed to send consent email:", error);
-    }
+      const functions = getFunctions()
+      const sendConsentConfirmation = httpsCallable(functions, 'sendConsentConfirmation')
+      await sendConsentConfirmation({ userId: auth.currentUser?.uid, email: userEmail, name: smeName })
+    } catch (error) { console.error("Failed to send consent email:", error) }
   }
 
   const handleSubmitProfile = async () => {
     const completedWithDeclaration = { ...completedSections, declarationConsent: true }
     const { allValid, sectionStatus } = validateAllSections(formData, completedWithDeclaration)
     if (!allValid) {
-      const issues = Object.entries(sectionStatus)
-        .filter(([_, status]) => !status.valid || !status.completed)
-        .map(([_, status]) => `❌ ${status.name.replace(/\n/g, " ")} is incomplete or invalid.`)
+      const issues = Object.entries(sectionStatus).filter(([_, s]) => !s.valid || !s.completed).map(([_, s]) => `❌ ${s.name.replace(/\n/g, " ")} is incomplete or invalid.`)
       alert("Profile submission blocked:\n\n" + issues.join("\n"))
       return
     }
-
     try {
-      const updatedCompletedSections = markSectionAsCompleted("declarationConsent")
-      await saveDataToFirebase(null, true, updatedCompletedSections)
-      const userEmail = formData.contactDetails?.email;
-      const smeName = formData.entityOverview?.registeredName || "there";
-
-      if (userEmail) {
-        await sendConsentConfirmationEmail(userEmail, smeName);
-      }
-
-      notifyVettingStatusUpdate({
-        companyName: smeName,
-        vettingStage: "queued",
-        estimatedDaysRemaining: 3,
-        analystNotes: "Universal Profile submitted. Application queued for verification checks.",
-      }).catch(err => console.error("Vetting status dispatch error:", err));
-
+      const updated = markSectionAsCompleted("declarationConsent")
+      await saveDataToFirebase(null, true, updated)
+      const userEmail = formData.contactDetails?.email
+      const smeName = formData.entityOverview?.registeredName || "there"
+      if (userEmail) await sendConsentConfirmationEmail(userEmail, smeName)
+      notifyVettingStatusUpdate({ companyName: smeName, vettingStage: "queued", estimatedDaysRemaining: 3, analystNotes: "Universal Profile submitted." }).catch((err) => console.error("Vetting status dispatch error:", err))
       setProfileSubmitted(true)
-      const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
-      if (!hasSeenCongratulationsPopup) {
-        setShowCongratulationsPopup(true)
-        localStorage.setItem(getUserSpecificKey("hasSeenCongratulationsPopup"), "true")
-      } else {
-        setShowSummary(true)
-      }
+      const hasSeenCongrats = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
+      if (!hasSeenCongrats) { setShowCongratulationsPopup(true); localStorage.setItem(getUserSpecificKey("hasSeenCongratulationsPopup"), "true") }
+      else setShowSummary(true)
       setIsEditing(false)
       window.scrollTo(0, 0)
-    } catch (err) {
-      console.error("Failed to submit profile:", err)
-      alert("Failed to submit profile. Please try again.")
-      setProfileSubmitted(false)
-    }
+    } catch (err) { console.error("Failed to submit profile:", err); alert("Failed to submit profile. Please try again."); setProfileSubmitted(false) }
   }
 
   const handleRegistrationComplete = async () => { alert("Your profile has been successfully submitted!"); navigate("/dashboard") }
@@ -591,7 +475,8 @@ export default function UniversalProfile() {
       case "ownershipManagement": return <OwnershipManagement {...commonProps} />
       case "contactDetails": return <ContactDetails {...commonProps} />
       case "legalCompliance": return <LegalCompliance {...commonProps} />
-      case "operationsOverview": return <OperationsOverview {...commonProps} />
+      case "operationsOverview":
+        return <OperationsOverview {...commonProps} economicSectors={formData.entityOverview?.economicSectors || []} />
       case "financialOverview": {
         const updateFinancial = (sectionOrPatch, maybePatch) => {
           if (typeof sectionOrPatch === "string") return updateFormData(sectionOrPatch, maybePatch)
@@ -622,7 +507,7 @@ export default function UniversalProfile() {
         const docRef = doc(db, "universalProfiles", effectiveUserId)
         const docSnap = await getDoc(docRef)
         if (docSnap.exists()) {
-          const data = docSnap.data();
+          const data = docSnap.data()
           setProfileData(data)
           if (data.completedSections) {
             setCompletedSections((prev) => ({ ...prev, instructions: true, ...data.completedSections }))
@@ -630,14 +515,13 @@ export default function UniversalProfile() {
           }
           setFormData((prev) => {
             const merged = { ...prev }
-            Object.keys(data).forEach(key => {
+            Object.keys(data).forEach((key) => {
               if (merged[key] && typeof merged[key] === 'object' && !Array.isArray(merged[key])) {
                 merged[key] = { ...merged[key], ...data[key] }
               } else {
                 merged[key] = data[key]
               }
             })
-            // Handle migration: move brand asset fields from entityOverview to brandAssets
             if (data.entityOverview) {
               const { brandsOwned, brandsRepresented, holdsFranchises, holdsAgencies, companyLogo, companyLetterhead, orgStructure } = data.entityOverview
               if (brandsOwned || brandsRepresented || holdsFranchises || holdsAgencies || companyLogo || companyLetterhead || orgStructure) {
@@ -658,10 +542,10 @@ export default function UniversalProfile() {
           const isComplete = data?.declarationConsent?.accuracy && data?.declarationConsent?.dataProcessing && data?.declarationConsent?.termsConditions
           if (isComplete && !isEditing) { setProfileSubmitted(true); setShowSummary(true) }
         } else {
-          if (isCompanyMember) setError("Company profile not found. Please contact the company owner to complete the Universal Profile.")
+          if (isCompanyMember) setError("Company profile not found. Please contact the company owner.")
           else setError("No profile found. Please complete your Universal Profile first.")
         }
-      } catch (err) { console.error("Error fetching profile data:", err); setError("Failed to load profile data. Please try again later.") }
+      } catch (err) { console.error("Error fetching profile data:", err); setError("Failed to load profile data.") }
       finally { setLoading(false) }
     }
     if (effectiveUserId) fetchProfileData()
@@ -680,48 +564,9 @@ export default function UniversalProfile() {
     )
   }
 
-  const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId")
-  const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
-
-  const renderCmfBanner = () => {
-    if (!isCmfView) return null;
-    return (
-      <div style={{
-        backgroundColor: "#e8f5e9", padding: "16px 20px",
-        borderRadius: "8px", border: "2px solid #4caf50",
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "20px"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "20px" }}>👁️</span>
-          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-            Facilitator View: Managing {viewingSMEName}'s Profile
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            sessionStorage.removeItem("viewingSMEId");
-            sessionStorage.removeItem("viewingSMEName");
-            sessionStorage.removeItem("investorViewMode");
-            sessionStorage.removeItem("viewOrigin");
-            window.location.href = "/cmf-cohorts";
-          }}
-          style={{
-            padding: "8px 16px", backgroundColor: "#4caf50", color: "white",
-            border: "none", borderRadius: "6px", cursor: "pointer",
-            fontWeight: "600", fontSize: "14px",
-          }}
-        >
-          ← Back to My Cohorts
-        </button>
-      </div>
-    );
-  };
-
   if (showSummary && !isEditing) {
     return (
       <div className="universal-profile-container">
-        {renderCmfBanner()}
         <ProfileSummary data={profileData || formData} onEdit={handleEditProfile} />
       </div>
     )
@@ -731,106 +576,6 @@ export default function UniversalProfile() {
 
   return (
     <div className="universal-profile-container">
-      {renderCmfBanner()}
-
-      {profileData?.status === "approved" && (
-        <div style={{
-          background: "#ecfdf5",
-          border: "1.5px solid #10b981",
-          borderRadius: "10px",
-          padding: "1rem 1.25rem",
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          color: "#065f46",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <CheckCircle size={24} color="#10b981" />
-            <div>
-              <strong style={{ fontSize: "1rem" }}>Profile Approved & Marketplace Activated! 🎉</strong>
-              <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "#047857" }}>
-                Your business listing is officially live and discoverable by corporate buyers and institutional funders.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => navigate("/marketplace")}
-            style={{
-              backgroundColor: "#10b981",
-              color: "white",
-              border: "none",
-              padding: "0.5rem 1rem",
-              borderRadius: "6px",
-              fontWeight: "600",
-              fontSize: "0.85rem",
-              cursor: "pointer",
-            }}
-          >
-            Go to Marketplace →
-          </button>
-        </div>
-      )}
-
-      {profileData?.evidenceRequested && profileData.evidenceRequested.length > 0 && (
-        <div style={{
-          background: "#fffbeb",
-          border: "1.5px solid #f59e0b",
-          borderRadius: "10px",
-          padding: "1rem 1.25rem",
-          marginBottom: "1.5rem",
-          color: "#92400e",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
-            <span style={{ fontSize: "1.25rem" }}>📄</span>
-            <strong>Action Required: Supporting Documents Requested</strong>
-          </div>
-          <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.875rem" }}>
-            Our vetting analysts require the following supporting evidence to complete verification:
-          </p>
-          <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.85rem" }}>
-            {profileData.evidenceRequested.map((docItem, idx) => (
-              <li key={idx} style={{ marginBottom: "0.25rem" }}><strong>{docItem}</strong></li>
-            ))}
-          </ul>
-          <div style={{ marginTop: "0.75rem" }}>
-            <button
-              onClick={() => navigate("/my-documents")}
-              style={{
-                backgroundColor: "#f59e0b",
-                color: "white",
-                border: "none",
-                padding: "0.4rem 0.9rem",
-                borderRadius: "6px",
-                fontWeight: "600",
-                fontSize: "0.85rem",
-                cursor: "pointer",
-              }}
-            >
-              Upload Documents Now →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {profileData?.status === "rejected" && (
-        <div style={{
-          background: "#fef2f2",
-          border: "1.5px solid #ef4444",
-          borderRadius: "10px",
-          padding: "1rem 1.25rem",
-          marginBottom: "1.5rem",
-          color: "#991b1b",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
-            <span style={{ fontSize: "1.25rem" }}>⚠️</span>
-            <strong>Profile Needs Revision</strong>
-          </div>
-          <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.875rem" }}>
-            {profileData.rejectionReason || "Some required verification details require your attention. Please update the flagged sections and resubmit."}
-          </p>
-        </div>
-      )}
       {validationModal.open && (
         <div className="popup-overlay">
           <div className="validation-popup">
@@ -851,7 +596,7 @@ export default function UniversalProfile() {
             <div className="popup-content">
               <h2>{onboardingSteps[currentOnboardingStep].title}</h2>
               <p>{onboardingSteps[currentOnboardingStep].content}</p>
-              <div className="popup-progress">{onboardingSteps.map((_, index) => <div key={index} className={`progress-dot ${index === currentOnboardingStep ? "active" : ""}`} />)}</div>
+              <div className="popup-progress">{onboardingSteps.map((_, i) => <div key={i} className={`progress-dot ${i === currentOnboardingStep ? "active" : ""}`} />)}</div>
               <div className="popup-buttons">
                 <button className="btn btn-secondary" onClick={handleCloseWelcomePopup}>Skip</button>
                 <button className="btn btn-primary" onClick={handleNextOnboardingStep}>{currentOnboardingStep < onboardingSteps.length - 1 ? "Next" : "Get Started"}<ArrowRight size={16} /></button>
@@ -869,7 +614,6 @@ export default function UniversalProfile() {
               <div className="confetti-animation"></div>
               <h2>Congratulations!</h2>
               <p>You've successfully completed your Universal Profile!</p>
-              <p>Your compliance score is "xx%", you can view this in your BIG score and you can make any necessary edits, or proceed to the Funding Application to apply for business funding.</p>
               <div className="popup-buttons-group">
                 <button className="btn btn-secondary" onClick={handleCloseCongratulationsPopup}>View Summary</button>
                 <button className="btn btn-primary" onClick={handleNavigateToFunding}>Go to Funding Application</button>
@@ -882,24 +626,6 @@ export default function UniversalProfile() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
         <h1 style={{ margin: 0 }}>{isCompanyMember ? `${companyName || "Company"} – Universal Profile` : "My Universal Profile"}</h1>
         <ProfileScopeSwitcher />
-        {(profileData?.is_verified || profileData?.scoreState?.is_verified || profileData?.status === "approved") && (
-          <div style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            backgroundColor: "#fef9c3",
-            border: "1.5px solid #eab308",
-            padding: "0.4rem 0.9rem",
-            borderRadius: "9999px",
-            color: "#854d0e",
-            fontWeight: "600",
-            fontSize: "0.9rem",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
-          }}>
-            <span>🏅</span>
-            <span>BIG Score Verified</span>
-          </div>
-        )}
       </div>
 
       <div className="profile-tracker">
@@ -909,16 +635,6 @@ export default function UniversalProfile() {
               <Users size={20} color={userRole === "viewer" ? "#f59e0b" : "#0369a1"} />
               <p style={{ margin: 0, color: userRole === "viewer" ? "#f59e0b" : "#0369a1", fontWeight: "600" }}>Company Member - Role: {userRole?.toUpperCase()}</p>
             </div>
-            <p style={{ margin: 0, color: "#4a5568", fontSize: "0.875rem" }}>
-              {userRole === "owner" && "You have full access to edit all sections."}
-              {userRole === "companyadmin" && "You can edit most sections except ownership and final declarations."}
-              {userRole === "manager" && "You can edit contact details, products/services, operations, and documents."}
-              {userRole === "employee" && "You can edit contact details and upload documents."}
-              {userRole === "viewer" && "You have read-only access. Contact the owner for edit permissions."}
-            </p>
-            <p style={{ margin: "0.5rem 0 0 0", color: "#4a5568", fontSize: "0.8rem" }}>
-              You are viewing {companyName ? `${companyName}'s` : "your company's"} profile. Any changes you save are applied to the company profile and recorded in its edit history.
-            </p>
           </div>
         )}
         <div className="profile-tracker-inner">
@@ -935,7 +651,7 @@ export default function UniversalProfile() {
       <div className="content-card">
         {!sectionEditable && activeSection !== "instructions" && (
           <div style={{ backgroundColor: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "1rem", fontSize: "0.875rem" }}>
-            View only – your role ({userRole}) can't edit this section. Ask the company owner if you need access.
+            View only – your role ({userRole}) can't edit this section.
           </div>
         )}
         {sectionEditable ? renderActiveSection() : (
