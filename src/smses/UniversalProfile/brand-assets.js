@@ -84,7 +84,7 @@ function RadioGroup({ name, value, onChange }) {
     )
 }
 
-export default function BrandAssets({ data = {}, updateData }) {
+export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
     const [formData, setFormData] = useState({})
     const [isLoading, setIsLoading] = useState(true)
     const [logoUploading, setLogoUploading] = useState(false)
@@ -439,31 +439,31 @@ export default function BrandAssets({ data = {}, updateData }) {
             <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px' }}>Brand Assets</h2>
 
             {/* Brands, Franchises & Agencies */}
-            <SectionHeading title="Brands & Representation" />
+            <SectionHeading title={isNGO ? "Organisation Brand Assets" : "Brands & Representation"} />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '1.5rem' }}>
-                <FormField label="Brands Owned">
+                <FormField label={isNGO ? "Programmes or Initiatives Owned" : "Brands Owned"}>
                     <input
                         type="text"
                         name="brandsOwned"
                         value={formData.brandsOwned || ""}
                         onChange={handleChange}
                         style={inputStyle}
-                        placeholder="e.g., Brand A, Brand B"
+                        placeholder={isNGO ? "e.g., ReadToLead, TechForGirls" : "e.g., Brand A, Brand B"}
                     />
                 </FormField>
 
-                <FormField label="Brands Represented">
+                <FormField label={isNGO ? "Affiliated Global / Partner Initiatives" : "Brands Represented"}>
                     <input
                         type="text"
                         name="brandsRepresented"
                         value={formData.brandsRepresented || ""}
                         onChange={handleChange}
                         style={inputStyle}
-                        placeholder="e.g., Brand X, Brand Y"
+                        placeholder={isNGO ? "e.g., Global Giving Partner, UNESCO Linked" : "e.g., Brand X, Brand Y"}
                     />
                 </FormField>
 
-                <FormField label="Do you hold any Franchises?">
+                <FormField label={isNGO ? "Holds Accreditations / Franchises?" : "Do you hold any Franchises?"}>
                     <RadioGroup
                         name="holdsFranchises"
                         value={formData.holdsFranchises}
@@ -471,7 +471,7 @@ export default function BrandAssets({ data = {}, updateData }) {
                     />
                 </FormField>
 
-                <FormField label="Do you hold any Agencies?">
+                <FormField label={isNGO ? "Represents Donor / Global Agencies?" : "Do you hold any Agencies?"}>
                     <RadioGroup
                         name="holdsAgencies"
                         value={formData.holdsAgencies}
@@ -481,10 +481,10 @@ export default function BrandAssets({ data = {}, updateData }) {
             </div>
 
             {/* Company Logo, Org Structure, Letterhead */}
-            <SectionHeading title="Brand Documents & Logos" />
+            <SectionHeading title={isNGO ? "Organisation Documents & Logos" : "Brand Documents & Logos"} />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
                 {/* Company Logo */}
-                <FormField label="Company Logo">
+                <FormField label={isNGO ? "Organisation Logo" : "Company Logo"}>
                     <div style={{
                         border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
                         backgroundColor: '#FAF8F5',
@@ -541,7 +541,7 @@ export default function BrandAssets({ data = {}, updateData }) {
                 </FormField>
 
                 {/* Organisational Structure */}
-                <FormField label="Organisational Structure (optional)">
+                <FormField label={isNGO ? "Organisational / Governance Structure Chart" : "Organisational Structure (optional)"}>
                     <div style={{
                         border: '2px dashed #C19A6B',
                         borderRadius: '8px',
@@ -642,7 +642,7 @@ export default function BrandAssets({ data = {}, updateData }) {
                 </FormField>
 
                 {/* Company Letterhead */}
-                <FormField label="Company Letterhead">
+                <FormField label={isNGO ? "Official Organisation Letterhead" : "Company Letterhead"}>
                     <div style={{
                         border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
                         backgroundColor: '#FAF8F5',

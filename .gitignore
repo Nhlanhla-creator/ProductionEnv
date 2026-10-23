@@ -70,3 +70,4 @@ backend/debug-token.js
 *.docx
 *.pdf
 *.md
+*.txt

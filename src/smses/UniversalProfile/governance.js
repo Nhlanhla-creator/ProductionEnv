@@ -8,6 +8,7 @@ import { db, auth, storage } from "../../firebaseConfig"
 import { getProfileOwnerId } from "../../utils/profile-context"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { checkIsNGO } from "./ngoTaxonomy"
 
 // ─── HELPER DATA ──────────────────────────────────────────────────────────
 
@@ -95,7 +96,8 @@ const DEFAULT_INTEREST = {
 
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────
 
-const Governance = ({ data, updateData }) => {
+const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
+  const isNGO = typeof isNGOProp === "boolean" ? isNGOProp : checkIsNGO(allFormData || {}, auth.currentUser);
   const [activeTab, setActiveTab] = useState("environmental")
   const [formData, setFormData] = useState({
     governanceChecklist: {},
@@ -382,6 +384,32 @@ const Governance = ({ data, updateData }) => {
               <option value="yes">Yes</option>
             </select>
           </div>
+          {isNGO && (
+            <>
+              <div className="bg-white border border-brown-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-brown-700 mb-1">Beneficiary Safeguarding & Protection</label>
+                <select name="beneficiarySafeguarding" value={formData.beneficiarySafeguarding || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                  <option value="no">No</option>
+                  <option value="partial">Partial</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+              <div className="bg-white border border-brown-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-brown-700 mb-1">Beneficiary Complaints Mechanism</label>
+                <select name="complaintsMechanism" value={formData.complaintsMechanism || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+              <div className="bg-white border border-brown-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-brown-700 mb-1">Volunteer Code of Conduct & Oversight</label>
+                <select name="volunteerConduct" value={formData.volunteerConduct || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -475,12 +503,24 @@ const Governance = ({ data, updateData }) => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-brown-700 mb-1">Management Reports Delivered</label>
+              <label className="block text-xs font-semibold text-brown-700 mb-1">
+                {isNGO ? "Management & Funder Reports Delivered" : "Management Reports Delivered"}
+              </label>
               <select name="managementReports" value={formData.managementReports || "no"} onChange={handleChange} className="w-full px-2 py-1.5 border border-brown-300 rounded-md text-xs bg-white">
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </select>
             </div>
+            {isNGO && (
+              <div>
+                <label className="block text-xs font-semibold text-brown-700 mb-1">Oversight of Restricted Funds</label>
+                <select name="restrictedFundsOversight" value={formData.restrictedFundsOversight || "no"} onChange={handleChange} className="w-full px-2 py-1.5 border border-brown-300 rounded-md text-xs bg-white">
+                  <option value="no">No</option>
+                  <option value="partial">Partial</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-brown-700 mb-1">Overdue Compliance Obligations</label>
               <select name="overdueCompliance" value={formData.overdueCompliance || "no"} onChange={handleChange} className="w-full px-2 py-1.5 border border-brown-300 rounded-md text-xs bg-white">
@@ -498,19 +538,25 @@ const Governance = ({ data, updateData }) => {
           </div>
         </div>
 
-        {/* Column 4: Ownership & Transparency */}
+        {/* Column 4: Ownership & Transparency / Governing Body & Accountability */}
         <div className="bg-white border border-brown-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-brown-800 mb-4 border-b border-brown-200 pb-2">Ownership & Oversight</h3>
+          <h3 className="text-lg font-semibold text-brown-800 mb-4 border-b border-brown-200 pb-2">
+            {isNGO ? "Governing Body & Accountability" : "Ownership & Oversight"}
+          </h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-brown-700 mb-1">Shareholder Register Maintained</label>
+              <label className="block text-xs font-semibold text-brown-700 mb-1">
+                {isNGO ? "Governing Body Register Maintained" : "Shareholder Register Maintained"}
+              </label>
               <select name="shareholderRegister" value={formData.shareholderRegister || "no"} onChange={handleChange} className="w-full px-2 py-1.5 border border-brown-300 rounded-md text-xs bg-white">
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-brown-700 mb-1">Voting Rights Documented</label>
+              <label className="block text-xs font-semibold text-brown-700 mb-1">
+                {isNGO ? "Decision-Making & Voting Rules Documented" : "Voting Rights Documented"}
+              </label>
               <select name="votingRights" value={formData.votingRights || "no"} onChange={handleChange} className="w-full px-2 py-1.5 border border-brown-300 rounded-md text-xs bg-white">
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
@@ -520,9 +566,19 @@ const Governance = ({ data, updateData }) => {
               <label className="block text-xs font-semibold text-brown-700 mb-1">Oversight Structure</label>
               <select name="oversightStructure" value={formData.oversightStructure || "none"} onChange={handleChange} className="w-full px-2 py-1.5 border border-brown-300 rounded-md text-xs bg-white">
                 <option value="none">None</option>
-                <option value="founder-only">Founder Only</option>
-                <option value="advisory-board">Advisory Board</option>
-                <option value="formal-board">Formal Board</option>
+                {isNGO ? (
+                  <>
+                    <option value="founder-only">Founders / Management Committee Only</option>
+                    <option value="advisory-board">Advisory Board</option>
+                    <option value="formal-board">Formal Board of Directors / Trustees</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="founder-only">Founder Only</option>
+                    <option value="advisory-board">Advisory Board</option>
+                    <option value="formal-board">Formal Board</option>
+                  </>
+                )}
               </select>
             </div>
             <div>
@@ -720,10 +776,14 @@ const Governance = ({ data, updateData }) => {
                 <td className="p-3 text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-700 font-bold">✓</span></td>
               </tr>
 
-              {/* Ownership & Transparency */}
+              {/* Ownership & Transparency / Control & Accountability */}
               <tr className="border-b border-brown-100">
-                <td rowSpan={2} className="p-3 text-brown-800 font-semibold bg-brown-50 align-top">Ownership & Transparency</td>
-                <td className="p-3 text-brown-700">Required ownership/control records current</td>
+                <td rowSpan={2} className="p-3 text-brown-800 font-semibold bg-brown-50 align-top">
+                  {isNGO ? "Control, Accountability & Transparency" : "Ownership & Transparency"}
+                </td>
+                <td className="p-3 text-brown-700">
+                  {isNGO ? "Required governing body records current" : "Required ownership/control records current"}
+                </td>
                 <td className="p-3 text-center">Yes</td>
                 <td className="p-3 text-center">Yes</td>
                 <td className="p-3 text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-700 font-bold">✓</span></td>

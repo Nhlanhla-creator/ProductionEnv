@@ -7,6 +7,7 @@ import './UniversalProfile.css';
 import { db, auth } from "../../firebaseConfig"
 import { getProfileOwnerId } from "../../utils/profile-context"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { checkIsNGO } from "./ngoTaxonomy"
 
 const bbbeeOptions = [
   { value: "1", label: "Level 1" },
@@ -21,10 +22,55 @@ const bbbeeOptions = [
   { value: "None", label: "None" },
 ]
 
+const ngoBbbeeOptions = [
+  { value: "sed_75_plus", label: "B-BBEE SED Beneficiary Allocation (≥75% Black Beneficiaries)" },
+  { value: "sed_under_75", label: "B-BBEE SED Beneficiary Allocation (<75% Black Beneficiaries)" },
+  { value: "specialised_eme", label: "Exempt Specialised Enterprise (EME)" },
+  { value: "specialised_qse", label: "Qualifying Specialised Enterprise (QSE)" },
+  { value: "standard_scorecard", label: "Standard B-BBEE Scorecard (Level 1–8)" },
+  { value: "not_applicable", label: "Not Applicable / None" },
+]
+
+const npoStatusOptions = [
+  { value: "Registered", label: "Registered with DSD (NPO Directorate)" },
+  { value: "Applied", label: "Application submitted / In progress" },
+  { value: "Not registered", label: "Not registered as NPO" },
+  { value: "Unsure", label: "Unsure / Under review" },
+]
+
+const pboStatusOptions = [
+  { value: "Approved", label: "Approved PBO (SARS Section 30)" },
+  { value: "Applied", label: "Application in progress with SARS TEU" },
+  { value: "Not approved", label: "Not registered as PBO" },
+  { value: "Unsure", label: "Unsure / Under review" },
+]
+
+const section18aStatusOptions = [
+  { value: "Approved", label: "Approved for Section 18A receipts" },
+  { value: "Applied", label: "Application submitted to SARS" },
+  { value: "Not approved", label: "Not approved for S18A" },
+  { value: "Unsure", label: "Unsure / Under review" },
+]
+
+const dsdReportingOptions = [
+  { value: "Up to date", label: "Up to date – Narrative report submitted" },
+  { value: "In preparation", label: "In preparation for submission" },
+  { value: "Pending review", label: "Submitted – Awaiting DSD acknowledgement" },
+  { value: "Overdue", label: "Overdue" },
+  { value: "Not applicable", label: "Not applicable (newly established)" },
+]
+
+const ngoVatOptions = [
+  { value: "exempt", label: "Exempt / Non-VAT vendor" },
+  { value: "registered", label: "Registered VAT vendor" },
+  { value: "not_registered", label: "Not registered" },
+]
+
 const uifStatusOptions = [
   { value: "Registered", label: "Registered with UIF" },
   { value: "Not yet registered", label: "Not yet registered" },
   { value: "In progress / Awaiting confirmation", label: "In progress / Awaiting confirmation" },
+  { value: "Exempt", label: "Exempt / No paid employees" },
 ]
 
 // Tooltip Component
@@ -103,10 +149,46 @@ const YesNoRadio = ({ value, onChange }) => (
   </div>
 )
 
-export default function LegalCompliance({ data = {}, updateData }) {
+export default function LegalCompliance({ data = {}, updateData, isNGO: isNGOProp, allFormData }) {
+  const isNGO = typeof isNGOProp === "boolean" ? isNGOProp : checkIsNGO(allFormData || {}, auth.currentUser)
+  const legalStructure = allFormData?.entityOverview?.legalStructure || ""
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [uploadingDocs, setUploadingDocs] = useState({})
+
+  const getDefaultData = (passedData) => {
+    if (passedData && Object.keys(passedData).length > 0) return passedData
+    return {
+      taxNumber: "",
+      taxClearancePin: "",
+      vatStatus: isNGO ? "exempt" : "",
+      vatNumber: "",
+      uifStatus: "",
+      uifNumber: "",
+      payeNumber: "",
+      bbbeeLevel: "",
+      bbbeeSedStatus: isNGO ? "sed_75_plus" : "",
+      blackBeneficiaryPercentage: "",
+      coidaNumber: "",
+      cipcAnnualReturn: "",
+      npoStatus: isNGO ? "Registered" : "",
+      npoNumber: "",
+      npoRegistrationDate: "",
+      pboStatus: isNGO ? "Approved" : "",
+      pboReferenceNumber: "",
+      pboApprovalDate: "",
+      section18aStatus: isNGO ? "Approved" : "",
+      section18aApprovedScope: "",
+      dsdAnnualReportStatus: isNGO ? "Up to date" : "",
+      dsdLastSubmissionDate: "",
+      pendingLegalJudgments: "No",
+      pendingLegalJudgmentsDetails: "",
+      taxClearanceCert: [],
+      vatCertificate: [],
+      bbbeeCert: [],
+      otherCerts: [],
+    }
+  }
 
   useEffect(() => {
     const loadLegalCompliance = async () => {
@@ -114,7 +196,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
         setIsLoading(true)
         const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
         if (isOnboarding) {
-          setFormData(data || {});
+          setFormData(getDefaultData(data));
           setIsLoading(false);
           return;
         }
@@ -143,8 +225,8 @@ export default function LegalCompliance({ data = {}, updateData }) {
         }
       } catch (error) {
         console.error("Error loading legal compliance details:", error)
-        setFormData(data)
-        updateData(data)
+        setFormData(getDefaultData(data))
+        updateData(getDefaultData(data))
       } finally {
         setIsLoading(false)
       }
@@ -152,30 +234,9 @@ export default function LegalCompliance({ data = {}, updateData }) {
     loadLegalCompliance()
   }, [])
 
-  const getDefaultData = (passedData) => {
-    if (Object.keys(passedData).length > 0) return passedData
-    return {
-      taxNumber: "",
-      taxClearancePin: "",
-      vatNumber: "",
-      uifStatus: "",
-      uifNumber: "",
-      payeNumber: "",
-      bbbeeLevel: "",
-      coidaNumber: "",
-      cipcAnnualReturn: "",
-      pendingLegalJudgments: "",
-      pendingLegalJudgmentsDetails: "",
-      taxClearanceCert: [],
-      vatCertificate: [],
-      bbbeeCert: [],
-      otherCerts: [],
-    }
-  }
-
   useEffect(() => {
     if (!isLoading && Object.keys(formData).length === 0) {
-      setFormData(data)
+      setFormData(getDefaultData(data))
     }
   }, [data, isLoading])
 
@@ -183,6 +244,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
     const { name, value } = e.target
     const updatedData = { ...formData, [name]: value }
     if (name === "uifStatus" && value !== "Registered") updatedData.uifNumber = ""
+    if (name === "vatStatus" && value !== "registered") updatedData.vatNumber = ""
     setFormData(updatedData)
     updateData(updatedData)
   }
@@ -196,21 +258,424 @@ export default function LegalCompliance({ data = {}, updateData }) {
     updateData(updatedData)
   }
 
-  const handleFileChange = (name, files) => {
-    const updatedData = { ...formData, [name]: files }
-    setFormData(updatedData)
-    updateData(updatedData)
-  }
-
   if (isLoading) {
     return (
       <div className="legal-compliance-loading">
         <h2 className="text-2xl font-bold text-brown-800 mb-6">Legal & Compliance</h2>
-        <p>Loading your compliance information...</p>
+        <p>Loading compliance information...</p>
       </div>
     )
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // NGO VIEW
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (isNGO) {
+    const isNPC = legalStructure === "NPC" || legalStructure.toLowerCase().includes("non-profit company");
+    return (
+      <div>
+        <div style={{ marginBottom: "20px" }}>
+          <h2 className="text-2xl font-bold text-brown-800" style={{ marginBottom: "4px" }}>Legal & Compliance</h2>
+          <p style={{ color: "#7d5a50", fontSize: "14px" }}>
+            Public benefit and non-profit registrations, SARS tax exemptions, employment compliance, and governance standing.
+          </p>
+        </div>
+
+        {/* 1. Public Benefit & Non-Profit Registrations */}
+        <div style={{
+          backgroundColor: "#fdfbf9",
+          border: "1px solid #ebd9c8",
+          borderRadius: "8px",
+          padding: "20px",
+          marginBottom: "24px"
+        }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+            Public Benefit & Non-Profit Registrations
+          </h3>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+            {/* NPO Registration Status */}
+            <FormField label="DSD NPO Directorate Status">
+              <select
+                name="npoStatus"
+                value={formData.npoStatus || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select NPO Status</option>
+                {npoStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            {formData.npoStatus === "Registered" ? (
+              <>
+                <FormField label="NPO Registration Number">
+                  <input
+                    type="text"
+                    name="npoNumber"
+                    value={formData.npoNumber || ""}
+                    onChange={handleChange}
+                    placeholder="e.g. 123-456 NPO"
+                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                </FormField>
+
+                <FormField label="NPO Registration Date">
+                  <input
+                    type="date"
+                    name="npoRegistrationDate"
+                    value={formData.npoRegistrationDate || ""}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                </FormField>
+              </>
+            ) : (
+              <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", color: "#8a6d58", fontSize: "13px" }}>
+                NPO registration under the Non-Profit Organisations Act (DSD) is strongly recommended for non-profit credibility.
+              </div>
+            )}
+
+            {/* SARS PBO Status (Section 30) */}
+            <FormField label="SARS PBO Status (Section 30)">
+              <select
+                name="pboStatus"
+                value={formData.pboStatus || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select PBO Status</option>
+                {pboStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            {formData.pboStatus === "Approved" ? (
+              <>
+                <FormField label="PBO Reference Number">
+                  <input
+                    type="text"
+                    name="pboReferenceNumber"
+                    value={formData.pboReferenceNumber || ""}
+                    onChange={handleChange}
+                    placeholder="e.g. 930012345"
+                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                </FormField>
+
+                <FormField label="PBO Approval Date">
+                  <input
+                    type="date"
+                    name="pboApprovalDate"
+                    value={formData.pboApprovalDate || ""}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                </FormField>
+              </>
+            ) : (
+              <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", color: "#8a6d58", fontSize: "13px" }}>
+                PBO approval exempts the organisation from income tax on bona fide donations and public benefit activities.
+              </div>
+            )}
+
+            {/* Section 18A Status */}
+            <FormField label="Section 18A Tax Receipts Approval">
+              <select
+                name="section18aStatus"
+                value={formData.section18aStatus || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select Section 18A Status</option>
+                {section18aStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            {formData.section18aStatus === "Approved" ? (
+              <div style={{ gridColumn: "span 2" }}>
+                <FormField label="Approved 18A Activity Scope">
+                  <input
+                    type="text"
+                    name="section18aApprovedScope"
+                    value={formData.section18aApprovedScope || ""}
+                    onChange={handleChange}
+                    placeholder="e.g. Part I Welfare & Humanitarian, Education & Development"
+                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                </FormField>
+              </div>
+            ) : (
+              <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", color: "#8a6d58", fontSize: "13px" }}>
+                Note: PBO approval does not automatically confer permission to issue Section 18A tax receipts. S18A receipts allow donors to deduct donations from their taxable income.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2. Tax & Statutory Reporting */}
+        <div style={{
+          backgroundColor: "#fdfbf9",
+          border: "1px solid #ebd9c8",
+          borderRadius: "8px",
+          padding: "20px",
+          marginBottom: "24px"
+        }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "16px" }}>
+            Tax & Statutory Reporting
+          </h3>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+            <FormField label="Income Tax Reference Number">
+              <input
+                type="text"
+                name="taxNumber"
+                value={formData.taxNumber || ""}
+                onChange={handleChange}
+                placeholder="e.g. 9000000000"
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              />
+            </FormField>
+
+            <FormField label="Tax Compliance PIN">
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="text"
+                  name="taxClearancePin"
+                  value={formData.taxClearancePin || ""}
+                  onChange={handleChange}
+                  placeholder="SARS eFiling PIN"
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                />
+                <Tooltip
+                  content="Your SARS Tax Clearance PIN confirms your organisation's tax compliance status with the South African Revenue Service."
+                  position="top"
+                >
+                  <HelpCircle className="w-4 h-4 text-brown-400 cursor-help hover:text-brown-600 transition-colors flex-shrink-0" />
+                </Tooltip>
+              </div>
+            </FormField>
+
+            <FormField label="VAT Vendor Status">
+              <select
+                name="vatStatus"
+                value={formData.vatStatus || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select VAT Status</option>
+                {ngoVatOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            {formData.vatStatus === "registered" && (
+              <FormField label="VAT Registration Number">
+                <input
+                  type="text"
+                  name="vatNumber"
+                  value={formData.vatNumber || ""}
+                  onChange={handleChange}
+                  placeholder="4XXXXXXXXX"
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                />
+              </FormField>
+            )}
+
+            <FormField label="DSD Annual Narrative Reporting">
+              <select
+                name="dsdAnnualReportStatus"
+                value={formData.dsdAnnualReportStatus || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select DSD Report Status</option>
+                {dsdReportingOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label={isNPC ? "CIPC Annual Return Date" : "Founding Document Annual Review"}>
+              <input
+                type="date"
+                name="cipcAnnualReturn"
+                value={formData.cipcAnnualReturn || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              />
+            </FormField>
+          </div>
+        </div>
+
+        {/* 3. Employment Compliance */}
+        <div style={{
+          backgroundColor: "#fdfbf9",
+          border: "1px solid #ebd9c8",
+          borderRadius: "8px",
+          padding: "20px",
+          marginBottom: "24px"
+        }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "16px" }}>
+            Employment & Labour Compliance
+          </h3>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+            <FormField label="PAYE Registration Number">
+              <input
+                type="text"
+                name="payeNumber"
+                value={formData.payeNumber || ""}
+                onChange={handleChange}
+                placeholder="7XXXXXXXXX (if paid staff)"
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              />
+            </FormField>
+
+            <FormField label="UIF Registration Status">
+              <select
+                name="uifStatus"
+                value={formData.uifStatus || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select UIF Status</option>
+                {uifStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            {formData.uifStatus === "Registered" ? (
+              <FormField label="UIF Reference Number">
+                <input
+                  type="text"
+                  name="uifNumber"
+                  value={formData.uifNumber || ""}
+                  onChange={handleChange}
+                  placeholder="UXXXXXXXXX"
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                />
+              </FormField>
+            ) : (
+              <FormField label="COIDA Reference Number">
+                <input
+                  type="text"
+                  name="coidaNumber"
+                  value={formData.coidaNumber || ""}
+                  onChange={handleChange}
+                  placeholder="Compensation fund (if applicable)"
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                />
+              </FormField>
+            )}
+
+            {formData.uifStatus === "Registered" && (
+              <FormField label="COIDA Reference Number">
+                <input
+                  type="text"
+                  name="coidaNumber"
+                  value={formData.coidaNumber || ""}
+                  onChange={handleChange}
+                  placeholder="Compensation fund (if applicable)"
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                />
+              </FormField>
+            )}
+          </div>
+        </div>
+
+        {/* 4. B-BBEE / Socio-Economic Development (SED) */}
+        <div style={{
+          backgroundColor: "#fdfbf9",
+          border: "1px solid #ebd9c8",
+          borderRadius: "8px",
+          padding: "20px",
+          marginBottom: "24px"
+        }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "16px" }}>
+            B-BBEE / Socio-Economic Development (SED) Standing
+          </h3>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "16px" }}>
+            <FormField label="B-BBEE / SED Classification">
+              <select
+                name="bbbeeSedStatus"
+                value={formData.bbbeeSedStatus || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select Classification</option>
+                {ngoBbbeeOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="% Black South African Beneficiaries">
+              <input
+                type="text"
+                name="blackBeneficiaryPercentage"
+                value={formData.blackBeneficiaryPercentage || ""}
+                onChange={handleChange}
+                placeholder="e.g. 85%"
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              />
+            </FormField>
+          </div>
+          <div style={{ marginTop: "10px", color: "#7d5a50", fontSize: "12px", lineHeight: "1.5" }}>
+            * Note: Non-profit organisations with ≥75% black beneficiaries qualify for full (100%) Socio-Economic Development (SED) scorecard recognition for corporate donors under the B-BBEE Codes of Good Practice.
+          </div>
+        </div>
+
+        {/* 5. Legal Matters */}
+        <div style={{
+          backgroundColor: "#fdfbf9",
+          border: "1px solid #ebd9c8",
+          borderRadius: "8px",
+          padding: "20px",
+          marginBottom: "24px"
+        }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "16px" }}>
+            Legal Standing & Disclosures
+          </h3>
+
+          <FormField label="Are there any pending legal judgments or material litigation against the organisation, directors, trustees, or office bearers?">
+            <YesNoRadio
+              value={formData.pendingLegalJudgments || "No"}
+              onChange={(val) => handleYesNo("pendingLegalJudgments", val)}
+            />
+          </FormField>
+
+          {formData.pendingLegalJudgments === "Yes" && (
+            <div style={{ marginTop: "16px" }}>
+              <FormField label="Please elaborate on the nature and status of the matter">
+                <textarea
+                  name="pendingLegalJudgmentsDetails"
+                  value={formData.pendingLegalJudgmentsDetails || ""}
+                  onChange={handleChange}
+                  rows={3}
+                  placeholder="Describe the nature of the matter, parties involved, financial exposure, and current status..."
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  style={{ resize: "vertical", fontFamily: "inherit", fontSize: "14px" }}
+                />
+              </FormField>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SME DEFAULT VIEW (Preserved 100% backward-compatible)
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div>
       <h2 className="text-2xl font-bold text-brown-800 mb-6">Legal & Compliance</h2>
