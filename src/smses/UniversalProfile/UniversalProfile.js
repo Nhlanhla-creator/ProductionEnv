@@ -24,17 +24,18 @@ import { useOnboardingVetting } from "../../hooks/useOnboardingVetting";
 import { useVerificationNudges } from "../../hooks/useVerificationNudges";
 import { ROLE_PERMISSIONS, resolveProfileContext } from "../../utils/profile-context";
 import ProfileScopeSwitcher from "../../utils/ProfileScopeSwitcher";
+import { checkIsNGO } from "./ngoTaxonomy";
 
-const sections = [
+export const getProfileSections = (isNGO = false) => [
   { id: "instructions", label: "Instructions" },
   { id: "entityOverview", label: "Entity\nOverview" },
-  { id: "brandAssets", label: "Brand\nAssets" },
-  { id: "productsServices", label: "Products &\nServices" },
-  { id: "ownershipManagement", label: "Ownership &\nManagement" },
+  { id: "brandAssets", label: isNGO ? "Organisation\nAssets" : "Brand\nAssets" },
+  { id: "productsServices", label: isNGO ? "Programmes &\nServices" : "Products &\nServices" },
+  { id: "ownershipManagement", label: isNGO ? "Leadership &\nManagement" : "Ownership &\nManagement" },
   { id: "legalCompliance", label: "Legal &\nCompliance" },
   { id: "operationsOverview", label: "Operations\nOverview" },
   { id: "financialOverview", label: "Financial\nOverview" },
-  { id: "governance", label: "ESG\nOverview" },
+  { id: "governance", label: isNGO ? "ESG\nReadiness" : "ESG\nOverview" },
   { id: "contactDetails", label: "Contact\nDetails" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
@@ -42,12 +43,31 @@ const sections = [
 
 const sectionValidations = {
   instructions: () => true,
-  entityOverview: (data) => (
-    data.registeredName && data.registrationNumber && data.entityType && data.legalStructure &&
-    data.entitySize && data.financialYearEnd && data.yearsInOperation >= 0 &&
-    data.operationStage && Array.isArray(data.economicSectors) && data.economicSectors.length > 0 &&
-    Array.isArray(data.operatingCountries) && data.operatingCountries.length > 0 && data.businessDescription
-  ),
+  entityOverview: (data) => {
+    const isNgoData = data.entityType === "NGO" || data.entityType === "NGO / Non-profit organisation" || ["NPC", "Trust", "Voluntary association", "Foreign non-profit entity"].includes(data.legalStructure)
+    if (isNgoData) {
+      return Boolean(
+        data.registeredName &&
+        data.registrationNumber &&
+        data.legalStructure &&
+        data.entitySize &&
+        data.mission
+      )
+    }
+    return Boolean(
+      data.registeredName &&
+      data.registrationNumber &&
+      data.entityType &&
+      data.legalStructure &&
+      data.entitySize &&
+      data.financialYearEnd &&
+      data.yearsInOperation >= 0 &&
+      data.operationStage &&
+      Array.isArray(data.economicSectors) && data.economicSectors.length > 0 &&
+      Array.isArray(data.operatingCountries) && data.operatingCountries.length > 0 &&
+      data.businessDescription
+    )
+  },
   brandAssets: () => true,
   ownershipManagement: () => true,
   contactDetails: (data) => {
@@ -73,10 +93,11 @@ const sectionValidations = {
   declarationConsent: (data) => Boolean(data?.accuracy && data?.dataProcessing && data?.termsConditions),
 }
 
-const validateAllSections = (formData, completedSections) => {
+const validateAllSections = (formData, completedSections, isNGO = false) => {
+  const sectionList = getProfileSections(isNGO)
   const sectionStatus = {}
   let allValid = true
-  sections.forEach((section) => {
+  sectionList.forEach((section) => {
     const sectionId = section.id
     const isValid = sectionValidations[sectionId](formData[sectionId] || {})
     sectionStatus[sectionId] = { valid: isValid, completed: completedSections[sectionId], name: section.label }
@@ -85,7 +106,10 @@ const validateAllSections = (formData, completedSections) => {
   return { allValid, sectionStatus }
 }
 
-const ALL_SECTION_IDS = sections.map((s) => s.id)
+// ── Role helpers ─────────────────────────────────────────────────────────────
+// The role coming back from profile-context (or stored on the user doc) is normalised here,
+// so an unexpected value ("admin", "Owner", "facilitator", undefined) can never lock a user out.
+const ALL_SECTION_IDS = getProfileSections(false).map((s) => s.id)
 const FALLBACK_ROLE_PERMISSIONS = {
   owner: { canEditAll: true, sections: ALL_SECTION_IDS },
   companyadmin: { canEditAll: false, sections: ["entityOverview", "brandAssets", "contactDetails", "legalCompliance", "operationsOverview", "financialOverview", "governance", "productsServices", "documents"] },
@@ -110,7 +134,7 @@ const getRolePermissions = (role) => {
 const readDeepLinkSection = () => {
   if (typeof window === "undefined") return null
   const requested = new URLSearchParams(window.location.search).get("section")
-  return sections.some((s) => s.id === requested) ? requested : null
+  return getProfileSections(false).some((s) => s.id === requested) ? requested : null
 }
 
 const onboardingSteps = [
@@ -143,7 +167,37 @@ export default function UniversalProfile() {
   const [activeSection, setActiveSection] = useState(deepLinkSection || "instructions")
   const [showSummary, setShowSummary] = useState(false)
   const [isEditing, setIsEditing] = useState(!!deepLinkSection)
+  const [authUser, setAuthUser] = useState(null)
 
+  const isDevMode = typeof window !== "undefined" && (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+  )
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (window.location.search.includes("ngo=true")) {
+        sessionStorage.setItem("ngoDevMode", "true")
+        sessionStorage.setItem("devMode", "true")
+      } else if (window.location.search.includes("ngo=false")) {
+        sessionStorage.setItem("ngoDevMode", "false")
+      }
+    }
+  }, [])
+
+  const toggleNgoMode = () => {
+    const nextNgo = !isNGO
+    sessionStorage.setItem("ngoDevMode", nextNgo.toString())
+    sessionStorage.setItem("devMode", "true")
+    setFormData((prev) => ({
+      ...prev,
+      entityOverview: {
+        ...prev.entityOverview,
+        entityType: nextNgo ? "NGO" : "SME",
+        legalStructure: nextNgo ? "NPC" : "(pty) Ltd",
+      },
+    }))
+  }
   const canEditSection = (sectionId) => {
     if (normalizeRole(userRole) === "owner") return true
     const permissions = getRolePermissions(userRole)
@@ -172,6 +226,9 @@ export default function UniversalProfile() {
     brandAssets: {
       brandsOwned: "", brandsRepresented: "", holdsFranchises: "", holdsAgencies: "",
       companyLogo: "", companyLetterhead: "", orgStructure: "",
+      mission: "", focusAreas: [], targetBeneficiaryGroups: [], targetBeneficiaryGroupsOther: "",
+      operatingModel: "", geographicReach: "", communitiesServed: "",
+      paidStaffCount: "", volunteerCount: "",
     },
     ownershipManagement: {
       shareholders: [{ name: "", country: "", shareholding: "", issuedShares: "", race: "", gender: "", isYouth: false, isDisabled: false, isAlsoDirector: false, doa: "", linkedin: "" }],
@@ -239,11 +296,17 @@ export default function UniversalProfile() {
       bbbeeCert: [], otherCerts: [], industryAccreditationDocs: [],
       companyProfile: [], clientReferences: [],
     },
-    declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false },
+    brandAssets: {},
+    declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false, authorisedSubmitter: false },
   })
 
+  const isNGO = checkIsNGO(formData, authUser)
+  const sections = getProfileSections(isNGO)
+
+  // ── Auth + company membership ──────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setAuthUser(user)
       if (user) {
         try {
           const ctx = await resolveProfileContext({ force: true })
@@ -276,7 +339,15 @@ export default function UniversalProfile() {
           console.error("Error checking company membership:", error)
           setEffectiveUserId(user.uid); setUserRole("owner"); setEditPermissions(getRolePermissions("owner"))
         }
-      } else navigate("/login")
+      } else {
+        if (isDevMode) {
+          setUserRole("owner")
+          setEditPermissions(getRolePermissions("owner") || FALLBACK_ROLE_PERMISSIONS.owner)
+          setEffectiveUserId("dev-mock-ngo-user")
+        } else {
+          navigate("/login")
+        }
+      }
       setLoading(false)
     })
     return () => unsubscribe()
@@ -437,7 +508,7 @@ export default function UniversalProfile() {
 
   const handleSubmitProfile = async () => {
     const completedWithDeclaration = { ...completedSections, declarationConsent: true }
-    const { allValid, sectionStatus } = validateAllSections(formData, completedWithDeclaration)
+    const { allValid, sectionStatus } = validateAllSections(formData, completedWithDeclaration, isNGO)
     if (!allValid) {
       const issues = Object.entries(sectionStatus).filter(([_, s]) => !s.valid || !s.completed).map(([_, s]) => `❌ ${s.name.replace(/\n/g, " ")} is incomplete or invalid.`)
       alert("Profile submission blocked:\n\n" + issues.join("\n"))
@@ -467,14 +538,25 @@ export default function UniversalProfile() {
 
   const renderActiveSection = () => {
     const sectionData = formData[activeSection] || {}
-    const commonProps = { data: sectionData, updateData: (data) => updateFormData(activeSection, data) }
+    const commonProps = {
+      data: sectionData,
+      updateData: (data) => updateFormData(activeSection, data),
+      isNGO,
+      allFormData: formData,
+    }
     switch (activeSection) {
-      case "instructions": return <Instructions />
-      case "entityOverview": return <EntityOverview {...commonProps} />
-      case "brandAssets": return <BrandAssets {...commonProps} />
-      case "ownershipManagement": return <OwnershipManagement {...commonProps} />
-      case "contactDetails": return <ContactDetails {...commonProps} />
-      case "legalCompliance": return <LegalCompliance {...commonProps} />
+      case "instructions":
+        return <Instructions isNGO={isNGO} />
+      case "entityOverview":
+        return <EntityOverview {...commonProps} />
+      case "brandAssets":
+        return <BrandAssets {...commonProps} isNGO={isNGO} />
+      case "ownershipManagement":
+        return <OwnershipManagement {...commonProps} />
+      case "contactDetails":
+        return <ContactDetails {...commonProps} />
+      case "legalCompliance":
+        return <LegalCompliance {...commonProps} />
       case "operationsOverview":
         return <OperationsOverview {...commonProps} economicSectors={formData.entityOverview?.economicSectors || []} />
       case "financialOverview": {
@@ -482,21 +564,40 @@ export default function UniversalProfile() {
           if (typeof sectionOrPatch === "string") return updateFormData(sectionOrPatch, maybePatch)
           return updateFormData("financialOverview", sectionOrPatch)
         }
-        return <FinancialOverview data={formData.financialOverview || {}} updateData={updateFinancial} />
+        return (
+          <FinancialOverview
+            data={formData.financialOverview || {}}
+            updateData={updateFinancial}
+            isNGO={isNGO}
+            allFormData={formData}
+          />
+        )
       }
       case "governance":
-        return <Governance data={formData.governance || {}} updateData={(section, data) => updateFormData(section, data)} />
-      case "productsServices": return <ProductsServices {...commonProps} />
-      case "documents": return <Documents {...commonProps} />
+        return (
+          <Governance
+            data={formData.governance || {}}
+            updateData={(section, data) => updateFormData(section, data)}
+            isNGO={isNGO}
+            allFormData={formData}
+          />
+        )
+      case "productsServices":
+        return <ProductsServices {...commonProps} />
+      case "documents":
+        return <Documents {...commonProps} />
       case "declarationConsent":
-        return <DeclarationConsent
-          {...commonProps}
-          allFormData={formData}
-          howDidYouHearData={formData.howDidYouHear || {}}
-          onHowDidYouHearUpdate={(data) => updateFormData("howDidYouHear", data)}
-          onComplete={handleRegistrationComplete}
-        />
-      default: return <Instructions />
+        return (
+          <DeclarationConsent
+            {...commonProps}
+            allFormData={formData}
+            howDidYouHearData={formData.howDidYouHear || {}}
+            onHowDidYouHearUpdate={(data) => updateFormData("howDidYouHear", data)}
+            onComplete={handleRegistrationComplete}
+          />
+        )
+      default:
+        return <Instructions isNGO={isNGO} />
     }
   }
 
@@ -504,6 +605,10 @@ export default function UniversalProfile() {
     const fetchProfileData = async () => {
       try {
         setLoading(true); if (!effectiveUserId) return
+        if (effectiveUserId === "dev-mock-ngo-user") {
+          setLoading(false)
+          return
+        }
         const docRef = doc(db, "universalProfiles", effectiveUserId)
         const docSnap = await getDoc(docRef)
         if (docSnap.exists()) {
@@ -567,7 +672,8 @@ export default function UniversalProfile() {
   if (showSummary && !isEditing) {
     return (
       <div className="universal-profile-container">
-        <ProfileSummary data={profileData || formData} onEdit={handleEditProfile} />
+        {renderCmfBanner()}
+        <ProfileSummary data={profileData || formData} onEdit={handleEditProfile} isNGO={isNGO} />
       </div>
     )
   }
@@ -624,8 +730,58 @@ export default function UniversalProfile() {
       )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
-        <h1 style={{ margin: 0 }}>{isCompanyMember ? `${companyName || "Company"} – Universal Profile` : "My Universal Profile"}</h1>
-        <ProfileScopeSwitcher />
+        <h1 style={{ margin: 0 }}>
+          {isCompanyMember
+            ? `${companyName || "Company"} – Universal Profile`
+            : isNGO
+            ? "My NGO Profile"
+            : "My Universal Profile"}
+        </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <ProfileScopeSwitcher />
+          {isDevMode && (
+            <button
+              type="button"
+              id="dev-ngo-toggle-btn"
+              onClick={toggleNgoMode}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 14px",
+                background: isNGO ? "linear-gradient(135deg, #7d5a50, #4a352f)" : "#ffffff",
+                color: isNGO ? "#faf7f2" : "#7d5a50",
+                border: "1px solid #7d5a50",
+                borderRadius: "8px",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(74, 53, 47, 0.15)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {isNGO ? "🤝 Mode: NGO (Click for SME)" : "🏢 Mode: Commercial SME (Click for NGO)"}
+            </button>
+          )}
+        </div>
+        {(profileData?.is_verified || profileData?.scoreState?.is_verified || profileData?.status === "approved") && (
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            backgroundColor: "#fef9c3",
+            border: "1.5px solid #eab308",
+            padding: "0.4rem 0.9rem",
+            borderRadius: "9999px",
+            color: "#854d0e",
+            fontWeight: "600",
+            fontSize: "0.9rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
+          }}>
+            <span>🏅</span>
+            <span>BIG Score Verified</span>
+          </div>
+        )}
       </div>
 
       <div className="profile-tracker">
@@ -641,7 +797,7 @@ export default function UniversalProfile() {
           {sections.map((section) => (
             <button key={section.id} onClick={() => { if (section.id === "documents") window.location.href = "/my-documents"; else setActiveSection(section.id) }}
               className={`profile-tracker-button ${activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"}`}>
-              {section.label.split("\n").map((line, i) => <span key={i} className="tracker-label-line">{line}</span>)}
+              {(section.label || "").split("\n").map((line, i) => <span key={i} className="tracker-label-line">{line}</span>)}
               {completedSections[section.id] && <CheckCircle className="check-icon" />}
             </button>
           ))}
@@ -668,7 +824,7 @@ export default function UniversalProfile() {
               : <button type="button" onClick={navigateToNextSection} className="btn btn-primary">Next <ChevronRight size={16} /></button>
           ) : sectionEditable ? (
             <button type="button" onClick={handleSubmitProfile}
-              disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions}
+              disabled={!formData.declarationConsent?.accuracy || !formData.declarationConsent?.dataProcessing || !formData.declarationConsent?.termsConditions || (isNGO && !formData.declarationConsent?.authorisedSubmitter)}
               className="btn btn-primary">Submit Profile</button>
           ) : null}
         </div>

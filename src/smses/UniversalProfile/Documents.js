@@ -1,5 +1,4 @@
-"use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { CheckCircle, XCircle, Upload, FileText, Loader2 } from "lucide-react"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
@@ -9,11 +8,13 @@ import { doc, getDoc, updateDoc, serverTimestamp  } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   getProfileDocuments, 
+  getNgoProfileDocuments,
   getDocumentLabel, 
   UNIFIED_DOCUMENT_PATHS,
   getDocumentId 
 } from "../../utils/documentMapping";
 import { useDocumentSync } from "../../components/useDocumentSync";
+import { checkIsNGO } from "./ngoTaxonomy";
 
 const ai = new GoogleGenAI({ 
   apiKey: ""
@@ -146,34 +147,265 @@ const documentValidationRules = {
   ],
   strictChecks:["has_client_details", "describes_services", "has_signature"]
 },
+  "Constitution / MOI / Trust Deed": {
+    requiredElements: [
+      "Organisation name matching profile",
+      "Adopted founding date and provisions",
+      "Non-profit / public benefit clause",
+      "Dissolution clause (assets to another NPO)",
+      "Office bearers / founder signatures or Master's / CIPC stamp"
+    ],
+    strictChecks: ["has_constitution_title", "matches_company_name"]
+  },
+  "Authorisation Letter / Board Resolution": {
+    requiredElements: [
+      "Organisation letterhead or reference",
+      "Resolution / mandate appointing the representative",
+      "Signatures of active trustees / board members",
+      "Scope of authority to submit and manage profile"
+    ],
+    strictChecks: ["has_mandate", "has_signatures"]
+  },
+  "NPO Registration Certificate": {
+    requiredElements: [
+      "Issued by Department of Social Development (DSD)",
+      "NPO registration number",
+      "Registered non-profit organisation name",
+      "Date of registration"
+    ],
+    strictChecks: ["issued_by_dsd", "has_npo_number"]
+  },
+  "SARS PBO Approval Letter": {
+    requiredElements: [
+      "Issued by SARS Tax Exemption Unit",
+      "Section 30 PBO reference number",
+      "Organisation name in Good Standing",
+      "Tax exemption status reference"
+    ],
+    strictChecks: ["issued_by_sars", "has_pbo_number"]
+  },
+  "SARS Section 18A Approval Letter": {
+    requiredElements: [
+      "Issued by SARS Tax Exemption Unit",
+      "Section 18A approval confirmation",
+      "Approved tax-deductible activity scope",
+      "Organisation name matching records"
+    ],
+    strictChecks: ["issued_by_sars", "has_s18a_approval"]
+  },
+  "B-BBEE SED Beneficiary Affidavit": {
+    requiredElements: [
+      "Sworn affidavit or verified scorecard",
+      "Percentage of Black beneficiaries (≥75% or specific %)",
+      "Commissioner of Oaths stamp and date within 12 months",
+      "Deponent signature and designation"
+    ],
+    strictChecks: ["has_sed_declaration", "commissioner_stamp"]
+  },
+  "Bank Details Confirmation Letter": {
+    requiredElements: [
+      "Official bank letterhead or stamp",
+      "Account name matching registered organisation",
+      "Account number and branch code",
+      "Date of issue within last 3 months"
+    ],
+    strictChecks: ["recent_issue_date", "matches_account_name"]
+  },
+  "Annual / Impact Report": {
+    requiredElements: [
+      "Organisation name and reporting period",
+      "Programme activities and outcomes overview",
+      "Beneficiary reach metrics and achievements"
+    ],
+    strictChecks: ["describes_programmes", "matches_company_name"]
+  },
+  "Beneficiary Safeguarding & Protection Policy": {
+    requiredElements: [
+      "Child and vulnerable beneficiary safeguarding standards",
+      "Incident reporting and escalation procedure",
+      "Staff/volunteer vetting and code of conduct commitment",
+      "Governing body adoption or approval date"
+    ],
+    strictChecks: ["safeguarding_scope", "has_reporting_procedure"]
+  }
 }
 
-// Create documents list from profile documents
-const documentsList = getProfileDocuments().map(label => {
-  const documentId = getDocumentId(label);
-  const baseConfig = {
-    id: documentId,
-    label: label,
-    accept: ".pdf,.jpg,.jpeg,.png",
-    required: true,
-    multiple: false,
-    description: `${label} document`
-  };
-  
-  // Add multiple file support for specific documents
-  if (['certifiedIds', 'otherCerts', 'industryAccreditationDocs', 'clientReferences'].includes(documentId)) {
-    baseConfig.multiple = true;
+// Helper to build document list dynamically based on NGO vs SME profile
+export const buildDocumentsList = (isNGO, allFormData) => {
+  if (!isNGO) {
+    return getProfileDocuments().map(label => {
+      const documentId = getDocumentId(label);
+      const baseConfig = {
+        id: documentId,
+        label: label,
+        accept: ".pdf,.jpg,.jpeg,.png",
+        required: true,
+        multiple: false,
+        description: `${label} document`
+      };
+      if (['certifiedIds', 'otherCerts', 'industryAccreditationDocs', 'clientReferences'].includes(documentId)) {
+        baseConfig.multiple = true;
+      }
+      if (documentId === 'shareRegister') {
+        baseConfig.accept = ".pdf,.jpg,.jpeg,.png,.xlsx,.xls";
+      }
+      return baseConfig;
+    });
   }
-  
-  // Add Excel support for share register
-  if (documentId === 'shareRegister') {
-    baseConfig.accept = ".pdf,.jpg,.jpeg,.png,.xlsx,.xls";
-  }
-  
-  return baseConfig;
-});
 
-export default function Documents({ data = {}, updateData }) {
+  // NGO Specific Documents Checklist - Share register is REMOVED
+  return [
+    {
+      id: "foundingDocument",
+      label: "Constitution / MOI / Trust Deed",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: true,
+      multiple: false,
+      description: "Founding legal constitution, memorandum of incorporation, or trust deed"
+    },
+    {
+      id: "registrationCertificate",
+      label: "Registration / Establishment Certificate",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: true,
+      multiple: false,
+      description: "CIPC registration certificate, Master's Letters of Authority, or Founding Minutes"
+    },
+    {
+      id: "certifiedIds",
+      label: "Certified IDs of Governing Body / Office Bearers",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: true,
+      multiple: true,
+      description: "Certified copies of ID documents of all active trustees, directors, or committee members"
+    },
+    {
+      id: "proofOfAddress",
+      label: "Proof of Organisational Address",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: true,
+      multiple: false,
+      description: "Utility bill, municipal statement, or official letterhead confirming operational address"
+    },
+    {
+      id: "authorityDocument",
+      label: "Authorisation Letter / Board Resolution",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: true,
+      multiple: false,
+      description: "Signed resolution or mandate authorising the designated person to manage the profile"
+    },
+    {
+      id: "npoCertificate",
+      label: "NPO Registration Certificate",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: Boolean(allFormData?.legalCompliance?.npoStatus === "registered" || allFormData?.legalCompliance?.npoNumber),
+      multiple: false,
+      description: "Department of Social Development (DSD) NPO registration certificate"
+    },
+    {
+      id: "pboApprovalLetter",
+      label: "SARS PBO Approval Letter",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: Boolean(allFormData?.legalCompliance?.pboStatus === "approved" || allFormData?.legalCompliance?.pboNumber),
+      multiple: false,
+      description: "SARS Section 30 PBO tax exemption confirmation letter"
+    },
+    {
+      id: "section18aLetter",
+      label: "SARS Section 18A Approval Letter",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: Boolean(allFormData?.legalCompliance?.section18aStatus === "approved"),
+      multiple: false,
+      description: "SARS Section 18A tax-deductible receipt approval letter"
+    },
+    {
+      id: "taxClearanceCert",
+      label: "Tax Compliance PIN / Clearance Certificate",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: true,
+      multiple: false,
+      description: "Valid SARS Tax Compliance Status PIN or clearance letter"
+    },
+    {
+      id: "bbbeeSedAffidavit",
+      label: "B-BBEE SED Beneficiary Affidavit",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: false,
+      multiple: false,
+      description: "Affidavit confirming ≥75% black beneficiaries recognition or verified scorecard"
+    },
+    {
+      id: "bankDetailsConfirmation",
+      label: "Bank Account Confirmation Letter",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: true,
+      multiple: false,
+      description: "Official stamped bank account confirmation letter issued within 3 months"
+    },
+    {
+      id: "financialStatements",
+      label: "Annual Financial Statements / Accounts",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: Boolean(allFormData?.financialOverview?.preparedStatements === "yes" || allFormData?.financialOverview?.auditedFinancials === "yes"),
+      multiple: false,
+      description: "Most recent signed annual financial statements or financial summary"
+    },
+    {
+      id: "annualImpactReport",
+      label: "Annual / Impact Report",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: false,
+      multiple: false,
+      description: "Annual report or impact summary detailing programmes and beneficiary reach"
+    },
+    {
+      id: "safeguardingPolicyDoc",
+      label: "Beneficiary Safeguarding & Protection Policy",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: Boolean(allFormData?.operationsOverview?.safeguardingPolicies === "yes" || allFormData?.governance?.socialBeneficiarySafeguarding === "yes"),
+      multiple: false,
+      description: "Child and vulnerable beneficiary safeguarding policy"
+    },
+    {
+      id: "industryAccreditationDocs",
+      label: "Sector Accreditations / Permits",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: false,
+      multiple: true,
+      description: "Relevant DSD, SETA, QCTO, DBE, DOH/HPCSA or SACSSP registrations"
+    },
+    {
+      id: "otherCerts",
+      label: "UIF / PAYE / COIDA Compliance",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: false,
+      multiple: true,
+      description: "Department of Labour or statutory registration letters"
+    },
+    {
+      id: "companyProfile",
+      label: "Organisational Strategy / Funding Presentation",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: false,
+      multiple: false,
+      description: "NGO profile, institutional strategy, or donor presentation"
+    },
+    {
+      id: "clientReferences",
+      label: "Funder / Partner References",
+      accept: ".pdf,.jpg,.jpeg,.png",
+      required: false,
+      multiple: true,
+      description: "Letters of endorsement from institutional funders or community partners"
+    }
+  ];
+};
+
+export default function Documents({ data = {}, updateData, isNGO: isNGOProp, allFormData }) {
+  const isNGO = isNGOProp ?? checkIsNGO(allFormData || data);
+  const documentsList = useMemo(() => buildDocumentsList(isNGO, allFormData), [isNGO, allFormData]);
+
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [uploadStatus, setUploadStatus] = useState({})
@@ -270,7 +502,7 @@ export default function Documents({ data = {}, updateData }) {
     };
 
     loadDocuments();
-  }, []);
+  }, [documentsList, isNGO]);
 
   const getRegisteredName = async () => {
     const user = auth.currentUser;
@@ -427,7 +659,20 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         "uif": "UIF/PAYE/COIDA Certificates",
         "paye": "UIF/PAYE/COIDA Certificates",
         "coida": "UIF/PAYE/COIDA Certificates",
-        "program report": "Previous Program Reports"
+        "program report": "Previous Program Reports",
+        "constitution": "Constitution / MOI / Trust Deed",
+        "trust deed": "Constitution / MOI / Trust Deed",
+        "moi": "Constitution / MOI / Trust Deed",
+        "authorisation": "Authorisation Letter / Board Resolution",
+        "resolution": "Authorisation Letter / Board Resolution",
+        "npo": "NPO Registration Certificate",
+        "pbo": "SARS PBO Approval Letter",
+        "section 18a": "SARS Section 18A Approval Letter",
+        "18a": "SARS Section 18A Approval Letter",
+        "safeguarding": "Beneficiary Safeguarding & Protection Policy",
+        "sed": "B-BBEE SED Beneficiary Affidavit",
+        "impact report": "Annual / Impact Report",
+        "annual report": "Annual / Impact Report"
       };
 
       const extractDocumentType = (text) => {
@@ -439,8 +684,12 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
           }
         }
         
+        if (lowerText.includes('constitution') || lowerText.includes('trust deed')) return "Constitution / MOI / Trust Deed";
+        if (lowerText.includes('npo')) return "NPO Registration Certificate";
+        if (lowerText.includes('pbo')) return "SARS PBO Approval Letter";
+        if (lowerText.includes('18a')) return "SARS Section 18A Approval Letter";
         if (lowerText.includes('tax') && lowerText.includes('clearance')) return "Tax Clearance Certificate";
-        if (lowerText.includes('bbbee') || lowerText.includes('b-bbee')) return "B-BBEE Certificate";
+        if (lowerText.includes('bbbee') || lowerText.includes('b-bbee') || lowerText.includes('sed')) return "B-BBEE Certificate";
         if (lowerText.includes('vat')) return "VAT Certificate";
         if (lowerText.includes('company') && lowerText.includes('registration')) return "Company Registration Certificate";
         if (lowerText.includes('business') && lowerText.includes('plan')) return "Business Plan";
@@ -963,7 +1212,7 @@ const handleDeleteFile = async (documentId, fileIndex) => {
           color: "#5d4037", 
           marginBottom: "30px",
           textAlign: "left"
-        }}>Document Upload Center</h2>
+        }}>{isNGO ? "Organisation Document Vault" : "Document Upload Center"}</h2>
         
         {/* Loading skeleton that matches the actual layout */}
         <div style={{
@@ -1150,7 +1399,7 @@ const handleDeleteFile = async (documentId, fileIndex) => {
         color: "#5d4037", 
         marginBottom: "30px",
         textAlign: "left"
-      }}>Document Upload Center</h2>
+      }}>{isNGO ? "Organisation Document Vault" : "Document Upload Center"}</h2>
 
       {/* Guidelines Section */}
       <div style={{

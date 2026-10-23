@@ -6,9 +6,19 @@ import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, getDocs } 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { uploadDocumentWithSync, deleteDocumentWithSync, getDocumentUrlFromAnyLocation } from '../../utils/documentSyncService';
 import { validateDocument, validateCompanyDocument } from '../../services/documentValidationService';
+import {
+  checkIsNGO,
+  NGO_LEGAL_STRUCTURES,
+  NGO_OPERATION_STAGES,
+  NGO_FOCUS_AREAS,
+  NGO_TARGET_BENEFICIARIES,
+  NGO_OPERATING_MODELS,
+  NGO_ENTITY_SIZES,
+} from './ngoTaxonomy';
 
 const entityTypes = [
   { value: "SME", label: "SME" },
+  { value: "NGO", label: "NGO / Non-Profit Organisation" },
   { value: "Social Enterprise", label: "Social Enterprise" },
   { value: "Funder/Investor", label: "Funder/Investor" },
   { value: "Corporate", label: "Corporate" },
@@ -433,7 +443,8 @@ function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "
   )
 }
 
-export default function EntityOverview({ data = {}, updateData }) {
+// Main component
+export default function EntityOverview({ data = {}, updateData, isNGO: isNgoProp, allFormData }) {
   const [formData, setFormData] = useState({})
   const [dynamicSponsors, setDynamicSponsors] = useState(null)
 
@@ -509,6 +520,27 @@ export default function EntityOverview({ data = {}, updateData }) {
         const docRef = doc(db, "universalProfiles", userId);
         const docSnap = await getDoc(docRef);
 
+        const defaultFields = {
+          memberOfAssociation: "",
+          industryAssociations: [],
+          industryAssociationsOther: "",
+          brandsOwned: "",
+          brandsRepresented: "",
+          holdsFranchises: "",
+          holdsAgencies: "",
+          sponsorType: "",
+          sponsorName: "",
+          sponsorViewPermission: "",
+          mission: "",
+          focusAreas: [],
+          targetBeneficiaryGroups: [],
+          targetBeneficiaryOther: "",
+          operatingModel: "",
+          communitiesServed: "",
+          paidStaffCount: "",
+          volunteerCount: "",
+        };
+
         if (docSnap.exists()) {
           const profileData = docSnap.data();
           let entityData = profileData.entityOverview || {};
@@ -522,7 +554,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             sponsorName: "",
             sponsorViewPermission: "",
           };
-
           Object.keys(defaultFields).forEach(key => {
             if (entityData[key] === undefined) {
               entityData[key] = defaultFields[key];
@@ -535,6 +566,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           updateFormData({ ...entityData });
         } else {
           updateFormData({
+            ...defaultFields,
             ...data,
             memberOfAssociation: "",
             industryAssociations: [],
@@ -604,6 +636,13 @@ export default function EntityOverview({ data = {}, updateData }) {
     )
   }
 
+  const isNGO = typeof isNgoProp === "boolean"
+    ? isNgoProp
+    : checkIsNGO(allFormData || { entityOverview: formData || data });
+  const currentLegalStructures = isNGO ? NGO_LEGAL_STRUCTURES : legalStructures;
+  const currentEntitySizes = isNGO ? NGO_ENTITY_SIZES : entitySizes;
+  const currentOperationStages = isNGO ? NGO_OPERATION_STAGES : operationStages;
+
   const selectedCountries = Array.isArray(formData.operatingCountries) ? formData.operatingCountries : []
   const showProvinces = selectedCountries.includes("South Africa")
   const memberOfAssociation = formData.memberOfAssociation
@@ -619,20 +658,20 @@ export default function EntityOverview({ data = {}, updateData }) {
       <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px' }}>Entity Overview</h2>
 
       {/* ============================================================ */}
-      {/* SECTION 1: Company Information - 3 per row */}
+      {/* SECTION 1: Company / Organisation Information - 3 per row */}
       {/* ============================================================ */}
-      <SectionHeading title="Company Information" />
+      <SectionHeading title={isNGO ? "Organisation Information" : "Company Information"} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-        <FormField label="Registered Name" required>
+        <FormField label={isNGO ? "Registered Organisation Name" : "Registered Name"} required>
           <input type="text" name="registeredName" value={formData.registeredName || ""} onChange={handleChange} style={inputStyle} required />
         </FormField>
 
-        <FormField label="Trading Name (if different)">
+        <FormField label={isNGO ? "Operating / Known Name (if different)" : "Trading Name (if different)"}>
           <input type="text" name="tradingName" value={formData.tradingName || ""} onChange={handleChange} style={inputStyle} />
         </FormField>
 
-        <FormField label="Registration Number" required>
+        <FormField label={isNGO ? "Registration Number (NPO / NPC / Trust No.)" : "Registration Number"} required>
           <input type="text" name="registrationNumber" value={formData.registrationNumber || ""} onChange={handleChange} style={inputStyle} required />
         </FormField>
 
@@ -646,14 +685,14 @@ export default function EntityOverview({ data = {}, updateData }) {
         <FormField label="Legal Structure" required>
           <select name="legalStructure" value={formData.legalStructure || ""} onChange={handleChange} style={inputStyle} required>
             <option value="">Select Legal Structure</option>
-            {legalStructures.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            {currentLegalStructures.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </FormField>
 
         <FormField label="Entity Size" required>
           <select name="entitySize" value={formData.entitySize || ""} onChange={handleChange} style={inputStyle} required>
             <option value="">Select Entity Size</option>
-            {entitySizes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            {currentEntitySizes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </FormField>
 
@@ -664,27 +703,55 @@ export default function EntityOverview({ data = {}, updateData }) {
         <FormField label="Years in Operation" required>
           <input type="number" name="yearsInOperation" value={formData.yearsInOperation || ""} onChange={handleChange} min="0" step="0.5" style={inputStyle} required />
         </FormField>
+
+        {isNGO && (
+          <>
+            <FormField label="Paid Staff (Full-time & Part-time)">
+              <input
+                type="number"
+                name="paidStaffCount"
+                value={formData.paidStaffCount ?? ""}
+                onChange={handleChange}
+                min="0"
+                placeholder="e.g. 5"
+                style={inputStyle}
+              />
+            </FormField>
+
+            <FormField label="Active Volunteers / Unpaid Staff">
+              <input
+                type="number"
+                name="volunteerCount"
+                value={formData.volunteerCount ?? ""}
+                onChange={handleChange}
+                min="0"
+                placeholder="e.g. 20"
+                style={inputStyle}
+              />
+            </FormField>
+          </>
+        )}
       </div>
 
       {/* ============================================================ */}
-      {/* SECTION 2: Business Classification - 3 per row */}
+      {/* SECTION 2: Business / Organisation Classification - 3 per row */}
       {/* ============================================================ */}
-      <SectionHeading title="Business Classification" />
+      <SectionHeading title={isNGO ? "Organisation Classification" : "Business Classification"} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-        <FormField label="Business Stage" required>
+        <FormField label={isNGO ? "Development / Operation Stage" : "Business Stage"} required>
           <select name="operationStage" value={formData.operationStage || ""} onChange={handleChange} style={inputStyle} required>
             <option value="">Select Operation Stage</option>
-            {operationStages.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            {currentOperationStages.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </FormField>
 
-        <FormField label="Economic Sector" required>
+        <FormField label={isNGO ? "Primary Sector / Field of Work" : "Economic Sector"} required>
           <MultiSelectDropdown
             options={economicSectors}
             selected={formData.economicSectors || []}
             onChange={(value) => handleMultiSelectChange("economicSectors", value)}
-            placeholder="Select economic sectors..."
+            placeholder={isNGO ? "Select field of work..." : "Select economic sectors..."}
           />
         </FormField>
 
@@ -708,7 +775,69 @@ export default function EntityOverview({ data = {}, updateData }) {
           </FormField>
         )}
 
-        <FormField label="Are you a member of any industry association?">
+        {isNGO && (
+          <>
+            <FormField label="Operating Model" required>
+              <select
+                name="operatingModel"
+                value={formData.operatingModel || ""}
+                onChange={handleChange}
+                style={inputStyle}
+                required
+              >
+                <option value="">Select Operating Model</option>
+                {NGO_OPERATING_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Key Communities / Areas Served">
+              <input
+                type="text"
+                name="communitiesServed"
+                value={formData.communitiesServed || ""}
+                onChange={handleChange}
+                style={inputStyle}
+                placeholder="e.g. Soweto, rural Vhembe, nationwide schools"
+              />
+            </FormField>
+
+            <FormField label="Primary Focus Areas" required>
+              <MultiSelectDropdown
+                options={NGO_FOCUS_AREAS}
+                selected={formData.focusAreas || []}
+                onChange={(value) => handleMultiSelectChange("focusAreas", value)}
+                placeholder="Select focus areas..."
+              />
+            </FormField>
+
+            <FormField label="Target Beneficiaries">
+              <MultiSelectDropdown
+                options={NGO_TARGET_BENEFICIARIES}
+                selected={formData.targetBeneficiaryGroups || []}
+                onChange={(value) => handleMultiSelectChange("targetBeneficiaryGroups", value)}
+                placeholder="Select target beneficiaries..."
+              />
+            </FormField>
+
+            {Array.isArray(formData.targetBeneficiaryGroups) && formData.targetBeneficiaryGroups.includes("Other") && (
+              <FormField label="Specify Other Beneficiaries">
+                <input
+                  type="text"
+                  name="targetBeneficiaryOther"
+                  value={formData.targetBeneficiaryOther || ""}
+                  onChange={handleChange}
+                  placeholder="Please specify other beneficiary groups..."
+                  style={inputStyle}
+                />
+              </FormField>
+            )}
+          </>
+        )}
+
+        {/* Industry / Sector Network Association */}
+        <FormField label={isNGO ? "Are you a member of any non-profit or sector association?" : "Are you a member of any industry association?"}>
           <div style={{ display: 'flex', gap: '16px' }}>
             {["yes", "no"].map((opt) => (
               <label
@@ -755,7 +884,7 @@ export default function EntityOverview({ data = {}, updateData }) {
 
         {memberOfAssociation === "yes" && (
           <>
-            <FormField label="Select your association(s)">
+            <FormField label={isNGO ? "Select your network / association(s)" : "Select your association(s)"}>
               <MultiSelectDropdown
                 options={industryAssociations}
                 selected={Array.isArray(formData.industryAssociations) ? formData.industryAssociations : []}
@@ -765,7 +894,7 @@ export default function EntityOverview({ data = {}, updateData }) {
             </FormField>
 
             {Array.isArray(formData.industryAssociations) && formData.industryAssociations.includes("Other") && (
-              <FormField label="Specify other association">
+              <FormField label="Specify other association / network">
                 <input
                   type="text"
                   name="industryAssociationsOther"
@@ -787,20 +916,23 @@ export default function EntityOverview({ data = {}, updateData }) {
             fontSize: '12px',
             color: '#666',
           }}>
-            You indicated that you are not a member of any industry association.
+            {isNGO
+              ? "You indicated that you are not a member of any non-profit or sector association."
+              : "You indicated that you are not a member of any industry association."}
           </div>
         )}
 
+        {/* ── Sponsor / Supporting Partners ── */}
         {!isOnboarding && (
           <>
-            <FormField label="Are you working with a specific sponsor?">
+            <FormField label={isNGO ? "Do you have existing funders or supporting partners?" : "Are you working with a specific sponsor?"}>
               <select
                 name="sponsorType"
                 value={sponsorType}
                 onChange={handleSponsorTypeChange}
                 style={inputStyle}
               >
-                <option value="">Select sponsor type</option>
+                <option value="">{isNGO ? "Select partner / funder type" : "Select sponsor type"}</option>
                 {sponsorTypes.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
@@ -853,8 +985,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           fontSize: '12px',
           color: '#2e7d32',
         }}>
-          <strong>📌 Note:</strong> The associations you select here will be able to see your business in their member ecosystem.
-          Make sure to select all associations you are a member of.
+          <strong>📌 Note:</strong> The {isNGO ? "networks and associations" : "associations"} you select here will be able to see your organisation in their member ecosystem.
         </div>
       )}
 
@@ -881,13 +1012,33 @@ export default function EntityOverview({ data = {}, updateData }) {
           fontSize: '12px',
           color: '#666',
         }}>
-          {selectedSponsorLabel} is recorded as your sponsor, but will not be able to view your profile.
+          {selectedSponsorLabel} is recorded as your supporting partner/sponsor, but will not be able to view your profile.
         </div>
       )}
 
-      {/* Business Description */}
-      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-        <FormField label="Brief Business Description">
+      {/* Mission (for NGO) & Description */}
+      {isNGO && (
+        <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+          <FormField label="Organisation Mission" required>
+            <textarea
+              name="mission"
+              value={formData.mission || ""}
+              onChange={handleChange}
+              rows={3}
+              style={{ ...inputStyle, resize: 'vertical' }}
+              maxLength={1000}
+              placeholder="State the core mission and purpose of your organisation (e.g. empowering vulnerable youth through digital literacy and work readiness)..."
+              required
+            />
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', textAlign: 'right' }}>
+              {(formData.mission || "").length}/1000 characters
+            </div>
+          </FormField>
+        </div>
+      )}
+
+      <div style={{ marginTop: isNGO ? '0' : '20px', marginBottom: '20px' }}>
+        <FormField label={isNGO ? "Organisation Purpose & Overview" : "Brief Business Description"}>
           <textarea
             name="businessDescription"
             value={formData.businessDescription || ""}
@@ -895,7 +1046,9 @@ export default function EntityOverview({ data = {}, updateData }) {
             rows={4}
             style={{ ...inputStyle, resize: 'vertical' }}
             maxLength={1500}
-            placeholder="Brief overview of your business..."
+            placeholder={isNGO
+              ? "Provide a summary of your organisation's background, core community programmes, and long-term vision..."
+              : "Brief overview of your business..."}
           />
           <div style={{
             fontSize: '12px',

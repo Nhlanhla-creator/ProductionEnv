@@ -5,10 +5,12 @@ import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { db, auth } from "../../firebaseConfig"
 import { doc, getDoc } from "firebase/firestore"
+import { checkIsNGO } from "./ngoTaxonomy"
 
-export default function ContactDetails({ data = {}, updateData }) {
+export default function ContactDetails({ data = {}, updateData, isNGO: isNgoProp, allFormData }) {
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
+  const isNGO = typeof isNgoProp === "boolean" ? isNgoProp : checkIsNGO(allFormData || { contactDetails: data });
 
   // Load data from Firebase when component mounts
   useEffect(() => {
@@ -208,7 +210,7 @@ export default function ContactDetails({ data = {}, updateData }) {
 
          
 
-          <FormField label="Business Phone" required>
+          <FormField label={isNGO ? "Organisation Phone" : "Business Phone"} required>
             <input
               type="text"
               name="businessPhone"
@@ -219,13 +221,13 @@ export default function ContactDetails({ data = {}, updateData }) {
             />
           </FormField>
 
-          <FormField label="Business WhatsApp">
+          <FormField label={isNGO ? "Organisation WhatsApp" : "Business WhatsApp"}>
             <input
               type="text"
               name="businessWhatsApp"
               value={formData.businessWhatsApp || ""}
               onChange={handleChange}
-              placeholder="WhatsApp business number"
+              placeholder={isNGO ? "WhatsApp organisation number" : "WhatsApp business number"}
               className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
             />
           </FormField>
@@ -241,7 +243,7 @@ export default function ContactDetails({ data = {}, updateData }) {
             />
           </FormField>
 
-          <FormField label="Email" required>
+          <FormField label={isNGO ? "Organisation Email" : "Email"} required>
             <input
               type="email"
               name="email"

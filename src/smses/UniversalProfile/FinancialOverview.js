@@ -4,6 +4,9 @@ import FormField from "./form-field";
 import FileUpload from "./file-upload";
 import { profitabilityOptions } from "./applicationOptions";
 import FinancialsGPT from "../FundingApplication/FinancialsAI";
+import { auth } from "../../firebaseConfig";
+import { checkIsNGO } from "./ngoTaxonomy";
+import { Plus, Trash2 } from "lucide-react";
 
 const formatCurrency = (value) => {
   if (!value) return "";
@@ -24,6 +27,7 @@ const financialChallengeOptions = [
   { value: "none_currently", label: "None currently" },
 ];
 
+// Support type multi-select options (SME)
 const supportTypeOptions = [
   { value: "funding_capital", label: "Funding / capital" },
   { value: "financial_management_support", label: "Financial management support" },
@@ -35,6 +39,21 @@ const supportTypeOptions = [
   { value: "none_currently", label: "None currently" },
 ];
 
+// Support type multi-select options (NGO)
+const ngoSupportTypeOptions = [
+  { value: "programme_funding", label: "Programme / Project grant funding" },
+  { value: "core_operating_funding", label: "Core operating / Unrestricted funding" },
+  { value: "capex_equipment", label: "Equipment & capital expenditure" },
+  { value: "inkind_support", label: "In-kind donor support & goods" },
+  { value: "volunteers_probono", label: "Volunteers & pro-bono professionals" },
+  { value: "student_interns", label: "Student interns & work-integrated learners" },
+  { value: "technical_assistance", label: "Technical assistance & M&E capacity building" },
+  { value: "strategic_partnerships", label: "Strategic partnerships & coalition building" },
+  { value: "governance_compliance", label: "Governance & compliance support" },
+  { value: "none_currently", label: "None currently" },
+];
+
+// Multi-select dropdown component
 const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "Select options..." }) => {
   const [isOpen, setIsOpen] = useState(false);
   const safeSelected = Array.isArray(selected) ? selected : [];
@@ -47,7 +66,7 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "
         <span style={{ color: safeSelected.length > 0 ? "#3d2b1f" : "#999" }}>
           {safeSelected.length > 0 ? getSelectedLabels() : placeholder}
         </span>
-        <span style={{ marginLeft: "8px" }}>{isOpen ? "▲" : "▼"}</span>
+        <span style={{ marginLeft: "8px" }}>{isOpen ? "?" : "?"}</span>
       </div>
       {isOpen && (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, maxHeight: "200px", overflowY: "auto", backgroundColor: "white", border: "1px solid #d6c4a8", borderTop: "none", borderRadius: "0 0 4px 4px", zIndex: 1000, boxShadow: "0 4px 8px rgba(0,0,0,0.1)" }}>
@@ -95,7 +114,8 @@ const FieldGroup = ({ children, style = {} }) => (
   </div>
 );
 
-const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) => {
+const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete, isNGO: isNGOProp, allFormData }) => {
+  const isNGO = typeof isNGOProp === "boolean" ? isNGOProp : checkIsNGO(allFormData || {}, auth.currentUser);
   const [currencyValues, setCurrencyValues] = useState({
     annualRevenue: data.annualRevenue || "",
     currentValuation: data.currentValuation || "",
@@ -142,13 +162,18 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
 
   return (
     <>
-      <h2>Financial Overview</h2>
+      <div style={{ marginBottom: "20px" }}>
+        <h2 className="text-2xl font-bold text-brown-800" style={{ marginBottom: "4px" }}>Financial Overview</h2>
+        <p style={{ color: "#7d5a50", fontSize: "14px" }}>
+          {isNGO
+            ? "Annual financial statements, income sources breakdown, key funders & commitments, and financial sustainability."
+            : "Financial statements, accounting systems, solvency, and funding requirements."}
+        </p>
+      </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* A. Financial Performance (Reality) */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* Financial Performance / Statements */}
       <div className="section-divider">
-        <h3>A. Financial Performance (Reality)</h3>
+        <h3>{isNGO ? "Financial Statements & Operating Accounts" : "Financial Performance"}</h3>
       </div>
 
       <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginBottom: "2rem" }}>
@@ -171,16 +196,18 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                     <select value={data.incomeCurrency || "ZAR"} onChange={(e) => handleInputChange("incomeCurrency", e.target.value)} style={{ width: "100%", maxWidth: "90px", padding: "4px", border: "1px solid #d6c4a8", borderRadius: "4px", fontSize: '11px' }}>
                       <option value="ZAR">ZAR (R)</option>
                       <option value="USD">USD ($)</option>
-                      <option value="EUR">EUR (€)</option>
-                      <option value="GBP">GBP (£)</option>
+                      <option value="EUR">EUR (�)</option>
+                      <option value="GBP">GBP (�)</option>
                     </select>
                   </td>
                   <td style={{ padding: "6px 10px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}></td>
                 </tr>
                 {[
-                  { label: "Turnover / Revenue", key: "incomeTurnover" },
-                  { label: "Cost of Goods Sold", key: "incomeCOGS" },
-                  { label: "Gross Profit", key: "incomeGrossProfit", highlight: true },
+                  { label: isNGO ? "Total Income" : "Turnover / Revenue", key: "incomeTurnover" },
+                  { label: isNGO ? "Direct Programme Costs" : "Cost of Goods Sold", key: "incomeCOGS" },
+                  { label: isNGO ? "Net Programme Contribution" : "Gross Profit", key: "incomeGrossProfit", highlight: true },
+                  { label: isNGO ? "Operating Surplus / (Deficit)" : "Operating Profit", key: "incomeOperatingProfit" },
+                  { label: isNGO ? "Total Surplus / (Deficit)" : "Net Profit", key: "incomeNetProfit", highlight: true },
                   { label: "Operating Profit", key: "incomeOperatingProfit" },
                   { label: "Net Profit", key: "incomeNetProfit", highlight: true },
                 ].map((row) => (
@@ -217,7 +244,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                   { label: "Total Assets", key: "balanceTotalAssets", highlight: true },
                   { label: "Current Liabilities", key: "balanceCurrentLiabilities" },
                   { label: "Long Term Liabilities", key: "balanceLongTermLiabilities" },
-                  { label: "Equity", key: "balanceEquity" },
+                  { label: isNGO ? "Accumulated Funds / Net Assets" : "Equity", key: "balanceEquity" },
                   { label: "Total Liabilities", key: "balanceTotalLiabilities", highlight: true },
                 ].map((row) => (
                   <tr key={row.key} style={{ backgroundColor: row.highlight ? "#f9f7f3" : "transparent" }}>
@@ -236,11 +263,361 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* B. Financial Management & Systems — grouped logically per row */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ----------------------------------------------------------------------- */}
+      {/* NGO SECTIONS: Income Sources, Key Funders, Financial Sustainability */}
+      {/* ----------------------------------------------------------------------- */}
+      {isNGO && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "2rem", marginBottom: "2.5rem" }}>
+          {/* 1. Income Sources Breakdown */}
+          <div style={{
+            backgroundColor: "#fdfbf9",
+            border: "1px solid #ebd9c8",
+            borderRadius: "8px",
+            padding: "20px",
+          }}>
+            <h4 style={{ color: "#4a352f", fontSize: "16px", fontWeight: "700", marginBottom: "8px" }}>
+              Income Sources Breakdown
+            </h4>
+            <p style={{ color: "#7d5a50", fontSize: "13px", marginBottom: "16px" }}>
+              Detail the organisation's primary revenue streams across grants, donations, earned income, and investments.
+            </p>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #d6c4a8", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#5c3a1e" }}>
+                    <th style={thStyle}>Income Category</th>
+                    <th style={thStyle}>Funding Nature</th>
+                    <th style={thStyleRight}>Current FY Amount</th>
+                    <th style={thStyleRight}>Previous FY Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { key: "philanthropicGrants", label: "Philanthropic Grants & Trusts", defaultType: "Restricted" },
+                    { key: "corporateDonations", label: "Corporate CSI / SED Donations", defaultType: "Restricted" },
+                    { key: "governmentSubsidies", label: "Government Grants & Subsidies", defaultType: "Restricted" },
+                    { key: "publicDonations", label: "Public & Individual Donations", defaultType: "Unrestricted" },
+                    { key: "serviceContractFees", label: "Service Fees & Contract Revenue", defaultType: "Earned Income" },
+                    { key: "socialEnterpriseSales", label: "Social Enterprise / Product Sales", defaultType: "Earned Income" },
+                    { key: "membershipFees", label: "Membership / Subscription Fees", defaultType: "Earned Income" },
+                    { key: "investmentIncome", label: "Investment & Interest Income", defaultType: "Unrestricted" },
+                    { key: "otherIncome", label: "Other Income", defaultType: "Unrestricted" },
+                  ].map((stream, idx) => (
+                    <tr key={stream.key} style={{ backgroundColor: idx % 2 === 0 ? "white" : "#fdfbf9" }}>
+                      <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", fontWeight: "500", color: "#3d2b1f" }}>
+                        {stream.label}
+                      </td>
+                      <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8" }}>
+                        <select
+                          value={data[`incomeType_${stream.key}`] || stream.defaultType}
+                          onChange={(e) => handleInputChange(`incomeType_${stream.key}`, e.target.value)}
+                          style={{ padding: "4px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", fontSize: "12px", width: "100%" }}
+                        >
+                          <option value="Restricted">Restricted</option>
+                          <option value="Unrestricted">Unrestricted</option>
+                          <option value="Earned Income">Earned Income</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
+                        <input
+                          type="text"
+                          value={data[`incomeAmount_${stream.key}`] || ""}
+                          onChange={(e) => handleInputChange(`incomeAmount_${stream.key}`, e.target.value)}
+                          placeholder="R 0"
+                          style={{ padding: "4px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", textAlign: "right", width: "140px", fontSize: "13px" }}
+                        />
+                      </td>
+                      <td style={{ padding: "8px 12px", borderBottom: "1px solid #d6c4a8", textAlign: "right" }}>
+                        <input
+                          type="text"
+                          value={data[`incomePrevAmount_${stream.key}`] || ""}
+                          onChange={(e) => handleInputChange(`incomePrevAmount_${stream.key}`, e.target.value)}
+                          placeholder="R 0"
+                          style={{ padding: "4px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", textAlign: "right", width: "140px", fontSize: "13px" }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 2. Key Funders & Funding Commitments */}
+          <div style={{
+            backgroundColor: "#fdfbf9",
+            border: "1px solid #ebd9c8",
+            borderRadius: "8px",
+            padding: "20px",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h4 style={{ color: "#4a352f", fontSize: "16px", fontWeight: "700", margin: 0 }}>
+                Key Funders & Funding Commitments
+              </h4>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentFunders = Array.isArray(data.keyFunders) ? data.keyFunders : [];
+                  handleInputChange("keyFunders", [
+                    ...currentFunders,
+                    { funderName: "", purpose: "", amount: "", currency: "ZAR", startDate: "", endDate: "", fundingNature: "Restricted", status: "Committed", reporting: "" }
+                  ]);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 12px",
+                  backgroundColor: "#5c3a1e",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={14} /> Add Funder Commitment
+              </button>
+            </div>
+            <p style={{ color: "#7d5a50", fontSize: "13px", marginBottom: "16px" }}>
+              Record major grants, philanthropic commitments, and donor contracts. Confidential funder names can be listed anonymously (e.g. "Private Foundation A").
+            </p>
+
+            {(!data.keyFunders || data.keyFunders.length === 0) ? (
+              <div style={{ padding: "20px", textAlign: "center", color: "#8a6d58", backgroundColor: "#faf6f0", borderRadius: "6px", border: "1px dashed #d6c4a8", fontSize: "13px" }}>
+                No funder commitments added yet. Click "+ Add Funder Commitment" to record key institutional funders.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {data.keyFunders.map((funder, idx) => (
+                  <div key={idx} style={{ padding: "14px", backgroundColor: "white", border: "1px solid #ebd9c8", borderRadius: "6px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.5fr 1fr 1fr 1fr auto", gap: "12px", alignItems: "center" }}>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "600", color: "#6b4c2a", display: "block", marginBottom: "4px" }}>Funder Name</label>
+                        <input
+                          type="text"
+                          value={funder.funderName || ""}
+                          onChange={(e) => {
+                            const updated = [...data.keyFunders];
+                            updated[idx].funderName = e.target.value;
+                            handleInputChange("keyFunders", updated);
+                          }}
+                          placeholder="e.g. Ford Foundation / DG Murray Trust"
+                          style={{ width: "100%", padding: "6px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", fontSize: "12px" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "600", color: "#6b4c2a", display: "block", marginBottom: "4px" }}>Programme Purpose</label>
+                        <input
+                          type="text"
+                          value={funder.purpose || ""}
+                          onChange={(e) => {
+                            const updated = [...data.keyFunders];
+                            updated[idx].purpose = e.target.value;
+                            handleInputChange("keyFunders", updated);
+                          }}
+                          placeholder="e.g. Early Literacy Programme"
+                          style={{ width: "100%", padding: "6px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", fontSize: "12px" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "600", color: "#6b4c2a", display: "block", marginBottom: "4px" }}>Committed Amount</label>
+                        <input
+                          type="text"
+                          value={funder.amount || ""}
+                          onChange={(e) => {
+                            const updated = [...data.keyFunders];
+                            updated[idx].amount = e.target.value;
+                            handleInputChange("keyFunders", updated);
+                          }}
+                          placeholder="e.g. R 1,500,000"
+                          style={{ width: "100%", padding: "6px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", fontSize: "12px" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "600", color: "#6b4c2a", display: "block", marginBottom: "4px" }}>Nature</label>
+                        <select
+                          value={funder.fundingNature || "Restricted"}
+                          onChange={(e) => {
+                            const updated = [...data.keyFunders];
+                            updated[idx].fundingNature = e.target.value;
+                            handleInputChange("keyFunders", updated);
+                          }}
+                          style={{ width: "100%", padding: "6px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", fontSize: "12px" }}
+                        >
+                          <option value="Restricted">Restricted</option>
+                          <option value="Unrestricted">Unrestricted (Core)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "600", color: "#6b4c2a", display: "block", marginBottom: "4px" }}>Status</label>
+                        <select
+                          value={funder.status || "Committed"}
+                          onChange={(e) => {
+                            const updated = [...data.keyFunders];
+                            updated[idx].status = e.target.value;
+                            handleInputChange("keyFunders", updated);
+                          }}
+                          style={{ width: "100%", padding: "6px 8px", border: "1px solid #d6c4a8", borderRadius: "4px", fontSize: "12px" }}
+                        >
+                          <option value="Committed">Committed</option>
+                          <option value="Pending Agreement">Pending Agreement</option>
+                          <option value="Under Application">Under Application</option>
+                        </select>
+                      </div>
+                      <div style={{ paddingTop: "18px" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = data.keyFunders.filter((_, i) => i !== idx);
+                            handleInputChange("keyFunders", updated);
+                          }}
+                          style={{ color: "#a94442", background: "none", border: "none", cursor: "pointer", padding: "4px" }}
+                          title="Remove funder"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 3. Financial Sustainability & Cash Runway */}
+          <div style={{
+            backgroundColor: "#fdfbf9",
+            border: "1px solid #ebd9c8",
+            borderRadius: "8px",
+            padding: "20px",
+          }}>
+            <h4 style={{ color: "#4a352f", fontSize: "16px", fontWeight: "700", marginBottom: "8px" }}>
+              Financial Sustainability & Cash Runway
+            </h4>
+            <p style={{ color: "#7d5a50", fontSize: "13px", marginBottom: "16px" }}>
+              Assess liquidity buffer, core burn rate, and committed funding horizon to evaluate non-profit solvency.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+              <FormField label="Available Unrestricted Cash Balance">
+                <input
+                  type="text"
+                  name="unrestrictedCash"
+                  value={data.unrestrictedCash || ""}
+                  onChange={(e) => handleInputChange("unrestrictedCash", e.target.value)}
+                  placeholder="e.g. R 450,000"
+                  className="form-input"
+                />
+              </FormField>
+
+              <FormField label="Average Monthly Operating Burn">
+                <input
+                  type="text"
+                  name="monthlyOperatingExpenditure"
+                  value={data.monthlyOperatingExpenditure || ""}
+                  onChange={(e) => handleInputChange("monthlyOperatingExpenditure", e.target.value)}
+                  placeholder="e.g. R 75,000"
+                  className="form-input"
+                />
+              </FormField>
+
+              <FormField label="Restricted Project Balances Held">
+                <input
+                  type="text"
+                  name="restrictedCashBalances"
+                  value={data.restrictedCashBalances || ""}
+                  onChange={(e) => handleInputChange("restrictedCashBalances", e.target.value)}
+                  placeholder="e.g. R 800,000"
+                  className="form-input"
+                />
+              </FormField>
+            </div>
+
+            {/* Calculated Runway Display */}
+            {(() => {
+              const parseAmount = (val) => {
+                if (!val) return 0;
+                const clean = val.toString().replace(/[^\d.]/g, "");
+                return parseFloat(clean) || 0;
+              };
+              const cash = parseAmount(data.unrestrictedCash);
+              const burn = parseAmount(data.monthlyOperatingExpenditure);
+              if (burn > 0) {
+                const runway = (cash / burn).toFixed(1);
+                const isHealthy = runway >= 6;
+                const isModerate = runway >= 3 && runway < 6;
+                return (
+                  <div style={{
+                    padding: "12px 16px",
+                    backgroundColor: isHealthy ? "#f0f7f0" : isModerate ? "#fffbf0" : "#fdf0f0",
+                    border: `1px solid ${isHealthy ? "#c2e0c2" : isModerate ? "#faebcc" : "#f5c6cb"}`,
+                    borderRadius: "6px",
+                    marginBottom: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}>
+                    <div>
+                      <span style={{ fontWeight: "700", color: "#3d2b1f", fontSize: "14px" }}>
+                        Unrestricted Cash Runway: {runway} Months
+                      </span>
+                      <span style={{ fontSize: "12px", color: "#666", marginLeft: "12px" }}>
+                        (Based on available unrestricted cash against monthly burn)
+                      </span>
+                    </div>
+                    <span style={{
+                      padding: "3px 8px",
+                      borderRadius: "12px",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      backgroundColor: isHealthy ? "#4a7c59" : isModerate ? "#c28e2b" : "#b94a48",
+                      color: "white"
+                    }}>
+                      {isHealthy ? "Strong Runway (=6 mo)" : isModerate ? "Moderate (3�6 mo)" : "Short (<3 mo)"}
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "16px" }}>
+              <FormField label="Committed Funding Period Coverage">
+                <select
+                  name="committedFundingCoverage"
+                  value={data.committedFundingCoverage || ""}
+                  onChange={(e) => handleInputChange("committedFundingCoverage", e.target.value)}
+                  className="form-select"
+                >
+                  <option value="">Select period</option>
+                  <option value="under_3_months">Under 3 months</option>
+                  <option value="3_to_6_months">3 to 6 months</option>
+                  <option value="6_to_12_months">6 to 12 months</option>
+                  <option value="12_to_24_months">12 to 24 months</option>
+                  <option value="over_24_months">More than 24 months</option>
+                </select>
+              </FormField>
+
+              <FormField label="Principal Funding Gaps & Unfunded Core Needs">
+                <textarea
+                  name="principalFundingGaps"
+                  value={data.principalFundingGaps || ""}
+                  onChange={(e) => handleInputChange("principalFundingGaps", e.target.value)}
+                  rows={2}
+                  placeholder="Describe essential core costs, staffing, or programme gaps that currently lack committed donor funding..."
+                  className="form-textarea"
+                />
+              </FormField>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Financial Management & Systems */}
       <div className="section-divider">
-        <h3>B. Financial Management &amp; Systems</h3>
+        <h3>Financial Management &amp; Systems</h3>
       </div>
 
       {/* Row 1: Books up to date + reason (conditional, adjacent) + Accounting software + Which software (conditional, adjacent) */}
@@ -309,9 +686,9 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* C. Financial Credibility — each question and its follow-ups grouped */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ----------------------------------------------------------------------- */}
+      {/* C. Financial Credibility � each question and its follow-ups grouped */}
+      {/* ----------------------------------------------------------------------- */}
       <div className="section-divider">
         <h3>C. Financial Credibility</h3>
       </div>
@@ -360,7 +737,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
           }} className="form-select" required>
             <option value="">Select</option>
             <option value="yes_3_plus">Yes (3+ years)</option>
-            <option value="yes_1_2">1–2 years</option>
+            <option value="yes_1_2">1�2 years</option>
             <option value="none">None</option>
           </select>
         </FormField>
@@ -418,10 +795,10 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* Liabilities — grouped: (1) sales terms + overdraft + overdraft follow-ups,   */}
+      {/* ----------------------------------------------------------------------- */}
+      {/* Liabilities � grouped: (1) sales terms + overdraft + overdraft follow-ups,   */}
       {/*                       (2) surety + debtors + year end, (3) bonds            */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ----------------------------------------------------------------------- */}
       <div className="section-divider">
         <h3>Liabilities</h3>
       </div>
@@ -487,33 +864,36 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
         </FormField>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* D. Current Financial Challenges */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* Current Financial Challenges */}
       <div className="section-divider">
-        <h3>D. Current Financial Challenges</h3>
+        <h3>Current Financial Challenges</h3>
       </div>
 
       {/* Challenges picker + elaboration side by side */}
       <div style={grid2}>
-        <FormField label="Current financial challenges (select all that apply)">
-          <MultiSelectDropdown options={financialChallengeOptions} selected={data.financialChallenges || []} onChange={(val) => handleInputChange("financialChallenges", val)} placeholder="Select challenges..." />
+        <FormField label={isNGO ? "What are your current financial challenges? (Select all that apply)" : "Current financial challenges (select all that apply)"}>
+          <MultiSelectDropdown options={financialChallengeOptions} selected={data.financialChallenges || []} onChange={(val) => handleInputChange("financialChallenges", val)} placeholder="Select financial challenges..." />
         </FormField>
         <FormField label="Elaborate on your financial challenges">
-          <textarea name="financialChallengesElaboration" value={data.financialChallengesElaboration || ""} onChange={(e) => handleInputChange("financialChallengesElaboration", e.target.value)} className="form-textarea" placeholder="More details..." rows={3} />
+          <textarea
+            name="financialChallengesElaboration"
+            value={data.financialChallengesElaboration || ""}
+            onChange={(e) => handleInputChange("financialChallengesElaboration", e.target.value)}
+            className="form-textarea"
+            placeholder={isNGO ? "Provide more details about the financial and sustainability challenges your organisation is currently facing..." : "Provide more details about the financial challenges your business is currently facing..."}
+            rows={3}
+          />
         </FormField>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* E. Support Intent */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* Support Intent */}
       <div className="section-divider">
-        <h3>E. Support Intent</h3>
+        <h3>Support Intent & Funding Requirements</h3>
       </div>
 
       {/* Funding + support needs side by side, fundraising history full width */}
       <div style={grid2}>
-        <FormField label="Are you currently seeking funding?">
+        <FormField label={isNGO ? "Are you currently seeking donor funding or grants?" : "Are you currently seeking funding?"}>
           <select name="seekingFunding" value={data.seekingFunding || ""} onChange={(e) => handleInputChange("seekingFunding", e.target.value)} className="form-select">
             <option value="">Select</option>
             <option value="yes_actively_raising">Yes – actively raising</option>
@@ -521,8 +901,8 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
             <option value="no">No</option>
           </select>
         </FormField>
-        <FormField label="Additional support needed (select all)">
-          <MultiSelectDropdown options={supportTypeOptions} selected={data.supportTypeNeeded || []} onChange={(val) => handleInputChange("supportTypeNeeded", val)} placeholder="Select support types..." />
+        <FormField label={isNGO ? "What type of additional support does your organisation currently need? (Select all that apply)" : "What type of additional support does your business currently need? (Select all that apply)"}>
+          <MultiSelectDropdown options={isNGO ? ngoSupportTypeOptions : supportTypeOptions} selected={data.supportTypeNeeded || []} onChange={(val) => handleInputChange("supportTypeNeeded", val)} placeholder="Select support types..." />
         </FormField>
       </div>
 

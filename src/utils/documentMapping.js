@@ -17,6 +17,19 @@ export const DOCUMENT_MAPPING = {
   "Company Profile / Brochure": { id: "companyProfile", category: DOCUMENT_CATEGORIES.PROFILE },
   "Client References": { id: "clientReferences", category: DOCUMENT_CATEGORIES.PROFILE },
 
+  // NGO SPECIFIC PROFILE DOCUMENTS
+  "Constitution / MOI / Trust Deed": { id: "foundingDocument", category: DOCUMENT_CATEGORIES.PROFILE },
+  "Authorisation Letter / Board Resolution": { id: "authorityDocument", category: DOCUMENT_CATEGORIES.PROFILE },
+  "NPO Registration Certificate": { id: "npoCertificate", category: DOCUMENT_CATEGORIES.PROFILE },
+  "SARS PBO Approval Letter": { id: "pboApprovalLetter", category: DOCUMENT_CATEGORIES.PROFILE },
+  "SARS Section 18A Approval Letter": { id: "section18aLetter", category: DOCUMENT_CATEGORIES.PROFILE },
+  "B-BBEE SED Beneficiary Affidavit": { id: "bbbeeSedAffidavit", category: DOCUMENT_CATEGORIES.PROFILE },
+  "Annual / Impact Report": { id: "annualImpactReport", category: DOCUMENT_CATEGORIES.PROFILE },
+  "Beneficiary Safeguarding & Protection Policy": { id: "safeguardingPolicyDoc", category: DOCUMENT_CATEGORIES.PROFILE },
+  "Sector Accreditations / Permits": { id: "industryAccreditationDocs", category: DOCUMENT_CATEGORIES.PROFILE },
+  "Organisational Strategy / Funding Presentation": { id: "companyProfile", category: DOCUMENT_CATEGORIES.PROFILE },
+  "Funder / Partner References": { id: "clientReferences", category: DOCUMENT_CATEGORIES.PROFILE },
+
   // ADDITIONAL DOCUMENTS (only in MyDocuments)
   "5 Year Budget": { id: "fiveYearBudget", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Audited Financials": { id: "auditedFinancials", category: DOCUMENT_CATEGORIES.ADDITIONAL },
@@ -73,7 +86,40 @@ export const getDocumentLabel = (id) => {
 export const getDocumentCategory = (label) => DOCUMENT_MAPPING[label]?.category || DOCUMENT_CATEGORIES.ADDITIONAL;
 
 export const getProfileDocuments = () => 
-  Object.keys(DOCUMENT_MAPPING).filter(label => DOCUMENT_MAPPING[label].category === DOCUMENT_CATEGORIES.PROFILE);
+  [
+    "Company Registration Certificate",
+    "Certified IDs of Directors & Shareholders",
+    "Share Register",
+    "Proof of Address",
+    "Tax Clearance Certificate",
+    "VAT Certificate",
+    "B-BBEE Certificate",
+    "UIF/PAYE/COIDA Certificates",
+    "Industry Accreditations",
+    "Company Profile / Brochure",
+    "Client References"
+  ];
+
+export const getNgoProfileDocuments = () => [
+  "Constitution / MOI / Trust Deed",
+  "Company Registration Certificate",
+  "Certified IDs of Directors & Shareholders",
+  "Proof of Address",
+  "Authorisation Letter / Board Resolution",
+  "NPO Registration Certificate",
+  "SARS PBO Approval Letter",
+  "SARS Section 18A Approval Letter",
+  "Tax Clearance Certificate",
+  "B-BBEE SED Beneficiary Affidavit",
+  "Bank Details Confirmation Letter",
+  "Financial Statements",
+  "Annual / Impact Report",
+  "Beneficiary Safeguarding & Protection Policy",
+  "UIF/PAYE/COIDA Certificates",
+  "Sector Accreditations / Permits",
+  "Organisational Strategy / Funding Presentation",
+  "Funder / Partner References"
+];
 
 export const getAdditionalDocuments = () =>
   Object.keys(DOCUMENT_MAPPING).filter(label => DOCUMENT_MAPPING[label].category === DOCUMENT_CATEGORIES.ADDITIONAL);
@@ -81,4 +127,4 @@ export const getAdditionalDocuments = () =>
 export const getAllDocumentLabels = () => Object.keys(DOCUMENT_MAPPING);
 
 export const getProfileDocumentIds = () => 
-  getProfileDocuments().map(label => getDocumentId(label))
+  getProfileDocuments().map(label => getDocumentId(label));
