@@ -660,6 +660,57 @@ export default function UniversalProfile() {
     if (!completedSections.documents) setCompletedSections((prev) => ({ ...prev, documents: true }))
   }, [formData.documents])
 
+  const renderCmfBanner = () => {
+    const isCmfView =
+      typeof window !== "undefined" &&
+      sessionStorage.getItem("viewOrigin") === "cmf" &&
+      sessionStorage.getItem("viewingSMEId")
+    if (!isCmfView) return null
+    const viewingSMEName = sessionStorage.getItem("viewingSMEName") || "Partner"
+    return (
+      <div
+        style={{
+          backgroundColor: "#e8f5e9",
+          padding: "16px 20px",
+          borderRadius: "8px",
+          border: "2px solid #4caf50",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "20px" }}>👁️</span>
+          <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+            Facilitator View: Managing {viewingSMEName}&apos;s Profile
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.removeItem("viewOrigin")
+            sessionStorage.removeItem("viewingSMEId")
+            sessionStorage.removeItem("viewingSMEName")
+            window.location.href = "/cmf/cohorts"
+          }}
+          style={{
+            backgroundColor: "#2e7d32",
+            color: "white",
+            border: "none",
+            padding: "8px 16px",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "13px",
+          }}
+        >
+          Exit Facilitator View
+        </button>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="loading">
