@@ -223,11 +223,11 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
       {/* Two-column: category chart + side panels */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "14px" }}>
 
-        {/* Availability loss by category */}
+        {/* Downtime by type / category */}
         <div style={cardS}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
             <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: T.accent }}>
-              Availability loss by category
+              Downtime by type / category
             </h3>
             {lossByCategory && (
               <span style={{ fontSize: "12.5px", color: T.muted }}>
@@ -290,7 +290,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
                 Loss composition
               </h4>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <CompositionRow label="Planned maintenance" hours={lossByCategory.plannedHours} total={lossByCategory.totalHours} color={CATEGORY_COLORS.planned_maintenance} />
+                <CompositionRow label="Planned" hours={lossByCategory.plannedHours} total={lossByCategory.totalHours} color={CATEGORY_COLORS.planned_maintenance} />
                 <CompositionRow label="Unplanned" hours={lossByCategory.unplannedHours} total={lossByCategory.totalHours} color={CATEGORY_COLORS.unplanned_mechanical} />
               </div>
             </div>
@@ -480,7 +480,7 @@ const buildRecommendation = (lossByCategory) => {
   const topShare = lossByCategory.totalHours > 0 ? (top.hours / lossByCategory.totalHours) * 100 : 0
 
   if (top.category === "unplanned_mechanical") {
-    return `Review the assets causing mechanical downtime — it accounts for ${Math.round(topShare)}% of availability loss this period (${Math.round(top.hours)} h across ${top.eventCount} events).`
+    return `Review the assets causing mechanical downtime — it accounts for ${Math.round(topShare)}% of recorded downtime this period (${Math.round(top.hours)} h across ${top.eventCount} events).`
   }
   if (top.category === "operational_delay") {
     return `Operational delay is the largest contributor at ${Math.round(topShare)}%. Investigate queueing, shift handovers and scheduling.`
@@ -491,5 +491,5 @@ const buildRecommendation = (lossByCategory) => {
   if (top.category === "planned_maintenance") {
     return `Planned maintenance is the largest block at ${Math.round(topShare)}%. This is expected — the opportunity is reducing duration without dropping scope.`
   }
-  return `${top.label} accounts for ${Math.round(topShare)}% of availability loss. Review the contributing assets.`
+  return `${top.label} accounts for ${Math.round(topShare)}% of recorded downtime. Review the contributing assets.`
 }

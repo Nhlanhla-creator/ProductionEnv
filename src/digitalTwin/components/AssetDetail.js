@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react"
 import { ArrowLeft, Plus, Pencil, CheckCircle2, AlertTriangle, XCircle, History } from "lucide-react"
+import DowntimeEventForm from "./DowntimeEventForm"
 import AssetForm from "./AssetForm"
 import AssetAssignmentModal from "./AssetAssignmentModal"
 import { getResource, updateResource, listAssignmentsForResource, closeAssignment, effectiveContextFor } from "../services/resourceService"
@@ -35,6 +36,7 @@ export default function AssetDetail({ tenantId, asset: initialAsset, onBack }) {
   const [assignments, setAssignments] = useState([])
   const [effectiveNow, setEffectiveNow] = useState([])
   const [activeTab, setActiveTab] = useState("Overview")
+  const [showDowntime, setShowDowntime] = useState(false)
   const [editing, setEditing] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -74,6 +76,8 @@ export default function AssetDetail({ tenantId, asset: initialAsset, onBack }) {
     return <div style={{ padding: "40px", textAlign: "center", color: T.muted }}>Loading asset…</div>
   }
 
+  if (showDowntime) return <DowntimeEventForm tenantId={tenantId} defaultAssetId={assetId} onBack={() => setShowDowntime(false)} />
+
   if (editing) {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
@@ -99,6 +103,7 @@ export default function AssetDetail({ tenantId, asset: initialAsset, onBack }) {
   return (
     <div>
       <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}><ArrowLeft size={14} /> Back to register</button>
+      <button onClick={() => setShowDowntime(true)} style={{ ...btnGhost, marginLeft: "8px", marginBottom: "14px" }}>Record / review downtime</button>
 
       {/* Header */}
       <div style={{ ...cardS, background: T.panel }}>

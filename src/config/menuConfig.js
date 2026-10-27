@@ -672,6 +672,13 @@ export const smeMenuItems = [
     route: "/growth",
     hasSubmenu: true,
     subItems: [
+      // ─── Overall Company Health (now standalone, outside RAPs) ───────────
+      {
+        id: "overall-health",
+        label: "Overall Company Health",
+        icon: <Heart size={16} />,
+        route: "/overall-company-health",
+      },
       // ─── Operations (Digital Twin) nested under Growth Suite ─────────────
       {
         id: "operations",
@@ -712,7 +719,7 @@ export const smeMenuItems = [
           },
         ],
       },
-      // ─── RAPs (Operational Performance removed) ──────────────────────────
+      // ─── RAPs (Overall Company Health removed) ───────────────────────────
       {
         id: "raps",
         label: "RAPs",
@@ -720,12 +727,6 @@ export const smeMenuItems = [
         route: "#",
         hasSubmenu: true,
         subItems: [
-          {
-            id: "overall-health",
-            label: "Overall Company Health",
-            icon: <Heart size={16} />,
-            route: "/overall-company-health",
-          },
           {
             id: "raps-calendar",
             label: "Governance Calendar",
@@ -752,28 +753,31 @@ export const smeMenuItems = [
         icon: <PieChart size={16} />,
         route: "/FinancialPerformance",
       },
-      // ─── Operational Performance now lives here (sibling of Financial) ───
+      // ─── Operational Performance (sibling of Financial) ─────────────────
       {
         id: "operational-performance",
         label: "Operational Performance",
         icon: <Activity size={16} />,
         route: "/OperationalStrength",
       },
+      // ─── People Performance ─────────────────────────────────────────────
       {
-        id: "people",
-        label: "People",
+        id: "people-performance",
+        label: "People Performance",
         icon: <Users size={16} />,
         route: "/People",
       },
+      // ─── ESG Performance ────────────────────────────────────────────────
       {
-        id: "social-environmental",
-        label: "ESG Impact",
+        id: "esg-performance",
+        label: "ESG Performance",
         icon: <Globe size={16} />,
         route: "/SocialImpact",
       },
+      // ─── Commercial Performance ─────────────────────────────────────────
       {
-        id: "marketing-sales",
-        label: "Marketing & Sales",
+        id: "commercial-performance",
+        label: "Commercial Performance",
         icon: <BarChart size={16} />,
         route: "/MarketingSales",
       },

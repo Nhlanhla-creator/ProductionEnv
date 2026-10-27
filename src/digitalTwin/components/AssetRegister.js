@@ -9,6 +9,8 @@
 
 import { useEffect, useState } from "react"
 import { Plus, Search, Pencil, Trash2, Upload, Eye, Users, Zap } from "lucide-react"
+import DowntimeMasterSetup from "./DowntimeMasterSetup"
+import DowntimeEventForm from "./DowntimeEventForm"
 import AssetForm from "./AssetForm"
 import AssetDetail from "./AssetDetail"
 import { RESOURCE_KIND, CRITICALITY } from "../models/assetSchema"
@@ -44,6 +46,7 @@ const statusStyle = {
 }
 
 export default function AssetRegister({ tenantId, onBack }) {
+  const [downtimeView, setDowntimeView] = useState(null)
   const [assets, setAssets] = useState([])
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
@@ -129,6 +132,9 @@ export default function AssetRegister({ tenantId, onBack }) {
     reload()
   }
 
+  if (downtimeView === "setup") return <DowntimeMasterSetup tenantId={tenantId} onBack={() => setDowntimeView(null)} />
+  if (downtimeView === "capture") return <DowntimeEventForm tenantId={tenantId} onBack={() => setDowntimeView(null)} />
+
   if (viewing) {
     return <AssetDetail tenantId={tenantId} asset={viewing} onBack={() => { setViewing(null); reload() }} />
   }
@@ -156,7 +162,9 @@ export default function AssetRegister({ tenantId, onBack }) {
       )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "12px" }}>
         <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: T.accent }}>Asset Register</h2>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button style={btnGhost} onClick={() => setDowntimeView("setup")}>Downtime master codes</button>
+          <button style={btnGhost} onClick={() => setDowntimeView("capture")}>Record / review downtime</button>
           <button style={btnGhost} title="Bulk import ships in Phase 4"
             onClick={() => notify("info", "Bulk import ships in Phase 4.")}>
             <Upload size={14} /> Import
