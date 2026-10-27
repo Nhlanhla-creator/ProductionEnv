@@ -48,6 +48,7 @@ export const createImportBatch = async (tenantId, {
   taxonomyVersion = null,
   contextId = null,
 } = {}) => {
+  if (sheetId === "IS07") throw new Error("The legacy IS07 importer is disabled. Use Record / review downtime with published master codes, or importDowntimeEvents from downtimeService.");
   if (!tenantId) throw new Error("tenantId is required");
   if (!sheetId || !INPUT_SHEETS[sheetId]) throw new Error(`Unknown sheet: ${sheetId}`);
   if (!idempotencyKey) throw new Error("idempotencyKey is required");
@@ -145,6 +146,7 @@ export const listImportBatches = async (tenantId, { sheetId = null, state = null
 export const dryRunImportBatch = async (tenantId, batchId) => {
   const batch = await getImportBatch(tenantId, batchId);
   if (!batch) throw new Error("Batch not found");
+  if (batch.sheetId === "IS07") throw new Error("Legacy downtime import/rollback is disabled. Capture against published master codes and use audited corrections; historical records are retained.");
   if (batch.state === IMPORT_BATCH_STATE.COMMITTED) throw new Error("Batch already committed");
 
   const sheet = INPUT_SHEETS[batch.sheetId];
@@ -400,6 +402,7 @@ const buildRowSummary = (sheetId, resolved) => {
 export const commitImportBatch = async (tenantId, batchId, { commitToken } = {}) => {
   const batch = await getImportBatch(tenantId, batchId);
   if (!batch) throw new Error("Batch not found");
+  if (batch.sheetId === "IS07") throw new Error("Legacy downtime import/rollback is disabled. Capture against published master codes and use audited corrections; historical records are retained.");
   if (batch.state === IMPORT_BATCH_STATE.COMMITTED) {
     // Idempotent — return the prior result
     return { ...batch, idempotent: true };
@@ -498,44 +501,9 @@ const commitToTarget = async (tenantId, batch, rows, batchId) => {
     return writtenIds;
   }
 
-  // For IS07 → downtimeEvents
+  // Downtime writes must always use downtimeService validation and asset revision locks.
   if (targetCollection === "downtimeEvents") {
-    for (const row of rows) {
-      const r = row.resolvedRecord;
-      const col = collection(db, "digitalTwinTenants", tenantId, "downtimeEvents");
-      const ref = doc(col);
-      const start = new Date(r.eventStart).getTime();
-      const end = r.eventEnd ? new Date(r.eventEnd).getTime() : null;
-      const durationHours = end !== null ? (end - start) / 3600000 : null;
-      await setDoc(ref, {
-        eventId: ref.id,
-        tenantId,
-        assetId: r.assetId || null,
-        groupId: r.groupId || null,
-        eventStart: r.eventStart,
-        eventEnd: r.eventEnd || null,
-        durationHours,
-        categoryLevel1: r.categoryLevel1,
-        categoryLevel2: r.categoryLevel2 || null,
-        failureMode: r.failureMode || null,
-        causeCode: r.causeCode || null,
-        responsibility: r.responsibility || "internal",
-        lostOperatingHours: r.lostOperatingHours ?? durationHours,
-        estimatedLostOutput: r.estimatedLostOutput || null,
-        workOrderId: r.workOrderId || null,
-        actionTaken: r.actionTaken || "",
-        evidenceUrl: r.evidenceUrl || "",
-        confidence: r.confidence || DATA_CONFIDENCE.MANUAL_ACTUAL,
-        source: "import",
-        externalSourceId: r.externalSourceId,
-        ingestionBatchId: batchId,
-        createdBy: actor(),
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      });
-      writtenIds.push(ref.id);
-    }
-    return writtenIds;
+    throw new Error("Use downtimeService for all downtime writes.");
   }
 
   // Generic fallback — write to the target collection
@@ -592,6 +560,7 @@ const mapToMeasurementsComponents = (sheetId, r) => {
 export const rollbackImportBatch = async (tenantId, batchId, { reason = "" } = {}) => {
   const batch = await getImportBatch(tenantId, batchId);
   if (!batch) throw new Error("Batch not found");
+  if (batch.sheetId === "IS07") throw new Error("Legacy downtime import/rollback is disabled. Capture against published master codes and use audited corrections; historical records are retained.");
   if (batch.state !== IMPORT_BATCH_STATE.COMMITTED) throw new Error("Only committed batches can be rolled back.");
   if (batch.rowIds.length === 0) throw new Error("Batch has no committed records to roll back.");
 

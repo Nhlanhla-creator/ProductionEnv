@@ -1,376 +1,159 @@
 "use client"
-
-/**
- * digitalTwin/components/DowntimeEventForm.jsx
- *
- * Screen 3 from the brief: contextual downtime capture that asks only for
- * what is needed now (Brief page 4). Every classification field maps
- * directly to Section 7.8's downtime event model.
- */
-
-import { useEffect, useMemo, useState } from "react"
-import { Check, AlertTriangle, X, Plus } from "lucide-react"
-import { createDowntimeEvent, DOWNTIME_TAXONOMY, listDowntimeEvents } from "../services/downtimeService"
-import { DOWNTIME_RESPONSIBILITY, DOWNTIME_LOSS_TYPE, DATA_CONFIDENCE } from "../models/enums"
-import { listResources } from "../services/resourceService"
-import { RESOURCE_KIND } from "../models/assetSchema"
-
-const T = {
-  ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", line: "#ded8d4",
-  lineSoft: "#e9e3df", lineStrong: "#b0a29b", bg: "#ffffff",
-  panel: "#faf8f7", raised: "#f2eeec", accent: "#4a352f", accentTint: "#f4efec",
-  red: "#991b1b", amber: "#92400e", green: "#166534",
-  redBg: "#fef2f2", amberBg: "#fffbeb", greenBg: "#f0fdf4",
-}
-const inputS = { width: "100%", padding: "9px 11px", border: `1px solid ${T.lineStrong}`,
-  borderRadius: "8px", fontSize: "13.5px", fontFamily: "inherit",
-  boxSizing: "border-box", color: T.ink, background: T.bg, outline: "none" }
-const labelS = { display: "block", fontSize: "12px", fontWeight: 600, color: T.accent, marginBottom: "5px" }
-const cardS = { background: T.bg, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "16px", marginBottom: "14px" }
-
-export default function DowntimeEventForm({ tenantId, defaultAssetId = null, onBack }) {
-  const [assets, setAssets] = useState([])
-  const [loadingAssets, setLoadingAssets] = useState(true)
-  const [assetId, setAssetId] = useState(defaultAssetId || "")
-  const [recentEvents, setRecentEvents] = useState([])
-
-  const [form, setForm] = useState({
-    categoryLevel1: "",
-    categoryLevel2: "",
-    lossType: "",
-    failureMode: "",
-    causeCode: "",
-    responsibility: DOWNTIME_RESPONSIBILITY.INTERNAL,
-    responsibleOwner: "",
-    eventStart: new Date().toISOString().slice(0, 16),
-    eventEnd: "",
-    notes: "",
-    confidence: DATA_CONFIDENCE.MANUAL_ACTUAL,
-    assetStateBefore: "",
-    operatingMode: "",
-    crew: "",
-    workOrderId: "",
-  })
-
-  const [saving, setSaving] = useState(false)
-  const [errors, setErrors] = useState([])
-  const [result, setResult] = useState(null)
-
-  // Load assets
+import { useEffect,useMemo,useState } from 'react';
+import { createDowntimeEvent,correctDowntimeEvent,listDowntimeEvents,listCaptureAssets } from '../services/downtimeService';
+import { listDowntimeMasters } from '../services/downtimeMasterService';
+import { effectiveContextFor } from '../services/resourceService';
+import { appliesTo,childrenOf,DOWNTIME_HEADINGS,durationOf,canCaptureAsset } from '../models/downtimeCodes';
+import { downloadDowntimeCsv } from '../services/downtimeSpreadsheetService';
+import DowntimeMasterSetup from './DowntimeMasterSetup';
+const input = { width:'100%',padding:'10px 12px',border:'1px solid #b0a29b',borderRadius:8,font:'inherit',boxSizing:'border-box',color:'#2d201c',background:'white' };
+const button = { ...input,width:'auto',cursor:'pointer',fontSize:13 };
+const primary = { ...button,background:'#4a352f',color:'white',fontWeight:600 };
+const card = { padding:18,border:'1px solid #ded8d4',borderRadius:12,background:'white',marginBottom:16 };
+const localInput = value => {
+  const d=value ? new Date(value) : new Date();
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+};
+const blank = () => ({ start:localInput(),end:'',notes:'' });
+const zoned = value => { const d = new Date(value);if(!value || !Number.isFinite(d.getTime())) throw new Error('Enter valid start and end times.');return d.toISOString(); };
+export default function DowntimeEventForm({ tenantId,defaultAssetId = null,onBack }) {
+  const [assets,setAssets] = useState([]),[masters,setMasters] = useState([]),[assetId,setAssetId] = useState(defaultAssetId || '');
+  const [masterId,setMasterId] = useState(''),[selected,setSelected] = useState([]),[form,setForm] = useState(blank);
+  const [events,setEvents] = useState([]),[busy,setBusy] = useState(false),[error,setError] = useState(''),[message,setMessage] = useState('');
+  const [loading,setLoading] = useState(true),[refresh,setRefresh] = useState(0),[setup,setSetup] = useState(false);
+  const [editing,setEditing] = useState(null),[reason,setReason] = useState('');
+  const [from,setFrom] = useState(''),[to,setTo] = useState('');
   useEffect(() => {
-    (async () => {
-      if (!tenantId) return
-      setLoadingAssets(true)
-      try {
-        const list = await listResources(tenantId, { resourceKind: RESOURCE_KIND.ASSET, status: "available", pageSize: 500 })
-        setAssets(list)
-        if (!assetId && list.length > 0 && !defaultAssetId) setAssetId(list[0].assetId || list[0].id)
-      } finally { setLoadingAssets(false) }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId])
-
-  // Load recent events for the selected asset
+    let live=true;
+    setAssets([]);setMasters([]);setEvents([]);setEditing(null);setReason('');setSelected([]);setMasterId('');setForm(blank());setError('');setMessage('');setLoading(true);
+    if(!tenantId) { setLoading(false);return undefined; }
+    Promise.all([listCaptureAssets(tenantId,{ includeInactive:true }),listDowntimeMasters(tenantId)]).then(([a,m]) => {
+      if(!live) return;
+      setAssets(a);setMasters(m);
+      setAssetId(old => a.some(x => (x.assetId || x.id) === (defaultAssetId || old)) ? (defaultAssetId || old) : (a[0]?.assetId || a[0]?.id || ''));
+    }).catch(e => { if(live) setError(e.message); }).finally(() => { if(live) setLoading(false); });
+    return () => { live=false; };
+  },[tenantId,defaultAssetId,refresh]);
   useEffect(() => {
-    (async () => {
-      if (!tenantId || !assetId) return
-      try {
-        const events = await listDowntimeEvents(tenantId, { assetId, pageSize: 10 })
-        setRecentEvents(events.slice(0, 5))
-      } catch { setRecentEvents([]) }
-    })()
-  }, [tenantId, assetId])
-
-  const set = (patch) => setForm((p) => ({ ...p, ...patch }))
-
-  const categoryDef = form.categoryLevel1 ? DOWNTIME_TAXONOMY[form.categoryLevel1] : null
-  const subcategories = categoryDef?.subcategories || []
-
-  // Live duration preview
-  const durationHours = useMemo(() => {
-    if (!form.eventStart) return null
-    const start = new Date(form.eventStart).getTime()
-    const end = form.eventEnd ? new Date(form.eventEnd).getTime() : null
-    if (end === null) return null
-    if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null
-    return (end - start) / 3600000
-  }, [form.eventStart, form.eventEnd])
-
-  // Estimated lost output — using selected asset's nominal productivity if we have one
-  const estimatedLostOutput = useMemo(() => {
-    if (durationHours === null) return null
-    const asset = assets.find((a) => (a.assetId || a.id) === assetId)
-    if (!asset || !asset.currentDeratedCapacity && !asset.nameplateCapacity) return null
-    const rate = asset.currentDeratedCapacity || asset.nameplateCapacity
-    return durationHours * Number(rate) // crude; better once productivity history exists
-  }, [durationHours, assets, assetId])
-
-  const validate = () => {
-    const errs = []
-    if (!assetId) errs.push("Select an asset.")
-    if (!form.categoryLevel1) errs.push("Select a downtime category.")
-    if (!form.eventStart) errs.push("Enter a start time.")
-    return errs
-  }
-
-  const handleSave = async () => {
-    const errs = validate()
-    setErrors(errs)
-    if (errs.length > 0) return
-
-    setSaving(true)
-    setResult(null)
+    let live=true;setEvents([]);
+    if(!tenantId || !assetId) return undefined;
+    listDowntimeEvents(tenantId,{ assetId }).then(rows => { if(live) setEvents(rows); }).catch(e => { if(live) setError(e.message); });
+    return () => { live=false; };
+  },[tenantId,assetId,refresh]);
+  const asset = assets.find(a => (a.assetId || a.id) === assetId);
+  const eligible = useMemo(() => masters.filter(m => m.published && asset && appliesTo(m.published.assignment,asset)),[masters,asset]);
+  const master = eligible.find(m => m.id === masterId) || (eligible.length === 1 ? eligible[0] : null);
+  const nodes = master?.published.nodes || [];
+  const path = selected.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+  const terminal = path.length>=3 && path[path.length-1]?.terminal;
+  const preview = useMemo(() => { try { return durationOf(zoned(form.start),zoned(form.end)).durationHours; } catch { return null; } },[form.start,form.end]);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const filtered = events.filter(e => (!from || Date.parse(e.eventEnd || e.eventStart)>new Date(`${from}T00:00`).getTime()) &&
+    (!to || Date.parse(e.eventStart)<new Date(`${to}T23:59:59.999`).getTime()));
+  // Filters select overlapping events; the table/export retain each full saved duration.
+  const shownEvents = filtered;
+  const editEvent = e => {
+    if(!e.masterListId || !e.classificationPath) { setError('Legacy records remain readable. Use the service API to close an open legacy record.');return; }
+    setEditing(e);setReason('');setForm({ start:localInput(e.eventStart),end:localInput(e.eventEnd),notes:e.notes || '' });
+    setError('');setMessage('');
+  };
+  const cancelEdit = () => { setEditing(null);setReason('');setForm(blank());setSelected([]); };
+  const submit = async e => {
+    e.preventDefault();setBusy(true);setError('');setMessage('');
     try {
-      const isoStart = new Date(form.eventStart).toISOString()
-      const isoEnd = form.eventEnd ? new Date(form.eventEnd).toISOString() : null
-      await createDowntimeEvent(tenantId, {
-        assetId,
-        eventStart: isoStart,
-        eventEnd: isoEnd,
-        categoryLevel1: form.categoryLevel1,
-        categoryLevel2: form.categoryLevel2 || null,
-        lossType: form.lossType || undefined,
-        failureMode: form.failureMode || null,
-        causeCode: form.causeCode || null,
-        responsibility: form.responsibility,
-        responsibleOwner: form.responsibleOwner,
-        assetStateBefore: form.assetStateBefore,
-        operatingMode: form.operatingMode,
-        crew: form.crew,
-        workOrderId: form.workOrderId,
-        estimatedLostOutput: estimatedLostOutput,
-        notes: form.notes,
-        confidence: form.confidence,
-      })
-      setResult({ ok: true })
-      // Reset the entry but keep the asset selection for rapid multi-entry
-      setForm((p) => ({
-        ...p,
-        categoryLevel1: "",
-        categoryLevel2: "",
-        failureMode: "",
-        causeCode: "",
-        eventStart: new Date().toISOString().slice(0, 16),
-        eventEnd: "",
-        notes: "",
-      }))
-    } catch (err) {
-      if (err.conflicts) {
-        setErrors([`Overlapping downtime — closes at a time that clashes with another event.`, ...err.conflicts.map((c) => `${c.eventStart.slice(0, 16)} → ${(c.eventEnd || "open").slice(0, 16)}`)])
+      if(!tenantId || !assetId) throw new Error('Select an organisation and asset.');
+      const timing = durationOf(zoned(form.start),zoned(form.end));
+      if(editing) {
+        await correctDowntimeEvent(tenantId,editing.eventId || editing.id,{ ...timing,notes:form.notes },{ reason,expectedVersion:editing.eventVersion });
       } else {
-        setErrors([err.message])
+        if(!master || !terminal) throw new Error('Select a published master list and complete the classification.');
+        const assignments = await effectiveContextFor(tenantId,assetId,timing.eventStart.slice(0,10));
+        const context = assignments.find(a => a.isPrimary) || assignments[0] || {};
+        await createDowntimeEvent(tenantId,{ ...timing,assetId,masterListId:master.id,masterVersion:master.published.version,
+          selectedCodeId:path[path.length-1].id,notes:form.notes,timezone,
+          siteId:context.siteId || null,contractId:context.contractId || null,activityId:context.activityId || null,serviceId:context.serviceId || null });
       }
-    } finally { setSaving(false) }
-  }
-
-  const Section = ({ title, children }) => (
-    <div style={cardS}>
-      <h3 style={{ margin: "0 0 12px", fontSize: "13px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-        {title}
-      </h3>
-      {children}
+      const wasEditing=!!editing;
+      cancelEdit();setMessage(wasEditing ? 'Correction saved with an audit trail.' : 'Downtime saved.');
+      setEvents(await listDowntimeEvents(tenantId,{ assetId }));
+    } catch(e) { setError(e.message); } finally { setBusy(false); }
+  };
+  if(setup) return <DowntimeMasterSetup tenantId={tenantId} onBack={() => { setSetup(false);setRefresh(r => r+1); }} />;
+  return <section style={{ maxWidth:1100,margin:'0 auto',color:'#2d201c' }}>
+    <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
+      {onBack && <button style={button} disabled={busy} onClick={onBack}>← Back</button>}
+      <button style={button} disabled={busy} onClick={() => setSetup(true)}>Manage master codes</button>
+      <button style={button} disabled={busy || loading} onClick={() => setRefresh(r => r+1)}>Reload assets and published codes</button>
     </div>
-  )
-
-  return (
-    <div>
-      {onBack && (
-        <button onClick={onBack} style={{ padding: "9px 16px", borderRadius: "8px",
-          border: `1px solid ${T.lineStrong}`, background: T.bg, color: T.body,
-          cursor: "pointer", fontFamily: "inherit", fontSize: "13.5px", fontWeight: 500,
-          marginBottom: "14px", display: "inline-flex", alignItems: "center", gap: "7px" }}>← Back</button>
-      )}
-
-      <h2 style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 700, color: T.accent }}>Record a downtime event</h2>
-      <p style={{ margin: "0 0 18px", fontSize: "13px", color: T.muted }}>
-        Only fields needed to calculate and explain this event are shown.
-      </p>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "14px" }}>
-        <div>
-          <Section title="Scope">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div>
-                <label style={labelS}>Asset *</label>
-                <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={inputS} disabled={loadingAssets}>
-                  <option value="">{loadingAssets ? "Loading…" : "Select asset…"}</option>
-                  {assets.map((a) => (
-                    <option key={a.assetId || a.id} value={a.assetId || a.id}>
-                      {a.name}{a.internalNumber ? ` · ${a.internalNumber}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labelS}>Asset state before event</label>
-                <input value={form.assetStateBefore} onChange={(e) => set({ assetStateBefore: e.target.value })}
-                  style={inputS} placeholder="e.g. operating" />
-              </div>
-            </div>
-          </Section>
-
-          <Section title="Timing">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div>
-                <label style={labelS}>Started *</label>
-                <input type="datetime-local" value={form.eventStart} onChange={(e) => set({ eventStart: e.target.value })} style={inputS} />
-              </div>
-              <div>
-                <label style={labelS}>Returned to service</label>
-                <input type="datetime-local" value={form.eventEnd} onChange={(e) => set({ eventEnd: e.target.value })} style={inputS} />
-                <p style={{ margin: "4px 0 0", fontSize: "11.5px", color: T.muted }}>
-                  Leave blank if the event is still open — close it later.
-                </p>
-              </div>
-            </div>
-          </Section>
-
-          <Section title="Classification">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-              <div>
-                <label style={labelS}>Category *</label>
-                <select value={form.categoryLevel1} onChange={(e) => set({ categoryLevel1: e.target.value, categoryLevel2: "" })} style={inputS}>
-                  <option value="">Select category…</option>
-                  {Object.entries(DOWNTIME_TAXONOMY).map(([code, def]) => (
-                    <option key={code} value={code}>
-                      {def.label}{def.planned ? " (planned)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labelS}>Subcategory</label>
-                <select value={form.categoryLevel2} onChange={(e) => set({ categoryLevel2: e.target.value })} style={inputS} disabled={!form.categoryLevel1}>
-                  <option value="">Select subcategory…</option>
-                  {subcategories.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div>
-                <label style={labelS}>Failure mode</label>
-                <input value={form.failureMode} onChange={(e) => set({ failureMode: e.target.value })}
-                  style={inputS} placeholder="e.g. Hose failure" />
-              </div>
-              <div>
-                <label style={labelS}>Responsibility</label>
-                <select value={form.responsibility} onChange={(e) => set({ responsibility: e.target.value })} style={inputS}>
-                  {Object.values(DOWNTIME_RESPONSIBILITY).map((r) => (
-                    <option key={r} value={r}>{r.replace(/_/g, " ")}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </Section>
-
-          <Section title="Operational context">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-              <div>
-                <label style={labelS}>Operating mode</label>
-                <input value={form.operatingMode} onChange={(e) => set({ operatingMode: e.target.value })} style={inputS} placeholder="e.g. hauling" />
-              </div>
-              <div>
-                <label style={labelS}>Crew</label>
-                <input value={form.crew} onChange={(e) => set({ crew: e.target.value })} style={inputS} placeholder="e.g. B crew" />
-              </div>
-              <div>
-                <label style={labelS}>Work order</label>
-                <input value={form.workOrderId} onChange={(e) => set({ workOrderId: e.target.value })} style={inputS} />
-              </div>
-            </div>
-          </Section>
-
-          <Section title="Notes">
-            <textarea rows="3" value={form.notes} onChange={(e) => set({ notes: e.target.value })}
-              style={{ ...inputS, resize: "vertical" }}
-              placeholder="Root cause and action can be completed after initial submission." />
-          </Section>
+    <h2>Record asset downtime</h2>
+    <p style={{ color:'#6b5b55' }}>Choose the asset and its published classification. Hours are calculated from start and end times.</p>
+    {error && <p role="alert" style={{ color:'#991b1b' }}>{error}</p>}
+    {message && <p role="status" style={{ color:'#166534' }}>{message}</p>}
+    {loading && <p>Loading assets and published codes…</p>}
+    {!loading && !assets.length && <p>No registered assets. Add an asset in the Asset Register first.</p>}
+    <form onSubmit={submit}>
+      <fieldset disabled={busy || loading || !tenantId} style={card}>
+        <legend>{editing ? 'Correct downtime — historical classification retained' : 'Downtime capture'}</legend>
+        <label style={{ display:'block',marginBottom:14 }}>Asset ID / name
+          <select required style={input} disabled={!!editing} value={assetId} onChange={e => { setAssetId(e.target.value);setMasterId('');setSelected([]);setError('');setMessage(''); }}>
+            <option value="">Select an asset</option>{assets.map(a => <option key={a.id} value={a.assetId || a.id}>{a.internalNumber || a.assetId || a.id} — {a.name}{!canCaptureAsset(a) ? " (history only)" : ""}</option>)}
+          </select>
+        </label>
+        {asset && !canCaptureAsset(asset) && <p>Historical asset: review and correct existing records here. New downtime requires an active asset.</p>}
+        <p style={{ fontSize:12,color:'#6b5b55' }}>Times use your device timezone: <strong>{timezone}</strong>. Stored as UTC. Events may cross midnight or span multiple days.</p>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:14 }}>
+          <label>Start date and time<input required type="datetime-local" style={input} value={form.start} onChange={e => setForm({ ...form,start:e.target.value })} /></label>
+          <label>End date and time<input required type="datetime-local" style={input} value={form.end} onChange={e => setForm({ ...form,end:e.target.value })} /></label>
         </div>
-
-        {/* Right panel */}
-        <div>
-          <div style={{ ...cardS, background: T.accentTint, borderColor: T.lineStrong }}>
-            <h3 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Calculated
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <CalcRow label="Duration"
-                value={durationHours === null ? "—"
-                  : durationHours >= 1
-                    ? `${Math.floor(durationHours)} h ${Math.round((durationHours % 1) * 60)} min`
-                    : `${Math.round(durationHours * 60)} min`} />
-              <CalcRow label="Estimated lost output"
-                value={estimatedLostOutput === null ? "—"
-                  : `${estimatedLostOutput.toLocaleString("en-ZA", { maximumFractionDigits: 0 })} ${assets.find((a) => (a.assetId || a.id) === assetId)?.canonicalUnit === "tonnes" ? "tonnes" : ""}`.trim()} />
-            </div>
-          </div>
-
-          <div style={cardS}>
-            <label style={labelS}>Confidence</label>
-            <select value={form.confidence} onChange={(e) => set({ confidence: e.target.value })} style={inputS}>
-              {Object.values(DATA_CONFIDENCE).map((c) => (
-                <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-              ))}
+        {editing ? <p style={card}>{editing.classificationPath.map(n => n.label).join(' → ')} · saved version {editing.masterVersion}</p> : <>
+          {!eligible.length && asset && <p style={{ color:'#92400e' }}>No published master list is assigned to this asset type or group. Open Manage master codes, assign a list and publish it.</p>}
+          <label style={{ display:'block',margin:'16px 0' }}>Published master list
+            <select required style={input} value={master?.id || ''} onChange={e => { setMasterId(e.target.value);setSelected([]); }}>
+              <option value="">Select a published list</option>{eligible.map(m => <option key={m.id} value={m.id}>{m.published.name} · v{m.published.version}</option>)}
             </select>
+          </label>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:14 }}>
+            {DOWNTIME_HEADINGS.map((heading,i) => {
+              const parent=i ? nodes.find(n => n.id === selected[i-1]) : null;
+              if(!master || (i && (!parent || parent.terminal))) return null;
+              const choices=childrenOf(nodes,parent?.id || null);
+              return <label key={heading}>Level {i+1} — {heading}
+                <select required style={input} value={selected[i] || ''} onChange={e => setSelected([...selected.slice(0,i),e.target.value].filter(Boolean))}>
+                  <option value="">Select {heading.toLowerCase()}</option>{choices.map(n => <option key={n.id} value={n.id}>{n.label}{n.origin==='custom_unmapped' ? ' (Custom / Unmapped)' : ''}</option>)}
+                </select>
+              </label>;
+            })}
           </div>
-
-          {errors.length > 0 && (
-            <div style={{ ...cardS, background: T.redBg, borderColor: `${T.red}33` }}>
-              <div style={{ display: "flex", gap: "8px", color: T.red, fontSize: "13px" }}>
-                <X size={15} style={{ marginTop: "2px", flexShrink: 0 }} />
-                <div>
-                  {errors.map((e, i) => <div key={i}>{e}</div>)}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {result && (
-            <div style={{ ...cardS, background: T.greenBg, borderColor: `${T.green}33` }}>
-              <div style={{ display: "flex", gap: "8px", color: T.green, fontSize: "13.5px" }}>
-                <Check size={15} style={{ marginTop: "2px", flexShrink: 0 }} />
-                <div>Downtime event saved.</div>
-              </div>
-            </div>
-          )}
-
-          <button onClick={handleSave} disabled={saving}
-            style={{ width: "100%", padding: "12px", borderRadius: "10px",
-              background: T.accent, color: "#fff", border: `1px solid ${T.accent}`,
-              cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit",
-              fontSize: "14px", fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
-            {saving ? "Saving…" : "Submit event"}
-          </button>
-
-          {recentEvents.length > 0 && (
-            <div style={{ ...cardS, marginTop: "14px" }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Recent events on this asset
-              </h4>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {recentEvents.map((e) => (
-                  <div key={e.id} style={{ fontSize: "12px", color: T.body, padding: "6px 8px",
-                    background: T.panel, borderRadius: "6px", border: `1px solid ${T.lineSoft}` }}>
-                    <div style={{ fontWeight: 600 }}>{DOWNTIME_TAXONOMY[e.categoryLevel1]?.label || e.categoryLevel1}</div>
-                    <div style={{ color: T.muted }}>
-                      {e.eventStart.slice(0, 16).replace("T", " ")} → {e.eventEnd ? e.eventEnd.slice(0, 16).replace("T", " ") : <span style={{ color: T.green }}>open</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {!!path.length && <p>{path.map(n => n.label).join(' → ')}</p>}
+        </>}
+        <label style={{ display:'block',marginTop:14 }}>Notes (optional)<textarea style={input} maxLength={10000} rows={3} value={form.notes} onChange={e => setForm({ ...form,notes:e.target.value })} /></label>
+        {editing && <label style={{ display:'block',marginTop:14 }}>Reason for correction<input required style={input} value={reason} onChange={e => setReason(e.target.value)} /></label>}
+        <div style={{ display:'flex',gap:14,flexWrap:'wrap',alignItems:'center',marginTop:16 }}>
+          <div style={{ padding:14,borderRadius:10,background:'#f4efec' }}><strong style={{ fontSize:28 }}>{preview === null ? '—' : preview.toFixed(2)}</strong> hours</div>
+          <button style={primary} disabled={busy || !asset || (!editing && (!terminal || !canCaptureAsset(asset)))}>{busy ? 'Saving…' : editing ? 'Save audited correction' : 'Save downtime'}</button>
+          {editing && <button type="button" style={button} onClick={cancelEdit}>Cancel correction</button>}
         </div>
+      </fieldset>
+    </form>
+    <div style={card}>
+      <div style={{ display:'flex',gap:12,alignItems:'end',flexWrap:'wrap' }}>
+        <h3 style={{ marginRight:'auto' }}>Downtime records for this asset</h3>
+        <label>From<input type="date" style={input} value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>To<input type="date" min={from || undefined} style={input} value={to} onChange={e => setTo(e.target.value)} /></label>
+        <button style={button} disabled={!shownEvents.length} onClick={() => { try { downloadDowntimeCsv(shownEvents); } catch(e) { setError(e.message); } }}>Export CSV</button>
       </div>
+      <p>{shownEvents.length} events · {shownEvents.reduce((s,e) => s+(Number(e.durationHours)||0),0).toFixed(2)} full event hours</p>
+      <div style={{ overflowX:'auto' }}><table style={{ width:'100%',borderCollapse:'collapse',fontSize:13 }}>
+        <thead><tr>{['Start','End','Hours','Classification','Notes',''].map((h,i) => <th key={i} style={{ padding:10,textAlign:'left',borderBottom:'1px solid #ded8d4' }}>{h}</th>)}</tr></thead>
+        <tbody>{shownEvents.map(e => <tr key={e.id}>
+          <td style={{ padding:10 }}>{new Date(e.eventStart).toLocaleString()}</td>
+          <td style={{ padding:10 }}>{e.eventEnd ? new Date(e.eventEnd).toLocaleString() : 'Open (legacy)'}</td>
+          <td style={{ padding:10 }}>{e.durationHours == null ? '—' : Number(e.durationHours).toFixed(2)}</td>
+          <td style={{ padding:10 }}>{e.classificationPath?.map(n => n.label).join(' → ') || [e.categoryLevel1,e.categoryLevel2].filter(Boolean).join(' → ')}</td>
+          <td style={{ padding:10 }}>{e.notes}</td><td style={{ padding:10 }}>{e.masterListId && <button style={button} disabled={busy} onClick={() => editEvent(e)}>Correct</button>}</td>
+        </tr>)}</tbody>
+      </table></div>
+      {!shownEvents.length && <p>No downtime records for this selection.</p>}
     </div>
-  )
-}
-
-function CalcRow({ label, value }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-      <span style={{ fontSize: "12.5px", color: "#3b2b26" }}>{label}</span>
-      <span style={{ fontSize: "15px", fontWeight: 700, color: "#2d201c", fontVariantNumeric: "tabular-nums" }}>{value}</span>
-    </div>
-  )
+  </section>;
 }

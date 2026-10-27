@@ -261,13 +261,17 @@ export const availabilityLossByCategory = async (tenantId, { scope = {}, periodL
 
   events.forEach((e) => {
     if (!e.eventEnd) return; // ignore open events
-    const hours = Number(e.durationHours) || 0;
+    // Clip events spanning period boundaries; the service includes overlapping events.
+    const start = Math.max(Date.parse(e.eventStart), period.startFrom ? Date.parse(period.startFrom) : -Infinity);
+    const end = Math.min(Date.parse(e.eventEnd), period.endTo ? Date.parse(period.endTo) + 1000 : Infinity);
+    const hours = Math.max(0, end - start) / 3600000;
+    if (!Number.isFinite(hours) || hours <= 0) return;
     const cat = e.categoryLevel1 || "unknown";
     if (!byCategory[cat]) {
       byCategory[cat] = {
         category: cat,
-        label: DOWNTIME_TAXONOMY[cat]?.label || cat.replace(/_/g, " "),
-        planned: !!DOWNTIME_TAXONOMY[cat]?.planned,
+        label: e.classificationPath?.[0]?.reportingLabel || DOWNTIME_TAXONOMY[cat]?.label || cat.replace(/_/g, " "),
+        planned: e.planned ?? !!DOWNTIME_TAXONOMY[cat]?.planned,
         hours: 0,
         eventCount: 0,
       };
@@ -275,12 +279,12 @@ export const availabilityLossByCategory = async (tenantId, { scope = {}, periodL
     byCategory[cat].hours += hours;
     byCategory[cat].eventCount += 1;
     totalHours += hours;
-    if (DOWNTIME_TAXONOMY[cat]?.planned) plannedHours += hours;
+    if (e.planned ?? DOWNTIME_TAXONOMY[cat]?.planned) plannedHours += hours;
     else unplannedHours += hours;
   });
 
   const rows = Object.values(byCategory).sort((a, b) => b.hours - a.hours);
-  return { rows, totalHours, plannedHours, unplannedHours, eventCount: events.length };
+  return { rows, totalHours, plannedHours, unplannedHours, eventCount: rows.reduce((sum, row) => sum + row.eventCount, 0) };
 };
 
 // ── Attention detection ───────────────────────────────────────────────────
