@@ -31,7 +31,7 @@ const labelS = { display: "block", fontSize: "11px", fontWeight: 700, color: T.m
 const valueS = { fontSize: "14px", color: T.ink, fontWeight: 500 }
 const TABS = ["Overview", "Assignment history", "Compliance"]
 
-export default function AssetDetail({ tenantId, asset: initialAsset, onBack }) {
+export default function AssetDetail({ tenantId, asset: initialAsset, onBack, onNavigate }) {
   const [asset, setAsset] = useState(initialAsset)
   const [assignments, setAssignments] = useState([])
   const [effectiveNow, setEffectiveNow] = useState([])
@@ -76,7 +76,7 @@ export default function AssetDetail({ tenantId, asset: initialAsset, onBack }) {
     return <div style={{ padding: "40px", textAlign: "center", color: T.muted }}>Loading asset…</div>
   }
 
-  if (showDowntime) return <DowntimeEventForm tenantId={tenantId} defaultAssetId={assetId} onBack={() => setShowDowntime(false)} />
+  if (showDowntime) return <DowntimeEventForm tenantId={tenantId} defaultAssetId={assetId} onNavigate={onNavigate} onBack={() => setShowDowntime(false)} />
 
   if (editing) {
     return (

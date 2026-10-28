@@ -106,6 +106,7 @@ export function validateCodes(nodes, previous = [], templateId = TEMPLATE_VERSIO
     } else if (n.level === 3) {
       if (n.origin !== 'custom_unmapped' || n.canonicalId !== null || n.standardLabel !== null) throw new Error('Custom Level 3 must be flagged Custom / Unmapped.');
     } else if (n.origin !== 'organisation' || n.canonicalId !== null || n.standardLabel !== null) throw new Error('Invalid organisation code.');
+    if (n.level === 5 && !n.terminal) throw new Error('Level 5 is the final downtime reason and must end the branch.');
     if (n.level < 3 && n.terminal) throw new Error('Branches may end only at Level 3, 4 or 5.');
     if (publishing && n.active) {
       if (path.some(p => !p.active)) throw new Error('An active code has an inactive parent. Deactivate the entire branch.');

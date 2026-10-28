@@ -164,9 +164,9 @@ async function mutateEvent(tenantId,input,{ eventId = null,reason = '',legacyClo
         const payload = { ...(old || {}),...classification,...timing,
           eventId:ref.id,tenantId,assetId:input.assetId,
           assetName:old?.assetName || asset.name,assetNumber:old?.assetNumber || asset.internalNumber || input.assetId,
-          groupId:old?.groupId || asset.equipmentGroupId || null,equipmentTypeId:old?.equipmentTypeId || asset.equipmentTypeId || null,
-          siteId:old?.siteId || input.siteId || null,contractId:old?.contractId || input.contractId || null,
-          activityId:old?.activityId || input.activityId || null,serviceId:old?.serviceId || input.serviceId || null,
+          groupId:old ? (old.groupId ?? null) : (input.groupId || asset.equipmentGroupId || null),equipmentTypeId:old ? (old.equipmentTypeId ?? null) : (asset.equipmentTypeId || null),
+          siteId:old ? (old.siteId ?? null) : (input.siteId || asset.siteId || null),contractId:old ? (old.contractId ?? null) : (input.contractId || null),
+          activityId:old ? (old.activityId ?? null) : (input.activityId || null),serviceId:old ? (old.serviceId ?? null) : (input.serviceId || null),
           notes:String(input.notes ?? old?.notes ?? ''),timezone:input.timezone || old?.timezone || 'Africa/Johannesburg',
           lostOperatingHours:timing.durationHours,confidence:old?.confidence || input.confidence || DATA_CONFIDENCE.MANUAL_ACTUAL,
           source:old?.source || input.source || 'manual',ingestionBatchId:old?.ingestionBatchId || input.ingestionBatchId || null,
@@ -262,4 +262,9 @@ export async function listCaptureAssets(tenantId,{ includeInactive = false } = {
   if (!tenantId) return [];
   const snap = await getDocs(query(collection(db,'digitalTwinTenants',tenantId,'resources'),where('resourceKind','==','asset')));
   return snap.docs.map(d => ({ ...d.data(),id:d.id })).filter(a => includeInactive || canCaptureAsset(a)).sort((a,b) => a.name.localeCompare(b.name));
+}
+
+export async function getDowntimeEventAudit(tenantId,eventId) {
+  const snap=await getDocs(collection(eventRef(tenantId,eventId),'auditLog'));
+  return snap.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>String(b.at).localeCompare(String(a.at)));
 }
