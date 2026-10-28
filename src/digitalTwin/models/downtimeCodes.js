@@ -76,6 +76,8 @@ export function codePath(nodes, id) {
 export const childrenOf = (nodes, parentId = null, activeOnly = true) => nodes
   .filter(n => n.parentId === parentId && (!activeOnly || n.active))
   .sort((a,b) => a.sortOrder-b.sortOrder || a.label.localeCompare(b.label));
+export const unfinishedBranches = nodes => nodes.filter(n =>
+  n.active && !n.terminal && !nodes.some(c => c.parentId === n.id && c.active));
 export function validateCodes(nodes, previous = [], templateId = TEMPLATE_VERSION, publishing = true) {
   if (!Array.isArray(nodes) || nodes.length > 600) throw new Error('Use at most 600 codes per master list.');
   const ids = new Set(), siblings = new Set();
@@ -112,7 +114,7 @@ export function validateCodes(nodes, previous = [], templateId = TEMPLATE_VERSIO
       if (path.some(p => !p.active)) throw new Error('An active code has an inactive parent. Deactivate the entire branch.');
       const kids = childrenOf(nodes,n.id);
       if (n.terminal && kids.length) throw new Error('A terminal code cannot have active children.');
-      if (!n.terminal && !kids.length) throw new Error(`Finish or deactivate the branch: ${n.label}.`);
+      if (!n.terminal && !kids.length) throw new Error(`Finish or deactivate the branch: ${path.map(p => p.label).join(' → ')}. ${n.level < 3 ? 'Add a Level 3 classification beneath this category, or deactivate the unused branch.' : 'Add a child code, mark this code as a final selection, or deactivate the unused branch.'}`);
     }
   });
   standards.filter(n => n.level <= 2).forEach(n => {
