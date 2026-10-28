@@ -24,6 +24,7 @@ import { NODE_TYPES } from "../models/enums"
 import KpiLineageModal from "./KpiLineageModal"
 import DrillDownView from "./DrillDownView"
 import OperationsSetupCard from "./OperationsSetupCard"
+import AssetRegister from "./AssetRegister"
 import { auth } from "../../firebaseConfig"
 
 const T = {
@@ -62,6 +63,7 @@ const CATEGORY_COLORS = {
 }
 
 export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpenLineage }) {
+  const [showDowntime, setShowDowntime] = useState(false)
   const [loading, setLoading] = useState(true)
   const [anchor, setAnchor] = useState(null)              // root node for the current view
   const [tiles, setTiles] = useState([])
@@ -118,6 +120,8 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     }
   }
 
+  if (showDowntime) return <AssetRegister tenantId={tenantId} onBack={() => setShowDowntime(false)} />
+
   if (loading && !anchor) {
     return <div style={{ padding: "40px", textAlign: "center", color: T.muted }}>Loading command centre…</div>
   }
@@ -125,6 +129,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
   if (!anchor) {
     return (
       <div style={{ padding: "24px", maxWidth: "820px", margin: "0 auto" }}>
+        <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => setShowDowntime(true)}>Open asset & downtime workspace</button>
         {/* Setup guide still shown so the user can start the wizard */}
         <OperationsSetupCard
           variant="compact"
@@ -177,6 +182,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     <div>
       {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back</button>}
 
+      <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => setShowDowntime(true)}>Asset register · Downtime setup · Capture · Reports</button>
       {/* ── SETUP GUIDE — SHOWN FIRST ── */}
       <OperationsSetupCard
         variant="compact"

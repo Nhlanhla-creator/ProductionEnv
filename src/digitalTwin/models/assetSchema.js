@@ -14,6 +14,7 @@
 
 import { ASSET_STATUS, DATA_CONFIDENCE, ALLOCATION_BASIS } from "./enums";
 import { CANONICAL_UNIT, UNITS } from "./units";
+import { normalAssetNumber } from "./assetIdentity";
 
 // ── Resource kinds ────────────────────────────────────────────────────────
 export const RESOURCE_KIND = Object.freeze({
@@ -106,6 +107,8 @@ export const createEmptyResource = (tenantId, overrides = {}) => {
     // Classification
     equipmentTypeId: null,       // canonical taxonomy ID (e.g. eqtype.rigid_haul_truck)
     equipmentGroupId: null,
+    siteId: null,
+    location: "",
     make: "",
     model: "",
     year: null,
@@ -194,6 +197,9 @@ export const validateResource = (resource, { isCreate = false } = {}) => {
 
   // Asset-only rules
   if (resource.resourceKind === RESOURCE_KIND.ASSET) {
+    if (isCreate || resource.internalNumber) {
+      try { normalAssetNumber(resource.internalNumber); } catch (e) { errors.push({ field: "internalNumber", message: e.message }); }
+    }
     if (!resource.equipmentTypeId) {
       errors.push({ field: "equipmentTypeId", message: "Canonical equipment type is required for physical assets." });
     }

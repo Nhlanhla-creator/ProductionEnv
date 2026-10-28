@@ -2,158 +2,88 @@
 import { useEffect,useMemo,useState } from 'react';
 import { createDowntimeEvent,correctDowntimeEvent,listDowntimeEvents,listCaptureAssets } from '../services/downtimeService';
 import { listDowntimeMasters } from '../services/downtimeMasterService';
-import { effectiveContextFor } from '../services/resourceService';
-import { appliesTo,childrenOf,DOWNTIME_HEADINGS,durationOf,canCaptureAsset } from '../models/downtimeCodes';
-import { downloadDowntimeCsv } from '../services/downtimeSpreadsheetService';
+import { contextForDowntime } from '../services/resourceService';
+import { appliesTo,childrenOf,DOWNTIME_HEADINGS,durationOf,canCaptureAsset,overlapping } from '../models/downtimeCodes';
+import DowntimeFlowNav from './DowntimeFlowNav';
 import DowntimeMasterSetup from './DowntimeMasterSetup';
-const input = { width:'100%',padding:'10px 12px',border:'1px solid #b0a29b',borderRadius:8,font:'inherit',boxSizing:'border-box',color:'#2d201c',background:'white' };
-const button = { ...input,width:'auto',cursor:'pointer',fontSize:13 };
-const primary = { ...button,background:'#4a352f',color:'white',fontWeight:600 };
-const card = { padding:18,border:'1px solid #ded8d4',borderRadius:12,background:'white',marginBottom:16 };
-const localInput = value => {
-  const d=value ? new Date(value) : new Date();
-  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-};
-const blank = () => ({ start:localInput(),end:'',notes:'' });
-const zoned = value => { const d = new Date(value);if(!value || !Number.isFinite(d.getTime())) throw new Error('Enter valid start and end times.');return d.toISOString(); };
-export default function DowntimeEventForm({ tenantId,defaultAssetId = null,onBack }) {
-  const [assets,setAssets] = useState([]),[masters,setMasters] = useState([]),[assetId,setAssetId] = useState(defaultAssetId || '');
-  const [masterId,setMasterId] = useState(''),[selected,setSelected] = useState([]),[form,setForm] = useState(blank);
-  const [events,setEvents] = useState([]),[busy,setBusy] = useState(false),[error,setError] = useState(''),[message,setMessage] = useState('');
-  const [loading,setLoading] = useState(true),[refresh,setRefresh] = useState(0),[setup,setSetup] = useState(false);
-  const [editing,setEditing] = useState(null),[reason,setReason] = useState('');
-  const [from,setFrom] = useState(''),[to,setTo] = useState('');
-  useEffect(() => {
-    let live=true;
-    setAssets([]);setMasters([]);setEvents([]);setEditing(null);setReason('');setSelected([]);setMasterId('');setForm(blank());setError('');setMessage('');setLoading(true);
-    if(!tenantId) { setLoading(false);return undefined; }
-    Promise.all([listCaptureAssets(tenantId,{ includeInactive:true }),listDowntimeMasters(tenantId)]).then(([a,m]) => {
-      if(!live) return;
-      setAssets(a);setMasters(m);
-      setAssetId(old => a.some(x => (x.assetId || x.id) === (defaultAssetId || old)) ? (defaultAssetId || old) : (a[0]?.assetId || a[0]?.id || ''));
-    }).catch(e => { if(live) setError(e.message); }).finally(() => { if(live) setLoading(false); });
-    return () => { live=false; };
-  },[tenantId,defaultAssetId,refresh]);
-  useEffect(() => {
-    let live=true;setEvents([]);
-    if(!tenantId || !assetId) return undefined;
-    listDowntimeEvents(tenantId,{ assetId }).then(rows => { if(live) setEvents(rows); }).catch(e => { if(live) setError(e.message); });
-    return () => { live=false; };
-  },[tenantId,assetId,refresh]);
-  const asset = assets.find(a => (a.assetId || a.id) === assetId);
-  const eligible = useMemo(() => masters.filter(m => m.published && asset && appliesTo(m.published.assignment,asset)),[masters,asset]);
-  const master = eligible.find(m => m.id === masterId) || (eligible.length === 1 ? eligible[0] : null);
-  const nodes = master?.published.nodes || [];
-  const path = selected.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-  const terminal = path.length>=3 && path[path.length-1]?.terminal;
-  const preview = useMemo(() => { try { return durationOf(zoned(form.start),zoned(form.end)).durationHours; } catch { return null; } },[form.start,form.end]);
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const filtered = events.filter(e => (!from || Date.parse(e.eventEnd || e.eventStart)>new Date(`${from}T00:00`).getTime()) &&
-    (!to || Date.parse(e.eventStart)<new Date(`${to}T23:59:59.999`).getTime()));
-  // Filters select overlapping events; the table/export retain each full saved duration.
-  const shownEvents = filtered;
-  const editEvent = e => {
-    if(!e.masterListId || !e.classificationPath) { setError('Legacy records remain readable. Use the service API to close an open legacy record.');return; }
-    setEditing(e);setReason('');setForm({ start:localInput(e.eventStart),end:localInput(e.eventEnd),notes:e.notes || '' });
-    setError('');setMessage('');
-  };
-  const cancelEdit = () => { setEditing(null);setReason('');setForm(blank());setSelected([]); };
-  const submit = async e => {
+import '../styles/Downtime.css';
+const localInput=value=>{const d=value?new Date(value):new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,23);};
+const blank=()=>({start:localInput(),end:'',notes:''});
+const zoned=value=>{const d=new Date(value);if(!value||!Number.isFinite(d.getTime()))throw new Error('Enter valid start and end date-times.');return d.toISOString();};
+export default function DowntimeEventForm({tenantId,defaultAssetId=null,initialEvent=null,onBack,onNavigate,onSaved}) {
+  const [assets,setAssets]=useState([]),[masters,setMasters]=useState([]),[assetId,setAssetId]=useState(initialEvent?.assetId||defaultAssetId||'');
+  const [masterId,setMasterId]=useState(''),[selected,setSelected]=useState([]),[form,setForm]=useState(()=>initialEvent?{start:localInput(initialEvent.eventStart),end:initialEvent.eventEnd?localInput(initialEvent.eventEnd):'',notes:initialEvent.notes||''}:blank());
+  const [editing,setEditing]=useState(initialEvent),[reason,setReason]=useState(''),[events,setEvents]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[eventsLoading,setEventsLoading]=useState(false);
+  const [lastSavedRange,setLastSavedRange]=useState(null);
+  const [error,setError]=useState(''),[message,setMessage]=useState(''),[reload,setReload]=useState(0),[setup,setSetup]=useState(false),[dirty,setDirty]=useState(false);
+  const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+  useEffect(()=>{
+    let live=true;setLoading(true);setError('');setAssets([]);setMasters([]);
+    if(!tenantId){setLoading(false);return undefined;}
+    Promise.all([listCaptureAssets(tenantId,{includeInactive:true}),listDowntimeMasters(tenantId)]).then(([a,m])=>{if(live){setAssets(a);setMasters(m);}}).catch(e=>{if(live)setError(e.message);}).finally(()=>{if(live)setLoading(false);});
+    return()=>{live=false;};
+  },[tenantId,reload]);
+  useEffect(()=>{setEditing(initialEvent);setAssetId(initialEvent?.assetId||defaultAssetId||'');setForm(initialEvent?{start:localInput(initialEvent.eventStart),end:initialEvent.eventEnd?localInput(initialEvent.eventEnd):'',notes:initialEvent.notes||''}:blank());setSelected([]);setMasterId('');setReason('');setDirty(false);setMessage('');},[tenantId,defaultAssetId,initialEvent]);
+  useEffect(()=>{
+    let live=true;setEvents([]);setEventsLoading(Boolean(tenantId&&assetId));
+    if(!tenantId||!assetId)return undefined;
+    listDowntimeEvents(tenantId,{assetId}).then(rows=>{if(live)setEvents(rows);}).catch(e=>{if(live)setError(e.message);}).finally(()=>{if(live)setEventsLoading(false);});
+    return()=>{live=false;};
+  },[tenantId,assetId,reload]);
+  const asset=assets.find(a=>(a.assetId||a.id)===assetId);
+  const eligible=useMemo(()=>masters.filter(m=>asset&&m.published&&appliesTo(m.published.assignment,asset)),[masters,asset]);
+  const master=eligible.find(m=>m.id===masterId)||(eligible.length===1?eligible[0]:null),nodes=master?.published.nodes||[];
+  const path=selected.map(id=>nodes.find(n=>n.id===id)).filter(Boolean),final=path[path.length-1],terminal=path.length>=3&&final?.terminal;
+  let timing=null,timeError='';try{if(form.start&&form.end)timing=durationOf(zoned(form.start),zoned(form.end));}catch(e){timeError=e.message;}
+  const conflicts=timing?overlapping(events,timing.eventStart,timing.eventEnd,editing?.eventId||editing?.id||null):[];
+  const update=patch=>{setForm(old=>({...old,...patch}));setDirty(true);setMessage('');};
+  const navigate=key=>{if(dirty&&!window.confirm('Leave this unsaved downtime event?'))return;if(onNavigate)onNavigate(key,{assetId,...(lastSavedRange||{})});else if(key==='setup')setSetup(true);else if(key==='assets')onBack?.();};
+  const submit=async e=>{
     e.preventDefault();setBusy(true);setError('');setMessage('');
-    try {
-      if(!tenantId || !assetId) throw new Error('Select an organisation and asset.');
-      const timing = durationOf(zoned(form.start),zoned(form.end));
-      if(editing) {
-        await correctDowntimeEvent(tenantId,editing.eventId || editing.id,{ ...timing,notes:form.notes },{ reason,expectedVersion:editing.eventVersion });
-      } else {
-        if(!master || !terminal) throw new Error('Select a published master list and complete the classification.');
-        const assignments = await effectiveContextFor(tenantId,assetId,timing.eventStart.slice(0,10));
-        const context = assignments.find(a => a.isPrimary) || assignments[0] || {};
-        await createDowntimeEvent(tenantId,{ ...timing,assetId,masterListId:master.id,masterVersion:master.published.version,
-          selectedCodeId:path[path.length-1].id,notes:form.notes,timezone,
-          siteId:context.siteId || null,contractId:context.contractId || null,activityId:context.activityId || null,serviceId:context.serviceId || null });
+    try{
+      if(!asset)throw new Error('Select a registered asset.');
+      const value=durationOf(zoned(form.start),zoned(form.end));
+      if(editing)await correctDowntimeEvent(tenantId,editing.eventId||editing.id,{...value,notes:form.notes,timezone},{reason,expectedVersion:editing.eventVersion});
+      else{
+        if(!master||!terminal)throw new Error('Complete the classification through the last configured level.');
+        const context=await contextForDowntime(tenantId,assetId,form.start.slice(0,10));
+        await createDowntimeEvent(tenantId,{...value,assetId,masterListId:master.id,masterVersion:master.published.version,selectedCodeId:final.id,notes:form.notes,timezone,
+          groupId:context.groupId||null,siteId:context.siteId||null,contractId:context.contractId||null,activityId:context.activityId||null,serviceId:context.serviceId||null});
       }
-      const wasEditing=!!editing;
-      cancelEdit();setMessage(wasEditing ? 'Correction saved with an audit trail.' : 'Downtime saved.');
-      setEvents(await listDowntimeEvents(tenantId,{ assetId }));
-    } catch(e) { setError(e.message); } finally { setBusy(false); }
+      const correction=Boolean(editing);setLastSavedRange({from:form.start.slice(0,10),to:form.end.slice(0,10)});setEditing(null);setReason('');setForm(blank());setDirty(false);setMessage(correction?'Correction saved. The original classification and an audit trail are retained.':'Downtime recorded. It is now available in Records & analysis.');
+      setEvents(await listDowntimeEvents(tenantId,{assetId}));onSaved?.();
+    }catch(e){setError(e.message);}finally{setBusy(false);}
   };
-  if(setup) return <DowntimeMasterSetup tenantId={tenantId} onBack={() => { setSetup(false);setRefresh(r => r+1); }} />;
-  return <section style={{ maxWidth:1100,margin:'0 auto',color:'#2d201c' }}>
-    <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
-      {onBack && <button style={button} disabled={busy} onClick={onBack}>← Back</button>}
-      <button style={button} disabled={busy} onClick={() => setSetup(true)}>Manage master codes</button>
-      <button style={button} disabled={busy || loading} onClick={() => setRefresh(r => r+1)}>Reload assets and published codes</button>
-    </div>
-    <h2>Record asset downtime</h2>
-    <p style={{ color:'#6b5b55' }}>Choose the asset and its published classification. Hours are calculated from start and end times.</p>
-    {error && <p role="alert" style={{ color:'#991b1b' }}>{error}</p>}
-    {message && <p role="status" style={{ color:'#166534' }}>{message}</p>}
-    {loading && <p>Loading assets and published codes…</p>}
-    {!loading && !assets.length && <p>No registered assets. Add an asset in the Asset Register first.</p>}
-    <form onSubmit={submit}>
-      <fieldset disabled={busy || loading || !tenantId} style={card}>
-        <legend>{editing ? 'Correct downtime — historical classification retained' : 'Downtime capture'}</legend>
-        <label style={{ display:'block',marginBottom:14 }}>Asset ID / name
-          <select required style={input} disabled={!!editing} value={assetId} onChange={e => { setAssetId(e.target.value);setMasterId('');setSelected([]);setError('');setMessage(''); }}>
-            <option value="">Select an asset</option>{assets.map(a => <option key={a.id} value={a.assetId || a.id}>{a.internalNumber || a.assetId || a.id} — {a.name}{!canCaptureAsset(a) ? " (history only)" : ""}</option>)}
-          </select>
-        </label>
-        {asset && !canCaptureAsset(asset) && <p>Historical asset: review and correct existing records here. New downtime requires an active asset.</p>}
-        <p style={{ fontSize:12,color:'#6b5b55' }}>Times use your device timezone: <strong>{timezone}</strong>. Stored as UTC. Events may cross midnight or span multiple days.</p>
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:14 }}>
-          <label>Start date and time<input required type="datetime-local" style={input} value={form.start} onChange={e => setForm({ ...form,start:e.target.value })} /></label>
-          <label>End date and time<input required type="datetime-local" style={input} value={form.end} onChange={e => setForm({ ...form,end:e.target.value })} /></label>
-        </div>
-        {editing ? <p style={card}>{editing.classificationPath.map(n => n.label).join(' → ')} · saved version {editing.masterVersion}</p> : <>
-          {!eligible.length && asset && <p style={{ color:'#92400e' }}>No published master list is assigned to this asset type or group. Open Manage master codes, assign a list and publish it.</p>}
-          <label style={{ display:'block',margin:'16px 0' }}>Published master list
-            <select required style={input} value={master?.id || ''} onChange={e => { setMasterId(e.target.value);setSelected([]); }}>
-              <option value="">Select a published list</option>{eligible.map(m => <option key={m.id} value={m.id}>{m.published.name} · v{m.published.version}</option>)}
-            </select>
-          </label>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:14 }}>
-            {DOWNTIME_HEADINGS.map((heading,i) => {
-              const parent=i ? nodes.find(n => n.id === selected[i-1]) : null;
-              if(!master || (i && (!parent || parent.terminal))) return null;
-              const choices=childrenOf(nodes,parent?.id || null);
-              return <label key={heading}>Level {i+1} — {heading}
-                <select required style={input} value={selected[i] || ''} onChange={e => setSelected([...selected.slice(0,i),e.target.value].filter(Boolean))}>
-                  <option value="">Select {heading.toLowerCase()}</option>{choices.map(n => <option key={n.id} value={n.id}>{n.label}{n.origin==='custom_unmapped' ? ' (Custom / Unmapped)' : ''}</option>)}
-                </select>
-              </label>;
-            })}
-          </div>
-          {!!path.length && <p>{path.map(n => n.label).join(' → ')}</p>}
+  if(setup)return <DowntimeMasterSetup tenantId={tenantId} onBack={()=>{setSetup(false);setSelected([]);setMasterId('');setReload(x=>x+1);}}/>;
+  const savedPath=editing?.classificationPath||path.map(n=>({label:n.label}));
+  return <section className="dt-workspace"><div className="dt-topline">Operations performance / Daily capture</div>
+    <DowntimeFlowNav current="capture" disabled={busy} onNavigate={navigate}/>
+    <div className="dt-heading"><div><h2>{editing?'Correct a downtime record':'Capture the delay. Understand the cause.'}</h2><p>Select the equipment, record the time and follow the published levels to the specific reason.</p></div><div className="dt-actions"><button className="dt-button" disabled={busy||loading} onClick={()=>{setSelected([]);setMasterId('');setReload(x=>x+1);}}>Refresh published codes</button></div></div>
+    {error&&<div role="alert" className="dt-notice dt-notice-error">{error}</div>}{message&&<div role="status" className="dt-notice dt-notice-success">{message}{onNavigate&&<button className="dt-button dt-button-small" style={{marginLeft:10}} onClick={()=>navigate('records')}>View records →</button>}</div>}
+    {loading&&<div className="dt-empty">Loading assets and published master lists…</div>}
+    {!loading&&!assets.length&&<div className="dt-empty"><strong>Register your first asset</strong>The capture form uses equipment from your asset register.<div style={{marginTop:14}}><button className="dt-button" onClick={()=>navigate('assets')}>Go to asset register</button></div></div>}
+    <form onSubmit={submit}><fieldset disabled={busy||loading||!tenantId}><div className="dt-grid"><main>
+      <section className="dt-panel"><div className="dt-panel-head"><h3>01 / Equipment & timing</h3><span className="dt-badge">{timezone}</span></div>
+        <label className="dt-field"><span>Asset ID & name <span aria-hidden="true">*</span></span><select required value={assetId} disabled={!!editing} onChange={e=>{setAssetId(e.target.value);setSelected([]);setMasterId('');setDirty(true);setMessage('');setError('');}}><option value="">Choose equipment from your register</option>{assets.map(a=><option key={a.id} value={a.assetId||a.id}>{a.internalNumber||a.assetId||a.id} — {a.name}{!canCaptureAsset(a)?' · History only':''}</option>)}</select></label>
+        {asset&&<p className="dt-muted">{asset.equipmentTypeId?.split('.').pop().replace(/_/g,' ')}{asset.location?` · ${asset.location}`:''}{!canCaptureAsset(asset)?' · Inactive equipment: existing records may be corrected, but new capture is unavailable.':''}</p>}
+        <div className="dt-fields" style={{marginTop:18}}><label className="dt-field"><span>Start date & time *</span><input type="datetime-local" step="0.001" required value={form.start} onChange={e=>update({start:e.target.value})}/></label><label className="dt-field"><span>End date & time *</span><input type="datetime-local" step="0.001" required value={form.end} onChange={e=>update({end:e.target.value})}/></label></div><p className="dt-muted" style={{marginBottom:0}}>Use dates and times in {timezone}. Events can cross midnight or span multiple days.</p>
+        {timeError&&<div role="alert" className="dt-notice dt-notice-error">{timeError}</div>}{conflicts.length>0&&<div role="alert" className="dt-notice dt-notice-error">This overlaps {conflicts.length} existing downtime event(s) for the same asset. Review the timing before saving.</div>}
+      </section>
+      <section className="dt-panel"><div className="dt-panel-head"><div><h3>02 / Classify the downtime</h3><p className="dt-muted" style={{margin:0}}>Each level follows the selected parent.</p></div><button type="button" className="dt-button dt-button-small" onClick={()=>navigate('setup')}>Manage master codes</button></div>
+        {editing?<div className="dt-notice">Historical classification is retained for this correction.<div className="dt-path">{editing.classificationPath?.map((p,i)=><span key={p.codeId}>{i+1}. {p.label}</span>)}</div></div>:<>
+          <label className="dt-field" style={{marginBottom:18}}><span>Published master list *</span><select required value={master?.id||''} onChange={e=>{setMasterId(e.target.value);setSelected([]);setDirty(true);}}><option value="">{asset?'Select the applicable published list':'Select an asset first'}</option>{eligible.map(m=><option key={m.id} value={m.id}>{m.published.name} · Version {m.published.version}</option>)}</select></label>
+          {asset&&!eligible.length&&!loading&&<div className="dt-notice">No published codes are assigned to this asset type or group. Assign a master list and publish it in Master codes.</div>}
+          <div className="dt-levels">{DOWNTIME_HEADINGS.map((heading,i)=>{
+            const parent=i?nodes.find(n=>n.id===selected[i-1]):null,ended=path.some(n=>n.terminal&&n.level<=i),enabled=!!master&&(!i||!!parent)&&!ended;
+            const choices=enabled?childrenOf(nodes,parent?.id||null):[];
+            return <div key={heading} className={`dt-level-row ${i===4?'dt-level-reason':''}`} data-selected={!!selected[i]}><span className="dt-level-number">{i+1}</span><label className="dt-field"><span>Level {i+1} — {heading}{enabled?' *':''}{i===4&&<span className="dt-badge dt-badge-dark">Downtime reason</span>}</span><select required={enabled} disabled={!enabled} value={selected[i]||''} onChange={e=>{setSelected([...selected.slice(0,i),e.target.value].filter(Boolean));setDirty(true);setMessage('');}}><option value="">{ended?`Not required — branch ends at Level ${final?.level}`:enabled?`Choose ${heading.toLowerCase()}`:i?'Choose the preceding level first':'Choose an asset and master list'}</option>{choices.map(n=><option key={n.id} value={n.id}>{n.label}{n.origin==='custom_unmapped'?' · Custom / Unmapped':''}</option>)}</select>{i===4&&<small>{ended?'The final configured selection is the saved reason for this shorter branch.':'Choose the specific reason, such as Engine Failure, No Parts Available or No Mechanic Available.'}</small>}</label></div>;
+          })}</div>
         </>}
-        <label style={{ display:'block',marginTop:14 }}>Notes (optional)<textarea style={input} maxLength={10000} rows={3} value={form.notes} onChange={e => setForm({ ...form,notes:e.target.value })} /></label>
-        {editing && <label style={{ display:'block',marginTop:14 }}>Reason for correction<input required style={input} value={reason} onChange={e => setReason(e.target.value)} /></label>}
-        <div style={{ display:'flex',gap:14,flexWrap:'wrap',alignItems:'center',marginTop:16 }}>
-          <div style={{ padding:14,borderRadius:10,background:'#f4efec' }}><strong style={{ fontSize:28 }}>{preview === null ? '—' : preview.toFixed(2)}</strong> hours</div>
-          <button style={primary} disabled={busy || !asset || (!editing && (!terminal || !canCaptureAsset(asset)))}>{busy ? 'Saving…' : editing ? 'Save audited correction' : 'Save downtime'}</button>
-          {editing && <button type="button" style={button} onClick={cancelEdit}>Cancel correction</button>}
-        </div>
-      </fieldset>
-    </form>
-    <div style={card}>
-      <div style={{ display:'flex',gap:12,alignItems:'end',flexWrap:'wrap' }}>
-        <h3 style={{ marginRight:'auto' }}>Downtime records for this asset</h3>
-        <label>From<input type="date" style={input} value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>To<input type="date" min={from || undefined} style={input} value={to} onChange={e => setTo(e.target.value)} /></label>
-        <button style={button} disabled={!shownEvents.length} onClick={() => { try { downloadDowntimeCsv(shownEvents); } catch(e) { setError(e.message); } }}>Export CSV</button>
-      </div>
-      <p>{shownEvents.length} events · {shownEvents.reduce((s,e) => s+(Number(e.durationHours)||0),0).toFixed(2)} full event hours</p>
-      <div style={{ overflowX:'auto' }}><table style={{ width:'100%',borderCollapse:'collapse',fontSize:13 }}>
-        <thead><tr>{['Start','End','Hours','Classification','Notes',''].map((h,i) => <th key={i} style={{ padding:10,textAlign:'left',borderBottom:'1px solid #ded8d4' }}>{h}</th>)}</tr></thead>
-        <tbody>{shownEvents.map(e => <tr key={e.id}>
-          <td style={{ padding:10 }}>{new Date(e.eventStart).toLocaleString()}</td>
-          <td style={{ padding:10 }}>{e.eventEnd ? new Date(e.eventEnd).toLocaleString() : 'Open (legacy)'}</td>
-          <td style={{ padding:10 }}>{e.durationHours == null ? '—' : Number(e.durationHours).toFixed(2)}</td>
-          <td style={{ padding:10 }}>{e.classificationPath?.map(n => n.label).join(' → ') || [e.categoryLevel1,e.categoryLevel2].filter(Boolean).join(' → ')}</td>
-          <td style={{ padding:10 }}>{e.notes}</td><td style={{ padding:10 }}>{e.masterListId && <button style={button} disabled={busy} onClick={() => editEvent(e)}>Correct</button>}</td>
-        </tr>)}</tbody>
-      </table></div>
-      {!shownEvents.length && <p>No downtime records for this selection.</p>}
-    </div>
+      </section>
+      <section className="dt-panel"><h3>03 / Supporting notes</h3><p className="dt-muted">Add operational detail if useful. Notes do not replace the classification or selected reason.</p><label className="dt-field"><span>Notes <small>Optional</small></span><textarea rows={3} maxLength={10000} value={form.notes} onChange={e=>update({notes:e.target.value})} placeholder="What happened, what was needed, or what the next shift should know…"/></label>{editing&&<label className="dt-field" style={{marginTop:18}}><span>Reason for correction *</span><input required maxLength={10000} value={reason} onChange={e=>{setReason(e.target.value);setDirty(true);}} placeholder="Explain why this record is being corrected"/></label>}</section>
+    </main><aside className="dt-sticky"><section className="dt-summary"><h3>Calculated downtime</h3><div className="dt-hours">{timing?timing.durationHours.toFixed(2):'0.00'}</div><small>hours · calculated automatically</small><dl><div><dt>Equipment</dt><dd>{asset?`${asset.internalNumber||asset.assetId} · ${asset.name}`:'No asset selected'}</dd></div><div><dt>Classification</dt><dd>{savedPath.length?savedPath.map(n=>n.label).join(' → '):'Complete the levels to classify this event.'}</dd></div><div><dt>Downtime reason</dt><dd>{editing?savedPath[savedPath.length-1]?.label:terminal?final.label:'Select the final configured code'}</dd></div><div><dt>Code version</dt><dd>{editing?`Historical version ${editing.masterVersion}`:master?`Published version ${master.published.version}`:'No published list selected'}</dd></div></dl></section>
+      <section className="dt-panel"><h3>Save this event</h3><p className="dt-muted">The record keeps its classification and code version, even if labels change later.</p><button type="submit" className="dt-button dt-button-primary" style={{width:'100%'}} disabled={busy||!asset||!timing||eventsLoading||!!conflicts.length||(!editing&&(!terminal||!canCaptureAsset(asset)))}>{busy?'Saving…':editing?'Save audited correction':'Save downtime event'}</button>{editing&&<button className="dt-button" type="button" style={{width:'100%',marginTop:8}} onClick={()=>navigate('records')}>Cancel correction</button>}</section>
+      <section className="dt-panel"><h3>Recent events for this asset</h3>{eventsLoading?<p className="dt-muted">Loading events…</p>:!events.length?<p className="dt-muted">No downtime recorded for this selection.</p>:events.slice(0,3).map(e=><div key={e.id} style={{borderBottom:'1px solid #eee7df',padding:'10px 0'}}><strong style={{fontSize:12}}>{e.classificationPath?.slice(-1)[0]?.label||e.categoryLevel2||'Legacy event'}</strong><p className="dt-muted" style={{margin:'4px 0'}}>{new Date(e.eventStart).toLocaleDateString()} · {e.durationHours==null?'Open':`${Number(e.durationHours).toFixed(2)} h`}</p></div>)}{onNavigate&&<button type="button" className="dt-button dt-button-text" onClick={()=>navigate('records')}>View all records →</button>}</section>
+    </aside></div></fieldset></form>
   </section>;
 }
