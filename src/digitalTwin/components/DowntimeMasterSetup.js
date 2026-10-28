@@ -4,7 +4,7 @@ import { listDowntimeMasters,createDowntimeMaster,saveDowntimeMaster,getDowntime
 import { listCaptureAssets } from '../services/downtimeService';
 import { listGroups } from '../services/resourceService';
 import { downloadMasterWorkbook,readMasterWorkbook } from '../services/downtimeSpreadsheetService';
-import { DOWNTIME_HEADINGS,childrenOf,codePath,validateCodes,appliesTo } from '../models/downtimeCodes';
+import { DOWNTIME_HEADINGS,childrenOf,codePath,validateCodes,appliesTo,unfinishedBranches } from '../models/downtimeCodes';
 import DowntimeFlowNav from './DowntimeFlowNav';
 import DowntimeDialog from './DowntimeDialog';
 import '../styles/Downtime.css';
@@ -17,6 +17,7 @@ export default function DowntimeMasterSetup({ tenantId,onBack,onNavigate }) {
   const [editing,setEditing]=useState(null),[audit,setAudit]=useState(null),[reload,setReload]=useState(0);
   const current=masters.find(m=>m.id===selected),node=draft?.nodes.find(n=>n.id===path[path.length-1]);
   const matching=useMemo(()=>draft?assets.filter(a=>appliesTo(draft.assignment,a)):[],[draft,assets]);
+  const unfinished=useMemo(()=>draft?unfinishedBranches(draft.nodes):[],[draft]);
   useEffect(()=>{
     let live=true;setLoading(true);setError('');setMasters([]);setDraft(null);setSelected('');setPath([]);setDirty(false);setEditing(null);setAudit(null);
     if(!tenantId){setLoading(false);return undefined;}
@@ -37,6 +38,10 @@ export default function DowntimeMasterSetup({ tenantId,onBack,onNavigate }) {
     setMessage('Organisation copy created. Review the levels, assign assets and publish when ready.');
   });
   const save=publish=>run(async()=>{
+    if(publish&&unfinished.length){
+      const first=unfinished[0];setPath(codePath(draft.nodes,first.id).map(n=>n.id));setTab('builder');
+      throw new Error(`${unfinished.length} unfinished active branch${unfinished.length===1?'':'es'}. Open each branch below, add its codes or deactivate it, then publish again.`);
+    }
     const m=await saveDowntimeMaster(tenantId,current.id,draft,current.revision,{publish});
     setMasters(old=>old.map(v=>v.id===m.id?m:v));setDraft(m.draft);setDirty(false);
     setMessage(publish?`Version ${m.published.version} is published. ${matching.length} active assets match the assignment.`:'Draft saved. Daily capture continues to use the published version.');
@@ -80,6 +85,7 @@ export default function DowntimeMasterSetup({ tenantId,onBack,onNavigate }) {
         <div className="dt-fields"><label className="dt-field"><span>List name</span><input value={draft.name} maxLength={120} disabled={busy} onChange={e=>change({...draft,name:e.target.value})}/></label><label className="dt-field"><span>Industry</span><input value={draft.industry} readOnly/><small>BIG standards and organisation-specific codes remain separate.</small></label></div>
       </div>
       <div className="dt-panel"><div className="dt-panel-head"><div><h3>Your classification hierarchy</h3><p className="dt-muted" style={{marginBottom:0}}>Select a value to see only its children. Level 5 holds the specific downtime reason.</p></div><div className="dt-actions"><button className="dt-button dt-button-small" disabled={busy} onClick={()=>{try{downloadMasterWorkbook(draft);}catch(e){setError(e.message);}}}>Download code template</button><label className="dt-button dt-button-small">Import codes<input className="dt-sr-only" type="file" accept=".xlsx,.xls,.csv" disabled={busy} aria-label="Import downtime master-code workbook" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)run(async()=>{const next=await readMasterWorkbook(file,draft,current.templateId);change(next);setPath(initialPath(next.nodes));setMessage('Codes imported into the draft. Review and publish to use them in capture.');});}}/></label></div></div>
+        {!!unfinished.length&&<div className="dt-notice" role="status"><strong>{unfinished.length} active branch{unfinished.length===1?' needs':'es need'} codes before publishing.</strong><p>Other-industry copies start with Levels 1–2 only. Add a Level 3 classification, then optional subcategories and reasons. Deactivate branches you do not use; their codes stay in the list.</p><div className="dt-actions">{unfinished.map(n=><button type="button" key={n.id} className="dt-button dt-button-small" disabled={busy} onClick={()=>{setPath(codePath(draft.nodes,n.id).map(p=>p.id));setTab('builder');}}>Open {codePath(draft.nodes,n.id).map(p=>p.label).join(' → ')}</button>)}</div></div>}
         <div className="dt-tabs" role="tablist" aria-label="Hierarchy view"><button type="button" className="dt-tab" role="tab" aria-selected={tab==='builder'} onClick={()=>setTab('builder')}>Level-by-level builder</button><button type="button" className="dt-tab" role="tab" aria-selected={tab==='tree'} onClick={()=>setTab('tree')}>Expandable tree</button></div>
         {tab==='builder'?<div className="dt-builder">{DOWNTIME_HEADINGS.map((heading,i)=>{
           const parent=i?draft.nodes.find(n=>n.id===path[i-1]):null,choices=(!i||parent)&&!parent?.terminal?childrenOf(draft.nodes,parent?.id||null,false):[];
