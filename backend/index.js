@@ -154,3 +154,10 @@ exports.onRatingCreated = onDocumentCreated(
 // ============================================================================
 
 exports.api = onRequest({ timeoutSeconds: 60, memory: "512MiB" }, app);
+
+// ============================================================================
+// 6. GROWTH SUITE AI DATA GENERATOR
+// ============================================================================
+
+const { generateGrowthSuiteAiData } = require("./routes/generateGrowthSuiteAiData");
+exports.generateGrowthSuiteAiData = generateGrowthSuiteAiData;

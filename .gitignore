@@ -61,6 +61,7 @@ analyzeAdvisorMatches.js
 analyzeSupplierMatches.js
 analyzeInternMatches.js
 analyzeFundingMatches.js
+generateGrowthSuiteAiData.js
 fundingMatches.js
 simple-bulk-update.js
 backend/debug-environment.js

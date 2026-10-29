@@ -6,7 +6,8 @@
  * to prompt OpenAI (gpt-4o-mini) and generate coherent, realistic KPI figures.
  */
 
-import { API_KEYS } from "../../../API.js";
+import { functions } from "../../../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
 
 export const SCENARIOS = [
   {
@@ -40,7 +41,6 @@ export const SCENARIOS = [
  */
 export const resolveOpenAiKey = () => {
   return (
-    API_KEYS?.OPENAI ||
     process.env.REACT_APP_OPENAI ||
     process.env.REACT_APP_OPENAI_API_KEY ||
     ""
@@ -252,13 +252,6 @@ export const generateRealisticKpiData = async ({
   scenarioId = "healthy",
   customMonthlyRevenue = null,
 }) => {
-  const apiKey = resolveOpenAiKey();
-  if (!apiKey) {
-    throw new Error(
-      "OpenAI API Key is missing. Please ensure REACT_APP_OPENAI is configured in your environment."
-    );
-  }
-
   const baseRows = getBaseEditableKpis(activeKpiRows);
   if (!baseRows.length) {
     throw new Error("No editable input KPIs found in this section to generate data for.");
@@ -285,103 +278,28 @@ export const generateRealisticKpiData = async ({
     label: p.label,
   }));
 
-  const promptContent = `
-You are a senior financial analyst and management accountant generating realistic demo/test data for an African SME business.
-
-BUSINESS PROFILE (Derived from Universal Profile):
-- Enterprise: ${profileContext.companyName}${profileContext.tradingName ? ` (Trading as: "${profileContext.tradingName}")` : ""}
-- Sector / Economic Industries: ${profileContext.industry}
-- Entity Scale: ${profileContext.turnoverRange} (Classification: ${profileContext.entitySize})
-- Operational Stage & Age: ${profileContext.operationStage} stage • ${profileContext.businessAge}
-- Workforce / Headcount: ${profileContext.employeeCount}
-${profileContext.offerings ? `- Core Offerings & Services: ${profileContext.offerings}` : ""}
-${profileContext.description ? `- Business Summary / Activity: ${profileContext.description}` : ""}
-- Target Monthly Revenue Anchor: ZAR ${targetMonthlyRevenue.toLocaleString()}
-
-TARGET FINANCIAL MODULE & SCOPE:
-- Module / Section: "${tabName}"
-- Target Category Scope: "${categoryName}"
-- Frequency: ${activeSection}
-
-SCENARIO: "${selectedScenario.name}"
-${selectedScenario.description}
-
-KPIS TO POPULATE (Do NOT populate derived/calculated totals like EBITDA or Gross Profit):
-${JSON.stringify(kpiList, null, 2)}
-
-TIME PERIODS (${periodList.length} periods):
-${JSON.stringify(periodList, null, 2)}
-
-ACCOUNTING & COHERENCE RULES:
-1. All figures must be contextually realistic for the company's sector and scale.
-2. Direct costs / Cost of Goods Sold (COGS) must remain reasonably lower than Sales/Revenue (e.g. standard 30% to 65% gross margins depending on industry).
-3. Operating expenses (salaries, rent, utilities, marketing) must reflect reasonable operational proportions.
-4. "budget" values represent forward planned projections; "actual" values reflect operational reality (with realistic small variances of -15% to +10%).
-5. Return ONLY whole rounded numbers (no cents, no currency symbols, no string formatting).
-6. Provide an entry for every period for both "budget" and "actual" for each KPI in the list.
-
-RESPONSE FORMAT:
-You MUST return ONLY a valid, raw JSON array of objects with no markdown code fences, no conversational text.
-Format:
-[
-  { "kpiId": "kpi_id_here", "which": "budget", "periodKey": "period_key_here", "value": 150000 },
-  { "kpiId": "kpi_id_here", "which": "actual", "periodKey": "period_key_here", "value": 142000 }
-]
-`.trim();
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a strict financial demo data generator. Output ONLY a valid JSON array of KPI figures adhering to the requested schema. No markdown formatting, no backticks, no commentary.",
-        },
-        { role: "user", content: promptContent },
-      ],
-      temperature: 0.5,
-    }),
+  // Dispatch to Firebase Cloud Function (runs securely with process.env.OPENAI_API_KEY)
+  const callGenerateAiData = httpsCallable(functions, "generateGrowthSuiteAiData");
+  const callResult = await callGenerateAiData({
+    profileContext,
+    tabName,
+    categoryName,
+    activeSection,
+    kpiList,
+    periodList,
+    selectedScenario,
+    targetMonthlyRevenue,
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`OpenAI API error (${response.status}): ${errorBody || response.statusText}`);
-  }
+  const responseData = callResult?.data || {};
+  const rawUpdates = Array.isArray(responseData.updates) ? responseData.updates : [];
 
-  const responseJson = await response.json();
-  const rawText = responseJson?.choices?.[0]?.message?.content?.trim() || "";
-
-  // Clean any markdown fences if model inadvertently wrapped it
-  const cleanJsonText = rawText
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  let parsedItems = [];
-  try {
-    parsedItems = JSON.parse(cleanJsonText);
-  } catch (err) {
-    console.error("Failed to parse OpenAI JSON response:", rawText);
-    throw new Error("AI returned an invalid JSON response structure. Please try again.");
-  }
-
-  if (!Array.isArray(parsedItems)) {
-    throw new Error("AI response was not a valid array of KPI entries.");
-  }
-
-  // Map to internal update format matching handleApplyCsvOverride / batchSaveKpiFields
+  // Map returned raw updates back to internal table format for preview and batch saving
   const kpiMap = new Map();
   baseRows.forEach((row) => kpiMap.set(row.kpi.id, row.kpi));
 
   const validUpdates = [];
-  parsedItems.forEach((item) => {
+  rawUpdates.forEach((item) => {
     if (!item || !item.kpiId || !item.periodKey || !item.which) return;
     const kpi = kpiMap.get(item.kpiId);
     if (!kpi) return;
@@ -405,7 +323,8 @@ Format:
     profileContext,
     targetMonthlyRevenue,
     updates: validUpdates,
-    rawCount: parsedItems.length,
+    rawCount: responseData.rawCount || validUpdates.length,
     validCount: validUpdates.length,
   };
 };
+
