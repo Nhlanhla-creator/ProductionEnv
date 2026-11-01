@@ -34,6 +34,7 @@ import {
 
 import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
+import { getCurrentCompanyId } from "../../utils/application-scope"
 
 import "./internApplication.css"
 
@@ -252,12 +253,14 @@ export default function InternApplication({
 
     try {
       setSaveStatus("saving")
+      const companyId = await getCurrentCompanyId()
 
       const baseData = {
         [activeSection]: sectionData,
         lastUpdated: serverTimestamp(),
         userId: user.uid,
         userEmail: user.email,
+        ...(companyId ? { companyId } : {}),
         status: "in_progress",
       }
 
@@ -337,6 +340,7 @@ export default function InternApplication({
 
     try {
       setSaveStatus("saving")
+      const companyId = await getCurrentCompanyId()
 
       // Save current section first
       const sectionData = formData[activeSection]
@@ -346,6 +350,7 @@ export default function InternApplication({
         lastUpdated: serverTimestamp(),
         userId: user.uid,
         userEmail: user.email,
+        ...(companyId ? { companyId } : {}),
       }
 
       let currentId = applicationId

@@ -10,6 +10,7 @@ import styles from "./funding.module.css"
 import { X, ArrowRight } from "lucide-react"
 import Upsell from "../../components/Upsell/Upsell" // Import the Upsell component
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" // Import the subscription hook
+import { resolveApplicationScope } from "../../utils/application-scope"
 
 const onboardingSteps = [
   {
@@ -62,12 +63,24 @@ export default function FundingMatchesPage() {
 
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser && isInvestorView && viewingSMEId) {
-        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true })
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null)
+        setAuthChecked(true)
+        return
+      }
+
+      try {
+        const scope = await resolveApplicationScope(firebaseUser)
+        const targetUid = scope?.matchUserId || firebaseUser.uid
+        const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+        setUser(
+          targetUid === firebaseUser.uid
+            ? firebaseUser
+            : { ...firebaseUser, uid: targetUid, ...(isInvestorView ? { isViewOnly: true } : {}) }
+        )
+      } catch (error) {
+        console.error("Failed to resolve funding match profile:", error)
         setUser(firebaseUser)
       }
       setAuthChecked(true)

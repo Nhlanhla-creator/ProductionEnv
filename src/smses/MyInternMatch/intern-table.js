@@ -45,6 +45,10 @@ import {
   setDoc,
 } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { storage } from "../../firebaseConfig"
 import "react-day-picker/dist/style.css"
@@ -1531,7 +1535,7 @@ const sendMessageToIntern = useCallback(
             const companyDocSnap = await getDoc(doc(db, "companies", userCompanyId))
 
             if (companyDocSnap.exists()) {
-              const ownerId = companyDocSnap.data().createdBy
+              const ownerId = companyDocSnap.data().createdBy || companyDocSnap.data().ownerId
               setUserRole(userCompanyRole || "viewer")
 
               if (ownerId === user.uid) {
@@ -1575,15 +1579,17 @@ const sendMessageToIntern = useCallback(
 
     const loadApplicationLinks = async () => {
       try {
-        const [matchSnap, appSnap] = await Promise.all([
+        const scope = await resolveApplicationScope(auth.currentUser)
+        if (!scope) return
+        const [matchSnap, appDocuments] = await Promise.all([
           getDocs(query(collection(db, "internMatchResults"), where("smeId", "==", effectiveUserId))),
-          getDocs(query(collection(db, "internApplicationsV2"), where("userId", "==", effectiveUserId))),
+          getScopedApplicationDocuments("internApplicationsV2", scope),
         ])
 
         // Application Request is the same label the Applications list shows in
         // its "Application" column.
         const titleByAppId = {}
-        appSnap.forEach((d) => {
+        appDocuments.forEach((d) => {
           const data = d.data()
           const jobOverview = data.jobOverview || {}
           titleByAppId[d.id] = jobOverview.internshipTitle?.trim() || "Internship Application"

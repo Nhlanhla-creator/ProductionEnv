@@ -8,13 +8,16 @@ import {
   query,
   where,
   getDocs,
-  orderBy,
   deleteDoc,
   updateDoc,
   doc,
   serverTimestamp,
 } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 import {
   Eye,
   FileText,
@@ -164,14 +167,23 @@ const ApplicationsList = ({
   const [quickActions, setQuickActions] = useState(null)
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      const effectiveUserId = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid
-      if (effectiveUserId) fetchApplications(effectiveUserId)
-      else {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
         setLoading(false)
         setError("Please log in")
+        return
+      }
+
+      try {
+        const scope = await resolveApplicationScope(user)
+        if (scope) fetchApplications(scope)
+        else {
+          setLoading(false)
+          setError("Please log in")
+        }
+      } catch (err) {
+        setLoading(false)
+        setError(err.message)
       }
     })
     return () => unsubscribe()
@@ -200,27 +212,15 @@ const ApplicationsList = ({
     }
   }
 
-  const fetchApplications = async (userId) => {
+  const fetchApplications = async (scope) => {
     try {
       setLoading(true)
       setError(null)
-      let apps = []
-      try {
-        const q = query(
-          collection(db, "advisoryApplicationsV2"),
-          where("userId", "==", userId),
-          orderBy("lastUpdated", "desc"),
-        )
-        const snapshot = await getDocs(q)
-        snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-      } catch {
-        const q = query(collection(db, "advisoryApplicationsV2"), where("userId", "==", userId))
-        const snapshot = await getDocs(q)
-        snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-        apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
-      }
+      const documents = await getScopedApplicationDocuments("advisoryApplicationsV2", scope)
+      const apps = documents.map((d) => formatAppData(d.id, d.data()))
+      apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
       setApplications(apps)
-      await fetchMatchCounts(userId)
+      await fetchMatchCounts(scope.matchUserId)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -384,7 +384,15 @@ const ApplicationsList = ({
         <h3 style={{ color: "#4a352f", marginBottom: 8 }}>Error Loading Applications</h3>
         <p style={{ color: "#dc2626", marginBottom: 20 }}>{error}</p>
         <button
-          onClick={() => auth.currentUser && fetchApplications(auth.currentUser.uid)}
+          onClick={async () => {
+            if (!auth.currentUser) return
+            try {
+              const scope = await resolveApplicationScope(auth.currentUser)
+              if (scope) fetchApplications(scope)
+            } catch (err) {
+              setError(err.message)
+            }
+          }}
           style={{
             display: "inline-flex",
             alignItems: "center",

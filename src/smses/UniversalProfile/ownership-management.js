@@ -460,7 +460,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
 
   const syncToGrowthSuite = async (directors) => {
     try {
-      const userId = auth.currentUser?.uid;
+      const userId = await getProfileOwnerId();
       if (!userId) return;
       const boardMembers = directors.map(director => ({
         name: director.name || "",
@@ -556,10 +556,11 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
       const item = type === 'director' ? formData.directors[index] : formData.executives[index];
       if (!item?.cv?.path) return;
       setIsUploadOverlayVisible(true);
+      const userId = await getProfileOwnerId();
       await deleteDocumentWithSync(
         storage,
         item.cv.path,
-        auth.currentUser?.uid,
+        userId,
         type,
         item.name,
         type === 'director' ? 'Board Member' : 'Executive'
@@ -584,7 +585,8 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     try {
       setIsUploadOverlayVisible(true);
       const director = formData.directors[index];
-      const userId = auth.currentUser?.uid;
+      const userId = await getProfileOwnerId();
+      if (!userId) throw new Error("Profile not found.");
       const storagePath = `cv_documents/${userId}/directors/${director.name}_${Date.now()}_${file.name}`;
       const uploaded = await uploadDocumentWithSync(
         storage,
@@ -609,7 +611,8 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     try {
       setIsUploadOverlayVisible(true);
       const executive = formData.executives[index];
-      const userId = auth.currentUser?.uid;
+      const userId = await getProfileOwnerId();
+      if (!userId) throw new Error("Profile not found.");
       const storagePath = `cv_documents/${userId}/executives/${executive.name}_${Date.now()}_${file.name}`;
       const uploaded = await uploadDocumentWithSync(
         storage,

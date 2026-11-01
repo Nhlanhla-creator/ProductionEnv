@@ -53,6 +53,10 @@ import {
 } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth, db } from "../../firebaseConfig"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
 import SupplierDetailsModal from "./SupplierDetailsModal"
@@ -958,7 +962,7 @@ export function SupplierTable({
           if (companyId) {
             const companySnap = await getDoc(doc(db, "companies", companyId))
             if (companySnap.exists()) {
-              const ownerId = companySnap.data().createdBy
+              const ownerId = companySnap.data().createdBy || companySnap.data().ownerId
               setUserRole(role || "viewer")
               setIsCompanyMember(ownerId !== user.uid)
               setEffectiveUserId(ownerId || user.uid)
@@ -1027,6 +1031,18 @@ export function SupplierTable({
       if (!appSnap) {
         const fallback = await getDoc(doc(db, "productApplications", effectiveUserId))
         if (fallback.exists()) appSnap = fallback
+      }
+      if (!appSnap) {
+        const scope = await resolveApplicationScope(auth.currentUser)
+        if (scope) {
+          const documents = await getScopedApplicationDocuments("productApplications", scope)
+          documents.sort((a, b) => {
+            const aTime = a.data().lastUpdated?.toMillis?.() || 0
+            const bTime = b.data().lastUpdated?.toMillis?.() || 0
+            return bTime - aTime
+          })
+          appSnap = documents[0] || null
+        }
       }
       if (!appSnap) {
         setSuppliers([])

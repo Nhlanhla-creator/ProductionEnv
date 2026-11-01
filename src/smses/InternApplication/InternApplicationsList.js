@@ -8,13 +8,16 @@ import {
   query,
   where,
   getDocs,
-  orderBy,
   deleteDoc,
   updateDoc,
   doc,
   serverTimestamp,
 } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 import {
   Eye,
   FileText,
@@ -163,22 +166,35 @@ const InternApplicationsList = ({
   const navigate = useNavigate()
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      const effectiveUserId = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid
-      if (effectiveUserId) fetchApplications(effectiveUserId)
-      else { setLoading(false); setError("Please log in") }
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        setLoading(false)
+        setError("Please log in")
+        return
+      }
+
+      try {
+        const scope = await resolveApplicationScope(user)
+        if (scope) fetchApplications(scope)
+        else { setLoading(false); setError("Please log in") }
+      } catch (err) {
+        setLoading(false)
+        setError(err.message)
+      }
     })
     return () => unsubscribe()
   }, [])
 
   // Re-fetch when refreshTrigger changes (e.g., after submitting an application)
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const effectiveUserId = (isInvestorView && viewingSMEId) ? viewingSMEId : auth.currentUser?.uid
-    if (effectiveUserId) fetchApplications(effectiveUserId)
+    const user = auth.currentUser
+    if (!user) return
+    resolveApplicationScope(user)
+      .then((scope) => scope && fetchApplications(scope))
+      .catch((err) => {
+        setLoading(false)
+        setError(err.message)
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger])
 
@@ -206,22 +222,14 @@ const InternApplicationsList = ({
     }
   }
 
-  const fetchApplications = async (userId) => {
+  const fetchApplications = async (scope) => {
     try {
       setLoading(true); setError(null)
-      let apps = []
-      try {
-        const q = query(collection(db, "internApplicationsV2"), where("userId", "==", userId), orderBy("lastUpdated", "desc"))
-        const snapshot = await getDocs(q)
-        snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-      } catch {
-        const q = query(collection(db, "internApplicationsV2"), where("userId", "==", userId))
-        const snapshot = await getDocs(q)
-        snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-        apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
-      }
+      const documents = await getScopedApplicationDocuments("internApplicationsV2", scope)
+      const apps = documents.map((d) => formatAppData(d.id, d.data()))
+      apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
       setApplications(apps)
-      await fetchMatchCounts(userId)
+      await fetchMatchCounts(scope.matchUserId)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -381,7 +389,15 @@ const InternApplicationsList = ({
       <div style={{ fontSize:44, marginBottom:16 }}>⚠️</div>
       <h3 style={{ color:"#4a352f", marginBottom:8 }}>Error Loading Applications</h3>
       <p style={{ color:"#dc2626", marginBottom:20 }}>{error}</p>
-      <button onClick={() => auth.currentUser && fetchApplications(auth.currentUser.uid)}
+      <button onClick={async () => {
+        if (!auth.currentUser) return
+        try {
+          const scope = await resolveApplicationScope(auth.currentUser)
+          if (scope) fetchApplications(scope)
+        } catch (err) {
+          setError(err.message)
+        }
+      }}
         style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"10px 22px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer" }}>
         <RefreshCw size={15} /> Retry
       </button>

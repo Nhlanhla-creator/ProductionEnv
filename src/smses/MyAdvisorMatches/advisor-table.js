@@ -47,6 +47,10 @@ import {
 } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth, db } from "../../firebaseConfig"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 import AdvisorDetailsModal from "./AdvisorDetailsModal"
 import {
   deriveAdvisorVerification,
@@ -960,7 +964,7 @@ export function AdvisorTable({
           if (companyId) {
             const companySnap = await getDoc(doc(db, "companies", companyId))
             if (companySnap.exists()) {
-              const ownerId = companySnap.data().createdBy
+              const ownerId = companySnap.data().createdBy || companySnap.data().ownerId
               setUserRole(role || "viewer")
               setIsCompanyMember(ownerId !== user.uid)
               setEffectiveUserId(ownerId || user.uid)
@@ -1019,15 +1023,17 @@ export function AdvisorTable({
 
     const loadApplicationLinks = async () => {
       try {
-        const [matchSnap, appSnap] = await Promise.all([
+        const scope = await resolveApplicationScope(auth.currentUser)
+        if (!scope) return
+        const [matchSnap, appDocuments] = await Promise.all([
           getDocs(query(collection(db, AI_MATCHES_COLLECTION), where("smeId", "==", effectiveUserId))),
-          getDocs(query(collection(db, "advisoryApplicationsV2"), where("userId", "==", effectiveUserId))),
+          getScopedApplicationDocuments("advisoryApplicationsV2", scope),
         ])
 
         // Requested Service is the same value the Applications list shows in
         // its "Application" column.
         const serviceByAppId = {}
-        appSnap.forEach((d) => {
+        appDocuments.forEach((d) => {
           const data = d.data()
           const roleOrExpertise =
             (data.advisoryRole || []).length > 0 ? data.advisoryRole[0] : (data.functionalExpertise || [])[0]

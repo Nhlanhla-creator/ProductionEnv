@@ -18,6 +18,10 @@ import {
 } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
+import {
   Eye,
   Calendar,
   Plus,
@@ -204,14 +208,23 @@ const FundingApplicationsList = ({
   const navigate = useNavigate()
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      const effectiveUserId = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid
-      if (effectiveUserId) fetchApplications(effectiveUserId)
-      else {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
         setLoading(false)
         setError("Please log in")
+        return
+      }
+
+      try {
+        const scope = await resolveApplicationScope(user)
+        if (scope) fetchApplications(scope)
+        else {
+          setLoading(false)
+          setError("Please log in")
+        }
+      } catch (err) {
+        setLoading(false)
+        setError(err.message)
       }
     })
     return () => unsubscribe()
@@ -259,23 +272,21 @@ const FundingApplicationsList = ({
     return ctx
   }
 
-  const fetchApplications = async (userId) => {
+  const fetchApplications = async (scope) => {
     try {
       setLoading(true)
       setError(null)
-      let apps = []
+      let documents = await getScopedApplicationDocuments("fundingApplicationsV2", scope)
 
-      const qNew = query(collection(db, "fundingApplicationsV2"), where("userId", "==", userId))
-      const snapshot = await getDocs(qNew)
-
-      if (snapshot.empty) {
-        const upDocRef = doc(db, "universalProfiles", userId)
+      if (documents.length === 0) {
+        const upDocRef = doc(db, "universalProfiles", scope.matchUserId)
         const upSnap = await getDoc(upDocRef)
         if (upSnap.exists()) {
           const upData = upSnap.data()
           if (upData.applicationOverview || upData.useOfFunds || upData.completedSections) {
             const newAppPayload = {
-              userId: userId,
+              userId: scope.applicationUserId,
+              ...(scope.companyId ? { companyId: scope.companyId } : {}),
               userEmail: auth.currentUser?.email || "",
               status: upData.status || (upData.applicationSubmitted ? "submitted" : "in_progress"),
               createdAt: serverTimestamp(),
@@ -296,16 +307,13 @@ const FundingApplicationsList = ({
 
             await addDoc(collection(db, "fundingApplicationsV2"), newAppPayload)
             await setDoc(upDocRef, { legacyFundingSeeded: true }, { merge: true })
-
-            const snapshotRefreshed = await getDocs(qNew)
-            snapshotRefreshed.forEach((d) => apps.push(formatAppData(d.id, d.data())))
+            documents = await getScopedApplicationDocuments("fundingApplicationsV2", scope)
           }
         }
-      } else {
-        snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-        apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
       }
 
+      const apps = documents.map((d) => formatAppData(d.id, d.data()))
+      apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
       setApplications(apps)
 
       const cached = {}
@@ -315,10 +323,10 @@ const FundingApplicationsList = ({
       })
       setCapitalNavByApp(cached)
 
-      await fetchMatchCounts(userId)
+      await fetchMatchCounts(scope.matchUserId)
 
       try {
-        await ensureNavCtx(userId, true)
+        await ensureNavCtx(scope.matchUserId, true)
       } catch (ctxErr) {
         console.error("Failed to load capital navigation context:", ctxErr)
       }
@@ -801,7 +809,15 @@ const FundingApplicationsList = ({
       <div style={{ fontSize: 44, marginBottom: 16 }}>⚠️</div>
       <h3 style={{ color: "#4a352f", marginBottom: 8 }}>Error Loading Applications</h3>
       <p style={{ color: "#dc2626", marginBottom: 20 }}>{error}</p>
-      <button onClick={() => auth.currentUser && fetchApplications(auth.currentUser.uid)}
+      <button onClick={async () => {
+        if (!auth.currentUser) return
+        try {
+          const scope = await resolveApplicationScope(auth.currentUser)
+          if (scope) fetchApplications(scope)
+        } catch (err) {
+          setError(err.message)
+        }
+      }}
         className="funding-cta-btn"
         style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", background: "linear-gradient(135deg,#a67c52,#7d5a50)", color: "#ffffff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
         <RefreshCw size={15} /> Retry

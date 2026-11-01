@@ -86,7 +86,7 @@ export const useEffectiveUserId = () => {
         if (companyId) {
           const companySnap = await getDoc(doc(db, "companies", companyId))
           if (companySnap.exists()) {
-            setEffectiveUserId(companySnap.data().createdBy || user.uid)
+            setEffectiveUserId(companySnap.data().createdBy || companySnap.data().ownerId || user.uid)
             setResolved(true)
             return
           }

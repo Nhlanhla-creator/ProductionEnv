@@ -24,11 +24,24 @@ export default function ProfileScopeSwitcher({ style = {} }) {
     <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", ...style }}>
       <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>Viewing:</span>
       <div style={{ display: "inline-flex", border: "1px solid #e6d7c3", borderRadius: "999px", overflow: "hidden" }}>
-        <button type="button" disabled={ctx.scope === "company"} onClick={() => setProfileScope("company")} style={pill(ctx.scope === "company")}>
-          🏢 {ctx.companyName || "Company"}
+        <button
+          type="button"
+          disabled={ctx.scope === "company"}
+          onClick={() => setProfileScope("company")}
+          style={pill(ctx.scope === "company")}
+          aria-pressed={ctx.scope === "company"}
+          title={ctx.companyName || "Company Profile"}
+        >
+          🏢 Company Profile
         </button>
-        <button type="button" disabled={ctx.scope === "own"} onClick={() => setProfileScope("own")} style={pill(ctx.scope === "own")}>
-          👤 My own profile
+        <button
+          type="button"
+          disabled={ctx.scope === "own"}
+          onClick={() => setProfileScope("own")}
+          style={pill(ctx.scope === "own")}
+          aria-pressed={ctx.scope === "own"}
+        >
+          👤 My Profile
         </button>
       </div>
     </div>

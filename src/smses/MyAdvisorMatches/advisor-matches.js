@@ -11,6 +11,10 @@ import AdvisorTabbedTables from "./advisor-tabbed-tables"
 import { X, ArrowRight } from 'lucide-react'
 import Upsell from "../../components/Upsell/Upsell"
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 
 const onboardingSteps = [
   {
@@ -68,16 +72,21 @@ export default function SupportProgramsPage() {
   useEffect(() => {
     if (!user?.uid) return;
 
-    const q = query(
-      collection(db, "advisoryApplicationsV2"),
-      where("userId", "==", user.uid),
-    );
+    let cancelled = false
+    const fetchApplicationCount = async () => {
+      const scope = await resolveApplicationScope(auth.currentUser)
+      if (!scope) return
+      const applications = await getScopedApplicationDocuments(
+        "advisoryApplicationsV2",
+        scope
+      )
+      if (!cancelled) setApplicationsCount(applications.length)
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setApplicationsCount(snapshot.size);
-    });
-
-    return () => unsubscribe();
+    fetchApplicationCount().catch((error) => {
+      console.error("Failed to fetch advisor application count:", error)
+    })
+    return () => { cancelled = true }
   }, [user?.uid]);
 
   // Fetch matches from smseAdvisoryMatches and calculate stage counts
@@ -129,12 +138,24 @@ export default function SupportProgramsPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser && isInvestorView && viewingSMEId) {
-        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true })
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null)
+        setAuthChecked(true)
+        return
+      }
+
+      try {
+        const scope = await resolveApplicationScope(firebaseUser)
+        const targetUid = scope?.matchUserId || firebaseUser.uid
+        const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+        setUser(
+          targetUid === firebaseUser.uid
+            ? firebaseUser
+            : { ...firebaseUser, uid: targetUid, ...(isInvestorView ? { isViewOnly: true } : {}) }
+        )
+      } catch (error) {
+        console.error("Failed to resolve advisor match profile:", error)
         setUser(firebaseUser)
       }
       setAuthChecked(true)

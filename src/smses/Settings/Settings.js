@@ -8,10 +8,17 @@ import {
   getDocs, arrayUnion, arrayRemove, writeBatch, setDoc
 } from "firebase/firestore"
 import TwoFactorSetup from '../../TwoFactorSetup';
+import SmeAccessEditor from "./SmeAccessEditor"
+import {
+  createDefaultSmeAccessPermissions,
+  resolveSmeAccessPermissions,
+} from "../../utils/sme-access"
 
 import { updatePassword, deleteUser, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
 import { differenceInDays } from "date-fns"; 
+import { useLocation } from "react-router-dom"
 export default function Settings() {
+  const { pathname } = useLocation()
   const colors = {
     lightBrown: "#f5f0e1",
     mediumBrown: "#e6d7c3",
@@ -23,7 +30,7 @@ export default function Settings() {
     paleBrown: "#f0e6d9",
   }
 
-  const TEAM_MEMBERS_ENABLED = false
+  const TEAM_MEMBERS_ENABLED = pathname === "/settings"
   const INVITE_ACCEPT_PATH = "/accept-invitation" // route that handles ?token=...
   const [accountLoaded, setAccountLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState("account")
@@ -74,6 +81,9 @@ const [companyMembers, setCompanyMembers] = useState([]);
 const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 const [inviteEmail, setInviteEmail] = useState("");
 const [inviteRole, setInviteRole] = useState("employee");
+const [inviteAccessPermissions, setInviteAccessPermissions] = useState(
+  () => createDefaultSmeAccessPermissions("employee")
+);
 const [companyId, setCompanyId] = useState(null);
 const [isCompanyOwner, setIsCompanyOwner] = useState(false);
 const [inviteLoading, setInviteLoading] = useState(false);
@@ -425,6 +435,7 @@ const loadCompanyMembers = async (companyId) => {
             || userData.displayName
             || (email ? email.split("@")[0] : ""),
           role: userData.userRole || 'employee',
+          accessPermissions: userData.accessPermissions || null,
           joinedAt: userData.createdAt || new Date().toISOString()
         });
       });
@@ -480,6 +491,30 @@ const handleCreateCompany = async () => {
 const showToast = (message, type = "success") => {
   setToast({ show: true, message, type });
   setTimeout(() => setToast({ show: false, message: "", type: "success" }), 4000);
+};
+
+const handleUpdateMemberAccess = async (memberId, accessPermissions) => {
+  if (!isCompanyOwner || memberId === auth.currentUser?.uid) return;
+  try {
+    await updateDoc(doc(db, "users", memberId), { accessPermissions });
+    await loadCompanyMembers(companyId);
+    showToast("Member access updated.");
+  } catch (error) {
+    console.error("Error updating member access:", error);
+    showToast("Failed to update member access.", "error");
+  }
+};
+
+const handleUpdateInvitationAccess = async (invitationId, accessPermissions) => {
+  if (!isCompanyOwner) return;
+  try {
+    await updateDoc(doc(db, "invitations", invitationId), { accessPermissions });
+    await loadInvitations(companyId);
+    showToast("Invitation access updated.");
+  } catch (error) {
+    console.error("Error updating invitation access:", error);
+    showToast("Failed to update invitation access.", "error");
+  }
 };
 
 const makeToken = () => {
@@ -592,6 +627,7 @@ const handleInviteMember = async () => {
       companyId: companyId,
       companyName: companyData.name || "Your Company",
       role: inviteRole,
+      accessPermissions: inviteAccessPermissions,
       invitedBy: user.uid,
       invitedByEmail: user.email,
       invitedByName: [formData.firstName, formData.lastName].filter(Boolean).join(" ") || user.email,
@@ -611,6 +647,7 @@ const handleInviteMember = async () => {
     await loadInvitations(companyId);
     setInviteEmail("");
     setInviteRole("employee");
+    setInviteAccessPermissions(createDefaultSmeAccessPermissions("employee"));
 
 
   } catch (error) {
@@ -1557,6 +1594,7 @@ const handleUpdateRole = async (memberId, newRole) => {
                   key={member.id}
                   style={{
                     display: "flex",
+                    flexWrap: "wrap",
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "1rem",
@@ -1565,7 +1603,7 @@ const handleUpdateRole = async (memberId, newRole) => {
                     border: `1px solid ${colors.lightBrown}`,
                   }}
                 >
-                  <div>
+                  <div style={{ flex: "1 1 320px" }}>
                     <div style={{
                       display: "flex",
                       alignItems: "center",
@@ -1601,6 +1639,18 @@ const handleUpdateRole = async (memberId, newRole) => {
                         </p>
                       </div>
                     </div>
+                    {isCompanyOwner && member.id !== auth.currentUser?.uid && (
+                      <details style={{ width: "100%", marginTop: "0.75rem", padding: "0.75rem 1rem", backgroundColor: "white", border: `1px solid ${colors.lightBrown}`, borderRadius: "8px" }}>
+                        <summary style={{ color: colors.primaryBrown, cursor: "pointer", fontWeight: 600 }}>
+                          Manage section access
+                        </summary>
+                        <SmeAccessEditor
+                          initialPermissions={resolveSmeAccessPermissions(member.role, member.accessPermissions)}
+                          onSave={(permissions) => handleUpdateMemberAccess(member.id, permissions)}
+                          saveLabel="Save member access"
+                        />
+                      </details>
+                    )}
                   </div>
 
                   <div style={{
@@ -1696,6 +1746,16 @@ const handleUpdateRole = async (memberId, newRole) => {
                       <button onClick={() => handleResendInvitation(inv.id)} style={{ padding: "0.5rem 0.9rem", backgroundColor: colors.lightBrown, color: colors.textBrown, border: "none", borderRadius: "6px", fontSize: "0.85rem", cursor: "pointer" }}>Resend</button>
                       <button onClick={() => handleCancelInvitation(inv.id)} style={{ padding: "0.5rem 0.9rem", backgroundColor: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "6px", fontSize: "0.85rem", cursor: "pointer" }}>Cancel</button>
                     </div>
+                    <details style={{ width: "100%", paddingTop: "0.5rem" }}>
+                      <summary style={{ color: colors.primaryBrown, cursor: "pointer", fontWeight: 600 }}>
+                        Manage invitation access
+                      </summary>
+                      <SmeAccessEditor
+                        initialPermissions={resolveSmeAccessPermissions(inv.role, inv.accessPermissions)}
+                        onSave={(permissions) => handleUpdateInvitationAccess(inv.id, permissions)}
+                        saveLabel="Save invitation access"
+                      />
+                    </details>
                   </div>
                 ))}
               </div>
@@ -2397,8 +2457,10 @@ const handleUpdateRole = async (memberId, newRole) => {
       padding: "2.5rem",
       borderRadius: "20px",
       boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-      maxWidth: "500px",
+      maxWidth: "900px",
       width: "90%",
+      maxHeight: "90vh",
+      overflowY: "auto",
     }}>
       <div style={{
         display: "flex",
@@ -2475,7 +2537,11 @@ const handleUpdateRole = async (memberId, newRole) => {
         </label>
         <select
           value={inviteRole}
-          onChange={(e) => setInviteRole(e.target.value)}
+          onChange={(e) => {
+            const role = e.target.value
+            setInviteRole(role)
+            setInviteAccessPermissions(createDefaultSmeAccessPermissions(role))
+          }}
           style={{
             width: "100%",
             padding: "0.875rem 1rem",
@@ -2493,6 +2559,11 @@ const handleUpdateRole = async (memberId, newRole) => {
           <option value="viewer">Viewer</option>
         </select>
       </div>
+
+      <SmeAccessEditor
+        value={inviteAccessPermissions}
+        onChange={setInviteAccessPermissions}
+      />
 
       {inviteError && (
         <div style={{

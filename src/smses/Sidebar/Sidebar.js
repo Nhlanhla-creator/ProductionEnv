@@ -3,6 +3,8 @@ import { useState, useEffect } from "react"
 import Sidebar from "../../components/profile/sidebar/Sidebar"
 import { useUserProfile } from "../../hooks/useUserProfile"
 import { smeMenuItems } from "../../config/menuConfig"
+import { filterSmeMenuItems } from "../../utils/sme-access"
+import { useSmeAccess } from "../SMEAccess"
 
 // ─── What an outside viewer can reach ───────────────────────────────────────
 const VIEWER_MENU_IDS = ["dashboard", "growth-tools", "profile", "documents"]
@@ -23,8 +25,9 @@ const CMF_VIEWER_MENU_IDS = [
 function SMESidebar() {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEName, setViewingSMEName] = useState("")
-  const [filteredMenuItems, setFilteredMenuItems] = useState(smeMenuItems)
+  const [filteredMenuItems, setFilteredMenuItems] = useState([])
   const [autoExpandMenus, setAutoExpandMenus] = useState({})
+  const { loading: accessLoading, error: accessError, isCompanyMember, permissions } = useSmeAccess()
 
   const { userName } = useUserProfile(
     "universalProfiles",
@@ -47,7 +50,7 @@ function SMESidebar() {
       )
 
       const visible = smeMenuItems.filter((item) => allowedIds.has(item.id))
-      setFilteredMenuItems(visible.length > 0 ? visible : smeMenuItems)
+      setFilteredMenuItems(visible)
 
       // Expand growth suite + RAPs + Operations so nested items are visible.
       setAutoExpandMenus({
@@ -55,11 +58,20 @@ function SMESidebar() {
         raps: true,
         operations: true,
       })
+    } else if (accessError) {
+      setFilteredMenuItems([])
+      setAutoExpandMenus({})
+    } else if (accessLoading) {
+      setFilteredMenuItems([])
+      setAutoExpandMenus({})
+    } else if (isCompanyMember) {
+      setFilteredMenuItems(filterSmeMenuItems(smeMenuItems, permissions?.sidebarSections || []))
+      setAutoExpandMenus({})
     } else {
       setFilteredMenuItems(smeMenuItems)
       setAutoExpandMenus({})
     }
-  }, [])
+  }, [accessError, accessLoading, isCompanyMember, permissions])
 
   return (
     <Sidebar

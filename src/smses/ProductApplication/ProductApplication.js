@@ -13,6 +13,7 @@ import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { fetchAllSuppliers } from "../hooks/useMatches"
 import { runAiAnalysisForApplication } from "../MySupplierMatches/supplier-table"
+import { getCurrentCompanyId } from "../../utils/application-scope"
 
 // ── Inline toast ─────────────────────────────────────────────────────────────
 
@@ -223,6 +224,7 @@ const ProductApplication = ({
   const saveDataToFirebase = async (overrides = {}) => {
     const user = auth.currentUser
     if (!user) throw new Error("User not logged in.")
+    const companyId = await getCurrentCompanyId()
     const docId = currentAppId || `${user.uid}_${Date.now()}`
     if (!currentAppId) setCurrentAppId(docId)
     await setDoc(
@@ -230,6 +232,7 @@ const ProductApplication = ({
       {
         ...formData,
         userId: user.uid,
+        ...(companyId ? { companyId } : {}),
         completedSections: { ...completedSections },
         lastUpdated: serverTimestamp(),
         status: applicationSubmitted ? "submitted" : "draft",

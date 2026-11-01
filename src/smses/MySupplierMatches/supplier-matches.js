@@ -11,6 +11,7 @@ import SupplierTabbedTables from "./supplier-tabbed-tables";
 import styles from "./supplier.module.css";
 import { X, ArrowRight } from 'lucide-react';
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { resolveApplicationScope } from "../../utils/application-scope";
 
 const onboardingSteps = [
   {
@@ -57,12 +58,24 @@ export default function SupplierMatchesPage() {
   const [defaultActiveTab, setDefaultActiveTab] = useState("my-matches"); // Set default to my-matches
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId");
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser && isInvestorView && viewingSMEId) {
-        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true });
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null);
+        setAuthChecked(true);
+        return;
+      }
+
+      try {
+        const scope = await resolveApplicationScope(firebaseUser);
+        const targetUid = scope?.matchUserId || firebaseUser.uid;
+        const isInvestorView = sessionStorage.getItem("investorViewMode") === "true";
+        setUser(
+          targetUid === firebaseUser.uid
+            ? firebaseUser
+            : { ...firebaseUser, uid: targetUid, ...(isInvestorView ? { isViewOnly: true } : {}) }
+        );
+      } catch (error) {
+        console.error("Failed to resolve supplier match profile:", error);
         setUser(firebaseUser);
       }
       setAuthChecked(true);

@@ -224,7 +224,7 @@ export function InternDealflowPage({ interns: internsProp, onStageSelect, classN
           if (userCompanyId) {
             const companyDocSnap = await getDoc(doc(db, "companies", userCompanyId))
             if (companyDocSnap.exists()) {
-              const ownerId = companyDocSnap.data().createdBy
+              const ownerId = companyDocSnap.data().createdBy || companyDocSnap.data().ownerId
               setEffectiveUserId(ownerId || user.uid)
               setAuthResolved(true)
               return

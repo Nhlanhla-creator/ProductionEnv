@@ -1,58 +1,61 @@
 import { useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../firebaseConfig';
+import { db } from '../firebaseConfig';
 import { 
   getAllDocumentLabels, 
   getDocumentId, 
   getProfileDocumentIds 
 } from '../utils/documentMapping';
+import { getProfileOwnerId } from '../utils/profile-context';
 
 export const useDocumentSync = (setSubmittedDocuments, setProfileData, setFormData) => {
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
+    let cancelled = false;
+    let unsubscribe = () => {};
 
-    const unsubscribe = onSnapshot(
-      doc(db, "universalProfiles", user.uid),
-      (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const data = docSnapshot.data();
-          
-          // Sync for MyDocuments (all documents)
-          if (setProfileData && setSubmittedDocuments) {
-            setProfileData(data);
-            
-            // Use getAllDocumentLabels from documentMapping instead of DOCUMENT_PATHS
-            const allDocumentLabels = getAllDocumentLabels();
-            
-            const submitted = allDocumentLabels.filter(docLabel => {
-              const documentId = getDocumentId(docLabel);
-              // Check if document exists and is not null
-              const documentUrl = data.documents?.[documentId];
-              return !!(documentUrl && documentUrl !== null && documentUrl !== '');
-            });
-            
-            setSubmittedDocuments(submitted);
-          }
-          
-          // Sync for Documents (profile documents only)
-          if (setFormData) {
-            const documentsData = {};
-            getProfileDocumentIds().forEach(docId => {
-              const url = data.documents?.[docId];
-              // Only include if URL exists and is not null
-              if (url && url !== null && url !== '') {
-                documentsData[docId] = [url];
-              } else {
-                documentsData[docId] = [];
-              }
-            });
-            setFormData(documentsData);
-          }
-        }
+    const subscribeToProfile = async () => {
+      try {
+        const profileId = await getProfileOwnerId();
+        if (!profileId || cancelled) return;
+
+        unsubscribe = onSnapshot(
+          doc(db, "universalProfiles", profileId),
+          (docSnapshot) => {
+            if (!docSnapshot.exists()) return;
+
+            const data = docSnapshot.data();
+            if (setProfileData && setSubmittedDocuments) {
+              setProfileData(data);
+              const allDocumentLabels = getAllDocumentLabels();
+              const submitted = allDocumentLabels.filter(docLabel => {
+                const documentId = getDocumentId(docLabel);
+                const documentUrl = data.documents?.[documentId];
+                return !!(documentUrl && documentUrl !== null && documentUrl !== '');
+              });
+              setSubmittedDocuments(submitted);
+            }
+
+            if (setFormData) {
+              const documentsData = {};
+              getProfileDocumentIds().forEach(docId => {
+                const url = data.documents?.[docId];
+                documentsData[docId] = url && url !== null && url !== '' ? [url] : [];
+              });
+              setFormData(documentsData);
+            }
+          },
+          (error) => console.error("Error syncing profile documents:", error)
+        );
+      } catch (error) {
+        console.error("Error resolving profile for document sync:", error);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    subscribeToProfile();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [setSubmittedDocuments, setProfileData, setFormData]);
 };

@@ -3,9 +3,10 @@ import { useEffect, useState } from "react"
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
-import { db, auth } from "../../firebaseConfig"
+import { db } from "../../firebaseConfig"
 import { doc, getDoc } from "firebase/firestore"
 import { checkIsNGO } from "./ngoTaxonomy"
+import { getProfileOwnerId } from "../../utils/profile-context"
 
 export default function ContactDetails({ data = {}, updateData, isNGO: isNgoProp, allFormData }) {
   const [formData, setFormData] = useState({})
@@ -24,8 +25,7 @@ export default function ContactDetails({ data = {}, updateData, isNGO: isNgoProp
           return;
         }
 
-        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
+        const userId = await getProfileOwnerId()
         
         if (!userId) {
           setIsLoading(false)

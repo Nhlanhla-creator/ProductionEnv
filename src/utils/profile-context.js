@@ -48,7 +48,7 @@ const compute = async (user, scope) => {
   const own = {
     profileId: user.uid, ownProfileId: user.uid, companyProfileId: null,
     role: "owner", isMember: false, isCmf: false, canSwitch: false, scope: "own",
-    companyId: null, companyName: "",
+    companyId: null, companyName: "", accessPermissions: null,
   }
 
   // Facilitator view
@@ -75,6 +75,7 @@ const compute = async (user, scope) => {
     companyProfileId: ownerId,
     canSwitch: true,
     role: ROLE_PERMISSIONS[userData.userRole] ? userData.userRole : "viewer",
+    accessPermissions: userData.accessPermissions || null,
   }
 
   // Member who switched back to their own profile

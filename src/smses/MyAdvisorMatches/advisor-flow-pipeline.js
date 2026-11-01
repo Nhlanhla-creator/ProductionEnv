@@ -167,7 +167,7 @@ export function AdvisorFlowPipeline({ totalAdvisors = 0, applications: applicati
         if (companyId) {
           const companySnap = await getDoc(doc(db, "companies", companyId))
           if (companySnap.exists()) {
-            setEffectiveUserId(companySnap.data().createdBy || user.uid)
+            setEffectiveUserId(companySnap.data().createdBy || companySnap.data().ownerId || user.uid)
             setAuthResolved(true)
             return
           }
