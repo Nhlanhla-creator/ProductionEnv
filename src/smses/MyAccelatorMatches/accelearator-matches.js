@@ -9,6 +9,7 @@ import styles from "./accelerator.module.css"
 import { X, ArrowRight } from 'lucide-react'
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
+import { resolveMatchUserId } from "../../utils/application-scope"
 
 const onboardingSteps = [
   {
@@ -63,12 +64,27 @@ export default function SupportProgramsPage() {
   const [stageFilter, setStageFilter] = useState(null)
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser && isInvestorView && viewingSMEId) {
-        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true })
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null)
+        setAuthChecked(true)
+        return
+      }
+
+      try {
+        const effectiveUid = await resolveMatchUserId(firebaseUser)
+        const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+        setUser(
+          effectiveUid === firebaseUser.uid
+            ? firebaseUser
+            : {
+                ...firebaseUser,
+                uid: effectiveUid,
+                ...(isInvestorView ? { isViewOnly: true } : {}),
+              }
+        )
+      } catch (error) {
+        console.error("Failed to resolve accelerator match profile:", error)
         setUser(firebaseUser)
       }
       setAuthChecked(true)

@@ -700,7 +700,7 @@ export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted,
           if (userCompanyId) {
             const companyDocSnap = await getDoc(doc(db, "companies", userCompanyId))
             if (companyDocSnap.exists()) {
-              const ownerId = companyDocSnap.data().createdBy
+              const ownerId = companyDocSnap.data().createdBy || companyDocSnap.data().ownerId
               setUserRole(userCompanyRole || "viewer")
               if (ownerId === user.uid) {
                 setIsCompanyMember(false)

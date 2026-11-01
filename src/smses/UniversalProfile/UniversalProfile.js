@@ -153,6 +153,7 @@ export default function UniversalProfile() {
   const [profileSubmitted, setProfileSubmitted] = useState(false)
   const [profileData, setProfileData] = useState(null)
   const [isCompanyMember, setIsCompanyMember] = useState(false)
+  const [profileSectionGrants, setProfileSectionGrants] = useState(null)
   const [effectiveUserId, setEffectiveUserId] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [companyName, setCompanyName] = useState("")
@@ -301,7 +302,17 @@ export default function UniversalProfile() {
   })
 
   const isNGO = checkIsNGO(formData, authUser)
-  const sections = getProfileSections(isNGO)
+  const sections = getProfileSections(isNGO).filter((section) =>
+    !isCompanyMember ||
+    !Array.isArray(profileSectionGrants) ||
+    profileSectionGrants.includes(section.id)
+  )
+
+  useEffect(() => {
+    if (sections.length && !sections.some((section) => section.id === activeSection)) {
+      setActiveSection(sections[0].id)
+    }
+  }, [sections, activeSection])
 
   // ── Auth + company membership ──────────────────────────────────────────────
   useEffect(() => {
@@ -313,6 +324,11 @@ export default function UniversalProfile() {
           const resolvedRole = normalizeRole(ctx.role) || (ctx.isMember && !ctx.isCmf ? "viewer" : "owner")
           setUserRole(resolvedRole)
           setIsCompanyMember(ctx.isMember)
+          setProfileSectionGrants(
+            Array.isArray(ctx.accessPermissions?.profileSections)
+              ? ctx.accessPermissions.profileSections
+              : null
+          )
           setEffectiveUserId(ctx.profileId)
           setCompanyName(ctx.companyName || "")
           setEditPermissions(getRolePermissions(resolvedRole) || FALLBACK_ROLE_PERMISSIONS.viewer)
@@ -422,6 +438,10 @@ export default function UniversalProfile() {
     const userId = effectiveUserId || auth.currentUser?.uid
     const currentUser = auth.currentUser
     if (!userId) { setLoading(false); throw new Error("User not logged in.") }
+    if (!section && isCompanyMember) {
+      setLoading(false)
+      throw new Error("Company members cannot submit the full company profile.")
+    }
     if (section && !canEditSection(section)) {
       alert(`You don't have permission to edit the ${sections.find((s) => s.id === section)?.label.replace(/\n/g, " ")} section.`)
       setLoading(false); return
@@ -507,6 +527,10 @@ export default function UniversalProfile() {
   }
 
   const handleSubmitProfile = async () => {
+    if (isCompanyMember) {
+      alert("Only the company owner can submit the full company profile.")
+      return
+    }
     const completedWithDeclaration = { ...completedSections, declarationConsent: true }
     const { allValid, sectionStatus } = validateAllSections(formData, completedWithDeclaration, isNGO)
     if (!allValid) {
@@ -720,7 +744,24 @@ export default function UniversalProfile() {
     )
   }
 
-  if (showSummary && !isEditing) {
+  if (isCompanyMember && sections.length === 0) {
+    return (
+      <div className="unauthorized" role="alert">
+        <h2>Profile access restricted</h2>
+        <p>Your company owner has not granted access to any company profile sections.</p>
+      </div>
+    )
+  }
+
+  if (isCompanyMember && !sections.some((section) => section.id === activeSection)) {
+    return <div role="alert" className="unauthorized">Your company owner has not granted access to this profile section.</div>
+  }
+
+  if (showSummary && !isEditing && (
+    !isCompanyMember ||
+    !Array.isArray(profileSectionGrants) ||
+    sections.length === getProfileSections(isNGO).length
+  )) {
     return (
       <div className="universal-profile-container">
         {renderCmfBanner()}

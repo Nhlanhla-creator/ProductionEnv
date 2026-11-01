@@ -15,6 +15,7 @@ import {
 } from "../../utils/documentMapping";
 import { useDocumentSync } from "../../components/useDocumentSync";
 import { checkIsNGO } from "./ngoTaxonomy";
+import { getProfileOwnerId } from "../../utils/profile-context";
 
 const ai = new GoogleGenAI({ 
   apiKey: ""
@@ -431,8 +432,7 @@ export default function Documents({ data = {}, updateData, isNGO: isNGOProp, all
           return;
         }
 
-        const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-        const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid;
+        const userId = await getProfileOwnerId();
         
         if (!userId) {
           setIsLoading(false);
@@ -513,8 +513,10 @@ export default function Documents({ data = {}, updateData, isNGO: isNGOProp, all
     }
 
     try {
-      console.log("🔍 Fetching from universalProfiles with UID:", user.uid);
-      const profileRef = doc(db, "universalProfiles", user.uid);
+      const profileId = await getProfileOwnerId();
+      if (!profileId) return null;
+      console.log("🔍 Fetching from universalProfiles with UID:", profileId);
+      const profileRef = doc(db, "universalProfiles", profileId);
       const profileSnap = await getDoc(profileRef);
       
       console.log("🔍 Profile exists:", profileSnap.exists());
@@ -528,7 +530,7 @@ export default function Documents({ data = {}, updateData, isNGO: isNGOProp, all
         console.log("🏢 Found registeredName:", registeredName);
         return registeredName || null;
       } else {
-        console.log("❌ No profile found for UID:", user.uid);
+        console.log("❌ No profile found for UID:", profileId);
         return null;
       }
     } catch (error) {
@@ -939,7 +941,7 @@ const handleFileChange = async (documentId, files) => {
         [documentId]: files.length > 0 ? 'success' : 'pending'
       }));
 
-      const userId = auth.currentUser?.uid;
+      const userId = await getProfileOwnerId();
       if (userId) {
         // ✅ USE FUNCTION FORM
         setUploadProgress(prev => ({ ...prev, currentStep: 'Uploading to secure storage...' }));
@@ -1108,8 +1110,7 @@ const handleDeleteFile = async (documentId, fileIndex) => {
   try {
     const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
     if (!isOnboarding) {
-      const isCmfView = sessionStorage.getItem("viewOrigin") === "cmf" && sessionStorage.getItem("viewingSMEId");
-      const userId = isCmfView ? sessionStorage.getItem("viewingSMEId") : auth.currentUser?.uid
+      const userId = await getProfileOwnerId()
       if (userId) {
         const docRef = doc(db, "universalProfiles", userId)
       

@@ -4,17 +4,16 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import {
-  collection,
-  query,
-  where,
-  getDocs,
-  orderBy,
   deleteDoc,
   updateDoc,
   doc,
   serverTimestamp,
 } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 import {
   Eye,
   FileText,
@@ -165,31 +164,32 @@ const ApplicationsList = ({
   const navigate = useNavigate()
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      const effectiveUserId = (isInvestorView && viewingSMEId) ? viewingSMEId : user?.uid
-      if (effectiveUserId) fetchApplications(effectiveUserId)
-      else { setLoading(false); setError("Please log in") }
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        setLoading(false)
+        setError("Please log in")
+        return
+      }
+
+      try {
+        const scope = await resolveApplicationScope(user)
+        if (scope) fetchApplications(scope)
+        else { setLoading(false); setError("Please log in") }
+      } catch (err) {
+        setLoading(false)
+        setError(err.message)
+      }
     })
     return () => unsubscribe()
   }, [])
 
-  const fetchApplications = async (userId) => {
+  const fetchApplications = async (scope) => {
     try {
       setLoading(true); setError(null)
-      try {
-        const q = query(collection(db, "productApplications"), where("userId", "==", userId), orderBy("lastUpdated", "desc"))
-        const snapshot = await getDocs(q)
-        const apps = []; snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-        setApplications(apps)
-      } catch {
-        const q = query(collection(db, "productApplications"), where("userId", "==", userId))
-        const snapshot = await getDocs(q)
-        const apps = []; snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-        apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
-        setApplications(apps)
-      }
+      const documents = await getScopedApplicationDocuments("productApplications", scope)
+      const apps = documents.map((d) => formatAppData(d.id, d.data()))
+      apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
+      setApplications(apps)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -325,7 +325,15 @@ const ApplicationsList = ({
       <div style={{ fontSize:44, marginBottom:16 }}>⚠️</div>
       <h3 style={{ color:"#4a352f", marginBottom:8 }}>Error Loading Applications</h3>
       <p style={{ color:"#dc2626", marginBottom:20 }}>{error}</p>
-      <button onClick={() => auth.currentUser && fetchApplications(auth.currentUser.uid)}
+      <button onClick={async () => {
+        if (!auth.currentUser) return
+        try {
+          const scope = await resolveApplicationScope(auth.currentUser)
+          if (scope) fetchApplications(scope)
+        } catch (err) {
+          setError(err.message)
+        }
+      }}
         style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"10px 22px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer" }}>
         <RefreshCw size={15} /> Retry
       </button>

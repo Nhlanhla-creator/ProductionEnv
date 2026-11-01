@@ -9,6 +9,7 @@ import InternTabbedTables from "./intern-tabbed-tables"
 import styles from "./intern.module.css"
 import Upsell from "../../components/Upsell/Upsell" // Import the Upsell component
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" // Import the subscription hook
+import { resolveApplicationScope } from "../../utils/application-scope"
 
 const onboardingSteps = [
   {
@@ -63,12 +64,24 @@ export default function InternMatchesPage() {
   const [stageFilter, setStageFilter] = useState("")
 
   useEffect(() => {
-    const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
-    const viewingSMEId = sessionStorage.getItem("viewingSMEId")
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser && isInvestorView && viewingSMEId) {
-        setUser({ ...firebaseUser, uid: viewingSMEId, isViewOnly: true })
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null)
+        setAuthChecked(true)
+        return
+      }
+
+      try {
+        const scope = await resolveApplicationScope(firebaseUser)
+        const targetUid = scope?.matchUserId || firebaseUser.uid
+        const isInvestorView = sessionStorage.getItem("investorViewMode") === "true"
+        setUser(
+          targetUid === firebaseUser.uid
+            ? firebaseUser
+            : { ...firebaseUser, uid: targetUid, ...(isInvestorView ? { isViewOnly: true } : {}) }
+        )
+      } catch (error) {
+        console.error("Failed to resolve intern match profile:", error)
         setUser(firebaseUser)
       }
       setAuthChecked(true)

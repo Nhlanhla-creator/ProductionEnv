@@ -197,7 +197,7 @@ export function AcceleratorFlowPipeline({ accelerators = [], applications = [], 
           if (userCompanyId) {
             const companyDocSnap = await getDoc(doc(db, "companies", userCompanyId))
             if (companyDocSnap.exists()) {
-              setEffectiveUserId(companyDocSnap.data().createdBy || user.uid)
+              setEffectiveUserId(companyDocSnap.data().createdBy || companyDocSnap.data().ownerId || user.uid)
               setAuthResolved(true)
               return
             }

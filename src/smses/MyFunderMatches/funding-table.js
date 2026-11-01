@@ -51,6 +51,10 @@ import {
 import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
 import { db, auth } from "../../firebaseConfig"
+import {
+  getScopedApplicationDocuments,
+  resolveApplicationScope,
+} from "../../utils/application-scope"
 import { getDocumentId, getAllDocumentLabels } from "../../utils/documentMapping"
 import { getDocumentUrlFromAnyLocation } from "../../utils/documentSyncService"
 import FunderDetailsModal from "./FunderDetailsModal"
@@ -938,7 +942,7 @@ export function FundingTable({
           if (companyId) {
             const companySnap = await getDoc(doc(db, "companies", companyId))
             if (companySnap.exists()) {
-              const ownerId = companySnap.data().createdBy
+              const ownerId = companySnap.data().createdBy || companySnap.data().ownerId
               setUserRole(role || "viewer")
               setIsCompanyMember(ownerId !== user.uid)
               setEffectiveUserId(ownerId || user.uid)
@@ -1039,15 +1043,17 @@ export function FundingTable({
 
     const loadApplicationLinks = async () => {
       try {
-        const [matchSnap, appSnap] = await Promise.all([
+        const scope = await resolveApplicationScope(auth.currentUser)
+        if (!scope) return
+        const [matchSnap, appDocuments] = await Promise.all([
           getDocs(query(collection(db, "smseFundingMatches"), where("smeId", "==", effectiveUserId))),
-          getDocs(query(collection(db, "fundingApplicationsV2"), where("userId", "==", effectiveUserId))),
+          getScopedApplicationDocuments("fundingApplicationsV2", scope),
         ])
 
         // Application Request is the same label the Applications list shows in
         // its "Application" column.
         const titleByAppId = {}
-        appSnap.forEach((d) => {
+        appDocuments.forEach((d) => {
           const data = d.data()
           const stage = data.applicationOverview?.fundingStage || ""
           titleByAppId[d.id] = `Funding${stage ? ` - ${stage}` : ""}`

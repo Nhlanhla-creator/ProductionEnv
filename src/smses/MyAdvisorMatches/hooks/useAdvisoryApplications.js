@@ -7,6 +7,7 @@ import { getAuth, onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
 import { db, auth } from "../../../firebaseConfig"
 import { sections } from "../../AdvisorApplication/AdvisorApplication"
+import { getCurrentCompanyId } from "../../../utils/application-scope"
 
 const IS_PROD = process.env.NODE_ENV === "production"
 const LOCAL_MATCHING_URL = "http://localhost:8000/api/advisors/analyze-matches"
@@ -214,8 +215,10 @@ export const useAdvisoryApplications = ({
  
   const ensureDocId = async () => {
     if (currentDocId) return currentDocId
+    const companyId = await getCurrentCompanyId()
     const docRef = await addDoc(collection(db, "advisoryApplicationsV2"), {
       userId: user.uid,
+      ...(companyId ? { companyId } : {}),
       userEmail: user.email,
       status: "in_progress",
       createdAt: serverTimestamp(),
@@ -233,10 +236,12 @@ export const useAdvisoryApplications = ({
         setSaveStatus("saving")
         const docId = await ensureDocId()
         const docRef = doc(db, "advisoryApplicationsV2", docId)
- 
+        const companyId = await getCurrentCompanyId()
+
         const base = {
           lastUpdated: serverTimestamp(),
           userId: user.uid,
+          ...(companyId ? { companyId } : {}),
           userEmail: user.email,
           status: "in_progress",
         }
@@ -310,10 +315,12 @@ export const useAdvisoryApplications = ({
       }
  
       const docRef = doc(db, "advisoryApplicationsV2", docId)
+      const companyId = await getCurrentCompanyId()
       await setDoc(
         docRef,
         {
           userId: user.uid,
+          ...(companyId ? { companyId } : {}),
           userEmail: user.email,
           status: "submitted",
           submittedAt: serverTimestamp(),

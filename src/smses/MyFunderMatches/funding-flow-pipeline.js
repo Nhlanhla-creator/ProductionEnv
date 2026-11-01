@@ -167,7 +167,7 @@ export default function DealFlowPipeline({ primaryMatchCount = 0, records: recor
         if (companyId) {
           const companySnap = await getDoc(doc(db, "companies", companyId))
           if (companySnap.exists()) {
-            setEffectiveUserId(companySnap.data().createdBy || user.uid)
+            setEffectiveUserId(companySnap.data().createdBy || companySnap.data().ownerId || user.uid)
             setAuthResolved(true)
             return
           }

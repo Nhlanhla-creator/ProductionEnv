@@ -19,6 +19,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
 
 import { db, auth } from "../../../firebaseConfig"
+import { getCurrentCompanyId } from "../../../utils/application-scope"
 
 const storage = getStorage()
 
@@ -1095,12 +1096,14 @@ export const useFundingApplications = ({
           [sectionId]: complete,
         }
 
+        const companyId = await getCurrentCompanyId()
         await setDoc(
           applicationRef,
           {
             [sectionId]: uploadedSection,
             completedSections: savedCompletion,
             userId: currentUser.uid,
+            ...(companyId ? { companyId } : {}),
             userEmail: currentUser.email || "",
             status: "in_progress",
             lastUpdated: serverTimestamp(),
@@ -1444,12 +1447,14 @@ export const useFundingApplications = ({
 
       const entityOverview = profile.entityOverview || {}
 
+      const companyId = await getCurrentCompanyId()
       await setDoc(
         applicationRef,
         {
           ...uploaded,
           entityOverview,
           userId: currentUser.uid,
+          ...(companyId ? { companyId } : {}),
           userEmail: currentUser.email || "",
           status: "submitted",
           submittedAt: serverTimestamp(),

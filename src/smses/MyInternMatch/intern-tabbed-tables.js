@@ -238,7 +238,7 @@ const useEffectiveUserId = () => {
         if (companyId) {
           const companySnap = await getDoc(doc(db, "companies", companyId))
           if (companySnap.exists()) {
-            const ownerId = companySnap.data().createdBy
+            const ownerId = companySnap.data().createdBy || companySnap.data().ownerId
             setEffectiveUserId(ownerId || user.uid)
             return
           }

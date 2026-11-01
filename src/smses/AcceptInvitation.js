@@ -183,6 +183,7 @@ export default function AcceptInvitation() {
         username: username || user.email.split("@")[0],
         companyId: invitation.companyId,
         userRole: invitation.role,
+        ...(invitation.accessPermissions && { accessPermissions: invitation.accessPermissions }),
         membershipInvitationId: invitation.id,
         createdAt: now,
         joinedAt: now,
@@ -193,6 +194,7 @@ export default function AcceptInvitation() {
       await updateDoc(userRef, {
         companyId: invitation.companyId,
         userRole: invitation.role,
+        ...(invitation.accessPermissions && { accessPermissions: invitation.accessPermissions }),
         membershipInvitationId: invitation.id,
         ...(!userSnap.data().email && { email: invitation.email }),
         joinedAt: now,
