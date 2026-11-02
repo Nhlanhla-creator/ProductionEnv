@@ -14,12 +14,9 @@ import {
   Trash2,
 } from "lucide-react"
 import FormField from "./FormField"
-import MultiSelectDropdown from "./MultiSelectDropdown"
 import styles from "./catalyst-universal-profile.module.css"
 import {
   ORGANISATION_LISTING_VISIBILITY,
-  ONBOARDING_RELATIONSHIPS,
-  THIRD_PARTY_ACCESS_SCOPES,
 } from "./catalystTaxonomy"
 
 export default function CatalystDeclarationConsent({
@@ -29,6 +26,8 @@ export default function CatalystDeclarationConsent({
   isLocked = false,
 }) {
   const decData = data || {}
+  const isOnboarding =
+    typeof window !== "undefined" && sessionStorage.getItem("isOnboarding") === "true"
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -38,7 +37,7 @@ export default function CatalystDeclarationConsent({
     })
   }
 
-  const handleThirdPartyFile = (e) => {
+  const handleCmfPermissionFile = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 10 * 1024 * 1024) {
@@ -47,22 +46,20 @@ export default function CatalystDeclarationConsent({
     }
     updateData({
       ...decData,
-      representativeAgreementFile: file,
-      representativeAgreementFileName: file.name,
-      representativeAgreementFileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+      cmfPermissionForm: [file],
+      cmfPermissionFileName: file.name,
+      cmfPermissionFileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
     })
   }
 
-  const handleRemoveThirdPartyFile = () => {
+  const handleRemoveCmfPermissionFile = () => {
     updateData({
       ...decData,
-      representativeAgreementFile: null,
-      representativeAgreementFileName: "",
-      representativeAgreementFileSize: "",
+      cmfPermissionForm: [],
+      cmfPermissionFileName: "",
+      cmfPermissionFileSize: "",
     })
   }
-
-  const isThirdPartyManaged = decData.onboardingRelationship === "authorised_third_party"
 
   const sectionHeadingStyle = {
     borderBottom: "2px solid #795548",
@@ -94,7 +91,7 @@ export default function CatalystDeclarationConsent({
           lineHeight: "1.5",
         }}
       >
-        <strong>Governance Guidance:</strong> Confirm information accuracy and legal representation authority. Configure marketplace listing visibility and optional delegated third-party access permissions. Programme participant consents are captured separately.
+        <strong>Governance Guidance:</strong> Confirm information accuracy, legal representation authority, and marketplace listing visibility. Programme participant consents are captured separately.
       </div>
 
       {/* ─── 1. Mandatory Declarations & Legal Consents ──────────────────────── */}
@@ -356,232 +353,127 @@ export default function CatalystDeclarationConsent({
         </div>
       </div>
 
-      {/* ─── 3. Account Governance & Third-Party / CMF Delegation ─────────────── */}
-      <div style={sectionHeadingStyle}>
-        <h3 style={sectionHeadingTextStyle}>Account Governance & Third-Party Management</h3>
-      </div>
+      {/* ─── 3. CMF Onboarding Permission Agreement (When Onboarded by CMF) ──── */}
+      {isOnboarding && (
+        <>
+          <div style={sectionHeadingStyle}>
+            <h3 style={sectionHeadingTextStyle}>CMF Permission Agreement</h3>
+          </div>
 
-      <div
-        style={{
-          backgroundColor: "#ffffff",
-          border: "1px solid #d7ccc8",
-          borderRadius: "8px",
-          padding: "1.25rem",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <div style={{ maxWidth: "550px", marginBottom: "1.25rem" }}>
-          <FormField
-            label="Onboarding & Profile Administration Relationship"
-            required
-            tooltip="Indicate whether full-time internal staff administer this profile or if a third party represents you."
-          >
-            <select
-              name="onboardingRelationship"
-              value={decData.onboardingRelationship || "self_managed"}
-              onChange={handleChange}
-              disabled={isLocked}
-              className={styles.formSelect}
-              required
-            >
-              {ONBOARDING_RELATIONSHIPS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <span style={{ fontSize: "12px", color: "#6d4c41", marginTop: "4px", display: "block" }}>
-            {ONBOARDING_RELATIONSHIPS.find((r) => r.value === (decData.onboardingRelationship || "self_managed"))?.description}
-          </span>
-        </div>
-
-        {/* Third-Party Representative Details */}
-        {isThirdPartyManaged && (
           <div
             style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #d7ccc8",
+              borderRadius: "8px",
               padding: "1.25rem",
-              backgroundColor: "#fcfaf8",
-              border: "1.5px solid #d7ccc8",
-              borderRadius: "6px",
-              marginTop: "1rem",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+              marginBottom: "1.5rem",
             }}
           >
-            <h4 style={{ margin: "0 0 1rem 0", fontSize: "14px", color: "#5d4037", fontWeight: 700 }}>
-              Authorised Representative Credentials & Delegated Scopes
-            </h4>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                gap: "1rem",
-                marginBottom: "1rem",
-              }}
+            <FormField
+              label="CMF Permission Agreement Form"
+              required
+              tooltip="Upload the signed CMF permission agreement authorizing profile onboarding and management."
             >
-              <FormField label="Representative Organisation Name" required>
-                <input
-                  type="text"
-                  name="representativeOrgName"
-                  value={decData.representativeOrgName || ""}
-                  onChange={handleChange}
-                  placeholder="e.g. Ubuntu Capital Advisors"
-                  className={styles.formInput}
-                  required
-                />
-              </FormField>
-              <FormField label="Representative Contact Person" required>
-                <input
-                  type="text"
-                  name="representativeContactPerson"
-                  value={decData.representativeContactPerson || ""}
-                  onChange={handleChange}
-                  placeholder="e.g. Sipho Moyo"
-                  className={styles.formInput}
-                  required
-                />
-              </FormField>
-              <FormField label="Representative Business Email" required>
-                <input
-                  type="email"
-                  name="representativeEmail"
-                  value={decData.representativeEmail || ""}
-                  onChange={handleChange}
-                  placeholder="sipho@ubuntucapital.example"
-                  className={styles.formInput}
-                  required
-                />
-              </FormField>
-            </div>
-
-            {/* Third-Party Access Scope MultiSelectDropdown */}
-            <div style={{ marginBottom: "1rem" }}>
-              <FormField
-                label="Authorised Management Access Scopes (Multi-Select)"
-                required
-                tooltip="Select specific administrative modules the representative is authorized to manage."
-              >
-                <MultiSelectDropdown
-                  options={THIRD_PARTY_ACCESS_SCOPES.map((s) => ({
-                    value: s.value,
-                    label: s.label,
-                    description: s.description,
-                  }))}
-                  selected={decData.thirdPartyAccessScopes || ["profile_edits", "programme_setup"]}
-                  onChange={(selected) => updateData({
-                    ...decData,
-                    thirdPartyAccessScopes: selected,
-                  })}
-                  placeholder="Select authorized access scopes..."
-                  disabled={isLocked}
-                />
-              </FormField>
-            </div>
-
-            {/* Permission Agreement File Upload */}
-            <div style={{ marginTop: "1rem" }}>
-              <FormField
-                label="CMF / Authorised Representative Permission Agreement"
-                required
-                tooltip="Signed authorization mandate form empowering the third party to act on the hub's behalf."
-              >
-                {!decData.representativeAgreementFileName ? (
-                  <div
-                    style={{
-                      border: "1.5px dashed #bcaaa4",
-                      borderRadius: "6px",
-                      padding: "1rem",
-                      backgroundColor: "#ffffff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      flexWrap: "wrap",
-                      gap: "10px",
-                    }}
-                  >
-                    <div>
-                      <span style={{ fontSize: "13px", color: "#5d4037", fontWeight: 600 }}>
-                        Upload signed authorization agreement
-                      </span>
-                      <span style={{ display: "block", fontSize: "12px", color: "#8d6e63" }}>
-                        Accepted formats: PDF, DOC, DOCX (Max 10 MB)
-                      </span>
-                    </div>
-
-                    <label
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "6px 14px",
-                        backgroundColor: "#795548",
-                        color: "#ffffff",
-                        borderRadius: "4px",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        cursor: isLocked ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      <Upload size={14} /> Upload Agreement
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={handleThirdPartyFile}
-                        disabled={isLocked}
-                        style={{ display: "none" }}
-                      />
-                    </label>
+              {!decData.cmfPermissionFileName && !(decData.cmfPermissionForm?.length > 0) ? (
+                <div
+                  style={{
+                    border: "1.5px dashed #bcaaa4",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    backgroundColor: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: "13px", color: "#5d4037", fontWeight: 600 }}>
+                      Upload signed CMF permission agreement
+                    </span>
+                    <span style={{ display: "block", fontSize: "12px", color: "#8d6e63" }}>
+                      Accepted formats: PDF, DOC, DOCX (Max 10 MB)
+                    </span>
                   </div>
-                ) : (
-                  <div
+
+                  <label
                     style={{
-                      border: "1px solid #c8e6c9",
-                      backgroundColor: "#f1f8e9",
-                      borderRadius: "6px",
-                      padding: "10px 14px",
-                      display: "flex",
+                      display: "inline-flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
-                      flexWrap: "wrap",
-                      gap: "10px",
+                      gap: "6px",
+                      padding: "6px 14px",
+                      backgroundColor: "#795548",
+                      color: "#ffffff",
+                      borderRadius: "4px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: isLocked ? "not-allowed" : "pointer",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <FileText size={20} color="#2e7d32" />
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: "13px", color: "#1b5e20", display: "block" }}>
-                          {decData.representativeAgreementFileName}
-                        </span>
-                        <span style={{ fontSize: "11px", color: "#558b2f" }}>
-                          Size: {decData.representativeAgreementFileSize}
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleRemoveThirdPartyFile}
+                    <Upload size={14} /> Upload Agreement
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleCmfPermissionFile}
                       disabled={isLocked}
-                      style={{
-                        padding: "4px 8px",
-                        backgroundColor: "#ffebee",
-                        border: "1px solid #ffcdd2",
-                        borderRadius: "4px",
-                        fontSize: "12px",
-                        color: "#c62828",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <Trash2 size={13} /> Remove
-                    </button>
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: "1px solid #c8e6c9",
+                    backgroundColor: "#f1f8e9",
+                    borderRadius: "6px",
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <FileText size={20} color="#2e7d32" />
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: "13px", color: "#1b5e20", display: "block" }}>
+                        {decData.cmfPermissionFileName ||
+                          decData.cmfPermissionForm?.[0]?.name ||
+                          "CMF Permission Agreement"}
+                      </span>
+                      {decData.cmfPermissionFileSize && (
+                        <span style={{ fontSize: "11px", color: "#558b2f" }}>
+                          Size: {decData.cmfPermissionFileSize}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                )}
-              </FormField>
-            </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRemoveCmfPermissionFile}
+                    disabled={isLocked}
+                    style={{
+                      padding: "4px 8px",
+                      backgroundColor: "#ffebee",
+                      border: "1px solid #ffcdd2",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      color: "#c62828",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Trash2 size={13} /> Remove
+                  </button>
+                </div>
+              )}
+            </FormField>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }

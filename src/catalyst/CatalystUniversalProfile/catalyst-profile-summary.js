@@ -545,6 +545,18 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
                     {[
                       { label: "Registered Name", value: summaryData?.registeredName },
                       { label: "Trading Name", value: summaryData?.tradingName },
+                      ...(summaryData?.organisationalArrangement === "unit_within_parent"
+                        ? [
+                            { label: "Unit / Department Name", value: summaryData?.unitOrDepartmentName },
+                            {
+                              label: "Parent Organisation",
+                              value:
+                                summaryData?.parentOrganisation === "other"
+                                  ? summaryData?.parentOrganisationOther
+                                  : summaryData?.parentOrganisation,
+                            },
+                          ]
+                        : []),
                       { label: "Legal Entity Type", value: summaryData?.legalEntityType },
                       { label: "Registration Number", value: summaryData?.registrationNumber },
                       { label: "Industry Sector", value: summaryData?.industrySector },
